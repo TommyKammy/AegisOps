@@ -5,4 +5,7 @@ services:
     image: opensearchproject/opensearch:2.19.0
     volumes:
       - /srv/aegisops/opensearch-data-placeholder:/usr/share/opensearch/data
+  dashboards:
+    image: opensearchproject/opensearch-dashboards:2.19.0
+    # access must remain behind the approved reverse proxy; no direct ports publication here
     # skeleton only; not production-ready until approved runtime settings are supplied
