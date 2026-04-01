@@ -67,6 +67,7 @@ approved_repo="${workdir}/approved-license"
 create_repo \
   "${approved_repo}" \
   ".env.sample" \
+  ".github/workflows/ci.yml" \
   "LICENSE.txt" \
   "README.md" \
   "config/" \
@@ -85,6 +86,7 @@ create_repo \
   "${unexpected_hidden_repo}" \
   ".codex-supervisor/" \
   ".env.sample" \
+  ".github/workflows/ci.yml" \
   "LICENSE.txt" \
   "README.md" \
   "config/" \

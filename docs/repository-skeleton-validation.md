@@ -10,6 +10,7 @@
 The approved top-level repository baseline allows these tracked entries:
 
 - `.env.sample`
+- `.github/`
 - `LICENSE.txt`
 - `README.md`
 - `config/`
@@ -24,9 +25,10 @@ The approved top-level repository baseline allows these tracked entries:
 
 ## Current Tracked Top-Level Entries
 
-The repository currently tracks these top-level entries in the current Git index after removing supervisor-local state from version control:
+The repository currently tracks these top-level entries in the verified pull request merge checkout after removing supervisor-local state from version control:
 
 - `.env.sample`
+- `.github/`
 - `LICENSE.txt`
 - `README.md`
 - `config/`

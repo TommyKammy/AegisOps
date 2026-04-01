@@ -7,6 +7,7 @@ repo_root="${1:-${default_repo_root}}"
 
 expected_top_level_entries=(
   ".env.sample"
+  ".github"
   "LICENSE.txt"
   "README.md"
   "config"
