@@ -4,72 +4,44 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-required_directories=(
-  "config"
-  "docs"
-  "ingest"
-  "n8n"
-  "opensearch"
-  "proxy"
-  "scripts"
-  "sigma"
-)
-
-allowed_top_level_directories=(
-  ".codex-supervisor"
-  "config"
-  "docs"
-  "ingest"
-  "n8n"
-  "opensearch"
-  "proxy"
-  "scripts"
-  "sigma"
-)
-
-required_files=(
+expected_top_level_entries=(
   ".env.sample"
+  "config"
+  "docs"
+  "ingest"
+  "n8n"
+  "opensearch"
+  "proxy"
+  "scripts"
+  "sigma"
 )
 
-allowed_top_level_control_entries=(
-  ".git"
-)
-
-for directory in "${required_directories[@]}"; do
-  if [[ ! -d "${repo_root}/${directory}" ]]; then
-    echo "Missing required top-level directory: ${directory}/" >&2
-    exit 1
-  fi
-done
-
-for file_path in "${required_files[@]}"; do
-  if [[ ! -f "${repo_root}/${file_path}" ]]; then
-    echo "Missing required top-level file: ${file_path}" >&2
-    exit 1
-  fi
-done
-
-for entry in "${allowed_top_level_control_entries[@]}"; do
-  if [[ ! -e "${repo_root}/${entry}" ]]; then
-    echo "Missing allowed top-level control entry: ${entry}" >&2
-    exit 1
-  fi
-done
-
-mapfile -t actual_directories < <(
-  find "${repo_root}" -maxdepth 1 -mindepth 1 -type d -printf '%f\n' | sort
-)
-mapfile -t expected_directories < <(
-  printf '%s\n' "${allowed_top_level_directories[@]}" | sort
-)
-
-if [[ "${actual_directories[*]}" != "${expected_directories[*]}" ]]; then
-  echo "Top-level directories do not match the approved repository skeleton." >&2
-  echo "Expected directories:" >&2
-  printf '  %s\n' "${expected_directories[@]}" >&2
-  echo "Actual directories:" >&2
-  printf '  %s\n' "${actual_directories[@]}" >&2
+if ! git -C "${repo_root}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "Not a Git working tree: ${repo_root}" >&2
   exit 1
 fi
 
-echo "Repository skeleton matches the approved top-level structure."
+for entry in "${expected_top_level_entries[@]}"; do
+  if [[ -z "$(git -C "${repo_root}" ls-tree --name-only HEAD -- "${entry}")" ]]; then
+    echo "Missing required tracked top-level entry at HEAD: ${entry}" >&2
+    exit 1
+  fi
+done
+
+mapfile -t actual_tracked_entries < <(
+  git -C "${repo_root}" ls-tree --name-only HEAD | LC_ALL=C sort
+)
+mapfile -t expected_entries < <(
+  printf '%s\n' "${expected_top_level_entries[@]}" | LC_ALL=C sort
+)
+
+if [[ "${actual_tracked_entries[*]}" != "${expected_entries[*]}" ]]; then
+  echo "Tracked top-level entries do not match the approved repository skeleton." >&2
+  echo "Expected tracked entries:" >&2
+  printf '  %s\n' "${expected_entries[@]}" >&2
+  echo "Actual tracked entries:" >&2
+  printf '  %s\n' "${actual_tracked_entries[@]}" >&2
+  exit 1
+fi
+
+echo "Repository skeleton matches the approved tracked top-level structure."
