@@ -1,4 +1,3 @@
-````markdown
 # AegisOps
 
 ## Platform Requirements Baseline
@@ -666,5 +665,3 @@ The following references SHOULD be maintained and kept current:
 ---
 
 ### End of Document
-
-```
