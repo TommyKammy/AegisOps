@@ -1,0 +1,7 @@
+schema_version: 1
+category: operations
+status: placeholder
+non_secret: true
+environment: template
+description: Placeholder parameter catalog for non-production operations settings.
+values: {}
