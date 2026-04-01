@@ -65,6 +65,8 @@ services:
     image: opensearchproject/opensearch:2.19.0
     volumes:
       - /srv/aegisops/opensearch-data-placeholder:/usr/share/opensearch/data
+  dashboards:
+    image: opensearchproject/opensearch-dashboards:2.19.0
     # skeleton only; not production-ready until approved runtime settings are supplied"
 assert_passes "${valid_repo}"
 
@@ -81,6 +83,8 @@ services:
     image: opensearchproject/opensearch:latest
     volumes:
       - /srv/aegisops/opensearch-data-placeholder:/usr/share/opensearch/data
+  dashboards:
+    image: opensearchproject/opensearch-dashboards:2.19.0
     # skeleton only; not production-ready until approved runtime settings are supplied"
 assert_fails_with "${latest_tag_repo}" "must not use the latest tag"
 
@@ -92,6 +96,8 @@ services:
     image: opensearchproject/opensearch:2.19.0
     volumes:
       - /tmp/opensearch:/usr/share/opensearch/data
+  dashboards:
+    image: opensearchproject/opensearch-dashboards:2.19.0
     # skeleton only; not production-ready until approved runtime settings are supplied"
 assert_fails_with "${bad_mount_repo}" "persistent mount placeholder"
 
@@ -103,7 +109,35 @@ services:
     image: nginx:1.27.0
     volumes:
       - /srv/aegisops/opensearch-data-placeholder:/usr/share/opensearch/data
+  dashboards:
+    image: opensearchproject/opensearch-dashboards:2.19.0
     # skeleton only; not production-ready until approved runtime settings are supplied"
 assert_fails_with "${bad_image_repo}" "must pin opensearchproject/opensearch"
+
+missing_dashboards_repo="${workdir}/missing-dashboards"
+create_repo "${missing_dashboards_repo}"
+write_compose "${missing_dashboards_repo}" "name: aegisops-opensearch
+services:
+  opensearch:
+    image: opensearchproject/opensearch:2.19.0
+    volumes:
+      - /srv/aegisops/opensearch-data-placeholder:/usr/share/opensearch/data
+    # skeleton only; not production-ready until approved runtime settings are supplied"
+assert_fails_with "${missing_dashboards_repo}" "must define a dashboards service"
+
+dashboards_ports_repo="${workdir}/dashboards-ports"
+create_repo "${dashboards_ports_repo}"
+write_compose "${dashboards_ports_repo}" "name: aegisops-opensearch
+services:
+  opensearch:
+    image: opensearchproject/opensearch:2.19.0
+    volumes:
+      - /srv/aegisops/opensearch-data-placeholder:/usr/share/opensearch/data
+  dashboards:
+    image: opensearchproject/opensearch-dashboards:2.19.0
+    ports:
+      - 5601:5601
+    # skeleton only; not production-ready until approved runtime settings are supplied"
+assert_fails_with "${dashboards_ports_repo}" "must not publish Dashboards directly with ports"
 
 echo "verify-opensearch-compose-skeleton tests passed"
