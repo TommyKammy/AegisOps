@@ -21,6 +21,7 @@ required_phrases=(
   "Webhook endpoints must require an authentication or integrity control such as a token, signature, or equivalent approved mechanism."
   "Administrative access must use documented approved paths rather than ad-hoc direct exposure of product service ports."
   "Any new always-on outbound dependency must be documented and reviewed for both security and operational impact before adoption."
+  "Deny-by-default remains the expected posture for outbound internet access unless an approved need is documented."
   "This document defines policy only and does not change runtime networking."
 )
 
