@@ -22,13 +22,18 @@ if [[ ! -f "${doc_path}" ]]; then
   exit 1
 fi
 
+escape_ere() {
+  printf '%s' "$1" | sed -e 's/[][(){}.^$*+?|\\]/\\&/g'
+}
+
 for entry in "${required_entries[@]}"; do
   if ! grep -Fq "\`${entry}\`" "${doc_path}"; then
     echo "Missing documented entry for ${entry}" >&2
     exit 1
   fi
 
-  if ! grep -Eq "\\| \`${entry//\//\\/}\` \\| .+[[:alnum:]].*\\|" "${doc_path}"; then
+  escaped_entry="$(escape_ere "${entry}")"
+  if ! grep -Eq "^\\| \`${escaped_entry}\` \\| .*[[:alnum:]].*\\|$" "${doc_path}"; then
     echo "Missing purpose description for ${entry}" >&2
     exit 1
   fi
