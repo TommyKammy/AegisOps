@@ -4,6 +4,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 doc_path="${repo_root}/docs/parameters/environment-parameter-catalog-structure.md"
+config_parameters_dir="${repo_root}/config/parameters"
 
 required_headings=(
   "## 1. Purpose"
@@ -30,6 +31,11 @@ required_phrases=(
 
 if [[ ! -f "${doc_path}" ]]; then
   echo "Missing environment parameter catalog structure document: ${doc_path}" >&2
+  exit 1
+fi
+
+if [[ ! -d "${config_parameters_dir}" ]]; then
+  echo "Missing repository parameter catalog structure: ${config_parameters_dir}" >&2
   exit 1
 fi
 
