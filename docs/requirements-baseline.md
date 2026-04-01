@@ -281,9 +281,43 @@ The name **AegisOps** SHOULD be used consistently in:
 * deployment identifiers
 * operational runbooks
 
-### 7.2 Docker and Compose
+Examples:
 
-* Compose project names SHOULD use the prefix: `aegisops-*`
+* `AegisOps Platform Requirements Baseline`
+* `AegisOps Repository Structure Baseline`
+* `aegisops-opensearch`
+
+### 7.2 Hostname Naming
+
+Hostnames MUST use lowercase letters, digits, and hyphens only.
+
+Hostnames MUST start with the `aegisops-` product namespace and SHOULD end with a stable role-specific suffix.
+
+Where multiple hosts share the same role, hostnames SHOULD use a zero-padded ordinal suffix.
+
+Recommended pattern:
+
+`aegisops-<role>-node-<nn>`
+
+Recommended examples:
+
+* `aegisops-opensearch-node-01`
+* `aegisops-opensearch-node-02`
+* `aegisops-ingest-node-01`
+
+Single-instance roles MAY omit the ordinal only when future expansion is not expected to create ambiguity.
+
+Recommended examples:
+
+* `aegisops-n8n-node`
+* `aegisops-proxy-node`
+
+### 7.3 Docker Compose Project Naming
+
+Compose project names:
+
+* MUST use the `aegisops-` prefix
+* MUST use lowercase letters, digits, and hyphens only
 * Service names SHOULD remain stable across environments where possible
 * Container names SHOULD NOT be hard-coded unless operationally justified
 
@@ -294,9 +328,15 @@ Recommended examples:
 * `aegisops-ingest`
 * `aegisops-proxy`
 
-### 7.3 OpenSearch Index Naming
+### 7.4 OpenSearch Index Naming
 
-Recommended index naming patterns:
+OpenSearch index names:
+
+* MUST use lowercase letters, digits, and hyphens only
+* MUST start with the `aegisops-` namespace
+* SHOULD group data by type before source
+
+Recommended patterns:
 
 * `aegisops-logs-windows-*`
 * `aegisops-logs-linux-*`
@@ -307,9 +347,12 @@ Recommended index naming patterns:
 
 Any deviation from index naming conventions MUST be documented.
 
-### 7.4 Detector Naming
+### 7.5 Detector Naming
 
-Detector names SHOULD be descriptive and stable.
+Detector names:
+
+* SHOULD be descriptive, stable, and namespace-prefixed
+* SHOULD use lowercase letters, digits, and hyphens only
 
 Recommended pattern:
 
@@ -319,9 +362,13 @@ Example:
 
 `aegisops-windows-suspicious-powershell-high`
 
-### 7.5 n8n Workflow Naming
+### 7.6 n8n Workflow Naming
 
-Workflow names SHOULD follow functional prefixes and SHOULD include the product namespace where appropriate.
+Workflow names:
+
+* MUST use the `aegisops_` namespace
+* SHOULD follow functional prefixes
+* SHOULD use lowercase letters, digits, and underscores only so they remain easy to map into exported workflow assets and automation tooling
 
 Recommended patterns:
 
@@ -331,15 +378,25 @@ Recommended patterns:
 * `aegisops_notify_*`
 * `aegisops_response_*`
 
-### 7.6 Secret and Environment Variable Naming
+Examples:
 
-Secret and environment variable names SHOULD be uppercase and scoped by component.
+* `aegisops_alert_ingest_opensearch_findings`
+* `aegisops_enrich_ip_reputation`
+* `aegisops_approve_host_isolation`
+
+### 7.7 Secret and Environment Variable Naming
+
+Secret and environment variable names:
+
+* SHOULD be uppercase, underscore-delimited, and scoped by component
+* SHOULD retain the same naming convention between environment variables and secret identifiers where practical
 
 Examples:
 
 * `AEGISOPS_OPENSEARCH_ADMIN_PASSWORD`
 * `AEGISOPS_N8N_ENCRYPTION_KEY`
 * `AEGISOPS_POSTGRES_PASSWORD`
+* `AEGISOPS_PROXY_TLS_CERT_PATH`
 
 ---
 
