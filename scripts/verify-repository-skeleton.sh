@@ -16,17 +16,17 @@ expected_top_level_entries=(
   "sigma"
 )
 
+if ! git -C "${repo_root}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "Not a Git working tree: ${repo_root}" >&2
+  exit 1
+fi
+
 for entry in "${expected_top_level_entries[@]}"; do
-  if [[ ! -e "${repo_root}/${entry}" ]]; then
-    echo "Missing required top-level entry: ${entry}" >&2
+  if [[ -z "$(git -C "${repo_root}" ls-tree --name-only HEAD -- "${entry}")" ]]; then
+    echo "Missing required tracked top-level entry at HEAD: ${entry}" >&2
     exit 1
   fi
 done
-
-if [[ ! -e "${repo_root}/.git" ]]; then
-  echo "Missing repository control entry: .git" >&2
-  exit 1
-fi
 
 mapfile -t actual_tracked_entries < <(
   git -C "${repo_root}" ls-tree --name-only HEAD | LC_ALL=C sort
