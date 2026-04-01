@@ -72,9 +72,10 @@ services:
       DB_POSTGRESDB_PASSWORD: \${AEGISOPS_POSTGRES_PASSWORD:?set-in-runtime-secret-source}
       N8N_ENCRYPTION_KEY: \${AEGISOPS_N8N_ENCRYPTION_KEY:?set-in-runtime-secret-source}
       N8N_HOST: \${AEGISOPS_N8N_HOST:-n8n-placeholder.internal}
+      N8N_USER_FOLDER: \${AEGISOPS_N8N_USER_FOLDER:-/data/n8n-placeholder}
       WEBHOOK_URL: \${AEGISOPS_N8N_WEBHOOK_URL:-https://n8n-placeholder.example.invalid/}
     volumes:
-      - /srv/aegisops/n8n-data-placeholder:/home/node/.n8n
+      - /srv/aegisops/n8n-data-placeholder:/data/n8n-placeholder
     # approved for n8n orchestration only; queue mode, Redis, and workflow import remain out of scope here
     # skeleton only; not production-ready until approved runtime settings are supplied"
 assert_passes "${valid_repo}"
@@ -99,9 +100,10 @@ services:
       DB_POSTGRESDB_PASSWORD: \${AEGISOPS_POSTGRES_PASSWORD:?set-in-runtime-secret-source}
       N8N_ENCRYPTION_KEY: \${AEGISOPS_N8N_ENCRYPTION_KEY:?set-in-runtime-secret-source}
       N8N_HOST: \${AEGISOPS_N8N_HOST:-n8n-placeholder.internal}
+      N8N_USER_FOLDER: \${AEGISOPS_N8N_USER_FOLDER:-/data/n8n-placeholder}
       WEBHOOK_URL: \${AEGISOPS_N8N_WEBHOOK_URL:-https://n8n-placeholder.example.invalid/}
     volumes:
-      - /srv/aegisops/n8n-data-placeholder:/home/node/.n8n
+      - /srv/aegisops/n8n-data-placeholder:/data/n8n-placeholder
     # approved for n8n orchestration only; queue mode, Redis, and workflow import remain out of scope here
     # skeleton only; not production-ready until approved runtime settings are supplied"
 assert_fails_with "${latest_tag_repo}" "must not use the latest tag"
@@ -121,9 +123,10 @@ services:
       DB_POSTGRESDB_PASSWORD: \${AEGISOPS_POSTGRES_PASSWORD:?set-in-runtime-secret-source}
       N8N_ENCRYPTION_KEY: \${AEGISOPS_N8N_ENCRYPTION_KEY:?set-in-runtime-secret-source}
       N8N_HOST: \${AEGISOPS_N8N_HOST:-n8n-placeholder.internal}
+      N8N_USER_FOLDER: \${AEGISOPS_N8N_USER_FOLDER:-/data/n8n-placeholder}
       WEBHOOK_URL: \${AEGISOPS_N8N_WEBHOOK_URL:-https://n8n-placeholder.example.invalid/}
     volumes:
-      - /tmp/n8n:/home/node/.n8n
+      - /tmp/n8n:/data/n8n-placeholder
     # approved for n8n orchestration only; queue mode, Redis, and workflow import remain out of scope here
     # skeleton only; not production-ready until approved runtime settings are supplied"
 assert_fails_with "${bad_mount_repo}" "persistent mount placeholder"
@@ -143,9 +146,10 @@ services:
       DB_POSTGRESDB_PASSWORD: supersecret
       N8N_ENCRYPTION_KEY: anothersecret
       N8N_HOST: n8n.internal
+      N8N_USER_FOLDER: /data/n8n-placeholder
       WEBHOOK_URL: https://n8n.internal/
     volumes:
-      - /srv/aegisops/n8n-data-placeholder:/home/node/.n8n
+      - /srv/aegisops/n8n-data-placeholder:/data/n8n-placeholder
     # approved for n8n orchestration only; queue mode, Redis, and workflow import remain out of scope here
     # skeleton only; not production-ready until approved runtime settings are supplied"
 assert_fails_with "${inline_secret_repo}" "placeholder-safe environment references"
@@ -165,11 +169,12 @@ services:
       DB_POSTGRESDB_PASSWORD: \${AEGISOPS_POSTGRES_PASSWORD:?set-in-runtime-secret-source}
       N8N_ENCRYPTION_KEY: \${AEGISOPS_N8N_ENCRYPTION_KEY:?set-in-runtime-secret-source}
       N8N_HOST: \${AEGISOPS_N8N_HOST:-n8n-placeholder.internal}
+      N8N_USER_FOLDER: \${AEGISOPS_N8N_USER_FOLDER:-/data/n8n-placeholder}
       WEBHOOK_URL: \${AEGISOPS_N8N_WEBHOOK_URL:-https://n8n-placeholder.example.invalid/}
     ports:
       - 5678:5678
     volumes:
-      - /srv/aegisops/n8n-data-placeholder:/home/node/.n8n
+      - /srv/aegisops/n8n-data-placeholder:/data/n8n-placeholder
     # approved for n8n orchestration only; queue mode, Redis, and workflow import remain out of scope here
     # skeleton only; not production-ready until approved runtime settings are supplied"
 assert_fails_with "${ports_repo}" "must not publish n8n directly with ports"
@@ -189,11 +194,12 @@ services:
       DB_POSTGRESDB_PASSWORD: \${AEGISOPS_POSTGRES_PASSWORD:?set-in-runtime-secret-source}
       N8N_ENCRYPTION_KEY: \${AEGISOPS_N8N_ENCRYPTION_KEY:?set-in-runtime-secret-source}
       N8N_HOST: \${AEGISOPS_N8N_HOST:-n8n-placeholder.internal}
+      N8N_USER_FOLDER: \${AEGISOPS_N8N_USER_FOLDER:-/data/n8n-placeholder}
       WEBHOOK_URL: \${AEGISOPS_N8N_WEBHOOK_URL:-https://n8n-placeholder.example.invalid/}
       EXECUTIONS_MODE: queue
       QUEUE_BULL_REDIS_HOST: redis
     volumes:
-      - /srv/aegisops/n8n-data-placeholder:/home/node/.n8n
+      - /srv/aegisops/n8n-data-placeholder:/data/n8n-placeholder
   redis:
     image: redis:7.4.2
     # approved for n8n orchestration only; queue mode, Redis, and workflow import remain out of scope here
@@ -216,9 +222,10 @@ services:
       DB_POSTGRESDB_PASSWORD: \${AEGISOPS_POSTGRES_PASSWORD:?set-in-runtime-secret-source}
       N8N_ENCRYPTION_KEY: \${AEGISOPS_N8N_ENCRYPTION_KEY:?set-in-runtime-secret-source}
       N8N_HOST: \${AEGISOPS_N8N_HOST:-n8n-placeholder.internal}
+      N8N_USER_FOLDER: \${AEGISOPS_N8N_USER_FOLDER:-/data/n8n-placeholder}
       WEBHOOK_URL: \${AEGISOPS_N8N_WEBHOOK_URL:-https://n8n-placeholder.example.invalid/}
     volumes:
-      - /srv/aegisops/n8n-data-placeholder:/home/node/.n8n
+      - /srv/aegisops/n8n-data-placeholder:/data/n8n-placeholder
     # approved for n8n orchestration only; queue mode, Redis, and workflow import remain out of scope here
     # skeleton only; not production-ready until approved runtime settings are supplied"
 assert_fails_with "${workflow_import_repo}" "must not introduce workflow import or execution logic"

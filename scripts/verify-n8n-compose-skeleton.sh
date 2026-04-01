@@ -64,11 +64,13 @@ require_pattern '^      N8N_ENCRYPTION_KEY: \${AEGISOPS_N8N_ENCRYPTION_KEY:\?set
   "n8n compose skeleton must use placeholder-safe environment references for N8N_ENCRYPTION_KEY."
 require_pattern '^      N8N_HOST: \${AEGISOPS_N8N_HOST:-n8n-placeholder\.internal}$' \
   "n8n compose skeleton must use placeholder-safe environment references for N8N_HOST."
+require_pattern '^      N8N_USER_FOLDER: \${AEGISOPS_N8N_USER_FOLDER:-/data/n8n-placeholder}$' \
+  "n8n compose skeleton must use placeholder-safe environment references for N8N_USER_FOLDER."
 require_pattern '^      WEBHOOK_URL: \${AEGISOPS_N8N_WEBHOOK_URL:-https://n8n-placeholder\.example\.invalid/}$' \
   "n8n compose skeleton must use placeholder-safe environment references for WEBHOOK_URL."
 require_pattern '^    volumes:$' \
   "n8n compose skeleton must declare volumes."
-require_pattern '^      - /srv/aegisops/n8n-data-placeholder:/home/node/\.n8n$' \
+require_pattern '^      - /srv/aegisops/n8n-data-placeholder:/data/n8n-placeholder$' \
   "n8n compose skeleton must use the explicit AegisOps n8n persistent mount placeholder."
 require_pattern 'n8n orchestration only' \
   "n8n compose skeleton must limit its role to the approved n8n orchestration boundary."

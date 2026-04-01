@@ -12,9 +12,10 @@ services:
       DB_POSTGRESDB_PASSWORD: ${AEGISOPS_POSTGRES_PASSWORD:?set-in-runtime-secret-source}
       N8N_ENCRYPTION_KEY: ${AEGISOPS_N8N_ENCRYPTION_KEY:?set-in-runtime-secret-source}
       N8N_HOST: ${AEGISOPS_N8N_HOST:-n8n-placeholder.internal}
+      N8N_USER_FOLDER: ${AEGISOPS_N8N_USER_FOLDER:-/data/n8n-placeholder}
       WEBHOOK_URL: ${AEGISOPS_N8N_WEBHOOK_URL:-https://n8n-placeholder.example.invalid/}
     volumes:
-      - /srv/aegisops/n8n-data-placeholder:/home/node/.n8n
+      - /srv/aegisops/n8n-data-placeholder:/data/n8n-placeholder
     # approved for n8n orchestration only; queue mode, Redis, and workflow import remain out of scope here
     # access must remain behind the approved reverse proxy; no direct ports publication here
     # skeleton only; not production-ready until approved runtime settings are supplied
