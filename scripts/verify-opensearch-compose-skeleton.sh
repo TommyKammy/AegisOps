@@ -24,7 +24,7 @@ require_pattern() {
   local pattern="$1"
   local message="$2"
 
-  if ! rg -n "${pattern}" "${compose_path}" >/dev/null; then
+  if ! grep -En "${pattern}" "${compose_path}" >/dev/null; then
     echo "${message}" >&2
     exit 1
   fi
@@ -33,15 +33,15 @@ require_pattern() {
 require_fixed_string "name: aegisops-opensearch"
 require_fixed_string "services:"
 require_fixed_string "  opensearch:"
-require_pattern '^    image: [^[:space:]]+:[^[:space:]]+$' \
-  "OpenSearch compose skeleton must pin the image version explicitly."
+require_pattern '^    image: opensearchproject/opensearch:[^[:space:]]+$' \
+  "OpenSearch compose skeleton must pin opensearchproject/opensearch to an explicit version tag."
 
-if rg -n '^    image: .*:latest$' "${compose_path}" >/dev/null; then
+if grep -En '^    image: .*:latest$' "${compose_path}" >/dev/null; then
   echo "OpenSearch compose skeleton must not use the latest tag." >&2
   exit 1
 fi
 
-if rg -n '^\s*container_name:' "${compose_path}" >/dev/null; then
+if grep -En '^[[:space:]]*container_name:' "${compose_path}" >/dev/null; then
   echo "OpenSearch compose skeleton must not hard-code container_name." >&2
   exit 1
 fi

@@ -95,4 +95,15 @@ services:
     # skeleton only; not production-ready until approved runtime settings are supplied"
 assert_fails_with "${bad_mount_repo}" "persistent mount placeholder"
 
+bad_image_repo="${workdir}/bad-image-repo"
+create_repo "${bad_image_repo}"
+write_compose "${bad_image_repo}" "name: aegisops-opensearch
+services:
+  opensearch:
+    image: nginx:1.27.0
+    volumes:
+      - /srv/aegisops/opensearch-data-placeholder:/usr/share/opensearch/data
+    # skeleton only; not production-ready until approved runtime settings are supplied"
+assert_fails_with "${bad_image_repo}" "must pin opensearchproject/opensearch"
+
 echo "verify-opensearch-compose-skeleton tests passed"
