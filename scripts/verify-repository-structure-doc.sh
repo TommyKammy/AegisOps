@@ -11,6 +11,7 @@ required_entries=(
   "sigma/"
   "n8n/"
   "ingest/"
+  "postgres/"
   "proxy/"
   "scripts/"
   "config/"

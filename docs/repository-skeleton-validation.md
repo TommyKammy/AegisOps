@@ -11,11 +11,13 @@ The approved top-level repository baseline allows these tracked entries:
 
 - `.env.sample`
 - `LICENSE.txt`
+- `README.md`
 - `config/`
 - `docs/`
 - `ingest/`
 - `n8n/`
 - `opensearch/`
+- `postgres/`
 - `proxy/`
 - `scripts/`
 - `sigma/`
@@ -26,11 +28,13 @@ The repository currently tracks these top-level entries in the current Git index
 
 - `.env.sample`
 - `LICENSE.txt`
+- `README.md`
 - `config/`
 - `docs/`
 - `ingest/`
 - `n8n/`
 - `opensearch/`
+- `postgres/`
 - `proxy/`
 - `scripts/`
 - `sigma/`
@@ -42,6 +46,6 @@ The current repository skeleton matches the approved baseline.
 Disposition decisions:
 
 - `.codex-supervisor/` is not an approved tracked top-level directory and must remain supervisor-local state only.
-- `LICENSE.txt` is an approved tracked top-level file and is now part of the documented baseline.
+- `LICENSE.txt` and `README.md` are approved tracked top-level files and are part of the documented baseline.
 
 No approved baseline top-level entries are missing.

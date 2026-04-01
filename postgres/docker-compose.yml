@@ -1,0 +1,14 @@
+name: aegisops-postgres
+
+services:
+  postgres:
+    image: postgres:16.4
+    environment:
+      POSTGRES_DB: ${AEGISOPS_POSTGRES_DB:-aegisops_n8n_placeholder}
+      POSTGRES_USER: ${AEGISOPS_POSTGRES_USER:-aegisops_n8n_placeholder}
+      POSTGRES_PASSWORD: ${AEGISOPS_POSTGRES_PASSWORD:?set-in-runtime-secret-source}
+    volumes:
+      - /srv/aegisops/postgres-data-placeholder:/var/lib/postgresql/data
+    # internal state store for n8n metadata and execution state only
+    # access must remain on approved internal paths; no direct ports publication here
+    # skeleton only; not production-ready until approved runtime settings are supplied
