@@ -17,6 +17,7 @@
 - Added `docs/documentation-ownership-map.md` to define a single ownership map for the requirements baseline, ADRs, parameter docs, and runbooks.
 - Added `scripts/verify-documentation-ownership-map.sh` as the focused reproducer and verifier for the ownership-map requirement.
 - Reproduced the gap first as a missing ownership-map document, then passed focused validation after adding the document.
+- Committed the change as `72433d2` (`docs: add documentation ownership map`) and opened draft PR #32 against `main`.
 
 ## Active Failure Context
 - None recorded.
@@ -26,12 +27,13 @@
 - Hypothesis: The issue is satisfied by adding one repository-controlled ownership-map document that supplements existing document-control metadata without changing runtime or implementation behavior.
 - What changed: Added `docs/documentation-ownership-map.md`; added `scripts/verify-documentation-ownership-map.sh`; reproduced failure as a missing document before implementing the map.
 - Current blocker: none
-- Next exact step: Stage the new doc, verifier, and updated journal; create a checkpoint commit on `codex/issue-22`.
+- Next exact step: Monitor draft PR #32 for review feedback and address any requested wording or verification changes.
 - Verification gap: No broader repo-wide doc suite was run because the change is documentation-only and the focused ownership-map verifier passed alongside adjacent runbook and parameter-doc checks.
 - Files touched: `.codex-supervisor/issues/22/issue-journal.md`, `docs/documentation-ownership-map.md`, `scripts/verify-documentation-ownership-map.sh`
 - Rollback concern: low; change is additive documentation plus a focused verifier.
-- Last focused command: `scripts/verify-documentation-ownership-map.sh`
+- Last focused command: `gh pr view 32 --json url,title,body,isDraft,headRefName,baseRefName`
 ### Scratchpad
 - Keep this section short. The supervisor may compact older notes automatically.
 - Reproducer before fix: `scripts/verify-documentation-ownership-map.sh` -> missing `docs/documentation-ownership-map.md`.
 - Focused verification after fix: `scripts/verify-documentation-ownership-map.sh`, `scripts/verify-runbook-doc.sh`, `scripts/verify-parameter-category-docs.sh`.
+- Draft PR: `https://github.com/TommyKammy/AegisOps/pull/32`
