@@ -1,0 +1,8 @@
+name: aegisops-opensearch
+
+services:
+  opensearch:
+    image: opensearchproject/opensearch:2.19.0
+    volumes:
+      - /srv/aegisops/opensearch-data-placeholder:/usr/share/opensearch/data
+    # skeleton only; not production-ready until approved runtime settings are supplied
