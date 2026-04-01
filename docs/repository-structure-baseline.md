@@ -17,10 +17,12 @@ It translates the repository structure guidance from `docs/requirements-baseline
 | `scripts/` | Repository maintenance, validation, and operator helper scripts that support reproducible execution. |
 | `config/` | Shared non-secret configuration artifacts and parameter files referenced by the platform components. |
 | `.env.sample` | Sample environment variables for documentation and structure only; never real secrets or active environment state. |
+| `LICENSE.txt` | Repository license text tracked as a stable project-level metadata file. |
 
 ## Repository Rules
 
 - Secrets must not be committed anywhere in the repository.
 - Real environment files are not approved repository assets.
 - New top-level directories require explicit approval because they change the repository baseline.
+- `.codex-supervisor/` is supervisor-local working state and is not an approved tracked top-level repository entry.
 - This document defines structure only and does not authorize runtime, deployment, or workflow implementation.

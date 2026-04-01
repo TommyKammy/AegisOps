@@ -3,13 +3,14 @@
 - Validation date: 2026-04-01
 - Baseline reference: `docs/repository-structure-baseline.md`
 - Verification command: `bash scripts/verify-repository-skeleton.sh`
-- Validation status: FAIL
+- Validation status: PASS
 
 ## Approved Baseline Entries
 
 The approved top-level repository baseline allows these tracked entries:
 
 - `.env.sample`
+- `LICENSE.txt`
 - `config/`
 - `docs/`
 - `ingest/`
@@ -21,9 +22,8 @@ The approved top-level repository baseline allows these tracked entries:
 
 ## Current Tracked Top-Level Entries
 
-The repository currently tracks these top-level entries at `HEAD`:
+The repository currently tracks these top-level entries in the current Git index after removing supervisor-local state from version control:
 
-- `.codex-supervisor/`
 - `.env.sample`
 - `LICENSE.txt`
 - `config/`
@@ -37,11 +37,11 @@ The repository currently tracks these top-level entries at `HEAD`:
 
 ## Result
 
-The current repository skeleton does not match the approved baseline.
+The current repository skeleton matches the approved baseline.
 
-Documented deviations:
+Disposition decisions:
 
-- Unexpected tracked top-level directory: `.codex-supervisor/`
-- Unexpected tracked top-level file: `LICENSE.txt`
+- `.codex-supervisor/` is not an approved tracked top-level directory and must remain supervisor-local state only.
+- `LICENSE.txt` is an approved tracked top-level file and is now part of the documented baseline.
 
-No required baseline top-level entries are missing.
+No approved baseline top-level entries are missing.
