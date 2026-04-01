@@ -238,6 +238,8 @@ aegisops/
 │  ├─ approval-patterns/
 │  ├─ credentials-template/
 │  └─ webhook-contracts/
+├─ postgres/
+│  └─ docker-compose.yml
 ├─ ingest/
 │  ├─ pipelines/
 │  ├─ parsers/

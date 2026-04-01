@@ -13,11 +13,13 @@ It translates the repository structure guidance from `docs/requirements-baseline
 | `sigma/` | Sigma detection content, including reviewed rules, curated subsets, suppressions, and field mappings. |
 | `n8n/` | n8n workflow assets, approval patterns, credential templates, and webhook contract definitions. |
 | `ingest/` | Log ingestion assets such as pipelines, parsers, and source definitions. |
+| `postgres/` | PostgreSQL deployment assets such as compose definitions for the n8n metadata and execution-state store. |
 | `proxy/` | Reverse proxy configuration for controlled access and TLS termination. |
 | `scripts/` | Repository maintenance, validation, and operator helper scripts that support reproducible execution. |
 | `config/` | Shared non-secret configuration artifacts and parameter files referenced by the platform components. |
 | `.env.sample` | Sample environment variables for documentation and structure only; never real secrets or active environment state. |
 | `LICENSE.txt` | Repository license text tracked as a stable project-level metadata file. |
+| `README.md` | Project overview and contributor-facing orientation for the current approved baseline. |
 
 ## Repository Rules
 

@@ -68,11 +68,13 @@ create_repo \
   "${approved_repo}" \
   ".env.sample" \
   "LICENSE.txt" \
+  "README.md" \
   "config/" \
   "docs/" \
   "ingest/" \
   "n8n/" \
   "opensearch/" \
+  "postgres/" \
   "proxy/" \
   "scripts/" \
   "sigma/"
@@ -84,11 +86,13 @@ create_repo \
   ".codex-supervisor/" \
   ".env.sample" \
   "LICENSE.txt" \
+  "README.md" \
   "config/" \
   "docs/" \
   "ingest/" \
   "n8n/" \
   "opensearch/" \
+  "postgres/" \
   "proxy/" \
   "scripts/" \
   "sigma/"

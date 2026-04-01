@@ -66,6 +66,7 @@ aegisops/
 ├── opensearch/
 ├── sigma/
 ├── n8n/
+├── postgres/
 ├── ingest/
 ├── proxy/
 ├── scripts/
