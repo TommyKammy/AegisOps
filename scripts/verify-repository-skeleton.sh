@@ -2,10 +2,12 @@
 
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+default_repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="${1:-${default_repo_root}}"
 
 expected_top_level_entries=(
   ".env.sample"
+  "LICENSE.txt"
   "config"
   "docs"
   "ingest"
@@ -21,19 +23,21 @@ if ! git -C "${repo_root}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   exit 1
 fi
 
-for entry in "${expected_top_level_entries[@]}"; do
-  if [[ -z "$(git -C "${repo_root}" ls-tree --name-only HEAD -- "${entry}")" ]]; then
-    echo "Missing required tracked top-level entry at HEAD: ${entry}" >&2
-    exit 1
-  fi
-done
-
 mapfile -t actual_tracked_entries < <(
-  git -C "${repo_root}" ls-tree --name-only HEAD | LC_ALL=C sort
+  git -C "${repo_root}" ls-files \
+    | awk -F/ '{print $1}' \
+    | LC_ALL=C sort -u
 )
 mapfile -t expected_entries < <(
   printf '%s\n' "${expected_top_level_entries[@]}" | LC_ALL=C sort
 )
+
+for entry in "${expected_top_level_entries[@]}"; do
+  if ! printf '%s\n' "${actual_tracked_entries[@]}" | grep -Fx "${entry}" >/dev/null; then
+    echo "Missing required tracked top-level entry: ${entry}" >&2
+    exit 1
+  fi
+done
 
 if [[ "${actual_tracked_entries[*]}" != "${expected_entries[*]}" ]]; then
   echo "Tracked top-level entries do not match the approved repository skeleton." >&2
