@@ -1,0 +1,7 @@
+schema_version: 1
+category: storage
+status: placeholder
+non_secret: true
+environment: template
+description: Placeholder parameter catalog for non-production storage settings.
+values: {}
