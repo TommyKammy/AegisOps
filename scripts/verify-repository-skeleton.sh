@@ -6,6 +6,7 @@ default_repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 repo_root="${1:-${default_repo_root}}"
 
 expected_top_level_entries=(
+  ".codex-supervisor"
   ".env.sample"
   ".github"
   "LICENSE.txt"

@@ -9,6 +9,7 @@
 
 The approved top-level repository baseline allows these tracked entries:
 
+- `.codex-supervisor/`
 - `.env.sample`
 - `.github/`
 - `LICENSE.txt`
@@ -25,8 +26,9 @@ The approved top-level repository baseline allows these tracked entries:
 
 ## Current Tracked Top-Level Entries
 
-The repository currently tracks these top-level entries in the verified pull request merge checkout after removing supervisor-local state from version control:
+The repository currently tracks these top-level entries in the verified pull request merge checkout:
 
+- `.codex-supervisor/`
 - `.env.sample`
 - `.github/`
 - `LICENSE.txt`
@@ -47,7 +49,7 @@ The current repository skeleton matches the approved baseline.
 
 Disposition decisions:
 
-- `.codex-supervisor/` is not an approved tracked top-level directory and must remain supervisor-local state only.
+- `.codex-supervisor/` is an approved tracked top-level directory for reviewable supervisor metadata such as issue journals; transient execution state under that path must remain untracked.
 - `LICENSE.txt` and `README.md` are approved tracked top-level files and are part of the documented baseline.
 
 No approved baseline top-level entries are missing.
