@@ -91,6 +91,7 @@ Key documents that serve as the source of truth for implementation decisions:
 - `docs/architecture.md`
 - `docs/canonical-telemetry-schema-baseline.md`
 - `docs/source-onboarding-contract.md`
+- `docs/sigma-to-opensearch-translation-strategy.md`
 - `docs/secops-domain-model.md`
 - `docs/runbook.md`
 - `docs/repository-structure-baseline.md`
