@@ -180,6 +180,33 @@ services:
       - /srv/aegisops/n8n-data-placeholder:/data/n8n-placeholder"
 assert_fails_with "${cross_service_repo}" "must pin n8nio/n8n to an explicit version tag"
 
+top_level_dedent_repo="${workdir}/top-level-dedent"
+create_repo "${top_level_dedent_repo}"
+write_compose "${top_level_dedent_repo}" "name: aegisops-n8n
+services:
+  n8n:
+    command: [\"n8n\", \"start\"]
+    # intentionally invalid: required image, environment, and volumes are absent here
+    # approved for n8n orchestration only; queue mode, Redis, and workflow import remain out of scope here
+    # skeleton only; not production-ready until approved runtime settings are supplied
+volumes:
+  helper:
+    image: n8nio/n8n:1.89.2
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: \${AEGISOPS_POSTGRES_HOST:-postgres}
+      DB_POSTGRESDB_PORT: \${AEGISOPS_POSTGRES_PORT:-5432}
+      DB_POSTGRESDB_DATABASE: \${AEGISOPS_POSTGRES_DB:-aegisops_n8n_placeholder}
+      DB_POSTGRESDB_USER: \${AEGISOPS_POSTGRES_USER:-aegisops_n8n_placeholder}
+      DB_POSTGRESDB_PASSWORD: \${AEGISOPS_POSTGRES_PASSWORD:?set-in-runtime-secret-source}
+      N8N_ENCRYPTION_KEY: \${AEGISOPS_N8N_ENCRYPTION_KEY:?set-in-runtime-secret-source}
+      N8N_HOST: \${AEGISOPS_N8N_HOST:-n8n-placeholder.internal}
+      N8N_USER_FOLDER: \${AEGISOPS_N8N_USER_FOLDER:-/data/n8n-placeholder}
+      WEBHOOK_URL: \${AEGISOPS_N8N_WEBHOOK_URL:-https://n8n-placeholder.example.invalid/}
+    volumes:
+      - /srv/aegisops/n8n-data-placeholder:/data/n8n-placeholder"
+assert_fails_with "${top_level_dedent_repo}" "must pin n8nio/n8n to an explicit version tag"
+
 ports_repo="${workdir}/ports"
 create_repo "${ports_repo}"
 write_compose "${ports_repo}" "name: aegisops-n8n

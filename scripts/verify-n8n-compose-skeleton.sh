@@ -33,6 +33,7 @@ require_pattern() {
 extract_n8n_block() {
   awk '
     /^  n8n:[[:space:]]*$/ { in_n8n = 1 }
+    in_n8n && /^[^[:space:]]/ { exit }
     in_n8n && /^  [a-z0-9-]+:[[:space:]]*$/ && $0 !~ /^  n8n:[[:space:]]*$/ { exit }
     in_n8n { print }
   ' "${compose_path}"
