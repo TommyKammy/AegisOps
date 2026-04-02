@@ -25,6 +25,7 @@ If a document inside one of these areas has its own `Owner` or `Owners` field, t
 | Documentation area path | Area | Owner |
 | ---- | ---- | ---- |
 | `docs/requirements-baseline.md` | Requirements baseline | IT Operations, Information Systems Department |
+| `docs/secops-domain-model.md` | SecOps domain model baseline | IT Operations, Information Systems Department |
 | `docs/adr/` | Architecture Decision Records (ADRs) | IT Operations, Information Systems Department |
 | `docs/parameters/` | Parameter documentation | IT Operations, Information Systems Department |
 | `docs/runbook.md` | Runbooks | IT Operations, Information Systems Department |
@@ -32,6 +33,8 @@ If a document inside one of these areas has its own `Owner` or `Owners` field, t
 The requirements baseline owner recorded in `docs/requirements-baseline.md` remains authoritative for that document and is unchanged by this map.
 
 ADR records under `docs/adr/` may identify specific document proposers or reviewers, but repository-level ownership for the ADR area remains assigned to IT Operations, Information Systems Department unless this map is updated explicitly.
+
+The SecOps domain model document remains the shared semantic reference for baseline object definitions and state boundaries and must stay aligned with the approved architecture and requirements baseline.
 
 Parameter documents under `docs/parameters/` remain the authoritative human-readable home for parameter references, category explanations, ownership notes, and review guidance.
 

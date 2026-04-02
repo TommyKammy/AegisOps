@@ -89,6 +89,7 @@ Key documents that serve as the source of truth for implementation decisions:
 
 - `docs/requirements-baseline.md`
 - `docs/architecture.md`
+- `docs/secops-domain-model.md`
 - `docs/runbook.md`
 - `docs/repository-structure-baseline.md`
 - `docs/network-exposure-and-access-path-policy.md`
