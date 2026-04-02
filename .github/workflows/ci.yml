@@ -73,6 +73,7 @@ jobs:
           bash scripts/test-verify-compose-skeleton-validation.sh
           bash scripts/test-verify-compose-skeleton-overview-doc.sh
           bash scripts/test-verify-control-plane-state-model-doc.sh
+          bash scripts/test-verify-ci-phase-5-workflow-coverage.sh
           bash scripts/test-verify-detection-lifecycle-and-rule-qa-framework.sh
           bash scripts/test-verify-phase-5-semantic-contract-validation.sh
           bash scripts/test-verify-repository-skeleton.sh
