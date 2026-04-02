@@ -39,7 +39,7 @@ if [[ ! -f "${doc_path}" ]]; then
 fi
 
 for heading in "${required_headings[@]}"; do
-  if ! grep -Fq "${heading}" "${doc_path}"; then
+  if ! grep -Fxq "${heading}" "${doc_path}"; then
     echo "Missing auth baseline heading: ${heading}" >&2
     exit 1
   fi
