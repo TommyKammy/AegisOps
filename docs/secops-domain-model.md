@@ -16,6 +16,7 @@ This document defines baseline semantics, ownership boundaries, and state transi
 | `Normalized Event` | Telemetry transformed into the approved event schema used by the analytics plane. |
 | `Detection Rule` | Reviewed detection logic that evaluates normalized telemetry and declares matching conditions. |
 | `Finding` | Detection result produced when a detection rule matches relevant telemetry. |
+| `Correlation` | Explicit relationship that links related findings, alerts, cases, assets, or identities because they share meaningful operator-facing context. |
 | `Alert` | Routed analyst-facing notification or queue item created from one or more findings that require attention. |
 | `Case` | Investigation record that groups analyst work, related alerts, evidence, and response coordination for one work item. |
 | `Incident` | Higher-order security event declaration used when one or more cases represent a material security event that needs coordinated handling. |
@@ -34,6 +35,8 @@ A `Raw Event` becomes a `Normalized Event` when the analytics plane has accepted
 A `Detection Rule` evaluates `Normalized Event` records. It does not own source telemetry, approvals, or action execution.
 
 A finding is the normalized analytic assertion that detection logic matched relevant telemetry.
+
+Correlation is the explicit relationship that links related findings, alerts, cases, assets, or identities because they share meaningful operator-facing context.
 
 An alert is the routed operator-facing notification or queue item created from one or more findings after baseline triage policy decides analyst attention is required.
 
@@ -73,6 +76,7 @@ OpenSearch findings, n8n workflow runs, and future case state must remain separa
 | `Normalized Event` | OpenSearch ingestion and analytics plane | The analytics plane owns normalized telemetry shape and analytic readiness. |
 | `Detection Rule` | Sigma for reviewed source definition; OpenSearch for deployed runtime materialization | Sigma remains the reviewable rule-definition source, while OpenSearch owns the deployed detector representation used at runtime. |
 | `Finding` | OpenSearch detection and analytics plane | A finding is an analytics-plane output and must not be redefined as workflow state. |
+| `Correlation` | Future AegisOps correlation and triage control layer | Correlation records operator-meaningful relationships without replacing the lifecycle of the linked records. |
 | `Alert` | Future AegisOps alert routing and triage control layer | Alert lifecycle belongs to the future control layer that decides routing, deduplication, and analyst attention. |
 | `Case` | Future AegisOps case management control layer | Case lifecycle must be owned separately from analytics outputs and workflow runs. |
 | `Incident` | Future AegisOps incident command and coordination control layer | Incident lifecycle is the coordinated operational record above individual cases. |
@@ -84,7 +88,53 @@ OpenSearch findings, n8n workflow runs, and future case state must remain separa
 | `Action Execution` | n8n execution plane with PostgreSQL-backed workflow state | n8n and its workflow state store own execution attempts and completion records, not the approval verdict. |
 | `Disposition` | The owner of the record being closed | Disposition belongs to the lifecycle authority of the finding, alert, case, or incident it classifies. |
 
-## 5. Baseline Alignment Notes
+## 5. Promotion and Correlation Rules
+
+A finding promotes to an alert only when triage policy determines that analyst attention, tracking, notification, or downstream workflow handling is required.
+
+A finding may remain a finding without becoming an alert when the result is retained only for analytics, threshold accumulation, tuning review, or later correlation and does not yet require direct operator handling.
+
+Correlation links records by shared context, but it does not by itself create an alert, open a case, or declare an incident.
+
+Correlation may connect records through common asset, identity, detection family, campaign hypothesis, time-bounded pattern, or other analyst-meaningful context, but it must not merge unrelated claims into a single lifecycle record without an explicit promotion decision.
+
+An alert promotes to a case only when the operator needs a durable work record for investigation, evidence handling, ownership, or response coordination beyond the alert queue item itself.
+
+An incident is declared only when one or more cases represent a material security event that requires coordinated operational handling beyond a single investigative work item.
+
+## 6. Grouping, Deduplication, and Case Creation Expectations
+
+A case must not be created for every alert by default.
+
+Grouping means related findings may be collected under one alert when they express the same operator-facing claim closely enough that one analyst work item can review them coherently.
+
+Deduplication means additional findings are attached to an existing alert or case when they restate the same analytic claim against materially the same operational target within the active review window.
+
+A new alert must be created instead of deduplicating when severity, target scope, response owner, or review window changes enough that analyst handling would differ.
+
+Grouping and deduplication must reduce alert volume without erasing accountability. The retained alert or case must still preserve references to the contributing findings and the rule used to collapse them.
+
+A case is created when analyst work requires durable ownership, evidence collection, note-taking, handoff, or coordinated response beyond the alert record itself.
+
+An alert may be closed without a case when the required analyst review fits inside the alert lifecycle and does not require broader investigation management.
+
+## 7. Disposition and Closure Taxonomy
+
+Closure disposition must classify both operational outcome and future tuning implications in reviewable terms.
+
+The same label may appear across findings, alerts, cases, and incidents, but each record type owns its own disposition decision and rationale.
+
+| Disposition | Meaning | Tuning implication |
+| ---- | ---- | ---- |
+| `False Positive` | The analytic claim was incorrect. | Detection logic, enrichment, or source mapping should be corrected or tightened. |
+| `Benign Positive` | The activity occurred as detected but does not represent harmful or policy-violating behavior in context. | Detection scope, routing, or enrichment may need adjustment so expected benign activity is separated from true security work. |
+| `Duplicate` | The record does not represent new work because another active or closed record already tracks the same claim. | Grouping and deduplication logic should preserve linkage and avoid repeated analyst work. |
+| `Expected Administrative Activity` | The activity is legitimate administrative, maintenance, or approved operational work that should remain distinguishable from suspicious behavior. | Tuning should prefer explicit allowlisting, context enrichment, or operator guidance rather than treating the event as unexplained noise. |
+| `Accepted Risk` | The activity or exposure is known and consciously accepted by the accountable owner, so no further investigative escalation is required under the current baseline. | Future alerts should retain the acceptance context and review horizon rather than reopening identical work without changed conditions. |
+
+Disposition must not be used to hide unresolved ownership. If the operator cannot explain why a record is closed, the record is not ready for closure.
+
+## 8. Baseline Alignment Notes
 
 This baseline keeps detection, investigation, approval, and execution as separate first-class concerns.
 
