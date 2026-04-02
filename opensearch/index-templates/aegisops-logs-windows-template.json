@@ -1,0 +1,9 @@
+{
+  "index_patterns": [
+    "aegisops-logs-windows-*"
+  ],
+  "template": {},
+  "_meta": {
+    "description": "AegisOps windows log index template placeholder only. Not production-ready."
+  }
+}

@@ -2,7 +2,8 @@
 
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+default_repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="${1:-${default_repo_root}}"
 doc_path="${repo_root}/docs/contributor-naming-guide.md"
 
 required_headings=(
@@ -22,6 +23,7 @@ required_examples=(
   "aegisops-n8n-node"
   "aegisops-opensearch"
   "aegisops-logs-windows-*"
+  "aegisops-logs-saas-*"
   "aegisops-findings-*"
   "aegisops-windows-suspicious-powershell-high"
   "aegisops_enrich_ip_reputation"

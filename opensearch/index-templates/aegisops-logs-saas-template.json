@@ -1,0 +1,9 @@
+{
+  "index_patterns": [
+    "aegisops-logs-saas-*"
+  ],
+  "template": {},
+  "_meta": {
+    "description": "AegisOps saas log index template placeholder only. Not production-ready."
+  }
+}

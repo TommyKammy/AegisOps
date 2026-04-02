@@ -73,6 +73,7 @@ Examples:
 - `aegisops-logs-windows-*`
 - `aegisops-logs-linux-*`
 - `aegisops-logs-network-*`
+- `aegisops-logs-saas-*`
 - `aegisops-alerts-*`
 - `aegisops-findings-*`
 
