@@ -23,9 +23,12 @@ jobs:
           bash scripts/verify-adr-review-path-doc.sh
           bash scripts/verify-architecture-doc.sh
           bash scripts/verify-architecture-runbook-validation.sh
+          bash scripts/verify-auth-baseline-doc.sh
+          bash scripts/verify-canonical-telemetry-schema-doc.sh
           bash scripts/verify-contributor-naming-guide-doc.sh
           bash scripts/verify-compose-skeleton-validation.sh
           bash scripts/verify-compose-skeleton-overview-doc.sh
+          bash scripts/verify-control-plane-state-model-doc.sh
           bash scripts/verify-detection-lifecycle-and-rule-qa-framework.sh
           bash scripts/verify-documentation-ownership-map.sh
           bash scripts/verify-secops-domain-model-doc.sh
@@ -40,18 +43,25 @@ jobs:
           bash scripts/verify-parameter-catalog-structure-doc.sh
           bash scripts/verify-parameter-category-docs.sh
           bash scripts/verify-parameter-config-files.sh
+          bash scripts/verify-phase-5-semantic-contract-validation.sh
           bash scripts/verify-postgres-compose-skeleton.sh
           bash scripts/verify-proxy-compose-skeleton.sh
+          bash scripts/verify-response-action-safety-model-doc.sh
           bash scripts/verify-repository-skeleton.sh
           bash scripts/verify-repository-structure-doc.sh
+          bash scripts/verify-retention-baseline-doc.sh
           bash scripts/verify-runbook-doc.sh
+          bash scripts/verify-secops-business-hours-operating-model-doc.sh
           bash scripts/verify-sigma-curated-skeleton.sh
           bash scripts/verify-sigma-n8n-skeleton-validation.sh
           bash scripts/verify-sigma-to-opensearch-translation-strategy-doc.sh
           bash scripts/verify-storage-policy-doc.sh
+          bash scripts/verify-source-onboarding-contract-doc.sh
 
       - name: Run focused shell tests
         run: |
+          bash scripts/test-verify-auth-baseline-doc.sh
+          bash scripts/test-verify-canonical-telemetry-schema-doc.sh
           bash scripts/test-verify-n8n-compose-skeleton.sh
           bash scripts/test-verify-n8n-workflow-category-guidance.sh
           bash scripts/test-verify-n8n-workflow-skeleton.sh
@@ -62,9 +72,15 @@ jobs:
           bash scripts/test-verify-proxy-compose-skeleton.sh
           bash scripts/test-verify-compose-skeleton-validation.sh
           bash scripts/test-verify-compose-skeleton-overview-doc.sh
+          bash scripts/test-verify-control-plane-state-model-doc.sh
           bash scripts/test-verify-detection-lifecycle-and-rule-qa-framework.sh
+          bash scripts/test-verify-phase-5-semantic-contract-validation.sh
           bash scripts/test-verify-repository-skeleton.sh
+          bash scripts/test-verify-response-action-safety-model-doc.sh
+          bash scripts/test-verify-retention-baseline-doc.sh
+          bash scripts/test-verify-secops-business-hours-operating-model-doc.sh
           bash scripts/test-verify-secops-domain-model-doc.sh
           bash scripts/test-verify-sigma-curated-skeleton.sh
           bash scripts/test-verify-sigma-n8n-skeleton-validation.sh
           bash scripts/test-verify-sigma-to-opensearch-translation-strategy-doc.sh
+          bash scripts/test-verify-source-onboarding-contract-doc.sh
