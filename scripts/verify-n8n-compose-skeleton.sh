@@ -86,14 +86,14 @@ if awk '
   $0 == "  n8n:" { in_n8n = 1; next }
   in_n8n && /^  [a-z0-9-]+:/ { in_n8n = 0 }
   in_n8n && /^[^[:space:]]/ { in_n8n = 0 }
-  in_n8n && $0 == "    ports:" { has_ports = 1 }
+  in_n8n && $0 ~ /^    ["'"'"']?ports["'"'"']?:[[:space:]]*$/ { has_ports = 1 }
   END { exit(has_ports ? 0 : 1) }
 ' "${compose_path}"; then
   echo "n8n compose skeleton must not publish n8n directly with ports." >&2
   exit 1
 fi
 
-if grep -En '(^  redis:$|QUEUE_BULL_REDIS_|EXECUTIONS_MODE: queue)' "${compose_path}" >/dev/null; then
+if grep -En '(^  ["'"'"']?redis["'"'"']?:$|QUEUE_BULL_REDIS_|EXECUTIONS_MODE:[[:space:]]*["'"'"']?queue["'"'"']?[[:space:]]*$)' "${compose_path}" >/dev/null; then
   echo "n8n compose skeleton must not enable queue mode or Redis." >&2
   exit 1
 fi

@@ -179,6 +179,31 @@ services:
     # skeleton only; not production-ready until approved runtime settings are supplied"
 assert_fails_with "${ports_repo}" "must not publish n8n directly with ports"
 
+ports_quoted_repo="${workdir}/ports-quoted"
+create_repo "${ports_quoted_repo}"
+write_compose "${ports_quoted_repo}" "name: aegisops-n8n
+services:
+  n8n:
+    image: n8nio/n8n:1.89.2
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: \${AEGISOPS_POSTGRES_HOST:-postgres}
+      DB_POSTGRESDB_PORT: \${AEGISOPS_POSTGRES_PORT:-5432}
+      DB_POSTGRESDB_DATABASE: \${AEGISOPS_POSTGRES_DB:-aegisops_n8n_placeholder}
+      DB_POSTGRESDB_USER: \${AEGISOPS_POSTGRES_USER:-aegisops_n8n_placeholder}
+      DB_POSTGRESDB_PASSWORD: \${AEGISOPS_POSTGRES_PASSWORD:?set-in-runtime-secret-source}
+      N8N_ENCRYPTION_KEY: \${AEGISOPS_N8N_ENCRYPTION_KEY:?set-in-runtime-secret-source}
+      N8N_HOST: \${AEGISOPS_N8N_HOST:-n8n-placeholder.internal}
+      N8N_USER_FOLDER: \${AEGISOPS_N8N_USER_FOLDER:-/data/n8n-placeholder}
+      WEBHOOK_URL: \${AEGISOPS_N8N_WEBHOOK_URL:-https://n8n-placeholder.example.invalid/}
+    'ports':
+      - 5678:5678
+    volumes:
+      - /srv/aegisops/n8n-data-placeholder:/data/n8n-placeholder
+    # approved for n8n orchestration only; queue mode, Redis, and workflow import remain out of scope here
+    # skeleton only; not production-ready until approved runtime settings are supplied"
+assert_fails_with "${ports_quoted_repo}" "must not publish n8n directly with ports"
+
 redis_repo="${workdir}/redis"
 create_repo "${redis_repo}"
 write_compose "${redis_repo}" "name: aegisops-n8n
@@ -206,6 +231,33 @@ services:
     # skeleton only; not production-ready until approved runtime settings are supplied"
 assert_fails_with "${redis_repo}" "must not enable queue mode or Redis"
 
+redis_quoted_repo="${workdir}/redis-quoted"
+create_repo "${redis_quoted_repo}"
+write_compose "${redis_quoted_repo}" "name: aegisops-n8n
+services:
+  n8n:
+    image: n8nio/n8n:1.89.2
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: \${AEGISOPS_POSTGRES_HOST:-postgres}
+      DB_POSTGRESDB_PORT: \${AEGISOPS_POSTGRES_PORT:-5432}
+      DB_POSTGRESDB_DATABASE: \${AEGISOPS_POSTGRES_DB:-aegisops_n8n_placeholder}
+      DB_POSTGRESDB_USER: \${AEGISOPS_POSTGRES_USER:-aegisops_n8n_placeholder}
+      DB_POSTGRESDB_PASSWORD: \${AEGISOPS_POSTGRES_PASSWORD:?set-in-runtime-secret-source}
+      N8N_ENCRYPTION_KEY: \${AEGISOPS_N8N_ENCRYPTION_KEY:?set-in-runtime-secret-source}
+      N8N_HOST: \${AEGISOPS_N8N_HOST:-n8n-placeholder.internal}
+      N8N_USER_FOLDER: \${AEGISOPS_N8N_USER_FOLDER:-/data/n8n-placeholder}
+      WEBHOOK_URL: \${AEGISOPS_N8N_WEBHOOK_URL:-https://n8n-placeholder.example.invalid/}
+      EXECUTIONS_MODE: \"queue\"
+      QUEUE_BULL_REDIS_HOST: redis
+    volumes:
+      - /srv/aegisops/n8n-data-placeholder:/data/n8n-placeholder
+  'redis':
+    image: redis:7.4.2
+    # approved for n8n orchestration only; queue mode, Redis, and workflow import remain out of scope here
+    # skeleton only; not production-ready until approved runtime settings are supplied"
+assert_fails_with "${redis_quoted_repo}" "must not enable queue mode or Redis"
+
 workflow_import_repo="${workdir}/workflow-import"
 create_repo "${workflow_import_repo}"
 write_compose "${workflow_import_repo}" "name: aegisops-n8n
@@ -229,5 +281,30 @@ services:
     # approved for n8n orchestration only; queue mode, Redis, and workflow import remain out of scope here
     # skeleton only; not production-ready until approved runtime settings are supplied"
 assert_fails_with "${workflow_import_repo}" "must not introduce workflow import or execution logic"
+
+workflow_import_quoted_repo="${workdir}/workflow-import-quoted"
+create_repo "${workflow_import_quoted_repo}"
+write_compose "${workflow_import_quoted_repo}" "name: aegisops-n8n
+services:
+  n8n:
+    image: n8nio/n8n:1.89.2
+    command: [\"n8n\", \"import:workflow\", \"--input\", \"/workflows/bootstrap.json\"]
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: \${AEGISOPS_POSTGRES_HOST:-postgres}
+      DB_POSTGRESDB_PORT: \${AEGISOPS_POSTGRES_PORT:-5432}
+      DB_POSTGRESDB_DATABASE: \${AEGISOPS_POSTGRES_DB:-aegisops_n8n_placeholder}
+      DB_POSTGRESDB_USER: \${AEGISOPS_POSTGRES_USER:-aegisops_n8n_placeholder}
+      DB_POSTGRESDB_PASSWORD: \${AEGISOPS_POSTGRES_PASSWORD:?set-in-runtime-secret-source}
+      N8N_ENCRYPTION_KEY: \${AEGISOPS_N8N_ENCRYPTION_KEY:?set-in-runtime-secret-source}
+      N8N_HOST: \${AEGISOPS_N8N_HOST:-n8n-placeholder.internal}
+      N8N_USER_FOLDER: \${AEGISOPS_N8N_USER_FOLDER:-/data/n8n-placeholder}
+      WEBHOOK_URL: \${AEGISOPS_N8N_WEBHOOK_URL:-https://n8n-placeholder.example.invalid/}
+    volumes:
+      - /srv/aegisops/n8n-data-placeholder:/data/n8n-placeholder
+      - /srv/aegisops/n8n-bootstrap-placeholder:/\"workflows\"/bootstrap.json
+    # approved for n8n orchestration only; queue mode, Redis, and workflow import remain out of scope here
+    # skeleton only; not production-ready until approved runtime settings are supplied"
+assert_fails_with "${workflow_import_quoted_repo}" "must not introduce workflow import or execution logic"
 
 echo "verify-n8n-compose-skeleton tests passed"
