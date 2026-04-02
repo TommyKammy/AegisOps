@@ -75,4 +75,32 @@ assert_fails_with \
   "${missing_marker_repo}" \
   "Missing required sigma curated marker text: Status: placeholder only; no active Sigma detection rules are committed here yet."
 
+unexpected_file_repo="${workdir}/unexpected-file"
+create_repo "${unexpected_file_repo}"
+write_curated_readme \
+  "${unexpected_file_repo}" \
+"# Sigma Curated Directory
+
+Purpose: reviewed Sigma rules approved for AegisOps onboarding.
+Status: placeholder only; no active Sigma detection rules are committed here yet.
+Rule onboarding requires future review and explicit approval before any real rule content is added."
+printf 'title: real-rule\n' > "${unexpected_file_repo}/sigma/curated/rule.yml"
+assert_fails_with \
+  "${unexpected_file_repo}" \
+  "Unexpected placeholder content in ${unexpected_file_repo}/sigma/curated; only ${unexpected_file_repo}/sigma/curated/README.md is allowed."
+
+unexpected_directory_repo="${workdir}/unexpected-directory"
+create_repo "${unexpected_directory_repo}"
+write_curated_readme \
+  "${unexpected_directory_repo}" \
+"# Sigma Curated Directory
+
+Purpose: reviewed Sigma rules approved for AegisOps onboarding.
+Status: placeholder only; no active Sigma detection rules are committed here yet.
+Rule onboarding requires future review and explicit approval before any real rule content is added."
+mkdir -p "${unexpected_directory_repo}/sigma/curated/pending"
+assert_fails_with \
+  "${unexpected_directory_repo}" \
+  "Unexpected placeholder content in ${unexpected_directory_repo}/sigma/curated; only ${unexpected_directory_repo}/sigma/curated/README.md is allowed."
+
 echo "verify-sigma-curated-skeleton tests passed"

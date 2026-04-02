@@ -30,4 +30,15 @@ for marker in "${required_markers[@]}"; do
   fi
 done
 
+unexpected_entries=()
+while IFS= read -r path; do
+  unexpected_entries+=("${path}")
+done < <(find "${curated_dir}" -mindepth 1 ! -path "${readme_path}" | LC_ALL=C sort)
+
+if (( ${#unexpected_entries[@]} > 0 )); then
+  echo "Unexpected placeholder content in ${curated_dir}; only ${readme_path} is allowed." >&2
+  printf ' %s\n' "${unexpected_entries[@]}" >&2
+  exit 1
+fi
+
 echo "Sigma curated skeleton markers are present and placeholder-safe."
