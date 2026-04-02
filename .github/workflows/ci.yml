@@ -44,6 +44,7 @@ jobs:
           bash scripts/verify-repository-structure-doc.sh
           bash scripts/verify-runbook-doc.sh
           bash scripts/verify-sigma-curated-skeleton.sh
+          bash scripts/verify-sigma-n8n-skeleton-validation.sh
           bash scripts/verify-storage-policy-doc.sh
 
       - name: Run focused shell tests
@@ -60,3 +61,4 @@ jobs:
           bash scripts/test-verify-compose-skeleton-overview-doc.sh
           bash scripts/test-verify-repository-skeleton.sh
           bash scripts/test-verify-sigma-curated-skeleton.sh
+          bash scripts/test-verify-sigma-n8n-skeleton-validation.sh
