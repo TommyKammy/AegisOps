@@ -97,4 +97,11 @@ printf '%s\n' '{"name":"aegisops_response_host_isolation"}' > \
 commit_fixture "${logic_file_repo}"
 assert_fails_with "${logic_file_repo}" "must not introduce workflow logic"
 
+extra_directory_repo="${workdir}/extra-directory"
+create_repo "${extra_directory_repo}"
+create_workflow_skeleton "${extra_directory_repo}"
+mkdir -p "${extra_directory_repo}/n8n/workflows/aegisops_notify/archive"
+commit_fixture "${extra_directory_repo}"
+assert_fails_with "${extra_directory_repo}" "Unexpected entries:"
+
 echo "verify-n8n-workflow-skeleton tests passed"

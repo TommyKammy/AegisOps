@@ -48,17 +48,17 @@ for category in "${expected_categories[@]}"; do
     exit 1
   fi
 
-  unexpected_files=()
+  unexpected_entries=()
   while IFS= read -r path; do
-    unexpected_files+=("${path}")
+    unexpected_entries+=("${path}")
   done < <(
-    find "${category_path}" -mindepth 1 -type f ! -name '.gitkeep' | LC_ALL=C sort
+    find "${category_path}" -mindepth 1 ! -path "${category_path}/.gitkeep" | LC_ALL=C sort
   )
 
-  if ((${#unexpected_files[@]} > 0)); then
+  if ((${#unexpected_entries[@]} > 0)); then
     echo "n8n workflow category placeholders must not introduce workflow logic: ${category_path}" >&2
-    printf 'Unexpected files:\n' >&2
-    printf '  %s\n' "${unexpected_files[@]}" >&2
+    printf 'Unexpected entries:\n' >&2
+    printf '  %s\n' "${unexpected_entries[@]}" >&2
     exit 1
   fi
 done
