@@ -90,6 +90,7 @@ Key documents that serve as the source of truth for implementation decisions:
 - `docs/requirements-baseline.md`
 - `docs/architecture.md`
 - `docs/canonical-telemetry-schema-baseline.md`
+- `docs/source-onboarding-contract.md`
 - `docs/secops-domain-model.md`
 - `docs/runbook.md`
 - `docs/repository-structure-baseline.md`
