@@ -30,6 +30,7 @@ If a document inside one of these areas has its own `Owner` or `Owners` field, t
 | `docs/sigma-to-opensearch-translation-strategy.md` | Sigma-to-OpenSearch translation strategy baseline | IT Operations, Information Systems Department |
 | `docs/detection-lifecycle-and-rule-qa-framework.md` | Detection lifecycle and rule QA framework baseline | IT Operations, Information Systems Department |
 | `docs/secops-domain-model.md` | SecOps domain model baseline | IT Operations, Information Systems Department |
+| `docs/auth-baseline.md` | Authentication, authorization, and service account ownership baseline | IT Operations, Information Systems Department |
 | `docs/response-action-safety-model.md` | Response action safety and approval binding baseline | IT Operations, Information Systems Department |
 | `docs/control-plane-state-model.md` | Control-plane state and reconciliation baseline | IT Operations, Information Systems Department |
 | `docs/adr/` | Architecture Decision Records (ADRs) | IT Operations, Information Systems Department |
@@ -41,6 +42,8 @@ The requirements baseline owner recorded in `docs/requirements-baseline.md` rema
 ADR records under `docs/adr/` may identify specific document proposers or reviewers, but repository-level ownership for the ADR area remains assigned to IT Operations, Information Systems Department unless this map is updated explicitly.
 
 The SecOps domain model document remains the shared semantic reference for baseline object definitions and state boundaries and must stay aligned with the approved architecture and requirements baseline.
+
+The auth baseline remains the policy reference for operator personas, least-privilege authorization boundaries, machine identity ownership, and secret lifecycle expectations across future monitors, workflows, approvals, and integrations.
 
 The response action safety model remains the baseline policy reference for action classes, approval binding, idempotency expectations, and post-approval drift protection for future response execution work.
 
