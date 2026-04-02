@@ -26,6 +26,7 @@ jobs:
           bash scripts/verify-contributor-naming-guide-doc.sh
           bash scripts/verify-compose-skeleton-validation.sh
           bash scripts/verify-compose-skeleton-overview-doc.sh
+          bash scripts/verify-detection-lifecycle-and-rule-qa-framework.sh
           bash scripts/verify-documentation-ownership-map.sh
           bash scripts/verify-secops-domain-model-doc.sh
           bash scripts/verify-ingest-compose-skeleton.sh
@@ -61,6 +62,7 @@ jobs:
           bash scripts/test-verify-proxy-compose-skeleton.sh
           bash scripts/test-verify-compose-skeleton-validation.sh
           bash scripts/test-verify-compose-skeleton-overview-doc.sh
+          bash scripts/test-verify-detection-lifecycle-and-rule-qa-framework.sh
           bash scripts/test-verify-repository-skeleton.sh
           bash scripts/test-verify-secops-domain-model-doc.sh
           bash scripts/test-verify-sigma-curated-skeleton.sh
