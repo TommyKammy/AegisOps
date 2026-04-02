@@ -1,0 +1,9 @@
+{
+  "index_patterns": [
+    "aegisops-logs-network-*"
+  ],
+  "template": {},
+  "_meta": {
+    "description": "AegisOps network log index template placeholder only. Not production-ready."
+  }
+}

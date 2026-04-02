@@ -1,0 +1,9 @@
+{
+  "index_patterns": [
+    "aegisops-logs-linux-*"
+  ],
+  "template": {},
+  "_meta": {
+    "description": "AegisOps linux log index template placeholder only. Not production-ready."
+  }
+}
