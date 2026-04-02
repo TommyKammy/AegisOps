@@ -10,7 +10,7 @@ It translates the repository structure guidance from `docs/requirements-baseline
 | ---- | ------- |
 | `docs/` | Architecture, ADRs, parameters, runbooks, and other human-readable project documentation. |
 | `opensearch/` | OpenSearch configuration assets such as compose definitions, detectors, templates, ILM policies, and snapshot-related configuration. |
-| `sigma/` | Sigma detection content, including reviewed rules, curated subsets, suppressions, and field mappings. |
+| `sigma/` | Sigma detection content, including reviewed rules, curated subsets, suppressions, field mappings, and placeholder markers that keep approved onboarding paths explicit before real rule content is added. |
 | `n8n/` | n8n workflow assets, approval patterns, credential templates, and webhook contract definitions. |
 | `ingest/` | Log ingestion assets such as pipelines, parsers, and source definitions. |
 | `postgres/` | PostgreSQL deployment assets such as compose definitions for the n8n metadata and execution-state store. |

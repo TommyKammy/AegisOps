@@ -79,6 +79,8 @@ For the detailed approved structure, see:
 - `docs/repository-structure-baseline.md`
 - `docs/requirements-baseline.md`
 
+Within `sigma/`, the `curated/` directory is reserved for reviewed Sigma rules that are approved for future onboarding. Placeholder markers may exist there before any actual detection content is admitted.
+
 ---
 
 ## Documentation
