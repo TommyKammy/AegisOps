@@ -22,11 +22,30 @@ create_repo() {
   git -C "${target}" config user.email "codex@example.com"
 }
 
+write_env_sample() {
+  local target="$1"
+  local content="$2"
+
+  printf '%s\n' "${content}" >"${target}/n8n/.env.sample"
+}
+
 write_compose() {
   local target="$1"
   local content="$2"
 
   printf '%s\n' "${content}" >"${target}/n8n/docker-compose.yml"
+  write_env_sample "${target}" "# Sample environment placeholders for the n8n compose skeleton only.
+# Do not use these placeholder values in production.
+AEGISOPS_POSTGRES_HOST=postgres
+AEGISOPS_POSTGRES_PORT=5432
+AEGISOPS_POSTGRES_DB=aegisops_n8n_placeholder
+AEGISOPS_POSTGRES_USER=aegisops_n8n_placeholder
+AEGISOPS_POSTGRES_PASSWORD=placeholder-not-a-secret
+AEGISOPS_N8N_ENCRYPTION_KEY=placeholder-not-a-secret
+AEGISOPS_N8N_HOST=n8n-placeholder.internal
+AEGISOPS_N8N_USER_FOLDER=/data/n8n-placeholder
+AEGISOPS_N8N_WEBHOOK_URL=https://n8n-placeholder.example.invalid/"
+  git -C "${target}" add n8n/.env.sample
   git -C "${target}" add n8n/docker-compose.yml
   git -C "${target}" commit -q -m "fixture"
 }
@@ -84,6 +103,18 @@ missing_file_repo="${workdir}/missing-file"
 create_repo "${missing_file_repo}"
 git -C "${missing_file_repo}" commit -q --allow-empty -m "fixture"
 assert_fails_with "${missing_file_repo}" "Missing n8n compose skeleton"
+
+missing_env_sample_repo="${workdir}/missing-env-sample"
+create_repo "${missing_env_sample_repo}"
+printf '%s\n' "name: aegisops-n8n
+services:
+  n8n:
+    image: n8nio/n8n:1.89.2
+    environment:
+      DB_TYPE: \${AEGISOPS_POSTGRES_HOST:-postgres}" >"${missing_env_sample_repo}/n8n/docker-compose.yml"
+git -C "${missing_env_sample_repo}" add n8n/docker-compose.yml
+git -C "${missing_env_sample_repo}" commit -q -m "fixture"
+assert_fails_with "${missing_env_sample_repo}" "Missing n8n environment sample placeholder"
 
 latest_tag_repo="${workdir}/latest-tag"
 create_repo "${latest_tag_repo}"
