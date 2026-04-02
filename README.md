@@ -97,6 +97,7 @@ Key documents that serve as the source of truth for implementation decisions:
 - `docs/auth-baseline.md`
 - `docs/response-action-safety-model.md`
 - `docs/control-plane-state-model.md`
+- `docs/retention-evidence-and-replay-readiness-baseline.md`
 - `docs/runbook.md`
 - `docs/repository-structure-baseline.md`
 - `docs/network-exposure-and-access-path-policy.md`

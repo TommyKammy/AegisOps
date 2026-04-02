@@ -33,6 +33,7 @@ If a document inside one of these areas has its own `Owner` or `Owners` field, t
 | `docs/auth-baseline.md` | Authentication, authorization, and service account ownership baseline | IT Operations, Information Systems Department |
 | `docs/response-action-safety-model.md` | Response action safety and approval binding baseline | IT Operations, Information Systems Department |
 | `docs/control-plane-state-model.md` | Control-plane state and reconciliation baseline | IT Operations, Information Systems Department |
+| `docs/retention-evidence-and-replay-readiness-baseline.md` | Retention, evidence lifecycle, and replay readiness baseline | IT Operations, Information Systems Department |
 | `docs/adr/` | Architecture Decision Records (ADRs) | IT Operations, Information Systems Department |
 | `docs/parameters/` | Parameter documentation | IT Operations, Information Systems Department |
 | `docs/runbook.md` | Runbooks | IT Operations, Information Systems Department |
@@ -48,6 +49,8 @@ The auth baseline remains the policy reference for operator personas, least-priv
 The response action safety model remains the baseline policy reference for action classes, approval binding, idempotency expectations, and post-approval drift protection for future response execution work.
 
 The control-plane state model remains the baseline ownership reference for which records stay in OpenSearch, which stay in n8n, and which require future AegisOps control-plane authority rather than implicit storage inside component-local state.
+
+The retention, evidence lifecycle, and replay readiness baseline remains the policy reference for record-family retention classes, evidence expiration constraints, replay dataset preservation, and restore-readiness assumptions.
 
 The canonical telemetry schema baseline remains the shared semantic reference for normalized event field expectations and must stay aligned with ECS usage rules, source provenance requirements, and the approved SecOps domain model.
 
