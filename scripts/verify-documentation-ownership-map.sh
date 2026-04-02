@@ -19,6 +19,7 @@ required_phrases=(
   '| `docs/requirements-baseline.md` | Requirements baseline | IT Operations, Information Systems Department |'
   '| `docs/canonical-telemetry-schema-baseline.md` | Canonical telemetry schema baseline | IT Operations, Information Systems Department |'
   '| `docs/source-onboarding-contract.md` | Source onboarding contract baseline | IT Operations, Information Systems Department |'
+  '| `docs/sigma-to-opensearch-translation-strategy.md` | Sigma-to-OpenSearch translation strategy baseline | IT Operations, Information Systems Department |'
   '| `docs/secops-domain-model.md` | SecOps domain model baseline | IT Operations, Information Systems Department |'
   '| `docs/adr/` | Architecture Decision Records (ADRs) | IT Operations, Information Systems Department |'
   '| `docs/parameters/` | Parameter documentation | IT Operations, Information Systems Department |'
