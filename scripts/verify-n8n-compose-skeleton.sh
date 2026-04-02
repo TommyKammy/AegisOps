@@ -32,9 +32,9 @@ require_pattern() {
 
 extract_n8n_block() {
   awk '
-    /^  n8n:[[:space:]]*$/ { in_n8n = 1 }
+    /^  n8n:[[:space:]]*(#.*)?$/ { in_n8n = 1 }
     in_n8n && /^[^[:space:]]/ { exit }
-    in_n8n && /^  [a-z0-9-]+:[[:space:]]*$/ && $0 !~ /^  n8n:[[:space:]]*$/ { exit }
+    in_n8n && /^  [a-z0-9_-]+:[[:space:]]*(#.*)?$/ && $0 !~ /^  n8n:[[:space:]]*(#.*)?$/ { exit }
     in_n8n { print }
   ' "${compose_path}"
 }
@@ -100,19 +100,16 @@ require_pattern 'skeleton only' \
 require_pattern 'not production-ready' \
   "n8n compose skeleton must state that it is not production-ready."
 
-if awk '
-  BEGIN { in_n8n = 0; has_ports = 0 }
-  $0 == "  n8n:" { in_n8n = 1; next }
-  in_n8n && /^  [a-z0-9-]+:/ { in_n8n = 0 }
-  in_n8n && /^[^[:space:]]/ { in_n8n = 0 }
-  in_n8n && $0 ~ /^    ["'"'"']?ports["'"'"']?:[[:space:]]*$/ { has_ports = 1 }
+if extract_n8n_block | awk '
+  BEGIN { has_ports = 0 }
+  $0 ~ /^    ["'"'"']?ports["'"'"']?:[[:space:]]*(#.*)?$/ { has_ports = 1 }
   END { exit(has_ports ? 0 : 1) }
-' "${compose_path}"; then
+'; then
   echo "n8n compose skeleton must not publish n8n directly with ports." >&2
   exit 1
 fi
 
-if grep -En '(^  ["'"'"']?redis["'"'"']?:$|QUEUE_BULL_REDIS_|EXECUTIONS_MODE:[[:space:]]*["'"'"']?queue["'"'"']?[[:space:]]*$)' "${compose_path}" >/dev/null; then
+if grep -En '(^  ["'"'"']?redis["'"'"']?:[[:space:]]*(#.*)?$|QUEUE_BULL_REDIS_|EXECUTIONS_MODE:[[:space:]]*["'"'"']?queue["'"'"']?[[:space:]]*(#.*)?$)' "${compose_path}" >/dev/null; then
   echo "n8n compose skeleton must not enable queue mode or Redis." >&2
   exit 1
 fi
