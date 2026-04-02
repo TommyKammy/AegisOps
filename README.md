@@ -95,6 +95,7 @@ Key documents that serve as the source of truth for implementation decisions:
 - `docs/detection-lifecycle-and-rule-qa-framework.md`
 - `docs/secops-domain-model.md`
 - `docs/response-action-safety-model.md`
+- `docs/control-plane-state-model.md`
 - `docs/runbook.md`
 - `docs/repository-structure-baseline.md`
 - `docs/network-exposure-and-access-path-policy.md`

@@ -22,6 +22,7 @@ required_phrases=(
   '| `docs/sigma-to-opensearch-translation-strategy.md` | Sigma-to-OpenSearch translation strategy baseline | IT Operations, Information Systems Department |'
   '| `docs/detection-lifecycle-and-rule-qa-framework.md` | Detection lifecycle and rule QA framework baseline | IT Operations, Information Systems Department |'
   '| `docs/secops-domain-model.md` | SecOps domain model baseline | IT Operations, Information Systems Department |'
+  '| `docs/control-plane-state-model.md` | Control-plane state and reconciliation baseline | IT Operations, Information Systems Department |'
   '| `docs/adr/` | Architecture Decision Records (ADRs) | IT Operations, Information Systems Department |'
   '| `docs/parameters/` | Parameter documentation | IT Operations, Information Systems Department |'
   '| `docs/runbook.md` | Runbooks | IT Operations, Information Systems Department |'
