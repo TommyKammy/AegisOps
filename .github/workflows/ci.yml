@@ -23,6 +23,7 @@ jobs:
           bash scripts/verify-adr-review-path-doc.sh
           bash scripts/verify-architecture-doc.sh
           bash scripts/verify-contributor-naming-guide-doc.sh
+          bash scripts/verify-compose-skeleton-validation.sh
           bash scripts/verify-documentation-ownership-map.sh
           bash scripts/verify-ingest-compose-skeleton.sh
           bash scripts/verify-naming-conventions-doc.sh
@@ -47,4 +48,5 @@ jobs:
           bash scripts/test-verify-opensearch-compose-skeleton.sh
           bash scripts/test-verify-postgres-compose-skeleton.sh
           bash scripts/test-verify-proxy-compose-skeleton.sh
+          bash scripts/test-verify-compose-skeleton-validation.sh
           bash scripts/test-verify-repository-skeleton.sh
