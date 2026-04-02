@@ -56,6 +56,7 @@ Examples:
 
 - `aegisops-opensearch`
 - `aegisops-n8n`
+- `aegisops-postgres`
 - `aegisops-ingest`
 - `aegisops-proxy`
 
