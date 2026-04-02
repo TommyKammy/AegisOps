@@ -31,25 +31,61 @@ config_required_phrases=(
   "values: {}"
 )
 
-declare -A doc_category_descriptions=(
-  [network]='The `network` category will document hostnames, IP addressing, subnets, DNS dependencies, and approved service endpoints that operators must review before environment-specific implementation work.'
-  [compute]='The `compute` category will document node roles, sizing references, runtime capacity assumptions, and similar infrastructure-level identifiers that guide future deployment planning.'
-  [storage]='The `storage` category will document mount points, data paths, backup targets, persistence-related parameter names, and other storage references that reviewers need to assess safely.'
-  [platform]='The `platform` category will document component identifiers, Docker Compose project names, execution modes, retention defaults, and other product-level runtime settings in descriptive form.'
-  [security]='The `security` category will document TLS material references, secret identifier names, approval-related parameter names, and access-control-related configuration keys without exposing live credentials.'
-  [operations]='The `operations` category will document backup schedules, monitoring hooks, maintenance metadata, and other operator-facing control parameters that require reviewable documentation.'
-)
-
-declare -A config_category_descriptions=(
-  [network]="Placeholder parameter catalog for non-production network settings."
-  [compute]="Placeholder parameter catalog for non-production compute settings."
-  [storage]="Placeholder parameter catalog for non-production storage settings."
-  [platform]="Placeholder parameter catalog for non-production platform settings."
-  [security]="Placeholder parameter catalog for non-production security metadata."
-  [operations]="Placeholder parameter catalog for non-production operations settings."
-)
-
 secret_pattern='(^|[^[:alnum:]_])\.env([^[:alnum:]_]|$)|BEGIN [A-Z ]+PRIVATE KEY|AKIA[0-9A-Z]{16}'
+
+doc_category_description() {
+  case "$1" in
+    network)
+      printf '%s\n' 'The `network` category will document hostnames, IP addressing, subnets, DNS dependencies, and approved service endpoints that operators must review before environment-specific implementation work.'
+      ;;
+    compute)
+      printf '%s\n' 'The `compute` category will document node roles, sizing references, runtime capacity assumptions, and similar infrastructure-level identifiers that guide future deployment planning.'
+      ;;
+    storage)
+      printf '%s\n' 'The `storage` category will document mount points, data paths, backup targets, persistence-related parameter names, and other storage references that reviewers need to assess safely.'
+      ;;
+    platform)
+      printf '%s\n' 'The `platform` category will document component identifiers, Docker Compose project names, execution modes, retention defaults, and other product-level runtime settings in descriptive form.'
+      ;;
+    security)
+      printf '%s\n' 'The `security` category will document TLS material references, secret identifier names, approval-related parameter names, and access-control-related configuration keys without exposing live credentials.'
+      ;;
+    operations)
+      printf '%s\n' 'The `operations` category will document backup schedules, monitoring hooks, maintenance metadata, and other operator-facing control parameters that require reviewable documentation.'
+      ;;
+    *)
+      echo "Unexpected parameter category: $1" >&2
+      exit 1
+      ;;
+  esac
+}
+
+config_category_description() {
+  case "$1" in
+    network)
+      printf '%s\n' 'Placeholder parameter catalog for non-production network settings.'
+      ;;
+    compute)
+      printf '%s\n' 'Placeholder parameter catalog for non-production compute settings.'
+      ;;
+    storage)
+      printf '%s\n' 'Placeholder parameter catalog for non-production storage settings.'
+      ;;
+    platform)
+      printf '%s\n' 'Placeholder parameter catalog for non-production platform settings.'
+      ;;
+    security)
+      printf '%s\n' 'Placeholder parameter catalog for non-production security metadata.'
+      ;;
+    operations)
+      printf '%s\n' 'Placeholder parameter catalog for non-production operations settings.'
+      ;;
+    *)
+      echo "Unexpected parameter category: $1" >&2
+      exit 1
+      ;;
+  esac
+}
 
 contains_exact_line() {
   local needle="$1"
@@ -75,8 +111,12 @@ category_title_from_doc_path() {
   IFS='-' read -r -a words <<< "${category_slug}"
 
   local title=""
+  local first_char
+  local rest
   for word in "${words[@]}"; do
-    title+="${title:+ }${word^}"
+    first_char="$(printf '%s' "${word:0:1}" | tr '[:lower:]' '[:upper:]')"
+    rest="${word:1}"
+    title+="${title:+ }${first_char}${rest}"
   done
 
   printf '%s\n' "${title}"
@@ -90,9 +130,19 @@ assert_exact_file_set() {
   local -a expected_files=("$@")
   local -a expected_sorted=()
   local -a actual_sorted=()
+  local path
 
-  mapfile -t expected_sorted < <(printf '%s\n' "${expected_files[@]}" | sort)
-  mapfile -t actual_sorted < <(find "${dir_path}" -maxdepth 1 -type f -printf '%f\n' | sort)
+  expected_sorted=($(printf '%s\n' "${expected_files[@]}" | LC_ALL=C sort))
+
+  for path in "${dir_path}"/*; do
+    if [[ -f "${path}" ]]; then
+      actual_sorted+=("${path##*/}")
+    fi
+  done
+
+  if [[ "${#actual_sorted[@]}" -gt 0 ]]; then
+    actual_sorted=($(printf '%s\n' "${actual_sorted[@]}" | LC_ALL=C sort))
+  fi
 
   if [[ "${#actual_sorted[@]}" -ne "${#expected_sorted[@]}" ]]; then
     echo "Unexpected ${label} file count in ${dir_path}" >&2
@@ -115,6 +165,9 @@ assert_exact_file_set() {
 validate_placeholder_doc() {
   local category="$1"
   local doc_path="$2"
+  local category_description
+
+  category_description="$(doc_category_description "${category}")"
 
   local expected_title="# AegisOps $(category_title_from_doc_path "${doc_path}") Parameters"
   local actual_title
@@ -129,7 +182,7 @@ validate_placeholder_doc() {
     "${expected_title}"
     "This placeholder document exists to reserve the approved \`${category}\` parameter category for future AegisOps catalog entries."
     "It describes category purpose only."
-    "${doc_category_descriptions[${category}]}"
+    "${category_description}"
     "No production values, environment-specific settings, or secrets belong in this file."
   )
 
@@ -166,6 +219,9 @@ validate_placeholder_doc() {
 validate_placeholder_config() {
   local category="$1"
   local config_path="$2"
+  local category_description
+
+  category_description="$(config_category_description "${category}")"
 
   local -a allowed_lines=(
     "schema_version: 1"
@@ -173,7 +229,7 @@ validate_placeholder_config() {
     "status: placeholder"
     "non_secret: true"
     "environment: template"
-    "description: ${config_category_descriptions[${category}]}"
+    "description: ${category_description}"
     "values: {}"
   )
 
@@ -251,10 +307,12 @@ for category in "${approved_categories[@]}"; do
   validate_placeholder_config "${category}" "${config_path}"
 done
 
-if find "${docs_dir}" "${config_dir}" -maxdepth 1 -type f -name '.env*' | grep -q .; then
-  echo "Active .env file detected in parameter catalog locations" >&2
-  exit 1
-fi
+for env_path in "${docs_dir}"/.env* "${config_dir}"/.env*; do
+  if [[ -f "${env_path}" ]]; then
+    echo "Active .env file detected in parameter catalog locations" >&2
+    exit 1
+  fi
+done
 
 if [[ ! -f "${validation_doc}" ]]; then
   echo "Missing parameter catalog validation result document: ${validation_doc}" >&2

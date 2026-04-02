@@ -1,0 +1,13 @@
+name: aegisops-proxy
+
+services:
+  proxy:
+    image: nginx:1.27.0
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d-placeholder:/etc/nginx/conf.d:ro
+      - /srv/aegisops/proxy-certs-placeholder:/etc/nginx/certs:ro
+    # approved ingress layer for user-facing UI access only
+    # backend UIs remain internal behind this proxy; no direct backend ports publication here
+    # route implementation, live certificates, and public publication remain out of scope here
+    # skeleton only; not production-ready until approved runtime settings are supplied
