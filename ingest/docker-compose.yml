@@ -1,0 +1,14 @@
+name: aegisops-ingest
+
+services:
+  collector:
+    image: alpine:3.22.1
+    profiles:
+      - placeholder
+  parser:
+    image: alpine:3.22.1
+    profiles:
+      - placeholder
+    # collection and parsing placeholder services only
+    # source integrations, parsing logic, and routing remain out of scope here
+    # skeleton only; not production-ready until approved runtime settings are supplied
