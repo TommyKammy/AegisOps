@@ -31,6 +31,7 @@ jobs:
           bash scripts/verify-naming-conventions-doc.sh
           bash scripts/verify-network-exposure-policy-doc.sh
           bash scripts/verify-n8n-compose-skeleton.sh
+          bash scripts/verify-n8n-workflow-skeleton.sh
           bash scripts/verify-opensearch-compose-skeleton.sh
           bash scripts/verify-parameter-catalog-alignment.sh
           bash scripts/verify-parameter-catalog-structure-doc.sh
@@ -47,6 +48,7 @@ jobs:
       - name: Run focused shell tests
         run: |
           bash scripts/test-verify-n8n-compose-skeleton.sh
+          bash scripts/test-verify-n8n-workflow-skeleton.sh
           bash scripts/test-verify-ingest-compose-skeleton.sh
           bash scripts/test-verify-opensearch-compose-skeleton.sh
           bash scripts/test-verify-architecture-runbook-validation.sh
