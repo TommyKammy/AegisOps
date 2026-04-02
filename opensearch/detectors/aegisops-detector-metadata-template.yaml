@@ -1,0 +1,16 @@
+# AegisOps detector metadata template only. Do not import as an active detector.
+template_kind: aegisops-detector-metadata
+template_status: placeholder-only
+detector_name: aegisops-<source>-<use-case>-<severity>
+owner: <team-or-role>
+purpose: <what this detector is intended to identify>
+severity: <low|medium|high|critical>
+expected_behavior: <what analysts should expect when this detector matches>
+source_prerequisites:
+  - <required log source, index pattern, or field dependency>
+governance:
+  activation_policy: metadata-only template; no active detector is introduced from this file
+  baseline_references:
+    - docs/requirements-baseline.md
+    - docs/contributor-naming-guide.md
+    - docs/repository-structure-baseline.md
