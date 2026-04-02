@@ -44,6 +44,12 @@ Detection-ready status requires explicit evidence for canonical field coverage, 
 
 Field coverage evidence must map source fields into the canonical telemetry schema baseline and must identify required, optional, unavailable, and intentionally deferred fields without ambiguity.
 
+`Required` in this contract means the field group remains required by the canonical schema or family baseline even when a specific source family cannot currently supply it. Reviewers must not reinterpret required as optional merely because a source lacks the value.
+
+`Unavailable` means the source cannot credibly provide the field group for the reviewed scope without fabrication. `Intentionally deferred` means the source may support the field group later, but the mapping, parser, or evidence is not yet complete.
+
+Detection-ready review cannot treat a canonical required field group as satisfied by omission alone. A required field group may be unavailable or intentionally deferred only through an explicit documented exception path that states whether the gap blocks normalization, blocks detection readiness, or remains allowed for the current readiness state.
+
 Timestamp evidence must identify the source event time, any collector-created time, ingest arrival time, known clock-quality limitations, and the chosen mapping for `@timestamp`, `event.created`, and `event.ingested`.
 
 Identity and asset linkage evidence must show which principals, hosts, workloads, tenants, devices, or observers the source can represent and where that context is absent or unreliable.
@@ -55,7 +61,9 @@ A source family is not detection-ready until parser version evidence, field cove
 Detection-ready review must also confirm the following:
 
 - The normalization mapping uses canonical schema semantics first and reserves `aegisops.*` extensions for additive cases that ECS does not already cover.
-- Required field groups from the canonical telemetry schema are either populated, marked unavailable with justification, or explicitly deferred with a documented non-goal.
+- Required field groups from the canonical telemetry schema remain required even when a source family cannot yet satisfy them.
+- Shared required field groups that are unavailable block normalization unless the onboarding package documents an approved exception path.
+- Family required baseline coverage that is unavailable or intentionally deferred blocks detection-ready status unless the onboarding package documents an approved exception path and the resulting detector-use limits.
 - Timestamp quality limitations are preserved as evidence rather than hidden by silently rewriting source meaning.
 - Identity and asset linkage claims are supported by actual source fields, not by fabricated enrichment assumptions.
 - Detection authors can determine exactly which normalized fields are stable enough to depend on before activating rule content for the family.
@@ -83,7 +91,8 @@ State expectations:
 
 - `candidate` means the family is recognized, scoped, and documented enough to reserve a future onboarding path, but detection content must not depend on it.
 - `schema-reviewed` means the minimum onboarding package exists and the canonical mapping and evidence gaps have been reviewed, but detection activation remains blocked until readiness evidence is complete.
-- `detection-ready` means the family has completed the required evidence package and may be referenced by future detection content subject to separate detector and rollout review.
+- `detection-ready` means the family has completed the required evidence package, has no unresolved intentionally deferred required coverage, and may be referenced by future detection content subject to separate detector and rollout review.
+- `detection-ready` may rely on an explicit exception path only when the exception states which required coverage is missing, why the gap does not block the approved readiness scope, and which downstream detections remain prohibited.
 
 This contract is schema-driven and family-oriented. It must not become source-specific ad hoc guidance for individual products.
 

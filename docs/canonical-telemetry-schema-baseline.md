@@ -25,6 +25,8 @@ The normalized contract exists so downstream detections, findings, correlation l
 
 This baseline does not require every source to populate every field. It requires each source family to preserve the highest-fidelity values it has for the approved field groups and to avoid silent semantic drift during normalization.
 
+Required means normalization-required, not universally source-populated. When a source family cannot supply a required field group for some records, the gap must be documented as an explicit exception path rather than silently reclassifying the group as optional.
+
 ## 3. Normalization Model and Field Classes
 
 Normalized fields are grouped into three classes:
@@ -32,6 +34,11 @@ Normalized fields are grouped into three classes:
 - Required fields must exist on every normalized event in the initial approved families unless the source record is unusable.
 - Optional fields should be populated when the source or collector provides the necessary value without fabrication.
 - Derived fields may be added by AegisOps logic only when their origin remains explainable and the source-derived values remain distinguishable from derived context.
+
+Onboarding evidence may additionally mark a field group as unavailable or intentionally deferred for a source family review, but those are review states rather than field classes. They do not change a canonical required field group into an optional one.
+
+- `Unavailable` means the source cannot credibly provide the field group without fabrication for the reviewed scope. For shared required groups, that normally blocks normalization unless an explicit exception path is approved. For family baseline coverage, it normally blocks detection-ready status unless an explicit exception path says otherwise.
+- `Intentionally deferred` means the source family may support the field group later but the mapping, evidence, or parser work is not yet complete. Deferred required coverage blocks detection-ready status until the deferred gap is resolved or an explicit exception path is approved.
 
 Raw source payload preservation rules:
 
@@ -79,6 +86,12 @@ Raw source payload preservation rules:
 - Source and destination fields must preserve endpoint roles as reported by the source, especially for firewall, proxy, VPN, and SaaS access logs where observer perspective can differ from host-local semantics.
 
 ## 5. Initial Log Family Baselines
+
+Interpretation rule for the family baselines below:
+
+- Shared field groups marked `Required` in Section 4 are event-level normalization requirements.
+- Family sections marked "Required baseline coverage" are source-family readiness requirements for the listed semantic areas. They do not mean every representative field appears on every event; they mean the family must preserve that semantic area when the source exposes it and must document any approved exception path when it cannot.
+- A missing family baseline requirement must be classified during onboarding as either a normalization blocker, a detection-ready blocker, or an explicit exception path with allowed downstream usage.
 
 ### 5.1 Windows Security and Endpoint Telemetry
 
