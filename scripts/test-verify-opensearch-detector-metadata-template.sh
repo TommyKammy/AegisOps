@@ -67,8 +67,12 @@ owner: <team-or-role>
 purpose: <what this detector is intended to identify>
 severity: <low|medium|high|critical>
 expected_behavior: <what analysts should expect when this detector matches>
+mitre_attack_technique_tags:
+  - <technique-id-or-tag>
 source_prerequisites:
   - <required log source, index pattern, or field dependency>
+false_positive_considerations:
+  - <known benign pattern, expected exception, or triage note>
 governance:
   activation_policy: metadata-only template; no active detector is introduced from this file
   baseline_references:
@@ -101,6 +105,50 @@ governance:
     - docs/repository-structure-baseline.md"
 assert_fails_with "${missing_field_repo}" "expected_behavior"
 
+missing_mitre_repo="${workdir}/missing-mitre"
+create_repo "${missing_mitre_repo}"
+write_template "${missing_mitre_repo}" "# AegisOps detector metadata template only. Do not import as an active detector.
+template_kind: aegisops-detector-metadata
+template_status: placeholder-only
+detector_name: aegisops-<source>-<use-case>-<severity>
+owner: <team-or-role>
+purpose: <what this detector is intended to identify>
+severity: <low|medium|high|critical>
+expected_behavior: <what analysts should expect when this detector matches>
+source_prerequisites:
+  - <required log source, index pattern, or field dependency>
+false_positive_considerations:
+  - <known benign pattern, expected exception, or triage note>
+governance:
+  activation_policy: metadata-only template; no active detector is introduced from this file
+  baseline_references:
+    - docs/requirements-baseline.md
+    - docs/contributor-naming-guide.md
+    - docs/repository-structure-baseline.md"
+assert_fails_with "${missing_mitre_repo}" "mitre_attack_technique_tags"
+
+missing_false_positive_repo="${workdir}/missing-false-positive"
+create_repo "${missing_false_positive_repo}"
+write_template "${missing_false_positive_repo}" "# AegisOps detector metadata template only. Do not import as an active detector.
+template_kind: aegisops-detector-metadata
+template_status: placeholder-only
+detector_name: aegisops-<source>-<use-case>-<severity>
+owner: <team-or-role>
+purpose: <what this detector is intended to identify>
+severity: <low|medium|high|critical>
+expected_behavior: <what analysts should expect when this detector matches>
+mitre_attack_technique_tags:
+  - <technique-id-or-tag>
+source_prerequisites:
+  - <required log source, index pattern, or field dependency>
+governance:
+  activation_policy: metadata-only template; no active detector is introduced from this file
+  baseline_references:
+    - docs/requirements-baseline.md
+    - docs/contributor-naming-guide.md
+    - docs/repository-structure-baseline.md"
+assert_fails_with "${missing_false_positive_repo}" "false_positive_considerations"
+
 runnable_repo="${workdir}/runnable"
 create_repo "${runnable_repo}"
 write_template "${runnable_repo}" "# AegisOps detector metadata template only. Do not import as an active detector.
@@ -111,8 +159,12 @@ owner: <team-or-role>
 purpose: <what this detector is intended to identify>
 severity: <low|medium|high|critical>
 expected_behavior: <what analysts should expect when this detector matches>
+mitre_attack_technique_tags:
+  - <technique-id-or-tag>
 source_prerequisites:
   - <required log source, index pattern, or field dependency>
+false_positive_considerations:
+  - <known benign pattern, expected exception, or triage note>
 enabled: false
 governance:
   activation_policy: metadata-only template; no active detector is introduced from this file
