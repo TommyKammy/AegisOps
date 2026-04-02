@@ -22,11 +22,24 @@ create_repo() {
   git -C "${target}" config user.email "codex@example.com"
 }
 
+write_env_sample() {
+  local target="$1"
+  local content="$2"
+
+  printf '%s\n' "${content}" >"${target}/postgres/.env.sample"
+}
+
 write_compose() {
   local target="$1"
   local content="$2"
 
   printf '%s\n' "${content}" >"${target}/postgres/docker-compose.yml"
+  write_env_sample "${target}" "# Sample environment placeholders for the PostgreSQL compose skeleton only.
+# Do not use these placeholder values in production.
+AEGISOPS_POSTGRES_DB=aegisops_n8n_placeholder
+AEGISOPS_POSTGRES_USER=aegisops_n8n_placeholder
+AEGISOPS_POSTGRES_PASSWORD=placeholder-not-a-secret"
+  git -C "${target}" add postgres/.env.sample
   git -C "${target}" add postgres/docker-compose.yml
   git -C "${target}" commit -q -m "fixture"
 }
@@ -77,6 +90,16 @@ missing_file_repo="${workdir}/missing-file"
 create_repo "${missing_file_repo}"
 git -C "${missing_file_repo}" commit -q --allow-empty -m "fixture"
 assert_fails_with "${missing_file_repo}" "Missing PostgreSQL compose skeleton"
+
+missing_env_sample_repo="${workdir}/missing-env-sample"
+create_repo "${missing_env_sample_repo}"
+printf '%s\n' "name: aegisops-postgres
+services:
+  postgres:
+    image: postgres:16.4" >"${missing_env_sample_repo}/postgres/docker-compose.yml"
+git -C "${missing_env_sample_repo}" add postgres/docker-compose.yml
+git -C "${missing_env_sample_repo}" commit -q -m "fixture"
+assert_fails_with "${missing_env_sample_repo}" "Missing PostgreSQL environment sample placeholder"
 
 latest_tag_repo="${workdir}/latest-tag"
 create_repo "${latest_tag_repo}"
