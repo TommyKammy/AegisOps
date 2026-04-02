@@ -31,6 +31,7 @@ If a document inside one of these areas has its own `Owner` or `Owners` field, t
 | `docs/detection-lifecycle-and-rule-qa-framework.md` | Detection lifecycle and rule QA framework baseline | IT Operations, Information Systems Department |
 | `docs/secops-domain-model.md` | SecOps domain model baseline | IT Operations, Information Systems Department |
 | `docs/response-action-safety-model.md` | Response action safety and approval binding baseline | IT Operations, Information Systems Department |
+| `docs/control-plane-state-model.md` | Control-plane state and reconciliation baseline | IT Operations, Information Systems Department |
 | `docs/adr/` | Architecture Decision Records (ADRs) | IT Operations, Information Systems Department |
 | `docs/parameters/` | Parameter documentation | IT Operations, Information Systems Department |
 | `docs/runbook.md` | Runbooks | IT Operations, Information Systems Department |
@@ -42,6 +43,8 @@ ADR records under `docs/adr/` may identify specific document proposers or review
 The SecOps domain model document remains the shared semantic reference for baseline object definitions and state boundaries and must stay aligned with the approved architecture and requirements baseline.
 
 The response action safety model remains the baseline policy reference for action classes, approval binding, idempotency expectations, and post-approval drift protection for future response execution work.
+
+The control-plane state model remains the baseline ownership reference for which records stay in OpenSearch, which stay in n8n, and which require future AegisOps control-plane authority rather than implicit storage inside component-local state.
 
 The canonical telemetry schema baseline remains the shared semantic reference for normalized event field expectations and must stay aligned with ECS usage rules, source provenance requirements, and the approved SecOps domain model.
 
