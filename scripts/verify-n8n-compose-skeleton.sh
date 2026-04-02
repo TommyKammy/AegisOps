@@ -30,10 +30,28 @@ require_pattern() {
   fi
 }
 
+extract_n8n_block() {
+  awk '
+    /^  n8n:[[:space:]]*$/ { in_n8n = 1 }
+    in_n8n && /^  [a-z0-9-]+:[[:space:]]*$/ && $0 !~ /^  n8n:[[:space:]]*$/ { exit }
+    in_n8n { print }
+  ' "${compose_path}"
+}
+
+require_n8n_pattern() {
+  local pattern="$1"
+  local message="$2"
+
+  if ! extract_n8n_block | grep -En "${pattern}" >/dev/null; then
+    echo "${message}" >&2
+    exit 1
+  fi
+}
+
 require_fixed_string "name: aegisops-n8n"
 require_fixed_string "services:"
 require_fixed_string "  n8n:"
-require_pattern '^    image: n8nio/n8n:[^[:space:]]+$' \
+require_n8n_pattern '^    image: n8nio/n8n:[^[:space:]]+$' \
   "n8n compose skeleton must pin n8nio/n8n to an explicit version tag."
 
 if grep -En '^    image: .*:latest$' "${compose_path}" >/dev/null; then
@@ -46,31 +64,31 @@ if grep -En '^[[:space:]]*container_name:' "${compose_path}" >/dev/null; then
   exit 1
 fi
 
-require_pattern '^    environment:$' \
+require_n8n_pattern '^    environment:$' \
   "n8n compose skeleton must declare environment variables."
-require_pattern '^      DB_TYPE: postgresdb$' \
+require_n8n_pattern '^      DB_TYPE: postgresdb$' \
   "n8n compose skeleton must pin DB_TYPE to postgresdb."
-require_pattern '^      DB_POSTGRESDB_HOST: \${AEGISOPS_POSTGRES_HOST:-postgres}$' \
+require_n8n_pattern '^      DB_POSTGRESDB_HOST: \${AEGISOPS_POSTGRES_HOST:-postgres}$' \
   "n8n compose skeleton must use placeholder-safe environment references for DB_POSTGRESDB_HOST."
-require_pattern '^      DB_POSTGRESDB_PORT: \${AEGISOPS_POSTGRES_PORT:-5432}$' \
+require_n8n_pattern '^      DB_POSTGRESDB_PORT: \${AEGISOPS_POSTGRES_PORT:-5432}$' \
   "n8n compose skeleton must use placeholder-safe environment references for DB_POSTGRESDB_PORT."
-require_pattern '^      DB_POSTGRESDB_DATABASE: \${AEGISOPS_POSTGRES_DB:-aegisops_n8n_placeholder}$' \
+require_n8n_pattern '^      DB_POSTGRESDB_DATABASE: \${AEGISOPS_POSTGRES_DB:-aegisops_n8n_placeholder}$' \
   "n8n compose skeleton must use placeholder-safe environment references for DB_POSTGRESDB_DATABASE."
-require_pattern '^      DB_POSTGRESDB_USER: \${AEGISOPS_POSTGRES_USER:-aegisops_n8n_placeholder}$' \
+require_n8n_pattern '^      DB_POSTGRESDB_USER: \${AEGISOPS_POSTGRES_USER:-aegisops_n8n_placeholder}$' \
   "n8n compose skeleton must use placeholder-safe environment references for DB_POSTGRESDB_USER."
-require_pattern '^      DB_POSTGRESDB_PASSWORD: \${AEGISOPS_POSTGRES_PASSWORD:\?set-in-runtime-secret-source}$' \
+require_n8n_pattern '^      DB_POSTGRESDB_PASSWORD: \${AEGISOPS_POSTGRES_PASSWORD:\?set-in-runtime-secret-source}$' \
   "n8n compose skeleton must use placeholder-safe environment references for DB_POSTGRESDB_PASSWORD."
-require_pattern '^      N8N_ENCRYPTION_KEY: \${AEGISOPS_N8N_ENCRYPTION_KEY:\?set-in-runtime-secret-source}$' \
+require_n8n_pattern '^      N8N_ENCRYPTION_KEY: \${AEGISOPS_N8N_ENCRYPTION_KEY:\?set-in-runtime-secret-source}$' \
   "n8n compose skeleton must use placeholder-safe environment references for N8N_ENCRYPTION_KEY."
-require_pattern '^      N8N_HOST: \${AEGISOPS_N8N_HOST:-n8n-placeholder\.internal}$' \
+require_n8n_pattern '^      N8N_HOST: \${AEGISOPS_N8N_HOST:-n8n-placeholder\.internal}$' \
   "n8n compose skeleton must use placeholder-safe environment references for N8N_HOST."
-require_pattern '^      N8N_USER_FOLDER: \${AEGISOPS_N8N_USER_FOLDER:-/data/n8n-placeholder}$' \
+require_n8n_pattern '^      N8N_USER_FOLDER: \${AEGISOPS_N8N_USER_FOLDER:-/data/n8n-placeholder}$' \
   "n8n compose skeleton must use placeholder-safe environment references for N8N_USER_FOLDER."
-require_pattern '^      WEBHOOK_URL: \${AEGISOPS_N8N_WEBHOOK_URL:-https://n8n-placeholder\.example\.invalid/}$' \
+require_n8n_pattern '^      WEBHOOK_URL: \${AEGISOPS_N8N_WEBHOOK_URL:-https://n8n-placeholder\.example\.invalid/}$' \
   "n8n compose skeleton must use placeholder-safe environment references for WEBHOOK_URL."
-require_pattern '^    volumes:$' \
+require_n8n_pattern '^    volumes:$' \
   "n8n compose skeleton must declare volumes."
-require_pattern '^      - /srv/aegisops/n8n-data-placeholder:/data/n8n-placeholder$' \
+require_n8n_pattern '^      - /srv/aegisops/n8n-data-placeholder:/data/n8n-placeholder$' \
   "n8n compose skeleton must use the explicit AegisOps n8n persistent mount placeholder."
 require_pattern 'n8n orchestration only' \
   "n8n compose skeleton must limit its role to the approved n8n orchestration boundary."
