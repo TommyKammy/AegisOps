@@ -7,6 +7,7 @@ repo_root="${1:-${default_repo_root}}"
 
 expected_top_level_entries=(
   ".env.sample"
+  ".github"
   "LICENSE.txt"
   "README.md"
   "config"
@@ -25,12 +26,19 @@ if ! git -C "${repo_root}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   exit 1
 fi
 
-mapfile -t actual_tracked_entries < <(
+actual_tracked_entries=()
+while IFS= read -r entry; do
+  actual_tracked_entries+=("${entry}")
+done < <(
   git -C "${repo_root}" ls-files \
     | awk -F/ '{print $1}' \
     | LC_ALL=C sort -u
 )
-mapfile -t expected_entries < <(
+
+expected_entries=()
+while IFS= read -r entry; do
+  expected_entries+=("${entry}")
+done < <(
   printf '%s\n' "${expected_top_level_entries[@]}" | LC_ALL=C sort
 )
 
