@@ -26,6 +26,7 @@ If a document inside one of these areas has its own `Owner` or `Owners` field, t
 | ---- | ---- | ---- |
 | `docs/requirements-baseline.md` | Requirements baseline | IT Operations, Information Systems Department |
 | `docs/canonical-telemetry-schema-baseline.md` | Canonical telemetry schema baseline | IT Operations, Information Systems Department |
+| `docs/source-onboarding-contract.md` | Source onboarding contract baseline | IT Operations, Information Systems Department |
 | `docs/secops-domain-model.md` | SecOps domain model baseline | IT Operations, Information Systems Department |
 | `docs/adr/` | Architecture Decision Records (ADRs) | IT Operations, Information Systems Department |
 | `docs/parameters/` | Parameter documentation | IT Operations, Information Systems Department |
@@ -38,6 +39,8 @@ ADR records under `docs/adr/` may identify specific document proposers or review
 The SecOps domain model document remains the shared semantic reference for baseline object definitions and state boundaries and must stay aligned with the approved architecture and requirements baseline.
 
 The canonical telemetry schema baseline remains the shared semantic reference for normalized event field expectations and must stay aligned with ECS usage rules, source provenance requirements, and the approved SecOps domain model.
+
+The source onboarding contract baseline remains the shared readiness reference for admitting new telemetry families and must stay aligned with the canonical telemetry schema baseline, provenance expectations, and explicit non-goals for sources that are not yet detection-ready.
 
 Parameter documents under `docs/parameters/` remain the authoritative human-readable home for parameter references, category explanations, ownership notes, and review guidance.
 

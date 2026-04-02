@@ -18,6 +18,7 @@ required_phrases=(
   "Document owner means the team accountable for keeping the document area current, reviewable, and aligned with the approved baseline and accepted ADRs."
   '| `docs/requirements-baseline.md` | Requirements baseline | IT Operations, Information Systems Department |'
   '| `docs/canonical-telemetry-schema-baseline.md` | Canonical telemetry schema baseline | IT Operations, Information Systems Department |'
+  '| `docs/source-onboarding-contract.md` | Source onboarding contract baseline | IT Operations, Information Systems Department |'
   '| `docs/secops-domain-model.md` | SecOps domain model baseline | IT Operations, Information Systems Department |'
   '| `docs/adr/` | Architecture Decision Records (ADRs) | IT Operations, Information Systems Department |'
   '| `docs/parameters/` | Parameter documentation | IT Operations, Information Systems Department |'
