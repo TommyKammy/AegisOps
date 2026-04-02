@@ -29,3 +29,5 @@ It translates the repository structure guidance from `docs/requirements-baseline
 - New top-level directories require explicit approval because they change the repository baseline.
 - `.codex-supervisor/` is supervisor-local working state and is not an approved tracked top-level repository entry.
 - This document defines structure only and does not authorize runtime, deployment, or workflow implementation.
+
+Within `sigma/`, placeholder marker files may reserve approved homes such as `curated/` and `suppressed/` before any real detection or suppression content is admitted.
