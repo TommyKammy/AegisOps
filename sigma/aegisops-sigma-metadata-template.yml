@@ -1,0 +1,26 @@
+# AegisOps Sigma metadata template only. Do not promote as a real Sigma rule.
+title: AegisOps Sigma Metadata Template
+id: <placeholder-uuid>
+status: experimental
+description: Placeholder-only metadata scaffold for future curated Sigma rule onboarding.
+template_kind: aegisops-sigma-rule-metadata
+template_status: placeholder-only
+owner: <team-or-role>
+purpose: <what this rule is intended to detect>
+expected_behavior: <what analysts should expect when this rule matches>
+severity: <low|medium|high|critical>
+tags:
+  - attack.<tactic-or-technique>
+logsource:
+  product: <required log source product>
+  service: <required log source service or subtype>
+source_prerequisites:
+  - <required log source, retention, field, or normalization dependency>
+detection:
+  placeholder: metadata-only
+  condition: placeholder
+governance:
+  activation_policy: metadata-only template; no active Sigma rule logic is introduced from this file
+  baseline_references:
+    - docs/requirements-baseline.md
+    - docs/repository-structure-baseline.md
