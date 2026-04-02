@@ -66,6 +66,7 @@ assert_fails_with() {
 approved_repo="${workdir}/approved-license"
 create_repo \
   "${approved_repo}" \
+  ".codex-supervisor/issues/94/issue-journal.md" \
   ".env.sample" \
   ".github/workflows/ci.yml" \
   "LICENSE.txt" \
@@ -84,7 +85,8 @@ assert_passes "${approved_repo}"
 unexpected_hidden_repo="${workdir}/unexpected-hidden-dir"
 create_repo \
   "${unexpected_hidden_repo}" \
-  ".codex-supervisor/" \
+  ".cache/" \
+  ".codex-supervisor/issues/94/issue-journal.md" \
   ".env.sample" \
   ".github/workflows/ci.yml" \
   "LICENSE.txt" \
@@ -98,6 +100,6 @@ create_repo \
   "proxy/" \
   "scripts/" \
   "sigma/"
-assert_fails_with "${unexpected_hidden_repo}" ".codex-supervisor"
+assert_fails_with "${unexpected_hidden_repo}" ".cache"
 
 echo "verify-repository-skeleton tests passed"

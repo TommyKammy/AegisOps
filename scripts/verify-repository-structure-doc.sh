@@ -6,6 +6,10 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 doc_path="${repo_root}/docs/repository-structure-baseline.md"
 
 required_entries=(
+  ".codex-supervisor/"
+  ".github/"
+  "LICENSE.txt"
+  "README.md"
   "docs/"
   "opensearch/"
   "sigma/"
