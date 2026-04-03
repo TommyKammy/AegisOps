@@ -1,0 +1,26 @@
+{
+  "fixture_provenance": {
+    "family": "windows-security-and-endpoint",
+    "type": "synthetic-review-example",
+    "review_case": "edge-forwarded-time-anomaly"
+  },
+  "System": {
+    "Provider": {
+      "Name": "Microsoft-Windows-Eventlog"
+    },
+    "EventID": 1102,
+    "Channel": "Security",
+    "Computer": "WS-SEC-09.corp.example.invalid",
+    "TimeCreated": "2026-03-31T11:59:10Z"
+  },
+  "CollectorMetadata": {
+    "event_created": "2026-03-31T12:00:15Z",
+    "event_ingested": "2026-03-31T12:00:45Z",
+    "known_time_anomaly_seconds": 95
+  },
+  "EventData": {
+    "SubjectUserSid": "S-1-5-21-1000-2000-3000-1118",
+    "SubjectUserName": "secops.remote",
+    "SubjectDomainName": "CORP"
+  }
+}
