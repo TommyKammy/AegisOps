@@ -1,0 +1,38 @@
+title: AegisOps Windows New Local User Created
+id: 91c9f67d-76f5-41f1-9ccf-66942a33df4f
+status: candidate
+description: Reviewed candidate rule for the initial Windows Phase 6 use case.
+owner: IT Operations, Information Systems Department
+purpose: Detect a reviewed Windows event where a new local user account is created on a managed host.
+expected_behavior: Create a reviewable finding when reviewed Windows telemetry records local account creation.
+severity: medium
+level: medium
+required_reviewer: Security Engineering reviewer
+expiry: 2026-07-01
+source_of_truth: sigma
+validation_evidence_reference: ingest/replay/windows-security-and-endpoint/normalized/success.ndjson#new-local-user-created
+rollback_expectation: Revert the translated detector content or return the rule to candidate review if validation volume or scope is unacceptable.
+tags:
+  - attack.persistence
+  - attack.t1136.001
+logsource:
+  product: windows
+  service: security
+field_dependencies:
+  - event.dataset
+  - event.code
+  - event.action
+  - host.name
+  - user.name
+  - destination.user.name
+source_prerequisites:
+  - Windows security and endpoint telemetry family remains schema-reviewed under docs/source-families/windows-security-and-endpoint/onboarding-package.md.
+  - Required normalized fields event.dataset, event.code, event.action, host.name, user.name, and destination.user.name are preserved for reviewed success-path fixtures.
+false_positive_considerations:
+  - Approved help desk provisioning, imaging workflows, or temporary break-glass account creation can legitimately match.
+detection:
+  selection:
+    event.dataset: windows.security
+    event.code: '4720'
+    event.action: local-user-created
+  condition: selection

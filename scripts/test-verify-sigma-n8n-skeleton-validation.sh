@@ -26,7 +26,7 @@ create_sigma_and_n8n_skeleton() {
   local target="$1"
 
   mkdir -p \
-    "${target}/sigma/curated" \
+    "${target}/sigma/curated/windows-security-and-endpoint" \
     "${target}/sigma/suppressed" \
     "${target}/n8n/workflows/aegisops_alert_ingest" \
     "${target}/n8n/workflows/aegisops_approve" \
@@ -40,11 +40,139 @@ create_sigma_and_n8n_skeleton() {
 
 Purpose: reviewed Sigma rules approved for AegisOps onboarding.
 
-Status: placeholder only; no active Sigma detection rules are committed here yet.
+Status: candidate Windows security and endpoint rules for the selected Phase 6 use cases only.
 
-This directory reserves the approved location for future curated Sigma content after review.
+Scope: privileged group membership change, audit log cleared, and new local user created.
 
-Rule onboarding requires future review and explicit approval before any real rule content is added.
+These rules stay within the approved single-event Sigma subset and remain review content only.
+EOF
+
+  cat <<'EOF' > "${target}/sigma/curated/windows-security-and-endpoint/privileged-group-membership-change.yml"
+title: AegisOps Windows Privileged Group Membership Change
+id: 2b6d9ef3-0e1e-4e42-a0c2-9f4f7f0d4c81
+status: candidate
+description: Reviewed candidate rule for the initial Windows Phase 6 use case.
+owner: IT Operations, Information Systems Department
+purpose: Detect a reviewed Windows event where a user is added to a privileged local or domain group.
+expected_behavior: Create a reviewable finding when reviewed Windows telemetry records a membership change into a privileged group.
+severity: high
+level: high
+required_reviewer: Security Engineering reviewer
+expiry: 2026-07-01
+source_of_truth: sigma
+validation_evidence_reference: ingest/replay/windows-security-and-endpoint/normalized/success.ndjson#privileged-group-membership-change
+rollback_expectation: Revert the translated detector content or return the rule to candidate review if validation volume or scope is unacceptable.
+tags:
+  - attack.persistence
+  - attack.privilege-escalation
+  - attack.t1098
+logsource:
+  product: windows
+  service: security
+field_dependencies:
+  - event.dataset
+  - event.code
+  - group.name
+  - user.name
+  - destination.user.name
+source_prerequisites:
+  - Windows security and endpoint telemetry family remains schema-reviewed under docs/source-families/windows-security-and-endpoint/onboarding-package.md.
+  - Required normalized fields event.dataset, event.code, group.name, user.name, and destination.user.name are preserved for reviewed success-path fixtures.
+false_positive_considerations:
+  - Approved administrative group changes by endpoint engineering, identity administrators, or build automation can legitimately match.
+detection:
+  selection:
+    event.dataset: windows.security
+    event.code:
+      - '4728'
+      - '4732'
+      - '4756'
+    group.name:
+      - Administrators
+      - Domain Admins
+      - Enterprise Admins
+  condition: selection
+EOF
+
+  cat <<'EOF' > "${target}/sigma/curated/windows-security-and-endpoint/audit-log-cleared.yml"
+title: AegisOps Windows Audit Log Cleared
+id: 4f5b2a71-91d4-4d75-85a1-c0fc12276fea
+status: candidate
+description: Reviewed candidate rule for the initial Windows Phase 6 use case.
+owner: IT Operations, Information Systems Department
+purpose: Detect a reviewed Windows event that records clearing of the Windows audit log.
+expected_behavior: Create a reviewable finding when reviewed Windows telemetry records audit-log-cleared activity.
+severity: high
+level: high
+required_reviewer: Security Engineering reviewer
+expiry: 2026-07-01
+source_of_truth: sigma
+validation_evidence_reference: ingest/replay/windows-security-and-endpoint/normalized/success.ndjson#audit-log-cleared
+rollback_expectation: Revert the translated detector content or return the rule to candidate review if validation volume or scope is unacceptable.
+tags:
+  - attack.defense-evasion
+  - attack.t1070.001
+logsource:
+  product: windows
+  service: security
+field_dependencies:
+  - event.dataset
+  - event.code
+  - event.action
+  - host.name
+  - user.name
+source_prerequisites:
+  - Windows security and endpoint telemetry family remains schema-reviewed under docs/source-families/windows-security-and-endpoint/onboarding-package.md.
+  - Required normalized fields event.dataset, event.code, event.action, host.name, and user.name are preserved for reviewed success-path fixtures.
+false_positive_considerations:
+  - Approved maintenance, forensic review, or controlled break-glass procedures can legitimately clear audit logs.
+detection:
+  selection:
+    event.dataset: windows.security
+    event.code: '1102'
+    event.action: audit-log-cleared
+  condition: selection
+EOF
+
+  cat <<'EOF' > "${target}/sigma/curated/windows-security-and-endpoint/new-local-user-created.yml"
+title: AegisOps Windows New Local User Created
+id: 91c9f67d-76f5-41f1-9ccf-66942a33df4f
+status: candidate
+description: Reviewed candidate rule for the initial Windows Phase 6 use case.
+owner: IT Operations, Information Systems Department
+purpose: Detect a reviewed Windows event where a new local user account is created on a managed host.
+expected_behavior: Create a reviewable finding when reviewed Windows telemetry records local account creation.
+severity: medium
+level: medium
+required_reviewer: Security Engineering reviewer
+expiry: 2026-07-01
+source_of_truth: sigma
+validation_evidence_reference: ingest/replay/windows-security-and-endpoint/normalized/success.ndjson#new-local-user-created
+rollback_expectation: Revert the translated detector content or return the rule to candidate review if validation volume or scope is unacceptable.
+tags:
+  - attack.persistence
+  - attack.t1136.001
+logsource:
+  product: windows
+  service: security
+field_dependencies:
+  - event.dataset
+  - event.code
+  - event.action
+  - host.name
+  - user.name
+  - destination.user.name
+source_prerequisites:
+  - Windows security and endpoint telemetry family remains schema-reviewed under docs/source-families/windows-security-and-endpoint/onboarding-package.md.
+  - Required normalized fields event.dataset, event.code, event.action, host.name, user.name, and destination.user.name are preserved for reviewed success-path fixtures.
+false_positive_considerations:
+  - Approved help desk provisioning, imaging workflows, or temporary break-glass account creation can legitimately match.
+detection:
+  selection:
+    event.dataset: windows.security
+    event.code: '4720'
+    event.action: local-user-created
+  condition: selection
 EOF
 
   cat <<'EOF' > "${target}/sigma/suppressed/README.md"
@@ -122,7 +250,7 @@ write_validation_doc() {
   cat <<'EOF' > "${target}/docs/sigma-n8n-skeleton-validation.md"
 # Sigma and n8n Skeleton Asset Validation
 
-- Validation date: 2026-04-02
+- Validation date: 2026-04-03
 - Baseline references: `docs/requirements-baseline.md`, `docs/repository-structure-baseline.md`, `sigma/README.md`, `n8n/workflows/README.md`
 - Verification commands: `bash scripts/verify-sigma-guidance-doc.sh`, `bash scripts/verify-sigma-curated-skeleton.sh`, `bash scripts/verify-sigma-suppressed-skeleton.sh`, `bash scripts/verify-n8n-workflow-category-guidance.sh`, `bash scripts/verify-n8n-workflow-skeleton.sh`, `bash scripts/verify-sigma-n8n-skeleton-validation.sh`
 - Validation status: PASS
@@ -131,6 +259,9 @@ write_validation_doc() {
 
 - `sigma/README.md`
 - `sigma/curated/README.md`
+- `sigma/curated/windows-security-and-endpoint/audit-log-cleared.yml`
+- `sigma/curated/windows-security-and-endpoint/new-local-user-created.yml`
+- `sigma/curated/windows-security-and-endpoint/privileged-group-membership-change.yml`
 - `sigma/suppressed/README.md`
 - `n8n/workflows/README.md`
 - `n8n/workflows/aegisops_alert_ingest/.gitkeep`
@@ -141,9 +272,9 @@ write_validation_doc() {
 
 ## Sigma Review Result
 
-The Sigma curated and suppressed directories preserve the approved distinction between future onboarding candidates and documented future suppression decisions.
+The Sigma curated and suppressed directories preserve the approved distinction between reviewed onboarding candidates and documented future suppression decisions.
 
-Both directories remain placeholder-only and do not introduce live Sigma rule, suppression, exception, or decision content.
+The curated slice is limited to privileged group membership change, audit log cleared, and new local user created, and the suppressed directory remains placeholder-only without live suppression entries.
 
 ## n8n Workflow Category Review Result
 
@@ -155,7 +286,7 @@ Each category remains a placeholder-only directory with a `.gitkeep` marker, and
 
 No reviewed Sigma asset introduces runnable detection behavior, and no reviewed n8n asset introduces runnable workflow behavior.
 
-The current tracked assets remain documentation and placeholder markers only.
+The current tracked Sigma assets remain reviewed content only, and the n8n assets remain documentation and placeholder markers only.
 
 ## Deviations
 
