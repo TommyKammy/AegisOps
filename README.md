@@ -93,6 +93,7 @@ Key documents that serve as the source of truth for implementation decisions:
 - `docs/source-onboarding-contract.md`
 - `docs/sigma-to-opensearch-translation-strategy.md`
 - `docs/detection-lifecycle-and-rule-qa-framework.md`
+- `docs/phase-6-initial-telemetry-slice.md`
 - `docs/secops-domain-model.md`
 - `docs/secops-business-hours-operating-model.md`
 - `docs/auth-baseline.md`

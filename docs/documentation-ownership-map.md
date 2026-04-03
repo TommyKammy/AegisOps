@@ -29,6 +29,7 @@ If a document inside one of these areas has its own `Owner` or `Owners` field, t
 | `docs/source-onboarding-contract.md` | Source onboarding contract baseline | IT Operations, Information Systems Department |
 | `docs/sigma-to-opensearch-translation-strategy.md` | Sigma-to-OpenSearch translation strategy baseline | IT Operations, Information Systems Department |
 | `docs/detection-lifecycle-and-rule-qa-framework.md` | Detection lifecycle and rule QA framework baseline | IT Operations, Information Systems Department |
+| `docs/phase-6-initial-telemetry-slice.md` | Phase 6 initial telemetry family and use-case selection baseline | IT Operations, Information Systems Department |
 | `docs/secops-domain-model.md` | SecOps domain model baseline | IT Operations, Information Systems Department |
 | `docs/secops-business-hours-operating-model.md` | Business-hours SecOps daily operating model baseline | IT Operations, Information Systems Department |
 | `docs/auth-baseline.md` | Authentication, authorization, and service account ownership baseline | IT Operations, Information Systems Department |
@@ -62,6 +63,8 @@ The source onboarding contract baseline remains the shared readiness reference f
 The Sigma-to-OpenSearch translation strategy baseline remains the approved boundary for what Sigma content is portable into future OpenSearch detector work, what must be deferred, and when detections must remain OpenSearch-native.
 
 The detection lifecycle and rule QA framework baseline remains the approval-readiness reference for moving reviewed detection content from proposal through activation, deprecation, and retirement without bypassing staging or evidence expectations.
+
+The Phase 6 initial telemetry slice document remains the narrow scoping reference for the first validated family and use-case set and must stay aligned with the business-hours operating model, replay-readiness assumptions, and Sigma translation boundaries.
 
 Parameter documents under `docs/parameters/` remain the authoritative human-readable home for parameter references, category explanations, ownership notes, and review guidance.
 
