@@ -53,7 +53,25 @@ The mapping summary below aligns the reviewed Windows references to the canonica
 
 Shared required field groups remain required under `docs/canonical-telemetry-schema-baseline.md`, and this package does not reinterpret missing source values as optional.
 
-## 5. Replay Fixture Plan
+## 5. Field Coverage Verification
+
+The field coverage matrix below classifies the reviewed Windows semantic areas as required, optional, unavailable, intentionally deferred, or exception-path constrained without ambiguity.
+
+| Semantic area | Coverage status | Evidence or exception path |
+| ---- | ---- | ---- |
+| Event classification and timestamp semantics | Required | Covered by the reviewed normalized fixtures for `event.code`, `event.action`, `@timestamp`, `event.created`, and `event.ingested`. |
+| Source provenance including event channel, provider, and collector or agent identity | Required | Covered by `event.provider`, `event.module`, `event.dataset`, and `aegisops.provenance.ingest_path` in the reviewed normalized fixtures. |
+| Host identity and asset references | Required | Covered by `host.name`, `host.hostname`, and `related.hosts` in the reviewed normalized fixtures. |
+| Actor identity and target identity when present | Required with exception path | The missing-actor edge fixture documents that absent actor identity is a detection-ready blocker for actor-dependent detections but remains an allowed schema-reviewed exception path for fixture validation without fabricating `user.*` fields. |
+| Logon session context, token or integrity details, and group references | Optional | `group.name` is covered by the privileged-group-addition fixture, while logon and token details are not required for this narrow review set. |
+| Process lineage and command-line context | Intentionally deferred | Windows security records in this narrow fixture set do not yet provide reviewed process lineage evidence, so broader process-context validation remains future work before detection-ready approval. |
+| Source and destination network context for remote access or lateral movement records | Unavailable | The reviewed administrative-security fixture set does not credibly supply remote network context and therefore cannot claim it without fabrication. |
+| Related user, host, IP, and process correlation fields | Required derived coverage | `related.user` and `related.hosts` are present where supported, and `related.ip` or `related.process` are omitted because the reviewed source records do not credibly expose them. |
+| AegisOps-specific provenance annotations under `aegisops.*` | Required derived coverage | Covered by `aegisops.provenance.*` and `aegisops.validation.*` in the normalized fixtures. |
+
+This package remains `schema-reviewed`, so the classifications above are evidence for fixture and mapping review rather than a claim that all required detection-ready coverage is complete.
+
+## 6. Replay Fixture Plan
 
 Replay fixtures are stored under `ingest/replay/windows-security-and-endpoint/normalized/`.
 
@@ -70,7 +88,7 @@ The `edge.ndjson` corpus contains reviewed edge cases that future parser validat
 
 The raw and normalized fixtures together are sufficient for future parser and mapping validation without claiming that the family is already detection-ready.
 
-## 6. Known Gaps and Non-Goals
+## 7. Known Gaps and Non-Goals
 
 This package remains `schema-reviewed` rather than `detection-ready` because parser version evidence, field-by-field coverage sign-off across a broader Windows event range, and explicit detector-use approval remain future work.
 
