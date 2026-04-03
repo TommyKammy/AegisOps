@@ -48,8 +48,13 @@ Future issues may expand this directory with detector definitions, validation no
 
 Any future addition here must keep runtime behavior unchanged unless the change explicitly includes approved activation and validation scope.
 
+The current Phase 6 slice adds staging-only detector artifacts for the selected Windows use cases under `opensearch/detectors/windows-security-and-endpoint/`.
+
+Those tracked artifacts preserve Sigma traceability and test-index scope only. They are reviewable detector materialization inputs, not production activation instructions.
+
 ## 6. Reference Documents
 
 - `docs/requirements-baseline.md`
 - `docs/repository-structure-baseline.md`
 - `opensearch/detectors/aegisops-detector-metadata-template.yaml`
+- `docs/phase-6-opensearch-detector-artifact-validation.md`

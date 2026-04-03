@@ -1,0 +1,45 @@
+artifact_kind: aegisops-opensearch-detector
+artifact_version: v1
+detector_name: aegisops-windows-privileged-group-membership-change-high
+status: staging
+deployment_scope: staging-only
+production_eligible: false
+source_family: windows-security-and-endpoint
+source_of_truth: sigma
+sigma_rule_path: sigma/curated/windows-security-and-endpoint/privileged-group-membership-change.yml
+sigma_rule_id: 2b6d9ef3-0e1e-4e42-a0c2-9f4f7f0d4c81
+title: AegisOps Windows Privileged Group Membership Change
+owner: IT Operations, Information Systems Department
+purpose: Detect a reviewed Windows event where a user is added to a privileged local or domain group.
+expected_behavior: Create a reviewable finding when reviewed Windows telemetry records a membership change into a privileged group.
+severity: high
+mitre_attack_technique_tags:
+  - attack.persistence
+  - attack.privilege-escalation
+  - attack.t1098
+field_dependencies:
+  - event.dataset
+  - event.code
+  - group.name
+  - user.name
+  - destination.user.name
+source_prerequisites:
+  - Windows security and endpoint telemetry family remains schema-reviewed under docs/source-families/windows-security-and-endpoint/onboarding-package.md.
+  - Required normalized fields event.dataset, event.code, group.name, user.name, and destination.user.name are preserved for reviewed success-path fixtures.
+index_patterns:
+  - aegisops-logs-windows-*
+validation_target_index:
+  - aegisops-logs-windows-staging-*
+query_language: lucene
+query: 'event.dataset:"windows.security" AND event.code:(4728 OR 4732 OR 4756) AND group.name:("Administrators" OR "Domain Admins" OR "Enterprise Admins")'
+validation_evidence_reference: ingest/replay/windows-security-and-endpoint/normalized/success.ndjson#privileged-group-membership-change
+false_positive_considerations:
+  - Approved administrative group changes by endpoint engineering, identity administrators, or build automation can legitimately match.
+fallback_handling: No OpenSearch-native fallback is required for this supported single-event Sigma translation.
+governance:
+  activation_guardrail: Staging or test-index validation only. Production activation is not approved by this artifact.
+  baseline_references:
+    - docs/phase-6-initial-telemetry-slice.md
+    - docs/sigma-to-opensearch-translation-strategy.md
+    - docs/detection-lifecycle-and-rule-qa-framework.md
+    - docs/source-families/windows-security-and-endpoint/onboarding-package.md
