@@ -79,4 +79,68 @@ Future validation guidance should describe:
 - the conditions that require escalation instead of continued operation, and
 - the repository artifacts that define the expected state.
 
-Until those procedures exist, this section serves only as a placeholder for approved future validation content.
+The selected Phase 6 validation slice is limited to the Windows security and endpoint telemetry family and the three reviewed detector artifacts under `opensearch/detectors/windows-security-and-endpoint/`.
+
+This runbook section is limited to replay validation, staging-only detector review, and read-only or notify-only workflow review during business hours.
+
+### 6.1 Selected Slice and Preconditions
+
+The selected replay-to-detection-to-notify slice covers these reviewed use cases only:
+
+1. Privileged group membership change
+2. Audit log cleared
+3. New local user created
+
+The operator should treat the slice as ready for analyst validation only when all of the following repository artifacts remain present and internally consistent:
+
+- `docs/phase-6-initial-telemetry-slice.md`
+- `docs/source-families/windows-security-and-endpoint/onboarding-package.md`
+- `docs/phase-6-opensearch-detector-artifact-validation.md`
+- `opensearch/detectors/windows-security-and-endpoint/privileged-group-membership-change-staging.yaml`
+- `opensearch/detectors/windows-security-and-endpoint/audit-log-cleared-staging.yaml`
+- `opensearch/detectors/windows-security-and-endpoint/new-local-user-created-staging.yaml`
+- `n8n/workflows/aegisops_enrich/aegisops_enrich_windows_selected_detector_outputs.json`
+- `n8n/workflows/aegisops_notify/aegisops_notify_windows_selected_detector_outputs.json`
+- `ingest/replay/windows-security-and-endpoint/normalized/success.ndjson`
+
+This slice is not a production activation checklist. It does not authorize live source onboarding, detector enablement against production indexes, response execution, or after-hours operation promises.
+
+### 6.2 Analyst Validation Path
+
+The analyst validation path for this slice is review-first and replay-oriented:
+
+1. Confirm the replay corpus still represents only the three selected Windows use cases and remains synthetic or redacted review material.
+2. Confirm each detector artifact remains `staging` scoped, points to `aegisops-logs-windows-staging-*`, and preserves the expected field dependencies and replay evidence references.
+3. Confirm the enrich workflow remains read-only and the notify workflow remains notify-only, with no write-capable connector, response step, or approval-bypass behavior inferred from the asset content.
+4. Exercise the slice by replaying the reviewed success-path records into the approved staging validation path and verifying that the resulting detector outputs are suitable for analyst review rather than automated action.
+5. Review the resulting routed work item during business hours and confirm it can be handled as a queue-driven analyst task with evidence capture, hypothesis development, and escalation or closure decisions remaining human-owned.
+
+Validation is incomplete if the slice depends on missing actor attribution, forwarded-event timing ambiguity, hidden field remapping, threshold logic, or any workflow behavior beyond the approved read-only and notify-only boundaries.
+
+### 6.3 Required Evidence Review
+
+Operators must review replay evidence from `ingest/replay/windows-security-and-endpoint/normalized/success.ndjson`, the staging-only detector metadata, and the read-only or notify-only workflow assets before treating the slice as validated.
+
+The minimum evidence review for each exercise is:
+
+- replay evidence showing which of the three selected Windows scenarios was used;
+- detector metadata showing the expected validation target index, Sigma traceability, field dependencies, and false-positive notes;
+- workflow metadata showing the enrich asset remains read-oriented and the notify asset remains analyst-routing only; and
+- analyst-facing review notes showing whether the routed output was understandable, attributable to the replayed record, and compatible with the business-hours queue model.
+
+Any validation record should note whether the slice produced an explainable analyst work item, whether the evidence was sufficient for same-day review, and whether the output should stay staged, be revised, or be withdrawn.
+
+### 6.4 Disable and Rollback Path
+
+If validation fails, disable the selected slice by keeping the detector artifacts out of production activation and by withdrawing `aegisops_enrich_windows_selected_detector_outputs.json` and `aegisops_notify_windows_selected_detector_outputs.json` from the active workflow set until the issue is corrected and re-reviewed.
+
+Rollback for this slice means returning to the prior safe state where the reviewed artifacts remain version-controlled reference material only:
+
+- do not promote the detector artifacts beyond staging-only scope;
+- do not treat replay success as authority for production index coverage;
+- do not leave the selected enrich or notify assets available for uncontrolled live routing if their analyst-facing output is misleading or incomplete; and
+- document the failure reason, the affected use case, and the artifact set withdrawn from validation so the next review can confirm the rollback state deliberately.
+
+Escalate instead of continuing validation when the failure suggests missing provenance, ambiguous timestamps, missing identity fields required by the detector, or any behavior that would make the routed work item unreliable for analyst review.
+
+The selected slice remains business-hours oriented and does not imply 24x7 monitoring, production write behavior, or uncontrolled activation.
