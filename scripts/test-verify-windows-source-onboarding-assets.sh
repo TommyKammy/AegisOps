@@ -53,11 +53,27 @@ The reviewed edge-case references in this package cover missing actor identity a
 
 The mapping summary aligns raw Windows event fields to the canonical telemetry schema baseline.
 
-## 5. Replay Fixture Plan
+## 5. Field Coverage Verification
+
+The field coverage matrix below classifies the reviewed Windows semantic areas as required, optional, unavailable, intentionally deferred, or exception-path constrained without ambiguity.
+
+| Semantic area | Coverage status | Evidence or exception path |
+| ---- | ---- | ---- |
+| Event classification and timestamp semantics | Required | Covered by the reviewed normalized fixtures for event.code, event.action, @timestamp, event.created, and event.ingested. |
+| Source provenance including event channel, provider, and collector or agent identity | Required | Covered by event.provider, event.module, event.dataset, and aegisops.provenance.ingest_path in the reviewed normalized fixtures. |
+| Host identity and asset references | Required | Covered by host.name, host.hostname, and related.hosts in the reviewed normalized fixtures. |
+| Actor identity and target identity when present | Required with exception path | The missing-actor edge fixture documents that absent actor identity is a detection-ready blocker for actor-dependent detections but remains an allowed schema-reviewed exception path for fixture validation without fabricating user fields. |
+| Logon session context, token or integrity details, and group references | Optional | Group references are covered by group.name in the privileged-group-addition fixture, while logon and token details are not required for this narrow review set. |
+| Process lineage and command-line context | Intentionally deferred | Windows security records in this narrow fixture set do not yet provide reviewed process lineage evidence, so broader process-context validation remains future work before detection-ready approval. |
+| Source and destination network context for remote access or lateral movement records | Unavailable | The reviewed administrative-security fixture set does not credibly supply remote network context and therefore cannot claim it without fabrication. |
+| Related user, host, IP, and process correlation fields | Required derived coverage | related.user and related.hosts are present where supported, and related.ip or related.process are omitted because the reviewed source records do not credibly expose them. |
+| AegisOps-specific provenance annotations under aegisops.* | Required derived coverage | Covered by aegisops.provenance.* and aegisops.validation.* in the normalized fixtures. |
+
+## 6. Replay Fixture Plan
 
 Replay fixtures are stored under `ingest/replay/windows-security-and-endpoint/normalized/`.
 
-## 6. Known Gaps and Non-Goals
+## 7. Known Gaps and Non-Goals
 
 No live rollout is included in this review package.' >"${target}/docs/source-families/windows-security-and-endpoint/onboarding-package.md"
 
@@ -78,14 +94,14 @@ All fixtures in this directory are synthetic or redacted review examples and are
   printf '%s\n' '{"EventID":1102,"ForwardedTimeSkewSeconds":95}' >"${target}/ingest/replay/windows-security-and-endpoint/raw/audit-log-cleared-forwarded-time-anomaly.json"
 
   printf '%s\n' \
-    '{"event.code":"4732"}' \
-    '{"event.code":"1102"}' \
-    '{"event.code":"4720"}' \
+    '{"@timestamp":"2026-03-31T12:00:00Z","event.created":"2026-03-31T12:00:03Z","event.ingested":"2026-03-31T12:00:08Z","event.action":"member-added-to-local-group","event.code":"4732","event.provider":"Microsoft-Windows-Security-Auditing","event.module":"windows","event.dataset":"windows.security","host.name":"WS-ADMIN-01","host.hostname":"WS-ADMIN-01.corp.example.invalid","user.name":"svc_admin_ops","destination.user.name":"jdoe","group.name":"Administrators","related.user":["svc_admin_ops","jdoe"],"related.hosts":["WS-ADMIN-01"],"aegisops.provenance.ingest_path":"review/windows-forwarded-event","aegisops.provenance.parser_version":"review-fixture-v1"}' \
+    '{"@timestamp":"2026-03-31T12:05:00Z","event.created":"2026-03-31T12:05:02Z","event.ingested":"2026-03-31T12:05:06Z","event.action":"audit-log-cleared","event.code":"1102","event.provider":"Microsoft-Windows-Eventlog","event.module":"windows","event.dataset":"windows.security","host.name":"WS-SEC-02","host.hostname":"WS-SEC-02.corp.example.invalid","user.name":"secops.tier2","related.user":["secops.tier2"],"related.hosts":["WS-SEC-02"],"aegisops.provenance.ingest_path":"review/windows-eventlog","aegisops.provenance.parser_version":"review-fixture-v1"}' \
+    '{"@timestamp":"2026-03-31T12:10:00Z","event.created":"2026-03-31T12:10:04Z","event.ingested":"2026-03-31T12:10:08Z","event.action":"local-user-created","event.code":"4720","event.provider":"Microsoft-Windows-Security-Auditing","event.module":"windows","event.dataset":"windows.security","host.name":"WS-APP-07","host.hostname":"WS-APP-07.corp.example.invalid","user.name":"helpdesk_admin","destination.user.name":"svc_tempops","related.user":["helpdesk_admin","svc_tempops"],"related.hosts":["WS-APP-07"],"aegisops.provenance.ingest_path":"review/windows-eventlog","aegisops.provenance.parser_version":"review-fixture-v1"}' \
     >"${target}/ingest/replay/windows-security-and-endpoint/normalized/success.ndjson"
 
   printf '%s\n' \
-    '{"aegisops.validation.case":"missing-actor"}' \
-    '{"aegisops.validation.case":"forwarded-time-anomaly"}' \
+    '{"event.created":"2026-03-31T12:11:03Z","event.ingested":"2026-03-31T12:11:07Z","aegisops.validation.case":"missing-actor","aegisops.validation.note":"Actor identity unavailable in reviewed source payload.","event.original":"local-user-created-missing-actor.json"}' \
+    '{"event.created":"2026-03-31T12:00:15Z","event.ingested":"2026-03-31T12:00:45Z","aegisops.provenance.clock_quality":"forwarded-event-time-anomaly","aegisops.validation.case":"forwarded-time-anomaly","aegisops.validation.note":"Source event time and collector receipt time diverge materially.","event.original":"audit-log-cleared-forwarded-time-anomaly.json"}' \
     >"${target}/ingest/replay/windows-security-and-endpoint/normalized/edge.ndjson"
 
   git -C "${target}" add .
@@ -149,5 +165,22 @@ printf '%s\n' '{"aegisops.validation.case":"missing-actor"}' >"${missing_tag_rep
 git -C "${missing_tag_repo}" add .
 commit_fixture "${missing_tag_repo}"
 assert_fails_with "${missing_tag_repo}" "Missing edge fixture tagged for forwarded timestamp handling."
+
+missing_coverage_repo="${workdir}/missing-coverage"
+create_repo "${missing_coverage_repo}"
+write_valid_assets "${missing_coverage_repo}"
+python3 - <<'PY' "${missing_coverage_repo}/docs/source-families/windows-security-and-endpoint/onboarding-package.md"
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+start = text.index("## 5. Field Coverage Verification")
+end = text.index("## 6. Replay Fixture Plan")
+path.write_text(text[:start] + text[end:])
+PY
+git -C "${missing_coverage_repo}" add .
+commit_fixture "${missing_coverage_repo}"
+assert_fails_with "${missing_coverage_repo}" "Missing Windows onboarding package heading: ## 5. Field Coverage Verification"
 
 echo "Windows source onboarding asset verifier tests passed."
