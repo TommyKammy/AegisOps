@@ -44,6 +44,9 @@ jobs:
           bash scripts/verify-parameter-category-docs.sh
           bash scripts/verify-parameter-config-files.sh
           bash scripts/verify-phase-5-semantic-contract-validation.sh
+          bash scripts/verify-phase-6-initial-telemetry-slice-doc.sh
+          bash scripts/verify-phase-6-opensearch-detector-artifacts.sh
+          bash scripts/verify-phase-6-replay-to-notify-validation.sh
           bash scripts/verify-postgres-compose-skeleton.sh
           bash scripts/verify-proxy-compose-skeleton.sh
           bash scripts/verify-response-action-safety-model-doc.sh
@@ -77,6 +80,9 @@ jobs:
           bash scripts/test-verify-ci-phase-5-workflow-coverage.sh
           bash scripts/test-verify-detection-lifecycle-and-rule-qa-framework.sh
           bash scripts/test-verify-phase-5-semantic-contract-validation.sh
+          bash scripts/test-verify-phase-6-initial-telemetry-slice-doc.sh
+          bash scripts/test-verify-phase-6-opensearch-detector-artifacts.sh
+          bash scripts/test-verify-phase-6-replay-to-notify-validation.sh
           bash scripts/test-verify-repository-skeleton.sh
           bash scripts/test-verify-response-action-safety-model-doc.sh
           bash scripts/test-verify-retention-baseline-doc.sh
