@@ -1,0 +1,241 @@
+{
+  "name": "aegisops_enrich_windows_selected_detector_outputs",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "Phase 6 read-only enrich workflow for the selected Windows detector outputs. No write-capable or response-executing step is permitted here.",
+        "height": 260,
+        "width": 420
+      },
+      "id": "note-read-only-boundary",
+      "name": "Phase 6 Read-only Boundary",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -920,
+        -120
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -900,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "selected-detector-outputs",
+              "name": "selected_detector_outputs",
+              "value": "privileged_group_membership_change,audit_log_cleared,new_local_user_created",
+              "type": "string"
+            },
+            {
+              "id": "read-only-boundary",
+              "name": "read_only_boundary",
+              "value": "true",
+              "type": "string"
+            },
+            {
+              "id": "notification-handoff-required",
+              "name": "notification_handoff_required",
+              "value": "true",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "normalize-selected-detector-output",
+      "name": "Normalize Selected Detector Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -620,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{$json.detector_name}}",
+        "rules": {
+          "values": [
+            {
+              "operation": "equal",
+              "value2": "privileged_group_membership_change"
+            },
+            {
+              "operation": "equal",
+              "value2": "audit_log_cleared"
+            },
+            {
+              "operation": "equal",
+              "value2": "new_local_user_created"
+            }
+          ]
+        }
+      },
+      "id": "route-selected-detector-output",
+      "name": "Route Selected Detector Output",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -340,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "detector-name-privileged-group-membership-change",
+              "name": "detector_name",
+              "value": "privileged_group_membership_change",
+              "type": "string"
+            },
+            {
+              "id": "enrichment-plan-privileged-group-membership-change",
+              "name": "enrichment_plan",
+              "value": "Confirm actor, target group, host, and change provenance from the finding payload only.",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "enrich-privileged-group-membership-change",
+      "name": "Build Read-only Enrichment Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -20,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "detector-name-audit-log-cleared",
+              "name": "detector_name",
+              "value": "audit_log_cleared",
+              "type": "string"
+            },
+            {
+              "id": "enrichment-plan-audit-log-cleared",
+              "name": "enrichment_plan",
+              "value": "Confirm actor, host, and event timing from the finding payload only.",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "enrich-audit-log-cleared",
+      "name": "Build Read-only Enrichment Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -20,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "detector-name-new-local-user-created",
+              "name": "detector_name",
+              "value": "new_local_user_created",
+              "type": "string"
+            },
+            {
+              "id": "enrichment-plan-new-local-user-created",
+              "name": "enrichment_plan",
+              "value": "Confirm actor, created account, host, and source record context from the finding payload only.",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "enrich-new-local-user-created",
+      "name": "Build Read-only Enrichment Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -20,
+        320
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalize Selected Detector Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Selected Detector Output": {
+      "main": [
+        [
+          {
+            "node": "Route Selected Detector Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Selected Detector Output": {
+      "main": [
+        [
+          {
+            "node": "Build Read-only Enrichment Context",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Read-only Enrichment Context",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Read-only Enrichment Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "versionId": "phase-6-read-only-v1",
+  "tags": [
+    {
+      "name": "read_only"
+    },
+    {
+      "name": "phase_6"
+    }
+  ]
+}

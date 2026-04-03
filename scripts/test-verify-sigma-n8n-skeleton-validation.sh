@@ -208,11 +208,11 @@ The approved workflow categories are alert ingest, enrich, approve, notify, and 
 
 ## 3. Placeholder Boundary
 
-Placeholder directories and marker files under `n8n/workflows/` are not production workflows.
+Placeholder directories and marker files under `n8n/workflows/` remain non-production placeholders for categories that do not yet contain an explicitly approved exported workflow asset.
 
-They reserve approved homes for future workflow assets without claiming that exported workflows, credentials, triggers, or integrations are already implemented here.
+The approved Phase 6 exception is limited to `aegisops_enrich_windows_selected_detector_outputs.json` and `aegisops_notify_windows_selected_detector_outputs.json`.
 
-Do not infer live runtime behavior, integration coverage, or production-ready response logic from the current placeholders.
+Do not infer broader live runtime behavior, integration coverage, or production-ready response logic beyond the approved Phase 6 read-only workflow assets.
 
 ## 4. Control vs Execution Alignment
 
@@ -224,9 +224,11 @@ The guidance in this directory does not authorize direct destructive actions fro
 
 ## 5. Contributor Guidance
 
-Leave runtime behavior unchanged unless a separately approved issue or ADR expands the baseline.
+Leave runtime behavior unchanged unless a separately approved issue or ADR expands the baseline beyond the current Phase 6 read-only workflow assets.
 
 Keep future workflow additions within the approved category boundary and preserve explicit approval gates for write or destructive actions.
+
+The approved Phase 6 workflow assets must remain read-only for enrichment and notify-only for analyst routing, without response execution, write-capable connectors, or uncontrolled downstream mutation.
 
 When real workflow assets are introduced in later approved work, they should remain auditable, clearly named, and explicit about whether a step is read-only, notify-only, approval-handling, or response-executing.
 
@@ -242,6 +244,127 @@ EOF
   : > "${target}/n8n/workflows/aegisops_enrich/.gitkeep"
   : > "${target}/n8n/workflows/aegisops_notify/.gitkeep"
   : > "${target}/n8n/workflows/aegisops_response/.gitkeep"
+
+  cat <<'EOF' > "${target}/n8n/workflows/aegisops_enrich/aegisops_enrich_windows_selected_detector_outputs.json"
+{
+  "name": "aegisops_enrich_windows_selected_detector_outputs",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Phase 6 Read-only Boundary",
+      "type": "n8n-nodes-base.stickyNote"
+    },
+    {
+      "parameters": {},
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "name": "selected_detector_outputs",
+              "value": "privileged_group_membership_change,audit_log_cleared,new_local_user_created",
+              "type": "string"
+            },
+            {
+              "name": "read_only_boundary",
+              "value": "true",
+              "type": "string"
+            },
+            {
+              "name": "notification_handoff_required",
+              "value": "true",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "name": "Normalize Selected Detector Output",
+      "type": "n8n-nodes-base.set"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "value": "privileged_group_membership_change"
+            },
+            {
+              "value": "audit_log_cleared"
+            },
+            {
+              "value": "new_local_user_created"
+            }
+          ]
+        }
+      },
+      "name": "Route Selected Detector Output",
+      "type": "n8n-nodes-base.switch"
+    }
+  ],
+  "tags": [
+    {
+      "name": "read_only"
+    },
+    {
+      "name": "phase_6"
+    }
+  ]
+}
+EOF
+
+  cat <<'EOF' > "${target}/n8n/workflows/aegisops_notify/aegisops_notify_windows_selected_detector_outputs.json"
+{
+  "name": "aegisops_notify_windows_selected_detector_outputs",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Notify-only Boundary",
+      "type": "n8n-nodes-base.stickyNote"
+    },
+    {
+      "parameters": {},
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "name": "selected_detector_outputs",
+              "value": "privileged_group_membership_change,audit_log_cleared,new_local_user_created",
+              "type": "string"
+            },
+            {
+              "name": "notify_only_boundary",
+              "value": "true",
+              "type": "string"
+            },
+            {
+              "name": "downstream_mutation_allowed",
+              "value": "false",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "name": "Format Analyst Notification",
+      "type": "n8n-nodes-base.set"
+    }
+  ],
+  "tags": [
+    {
+      "name": "notify_only"
+    },
+    {
+      "name": "phase_6"
+    }
+  ]
+}
+EOF
 }
 
 write_validation_doc() {
@@ -267,7 +390,9 @@ write_validation_doc() {
 - `n8n/workflows/aegisops_alert_ingest/.gitkeep`
 - `n8n/workflows/aegisops_approve/.gitkeep`
 - `n8n/workflows/aegisops_enrich/.gitkeep`
+- `n8n/workflows/aegisops_enrich/aegisops_enrich_windows_selected_detector_outputs.json`
 - `n8n/workflows/aegisops_notify/.gitkeep`
+- `n8n/workflows/aegisops_notify/aegisops_notify_windows_selected_detector_outputs.json`
 - `n8n/workflows/aegisops_response/.gitkeep`
 
 ## Sigma Review Result
@@ -278,15 +403,15 @@ The curated slice is limited to privileged group membership change, audit log cl
 
 ## n8n Workflow Category Review Result
 
-The tracked n8n workflow skeleton covers the approved alert ingest, enrich, approve, notify, and response categories.
+The tracked n8n workflow structure keeps the approved alert ingest, enrich, approve, notify, and response categories while limiting exported workflow assets to the selected Phase 6 read-only slice.
 
-Each category remains a placeholder-only directory with a `.gitkeep` marker, and no exported workflow, trigger, credential, or execution logic is present.
+Alert ingest, approve, and response remain placeholder-only with `.gitkeep` markers, while enrich and notify contain only the approved selected-detector workflow exports.
 
 ## Live Behavior Review Result
 
-No reviewed Sigma asset introduces runnable detection behavior, and no reviewed n8n asset introduces runnable workflow behavior.
+No reviewed Sigma asset introduces runnable detection behavior, and the reviewed n8n assets remain read-only workflow exports without approval-exempt write or response execution steps.
 
-The current tracked Sigma assets remain reviewed content only, and the n8n assets remain documentation and placeholder markers only.
+The current tracked Sigma assets remain reviewed content only, and the n8n workflow assets are limited to enrichment, routing, and notification payload preparation for the selected Windows detector outputs.
 
 ## Deviations
 
