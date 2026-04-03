@@ -1,0 +1,25 @@
+{
+  "fixture_provenance": {
+    "family": "windows-security-and-endpoint",
+    "type": "synthetic-review-example",
+    "review_case": "edge-missing-actor"
+  },
+  "System": {
+    "Provider": {
+      "Name": "Microsoft-Windows-Security-Auditing"
+    },
+    "EventID": 4720,
+    "Channel": "Security",
+    "Computer": "WS-APP-09.corp.example.invalid",
+    "TimeCreated": "2026-03-31T12:11:00Z"
+  },
+  "EventData": {
+    "SubjectUserSid": null,
+    "SubjectUserName": null,
+    "SubjectDomainName": null,
+    "TargetUserSid": "S-1-5-21-1000-2000-3000-2409",
+    "TargetUserName": "svc_ephemeral",
+    "TargetDomainName": "WS-APP-09",
+    "RedactionNote": "Actor identity unavailable in reviewed source payload."
+  }
+}

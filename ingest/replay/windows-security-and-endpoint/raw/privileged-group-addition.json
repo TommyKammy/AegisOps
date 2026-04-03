@@ -1,0 +1,26 @@
+{
+  "fixture_provenance": {
+    "family": "windows-security-and-endpoint",
+    "type": "synthetic-review-example",
+    "review_case": "success"
+  },
+  "System": {
+    "Provider": {
+      "Name": "Microsoft-Windows-Security-Auditing"
+    },
+    "EventID": 4732,
+    "Channel": "Security",
+    "Computer": "WS-ADMIN-01.corp.example.invalid",
+    "TimeCreated": "2026-03-31T12:00:00Z"
+  },
+  "EventData": {
+    "SubjectUserSid": "S-1-5-21-1000-2000-3000-1105",
+    "SubjectUserName": "svc_admin_ops",
+    "SubjectDomainName": "CORP",
+    "MemberSid": "S-1-5-21-1000-2000-3000-2111",
+    "MemberName": "CORP\\jdoe",
+    "GroupSid": "S-1-5-32-544",
+    "GroupName": "Administrators",
+    "GroupDomain": "Builtin"
+  }
+}

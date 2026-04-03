@@ -57,6 +57,7 @@ jobs:
           bash scripts/verify-sigma-to-opensearch-translation-strategy-doc.sh
           bash scripts/verify-storage-policy-doc.sh
           bash scripts/verify-source-onboarding-contract-doc.sh
+          bash scripts/verify-windows-source-onboarding-assets.sh
 
       - name: Run focused shell tests
         run: |
@@ -85,3 +86,4 @@ jobs:
           bash scripts/test-verify-sigma-n8n-skeleton-validation.sh
           bash scripts/test-verify-sigma-to-opensearch-translation-strategy-doc.sh
           bash scripts/test-verify-source-onboarding-contract-doc.sh
+          bash scripts/test-verify-windows-source-onboarding-assets.sh
