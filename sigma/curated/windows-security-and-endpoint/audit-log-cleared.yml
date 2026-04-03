@@ -1,0 +1,37 @@
+title: AegisOps Windows Audit Log Cleared
+id: 4f5b2a71-91d4-4d75-85a1-c0fc12276fea
+status: candidate
+description: Reviewed candidate rule for the initial Windows Phase 6 use case.
+owner: IT Operations, Information Systems Department
+purpose: Detect a reviewed Windows event that records clearing of the Windows audit log.
+expected_behavior: Create a reviewable finding when reviewed Windows telemetry records audit-log-cleared activity.
+severity: high
+level: high
+required_reviewer: Security Engineering reviewer
+expiry: 2026-07-01
+source_of_truth: sigma
+validation_evidence_reference: ingest/replay/windows-security-and-endpoint/normalized/success.ndjson#audit-log-cleared
+rollback_expectation: Revert the translated detector content or return the rule to candidate review if validation volume or scope is unacceptable.
+tags:
+  - attack.defense-evasion
+  - attack.t1070.001
+logsource:
+  product: windows
+  service: security
+field_dependencies:
+  - event.dataset
+  - event.code
+  - event.action
+  - host.name
+  - user.name
+source_prerequisites:
+  - Windows security and endpoint telemetry family remains schema-reviewed under docs/source-families/windows-security-and-endpoint/onboarding-package.md.
+  - Required normalized fields event.dataset, event.code, event.action, host.name, and user.name are preserved for reviewed success-path fixtures.
+false_positive_considerations:
+  - Approved maintenance, forensic review, or controlled break-glass procedures can legitimately clear audit logs.
+detection:
+  selection:
+    event.dataset: windows.security
+    event.code: '1102'
+    event.action: audit-log-cleared
+  condition: selection

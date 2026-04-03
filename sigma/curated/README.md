@@ -2,8 +2,8 @@
 
 Purpose: reviewed Sigma rules approved for AegisOps onboarding.
 
-Status: placeholder only; no active Sigma detection rules are committed here yet.
+Status: candidate Windows security and endpoint rules for the selected Phase 6 use cases only.
 
-This directory reserves the approved location for future curated Sigma content after review.
+Scope: privileged group membership change, audit log cleared, and new local user created.
 
-Rule onboarding requires future review and explicit approval before any real rule content is added.
+These rules stay within the approved single-event Sigma subset and remain review content only.
