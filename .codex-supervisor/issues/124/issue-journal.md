@@ -16,6 +16,7 @@
 ## Latest Codex Summary
 - Added a focused verifier and shell test for Windows source onboarding assets and replay fixtures, reproduced the missing-package failure, then added the Windows onboarding package and reviewed replay corpus under `docs/source-families/` and `ingest/replay/`.
 - Focused verification now passes for the new verifier and adjacent Phase 6/source-onboarding checks.
+- Pushed branch `codex/issue-124`, committed the checkpoint as `53b999c`, and opened draft PR #132.
 
 ## Active Failure Context
 - None recorded.
@@ -25,10 +26,10 @@
 - Hypothesis: The repo was missing the selected Windows source-family onboarding package and replay fixtures needed for Phase 6 source-readiness review.
 - What changed: Added `scripts/verify-windows-source-onboarding-assets.sh` and `scripts/test-verify-windows-source-onboarding-assets.sh`, wired them into `.github/workflows/ci.yml`, and created the Windows onboarding package plus raw and normalized replay fixtures.
 - Current blocker: none
-- Next exact step: Review the new Windows onboarding assets, then stage and commit the focused checkpoint on `codex/issue-124`.
-- Verification gap: Full CI was not run locally; focused verification only.
+- Next exact step: Monitor draft PR #132 and any CI results, then address review or workflow feedback if it appears.
+- Verification gap: Full repository CI was not run locally; focused verification only.
 - Files touched: `.github/workflows/ci.yml`, `scripts/verify-windows-source-onboarding-assets.sh`, `scripts/test-verify-windows-source-onboarding-assets.sh`, `docs/source-families/windows-security-and-endpoint/onboarding-package.md`, `ingest/replay/windows-security-and-endpoint/README.md`, `ingest/replay/windows-security-and-endpoint/raw/*`, `ingest/replay/windows-security-and-endpoint/normalized/*`
 - Rollback concern: Low; changes are additive docs, fixtures, and verification only.
-- Last focused command: `bash scripts/test-verify-ci-phase-5-workflow-coverage.sh`
+- Last focused command: `gh pr create --draft --base main --head codex/issue-124 --title "Add Windows source onboarding assets and replay fixtures" ...`
 ### Scratchpad
 - Keep this section short. The supervisor may compact older notes automatically.
