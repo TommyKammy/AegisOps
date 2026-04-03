@@ -205,7 +205,7 @@ Status: placeholder only; no active Sigma detection rules are committed here yet
 Rule onboarding requires future review and explicit approval before any real rule content is added.' >"${placeholder_repo}/sigma/curated/README.md"
 assert_fails_with \
   "${placeholder_repo}" \
-  "Missing required Sigma content in ${placeholder_repo}/sigma/curated/README.md: Status: candidate Windows security and endpoint rules for the selected Phase 6 use cases only."
+  "Curated Sigma content does not match reviewed baseline: ${placeholder_repo}/sigma/curated/README.md"
 
 unsupported_repo="${workdir}/unsupported"
 create_repo "${unsupported_repo}"
@@ -221,7 +221,18 @@ path.write_text(text)
 PY
 assert_fails_with \
   "${unsupported_repo}" \
-  "Unsupported Sigma content in ${unsupported_repo}/sigma/curated/windows-security-and-endpoint/new-local-user-created.yml: timeframe:"
+  "Curated Sigma content does not match reviewed baseline: ${unsupported_repo}/sigma/curated/windows-security-and-endpoint/new-local-user-created.yml"
+
+required_symlink_repo="${workdir}/required-symlink"
+create_repo "${required_symlink_repo}"
+write_valid_curated_slice "${required_symlink_repo}"
+rm "${required_symlink_repo}/sigma/curated/windows-security-and-endpoint/audit-log-cleared.yml"
+ln -s \
+  "${required_symlink_repo}/sigma/curated/windows-security-and-endpoint/new-local-user-created.yml" \
+  "${required_symlink_repo}/sigma/curated/windows-security-and-endpoint/audit-log-cleared.yml"
+assert_fails_with \
+  "${required_symlink_repo}" \
+  "Curated Sigma rule must be a regular file: ${required_symlink_repo}/sigma/curated/windows-security-and-endpoint/audit-log-cleared.yml"
 
 unexpected_repo="${workdir}/unexpected"
 create_repo "${unexpected_repo}"
@@ -230,5 +241,16 @@ printf '%s\n' 'title: extra' >"${unexpected_repo}/sigma/curated/windows-security
 assert_fails_with \
   "${unexpected_repo}" \
   "Unexpected curated Sigma content outside the selected Phase 6 slice."
+
+extra_symlink_repo="${workdir}/extra-symlink"
+create_repo "${extra_symlink_repo}"
+write_valid_curated_slice "${extra_symlink_repo}"
+printf '%s\n' 'title: off-slice' >"${extra_symlink_repo}/off-slice.yml"
+ln -s \
+  "${extra_symlink_repo}/off-slice.yml" \
+  "${extra_symlink_repo}/sigma/curated/windows-security-and-endpoint/off-slice.yml"
+assert_fails_with \
+  "${extra_symlink_repo}" \
+  "Curated Sigma content must not include symlinks."
 
 echo "verify-sigma-curated-skeleton tests passed"
