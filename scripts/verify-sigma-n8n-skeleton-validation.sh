@@ -31,10 +31,10 @@ required_phrases=(
   "## Deviations"
   "The Sigma curated and suppressed directories preserve the approved distinction between reviewed onboarding candidates and documented future suppression decisions."
   "The curated slice is limited to privileged group membership change, audit log cleared, and new local user created, and the suppressed directory remains placeholder-only without live suppression entries."
-  "The tracked n8n workflow skeleton covers the approved alert ingest, enrich, approve, notify, and response categories."
-  "Each category remains a placeholder-only directory with a \`.gitkeep\` marker, and no exported workflow, trigger, credential, or execution logic is present."
-  "No reviewed Sigma asset introduces runnable detection behavior, and no reviewed n8n asset introduces runnable workflow behavior."
-  "The current tracked Sigma assets remain reviewed content only, and the n8n assets remain documentation and placeholder markers only."
+  "The tracked n8n workflow structure keeps the approved alert ingest, enrich, approve, notify, and response categories while limiting exported workflow assets to the selected Phase 6 read-only slice."
+  "Alert ingest, approve, and response remain placeholder-only with \`.gitkeep\` markers, while enrich and notify contain only the approved selected-detector workflow exports."
+  "No reviewed Sigma asset introduces runnable detection behavior, and the reviewed n8n assets remain read-only workflow exports without approval-exempt write or response execution steps."
+  "The current tracked Sigma assets remain reviewed content only, and the n8n workflow assets are limited to enrichment, routing, and notification payload preparation for the selected Windows detector outputs."
   "No deviations found."
 )
 
@@ -56,7 +56,9 @@ reviewed_artifacts=(
   "n8n/workflows/aegisops_alert_ingest/.gitkeep"
   "n8n/workflows/aegisops_approve/.gitkeep"
   "n8n/workflows/aegisops_enrich/.gitkeep"
+  "n8n/workflows/aegisops_enrich/aegisops_enrich_windows_selected_detector_outputs.json"
   "n8n/workflows/aegisops_notify/.gitkeep"
+  "n8n/workflows/aegisops_notify/aegisops_notify_windows_selected_detector_outputs.json"
   "n8n/workflows/aegisops_response/.gitkeep"
 )
 
@@ -67,4 +69,4 @@ for artifact in "${reviewed_artifacts[@]}"; do
   fi
 done
 
-echo "Sigma and n8n skeleton assets match the approved category structure and remain placeholder-safe."
+echo "Sigma assets remain reviewed content and n8n assets remain limited to the approved Phase 6 read-only workflow slice."

@@ -52,9 +52,11 @@ The approved workflow categories are alert ingest, enrich, approve, notify, and 
 
 ## 3. Placeholder Boundary
 
-Placeholder directories and marker files under `n8n/workflows/` are not production workflows.
+Placeholder directories and marker files under `n8n/workflows/` remain non-production placeholders for categories that do not yet contain an explicitly approved exported workflow asset.
 
-Do not infer live runtime behavior, integration coverage, or production-ready response logic from the current placeholders.
+The approved Phase 6 exception is limited to `aegisops_enrich_windows_selected_detector_outputs.json` and `aegisops_notify_windows_selected_detector_outputs.json`.
+
+Do not infer broader live runtime behavior, integration coverage, or production-ready response logic beyond the approved Phase 6 read-only workflow assets.
 
 ## 4. Control vs Execution Alignment
 
@@ -64,9 +66,11 @@ This separation preserves the approved control-versus-execution model and preven
 
 ## 5. Contributor Guidance
 
-Leave runtime behavior unchanged unless a separately approved issue or ADR expands the baseline.
+Leave runtime behavior unchanged unless a separately approved issue or ADR expands the baseline beyond the current Phase 6 read-only workflow assets.
 
 Keep future workflow additions within the approved category boundary and preserve explicit approval gates for write or destructive actions.
+
+The approved Phase 6 workflow assets must remain read-only for enrichment and notify-only for analyst routing, without response execution, write-capable connectors, or uncontrolled downstream mutation.
 
 ## 6. Reference Documents
 
@@ -137,7 +141,7 @@ The approved workflow categories are alert ingest, enrich, approve, notify, and 
 
 ## 3. Placeholder Boundary
 
-Placeholder directories and marker files under `n8n/workflows/` are not production workflows.
+Placeholder directories and marker files under `n8n/workflows/` remain non-production placeholders for categories that do not yet contain an explicitly approved exported workflow asset.
 
 ## 4. Control vs Execution Alignment
 
@@ -180,9 +184,11 @@ The approved workflow categories are alert ingest, enrich, approve, notify, and 
 
 ## 3. Placeholder Boundary
 
-Placeholder directories and marker files under `n8n/workflows/` are not production workflows.
+Placeholder directories and marker files under `n8n/workflows/` remain non-production placeholders for categories that do not yet contain an explicitly approved exported workflow asset.
 
-Do not infer live runtime behavior, integration coverage, or production-ready response logic from the current placeholders.
+The approved Phase 6 exception is limited to `aegisops_enrich_windows_selected_detector_outputs.json` and `aegisops_notify_windows_selected_detector_outputs.json`.
+
+Do not infer broader live runtime behavior, integration coverage, or production-ready response logic beyond the approved Phase 6 read-only workflow assets.
 
 ## 4. Control vs Execution Alignment
 
@@ -190,7 +196,9 @@ OpenSearch remains responsible for detection and analytics, while n8n is limited
 
 ## 5. Contributor Guidance
 
-Leave runtime behavior unchanged unless a separately approved issue or ADR expands the baseline.
+Leave runtime behavior unchanged unless a separately approved issue or ADR expands the baseline beyond the current Phase 6 read-only workflow assets.
+
+The approved Phase 6 workflow assets must remain read-only for enrichment and notify-only for analyst routing, without response execution, write-capable connectors, or uncontrolled downstream mutation.
 
 ## 6. Reference Documents
 

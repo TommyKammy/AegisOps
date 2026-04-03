@@ -18,10 +18,11 @@ required_headings=(
 required_phrases=(
   "This directory exists to document the approved workflow-category boundaries for AegisOps n8n assets."
   "The approved workflow categories are alert ingest, enrich, approve, notify, and response."
-  'Placeholder directories and marker files under `n8n/workflows/` are not production workflows.'
+  'Placeholder directories and marker files under `n8n/workflows/` remain non-production placeholders for categories that do not yet contain an explicitly approved exported workflow asset.'
   "OpenSearch remains responsible for detection and analytics, while n8n is limited to approved orchestration, enrichment, approval handling, notification routing, and controlled downstream execution."
-  "Do not infer live runtime behavior, integration coverage, or production-ready response logic from the current placeholders."
-  "Leave runtime behavior unchanged unless a separately approved issue or ADR expands the baseline."
+  'The approved Phase 6 exception is limited to `aegisops_enrich_windows_selected_detector_outputs.json` and `aegisops_notify_windows_selected_detector_outputs.json`.'
+  "The approved Phase 6 workflow assets must remain read-only for enrichment and notify-only for analyst routing, without response execution, write-capable connectors, or uncontrolled downstream mutation."
+  "Leave runtime behavior unchanged unless a separately approved issue or ADR expands the baseline beyond the current Phase 6 read-only workflow assets."
 )
 
 required_references=(
@@ -56,4 +57,4 @@ for reference in "${required_references[@]}"; do
   fi
 done
 
-echo "n8n workflow category guidance documents approved categories, placeholder limits, and control-versus-execution boundaries."
+echo "n8n workflow category guidance documents approved categories, the limited Phase 6 workflow exception, and control-versus-execution boundaries."

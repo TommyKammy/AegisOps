@@ -1,0 +1,97 @@
+{
+  "name": "aegisops_notify_windows_selected_detector_outputs",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "Phase 6 notify-only workflow for the selected Windows detector outputs. This workflow prepares analyst-routing payloads and must not perform response execution or write-capable downstream mutation.",
+        "height": 260,
+        "width": 420
+      },
+      "id": "note-notify-only-boundary",
+      "name": "Notify-only Boundary",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -860,
+        -120
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -820,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "selected-detector-outputs",
+              "name": "selected_detector_outputs",
+              "value": "privileged_group_membership_change,audit_log_cleared,new_local_user_created",
+              "type": "string"
+            },
+            {
+              "id": "notify-only-boundary",
+              "name": "notify_only_boundary",
+              "value": "true",
+              "type": "string"
+            },
+            {
+              "id": "downstream-mutation-allowed",
+              "name": "downstream_mutation_allowed",
+              "value": "false",
+              "type": "string"
+            },
+            {
+              "id": "routing-destination",
+              "name": "routing_destination",
+              "value": "business-hours-analyst-queue",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "format-analyst-notification",
+      "name": "Format Analyst Notification",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -520,
+        140
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Format Analyst Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "versionId": "phase-6-notify-v1",
+  "tags": [
+    {
+      "name": "notify_only"
+    },
+    {
+      "name": "phase_6"
+    }
+  ]
+}
