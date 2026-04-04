@@ -110,11 +110,11 @@ One blocked case is enough to fail trust for that evaluated path until the desig
 
 This baseline does not define runtime prompt templates, judge models, or scoring code.
 
-This baseline does not approve production telemetry export to any AI provider.
+It also does not approve production telemetry export to any AI provider.
 
-This baseline does not define pass-rate thresholds for automatic release decisions.
+Pass-rate thresholds for automatic release decisions are out of scope here.
 
-This baseline does not replace future implementation-specific test plans once a concrete AI hunt surface exists.
+Future implementation-specific test plans are still required once a concrete AI hunt surface exists.
 
 ## 9. Baseline Alignment Notes
 
