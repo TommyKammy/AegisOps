@@ -11,3 +11,12 @@ The first live control-plane service belongs here so the runtime boundary stays 
 - PostgreSQL persistence-contract assets under `postgres/control-plane/`.
 
 Future implementation may add service source code, adapters, tests, and service-local documentation here, but it must preserve the approved ownership split defined in `docs/control-plane-runtime-service-boundary.md` and `docs/control-plane-state-model.md`.
+
+Current scaffold:
+
+- `main.py` is the local entrypoint for rendering a runtime snapshot without assuming deployment tooling.
+- `aegisops_control_plane/` contains the initial service module, boundary-aware adapters, and environment-backed runtime config.
+- `tests/` contains focused service-root tests for the local runtime skeleton.
+- `config/local.env.sample` defines non-secret local placeholders for PostgreSQL, OpenSearch, and n8n integration boundaries.
+
+This scaffold is intentionally minimal. It does not introduce real credentials, production deployment, analyst UI, or live detector execution.
