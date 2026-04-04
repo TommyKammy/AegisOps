@@ -28,6 +28,12 @@ from aegisops_control_plane.models import (
 
 
 class PostgresControlPlaneStoreTests(unittest.TestCase):
+    def test_store_reports_current_in_process_persistence_mode(self) -> None:
+        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+
+        self.assertEqual(store.persistence_mode, "in_memory")
+        self.assertEqual(store.dsn, "postgresql://control-plane.local/aegisops")
+
     def test_store_round_trips_reviewed_record_families_by_aegisops_ids(self) -> None:
         store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
         timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
