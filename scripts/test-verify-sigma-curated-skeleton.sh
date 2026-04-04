@@ -56,15 +56,21 @@ tags:
 logsource:
   product: windows
   service: security
-field_dependencies:
-  - event.dataset
-  - event.code
-  - group.name
-  - user.name
-  - destination.user.name
+field_semantics:
+  match_required:
+    - event.dataset
+    - event.code
+    - group.name
+  triage_required:
+    - user.name
+    - destination.user.name
+  activation_gating:
+    - Windows security and endpoint telemetry family remains detection-ready for authoritative actor and target identity under docs/source-families/windows-security-and-endpoint/onboarding-package.md.
+  confidence_degrading:
+    - Missing actor identity degrades attribution confidence and blocks promotion beyond staging review for actor-dependent use.
 source_prerequisites:
   - Windows security and endpoint telemetry family remains schema-reviewed under docs/source-families/windows-security-and-endpoint/onboarding-package.md.
-  - Required normalized fields event.dataset, event.code, group.name, user.name, and destination.user.name are preserved for reviewed success-path fixtures.
+  - Staging translation review is allowed only while the reviewed success-path fixtures preserve event.dataset, event.code, group.name, user.name, and destination.user.name.
 false_positive_considerations:
   - Approved administrative group changes by endpoint engineering, identity administrators, or build automation can legitimately match.
 detection:
@@ -100,15 +106,21 @@ tags:
 logsource:
   product: windows
   service: security
-field_dependencies:
-  - event.dataset
-  - event.code
-  - event.action
-  - host.name
-  - user.name
+field_semantics:
+  match_required:
+    - event.dataset
+    - event.code
+    - event.action
+  triage_required:
+    - host.name
+    - user.name
+  activation_gating:
+    - Windows security and endpoint telemetry family remains detection-ready for authoritative host and actor identity under docs/source-families/windows-security-and-endpoint/onboarding-package.md.
+  confidence_degrading:
+    - Missing actor identity degrades attribution confidence and blocks promotion beyond staging review for actor-dependent use.
 source_prerequisites:
   - Windows security and endpoint telemetry family remains schema-reviewed under docs/source-families/windows-security-and-endpoint/onboarding-package.md.
-  - Required normalized fields event.dataset, event.code, event.action, host.name, and user.name are preserved for reviewed success-path fixtures.
+  - Staging translation review is allowed only while the reviewed success-path fixtures preserve event.dataset, event.code, event.action, host.name, and user.name.
 false_positive_considerations:
   - Approved maintenance, forensic review, or controlled break-glass procedures can legitimately clear audit logs.
 detection:
@@ -138,16 +150,22 @@ tags:
 logsource:
   product: windows
   service: security
-field_dependencies:
-  - event.dataset
-  - event.code
-  - event.action
-  - host.name
-  - user.name
-  - destination.user.name
+field_semantics:
+  match_required:
+    - event.dataset
+    - event.code
+    - event.action
+  triage_required:
+    - host.name
+    - user.name
+    - destination.user.name
+  activation_gating:
+    - Windows security and endpoint telemetry family remains detection-ready for authoritative host, actor, and target identity under docs/source-families/windows-security-and-endpoint/onboarding-package.md.
+  confidence_degrading:
+    - Missing actor identity degrades attribution confidence and blocks promotion beyond staging review for actor-dependent use.
 source_prerequisites:
   - Windows security and endpoint telemetry family remains schema-reviewed under docs/source-families/windows-security-and-endpoint/onboarding-package.md.
-  - Required normalized fields event.dataset, event.code, event.action, host.name, user.name, and destination.user.name are preserved for reviewed success-path fixtures.
+  - Staging translation review is allowed only while the reviewed success-path fixtures preserve event.dataset, event.code, event.action, host.name, user.name, and destination.user.name.
 false_positive_considerations:
   - Approved help desk provisioning, imaging workflows, or temporary break-glass account creation can legitimately match.
 detection:
@@ -205,7 +223,7 @@ Status: placeholder only; no active Sigma detection rules are committed here yet
 Rule onboarding requires future review and explicit approval before any real rule content is added.' >"${placeholder_repo}/sigma/curated/README.md"
 assert_fails_with \
   "${placeholder_repo}" \
-  "Curated Sigma content does not match reviewed baseline: ${placeholder_repo}/sigma/curated/README.md"
+  "Missing curated Sigma rule: ${placeholder_repo}/sigma/curated/windows-security-and-endpoint/privileged-group-membership-change.yml"
 
 unsupported_repo="${workdir}/unsupported"
 create_repo "${unsupported_repo}"
@@ -216,12 +234,12 @@ import sys
 
 path = Path(sys.argv[1])
 text = path.read_text()
-text = text.replace("condition: selection", "timeframe: 5m\ncondition: selection")
+text = text.replace("field_semantics:", "field_dependencies:")
 path.write_text(text)
 PY
 assert_fails_with \
   "${unsupported_repo}" \
-  "Curated Sigma content does not match reviewed baseline: ${unsupported_repo}/sigma/curated/windows-security-and-endpoint/new-local-user-created.yml"
+  "Curated Sigma content is missing required reviewed field: ${unsupported_repo}/sigma/curated/windows-security-and-endpoint/new-local-user-created.yml: field_semantics:"
 
 required_symlink_repo="${workdir}/required-symlink"
 create_repo "${required_symlink_repo}"

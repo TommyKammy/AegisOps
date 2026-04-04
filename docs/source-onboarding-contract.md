@@ -91,6 +91,7 @@ State expectations:
 
 - `candidate` means the family is recognized, scoped, and documented enough to reserve a future onboarding path, but detection content must not depend on it.
 - `schema-reviewed` means the minimum onboarding package exists and the canonical mapping and evidence gaps have been reviewed, but detection activation remains blocked until readiness evidence is complete.
+- `schema-reviewed` is sufficient only for staging translation design review against documented field coverage. It is not sufficient for production activation or for claiming source-level detection readiness.
 - `detection-ready` means the family has completed the required evidence package, has no unresolved intentionally deferred required coverage, and may be referenced by future detection content subject to separate detector and rollout review.
 - `detection-ready` may rely on an explicit exception path only when the exception states which required coverage is missing, why the gap does not block the approved readiness scope, and which downstream detections remain prohibited.
 

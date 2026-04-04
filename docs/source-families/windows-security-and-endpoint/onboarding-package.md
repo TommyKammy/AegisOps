@@ -71,6 +71,8 @@ The field coverage matrix below classifies the reviewed Windows semantic areas a
 
 This package remains `schema-reviewed`, so the classifications above are evidence for fixture and mapping review rather than a claim that all required detection-ready coverage is complete.
 
+Within the reviewed Phase 6 slice, `schema-reviewed` evidence is sufficient only for staging translation review against the documented success-path fixtures. Production activation remains blocked until the family reaches `detection-ready` for any rule dependency classified as activation-gating.
+
 ## 6. Replay Fixture Plan
 
 Replay fixtures are stored under `ingest/replay/windows-security-and-endpoint/normalized/`.

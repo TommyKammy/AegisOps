@@ -88,7 +88,11 @@ The approved baseline supports selection-based field matching, boolean condition
 
 ## 4. Required Rule Metadata and Source Prerequisites
 
-Each rule proposed for translation must declare rule identity, owner, severity, purpose, ATT&CK mapping, normalized field dependencies, source-family prerequisites, and known false-positive considerations.
+Each rule proposed for translation must declare rule identity, owner, severity, purpose, ATT&CK mapping, split field semantics, source-family prerequisites, and known false-positive considerations.
+
+A source family that remains `schema-reviewed` may be sufficient for staging translation review only when the rule declares which fields are match-required, triage-required, activation-gating, or confidence-degrading.
+
+Production activation requires `detection-ready` source evidence for every activation-gating dependency and must not treat `schema-reviewed` coverage alone as sufficient.
 
 ## 5. Unsupported and Deferred Sigma Feature Matrix
 
@@ -103,7 +107,7 @@ The baseline does not support Sigma correlation, aggregations, temporal counting
 
 When a detection requirement cannot be translated safely from the approved Sigma subset, the detection must remain OpenSearch-native and carry explicit documentation that Sigma is not the source of truth for that rule.
 
-OpenSearch-native fallback content must still preserve owner, purpose, source prerequisites, field dependencies, validation evidence, and false-positive notes so review standards remain consistent.
+OpenSearch-native fallback content must still preserve owner, purpose, source prerequisites, split field semantics, validation evidence, and false-positive notes so review standards remain consistent.
 
 ## 7. Baseline Alignment Notes
 
@@ -142,7 +146,11 @@ The approved baseline supports selection-based field matching, boolean condition
 
 ## 4. Required Rule Metadata and Source Prerequisites
 
-Each rule proposed for translation must declare rule identity, owner, severity, purpose, ATT&CK mapping, normalized field dependencies, source-family prerequisites, and known false-positive considerations.
+Each rule proposed for translation must declare rule identity, owner, severity, purpose, ATT&CK mapping, split field semantics, source-family prerequisites, and known false-positive considerations.
+
+A source family that remains `schema-reviewed` may be sufficient for staging translation review only when the rule declares which fields are match-required, triage-required, activation-gating, or confidence-degrading.
+
+Production activation requires `detection-ready` source evidence for every activation-gating dependency and must not treat `schema-reviewed` coverage alone as sufficient.
 
 ## 5. Unsupported and Deferred Sigma Feature Matrix
 

@@ -13,7 +13,7 @@
 
 The reviewed detector artifacts remain staging-only, preserve the selected Sigma rule identities, and limit validation to Windows staging indexes.
 
-Each artifact retains explicit Sigma traceability, Windows source prerequisites, normalized field dependencies, replay evidence references, and false-positive notes so the detector slice can be reviewed without implying automatic rollout.
+Each artifact retains explicit Sigma traceability, Windows source prerequisites, split field semantics, replay evidence references, and false-positive notes so the detector slice can be reviewed without implying automatic rollout.
 
 ## Fallback Handling
 
