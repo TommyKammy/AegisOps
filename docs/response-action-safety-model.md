@@ -29,6 +29,7 @@ At minimum, an action request must record:
 
 | Field | Required binding purpose |
 | ---- | ---- |
+| `action_request_id` | Provides the immutable control-plane identifier for the exact request under review and execution binding. |
 | Request identifier | Distinguishes one requested action from later edits, retries, or related cases. |
 | Requester identity | Binds the proposed action to the accountable human or approved service principal that asked for it. |
 | Linked case, alert, finding, or incident reference | Preserves the investigative context that justified the request. |
@@ -56,6 +57,8 @@ An approval decision answers whether a specific action request is authorized und
 
 The approval record must bind the requester identity, approver identity, target snapshot, payload hash, approval timestamp, expiry, and required quorum result to the specific action request.
 
+Each approval decision must also carry an immutable `approval_decision_id` so approval outcome does not get inferred from workflow history or overwritten by later review activity.
+
 The approval record must also capture the approval outcome, the approver rationale or conditions, and any execution constraints that narrow what may happen after approval.
 
 If dry-run evidence is required for the action class, the approval record must reference the reviewed dry-run result that matches the approved target snapshot and payload hash.
@@ -69,6 +72,8 @@ At minimum, drift checks must compare the current requester identity, target sna
 An execution attempt must be rejected when requester identity, target snapshot, payload hash, expiry, quorum, or required dry-run evidence no longer matches the approved record.
 
 Approval reuse is prohibited across materially different targets, payloads, or time windows even if the operator intent appears similar. A new action request and approval decision are required when the reviewed context changes.
+
+At minimum, the action-request lifecycle must distinguish `draft`, `pending_approval`, `approved`, `rejected`, `expired`, `canceled`, `superseded`, `executing`, `completed`, `failed`, and `unresolved`, while the approval-decision lifecycle must distinguish `pending`, `approved`, `rejected`, `expired`, `canceled`, and `superseded`.
 
 ## 5. Execution Safeguards
 

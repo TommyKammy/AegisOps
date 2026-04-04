@@ -23,12 +23,15 @@ required_phrases=(
   '| `Soft Write` |'
   '| `Hard Write` |'
   "Every action request must identify the requester, the intended action class, the target, the justification, and the exact payload or payload reference proposed for execution."
+  '| `action_request_id` | Provides the immutable control-plane identifier for the exact request under review and execution binding. |'
   "Execution must not proceed when the action request lacks target specificity, approval requirements, expiry, or the evidence needed to bind approval context to execution context."
   "Approval decisions must remain separate from execution attempts."
   "The approval record must bind the requester identity, approver identity, target snapshot, payload hash, approval timestamp, expiry, and required quorum result to the specific action request."
+  'Each approval decision must also carry an immutable `approval_decision_id` so approval outcome does not get inferred from workflow history or overwritten by later review activity.'
   "If dry-run evidence is required for the action class, the approval record must reference the reviewed dry-run result that matches the approved target snapshot and payload hash."
   "Execution must perform post-approval drift checks before acting."
   "An execution attempt must be rejected when requester identity, target snapshot, payload hash, expiry, quorum, or required dry-run evidence no longer matches the approved record."
+  'At minimum, the action-request lifecycle must distinguish `draft`, `pending_approval`, `approved`, `rejected`, `expired`, `canceled`, `superseded`, `executing`, `completed`, `failed`, and `unresolved`, while the approval-decision lifecycle must distinguish `pending`, `approved`, `rejected`, `expired`, `canceled`, and `superseded`.'
   "Every execution attempt must carry an idempotency key that is unique for the approved action request and execution intent."
   "Execution records must capture the downstream result, verification evidence, and rollback or containment outcome where applicable."
   "Duplicate execution attempts for the same approved action request must be prevented unless an explicitly recorded retry policy allows another attempt under the same binding context."

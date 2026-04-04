@@ -12,9 +12,10 @@ required_headings=(
   "## 3. Baseline Ownership and Source of Truth"
   "## 4. Approved Future Persistence Boundary"
   "## 5. Reconciliation Responsibilities"
-  "## 6. Retry, Dead-Letter, and Manual Recovery Responsibilities"
-  "## 7. Idempotency and Audit Expectations"
-  "## 8. Baseline Alignment Notes"
+  "## 6. Minimum Record Identifiers and Lifecycle States"
+  "## 7. Retry, Dead-Letter, and Manual Recovery Responsibilities"
+  "## 8. Idempotency and Audit Expectations"
+  "## 9. Baseline Alignment Notes"
 )
 
 required_phrases=(
@@ -48,6 +49,21 @@ required_phrases=(
   "The control plane is responsible for reconciling approved action intent against observed n8n execution outcomes and for recording when reconciliation is incomplete, stale, or failed."
   "Reconciliation must prefer deterministic correlation keys such as finding identifiers, action-request identifiers, approval identifiers, workflow identifiers, and idempotency keys rather than fuzzy time-window matching."
   "Stable reconciliation keys must allow operators to compare OpenSearch analytics output, control-plane records, and n8n execution outcomes without assuming those systems share one lifecycle or one authoritative identifier."
+  "The baseline must define immutable record-family identifiers and explicit lifecycle states for Alert, Case, Evidence, Approval Decision, and Action Request records before any live control-plane implementation exists."
+  "These identifiers and states are minimum control-plane expectations. They must not be inferred from OpenSearch alert status, OpenSearch document updates, n8n execution status, or ad hoc analyst notes."
+  '| `alert_id` | Immutable AegisOps control-plane identifier for one alert record. |'
+  '| `case_id` | Immutable AegisOps control-plane identifier for one investigation record. |'
+  '| `evidence_id` | Immutable AegisOps control-plane identifier for one evidence record. |'
+  '| `approval_decision_id` | Immutable AegisOps control-plane identifier for one approval decision record. |'
+  '| `action_request_id` | Immutable AegisOps control-plane identifier for one requested response action. |'
+  '| `new` | The alert record exists and awaits analyst triage. |'
+  '| `triaged` | Initial analyst or policy review classified the alert and decided whether deeper work is required. |'
+  '| `investigating` | Investigation, evidence gathering, or coordination work is actively in progress. |'
+  '| `collected` | The evidence item was acquired and recorded with initial provenance metadata. |'
+  '| `pending` | The approval decision is open and quorum or reviewer action is not yet complete. |'
+  '| `pending_approval` | The request is complete enough for review and is waiting on approval outcome. |'
+  "These lifecycle states establish the minimum reviewable transitions for later reconciliation, retry, expiry, duplicate suppression, and manual recovery work."
+  "No control-plane record family may silently inherit lifecycle from OpenSearch alerts or n8n execution history. Cross-system state must be linked through explicit identifiers and reconciliation records instead."
   "Hunt records must preserve explicit lifecycle state, ownership, hypothesis linkage, and closure rationale even when no case is opened."
   "Observation records must preserve scoped analyst assertions, timestamps, authorship, and linkage to supporting evidence without turning evidence custody into free-form narrative."
   "Lead records must preserve investigative hypotheses, triage rationale, and disposition state without being treated as equivalent to alert state, case state, or recommendation text."
