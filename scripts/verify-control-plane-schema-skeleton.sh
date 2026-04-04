@@ -9,17 +9,17 @@ schema_path="${repo_root}/postgres/control-plane/schema.sql"
 migration_path="${repo_root}/postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql"
 
 if [[ ! -f "${readme_path}" ]]; then
-  echo "Missing control-plane schema skeleton README: ${readme_path}" >&2
+  echo "Missing control-plane schema README: ${readme_path}" >&2
   exit 1
 fi
 
 if [[ ! -f "${schema_path}" ]]; then
-  echo "Missing control-plane schema skeleton manifest: ${schema_path}" >&2
+  echo "Missing control-plane schema manifest: ${schema_path}" >&2
   exit 1
 fi
 
 if [[ ! -f "${migration_path}" ]]; then
-  echo "Missing control-plane schema skeleton migration: ${migration_path}" >&2
+  echo "Missing control-plane schema migration: ${migration_path}" >&2
   exit 1
 fi
 
@@ -44,39 +44,31 @@ require_pattern() {
   fi
 }
 
-reject_live_ddl() {
-  local file_path="$1"
-  local artifact_label="$2"
-  local forbidden_pattern='^[[:space:]]*(create[[:space:]]+(table|index|unique[[:space:]]+index|view|materialized[[:space:]]+view|sequence|trigger|function)|alter[[:space:]]+(table|index|schema)|drop[[:space:]]+(table|index|view|materialized[[:space:]]+view|sequence|trigger|function|schema)|insert[[:space:]]|update[[:space:]]|delete[[:space:]]+from|truncate[[:space:]]+table|comment[[:space:]]+on[[:space:]]|grant[[:space:]]|revoke[[:space:]])'
+require_pattern "${readme_path}" '^# Control-Plane Schema v1$' \
+  "Control-plane schema README must declare the v1 baseline."
+require_pattern "${readme_path}" 'runtime-ready control-plane schema baseline' \
+  "Control-plane schema README must describe the reviewed runtime-ready baseline."
+require_pattern "${readme_path}" 'do(es)? not authorize live deployment, production data migration, or credentials' \
+  "Control-plane schema README must forbid live deployment, production migration, or credentials."
+require_pattern "${readme_path}" 'n8n-owned PostgreSQL metadata and execution-state tables' \
+  "Control-plane schema README must preserve the n8n ownership boundary."
+require_pattern "${readme_path}" 'Future work remains explicit' \
+  "Control-plane schema README must keep future work explicit."
 
-  if grep -Ein "${forbidden_pattern}" "${file_path}" >/dev/null; then
-    echo "${artifact_label} must not contain live implementation DDL beyond the approved placeholder boundary." >&2
-    exit 1
-  fi
-}
-
-require_pattern "${readme_path}" '^# Control-Plane Schema Skeleton$' \
-  "Control-plane schema skeleton README must declare the placeholder skeleton."
-require_pattern "${readme_path}" 'placeholder' \
-  "Control-plane schema skeleton README must state that the assets are placeholders."
-require_pattern "${readme_path}" 'not production-ready' \
-  "Control-plane schema skeleton README must state that the assets are not production-ready."
-require_pattern "${readme_path}" 'do(es)? not authorize a live service, datastore deployment, credentials, or runtime migration execution' \
-  "Control-plane schema skeleton README must forbid live deployment or credentials."
-
-require_fixed_string "${schema_path}" "-- Control-plane schema skeleton for the future AegisOps-owned PostgreSQL boundary."
-require_fixed_string "${schema_path}" "-- Placeholder only. Not production-ready."
+require_fixed_string "${schema_path}" "-- Control-plane schema v1 for the AegisOps-owned PostgreSQL boundary."
+require_fixed_string "${schema_path}" "-- runtime_baseline: reviewed_v1"
+require_fixed_string "${schema_path}" "-- schema: aegisops_control"
 require_fixed_string "${schema_path}" "create schema if not exists aegisops_control;"
-require_pattern "${schema_path}" '^-- schema: aegisops_control$' \
-  "Control-plane schema skeleton manifest must name the aegisops_control schema."
+require_pattern "${schema_path}" 'reconciliation boundary' \
+  "Control-plane schema manifest must document the reconciliation boundary."
 
-require_fixed_string "${migration_path}" "-- Migration skeleton only. Do not run in production."
+require_fixed_string "${migration_path}" "-- Control-plane schema v1 baseline migration."
 require_pattern "${migration_path}" '^begin;$' \
-  "Control-plane migration skeleton must start an explicit transaction."
+  "Control-plane migration must start an explicit transaction."
 require_pattern "${migration_path}" '^commit;$' \
-  "Control-plane migration skeleton must end an explicit transaction."
+  "Control-plane migration must end an explicit transaction."
 require_pattern "${migration_path}" '^create schema if not exists aegisops_control;$' \
-  "Control-plane migration skeleton must reserve the aegisops_control schema."
+  "Control-plane migration must reserve the aegisops_control schema."
 
 record_families=(
   "alert"
@@ -94,21 +86,27 @@ record_families=(
 )
 
 for family in "${record_families[@]}"; do
-  require_fixed_string "${schema_path}" "-- table: ${family}_records"
-  require_fixed_string "${migration_path}" "-- reserve table home: ${family}_records"
+  require_pattern "${schema_path}" "^create table if not exists aegisops_control\\.${family}_records \\($" \
+    "Control-plane schema manifest must materialize ${family}_records."
+  require_pattern "${schema_path}" "^\\s+lifecycle_state text not null,$" \
+    "Control-plane schema manifest must define lifecycle_state columns."
+  require_pattern "${migration_path}" "^create table if not exists aegisops_control\\.${family}_records \\($" \
+    "Control-plane migration must materialize ${family}_records."
 done
 
+require_pattern "${schema_path}" 'check \(' \
+  "Control-plane schema manifest must constrain lifecycle states with explicit checks."
+require_pattern "${schema_path}" 'linked_execution_ids text\[\] not null default '\''\{\}'\''::text\[\]' \
+  "Control-plane schema manifest must preserve explicit reconciliation linkage to execution-plane records."
+
 if grep -Ein '^[[:space:]]*insert[[:space:]]' "${schema_path}" >/dev/null; then
-  echo "Control-plane schema skeleton manifest must not seed live control-plane data." >&2
+  echo "Control-plane schema manifest must not seed live control-plane data." >&2
   exit 1
 fi
 
 if grep -Ein '^[[:space:]]*insert[[:space:]]' "${migration_path}" >/dev/null; then
-  echo "Control-plane migration skeleton must not seed live control-plane data." >&2
+  echo "Control-plane migration must not seed live control-plane data." >&2
   exit 1
 fi
 
-reject_live_ddl "${schema_path}" "Control-plane schema skeleton manifest"
-reject_live_ddl "${migration_path}" "Control-plane migration skeleton"
-
-echo "Control-plane schema skeleton matches the approved placeholder contract."
+echo "Control-plane schema assets match the reviewed v1 baseline."

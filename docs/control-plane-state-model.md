@@ -71,7 +71,7 @@ The approved ownership split for a future PostgreSQL-backed implementation is:
 
 This boundary approves where future authoritative control-plane records belong conceptually, but it does not approve live PostgreSQL provisioning, schema migrations, credentials, or runtime deployment changes in this phase.
 
-The repository may reserve a version-controlled placeholder home for that future boundary under `postgres/control-plane/`, including schema manifests and migration skeleton files that document reviewed record-family intent without claiming live readiness.
+The repository may materialize a version-controlled schema baseline for that future boundary under `postgres/control-plane/`, including reviewed schema manifests and migration files that keep the approved record-family boundary explicit without authorizing live deployment, credentials, or production migration execution in this phase.
 
 ## 5. Reconciliation Responsibilities
 

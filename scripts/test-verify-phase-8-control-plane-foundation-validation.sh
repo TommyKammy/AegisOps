@@ -118,16 +118,16 @@ assert_fails_with "${missing_validation_repo}" "Missing Phase 8 control-plane fo
 missing_state_model_cross_link_repo="${workdir}/missing-state-model-cross-link"
 create_repo "${missing_state_model_cross_link_repo}"
 write_required_artifacts "${missing_state_model_cross_link_repo}"
-remove_text_from_doc "${missing_state_model_cross_link_repo}" "docs/control-plane-state-model.md" 'The repository may reserve a version-controlled placeholder home for that future boundary under `postgres/control-plane/`, including schema manifests and migration skeleton files that document reviewed record-family intent without claiming live readiness.'
+remove_text_from_doc "${missing_state_model_cross_link_repo}" "docs/control-plane-state-model.md" 'The repository may materialize a version-controlled schema baseline for that future boundary under `postgres/control-plane/`, including reviewed schema manifests and migration files that keep the approved record-family boundary explicit without authorizing live deployment, credentials, or production migration execution in this phase.'
 commit_fixture "${missing_state_model_cross_link_repo}"
 assert_fails_with "${missing_state_model_cross_link_repo}" "Missing required line in ${missing_state_model_cross_link_repo}/docs/control-plane-state-model.md"
 
 missing_schema_boundary_repo="${workdir}/missing-schema-boundary"
 create_repo "${missing_schema_boundary_repo}"
 write_required_artifacts "${missing_schema_boundary_repo}"
-remove_text_from_doc "${missing_schema_boundary_repo}" "postgres/control-plane/README.md" 'The reserved schema boundary is `aegisops_control`, kept separate from n8n-owned PostgreSQL metadata and execution-state tables.'
+remove_text_from_doc "${missing_schema_boundary_repo}" "postgres/control-plane/README.md" 'The schema remains separate from n8n-owned PostgreSQL metadata and execution-state tables even when both live on the same engine class.'
 commit_fixture "${missing_schema_boundary_repo}"
-assert_fails_with "${missing_schema_boundary_repo}" "Missing required line in ${missing_schema_boundary_repo}/postgres/control-plane/README.md"
+assert_fails_with "${missing_schema_boundary_repo}" "Control-plane schema README must preserve the n8n ownership boundary"
 
 missing_artifact_listing_repo="${workdir}/missing-artifact-listing"
 create_repo "${missing_artifact_listing_repo}"
@@ -143,11 +143,11 @@ replace_text_in_doc "${modified_validation_status_repo}" "docs/phase-8-control-p
 commit_fixture "${modified_validation_status_repo}"
 assert_fails_with "${modified_validation_status_repo}" "Missing required line in ${modified_validation_status_repo}/docs/phase-8-control-plane-foundation-validation.md: - Validation status: PASS"
 
-missing_reconciliation_placeholder_repo="${workdir}/missing-reconciliation-placeholder"
-create_repo "${missing_reconciliation_placeholder_repo}"
-write_required_artifacts "${missing_reconciliation_placeholder_repo}"
-remove_text_from_doc "${missing_reconciliation_placeholder_repo}" "postgres/control-plane/README.md" '- `reconciliation_records`'
-commit_fixture "${missing_reconciliation_placeholder_repo}"
-assert_fails_with "${missing_reconciliation_placeholder_repo}" "Missing required line in ${missing_reconciliation_placeholder_repo}/postgres/control-plane/README.md: - \`reconciliation_records\`"
+missing_reconciliation_record_repo="${workdir}/missing-reconciliation-record"
+create_repo "${missing_reconciliation_record_repo}"
+write_required_artifacts "${missing_reconciliation_record_repo}"
+remove_text_from_doc "${missing_reconciliation_record_repo}" "postgres/control-plane/README.md" '- `reconciliation_records`'
+commit_fixture "${missing_reconciliation_record_repo}"
+assert_fails_with "${missing_reconciliation_record_repo}" "Missing required line in ${missing_reconciliation_record_repo}/postgres/control-plane/README.md: - \`reconciliation_records\`"
 
 echo "verify-phase-8-control-plane-foundation-validation tests passed"

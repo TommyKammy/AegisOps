@@ -1,16 +1,12 @@
-# Control-Plane Schema Skeleton
+# Control-Plane Schema v1
 
-This directory reserves the reviewed repository home for future AegisOps-owned control-plane schema and migration assets.
+This directory contains the reviewed runtime-ready control-plane schema baseline for the AegisOps-owned PostgreSQL boundary.
 
-These files are placeholders only, are not production-ready, and do not authorize a live service, datastore deployment, credentials, or runtime migration execution.
+The schema remains separate from n8n-owned PostgreSQL metadata and execution-state tables even when both live on the same engine class.
 
-The reserved schema boundary is `aegisops_control`, kept separate from n8n-owned PostgreSQL metadata and execution-state tables.
+These repository assets do not authorize live deployment, production data migration, or credentials.
 
-Executable runtime-oriented SQL such as `CREATE TABLE`, `ALTER TABLE`, index creation, constraint DDL, and seed data is out of bounds for this placeholder-only directory until control-plane persistence implementation is explicitly approved.
-
-Placeholder comments may describe future reviewed DDL intent, but executable live-ish SQL must fail closed during validation.
-
-The initial placeholder record-family homes tracked here are:
+The v1 baseline materializes the approved control-plane record families:
 
 - `alert_records`
 - `case_records`
@@ -25,4 +21,6 @@ The initial placeholder record-family homes tracked here are:
 - `ai_trace_records`
 - `reconciliation_records`
 
-Future issues may replace placeholder comments with reviewed DDL once control-plane persistence implementation is explicitly approved.
+The schema keeps the reconciliation boundary explicit by recording cross-system linkage and mismatch state in dedicated control-plane tables rather than collapsing that state into n8n-owned execution metadata.
+
+Future work remains explicit: online rollout sequencing, environment-specific access controls, stricter foreign-key enforcement across cyclic record families, and additional index tuning stay out of scope for this baseline.
