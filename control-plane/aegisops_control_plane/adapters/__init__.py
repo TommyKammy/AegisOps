@@ -1,0 +1,11 @@
+"""Adapter placeholders for the first control-plane service boundary."""
+
+from .n8n import N8NReconciliationAdapter
+from .opensearch import OpenSearchSignalAdapter
+from .postgres import PostgresControlPlaneStore
+
+__all__ = [
+    "N8NReconciliationAdapter",
+    "OpenSearchSignalAdapter",
+    "PostgresControlPlaneStore",
+]
