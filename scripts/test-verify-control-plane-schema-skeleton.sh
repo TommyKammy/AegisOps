@@ -31,6 +31,23 @@ write_valid_fixture() {
     "This directory reserves the reviewed repository home for future AegisOps-owned control-plane schema and migration assets." \
     "" \
     "These files are placeholders only, are not production-ready, and do not authorize a live service, datastore deployment, credentials, or runtime migration execution." \
+    "" \
+    "The reserved schema boundary is \`aegisops_control\`, kept separate from n8n-owned PostgreSQL metadata and execution-state tables." \
+    "" \
+    "The initial placeholder record-family homes tracked here are:" \
+    "" \
+    "- \`alert_records\`" \
+    "- \`case_records\`" \
+    "- \`evidence_records\`" \
+    "- \`observation_records\`" \
+    "- \`lead_records\`" \
+    "- \`recommendation_records\`" \
+    "- \`approval_decision_records\`" \
+    "- \`action_request_records\`" \
+    "- \`hunt_records\`" \
+    "- \`hunt_run_records\`" \
+    "- \`ai_trace_records\`" \
+    "- \`reconciliation_records\`" \
     >"${target}/postgres/control-plane/README.md"
 
   printf '%s\n' \
@@ -50,6 +67,7 @@ write_valid_fixture() {
     "-- table: hunt_records" \
     "-- table: hunt_run_records" \
     "-- table: ai_trace_records" \
+    "-- table: reconciliation_records" \
     >"${target}/postgres/control-plane/schema.sql"
 
   printf '%s\n' \
@@ -67,6 +85,7 @@ write_valid_fixture() {
     "-- reserve table home: hunt_records" \
     "-- reserve table home: hunt_run_records" \
     "-- reserve table home: ai_trace_records" \
+    "-- reserve table home: reconciliation_records" \
     "commit;" \
     >"${target}/postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql"
 
@@ -145,6 +164,31 @@ git -C "${missing_family_repo}" add postgres/control-plane/schema.sql
 git -C "${missing_family_repo}" commit -q -m "fixture update"
 assert_fails_with "${missing_family_repo}" "-- table: ai_trace_records"
 
+missing_reconciliation_family_repo="${workdir}/missing-reconciliation-family"
+create_repo "${missing_reconciliation_family_repo}"
+write_valid_fixture "${missing_reconciliation_family_repo}"
+printf '%s\n' \
+  "-- Control-plane schema skeleton for the future AegisOps-owned PostgreSQL boundary." \
+  "-- Placeholder only. Not production-ready." \
+  "-- schema: aegisops_control" \
+  "create schema if not exists aegisops_control;" \
+  "" \
+  "-- table: alert_records" \
+  "-- table: case_records" \
+  "-- table: evidence_records" \
+  "-- table: observation_records" \
+  "-- table: lead_records" \
+  "-- table: recommendation_records" \
+  "-- table: approval_decision_records" \
+  "-- table: action_request_records" \
+  "-- table: hunt_records" \
+  "-- table: hunt_run_records" \
+  "-- table: ai_trace_records" \
+  >"${missing_reconciliation_family_repo}/postgres/control-plane/schema.sql"
+git -C "${missing_reconciliation_family_repo}" add postgres/control-plane/schema.sql
+git -C "${missing_reconciliation_family_repo}" commit -q -m "fixture update"
+assert_fails_with "${missing_reconciliation_family_repo}" "-- table: reconciliation_records"
+
 seed_repo="${workdir}/seed"
 create_repo "${seed_repo}"
 write_valid_fixture "${seed_repo}"
@@ -163,6 +207,7 @@ printf '%s\n' \
   "-- reserve table home: hunt_records" \
   "-- reserve table home: hunt_run_records" \
   "-- reserve table home: ai_trace_records" \
+  "-- reserve table home: reconciliation_records" \
   "insert into aegisops_control.alert_records (alert_id) values ('alert-1');" \
   "commit;" \
   >"${seed_repo}/postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql"

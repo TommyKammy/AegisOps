@@ -13,5 +13,6 @@ create schema if not exists aegisops_control;
 -- reserve table home: hunt_records
 -- reserve table home: hunt_run_records
 -- reserve table home: ai_trace_records
+-- reserve table home: reconciliation_records
 
 commit;

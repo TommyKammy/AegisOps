@@ -35,3 +35,6 @@ create schema if not exists aegisops_control;
 
 -- table: ai_trace_records
 -- immutable ai_trace_id plus prompt, model, review, and downstream linkage context
+
+-- table: reconciliation_records
+-- immutable reconciliation_id plus cross-system correlation keys, mismatch state, and resolution linkage

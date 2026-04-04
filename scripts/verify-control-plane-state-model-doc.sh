@@ -32,10 +32,11 @@ required_phrases=(
   '| `Hunt` | Future AegisOps control-plane hunt record | Hunt lifecycle must remain analyst-directed and reviewable rather than inferred from ad hoc queries or downstream workflow runs. |'
   '| `Hunt Run` | Future AegisOps control-plane hunt-run record | Each hunt run must preserve bounded scope, execution context, and outcome for one hunt iteration without replacing alerts or cases. |'
   '| `AI Trace` | Future AegisOps control-plane AI-trace record | AI trace records must preserve prompt, model, review, and linkage context without mutating evidence custody or analyst-owned dispositions. |'
+  '| `Reconciliation` | Future AegisOps control-plane reconciliation record | Cross-system linkage, mismatch tracking, and resolution state must not dissolve into alert fields, case notes, or n8n metadata. |'
   '| `Action Execution` | n8n execution plane with PostgreSQL-backed workflow state | n8n owns execution-attempt state, step progress, and connector-specific runtime details. |'
   "n8n execution history must not become the implicit system of record for case state, approval state, or action-request intent."
   "OpenSearch findings and alerts remain upstream analytic signals for reconciliation input, but they do not own downstream case, approval, or execution-policy state."
-  "The minimum control-plane record families for this baseline are Alert, Case, Evidence, Observation, Lead, Recommendation, Approval Decision, Action Request, Hunt, Hunt Run, AI Trace, and the execution-plane Action Execution record that must later reconcile with them."
+  "The minimum control-plane record families for this baseline are Alert, Case, Evidence, Observation, Lead, Recommendation, Approval Decision, Action Request, Hunt, Hunt Run, AI Trace, Reconciliation, and the execution-plane Action Execution record that must later reconcile with them."
   "The approved future persistence boundary for those platform-owned control records is an AegisOps-owned PostgreSQL-backed control-plane datastore boundary."
   "That future PostgreSQL-backed boundary may share a PostgreSQL engine class with n8n, but it must not collapse control-plane ownership into n8n-owned metadata tables or runtime workflow state."
   "If a future implementation uses one PostgreSQL cluster for both concerns, it must still preserve an explicit ownership split through separate AegisOps-controlled schemas, tables, migration history, and access controls for control-plane records."
@@ -56,7 +57,8 @@ required_phrases=(
   'Duplicate or restated upstream analytics signals must not mint a fresh `alert_id` when they do not represent materially new analyst work.'
   'The minimum reconciliation fields for that boundary are `finding_id`, `analytic_signal_id` when distinct, `alert_id`, the control-plane deduplication or correlation key, first-seen and last-seen timestamps for the linked upstream signal set, and explicit ingest disposition showing whether the signal created, updated, deduplicated against, or restated an existing alert.'
   'Reconciliation records must preserve which upstream findings or analytic signals were attached to an alert so later implementations can distinguish repeated analytics output from new analyst work.'
-  "The baseline must define immutable record-family identifiers and explicit lifecycle states for Alert, Case, Evidence, Observation, Lead, Recommendation, Hunt, Hunt Run, AI Trace, Approval Decision, and Action Request records before any live control-plane implementation exists."
+  'Reconciliation records must also preserve how alerts, cases, approval decisions, action requests, hunts, hunt runs, AI traces, and execution outcomes were linked or found to disagree so mismatch tracking remains a first-class control-plane concern.'
+  "The baseline must define immutable record-family identifiers and explicit lifecycle states for Alert, Case, Evidence, Observation, Lead, Recommendation, Hunt, Hunt Run, AI Trace, Approval Decision, Action Request, and Reconciliation records before any live control-plane implementation exists."
   "These identifiers and states are minimum control-plane expectations. They must not be inferred from OpenSearch alert status, OpenSearch document updates, n8n execution status, or ad hoc analyst notes."
   '| `alert_id` | Immutable AegisOps control-plane identifier for one alert record. |'
   '| `finding_id` | Required upstream analytic linkage to the originating finding that justified alert creation or update. |'
@@ -141,6 +143,10 @@ required_phrases=(
   "Minimum identifier expectation for an AI Trace record:"
   '| `ai_trace_id` | Immutable AegisOps control-plane identifier for one AI-trace record. |'
   '| `accepted_for_reference` | Reviewers allowed the trace to remain linked as advisory context, but it still does not replace evidence, lead state, or case state. |'
+  "Minimum identifier expectation for a Reconciliation record:"
+  '| `reconciliation_id` | Immutable AegisOps control-plane identifier for one reconciliation record. |'
+  '| `mismatched` | The linked records disagree on identifiers, lifecycle, payload binding, timing, or outcome and require explicit review. |'
+  "Reconciliation records provide the explicit cross-system home for mismatch tracking and resolution. They do not replace the lifecycle ownership of alerts, cases, approvals, action requests, hunts, hunt runs, AI traces, or execution outcomes."
   "Promotion of a lead into alert or case work must create or update the destination alert or case record while preserving the original lead as a first-class control-plane record with explicit promotion linkage."
   "Observation records, recommendation records, AI trace records, and case notes may contribute context to promotion decisions, but none of them may become the sole system of record for lead state or lead promotion history."
   "Hunt, hunt-run, observation, lead, recommendation, and AI trace records may attach to alerts, cases, or stand-alone hunt workflows, but attachment alone does not transfer lifecycle ownership or collapse one record family into another."

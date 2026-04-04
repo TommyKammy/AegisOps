@@ -79,6 +79,7 @@ record_families=(
   "hunt"
   "hunt_run"
   "ai_trace"
+  "reconciliation"
 )
 
 for family in "${record_families[@]}"; do

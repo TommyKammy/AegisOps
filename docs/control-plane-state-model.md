@@ -35,18 +35,19 @@ No new live datastore is approved in this phase. PostgreSQL remains the backing 
 | `Hunt` | Future AegisOps control-plane hunt record | Hunt lifecycle must remain analyst-directed and reviewable rather than inferred from ad hoc queries or downstream workflow runs. |
 | `Hunt Run` | Future AegisOps control-plane hunt-run record | Each hunt run must preserve bounded scope, execution context, and outcome for one hunt iteration without replacing alerts or cases. |
 | `AI Trace` | Future AegisOps control-plane AI-trace record | AI trace records must preserve prompt, model, review, and linkage context without mutating evidence custody or analyst-owned dispositions. |
+| `Reconciliation` | Future AegisOps control-plane reconciliation record | Cross-system linkage, mismatch tracking, and resolution state must not dissolve into alert fields, case notes, or n8n metadata. |
 | `Action Execution` | n8n execution plane with PostgreSQL-backed workflow state | n8n owns execution-attempt state, step progress, and connector-specific runtime details. |
 
 n8n execution history must not become the implicit system of record for case state, approval state, or action-request intent.
 
 OpenSearch findings and alerts remain upstream analytic signals for reconciliation input, but they do not own downstream case, approval, or execution-policy state.
 
-The minimum control-plane record families for this baseline are Alert, Case, Evidence, Observation, Lead, Recommendation, Approval Decision, Action Request, Hunt, Hunt Run, AI Trace, and the execution-plane Action Execution record that must later reconcile with them.
+The minimum control-plane record families for this baseline are Alert, Case, Evidence, Observation, Lead, Recommendation, Approval Decision, Action Request, Hunt, Hunt Run, AI Trace, Reconciliation, and the execution-plane Action Execution record that must later reconcile with them.
 
 At the approved baseline level, the source-of-truth expectations are:
 
 - findings remain analytics-plane facts produced and retained by OpenSearch;
-- alerts, cases, evidence, observations, leads, recommendations, approvals, action requests, hunts, hunt runs, and AI traces are platform-owned control records whose future authoritative home is an AegisOps control schema or API boundary;
+- alerts, cases, evidence, observations, leads, recommendations, approvals, action requests, hunts, hunt runs, AI traces, and reconciliation records are platform-owned control records whose future authoritative home is an AegisOps control schema or API boundary;
 - action execution state remains execution-plane runtime state owned by n8n and backed by PostgreSQL; and
 - evidence links across those records must be explicit rather than reconstructed from whichever component happens to log the most detail.
 
@@ -98,6 +99,8 @@ The minimum reconciliation fields for that boundary are `finding_id`, `analytic_
 
 Reconciliation records must preserve which upstream findings or analytic signals were attached to an alert so later implementations can distinguish repeated analytics output from new analyst work.
 
+Reconciliation records must also preserve how alerts, cases, approval decisions, action requests, hunts, hunt runs, AI traces, and execution outcomes were linked or found to disagree so mismatch tracking remains a first-class control-plane concern.
+
 The minimum stable reconciliation key set for this baseline is:
 
 - `finding_id` for the upstream OpenSearch analytic record;
@@ -136,7 +139,7 @@ Disagreement between analytics, control-plane, and execution-plane records must 
 
 ## 6. Minimum Record Identifiers and Lifecycle States
 
-The baseline must define immutable record-family identifiers and explicit lifecycle states for Alert, Case, Evidence, Observation, Lead, Recommendation, Hunt, Hunt Run, AI Trace, Approval Decision, and Action Request records before any live control-plane implementation exists.
+The baseline must define immutable record-family identifiers and explicit lifecycle states for Alert, Case, Evidence, Observation, Lead, Recommendation, Hunt, Hunt Run, AI Trace, Approval Decision, Action Request, and Reconciliation records before any live control-plane implementation exists.
 
 These identifiers and states are minimum control-plane expectations. They must not be inferred from OpenSearch alert status, OpenSearch document updates, n8n execution status, or ad hoc analyst notes.
 
@@ -393,6 +396,30 @@ Minimum lifecycle states for an Action Request record:
 | `completed` | Execution and required post-action verification completed well enough to close the request. |
 | `failed` | Execution or required verification concluded unsuccessfully under the current approved request. |
 | `unresolved` | Operators cannot yet prove whether the request was executed correctly, failed partially, or needs manual recovery. |
+
+### 6.12 Reconciliation
+
+Minimum identifier expectation for a Reconciliation record:
+
+| Field | Minimum expectation |
+| ---- | ---- |
+| `reconciliation_id` | Immutable AegisOps control-plane identifier for one reconciliation record. |
+| Subject linkage set | Required explicit references to the alert, case, approval decision, action request, hunt, hunt run, AI trace, and execution records or upstream analytic identifiers being compared. |
+| `finding_id`, `analytic_signal_id`, or `workflow_execution_id` | Required external or execution-plane correlation identifiers proving which cross-system records were evaluated. |
+| Correlation key and mismatch summary | Required deterministic comparison key, reconciliation scope, and preserved statement of which fields or lifecycle facts aligned or diverged. |
+
+Minimum lifecycle states for a Reconciliation record:
+
+| State | Meaning |
+| ---- | ---- |
+| `pending` | The linked records were identified, but comparison or correlation has not yet completed. |
+| `matched` | The linked analytics, control-plane, and execution-plane records align well enough that no open discrepancy remains. |
+| `mismatched` | The linked records disagree on identifiers, lifecycle, payload binding, timing, or outcome and require explicit review. |
+| `stale` | The prior comparison no longer reflects the latest upstream or downstream state and must be recomputed or reviewed again. |
+| `resolved` | Operators recorded how the mismatch or gap was resolved without deleting the prior disagreement evidence. |
+| `superseded` | A newer reconciliation record replaced this one for the same bounded comparison scope. |
+
+Reconciliation records provide the explicit cross-system home for mismatch tracking and resolution. They do not replace the lifecycle ownership of alerts, cases, approvals, action requests, hunts, hunt runs, AI traces, or execution outcomes.
 
 These lifecycle states establish the minimum reviewable transitions for later reconciliation, retry, expiry, duplicate suppression, and manual recovery work.
 
