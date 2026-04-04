@@ -118,7 +118,133 @@ Reconciliation must preserve auditable disagreement. When OpenSearch, n8n, and t
 
 Disagreement between analytics, control-plane, and execution-plane records must remain auditable rather than silently overwritten.
 
-## 6. Retry, Dead-Letter, and Manual Recovery Responsibilities
+## 6. Minimum Record Identifiers and Lifecycle States
+
+The baseline must define immutable record-family identifiers and explicit lifecycle states for Alert, Case, Evidence, Approval Decision, and Action Request records before any live control-plane implementation exists.
+
+These identifiers and states are minimum control-plane expectations. They must not be inferred from OpenSearch alert status, OpenSearch document updates, n8n execution status, or ad hoc analyst notes.
+
+### 6.1 Alert
+
+Minimum identifier expectation for an Alert record:
+
+| Field | Minimum expectation |
+| ---- | ---- |
+| `alert_id` | Immutable AegisOps control-plane identifier for one alert record. |
+| `finding_id` | Required upstream analytic linkage to the originating finding that justified alert creation or update. |
+| `analytic_signal_id` | Required when the routed OpenSearch alerting or correlation artifact is distinct from the underlying finding. |
+| `case_id` | Optional linkage that becomes required once the alert is promoted into a tracked case. |
+
+Minimum lifecycle states for an Alert record:
+
+| State | Meaning |
+| ---- | ---- |
+| `new` | The alert record exists and awaits analyst triage. |
+| `triaged` | Initial analyst or policy review classified the alert and decided whether deeper work is required. |
+| `investigating` | The alert remains an active analyst work item even if a linked case is not yet opened. |
+| `escalated_to_case` | The alert remains linked to an active case that now owns the broader investigation. |
+| `closed` | Alert handling is complete with an explicit disposition and closure rationale. |
+| `reopened` | The alert returned to active review after closure because new evidence, correlation, or review findings changed the decision. |
+| `superseded` | The alert is no longer the primary work-tracking record because another alert or case absorbed responsibility through an explicit linkage. |
+
+### 6.2 Case
+
+Minimum identifier expectation for a Case record:
+
+| Field | Minimum expectation |
+| ---- | ---- |
+| `case_id` | Immutable AegisOps control-plane identifier for one investigation record. |
+| `alert_id` | Required linkage to the originating alert when the case came from alert promotion. |
+| `finding_id` | Required when the case is opened directly from analytic output or needs durable linkage to the driving finding set. |
+| `evidence_id` | One or more explicit evidence links rather than implicit attachment through notes or workflow metadata. |
+
+Minimum lifecycle states for a Case record:
+
+| State | Meaning |
+| ---- | ---- |
+| `open` | The case is created and awaits or has just begun analyst ownership. |
+| `investigating` | Investigation, evidence gathering, or coordination work is actively in progress. |
+| `pending_action` | The case is waiting for an approved or proposed response step, external dependency, or validation result before closure can proceed. |
+| `contained_pending_validation` | Immediate response or containment occurred, but verification or residual-risk review remains open. |
+| `closed` | Case handling is complete with recorded disposition, closure rationale, and any follow-up requirements. |
+| `reopened` | The case returned to active handling after closure because new facts or failed validation invalidated the prior closure. |
+| `superseded` | The case was intentionally replaced or merged into another case or incident while preserving linkage and audit history. |
+
+### 6.3 Evidence
+
+Minimum identifier expectation for an Evidence record:
+
+| Field | Minimum expectation |
+| ---- | ---- |
+| `evidence_id` | Immutable AegisOps control-plane identifier for one evidence record. |
+| `source_record_id` | Required reference to the originating source artifact, datastore object, upload, or acquisition event. |
+| `case_id` or `alert_id` | Required control-plane linkage showing which alert, case, or related work item currently relies on the evidence. |
+| Provenance metadata | Required capture context such as collector identity, acquisition timestamp, source system, and derivation relationship when applicable. |
+
+Minimum lifecycle states for an Evidence record:
+
+| State | Meaning |
+| ---- | ---- |
+| `collected` | The evidence item was acquired and recorded with initial provenance metadata. |
+| `validated` | Provenance, integrity, or acquisition quality checks completed enough for analyst use. |
+| `linked` | The evidence is attached to one or more control-plane records as supporting material. |
+| `superseded` | A newer or more authoritative evidence record replaced this one without deleting its historical relevance. |
+| `withdrawn` | The evidence remains historically visible, but it must no longer be relied on because provenance, integrity, or scope was invalidated. |
+
+### 6.4 Approval Decision
+
+Minimum identifier expectation for an Approval Decision record:
+
+| Field | Minimum expectation |
+| ---- | ---- |
+| `approval_decision_id` | Immutable AegisOps control-plane identifier for one approval decision record. |
+| `action_request_id` | Required linkage to the exact action request under review. |
+| Approver identity set | Required accountable identity for each approver or reviewer participating in the decision. |
+| Target snapshot and payload hash | Required binding inputs that prove which reviewed context the decision authorized or rejected. |
+
+Minimum lifecycle states for an Approval Decision record:
+
+| State | Meaning |
+| ---- | ---- |
+| `pending` | The approval decision is open and quorum or reviewer action is not yet complete. |
+| `approved` | The required approval outcome and quorum, if any, were satisfied before expiry. |
+| `rejected` | The reviewed request was explicitly denied. |
+| `expired` | The approval window closed before a valid executable approval outcome remained available. |
+| `canceled` | The approval decision was intentionally stopped because the underlying request was withdrawn or replaced before completion. |
+| `superseded` | A newer approval decision replaced this decision for the same requested intent under revised reviewed context. |
+
+### 6.5 Action Request
+
+Minimum identifier expectation for an Action Request record:
+
+| Field | Minimum expectation |
+| ---- | ---- |
+| `action_request_id` | Immutable AegisOps control-plane identifier for one requested response action. |
+| `approval_decision_id` | Explicit linkage to the governing approval decision once one exists. |
+| `case_id`, `alert_id`, or `finding_id` | Required upstream context showing which investigative work item justified the request. |
+| Idempotency key | Required stable execution correlation key that survives retries and duplicate-delivery checks. |
+
+Minimum lifecycle states for an Action Request record:
+
+| State | Meaning |
+| ---- | ---- |
+| `draft` | The request exists but is not yet ready to enter approval or execution handling. |
+| `pending_approval` | The request is complete enough for review and is waiting on approval outcome. |
+| `approved` | The request has a valid linked approval decision and may proceed to execution readiness checks. |
+| `rejected` | The request cannot execute because the approval decision denied it. |
+| `expired` | The request cannot execute because its approval or execution window elapsed. |
+| `canceled` | The request was intentionally withdrawn before execution completed. |
+| `superseded` | The request was replaced by a newer request for revised target scope, payload, or timing. |
+| `executing` | At least one correlated execution attempt is in progress under the approved binding context. |
+| `completed` | Execution and required post-action verification completed well enough to close the request. |
+| `failed` | Execution or required verification concluded unsuccessfully under the current approved request. |
+| `unresolved` | Operators cannot yet prove whether the request was executed correctly, failed partially, or needs manual recovery. |
+
+These lifecycle states establish the minimum reviewable transitions for later reconciliation, retry, expiry, duplicate suppression, and manual recovery work.
+
+No control-plane record family may silently inherit lifecycle from OpenSearch alerts or n8n execution history. Cross-system state must be linked through explicit identifiers and reconciliation records instead.
+
+## 7. Retry, Dead-Letter, and Manual Recovery Responsibilities
 
 Retry policy belongs to the control-plane intent record, while duplicate suppression and step-level retry behavior inside a running workflow belong to n8n.
 
@@ -138,7 +264,7 @@ Manual recovery procedures must support re-drive, cancellation, supersession, an
 
 Manual recovery must also preserve why the operator chose the recovery path, which records were linked or superseded, and whether follow-up verification or rollback work remains open.
 
-## 7. Idempotency and Audit Expectations
+## 8. Idempotency and Audit Expectations
 
 Every action request and execution attempt must carry a stable idempotency key that survives retries, duplicate delivery, and reconciliation replays.
 
@@ -154,7 +280,7 @@ Auditability requires separate evidence for:
 
 No single component log should be treated as sufficient to reconstruct the entire decision chain when that would blur responsibility boundaries or allow silent loss of approval evidence.
 
-## 8. Baseline Alignment Notes
+## 9. Baseline Alignment Notes
 
 This model keeps component boundaries explicit without approving a new live datastore in the current phase.
 
