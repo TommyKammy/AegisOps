@@ -26,18 +26,24 @@ No new live datastore is approved in this phase. PostgreSQL remains the backing 
 | `OpenSearch Alert Signal` | OpenSearch detection and analytics plane | OpenSearch-owned alerting artifacts are upstream analytic signals, not the durable analyst work-tracking record for the platform. |
 | `Alert` | Future AegisOps control-plane alert record | Alert lifecycle must not be inferred from OpenSearch alert documents or n8n execution history alone. |
 | `Case` | Future AegisOps control-plane case record | Case ownership, analyst status, and evidence linkage must not dissolve into workflow runs or dashboard state. |
+| `Evidence` | Future AegisOps control-plane evidence record | Evidence custody, provenance, and record linkage must remain explicit instead of dissolving into case notes, AI output, or workflow metadata. |
 | `Approval Decision` | Future AegisOps control-plane approval record | Approval is a first-class control decision and must not be reconstructed from whether a workflow happened to run. |
 | `Action Request` | Future AegisOps control-plane action-request record | Requested intent, target scope, payload binding, and expiry belong to the control layer rather than to workflow definitions or execution logs. |
+| `Hunt` | Future AegisOps control-plane hunt record | Hunt lifecycle must remain analyst-directed and reviewable rather than inferred from ad hoc queries or downstream workflow runs. |
+| `Hunt Run` | Future AegisOps control-plane hunt-run record | Each hunt run must preserve bounded scope, execution context, and outcome for one hunt iteration without replacing alerts or cases. |
+| `AI Trace` | Future AegisOps control-plane AI-trace record | AI trace records must preserve prompt, model, review, and linkage context without mutating evidence custody or analyst-owned dispositions. |
 | `Action Execution` | n8n execution plane with PostgreSQL-backed workflow state | n8n owns execution-attempt state, step progress, and connector-specific runtime details. |
 
 n8n execution history must not become the implicit system of record for case state, approval state, or action-request intent.
 
 OpenSearch findings and alerts remain upstream analytic signals for reconciliation input, but they do not own downstream case, approval, or execution-policy state.
 
+The minimum control-plane record families for this baseline are Alert, Case, Evidence, Approval Decision, Action Request, Hunt, Hunt Run, AI Trace, and the execution-plane Action Execution record that must later reconcile with them.
+
 At the approved baseline level, the source-of-truth expectations are:
 
 - findings remain analytics-plane facts produced and retained by OpenSearch;
-- alerts, cases, approvals, and action requests are platform-owned control records whose future authoritative home is an AegisOps control schema or API boundary;
+- alerts, cases, evidence, approvals, action requests, hunts, hunt runs, and AI traces are platform-owned control records whose future authoritative home is an AegisOps control schema or API boundary;
 - action execution state remains execution-plane runtime state owned by n8n and backed by PostgreSQL; and
 - evidence links across those records must be explicit rather than reconstructed from whichever component happens to log the most detail.
 
@@ -47,18 +53,40 @@ The control plane is responsible for reconciling approved action intent against 
 
 Reconciliation must prefer deterministic correlation keys such as finding identifiers, action-request identifiers, approval identifiers, workflow identifiers, and idempotency keys rather than fuzzy time-window matching.
 
+Stable reconciliation keys must allow operators to compare OpenSearch analytics output, control-plane records, and n8n execution outcomes without assuming those systems share one lifecycle or one authoritative identifier.
+
 OpenSearch is responsible for producing stable analytic identifiers and timestamps for findings and other analytic signals that downstream control-plane logic may reference.
 
 n8n is responsible for exposing enough workflow-run identifiers, timestamps, execution outcomes, and step-level failure detail that a future control-plane layer can correlate approved intent to observed execution behavior.
 
+The minimum stable reconciliation key set for this baseline is:
+
+- `finding_id` for the upstream OpenSearch analytic record;
+- `analytic_signal_id` for the specific OpenSearch alerting or correlation artifact, when distinct from the finding;
+- `alert_id` and `case_id` for control-plane triage and investigation ownership;
+- `evidence_id` plus preserved provenance metadata for linked artifacts or derived material;
+- `approval_decision_id` and `action_request_id` for authorized response intent;
+- `hunt_id` and `hunt_run_id` for analyst-directed exploration and each bounded execution of that exploration;
+- `ai_trace_id` for preserved AI-assisted interpretation or recommendation context; and
+- `workflow_id`, `workflow_execution_id`, and an action idempotency key for the n8n execution-plane record.
+
 The future AegisOps control layer is responsible for:
 
 - deciding whether an analytic signal should create or update an alert or case record;
+- deciding how evidence, hunts, hunt runs, and AI traces are attached to alerts, cases, or independent analyst workflows without collapsing their ownership boundaries;
 - deciding whether an action request is pending approval, approved, rejected, expired, canceled, superseded, executing, completed, failed, or unresolved;
 - binding approval decisions to exact request context before execution is allowed; and
 - marking reconciliation exceptions when upstream findings disappear, duplicate workflow triggers arrive, or n8n reports an outcome that does not satisfy the approved intent record.
 
+Hunt records must preserve explicit lifecycle state, ownership, hypothesis linkage, and closure rationale even when no case is opened.
+
+Hunt-run reconciliation must preserve whether a run was planned, started, completed, canceled, superseded, or left unresolved, plus which findings, observations, or cases it did or did not influence.
+
+AI trace records must preserve generation, review, acceptance, rejection, supersession, and linkage expectations as explicit control-plane state rather than silent prompt history.
+
 Reconciliation must preserve auditable disagreement. When OpenSearch, n8n, and the future control record disagree, the platform must retain that mismatch as an explicit state that operators can inspect and resolve rather than overwriting one side to make the data look clean.
+
+Disagreement between analytics, control-plane, and execution-plane records must remain auditable rather than silently overwritten.
 
 ## 5. Retry, Dead-Letter, and Manual Recovery Responsibilities
 
