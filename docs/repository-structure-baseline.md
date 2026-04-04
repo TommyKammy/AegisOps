@@ -14,7 +14,7 @@ It translates the repository structure guidance from `docs/requirements-baseline
 | `n8n/` | n8n workflow assets, approval patterns, credential templates, and webhook contract definitions. |
 | `ingest/` | Log ingestion assets such as pipelines, parsers, and source definitions. |
 | `control-plane/` | Live AegisOps control-plane application code, service bootstrapping, adapters, tests, and service-local documentation for the approved runtime boundary. |
-| `postgres/` | PostgreSQL deployment assets such as compose definitions for the n8n metadata and execution-state store, plus placeholder schema and migration assets for the future AegisOps-owned control-plane boundary. |
+| `postgres/` | PostgreSQL deployment assets such as compose definitions for the n8n metadata and execution-state store, plus the reviewed schema and migration baseline for the AegisOps-owned control-plane boundary. |
 | `proxy/` | Reverse proxy configuration for controlled access and TLS termination. |
 | `scripts/` | Repository maintenance, validation, and operator helper scripts that support reproducible execution. |
 | `config/` | Shared non-secret configuration artifacts and parameter files referenced by the platform components. |
@@ -36,4 +36,4 @@ Within `sigma/`, placeholder marker files may reserve approved homes such as `cu
 
 Within `control-plane/`, live control-plane application code must stay separate from `postgres/control-plane/` so the runtime boundary does not dissolve into persistence-contract assets.
 
-Within `postgres/`, placeholder files may reserve approved homes such as `control-plane/schema.sql` and `control-plane/migrations/` before any live control-plane service, credentials, or runtime migration execution is approved.
+Within `postgres/`, `control-plane/schema.sql` and `control-plane/migrations/` define the reviewed control-plane schema baseline while staying separate from runtime application code, live deployment approval, credentials, and production migration execution.

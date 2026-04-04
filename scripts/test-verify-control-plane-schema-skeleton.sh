@@ -26,70 +26,214 @@ write_valid_fixture() {
   local target="$1"
 
   printf '%s\n' \
-    "# Control-Plane Schema Skeleton" \
+    "# Control-Plane Schema v1" \
     "" \
-    "This directory reserves the reviewed repository home for future AegisOps-owned control-plane schema and migration assets." \
+    "This directory contains the reviewed runtime-ready control-plane schema baseline for the AegisOps-owned PostgreSQL boundary." \
     "" \
-    "These files are placeholders only, are not production-ready, and do not authorize a live service, datastore deployment, credentials, or runtime migration execution." \
+    "The schema remains separate from n8n-owned PostgreSQL metadata and execution-state tables even when both live on the same engine class." \
     "" \
-    "The reserved schema boundary is \`aegisops_control\`, kept separate from n8n-owned PostgreSQL metadata and execution-state tables." \
+    "These repository assets do not authorize live deployment, production data migration, or credentials." \
     "" \
-    "The initial placeholder record-family homes tracked here are:" \
-    "" \
-    "- \`alert_records\`" \
-    "- \`case_records\`" \
-    "- \`evidence_records\`" \
-    "- \`observation_records\`" \
-    "- \`lead_records\`" \
-    "- \`recommendation_records\`" \
-    "- \`approval_decision_records\`" \
-    "- \`action_request_records\`" \
-    "- \`hunt_records\`" \
-    "- \`hunt_run_records\`" \
-    "- \`ai_trace_records\`" \
-    "- \`reconciliation_records\`" \
+    "Future work remains explicit: online rollout sequencing, environment-specific access controls, and additional index tuning stay out of scope for this baseline." \
     >"${target}/postgres/control-plane/README.md"
 
   printf '%s\n' \
-    "-- Control-plane schema skeleton for the future AegisOps-owned PostgreSQL boundary." \
-    "-- Placeholder only. Not production-ready." \
+    "-- Control-plane schema v1 for the AegisOps-owned PostgreSQL boundary." \
+    "-- runtime_baseline: reviewed_v1" \
     "-- schema: aegisops_control" \
+    "-- reconciliation boundary: control-plane records keep mismatch state explicit without collapsing into n8n-owned execution tables." \
     "create schema if not exists aegisops_control;" \
     "" \
-    "-- table: alert_records" \
-    "-- placeholder note: future reviewed CREATE TABLE lives here only after explicit approval" \
-    "-- table: case_records" \
-    "-- table: evidence_records" \
-    "-- table: observation_records" \
-    "-- table: lead_records" \
-    "-- table: recommendation_records" \
-    "-- table: approval_decision_records" \
-    "-- table: action_request_records" \
-    "-- table: hunt_records" \
-    "-- table: hunt_run_records" \
-    "-- table: ai_trace_records" \
-    "-- table: reconciliation_records" \
+    "create table if not exists aegisops_control.alert_records (" \
+    "  alert_id text primary key," \
+    "  finding_id text not null," \
+    "  analytic_signal_id text," \
+    "  case_id text," \
+    "  lifecycle_state text not null," \
+    "  created_at timestamptz not null default timezone('utc', now())," \
+    "  updated_at timestamptz not null default timezone('utc', now())," \
+    "  check (lifecycle_state in ('new','triaged','investigating','escalated_to_case','closed','reopened','superseded'))" \
+    ");" \
+    "" \
+    "create table if not exists aegisops_control.case_records (" \
+    "  case_id text primary key," \
+    "  alert_id text," \
+    "  finding_id text," \
+    "  evidence_ids text[] not null default '{}'::text[]," \
+    "  lifecycle_state text not null," \
+    "  created_at timestamptz not null default timezone('utc', now())," \
+    "  updated_at timestamptz not null default timezone('utc', now())," \
+    "  check (finding_id is not null or alert_id is not null)," \
+    "  check (cardinality(evidence_ids) >= 1)," \
+    "  check (lifecycle_state in ('open','investigating','pending_action','contained_pending_validation','closed','reopened','superseded'))" \
+    ");" \
+    "" \
+    "create table if not exists aegisops_control.evidence_records (" \
+    "  evidence_id text primary key," \
+    "  source_record_id text not null," \
+    "  alert_id text," \
+    "  case_id text," \
+    "  source_system text not null," \
+    "  collector_identity text not null," \
+    "  acquired_at timestamptz not null," \
+    "  derivation_relationship text," \
+    "  lifecycle_state text not null," \
+    "  created_at timestamptz not null default timezone('utc', now())," \
+    "  updated_at timestamptz not null default timezone('utc', now())," \
+    "  check (alert_id is not null or case_id is not null)," \
+    "  check (lifecycle_state in ('collected','validated','linked','superseded','withdrawn'))" \
+    ");" \
+    "" \
+    "create table if not exists aegisops_control.observation_records (" \
+    "  observation_id text primary key," \
+    "  hunt_id text," \
+    "  hunt_run_id text," \
+    "  alert_id text," \
+    "  case_id text," \
+    "  supporting_evidence_ids text[] not null default '{}'::text[]," \
+    "  author_identity text not null," \
+    "  observed_at timestamptz not null," \
+    "  scope_statement text not null," \
+    "  lifecycle_state text not null," \
+    "  created_at timestamptz not null default timezone('utc', now())," \
+    "  updated_at timestamptz not null default timezone('utc', now())," \
+    "  check (hunt_id is not null or hunt_run_id is not null or alert_id is not null or case_id is not null)," \
+    "  check (cardinality(supporting_evidence_ids) >= 1)," \
+    "  check (lifecycle_state in ('captured','confirmed','challenged','superseded','withdrawn'))" \
+    ");" \
+    "" \
+    "create table if not exists aegisops_control.lead_records (" \
+    "  lead_id text primary key," \
+    "  observation_id text," \
+    "  finding_id text," \
+    "  hunt_run_id text," \
+    "  alert_id text," \
+    "  case_id text," \
+    "  triage_owner text not null," \
+    "  triage_rationale text not null," \
+    "  created_at timestamptz not null default timezone('utc', now())," \
+    "  updated_at timestamptz not null default timezone('utc', now())," \
+    "  lifecycle_state text not null," \
+    "  check (observation_id is not null or finding_id is not null or hunt_run_id is not null)," \
+    "  check (lifecycle_state in ('open','triaged','promoted_to_alert','promoted_to_case','closed','superseded'))" \
+    ");" \
+    "" \
+    "create table if not exists aegisops_control.recommendation_records (" \
+    "  recommendation_id text primary key," \
+    "  lead_id text," \
+    "  hunt_run_id text," \
+    "  alert_id text," \
+    "  case_id text," \
+    "  ai_trace_id text," \
+    "  review_owner text not null," \
+    "  intended_outcome text not null," \
+    "  created_at timestamptz not null default timezone('utc', now())," \
+    "  updated_at timestamptz not null default timezone('utc', now())," \
+    "  lifecycle_state text not null," \
+    "  check (lead_id is not null or hunt_run_id is not null or alert_id is not null or case_id is not null)," \
+    "  check (lifecycle_state in ('proposed','under_review','accepted','rejected','materialized','superseded','withdrawn'))" \
+    ");" \
+    "" \
+    "create table if not exists aegisops_control.approval_decision_records (" \
+    "  approval_decision_id text primary key," \
+    "  action_request_id text not null," \
+    "  approver_identities text[] not null default '{}'::text[]," \
+    "  target_snapshot jsonb not null," \
+    "  payload_hash text not null," \
+    "  decided_at timestamptz," \
+    "  lifecycle_state text not null," \
+    "  created_at timestamptz not null default timezone('utc', now())," \
+    "  updated_at timestamptz not null default timezone('utc', now())," \
+    "  check (cardinality(approver_identities) >= 1)," \
+    "  check (lifecycle_state in ('pending','approved','rejected','expired','canceled','superseded'))" \
+    ");" \
+    "" \
+    "create table if not exists aegisops_control.action_request_records (" \
+    "  action_request_id text primary key," \
+    "  approval_decision_id text," \
+    "  case_id text," \
+    "  alert_id text," \
+    "  finding_id text," \
+    "  idempotency_key text not null," \
+    "  target_scope jsonb not null," \
+    "  payload_hash text not null," \
+    "  requested_at timestamptz not null," \
+    "  expires_at timestamptz," \
+    "  lifecycle_state text not null," \
+    "  created_at timestamptz not null default timezone('utc', now())," \
+    "  updated_at timestamptz not null default timezone('utc', now())," \
+    "  check (case_id is not null or alert_id is not null or finding_id is not null)," \
+    "  check (lifecycle_state in ('draft','pending_approval','approved','rejected','expired','canceled','superseded','executing','completed','failed','unresolved'))" \
+    ");" \
+    "" \
+    "create table if not exists aegisops_control.hunt_records (" \
+    "  hunt_id text primary key," \
+    "  hypothesis_statement text not null," \
+    "  hypothesis_version text not null," \
+    "  owner_identity text not null," \
+    "  scope_boundary text not null," \
+    "  opened_at timestamptz not null," \
+    "  alert_id text," \
+    "  case_id text," \
+    "  lifecycle_state text not null," \
+    "  created_at timestamptz not null default timezone('utc', now())," \
+    "  updated_at timestamptz not null default timezone('utc', now())," \
+    "  check (lifecycle_state in ('draft','active','on_hold','concluded','closed','superseded'))" \
+    ");" \
+    "" \
+    "create table if not exists aegisops_control.hunt_run_records (" \
+    "  hunt_run_id text primary key," \
+    "  hunt_id text not null," \
+    "  scope_snapshot jsonb not null," \
+    "  execution_plan_reference text not null," \
+    "  output_linkage jsonb not null default '{}'::jsonb," \
+    "  started_at timestamptz," \
+    "  completed_at timestamptz," \
+    "  lifecycle_state text not null," \
+    "  created_at timestamptz not null default timezone('utc', now())," \
+    "  updated_at timestamptz not null default timezone('utc', now())," \
+    "  check (lifecycle_state in ('planned','running','completed','canceled','superseded','unresolved'))" \
+    ");" \
+    "" \
+    "create table if not exists aegisops_control.ai_trace_records (" \
+    "  ai_trace_id text primary key," \
+    "  subject_linkage jsonb not null," \
+    "  model_identity text not null," \
+    "  prompt_version text not null," \
+    "  generated_at timestamptz not null," \
+    "  material_input_refs text[] not null default '{}'::text[]," \
+    "  reviewer_identity text not null," \
+    "  lifecycle_state text not null," \
+    "  created_at timestamptz not null default timezone('utc', now())," \
+    "  updated_at timestamptz not null default timezone('utc', now())," \
+    "  check (lifecycle_state in ('generated','under_review','accepted_for_reference','rejected_for_reference','superseded','withdrawn'))" \
+    ");" \
+    "" \
+    "create table if not exists aegisops_control.reconciliation_records (" \
+    "  reconciliation_id text primary key," \
+    "  subject_linkage jsonb not null," \
+    "  finding_id text," \
+    "  analytic_signal_id text," \
+    "  workflow_execution_id text," \
+    "  linked_execution_ids text[] not null default '{}'::text[]," \
+    "  correlation_key text not null," \
+    "  mismatch_summary text not null," \
+    "  compared_at timestamptz not null," \
+    "  lifecycle_state text not null," \
+    "  created_at timestamptz not null default timezone('utc', now())," \
+    "  updated_at timestamptz not null default timezone('utc', now())," \
+    "  check (finding_id is not null or analytic_signal_id is not null or workflow_execution_id is not null)," \
+    "  check (lifecycle_state in ('pending','matched','mismatched','stale','resolved','superseded'))" \
+    ");" \
     >"${target}/postgres/control-plane/schema.sql"
 
-  printf '%s\n' \
-    "-- Migration skeleton only. Do not run in production." \
-    "begin;" \
-    "create schema if not exists aegisops_control;" \
-    "-- placeholder note: future reviewed ALTER TABLE or CREATE INDEX statements are not approved in this phase" \
-    "-- reserve table home: alert_records" \
-    "-- reserve table home: case_records" \
-    "-- reserve table home: evidence_records" \
-    "-- reserve table home: observation_records" \
-    "-- reserve table home: lead_records" \
-    "-- reserve table home: recommendation_records" \
-    "-- reserve table home: approval_decision_records" \
-    "-- reserve table home: action_request_records" \
-    "-- reserve table home: hunt_records" \
-    "-- reserve table home: hunt_run_records" \
-    "-- reserve table home: ai_trace_records" \
-    "-- reserve table home: reconciliation_records" \
-    "commit;" \
-    >"${target}/postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql"
+  cp "${target}/postgres/control-plane/schema.sql" \
+    "${target}/postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql"
+  perl -0pi -e "s/^-- Control-plane schema v1 for the AegisOps-owned PostgreSQL boundary\\./-- Control-plane schema v1 baseline migration./" \
+    "${target}/postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql"
+  perl -0pi -e "s/\\A(-- Control-plane schema v1 baseline migration\\.\\n)/\$1begin;\\n/" \
+    "${target}/postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql"
+  printf '\ncommit;\n' >>"${target}/postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql"
 
   git -C "${target}" add postgres/control-plane/README.md
   git -C "${target}" add postgres/control-plane/schema.sql
@@ -131,174 +275,48 @@ assert_passes "${valid_repo}"
 missing_readme_repo="${workdir}/missing-readme"
 create_repo "${missing_readme_repo}"
 git -C "${missing_readme_repo}" commit -q --allow-empty -m "fixture"
-assert_fails_with "${missing_readme_repo}" "Missing control-plane schema skeleton README"
+assert_fails_with "${missing_readme_repo}" "Missing control-plane schema README"
 
-missing_schema_repo="${workdir}/missing-schema"
-create_repo "${missing_schema_repo}"
-printf '%s\n' "# Control-Plane Schema Skeleton" >"${missing_schema_repo}/postgres/control-plane/README.md"
-printf '%s\n' "-- Migration skeleton only. Do not run in production." >"${missing_schema_repo}/postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql"
-git -C "${missing_schema_repo}" add postgres/control-plane/README.md
-git -C "${missing_schema_repo}" add postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql
-git -C "${missing_schema_repo}" commit -q -m "fixture"
-assert_fails_with "${missing_schema_repo}" "Missing control-plane schema skeleton manifest"
-
-missing_family_repo="${workdir}/missing-family"
-create_repo "${missing_family_repo}"
-write_valid_fixture "${missing_family_repo}"
+placeholder_readme_repo="${workdir}/placeholder-readme"
+create_repo "${placeholder_readme_repo}"
+write_valid_fixture "${placeholder_readme_repo}"
 printf '%s\n' \
-  "-- Control-plane schema skeleton for the future AegisOps-owned PostgreSQL boundary." \
-  "-- Placeholder only. Not production-ready." \
-  "-- schema: aegisops_control" \
-  "create schema if not exists aegisops_control;" \
+  "# Control-Plane Schema Skeleton" \
   "" \
-  "-- table: alert_records" \
-  "-- table: case_records" \
-  "-- table: evidence_records" \
-  "-- table: observation_records" \
-  "-- table: lead_records" \
-  "-- table: recommendation_records" \
-  "-- table: approval_decision_records" \
-  "-- table: action_request_records" \
-  "-- table: hunt_records" \
-  "-- table: hunt_run_records" \
-  >"${missing_family_repo}/postgres/control-plane/schema.sql"
-git -C "${missing_family_repo}" add postgres/control-plane/schema.sql
-git -C "${missing_family_repo}" commit -q -m "fixture update"
-assert_fails_with "${missing_family_repo}" "-- table: ai_trace_records"
+  "These files are placeholders only." \
+  >"${placeholder_readme_repo}/postgres/control-plane/README.md"
+git -C "${placeholder_readme_repo}" add postgres/control-plane/README.md
+git -C "${placeholder_readme_repo}" commit -q -m "fixture update"
+assert_fails_with "${placeholder_readme_repo}" "Control-plane schema README must declare the v1 baseline"
 
-missing_reconciliation_family_repo="${workdir}/missing-reconciliation-family"
-create_repo "${missing_reconciliation_family_repo}"
-write_valid_fixture "${missing_reconciliation_family_repo}"
-printf '%s\n' \
-  "-- Control-plane schema skeleton for the future AegisOps-owned PostgreSQL boundary." \
-  "-- Placeholder only. Not production-ready." \
-  "-- schema: aegisops_control" \
-  "create schema if not exists aegisops_control;" \
-  "" \
-  "-- table: alert_records" \
-  "-- table: case_records" \
-  "-- table: evidence_records" \
-  "-- table: observation_records" \
-  "-- table: lead_records" \
-  "-- table: recommendation_records" \
-  "-- table: approval_decision_records" \
-  "-- table: action_request_records" \
-  "-- table: hunt_records" \
-  "-- table: hunt_run_records" \
-  "-- table: ai_trace_records" \
-  >"${missing_reconciliation_family_repo}/postgres/control-plane/schema.sql"
-git -C "${missing_reconciliation_family_repo}" add postgres/control-plane/schema.sql
-git -C "${missing_reconciliation_family_repo}" commit -q -m "fixture update"
-assert_fails_with "${missing_reconciliation_family_repo}" "-- table: reconciliation_records"
+missing_table_repo="${workdir}/missing-table"
+create_repo "${missing_table_repo}"
+write_valid_fixture "${missing_table_repo}"
+awk '/^create table if not exists aegisops_control\.reconciliation_records \(/ {exit} {print}' \
+  "${missing_table_repo}/postgres/control-plane/schema.sql" \
+  >"${missing_table_repo}/postgres/control-plane/schema.sql.tmp"
+mv "${missing_table_repo}/postgres/control-plane/schema.sql.tmp" \
+  "${missing_table_repo}/postgres/control-plane/schema.sql"
+git -C "${missing_table_repo}" add postgres/control-plane/schema.sql
+git -C "${missing_table_repo}" commit -q -m "fixture update"
+assert_fails_with "${missing_table_repo}" "must materialize reconciliation_records"
 
-schema_live_ddl_repo="${workdir}/schema-live-ddl"
-create_repo "${schema_live_ddl_repo}"
-write_valid_fixture "${schema_live_ddl_repo}"
-printf '%s\n' \
-  "-- Control-plane schema skeleton for the future AegisOps-owned PostgreSQL boundary." \
-  "-- Placeholder only. Not production-ready." \
-  "-- schema: aegisops_control" \
-  "create schema if not exists aegisops_control;" \
-  "" \
-  "-- table: alert_records" \
-  "-- placeholder note: future reviewed CREATE TABLE lives here only after explicit approval" \
-  "-- table: case_records" \
-  "-- table: evidence_records" \
-  "-- table: observation_records" \
-  "-- table: lead_records" \
-  "-- table: recommendation_records" \
-  "-- table: approval_decision_records" \
-  "-- table: action_request_records" \
-  "-- table: hunt_records" \
-  "-- table: hunt_run_records" \
-  "-- table: ai_trace_records" \
-  "-- table: reconciliation_records" \
-  "create table aegisops_control.alert_records (alert_id text primary key);" \
-  >"${schema_live_ddl_repo}/postgres/control-plane/schema.sql"
-git -C "${schema_live_ddl_repo}" add postgres/control-plane/schema.sql
-git -C "${schema_live_ddl_repo}" commit -q -m "fixture update"
-assert_fails_with "${schema_live_ddl_repo}" "must not contain live implementation DDL"
+missing_reconciliation_link_repo="${workdir}/missing-reconciliation-link"
+create_repo "${missing_reconciliation_link_repo}"
+write_valid_fixture "${missing_reconciliation_link_repo}"
+perl -0pi -e "s/\\n  linked_execution_ids text\\[\\] not null default '\\{\\}'::text\\[\\],//" \
+  "${missing_reconciliation_link_repo}/postgres/control-plane/schema.sql"
+git -C "${missing_reconciliation_link_repo}" add postgres/control-plane/schema.sql
+git -C "${missing_reconciliation_link_repo}" commit -q -m "fixture update"
+assert_fails_with "${missing_reconciliation_link_repo}" "must preserve explicit reconciliation linkage to execution-plane records"
 
-schema_index_repo="${workdir}/schema-index-ddl"
-create_repo "${schema_index_repo}"
-write_valid_fixture "${schema_index_repo}"
-printf '%s\n' \
-  "-- Control-plane schema skeleton for the future AegisOps-owned PostgreSQL boundary." \
-  "-- Placeholder only. Not production-ready." \
-  "-- schema: aegisops_control" \
-  "create schema if not exists aegisops_control;" \
-  "" \
-  "-- table: alert_records" \
-  "-- placeholder note: future reviewed CREATE TABLE lives here only after explicit approval" \
-  "-- table: case_records" \
-  "-- table: evidence_records" \
-  "-- table: observation_records" \
-  "-- table: lead_records" \
-  "-- table: recommendation_records" \
-  "-- table: approval_decision_records" \
-  "-- table: action_request_records" \
-  "-- table: hunt_records" \
-  "-- table: hunt_run_records" \
-  "-- table: ai_trace_records" \
-  "-- table: reconciliation_records" \
-  "create index alert_records_alert_id_idx on aegisops_control.alert_records (alert_id);" \
-  >"${schema_index_repo}/postgres/control-plane/schema.sql"
-git -C "${schema_index_repo}" add postgres/control-plane/schema.sql
-git -C "${schema_index_repo}" commit -q -m "fixture update"
-assert_fails_with "${schema_index_repo}" "must not contain live implementation DDL"
-
-migration_live_ddl_repo="${workdir}/migration-live-ddl"
-create_repo "${migration_live_ddl_repo}"
-write_valid_fixture "${migration_live_ddl_repo}"
-printf '%s\n' \
-  "-- Migration skeleton only. Do not run in production." \
-  "begin;" \
-  "create schema if not exists aegisops_control;" \
-  "-- placeholder note: future reviewed ALTER TABLE or CREATE INDEX statements are not approved in this phase" \
-  "-- reserve table home: alert_records" \
-  "-- reserve table home: case_records" \
-  "-- reserve table home: evidence_records" \
-  "-- reserve table home: observation_records" \
-  "-- reserve table home: lead_records" \
-  "-- reserve table home: recommendation_records" \
-  "-- reserve table home: approval_decision_records" \
-  "-- reserve table home: action_request_records" \
-  "-- reserve table home: hunt_records" \
-  "-- reserve table home: hunt_run_records" \
-  "-- reserve table home: ai_trace_records" \
-  "-- reserve table home: reconciliation_records" \
-  "alter table aegisops_control.alert_records add constraint alert_records_pk primary key (alert_id);" \
-  "commit;" \
-  >"${migration_live_ddl_repo}/postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql"
-git -C "${migration_live_ddl_repo}" add postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql
-git -C "${migration_live_ddl_repo}" commit -q -m "fixture update"
-assert_fails_with "${migration_live_ddl_repo}" "must not contain live implementation DDL"
-
-seed_repo="${workdir}/seed"
-create_repo "${seed_repo}"
-write_valid_fixture "${seed_repo}"
-printf '%s\n' \
-  "-- Migration skeleton only. Do not run in production." \
-  "begin;" \
-  "create schema if not exists aegisops_control;" \
-  "-- placeholder note: future reviewed ALTER TABLE or CREATE INDEX statements are not approved in this phase" \
-  "-- reserve table home: alert_records" \
-  "-- reserve table home: case_records" \
-  "-- reserve table home: evidence_records" \
-  "-- reserve table home: observation_records" \
-  "-- reserve table home: lead_records" \
-  "-- reserve table home: recommendation_records" \
-  "-- reserve table home: approval_decision_records" \
-  "-- reserve table home: action_request_records" \
-  "-- reserve table home: hunt_records" \
-  "-- reserve table home: hunt_run_records" \
-  "-- reserve table home: ai_trace_records" \
-  "-- reserve table home: reconciliation_records" \
-  "insert into aegisops_control.alert_records (alert_id) values ('alert-1');" \
-  "commit;" \
-  >"${seed_repo}/postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql"
-git -C "${seed_repo}" add postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql
-git -C "${seed_repo}" commit -q -m "fixture update"
-assert_fails_with "${seed_repo}" "must not seed live control-plane data"
+schema_seed_repo="${workdir}/schema-seed"
+create_repo "${schema_seed_repo}"
+write_valid_fixture "${schema_seed_repo}"
+printf '\ninsert into aegisops_control.alert_records (alert_id, finding_id, lifecycle_state) values (''a'', ''f'', ''new'');\n' \
+  >>"${schema_seed_repo}/postgres/control-plane/schema.sql"
+git -C "${schema_seed_repo}" add postgres/control-plane/schema.sql
+git -C "${schema_seed_repo}" commit -q -m "fixture update"
+assert_fails_with "${schema_seed_repo}" "must not seed live control-plane data"
 
 echo "verify-control-plane-schema-skeleton tests passed"

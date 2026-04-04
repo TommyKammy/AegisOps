@@ -53,7 +53,7 @@ Log Sources
 
 Supporting services:
 
-- **PostgreSQL** — n8n metadata and execution state, plus placeholder control-plane schema assets
+- **PostgreSQL** — n8n metadata and execution state, plus the reviewed control-plane schema baseline
 - **Redis** — optional future component for queue-based scaling
 - **Reverse Proxy** — controlled user-facing access and TLS termination
 
@@ -85,9 +85,9 @@ Within `sigma/`, the `curated/` directory is reserved for reviewed Sigma rules t
 
 Within `control-plane/`, the first live AegisOps-owned control-plane runtime will live as application code and service-local tests.
 
-Within `postgres/`, the `control-plane/` directory reserves the repository home for placeholder AegisOps-owned control-plane schema and migration assets. It does not introduce a live datastore or runtime migration flow.
+Within `postgres/`, the `control-plane/` directory is the repository home for the reviewed AegisOps-owned control-plane schema baseline and migration assets. It does not authorize live deployment, production data migration, or credentials.
 
-That placeholder boundary fails closed if executable live-ish control-plane DDL or seed data appears before explicit persistence approval.
+That schema boundary remains separate from n8n-owned PostgreSQL metadata and execution-state tables, and future rollout, access-control, and index-tuning work stays explicit.
 
 ---
 
