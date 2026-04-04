@@ -16,6 +16,13 @@ This document defines baseline semantics, ownership boundaries, and state transi
 | `Normalized Event` | Telemetry transformed into the approved event schema used by the analytics plane. |
 | `Detection Rule` | Reviewed detection logic that evaluates normalized telemetry and declares matching conditions. |
 | `Finding` | Detection result produced when a detection rule matches relevant telemetry. |
+| `Hunt` | Analyst-directed exploration record created to test a threat hypothesis or investigate suspicious conditions beyond deterministic detection output. |
+| `Hunt Hypothesis` | Explicit statement of what the analyst believes may be happening, why it is worth testing, and what evidence or observations would support or refute it. |
+| `Hunt Run` | One bounded execution of a specific hunt hypothesis against a defined scope, time window, dataset, or query plan. |
+| `Observation` | Recorded fact, pattern, or notable condition gathered during hunting or investigation that may inform later judgment but is not itself a deterministic detection claim. |
+| `Lead` | Triage-worthy investigative signal derived from one or more observations, findings, or contextual facts that justifies additional analyst attention. |
+| `Recommendation` | Proposed analyst or system action derived from findings, hunt conclusions, or AI-assisted interpretation that still requires human review within the appropriate approval boundary. |
+| `AI Trace` | Preserved record of AI-assisted interpretation inputs, prompts, model outputs, confidence notes, and review context associated with a SecOps record. |
 | `Correlation` | Explicit relationship that links related findings, alerts, cases, assets, or identities because they share meaningful operator-facing context. |
 | `Alert` | Routed analyst-facing notification or queue item created from one or more findings that require attention. |
 | `Case` | Investigation record that groups analyst work, related alerts, evidence, and response coordination for one work item. |
@@ -36,6 +43,28 @@ A `Detection Rule` evaluates `Normalized Event` records. It does not own source 
 
 A finding is the normalized analytic assertion that detection logic matched relevant telemetry.
 
+A hunt is an analyst-directed exploration record created to test a threat hypothesis or investigate suspicious conditions beyond deterministic detection output.
+
+A hunt hypothesis is the explicit statement of what the analyst believes may be happening, why it is worth testing, and what evidence or observations would support or refute it.
+
+A hunt run is one bounded execution of a specific hunt hypothesis against a defined scope, time window, dataset, or query plan.
+
+An observation is a recorded fact, pattern, or notable condition gathered during hunting or investigation that may inform later judgment but is not itself a deterministic detection claim.
+
+An observation may support a finding or a lead, but it is not itself a finding because it does not assert that reviewed detection logic matched.
+
+A lead is a triage-worthy investigative signal derived from one or more observations, findings, or contextual facts that justifies additional analyst attention.
+
+A lead may promote into alert or case work when triage determines the signal warrants tracked investigation, but the lead remains distinct from the alert or case record it informs.
+
+A recommendation is a proposed analyst or system action derived from findings, hunt conclusions, or AI-assisted interpretation that still requires human review within the appropriate approval boundary.
+
+An AI trace is the preserved record of AI-assisted interpretation inputs, prompts, model outputs, confidence notes, and review context associated with a SecOps record.
+
+An AI trace is not evidence. It preserves how AI-assisted interpretation was produced and reviewed, while evidence preserves the underlying supporting artifacts and chain of custody.
+
+AI-assisted interpretation may summarize, rank, or recommend, but it must not overwrite deterministic finding output, evidence custody, approval decisions, or action execution records.
+
 Correlation is the explicit relationship that links related findings, alerts, cases, assets, or identities because they share meaningful operator-facing context.
 
 An alert is the routed operator-facing notification or queue item created from one or more findings after baseline triage policy decides analyst attention is required.
@@ -53,6 +82,8 @@ A case may exist without an incident. An incident is created only when separate 
 `Asset` and `Identity` are reference entities. They contextualize findings, alerts, cases, incidents, evidence, and action requests, but they are not themselves detections or response outcomes.
 
 `Evidence` is supporting material linked to another record. Evidence is not a substitute for alert state, case state, or incident state.
+
+`Evidence` preserves source artifacts, provenance, and custody. AI interpretation may reference evidence, but it does not replace or mutate the underlying evidence record.
 
 `Action Request` is the proposal to do something. It defines the requested response intent, target, justification, and required approval boundary.
 
@@ -76,6 +107,13 @@ OpenSearch findings, n8n workflow runs, and future case state must remain separa
 | `Normalized Event` | OpenSearch ingestion and analytics plane | The analytics plane owns normalized telemetry shape and analytic readiness. |
 | `Detection Rule` | Sigma for reviewed source definition; OpenSearch for deployed runtime materialization | Sigma remains the reviewable rule-definition source, while OpenSearch owns the deployed detector representation used at runtime. |
 | `Finding` | OpenSearch detection and analytics plane | A finding is an analytics-plane output and must not be redefined as workflow state. |
+| `Hunt` | Future AegisOps hunt management control layer | Hunt lifecycle belongs to the analyst-directed exploration record and must remain separate from deterministic findings, alerts, and cases. |
+| `Hunt Hypothesis` | Future AegisOps hunt management control layer | Hypothesis ownership stays with the hunt record family so the analytic question remains reviewable across multiple runs. |
+| `Hunt Run` | Future AegisOps hunt management control layer | Each run records bounded execution context and outcome for one hypothesis evaluation without becoming the system of record for alerts or cases. |
+| `Observation` | Future AegisOps hunt and investigation record layer | Observations preserve notable facts gathered during hunts or investigations without asserting a reviewed finding or opening case state on their own. |
+| `Lead` | Future AegisOps triage and investigation control layer | Lead lifecycle captures triage-worthy investigative signals without collapsing directly into findings, alerts, or cases until an explicit promotion decision is made. |
+| `Recommendation` | Future AegisOps analyst decision support control layer | Recommendations remain advisory outputs and must not become approvals, action requests, or executions by implication. |
+| `AI Trace` | Future AegisOps AI interpretation record layer | AI trace ownership preserves how interpretation was generated and reviewed while keeping evidence custody and deterministic system records separate. |
 | `Correlation` | Future AegisOps correlation and triage control layer | Correlation records operator-meaningful relationships without replacing the lifecycle of the linked records. |
 | `Alert` | Future AegisOps alert routing and triage control layer | Alert lifecycle belongs to the future control layer that decides routing, deduplication, and analyst attention. |
 | `Case` | Future AegisOps case management control layer | Case lifecycle must be owned separately from analytics outputs and workflow runs. |
@@ -93,6 +131,12 @@ OpenSearch findings, n8n workflow runs, and future case state must remain separa
 A finding promotes to an alert only when triage policy determines that analyst attention, tracking, notification, or downstream workflow handling is required.
 
 A finding may remain a finding without becoming an alert when the result is retained only for analytics, threshold accumulation, tuning review, or later correlation and does not yet require direct operator handling.
+
+A hunt may produce observations, leads, recommendations, or supporting context for findings, alerts, and cases, but hunt records do not replace those records.
+
+A lead promotes to an alert only when triage decides the investigative signal requires durable analyst queueing or response handling.
+
+A lead may be attached directly to an existing case when the signal materially advances an active investigation without requiring a separate alert lifecycle.
 
 Correlation links records by shared context, but it does not by itself create an alert, open a case, or declare an incident.
 

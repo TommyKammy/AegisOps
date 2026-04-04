@@ -24,6 +24,13 @@ required_phrases=(
   '| `Normalized Event` |'
   '| `Detection Rule` |'
   '| `Finding` |'
+  '| `Hunt` |'
+  '| `Hunt Hypothesis` |'
+  '| `Hunt Run` |'
+  '| `Observation` |'
+  '| `Lead` |'
+  '| `Recommendation` |'
+  '| `AI Trace` |'
   '| `Correlation` |'
   '| `Alert` |'
   '| `Case` |'
@@ -36,7 +43,18 @@ required_phrases=(
   '| `Action Execution` |'
   '| `Disposition` |'
   "A finding is the normalized analytic assertion that detection logic matched relevant telemetry."
+  "A hunt is an analyst-directed exploration record created to test a threat hypothesis or investigate suspicious conditions beyond deterministic detection output."
+  "A hunt hypothesis is the explicit statement of what the analyst believes may be happening, why it is worth testing, and what evidence or observations would support or refute it."
+  "A hunt run is one bounded execution of a specific hunt hypothesis against a defined scope, time window, dataset, or query plan."
+  "An observation is a recorded fact, pattern, or notable condition gathered during hunting or investigation that may inform later judgment but is not itself a deterministic detection claim."
+  "A lead is a triage-worthy investigative signal derived from one or more observations, findings, or contextual facts that justifies additional analyst attention."
+  "A recommendation is a proposed analyst or system action derived from findings, hunt conclusions, or AI-assisted interpretation that still requires human review within the appropriate approval boundary."
+  "An AI trace is the preserved record of AI-assisted interpretation inputs, prompts, model outputs, confidence notes, and review context associated with a SecOps record."
   "Correlation is the explicit relationship that links related findings, alerts, cases, assets, or identities because they share meaningful operator-facing context."
+  "An observation may support a finding or a lead, but it is not itself a finding because it does not assert that reviewed detection logic matched."
+  "A lead may promote into alert or case work when triage determines the signal warrants tracked investigation, but the lead remains distinct from the alert or case record it informs."
+  "An AI trace is not evidence. It preserves how AI-assisted interpretation was produced and reviewed, while evidence preserves the underlying supporting artifacts and chain of custody."
+  "AI-assisted interpretation may summarize, rank, or recommend, but it must not overwrite deterministic finding output, evidence custody, approval decisions, or action execution records."
   "An alert is the routed operator-facing notification or queue item created from one or more findings after baseline triage policy decides analyst attention is required."
   "A case is the investigation record that groups alerts, evidence, analyst notes, and response coordination for one work item."
   "An incident is the higher-order security event declaration used when one or more cases represent a material security event that needs coordinated operational handling."
@@ -44,12 +62,22 @@ required_phrases=(
   "An action execution records the actual downstream attempt or completion state for an approved or explicitly allowed action request."
   "OpenSearch findings, n8n workflow runs, and future case state must remain separate records and must not be treated as interchangeable identifiers or lifecycle states."
   '| `Finding` | OpenSearch detection and analytics plane |'
+  '| `Hunt` | Future AegisOps hunt management control layer |'
+  '| `Hunt Hypothesis` | Future AegisOps hunt management control layer |'
+  '| `Hunt Run` | Future AegisOps hunt management control layer |'
+  '| `Observation` | Future AegisOps hunt and investigation record layer |'
+  '| `Lead` | Future AegisOps triage and investigation control layer |'
+  '| `Recommendation` | Future AegisOps analyst decision support control layer |'
+  '| `AI Trace` | Future AegisOps AI interpretation record layer |'
   '| `Correlation` | Future AegisOps correlation and triage control layer |'
   '| `Alert` | Future AegisOps alert routing and triage control layer |'
   '| `Case` | Future AegisOps case management control layer |'
   '| `Approval Decision` | Future AegisOps approval control layer |'
   '| `Action Execution` | n8n execution plane with PostgreSQL-backed workflow state |'
   "A finding promotes to an alert only when triage policy determines that analyst attention, tracking, notification, or downstream workflow handling is required."
+  "A hunt may produce observations, leads, recommendations, or supporting context for findings, alerts, and cases, but hunt records do not replace those records."
+  "A lead promotes to an alert only when triage decides the investigative signal requires durable analyst queueing or response handling."
+  "A lead may be attached directly to an existing case when the signal materially advances an active investigation without requiring a separate alert lifecycle."
   "Correlation links records by shared context, but it does not by itself create an alert, open a case, or declare an incident."
   "A case must not be created for every alert by default."
   "Deduplication means additional findings are attached to an existing alert or case when they restate the same analytic claim against materially the same operational target within the active review window."

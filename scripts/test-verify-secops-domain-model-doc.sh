@@ -4,6 +4,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 verifier="${repo_root}/scripts/verify-secops-domain-model-doc.sh"
+canonical_doc="${repo_root}/docs/secops-domain-model.md"
 
 workdir="$(mktemp -d)"
 trap 'rm -rf "${workdir}"' EXIT
@@ -22,11 +23,19 @@ create_repo() {
   git -C "${target}" config user.email "codex@example.com"
 }
 
-write_doc() {
+write_canonical_doc() {
   local target="$1"
-  local doc_content="$2"
 
-  printf '%s\n' "${doc_content}" >"${target}/docs/secops-domain-model.md"
+  cp "${canonical_doc}" "${target}/docs/secops-domain-model.md"
+  git -C "${target}" add docs/secops-domain-model.md
+}
+
+remove_text_from_doc() {
+  local target="$1"
+  local expected_text="$2"
+  local doc_path="${target}/docs/secops-domain-model.md"
+
+  REMOVE_TEXT="${expected_text}" perl -0pi -e 's/\Q$ENV{REMOVE_TEXT}\E\n?//g' "${doc_path}"
   git -C "${target}" add docs/secops-domain-model.md
 }
 
@@ -64,94 +73,7 @@ assert_fails_with() {
 
 valid_repo="${workdir}/valid"
 create_repo "${valid_repo}"
-write_doc "${valid_repo}" '# AegisOps SecOps Domain Model
-
-## 1. Purpose
-
-This document defines the first-class SecOps domain model for the AegisOps baseline.
-
-This document defines baseline semantics, ownership boundaries, and state transitions only. It does not introduce runtime behavior, workflow automation, or architecture changes.
-
-## 2. Core Domain Objects
-
-| Object | Definition |
-| ---- | ---- |
-| `Raw Event` | Uninterpreted source telemetry before normalization. |
-| `Normalized Event` | Event translated into the approved analytic schema. |
-| `Detection Rule` | Reviewed detection logic that evaluates normalized telemetry. |
-| `Finding` | Detection result produced when rule logic matches telemetry. |
-| `Correlation` | Explicit relationship that links related records through shared operator-facing context. |
-| `Alert` | Routed analyst-facing item created from findings that require attention. |
-| `Case` | Investigation record for an analyst work item. |
-| `Incident` | Coordinated security event declaration across one or more cases. |
-| `Asset` | Managed host, service, application, or environment entity relevant to operations. |
-| `Identity` | Human or machine principal associated with activity or response scope. |
-| `Evidence` | Preserved supporting record used to explain or justify SecOps decisions. |
-| `Action Request` | Proposed response step waiting for approval or execution disposition. |
-| `Approval Decision` | Explicit decision for a specific action request. |
-| `Action Execution` | Record of the actual attempted or completed action. |
-| `Disposition` | Closure or outcome classification applied to findings, alerts, cases, or incidents under the correct owner boundary. |
-
-## 3. Relationship and State Boundaries
-
-A finding is the normalized analytic assertion that detection logic matched relevant telemetry.
-
-Correlation is the explicit relationship that links related findings, alerts, cases, assets, or identities because they share meaningful operator-facing context.
-
-An alert is the routed operator-facing notification or queue item created from one or more findings after baseline triage policy decides analyst attention is required.
-
-A case is the investigation record that groups alerts, evidence, analyst notes, and response coordination for one work item.
-
-An incident is the higher-order security event declaration used when one or more cases represent a material security event that needs coordinated operational handling.
-
-An approval decision records whether a specific action request is authorized, rejected, or expired.
-
-An action execution records the actual downstream attempt or completion state for an approved or explicitly allowed action request.
-
-OpenSearch findings, n8n workflow runs, and future case state must remain separate records and must not be treated as interchangeable identifiers or lifecycle states.
-
-## 4. Baseline System of Record
-
-| Object or boundary | Baseline system of record |
-| ---- | ---- |
-| `Finding` | OpenSearch detection and analytics plane |
-| `Correlation` | Future AegisOps correlation and triage control layer |
-| `Alert` | Future AegisOps alert routing and triage control layer |
-| `Case` | Future AegisOps case management control layer |
-| `Approval Decision` | Future AegisOps approval control layer |
-| `Action Execution` | n8n execution plane with PostgreSQL-backed workflow state |
-
-## 5. Promotion and Correlation Rules
-
-A finding promotes to an alert only when triage policy determines that analyst attention, tracking, notification, or downstream workflow handling is required.
-
-Correlation links records by shared context, but it does not by itself create an alert, open a case, or declare an incident.
-
-## 6. Grouping, Deduplication, and Case Creation Expectations
-
-A case must not be created for every alert by default.
-
-Deduplication means additional findings are attached to an existing alert or case when they restate the same analytic claim against materially the same operational target within the active review window.
-
-A new alert must be created instead of deduplicating when severity, target scope, response owner, or review window changes enough that analyst handling would differ.
-
-A case is created when analyst work requires durable ownership, evidence collection, note-taking, handoff, or coordinated response beyond the alert record itself.
-
-An incident is declared only when one or more cases represent a material security event that requires coordinated operational handling beyond a single investigative work item.
-
-## 7. Disposition and Closure Taxonomy
-
-| Disposition | Meaning |
-| ---- | ---- |
-| `False Positive` | The analytic claim was incorrect. |
-| `Benign Positive` | The activity occurred as detected but does not represent harmful or policy-violating behavior in context. |
-| `Duplicate` | The record does not represent new work because another active or closed record already tracks the same claim. |
-| `Expected Administrative Activity` | The activity is legitimate administrative, maintenance, or approved operational work that should remain distinguishable from suspicious behavior. |
-| `Accepted Risk` | The activity or exposure is known and consciously accepted by the accountable owner, so no further investigative escalation is required under the current baseline. |
-
-## 8. Baseline Alignment Notes
-
-The baseline keeps detection, approval, and execution as separate control decisions.'
+write_canonical_doc "${valid_repo}"
 commit_fixture "${valid_repo}"
 assert_passes "${valid_repo}"
 
@@ -162,176 +84,15 @@ assert_fails_with "${missing_doc_repo}" "Missing SecOps domain model document:"
 
 missing_boundary_repo="${workdir}/missing-boundary"
 create_repo "${missing_boundary_repo}"
-write_doc "${missing_boundary_repo}" '# AegisOps SecOps Domain Model
-
-## 1. Purpose
-
-This document defines the first-class SecOps domain model for the AegisOps baseline.
-
-This document defines baseline semantics, ownership boundaries, and state transitions only. It does not introduce runtime behavior, workflow automation, or architecture changes.
-
-## 2. Core Domain Objects
-
-| Object | Definition |
-| ---- | ---- |
-| `Raw Event` | Uninterpreted source telemetry before normalization. |
-| `Normalized Event` | Event translated into the approved analytic schema. |
-| `Detection Rule` | Reviewed detection logic that evaluates normalized telemetry. |
-| `Finding` | Detection result produced when rule logic matches telemetry. |
-| `Alert` | Routed analyst-facing item created from findings that require attention. |
-| `Case` | Investigation record for an analyst work item. |
-| `Incident` | Coordinated security event declaration across one or more cases. |
-| `Asset` | Managed host, service, application, or environment entity relevant to operations. |
-| `Identity` | Human or machine principal associated with activity or response scope. |
-| `Evidence` | Preserved supporting record used to explain or justify SecOps decisions. |
-| `Action Request` | Proposed response step waiting for approval or execution disposition. |
-| `Approval Decision` | Explicit decision for a specific action request. |
-| `Action Execution` | Record of the actual attempted or completed action. |
-| `Disposition` | Closure or outcome classification applied to findings, alerts, cases, or incidents under the correct owner boundary. |
-
-## 3. Relationship and State Boundaries
-
-A finding is the normalized analytic assertion that detection logic matched relevant telemetry.
-
-Correlation is the explicit relationship that links related findings, alerts, cases, assets, or identities because they share meaningful operator-facing context.
-
-An alert is the routed operator-facing notification or queue item created from one or more findings after baseline triage policy decides analyst attention is required.
-
-A case is the investigation record that groups alerts, evidence, analyst notes, and response coordination for one work item.
-
-An incident is the higher-order security event declaration used when one or more cases represent a material security event that needs coordinated operational handling.
-
-An approval decision records whether a specific action request is authorized, rejected, or expired.
-
-An action execution records the actual downstream attempt or completion state for an approved or explicitly allowed action request.
-
-## 4. Baseline System of Record
-
-| Object or boundary | Baseline system of record |
-| ---- | ---- |
-| `Finding` | OpenSearch detection and analytics plane |
-| `Correlation` | Future AegisOps correlation and triage control layer |
-| `Alert` | Future AegisOps alert routing and triage control layer |
-| `Case` | Future AegisOps case management control layer |
-| `Approval Decision` | Future AegisOps approval control layer |
-| `Action Execution` | n8n execution plane with PostgreSQL-backed workflow state |
-
-## 5. Promotion and Correlation Rules
-
-A finding promotes to an alert only when triage policy determines that analyst attention, tracking, notification, or downstream workflow handling is required.
-
-Correlation links records by shared context, but it does not by itself create an alert, open a case, or declare an incident.
-
-## 6. Grouping, Deduplication, and Case Creation Expectations
-
-A case must not be created for every alert by default.
-
-Deduplication means additional findings are attached to an existing alert or case when they restate the same analytic claim against materially the same operational target within the active review window.
-
-A new alert must be created instead of deduplicating when severity, target scope, response owner, or review window changes enough that analyst handling would differ.
-
-A case is created when analyst work requires durable ownership, evidence collection, note-taking, handoff, or coordinated response beyond the alert record itself.
-
-An incident is declared only when one or more cases represent a material security event that requires coordinated operational handling beyond a single investigative work item.
-
-## 7. Disposition and Closure Taxonomy
-
-| Disposition | Meaning |
-| ---- | ---- |
-| `False Positive` | The analytic claim was incorrect. |
-| `Benign Positive` | The activity occurred as detected but does not represent harmful or policy-violating behavior in context. |
-| `Duplicate` | The record does not represent new work because another active or closed record already tracks the same claim. |
-| `Expected Administrative Activity` | The activity is legitimate administrative, maintenance, or approved operational work that should remain distinguishable from suspicious behavior. |
-| `Accepted Risk` | The activity or exposure is known and consciously accepted by the accountable owner, so no further investigative escalation is required under the current baseline. |
-
-## 8. Baseline Alignment Notes
-
-The baseline keeps detection, approval, and execution as separate control decisions.'
+write_canonical_doc "${missing_boundary_repo}"
+remove_text_from_doc "${missing_boundary_repo}" "OpenSearch findings, n8n workflow runs, and future case state must remain separate records and must not be treated as interchangeable identifiers or lifecycle states."
 commit_fixture "${missing_boundary_repo}"
 assert_fails_with "${missing_boundary_repo}" "OpenSearch findings, n8n workflow runs, and future case state must remain separate records and must not be treated as interchangeable identifiers or lifecycle states."
 
 missing_dedup_repo="${workdir}/missing-dedup"
 create_repo "${missing_dedup_repo}"
-write_doc "${missing_dedup_repo}" '# AegisOps SecOps Domain Model
-
-## 1. Purpose
-
-This document defines the first-class SecOps domain model for the AegisOps baseline.
-
-This document defines baseline semantics, ownership boundaries, and state transitions only. It does not introduce runtime behavior, workflow automation, or architecture changes.
-
-## 2. Core Domain Objects
-
-| Object | Definition |
-| ---- | ---- |
-| `Raw Event` | Uninterpreted source telemetry before normalization. |
-| `Normalized Event` | Event translated into the approved analytic schema. |
-| `Detection Rule` | Reviewed detection logic that evaluates normalized telemetry. |
-| `Finding` | Detection result produced when rule logic matches telemetry. |
-| `Correlation` | Explicit relationship that links related records through shared operator-facing context. |
-| `Alert` | Routed analyst-facing item created from findings that require attention. |
-| `Case` | Investigation record for an analyst work item. |
-| `Incident` | Coordinated security event declaration across one or more cases. |
-| `Asset` | Managed host, service, application, or environment entity relevant to operations. |
-| `Identity` | Human or machine principal associated with activity or response scope. |
-| `Evidence` | Preserved supporting record used to explain or justify SecOps decisions. |
-| `Action Request` | Proposed response step waiting for approval or execution disposition. |
-| `Approval Decision` | Explicit decision for a specific action request. |
-| `Action Execution` | Record of the actual attempted or completed action. |
-| `Disposition` | Closure or outcome classification applied to findings, alerts, cases, or incidents under the correct owner boundary. |
-
-## 3. Relationship and State Boundaries
-
-A finding is the normalized analytic assertion that detection logic matched relevant telemetry.
-
-Correlation is the explicit relationship that links related findings, alerts, cases, assets, or identities because they share meaningful operator-facing context.
-
-An alert is the routed operator-facing notification or queue item created from one or more findings after baseline triage policy decides analyst attention is required.
-
-A case is the investigation record that groups alerts, evidence, analyst notes, and response coordination for one work item.
-
-An incident is the higher-order security event declaration used when one or more cases represent a material security event that needs coordinated operational handling.
-
-An approval decision records whether a specific action request is authorized, rejected, or expired.
-
-An action execution records the actual downstream attempt or completion state for an approved or explicitly allowed action request.
-
-OpenSearch findings, n8n workflow runs, and future case state must remain separate records and must not be treated as interchangeable identifiers or lifecycle states.
-
-## 4. Baseline System of Record
-
-| Object or boundary | Baseline system of record |
-| ---- | ---- |
-| `Finding` | OpenSearch detection and analytics plane |
-| `Correlation` | Future AegisOps correlation and triage control layer |
-| `Alert` | Future AegisOps alert routing and triage control layer |
-| `Case` | Future AegisOps case management control layer |
-| `Approval Decision` | Future AegisOps approval control layer |
-| `Action Execution` | n8n execution plane with PostgreSQL-backed workflow state |
-
-## 5. Promotion and Correlation Rules
-
-A finding promotes to an alert only when triage policy determines that analyst attention, tracking, notification, or downstream workflow handling is required.
-
-Correlation links records by shared context, but it does not by itself create an alert, open a case, or declare an incident.
-
-## 6. Grouping, Deduplication, and Case Creation Expectations
-
-A case must not be created for every alert by default.
-
-## 7. Disposition and Closure Taxonomy
-
-| Disposition | Meaning |
-| ---- | ---- |
-| `False Positive` | The analytic claim was incorrect. |
-| `Benign Positive` | The activity occurred as detected but does not represent harmful or policy-violating behavior in context. |
-| `Duplicate` | The record does not represent new work because another active or closed record already tracks the same claim. |
-| `Expected Administrative Activity` | The activity is legitimate administrative, maintenance, or approved operational work that should remain distinguishable from suspicious behavior. |
-| `Accepted Risk` | The activity or exposure is known and consciously accepted by the accountable owner, so no further investigative escalation is required under the current baseline. |
-
-## 8. Baseline Alignment Notes
-
-The baseline keeps detection, approval, and execution as separate control decisions.'
+write_canonical_doc "${missing_dedup_repo}"
+remove_text_from_doc "${missing_dedup_repo}" "Deduplication means additional findings are attached to an existing alert or case when they restate the same analytic claim against materially the same operational target within the active review window."
 commit_fixture "${missing_dedup_repo}"
 assert_fails_with "${missing_dedup_repo}" "Deduplication means additional findings are attached to an existing alert or case when they restate the same analytic claim against materially the same operational target within the active review window."
 
