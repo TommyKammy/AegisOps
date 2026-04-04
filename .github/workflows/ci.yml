@@ -48,6 +48,7 @@ jobs:
           bash scripts/verify-parameter-config-files.sh
           bash scripts/verify-phase-5-semantic-contract-validation.sh
           bash scripts/verify-phase-7-ai-hunt-design-validation.sh
+          bash scripts/verify-phase-8-control-plane-foundation-validation.sh
           bash scripts/verify-phase-6-initial-telemetry-slice-doc.sh
           bash scripts/verify-phase-6-opensearch-detector-artifacts.sh
           bash scripts/verify-phase-6-replay-to-notify-validation.sh
@@ -66,6 +67,9 @@ jobs:
           bash scripts/verify-storage-policy-doc.sh
           bash scripts/verify-source-onboarding-contract-doc.sh
           bash scripts/verify-windows-source-onboarding-assets.sh
+
+      - name: Run Phase 8 workflow coverage guard
+        run: bash scripts/test-verify-ci-phase-8-workflow-coverage.sh
 
       - name: Run focused shell tests
         run: |
@@ -87,9 +91,11 @@ jobs:
           bash scripts/test-verify-control-plane-schema-skeleton.sh
           bash scripts/test-verify-ci-phase-5-workflow-coverage.sh
           bash scripts/test-verify-ci-phase-6-workflow-coverage.sh
+          bash scripts/test-verify-ci-phase-8-workflow-coverage.sh
           bash scripts/test-verify-detection-lifecycle-and-rule-qa-framework.sh
           bash scripts/test-verify-phase-5-semantic-contract-validation.sh
           bash scripts/test-verify-phase-7-ai-hunt-design-validation.sh
+          bash scripts/test-verify-phase-8-control-plane-foundation-validation.sh
           bash scripts/test-verify-phase-6-initial-telemetry-slice-doc.sh
           bash scripts/test-verify-phase-6-opensearch-detector-artifacts.sh
           bash scripts/test-verify-phase-6-replay-to-notify-validation.sh
