@@ -6,6 +6,10 @@ These files are placeholders only, are not production-ready, and do not authoriz
 
 The reserved schema boundary is `aegisops_control`, kept separate from n8n-owned PostgreSQL metadata and execution-state tables.
 
+Executable runtime-oriented SQL such as `CREATE TABLE`, `ALTER TABLE`, index creation, constraint DDL, and seed data is out of bounds for this placeholder-only directory until control-plane persistence implementation is explicitly approved.
+
+Placeholder comments may describe future reviewed DDL intent, but executable live-ish SQL must fail closed during validation.
+
 The initial placeholder record-family homes tracked here are:
 
 - `alert_records`

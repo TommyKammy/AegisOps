@@ -44,6 +44,17 @@ require_pattern() {
   fi
 }
 
+reject_live_ddl() {
+  local file_path="$1"
+  local artifact_label="$2"
+  local forbidden_pattern='^[[:space:]]*(create[[:space:]]+(table|index|unique[[:space:]]+index|view|materialized[[:space:]]+view|sequence|trigger|function)|alter[[:space:]]+(table|index|schema)|drop[[:space:]]+(table|index|view|materialized[[:space:]]+view|sequence|trigger|function|schema)|insert[[:space:]]|update[[:space:]]|delete[[:space:]]+from|truncate[[:space:]]+table|comment[[:space:]]+on[[:space:]]|grant[[:space:]]|revoke[[:space:]])'
+
+  if grep -Ein "${forbidden_pattern}" "${file_path}" >/dev/null; then
+    echo "${artifact_label} must not contain live implementation DDL beyond the approved placeholder boundary." >&2
+    exit 1
+  fi
+}
+
 require_pattern "${readme_path}" '^# Control-Plane Schema Skeleton$' \
   "Control-plane schema skeleton README must declare the placeholder skeleton."
 require_pattern "${readme_path}" 'placeholder' \
@@ -96,5 +107,8 @@ if grep -Ein '^[[:space:]]*insert[[:space:]]' "${migration_path}" >/dev/null; th
   echo "Control-plane migration skeleton must not seed live control-plane data." >&2
   exit 1
 fi
+
+reject_live_ddl "${schema_path}" "Control-plane schema skeleton manifest"
+reject_live_ddl "${migration_path}" "Control-plane migration skeleton"
 
 echo "Control-plane schema skeleton matches the approved placeholder contract."

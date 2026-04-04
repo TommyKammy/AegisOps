@@ -57,6 +57,7 @@ write_valid_fixture() {
     "create schema if not exists aegisops_control;" \
     "" \
     "-- table: alert_records" \
+    "-- placeholder note: future reviewed CREATE TABLE lives here only after explicit approval" \
     "-- table: case_records" \
     "-- table: evidence_records" \
     "-- table: observation_records" \
@@ -74,6 +75,7 @@ write_valid_fixture() {
     "-- Migration skeleton only. Do not run in production." \
     "begin;" \
     "create schema if not exists aegisops_control;" \
+    "-- placeholder note: future reviewed ALTER TABLE or CREATE INDEX statements are not approved in this phase" \
     "-- reserve table home: alert_records" \
     "-- reserve table home: case_records" \
     "-- reserve table home: evidence_records" \
@@ -189,6 +191,89 @@ git -C "${missing_reconciliation_family_repo}" add postgres/control-plane/schema
 git -C "${missing_reconciliation_family_repo}" commit -q -m "fixture update"
 assert_fails_with "${missing_reconciliation_family_repo}" "-- table: reconciliation_records"
 
+schema_live_ddl_repo="${workdir}/schema-live-ddl"
+create_repo "${schema_live_ddl_repo}"
+write_valid_fixture "${schema_live_ddl_repo}"
+printf '%s\n' \
+  "-- Control-plane schema skeleton for the future AegisOps-owned PostgreSQL boundary." \
+  "-- Placeholder only. Not production-ready." \
+  "-- schema: aegisops_control" \
+  "create schema if not exists aegisops_control;" \
+  "" \
+  "-- table: alert_records" \
+  "-- placeholder note: future reviewed CREATE TABLE lives here only after explicit approval" \
+  "-- table: case_records" \
+  "-- table: evidence_records" \
+  "-- table: observation_records" \
+  "-- table: lead_records" \
+  "-- table: recommendation_records" \
+  "-- table: approval_decision_records" \
+  "-- table: action_request_records" \
+  "-- table: hunt_records" \
+  "-- table: hunt_run_records" \
+  "-- table: ai_trace_records" \
+  "-- table: reconciliation_records" \
+  "create table aegisops_control.alert_records (alert_id text primary key);" \
+  >"${schema_live_ddl_repo}/postgres/control-plane/schema.sql"
+git -C "${schema_live_ddl_repo}" add postgres/control-plane/schema.sql
+git -C "${schema_live_ddl_repo}" commit -q -m "fixture update"
+assert_fails_with "${schema_live_ddl_repo}" "must not contain live implementation DDL"
+
+schema_index_repo="${workdir}/schema-index-ddl"
+create_repo "${schema_index_repo}"
+write_valid_fixture "${schema_index_repo}"
+printf '%s\n' \
+  "-- Control-plane schema skeleton for the future AegisOps-owned PostgreSQL boundary." \
+  "-- Placeholder only. Not production-ready." \
+  "-- schema: aegisops_control" \
+  "create schema if not exists aegisops_control;" \
+  "" \
+  "-- table: alert_records" \
+  "-- placeholder note: future reviewed CREATE TABLE lives here only after explicit approval" \
+  "-- table: case_records" \
+  "-- table: evidence_records" \
+  "-- table: observation_records" \
+  "-- table: lead_records" \
+  "-- table: recommendation_records" \
+  "-- table: approval_decision_records" \
+  "-- table: action_request_records" \
+  "-- table: hunt_records" \
+  "-- table: hunt_run_records" \
+  "-- table: ai_trace_records" \
+  "-- table: reconciliation_records" \
+  "create index alert_records_alert_id_idx on aegisops_control.alert_records (alert_id);" \
+  >"${schema_index_repo}/postgres/control-plane/schema.sql"
+git -C "${schema_index_repo}" add postgres/control-plane/schema.sql
+git -C "${schema_index_repo}" commit -q -m "fixture update"
+assert_fails_with "${schema_index_repo}" "must not contain live implementation DDL"
+
+migration_live_ddl_repo="${workdir}/migration-live-ddl"
+create_repo "${migration_live_ddl_repo}"
+write_valid_fixture "${migration_live_ddl_repo}"
+printf '%s\n' \
+  "-- Migration skeleton only. Do not run in production." \
+  "begin;" \
+  "create schema if not exists aegisops_control;" \
+  "-- placeholder note: future reviewed ALTER TABLE or CREATE INDEX statements are not approved in this phase" \
+  "-- reserve table home: alert_records" \
+  "-- reserve table home: case_records" \
+  "-- reserve table home: evidence_records" \
+  "-- reserve table home: observation_records" \
+  "-- reserve table home: lead_records" \
+  "-- reserve table home: recommendation_records" \
+  "-- reserve table home: approval_decision_records" \
+  "-- reserve table home: action_request_records" \
+  "-- reserve table home: hunt_records" \
+  "-- reserve table home: hunt_run_records" \
+  "-- reserve table home: ai_trace_records" \
+  "-- reserve table home: reconciliation_records" \
+  "alter table aegisops_control.alert_records add constraint alert_records_pk primary key (alert_id);" \
+  "commit;" \
+  >"${migration_live_ddl_repo}/postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql"
+git -C "${migration_live_ddl_repo}" add postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql
+git -C "${migration_live_ddl_repo}" commit -q -m "fixture update"
+assert_fails_with "${migration_live_ddl_repo}" "must not contain live implementation DDL"
+
 seed_repo="${workdir}/seed"
 create_repo "${seed_repo}"
 write_valid_fixture "${seed_repo}"
@@ -196,6 +281,7 @@ printf '%s\n' \
   "-- Migration skeleton only. Do not run in production." \
   "begin;" \
   "create schema if not exists aegisops_control;" \
+  "-- placeholder note: future reviewed ALTER TABLE or CREATE INDEX statements are not approved in this phase" \
   "-- reserve table home: alert_records" \
   "-- reserve table home: case_records" \
   "-- reserve table home: evidence_records" \
