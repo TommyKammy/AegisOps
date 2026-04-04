@@ -16,9 +16,24 @@ class RuntimeConfig:
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> "RuntimeConfig":
         source = environ if environ is not None else os.environ
+        raw_port = source.get("AEGISOPS_CONTROL_PLANE_PORT", "")
+        if raw_port == "":
+            port = cls.port
+        else:
+            try:
+                port = int(raw_port)
+            except ValueError as exc:
+                raise ValueError(
+                    f"AEGISOPS_CONTROL_PLANE_PORT must be an integer, got: {raw_port!r}"
+                ) from exc
+            if not (1 <= port <= 65535):
+                raise ValueError(
+                    f"AEGISOPS_CONTROL_PLANE_PORT must be between 1 and 65535, got: {port}"
+                )
+
         return cls(
             host=source.get("AEGISOPS_CONTROL_PLANE_HOST", cls.host),
-            port=int(source.get("AEGISOPS_CONTROL_PLANE_PORT", cls.port)),
+            port=port,
             postgres_dsn=source.get("AEGISOPS_CONTROL_PLANE_POSTGRES_DSN", cls.postgres_dsn),
             opensearch_url=source.get("AEGISOPS_CONTROL_PLANE_OPENSEARCH_URL", cls.opensearch_url),
             n8n_base_url=source.get("AEGISOPS_CONTROL_PLANE_N8N_BASE_URL", cls.n8n_base_url),

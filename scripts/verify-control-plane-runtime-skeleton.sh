@@ -34,6 +34,7 @@ required_env_lines=(
   "AEGISOPS_CONTROL_PLANE_OPENSEARCH_URL=<set-me>"
   "AEGISOPS_CONTROL_PLANE_N8N_BASE_URL=<set-me>"
 )
+actual_env_line_count=0
 
 for expected_line in "${required_env_lines[@]}"; do
   if ! grep -Fqx -- "${expected_line}" "${env_sample}"; then
@@ -41,6 +42,20 @@ for expected_line in "${required_env_lines[@]}"; do
     exit 1
   fi
 done
+
+while IFS= read -r line; do
+  [[ -z "${line}" || "${line}" =~ ^[[:space:]]*# ]] && continue
+  actual_env_line_count=$((actual_env_line_count + 1))
+  if ! grep -Fqx -- "${line}" <(printf '%s\n' "${required_env_lines[@]}"); then
+    echo "Unexpected control-plane local sample setting: ${line}" >&2
+    exit 1
+  fi
+done < "${env_sample}"
+
+if [[ "${actual_env_line_count}" -ne "${#required_env_lines[@]}" ]]; then
+  echo "Control-plane local env sample must define exactly ${#required_env_lines[@]} non-comment settings." >&2
+  exit 1
+fi
 
 if grep -Eq '://[^<[:space:]]+:[^<[:space:]]+@' "${env_sample}"; then
   echo "Control-plane local env sample must not contain embedded credentials." >&2

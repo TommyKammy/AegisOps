@@ -22,6 +22,11 @@ class RuntimeSkeletonTests(unittest.TestCase):
         self.assertEqual(snapshot.opensearch_url, "<set-me>")
         self.assertEqual(snapshot.n8n_base_url, "<set-me>")
 
+    def test_runtime_snapshot_uses_default_port_when_env_is_empty(self) -> None:
+        snapshot = build_runtime_snapshot({"AEGISOPS_CONTROL_PLANE_PORT": ""})
+
+        self.assertEqual(snapshot.bind_port, 8080)
+
     def test_runtime_snapshot_preserves_boundary_split(self) -> None:
         snapshot = build_runtime_snapshot(
             {
@@ -36,6 +41,20 @@ class RuntimeSkeletonTests(unittest.TestCase):
         self.assertEqual(snapshot.ownership_boundary["postgres_contract_root"], "postgres/control-plane/")
         self.assertEqual(snapshot.ownership_boundary["signal_source"], "opensearch/")
         self.assertEqual(snapshot.ownership_boundary["execution_plane"], "n8n/")
+
+    def test_runtime_snapshot_rejects_non_integer_port(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            r"AEGISOPS_CONTROL_PLANE_PORT must be an integer, got: 'invalid'",
+        ):
+            build_runtime_snapshot({"AEGISOPS_CONTROL_PLANE_PORT": "invalid"})
+
+    def test_runtime_snapshot_rejects_out_of_range_port(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            r"AEGISOPS_CONTROL_PLANE_PORT must be between 1 and 65535, got: 70000",
+        ):
+            build_runtime_snapshot({"AEGISOPS_CONTROL_PLANE_PORT": "70000"})
 
 
 if __name__ == "__main__":

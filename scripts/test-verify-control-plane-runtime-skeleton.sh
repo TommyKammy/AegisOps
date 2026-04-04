@@ -86,4 +86,20 @@ create_runtime_repo "${failing_repo}"
 rm "${failing_repo}/control-plane/aegisops_control_plane/adapters/n8n.py"
 assert_fails_with "${failing_repo}" "Missing control-plane runtime skeleton file: control-plane/aegisops_control_plane/adapters/n8n.py"
 
+unexpected_env_repo="${workdir}/unexpected-env"
+mkdir -p "${unexpected_env_repo}"
+create_runtime_repo "${unexpected_env_repo}"
+cat <<'EOF' >> "${unexpected_env_repo}/control-plane/config/local.env.sample"
+AEGISOPS_CONTROL_PLANE_SECRET_TOKEN=real-secret
+EOF
+assert_fails_with "${unexpected_env_repo}" "Unexpected control-plane local sample setting: AEGISOPS_CONTROL_PLANE_SECRET_TOKEN=real-secret"
+
+duplicate_env_repo="${workdir}/duplicate-env"
+mkdir -p "${duplicate_env_repo}"
+create_runtime_repo "${duplicate_env_repo}"
+cat <<'EOF' >> "${duplicate_env_repo}/control-plane/config/local.env.sample"
+AEGISOPS_CONTROL_PLANE_PORT=8080
+EOF
+assert_fails_with "${duplicate_env_repo}" "Control-plane local env sample must define exactly 5 non-comment settings."
+
 echo "verify-control-plane-runtime-skeleton tests passed"
