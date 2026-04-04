@@ -97,6 +97,7 @@ Key documents that serve as the source of truth for implementation decisions:
 - `docs/secops-domain-model.md`
 - `docs/secops-business-hours-operating-model.md`
 - `docs/auth-baseline.md`
+- `docs/asset-identity-privilege-context-baseline.md`
 - `docs/response-action-safety-model.md`
 - `docs/control-plane-state-model.md`
 - `docs/retention-evidence-and-replay-readiness-baseline.md`
