@@ -5,31 +5,45 @@
 - Branch: codex/issue-181
 - Workspace: .
 - Journal: .codex-supervisor/issues/181/issue-journal.md
-- Current phase: reproducing
-- Attempt count: 1 (implementation=1, repair=0)
-- Last head SHA: 52e68c0321d2a5853bca9d79c3e3012dfc57f9e4
+- Current phase: repairing_ci
+- Attempt count: 3 (implementation=2, repair=1)
+- Last head SHA: c9c590a87e9ee13784e4168d35d5e9a4cc76c5f2
 - Blocked reason: none
-- Last failure signature: none
-- Repeated failure signature count: 0
-- Updated at: 2026-04-04T20:07:19.511Z
+- Last failure signature: verify:fail
+- Repeated failure signature count: 1
+- Updated at: 2026-04-04T20:26:57.300Z
 
 ## Latest Codex Summary
-- Reproduced the issue as a documentation-and-verification gap: existing repository checks passed, but no reviewed artifact defined the live control-plane runtime boundary or repository placement for application code.
-- Added a dedicated Phase 9 design reference, approved `control-plane/` as the live runtime home, kept `postgres/control-plane/` as the persistence-contract home, and tightened repository/validation scripts to fail closed on that split.
-- Focused verification now passes for the new runtime-boundary verifier, the updated repository structure and skeleton verifiers, the Phase 9 validation record, and the targeted test scripts.
+Reproduced the failing `verify` check from PR [#193](https://github.com/TommyKammy/AegisOps/pull/193) and traced it to an exact-string drift in `README.md` after the broader Phase 8 foundation validator was included in CI merge validation.
+
+Updated `README.md` to restore the approved placeholder PostgreSQL boundary wording, then aligned `scripts/verify-phase-9-control-plane-runtime-boundary-validation.sh` with that same approved baseline so the issue-specific verifier no longer conflicts with the broader CI contract. Focused local verification now passes for the reproduced blocker and the Phase 9 design-boundary checks.
+
+Summary: Repaired the PR `verify` failure by restoring the approved `README.md` placeholder-boundary wording and syncing the Phase 9 validator to the same exact baseline.
+State hint: repairing_ci
+Blocked reason: none
+Tests: `bash scripts/test-verify-control-plane-runtime-service-boundary-doc.sh`; `bash scripts/test-verify-repository-skeleton.sh`; `bash scripts/verify-repository-skeleton.sh`; `bash scripts/verify-repository-structure-doc.sh`; `bash scripts/verify-control-plane-runtime-service-boundary-doc.sh`; `bash scripts/verify-phase-8-control-plane-foundation-validation.sh`; `bash scripts/verify-phase-9-control-plane-runtime-boundary-validation.sh`; `rg -n 'control-plane|OpenSearch|n8n|PostgreSQL|repository' docs README.md`
+Next action: Commit and push the CI repair on `codex/issue-181`, then monitor PR `#193` for the rerun of `verify`.
+Failure signature: verify:fail
 
 ## Active Failure Context
-- None recorded.
+- Category: checks
+- Summary: PR #193 has failing checks.
+- Command or source: gh pr checks
+- Reference: https://github.com/TommyKammy/AegisOps/pull/193
+- Details:
+  - verify (fail/FAILURE) https://github.com/TommyKammy/AegisOps/actions/runs/23986837977/job/69960062480
 
 ## Codex Working Notes
 ### Current Handoff
-- Hypothesis: The missing deliverable was not a failing implementation test but an absent design-and-verification contract for where the first live control-plane service belongs and how it stays separate from OpenSearch, n8n, and `postgres/control-plane/`.
-- What changed: Added `docs/control-plane-runtime-service-boundary.md`, `control-plane/README.md`, `docs/phase-9-control-plane-runtime-boundary-validation.md`, new verifier/test scripts for the boundary, and updated `README.md`, `docs/architecture.md`, `docs/repository-structure-baseline.md`, repository skeleton docs/scripts, and the documentation ownership map to approve and enforce the new `control-plane/` top-level runtime home.
+- Hypothesis: The failing PR merge check came from baseline drift, not a missing design artifact: the merged CI suite enforced newer Phase 8 `README.md` wording than this branch carried, and the Phase 9 verifier still enforced the older text.
+- What changed: Reproduced the failing merge-check locally with `bash scripts/verify-phase-8-control-plane-foundation-validation.sh`, updated `README.md` to the approved placeholder PostgreSQL boundary wording, and changed `scripts/verify-phase-9-control-plane-runtime-boundary-validation.sh` to require that same wording so Phase 8 and Phase 9 checks agree.
 - Current blocker: none
-- Next exact step: Commit the staged Phase 9 control-plane runtime-boundary checkpoint, then report the verified placement and scope contract back to the supervisor.
-- Verification gap: No broad repo-wide test sweep was run because the change is documentation and verification-script scoped; focused checks for the affected contract passed.
-- Files touched: README.md; control-plane/README.md; docs/architecture.md; docs/control-plane-runtime-service-boundary.md; docs/documentation-ownership-map.md; docs/phase-9-control-plane-runtime-boundary-validation.md; docs/repository-skeleton-validation.md; docs/repository-structure-baseline.md; scripts/test-verify-control-plane-runtime-service-boundary-doc.sh; scripts/test-verify-repository-skeleton.sh; scripts/verify-control-plane-runtime-service-boundary-doc.sh; scripts/verify-phase-9-control-plane-runtime-boundary-validation.sh; scripts/verify-repository-skeleton.sh; scripts/verify-repository-structure-doc.sh
-- Rollback concern: Reverting this checkpoint would remove the newly approved top-level `control-plane/` repository placement and make later Phase 9 runtime scaffolding ambiguous again.
+- Next exact step: Commit and push the repair so PR `#193` reruns `verify`, then confirm the failing check clears.
+- Verification gap: I did not run the entire GitHub Actions verify workflow locally; I ran the reproduced blocker plus the focused Phase 8, Phase 9, repository-structure, repository-skeleton, and boundary verifier/test commands that cover the changed README and verifier paths.
+- Files touched: .codex-supervisor/issues/181/issue-journal.md; README.md; scripts/verify-phase-9-control-plane-runtime-boundary-validation.sh
+- Rollback concern: Reverting this repair would restore the README/verifier wording conflict and leave PR `#193` failing the merge-time verify suite even though the design artifacts themselves remain present.
 - Last focused command: bash scripts/verify-phase-9-control-plane-runtime-boundary-validation.sh
+- Exact failures observed: `gh pr checks 193 --json ...` and the Actions log for run `23986837977` showed `Missing required line in .../README.md: Within \`postgres/\`, the \`control-plane/\` directory reserves the repository home for placeholder AegisOps-owned control-plane schema and migration assets. It does not introduce a live datastore or runtime migration flow.` Local reproduction with `bash scripts/verify-phase-8-control-plane-foundation-validation.sh` failed with the same message before the README fix.
+- Commands run this turn: `sed -n '1,220p' /Users/jp.infra/Dev/codex-supervisor/.local/memory/TommyKammy-AegisOps/issue-181/AGENTS.generated.md`; `sed -n '1,220p' /Users/jp.infra/Dev/codex-supervisor/.local/memory/TommyKammy-AegisOps/issue-181/context-index.md`; `sed -n '1,260p' .codex-supervisor/issues/181/issue-journal.md`; `sed -n '1,220p' /Users/jp.infra/.codex/plugins/cache/openai-curated/github/f78e3ad49297672a905eb7afb6aa0cef34edc79e/skills/gh-fix-ci/SKILL.md`; `gh auth status`; `gh pr checks 193 --json name,state,bucket,link,startedAt,completedAt,workflow`; `python3 /Users/jp.infra/.codex/plugins/cache/openai-curated/github/f78e3ad49297672a905eb7afb6aa0cef34edc79e/skills/gh-fix-ci/scripts/inspect_pr_checks.py --repo . --pr 193 --json`; `git status --short --branch`; `sed -n '1,240p' README.md`; `sed -n '1,240p' docs/repository-structure-baseline.md`; `sed -n '1,220p' scripts/verify-repository-structure-doc.sh`; `bash scripts/verify-repository-structure-doc.sh`; `git fetch origin main`; `git rev-parse HEAD origin/main`; `sed -n '1,220p' scripts/verify-phase-8-control-plane-foundation-validation.sh`; `bash scripts/verify-phase-8-control-plane-foundation-validation.sh`; `sed -n '1,240p' scripts/verify-phase-9-control-plane-runtime-boundary-validation.sh`; `sed -n '1,220p' docs/phase-9-control-plane-runtime-boundary-validation.md`; `sed -n '1,220p' docs/control-plane-runtime-service-boundary.md`; `rg -n "reviewed control-plane schema and migration assets|runtime application root|placeholder AegisOps-owned control-plane schema and migration assets|runtime migration flow" scripts docs README.md control-plane postgres`; `bash scripts/test-verify-control-plane-runtime-service-boundary-doc.sh`; `bash scripts/test-verify-repository-skeleton.sh`; `bash scripts/verify-repository-skeleton.sh`; `bash scripts/verify-control-plane-runtime-service-boundary-doc.sh`; `bash scripts/verify-phase-9-control-plane-runtime-boundary-validation.sh`; `rg -n 'control-plane|OpenSearch|n8n|PostgreSQL|repository' docs README.md`
 ### Scratchpad
 - Keep this section short. The supervisor may compact older notes automatically.

@@ -85,9 +85,9 @@ Within `sigma/`, the `curated/` directory is reserved for reviewed Sigma rules t
 
 Within `control-plane/`, the first live AegisOps-owned control-plane runtime will live as application code and service-local tests.
 
-Within `postgres/`, the `control-plane/` directory remains the repository home for reviewed control-plane schema and migration assets. It does not become the runtime application root.
+Within `postgres/`, the `control-plane/` directory reserves the repository home for placeholder AegisOps-owned control-plane schema and migration assets. It does not introduce a live datastore or runtime migration flow.
 
-That placeholder persistence boundary fails closed if executable live-ish control-plane DDL or seed data appears before explicit persistence approval.
+That placeholder boundary fails closed if executable live-ish control-plane DDL or seed data appears before explicit persistence approval.
 
 ---
 
