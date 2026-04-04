@@ -15,6 +15,7 @@ The approved top-level repository baseline allows these tracked entries:
 - `LICENSE.txt`
 - `README.md`
 - `config/`
+- `control-plane/`
 - `docs/`
 - `ingest/`
 - `n8n/`
@@ -34,6 +35,7 @@ The repository currently tracks these top-level entries in the verified pull req
 - `LICENSE.txt`
 - `README.md`
 - `config/`
+- `control-plane/`
 - `docs/`
 - `ingest/`
 - `n8n/`
@@ -45,7 +47,7 @@ The repository currently tracks these top-level entries in the verified pull req
 
 ## Result
 
-The current repository skeleton matches the approved baseline.
+The current repository skeleton matches the approved baseline, including the dedicated `control-plane/` runtime home.
 
 Disposition decisions:
 

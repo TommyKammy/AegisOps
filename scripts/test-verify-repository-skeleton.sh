@@ -72,6 +72,7 @@ create_repo \
   "LICENSE.txt" \
   "README.md" \
   "config/" \
+  "control-plane/" \
   "docs/" \
   "ingest/" \
   "n8n/" \
@@ -92,6 +93,7 @@ create_repo \
   "LICENSE.txt" \
   "README.md" \
   "config/" \
+  "control-plane/" \
   "docs/" \
   "ingest/" \
   "n8n/" \
