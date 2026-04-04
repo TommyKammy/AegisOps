@@ -79,6 +79,8 @@ required_phrases=(
   '| `Approval Decision` | Future AegisOps approval control layer |'
   '| `Action Execution` | n8n execution plane with PostgreSQL-backed workflow state |'
   "A finding promotes to an alert only when triage policy determines that analyst attention, tracking, notification, or downstream workflow handling is required."
+  "Finding-to-alert routing must preserve the distinction between the upstream finding, any distinct analytic signal emitted by OpenSearch alerting or correlation logic, and the downstream alert record created for analyst work."
+  "A finding identifier, an analytic signal identifier, and an alert identifier are related references, not interchangeable lifecycle keys."
   "A hunt may produce observations, leads, recommendations, or supporting context for findings, alerts, and cases, but hunt records do not replace those records."
   "A lead promotes to an alert only when triage decides the investigative signal requires durable analyst queueing or response handling."
   "A lead may be attached directly to an existing case when the signal materially advances an active investigation without requiring a separate alert lifecycle."
@@ -86,6 +88,7 @@ required_phrases=(
   "Correlation links records by shared context, but it does not by itself create an alert, open a case, or declare an incident."
   "A case must not be created for every alert by default."
   "Deduplication means additional findings are attached to an existing alert or case when they restate the same analytic claim against materially the same operational target within the active review window."
+  "When upstream analytics restate the same claim without materially changing analyst work, the control plane must update or link the existing alert rather than minting a new alert identifier."
   "A new alert must be created instead of deduplicating when severity, target scope, response owner, or review window changes enough that analyst handling would differ."
   "A case is created when analyst work requires durable ownership, evidence collection, note-taking, handoff, or coordinated response beyond the alert record itself."
   "An incident is declared only when one or more cases represent a material security event that requires coordinated operational handling beyond a single investigative work item."

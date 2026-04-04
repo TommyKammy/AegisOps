@@ -82,6 +82,20 @@ OpenSearch is responsible for producing stable analytic identifiers and timestam
 
 n8n is responsible for exposing enough workflow-run identifiers, timestamps, execution outcomes, and step-level failure detail that a future control-plane layer can correlate approved intent to observed execution behavior.
 
+Finding-to-alert ingestion contract requirements:
+
+The ingestion boundary must treat `finding_id`, `analytic_signal_id`, and `alert_id` as related but non-interchangeable identifiers.
+
+A future ingest path must preserve the upstream `finding_id` as the durable analytic-origin reference, preserve `analytic_signal_id` when OpenSearch emits a distinct alerting or correlation artifact, and assign a separate control-plane `alert_id` for the analyst-facing record created or updated from that signal.
+
+The control plane must evaluate whether an incoming upstream signal creates a new alert, updates an existing alert, or is recorded only as a duplicate or restatement linked to an existing alert.
+
+Duplicate or restated upstream analytics signals must not mint a fresh `alert_id` when they do not represent materially new analyst work.
+
+The minimum reconciliation fields for that boundary are `finding_id`, `analytic_signal_id` when distinct, `alert_id`, the control-plane deduplication or correlation key, first-seen and last-seen timestamps for the linked upstream signal set, and explicit ingest disposition showing whether the signal created, updated, deduplicated against, or restated an existing alert.
+
+Reconciliation records must preserve which upstream findings or analytic signals were attached to an alert so later implementations can distinguish repeated analytics output from new analyst work.
+
 The minimum stable reconciliation key set for this baseline is:
 
 - `finding_id` for the upstream OpenSearch analytic record;
