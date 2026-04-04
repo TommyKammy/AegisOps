@@ -49,6 +49,13 @@ required_phrases=(
   "The control plane is responsible for reconciling approved action intent against observed n8n execution outcomes and for recording when reconciliation is incomplete, stale, or failed."
   "Reconciliation must prefer deterministic correlation keys such as finding identifiers, action-request identifiers, approval identifiers, workflow identifiers, and idempotency keys rather than fuzzy time-window matching."
   "Stable reconciliation keys must allow operators to compare OpenSearch analytics output, control-plane records, and n8n execution outcomes without assuming those systems share one lifecycle or one authoritative identifier."
+  'Finding-to-alert ingestion contract requirements:'
+  'The ingestion boundary must treat `finding_id`, `analytic_signal_id`, and `alert_id` as related but non-interchangeable identifiers.'
+  'A future ingest path must preserve the upstream `finding_id` as the durable analytic-origin reference, preserve `analytic_signal_id` when OpenSearch emits a distinct alerting or correlation artifact, and assign a separate control-plane `alert_id` for the analyst-facing record created or updated from that signal.'
+  'The control plane must evaluate whether an incoming upstream signal creates a new alert, updates an existing alert, or is recorded only as a duplicate or restatement linked to an existing alert.'
+  'Duplicate or restated upstream analytics signals must not mint a fresh `alert_id` when they do not represent materially new analyst work.'
+  'The minimum reconciliation fields for that boundary are `finding_id`, `analytic_signal_id` when distinct, `alert_id`, the control-plane deduplication or correlation key, first-seen and last-seen timestamps for the linked upstream signal set, and explicit ingest disposition showing whether the signal created, updated, deduplicated against, or restated an existing alert.'
+  'Reconciliation records must preserve which upstream findings or analytic signals were attached to an alert so later implementations can distinguish repeated analytics output from new analyst work.'
   "The baseline must define immutable record-family identifiers and explicit lifecycle states for Alert, Case, Evidence, Observation, Lead, Recommendation, Hunt, Hunt Run, AI Trace, Approval Decision, and Action Request records before any live control-plane implementation exists."
   "These identifiers and states are minimum control-plane expectations. They must not be inferred from OpenSearch alert status, OpenSearch document updates, n8n execution status, or ad hoc analyst notes."
   '| `alert_id` | Immutable AegisOps control-plane identifier for one alert record. |'
