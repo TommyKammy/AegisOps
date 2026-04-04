@@ -39,6 +39,10 @@ required_phrases=(
   "This model preserves the baseline separation between detection, approval, and execution and prevents approval from degrading into a generic approve button."
 )
 
+prohibited_phrases=(
+  "| Request identifier | Distinguishes one requested action from later edits, retries, or related cases. |"
+)
+
 if [[ ! -f "${doc_path}" ]]; then
   echo "Missing response action safety model document: ${doc_path}" >&2
   exit 1
@@ -54,6 +58,13 @@ done
 for phrase in "${required_phrases[@]}"; do
   if ! grep -Fq "${phrase}" "${doc_path}"; then
     echo "Missing response action safety model statement: ${phrase}" >&2
+    exit 1
+  fi
+done
+
+for phrase in "${prohibited_phrases[@]}"; do
+  if grep -Fq "${phrase}" "${doc_path}"; then
+    echo "Ambiguous response action safety model statement: ${phrase}" >&2
     exit 1
   fi
 done

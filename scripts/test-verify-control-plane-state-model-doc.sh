@@ -111,7 +111,7 @@ These identifiers and states are minimum control-plane expectations. They must n
 | ---- | ---- |
 | `new` | The alert record exists and awaits analyst triage. |
 | `triaged` | Initial analyst or policy review classified the alert and decided whether deeper work is required. |
-| `investigating` | Investigation, evidence gathering, or coordination work is actively in progress. |
+| `investigating` | The alert remains an active analyst work item even if a linked case is not yet opened. |
 | `escalated_to_case` | The alert remains linked to an active case that now owns the broader investigation. |
 | `closed` | Alert handling is complete with an explicit disposition and closure rationale. |
 | `reopened` | The alert returned to active review after closure because new evidence, correlation, or review findings changed the decision. |
@@ -292,3 +292,11 @@ create_repo "${missing_ownership_split_repo}"
 write_doc "${missing_ownership_split_repo}" "${valid_doc_content/The approved ownership split for a future PostgreSQL-backed implementation is:/}"
 commit_fixture "${missing_ownership_split_repo}"
 assert_fails_with "${missing_ownership_split_repo}" "The approved ownership split for a future PostgreSQL-backed implementation is:"
+
+missing_evidence_withdrawn_state_repo="${workdir}/missing-evidence-withdrawn-state"
+create_repo "${missing_evidence_withdrawn_state_repo}"
+write_doc "${missing_evidence_withdrawn_state_repo}" "${valid_doc_content/| \`withdrawn\` | The evidence remains historically visible, but it must no longer be relied on because provenance, integrity, or scope was invalidated. |/}"
+commit_fixture "${missing_evidence_withdrawn_state_repo}"
+assert_fails_with "${missing_evidence_withdrawn_state_repo}" '| `withdrawn` | The evidence remains historically visible, but it must no longer be relied on because provenance, integrity, or scope was invalidated. |'
+
+echo "Control-plane state model verifier enforces required policy statements."

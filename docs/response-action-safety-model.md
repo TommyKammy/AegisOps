@@ -30,7 +30,6 @@ At minimum, an action request must record:
 | Field | Required binding purpose |
 | ---- | ---- |
 | `action_request_id` | Provides the immutable control-plane identifier for the exact request under review and execution binding. |
-| Request identifier | Distinguishes one requested action from later edits, retries, or related cases. |
 | Requester identity | Binds the proposed action to the accountable human or approved service principal that asked for it. |
 | Linked case, alert, finding, or incident reference | Preserves the investigative context that justified the request. |
 | Action class | Determines the minimum approval, dry-run, rollback, and verification expectations. |
