@@ -287,7 +287,7 @@ Minimum identifier expectation for a Hunt Run record:
 | ---- | ---- |
 | `hunt_run_id` | Immutable AegisOps control-plane identifier for one bounded hunt-run record. |
 | `hunt_id` | Required linkage to the hunt whose hypothesis and ownership context this run evaluates. |
-| Scope snapshot and execution plan | Required bounded time window, dataset or target scope, and query or procedure reference for the specific run. |
+| Scope snapshot and execution plan | Required bounded scope details: time window, dataset or target scope, and query or procedure reference for the specific run. |
 | Output linkage set | Required explicit links to any findings, observations, leads, recommendations, alerts, or cases that the run influenced. |
 
 Minimum lifecycle states for a Hunt Run record:
