@@ -21,6 +21,7 @@ jobs:
       - name: Run documentation and skeleton verifiers
         run: |
           bash scripts/verify-adr-review-path-doc.sh
+          bash scripts/verify-asset-identity-privilege-context-baseline.sh
           bash scripts/verify-ai-hunt-plane-adr.sh
           bash scripts/verify-architecture-doc.sh
           bash scripts/verify-architecture-runbook-validation.sh
@@ -66,6 +67,7 @@ jobs:
 
       - name: Run focused shell tests
         run: |
+          bash scripts/test-verify-asset-identity-privilege-context-baseline.sh
           bash scripts/test-verify-auth-baseline-doc.sh
           bash scripts/test-verify-ci-phase-7-workflow-coverage.sh
           bash scripts/test-verify-canonical-telemetry-schema-doc.sh

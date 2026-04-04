@@ -33,6 +33,7 @@ If a document inside one of these areas has its own `Owner` or `Owners` field, t
 | `docs/secops-domain-model.md` | SecOps domain model baseline | IT Operations, Information Systems Department |
 | `docs/secops-business-hours-operating-model.md` | Business-hours SecOps daily operating model baseline | IT Operations, Information Systems Department |
 | `docs/auth-baseline.md` | Authentication, authorization, and service account ownership baseline | IT Operations, Information Systems Department |
+| `docs/asset-identity-privilege-context-baseline.md` | Asset, identity, and privilege context baseline | IT Operations, Information Systems Department |
 | `docs/response-action-safety-model.md` | Response action safety and approval binding baseline | IT Operations, Information Systems Department |
 | `docs/control-plane-state-model.md` | Control-plane state and reconciliation baseline | IT Operations, Information Systems Department |
 | `docs/retention-evidence-and-replay-readiness-baseline.md` | Retention, evidence lifecycle, and replay readiness baseline | IT Operations, Information Systems Department |
@@ -49,6 +50,8 @@ The SecOps domain model document remains the shared semantic reference for basel
 The business-hours SecOps operating model remains the analyst-workflow reference for triage, case creation, approval timeout handling, after-hours escalation, and handoff expectations under the non-24x7 baseline.
 
 The auth baseline remains the policy reference for operator personas, least-privilege authorization boundaries, machine identity ownership, and secret lifecycle expectations across future monitors, workflows, approvals, and integrations.
+
+The asset, identity, and privilege context baseline remains the Phase 7 design reference for reviewed alias handling, ownership expectations, criticality context, and privilege-relevant entity reasoning without implying live CMDB or IdP authority.
 
 The response action safety model remains the baseline policy reference for action classes, approval binding, idempotency expectations, and post-approval drift protection for future response execution work.
 

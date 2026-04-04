@@ -23,12 +23,14 @@ required_phrases=(
   '| `docs/detection-lifecycle-and-rule-qa-framework.md` | Detection lifecycle and rule QA framework baseline | IT Operations, Information Systems Department |'
   '| `docs/secops-domain-model.md` | SecOps domain model baseline | IT Operations, Information Systems Department |'
   '| `docs/auth-baseline.md` | Authentication, authorization, and service account ownership baseline | IT Operations, Information Systems Department |'
+  '| `docs/asset-identity-privilege-context-baseline.md` | Asset, identity, and privilege context baseline | IT Operations, Information Systems Department |'
   '| `docs/response-action-safety-model.md` | Response action safety and approval binding baseline | IT Operations, Information Systems Department |'
   '| `docs/control-plane-state-model.md` | Control-plane state and reconciliation baseline | IT Operations, Information Systems Department |'
   '| `docs/retention-evidence-and-replay-readiness-baseline.md` | Retention, evidence lifecycle, and replay readiness baseline | IT Operations, Information Systems Department |'
   '| `docs/adr/` | Architecture Decision Records (ADRs) | IT Operations, Information Systems Department |'
   '| `docs/parameters/` | Parameter documentation | IT Operations, Information Systems Department |'
   '| `docs/runbook.md` | Runbooks | IT Operations, Information Systems Department |'
+  'The asset, identity, and privilege context baseline remains the Phase 7 design reference for reviewed alias handling, ownership expectations, criticality context, and privilege-relevant entity reasoning without implying live CMDB or IdP authority.'
   'The retention, evidence lifecycle, and replay readiness baseline remains the policy reference for record-family retention classes, evidence expiration constraints, replay dataset preservation, and restore-readiness assumptions.'
 )
 
