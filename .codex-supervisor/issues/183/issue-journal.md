@@ -41,12 +41,13 @@ Failure signature: PRRT_kwDOR2iDUc543jHq|PRRT_kwDOR2iDUc543jHu|PRRT_kwDOR2iDUc54
 - Hypothesis: Issue #183 is satisfied by replacing the placeholder-only control-plane SQL contract with a repository-validated v1 baseline that preserves the n8n ownership split and explicit reconciliation state.
 - What changed: Validated the six CodeRabbit review findings as real and removed the contradictory empty-array defaults from `case_records.evidence_ids`, `observation_records.supporting_evidence_ids`, and `approval_decision_records.approver_identities` in both `postgres/control-plane/schema.sql` and `postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql`; aligned `scripts/test-verify-control-plane-schema-skeleton.sh` so the verifier fixture matches the runtime contract.
 - Current blocker: None.
-- Next exact step: Commit and push the review-fix patch to PR #195, then watch the refreshed PR checks/review state.
+- Next exact step: Watch PR #195 for the refreshed `verify` run and CodeRabbit status after commit `8c492ed`, then handle any follow-up review only if new feedback appears.
 - Verification gap: `psql` is not installed in this workspace, so SQL was validated through repository verifiers and shell tests rather than an actual PostgreSQL parser/runtime.
 - Files touched: postgres/control-plane/schema.sql; postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql; scripts/test-verify-control-plane-schema-skeleton.sh
 - Rollback concern: The main risk is contract drift for downstream work that still assumes placeholder-only SQL assets; the aligned verification/docs updates were included specifically to avoid that split-brain state.
-- Last focused command: bash scripts/test-verify-control-plane-schema-skeleton.sh
+- Last focused command: gh pr view 195 --json number,isDraft,reviewDecision,statusCheckRollup,url
 ### Scratchpad
 - Keep this section short. The supervisor may compact older notes automatically.
 - Commands run this turn: `git status --short`; `sed -n '1,220p' postgres/control-plane/schema.sql`; `sed -n '1,220p' postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql`; `rg -n "default '\\{\\}'::text\\[]|cardinality\\(" postgres/control-plane/schema.sql postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql`; `sed -n '1,220p' scripts/verify-control-plane-schema-skeleton.sh`; `sed -n '1,260p' scripts/test-verify-control-plane-schema-skeleton.sh`; `rg -n "create schema|create table|reconciliation" postgres/control-plane`; `bash scripts/verify-control-plane-schema-skeleton.sh`; `bash scripts/test-verify-control-plane-schema-skeleton.sh`; `git diff --check`
 - Review-fix scope: keep the non-empty array checks and remove only the conflicting empty defaults so inserts must supply values for those three record families.
+- Publish status: committed `8c492ed` (`Fix control-plane non-empty array defaults`) and pushed `codex/issue-183`; immediate PR status after push shows `verify` in progress and `CodeRabbit` pending.
