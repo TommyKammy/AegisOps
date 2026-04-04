@@ -62,6 +62,12 @@ OpenSearch must not become the authoritative store for alert lifecycle, case sta
 
 n8n metadata tables and workflow execution history must not become the authoritative store for alert ownership, case ownership, evidence linkage, recommendation review state, approval decisions, or action-request intent.
 
+The approved ownership split for a future PostgreSQL-backed implementation is:
+
+- AegisOps control-plane storage owns authoritative platform records, including alerts, cases, evidence, observations, leads, recommendations, approval decisions, action requests, hunts, hunt runs, AI traces, and reconciliation state that binds those records to analytics and execution outcomes.
+- n8n-owned PostgreSQL storage owns runtime workflow metadata, execution attempts, step progress, connector-local execution details, retry artifacts internal to a running workflow, and similar orchestration-engine state.
+- OpenSearch owns telemetry, findings, and OpenSearch-native analytic or alerting artifacts that act as upstream signals rather than downstream control-plane truth.
+
 This boundary approves where future authoritative control-plane records belong conceptually, but it does not approve live PostgreSQL provisioning, schema migrations, credentials, or runtime deployment changes in this phase.
 
 ## 5. Reconciliation Responsibilities
@@ -174,3 +180,9 @@ create_repo "${missing_idempotency_repo}"
 write_doc "${missing_idempotency_repo}" "${valid_doc_content/Every action request and execution attempt must carry a stable idempotency key that survives retries, duplicate delivery, and reconciliation replays./}"
 commit_fixture "${missing_idempotency_repo}"
 assert_fails_with "${missing_idempotency_repo}" "Every action request and execution attempt must carry a stable idempotency key that survives retries, duplicate delivery, and reconciliation replays."
+
+missing_ownership_split_repo="${workdir}/missing-ownership-split"
+create_repo "${missing_ownership_split_repo}"
+write_doc "${missing_ownership_split_repo}" "${valid_doc_content/The approved ownership split for a future PostgreSQL-backed implementation is:/}"
+commit_fixture "${missing_ownership_split_repo}"
+assert_fails_with "${missing_ownership_split_repo}" "The approved ownership split for a future PostgreSQL-backed implementation is:"

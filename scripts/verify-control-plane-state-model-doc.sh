@@ -40,6 +40,10 @@ required_phrases=(
   "If a future implementation uses one PostgreSQL cluster for both concerns, it must still preserve an explicit ownership split through separate AegisOps-controlled schemas, tables, migration history, and access controls for control-plane records."
   "OpenSearch must not become the authoritative store for alert lifecycle, case state, evidence custody, approval decisions, action-request intent, hunt lifecycle, hunt-run status, or AI trace review state."
   "n8n metadata tables and workflow execution history must not become the authoritative store for alert ownership, case ownership, evidence linkage, recommendation review state, approval decisions, or action-request intent."
+  "The approved ownership split for a future PostgreSQL-backed implementation is:"
+  "- AegisOps control-plane storage owns authoritative platform records, including alerts, cases, evidence, observations, leads, recommendations, approval decisions, action requests, hunts, hunt runs, AI traces, and reconciliation state that binds those records to analytics and execution outcomes."
+  "- n8n-owned PostgreSQL storage owns runtime workflow metadata, execution attempts, step progress, connector-local execution details, retry artifacts internal to a running workflow, and similar orchestration-engine state."
+  "- OpenSearch owns telemetry, findings, and OpenSearch-native analytic or alerting artifacts that act as upstream signals rather than downstream control-plane truth."
   "This boundary approves where future authoritative control-plane records belong conceptually, but it does not approve live PostgreSQL provisioning, schema migrations, credentials, or runtime deployment changes in this phase."
   "The control plane is responsible for reconciling approved action intent against observed n8n execution outcomes and for recording when reconciliation is incomplete, stale, or failed."
   "Reconciliation must prefer deterministic correlation keys such as finding identifiers, action-request identifiers, approval identifiers, workflow identifiers, and idempotency keys rather than fuzzy time-window matching."
@@ -64,14 +68,14 @@ if [[ ! -f "${doc_path}" ]]; then
 fi
 
 for heading in "${required_headings[@]}"; do
-  if ! grep -Fq "${heading}" "${doc_path}"; then
+  if ! grep -Fq -- "${heading}" "${doc_path}"; then
     echo "Missing control-plane state model heading: ${heading}" >&2
     exit 1
   fi
 done
 
 for phrase in "${required_phrases[@]}"; do
-  if ! grep -Fq "${phrase}" "${doc_path}"; then
+  if ! grep -Fq -- "${phrase}" "${doc_path}"; then
     echo "Missing control-plane state model statement: ${phrase}" >&2
     exit 1
   fi
