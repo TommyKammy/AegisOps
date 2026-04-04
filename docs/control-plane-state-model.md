@@ -50,7 +50,27 @@ At the approved baseline level, the source-of-truth expectations are:
 - action execution state remains execution-plane runtime state owned by n8n and backed by PostgreSQL; and
 - evidence links across those records must be explicit rather than reconstructed from whichever component happens to log the most detail.
 
-## 4. Reconciliation Responsibilities
+## 4. Approved Future Persistence Boundary
+
+The approved future persistence boundary for those platform-owned control records is an AegisOps-owned PostgreSQL-backed control-plane datastore boundary.
+
+That future PostgreSQL-backed boundary may share a PostgreSQL engine class with n8n, but it must not collapse control-plane ownership into n8n-owned metadata tables or runtime workflow state.
+
+If a future implementation uses one PostgreSQL cluster for both concerns, it must still preserve an explicit ownership split through separate AegisOps-controlled schemas, tables, migration history, and access controls for control-plane records.
+
+OpenSearch must not become the authoritative store for alert lifecycle, case state, evidence custody, approval decisions, action-request intent, hunt lifecycle, hunt-run status, or AI trace review state.
+
+n8n metadata tables and workflow execution history must not become the authoritative store for alert ownership, case ownership, evidence linkage, recommendation review state, approval decisions, or action-request intent.
+
+The approved ownership split for a future PostgreSQL-backed implementation is:
+
+- AegisOps control-plane storage owns authoritative platform records, including alerts, cases, evidence, observations, leads, recommendations, approval decisions, action requests, hunts, hunt runs, AI traces, and reconciliation state that binds those records to analytics and execution outcomes.
+- n8n-owned PostgreSQL storage owns runtime workflow metadata, execution attempts, step progress, connector-local execution details, retry artifacts internal to a running workflow, and similar orchestration-engine state.
+- OpenSearch owns telemetry, findings, and OpenSearch-native analytic or alerting artifacts that act as upstream signals rather than downstream control-plane truth.
+
+This boundary approves where future authoritative control-plane records belong conceptually, but it does not approve live PostgreSQL provisioning, schema migrations, credentials, or runtime deployment changes in this phase.
+
+## 5. Reconciliation Responsibilities
 
 The control plane is responsible for reconciling approved action intent against observed n8n execution outcomes and for recording when reconciliation is incomplete, stale, or failed.
 
@@ -98,7 +118,7 @@ Reconciliation must preserve auditable disagreement. When OpenSearch, n8n, and t
 
 Disagreement between analytics, control-plane, and execution-plane records must remain auditable rather than silently overwritten.
 
-## 5. Retry, Dead-Letter, and Manual Recovery Responsibilities
+## 6. Retry, Dead-Letter, and Manual Recovery Responsibilities
 
 Retry policy belongs to the control-plane intent record, while duplicate suppression and step-level retry behavior inside a running workflow belong to n8n.
 
@@ -118,7 +138,7 @@ Manual recovery procedures must support re-drive, cancellation, supersession, an
 
 Manual recovery must also preserve why the operator chose the recovery path, which records were linked or superseded, and whether follow-up verification or rollback work remains open.
 
-## 6. Idempotency and Audit Expectations
+## 7. Idempotency and Audit Expectations
 
 Every action request and execution attempt must carry a stable idempotency key that survives retries, duplicate delivery, and reconciliation replays.
 
@@ -134,7 +154,7 @@ Auditability requires separate evidence for:
 
 No single component log should be treated as sufficient to reconstruct the entire decision chain when that would blur responsibility boundaries or allow silent loss of approval evidence.
 
-## 7. Baseline Alignment Notes
+## 8. Baseline Alignment Notes
 
 This model keeps component boundaries explicit without approving a new live datastore in the current phase.
 

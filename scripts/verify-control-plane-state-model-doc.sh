@@ -10,10 +10,11 @@ required_headings=(
   "## 1. Purpose"
   "## 2. Baseline Design Constraints"
   "## 3. Baseline Ownership and Source of Truth"
-  "## 4. Reconciliation Responsibilities"
-  "## 5. Retry, Dead-Letter, and Manual Recovery Responsibilities"
-  "## 6. Idempotency and Audit Expectations"
-  "## 7. Baseline Alignment Notes"
+  "## 4. Approved Future Persistence Boundary"
+  "## 5. Reconciliation Responsibilities"
+  "## 6. Retry, Dead-Letter, and Manual Recovery Responsibilities"
+  "## 7. Idempotency and Audit Expectations"
+  "## 8. Baseline Alignment Notes"
 )
 
 required_phrases=(
@@ -34,6 +35,12 @@ required_phrases=(
   "n8n execution history must not become the implicit system of record for case state, approval state, or action-request intent."
   "OpenSearch findings and alerts remain upstream analytic signals for reconciliation input, but they do not own downstream case, approval, or execution-policy state."
   "The minimum control-plane record families for this baseline are Alert, Case, Evidence, Observation, Lead, Recommendation, Approval Decision, Action Request, Hunt, Hunt Run, AI Trace, and the execution-plane Action Execution record that must later reconcile with them."
+  "The approved future persistence boundary for those platform-owned control records is an AegisOps-owned PostgreSQL-backed control-plane datastore boundary."
+  "That future PostgreSQL-backed boundary may share a PostgreSQL engine class with n8n, but it must not collapse control-plane ownership into n8n-owned metadata tables or runtime workflow state."
+  "If a future implementation uses one PostgreSQL cluster for both concerns, it must still preserve an explicit ownership split through separate AegisOps-controlled schemas, tables, migration history, and access controls for control-plane records."
+  "OpenSearch must not become the authoritative store for alert lifecycle, case state, evidence custody, approval decisions, action-request intent, hunt lifecycle, hunt-run status, or AI trace review state."
+  "n8n metadata tables and workflow execution history must not become the authoritative store for alert ownership, case ownership, evidence linkage, recommendation review state, approval decisions, or action-request intent."
+  "This boundary approves where future authoritative control-plane records belong conceptually, but it does not approve live PostgreSQL provisioning, schema migrations, credentials, or runtime deployment changes in this phase."
   "The control plane is responsible for reconciling approved action intent against observed n8n execution outcomes and for recording when reconciliation is incomplete, stale, or failed."
   "Reconciliation must prefer deterministic correlation keys such as finding identifiers, action-request identifiers, approval identifiers, workflow identifiers, and idempotency keys rather than fuzzy time-window matching."
   "Stable reconciliation keys must allow operators to compare OpenSearch analytics output, control-plane records, and n8n execution outcomes without assuming those systems share one lifecycle or one authoritative identifier."
