@@ -19,6 +19,7 @@ required_docs=(
   "docs/safe-query-gateway-and-tool-policy.md"
   "docs/asset-identity-privilege-context-baseline.md"
   "docs/retention-evidence-and-replay-readiness-baseline.md"
+  "docs/secops-domain-model.md"
   "docs/phase-7-ai-hunt-evaluation-baseline.md"
   "docs/phase-7-ai-hunt-design-validation.md"
 )
@@ -111,6 +112,20 @@ write_required_docs "${missing_cross_link_repo}"
 remove_text_from_doc "${missing_cross_link_repo}" "docs/phase-7-ai-hunt-evaluation-baseline.md" "It supplements \`docs/adr/0001-phase-7-ai-hunt-plane-and-external-ai-data-boundary.md\`, \`docs/safe-query-gateway-and-tool-policy.md\`, \`docs/asset-identity-privilege-context-baseline.md\`, and \`docs/retention-evidence-and-replay-readiness-baseline.md\` by defining how future AI hunt behavior must be challenged before any live AI-assisted path is treated as trustworthy."
 commit_fixture "${missing_cross_link_repo}"
 assert_fails_with "${missing_cross_link_repo}" "Missing Phase 7 evaluation baseline statement"
+
+missing_domain_model_repo="${workdir}/missing-domain-model"
+create_repo "${missing_domain_model_repo}"
+write_required_docs "${missing_domain_model_repo}"
+remove_doc "${missing_domain_model_repo}" "docs/secops-domain-model.md"
+commit_fixture "${missing_domain_model_repo}"
+assert_fails_with "${missing_domain_model_repo}" "Missing SecOps domain model document:"
+
+missing_hunt_semantics_cross_link_repo="${workdir}/missing-hunt-semantics-cross-link"
+create_repo "${missing_hunt_semantics_cross_link_repo}"
+write_required_docs "${missing_hunt_semantics_cross_link_repo}"
+remove_text_from_doc "${missing_hunt_semantics_cross_link_repo}" "docs/asset-identity-privilege-context-baseline.md" "It supplements \`docs/secops-domain-model.md\`, \`docs/auth-baseline.md\`, and \`docs/adr/0001-phase-7-ai-hunt-plane-and-external-ai-data-boundary.md\` by defining the smallest reviewed context model AegisOps may use when hunts reason about hosts, users, service accounts, groups, aliases, ownership, and criticality."
+commit_fixture "${missing_hunt_semantics_cross_link_repo}"
+assert_fails_with "${missing_hunt_semantics_cross_link_repo}" "Missing Phase 7 hunt semantics cross-link statement"
 
 missing_artifact_listing_repo="${workdir}/missing-artifact-listing"
 create_repo "${missing_artifact_listing_repo}"
