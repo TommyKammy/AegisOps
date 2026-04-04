@@ -19,5 +19,6 @@ The initial placeholder record-family homes tracked here are:
 - `hunt_records`
 - `hunt_run_records`
 - `ai_trace_records`
+- `reconciliation_records`
 
 Future issues may replace placeholder comments with reviewed DDL once control-plane persistence implementation is explicitly approved.

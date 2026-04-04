@@ -110,4 +110,11 @@ remove_text_from_doc "${missing_evidence_withdrawn_state_repo}" '| `withdrawn` |
 commit_fixture "${missing_evidence_withdrawn_state_repo}"
 assert_fails_with "${missing_evidence_withdrawn_state_repo}" '| `withdrawn` | The evidence remains historically visible, but it must no longer be relied on because provenance, integrity, or scope was invalidated. |'
 
+missing_reconciliation_record_repo="${workdir}/missing-reconciliation-record"
+create_repo "${missing_reconciliation_record_repo}"
+write_canonical_doc "${missing_reconciliation_record_repo}"
+remove_text_from_doc "${missing_reconciliation_record_repo}" '| `Reconciliation` | Future AegisOps control-plane reconciliation record | Cross-system linkage, mismatch tracking, and resolution state must not dissolve into alert fields, case notes, or n8n metadata. |'
+commit_fixture "${missing_reconciliation_record_repo}"
+assert_fails_with "${missing_reconciliation_record_repo}" '| `Reconciliation` | Future AegisOps control-plane reconciliation record | Cross-system linkage, mismatch tracking, and resolution state must not dissolve into alert fields, case notes, or n8n metadata. |'
+
 echo "Control-plane state model verifier enforces required policy statements."

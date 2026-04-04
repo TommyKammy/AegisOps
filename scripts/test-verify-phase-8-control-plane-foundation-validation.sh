@@ -143,4 +143,11 @@ replace_text_in_doc "${modified_validation_status_repo}" "docs/phase-8-control-p
 commit_fixture "${modified_validation_status_repo}"
 assert_fails_with "${modified_validation_status_repo}" "Missing required line in ${modified_validation_status_repo}/docs/phase-8-control-plane-foundation-validation.md: - Validation status: PASS"
 
+missing_reconciliation_placeholder_repo="${workdir}/missing-reconciliation-placeholder"
+create_repo "${missing_reconciliation_placeholder_repo}"
+write_required_artifacts "${missing_reconciliation_placeholder_repo}"
+remove_text_from_doc "${missing_reconciliation_placeholder_repo}" "postgres/control-plane/README.md" '- `reconciliation_records`'
+commit_fixture "${missing_reconciliation_placeholder_repo}"
+assert_fails_with "${missing_reconciliation_placeholder_repo}" "Missing required line in ${missing_reconciliation_placeholder_repo}/postgres/control-plane/README.md: - \`reconciliation_records\`"
+
 echo "verify-phase-8-control-plane-foundation-validation tests passed"
