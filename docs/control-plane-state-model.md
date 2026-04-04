@@ -27,6 +27,9 @@ No new live datastore is approved in this phase. PostgreSQL remains the backing 
 | `Alert` | Future AegisOps control-plane alert record | Alert lifecycle must not be inferred from OpenSearch alert documents or n8n execution history alone. |
 | `Case` | Future AegisOps control-plane case record | Case ownership, analyst status, and evidence linkage must not dissolve into workflow runs or dashboard state. |
 | `Evidence` | Future AegisOps control-plane evidence record | Evidence custody, provenance, and record linkage must remain explicit instead of dissolving into case notes, AI output, or workflow metadata. |
+| `Observation` | Future AegisOps control-plane observation record | Observations capture analyst-asserted investigative facts and must remain distinct from raw evidence artifacts, AI trace text, and case status fields. |
+| `Lead` | Future AegisOps control-plane lead record | Leads preserve candidate hypotheses or follow-up directions without silently promoting them into alerts, cases, or approved action intent. |
+| `Recommendation` | Future AegisOps control-plane recommendation record | Recommendations preserve proposed analyst or AI-advised next steps without replacing approval decisions, action requests, or execution outcomes. |
 | `Approval Decision` | Future AegisOps control-plane approval record | Approval is a first-class control decision and must not be reconstructed from whether a workflow happened to run. |
 | `Action Request` | Future AegisOps control-plane action-request record | Requested intent, target scope, payload binding, and expiry belong to the control layer rather than to workflow definitions or execution logs. |
 | `Hunt` | Future AegisOps control-plane hunt record | Hunt lifecycle must remain analyst-directed and reviewable rather than inferred from ad hoc queries or downstream workflow runs. |
@@ -38,12 +41,12 @@ n8n execution history must not become the implicit system of record for case sta
 
 OpenSearch findings and alerts remain upstream analytic signals for reconciliation input, but they do not own downstream case, approval, or execution-policy state.
 
-The minimum control-plane record families for this baseline are Alert, Case, Evidence, Approval Decision, Action Request, Hunt, Hunt Run, AI Trace, and the execution-plane Action Execution record that must later reconcile with them.
+The minimum control-plane record families for this baseline are Alert, Case, Evidence, Observation, Lead, Recommendation, Approval Decision, Action Request, Hunt, Hunt Run, AI Trace, and the execution-plane Action Execution record that must later reconcile with them.
 
 At the approved baseline level, the source-of-truth expectations are:
 
 - findings remain analytics-plane facts produced and retained by OpenSearch;
-- alerts, cases, evidence, approvals, action requests, hunts, hunt runs, and AI traces are platform-owned control records whose future authoritative home is an AegisOps control schema or API boundary;
+- alerts, cases, evidence, observations, leads, recommendations, approvals, action requests, hunts, hunt runs, and AI traces are platform-owned control records whose future authoritative home is an AegisOps control schema or API boundary;
 - action execution state remains execution-plane runtime state owned by n8n and backed by PostgreSQL; and
 - evidence links across those records must be explicit rather than reconstructed from whichever component happens to log the most detail.
 
@@ -65,6 +68,7 @@ The minimum stable reconciliation key set for this baseline is:
 - `analytic_signal_id` for the specific OpenSearch alerting or correlation artifact, when distinct from the finding;
 - `alert_id` and `case_id` for control-plane triage and investigation ownership;
 - `evidence_id` plus preserved provenance metadata for linked artifacts or derived material;
+- `observation_id`, `lead_id`, and `recommendation_id` for analyst assertions, investigative direction, and proposed next steps that must remain independently reviewable;
 - `approval_decision_id` and `action_request_id` for authorized response intent;
 - `hunt_id` and `hunt_run_id` for analyst-directed exploration and each bounded execution of that exploration;
 - `ai_trace_id` for preserved AI-assisted interpretation or recommendation context; and
@@ -73,14 +77,20 @@ The minimum stable reconciliation key set for this baseline is:
 The future AegisOps control layer is responsible for:
 
 - deciding whether an analytic signal should create or update an alert or case record;
-- deciding how evidence, hunts, hunt runs, and AI traces are attached to alerts, cases, or independent analyst workflows without collapsing their ownership boundaries;
+- deciding how evidence, observations, leads, recommendations, hunts, hunt runs, and AI traces are attached to alerts, cases, or independent analyst workflows without collapsing their ownership boundaries;
 - deciding whether an action request is pending approval, approved, rejected, expired, canceled, superseded, executing, completed, failed, or unresolved;
 - binding approval decisions to exact request context before execution is allowed; and
 - marking reconciliation exceptions when upstream findings disappear, duplicate workflow triggers arrive, or n8n reports an outcome that does not satisfy the approved intent record.
 
+Observation records must preserve scoped analyst assertions, timestamps, authorship, and linkage to supporting evidence without turning evidence custody into free-form narrative.
+
+Lead records must preserve investigative hypotheses, triage rationale, and disposition state without being treated as equivalent to alert state, case state, or recommendation text.
+
+Recommendation records must preserve proposed next steps, rationale, and review status without being treated as approval, execution, or immutable evidence.
+
 Hunt records must preserve explicit lifecycle state, ownership, hypothesis linkage, and closure rationale even when no case is opened.
 
-Hunt-run reconciliation must preserve whether a run was planned, started, completed, canceled, superseded, or left unresolved, plus which findings, observations, or cases it did or did not influence.
+Hunt-run reconciliation must preserve whether a run was planned, started, completed, canceled, superseded, or left unresolved, plus which findings, observations, leads, recommendations, or cases it did or did not influence.
 
 AI trace records must preserve generation, review, acceptance, rejection, supersession, and linkage expectations as explicit control-plane state rather than silent prompt history.
 
