@@ -5,78 +5,46 @@
 - Branch: codex/issue-147
 - Workspace: .
 - Journal: .codex-supervisor/issues/147/issue-journal.md
-- Current phase: draft_pr
+- Current phase: addressing_review
 - Attempt count: 44 (implementation=3, repair=11)
-- Last head SHA: 9ca12bb7631a95c285deb54b0e2a509454bf46cb
+- Last head SHA: 3d9153b38edb0ff3a51df18059c92679922edd08
 - Blocked reason: none
-- Last failure signature: none
-- Repeated failure signature count: 0
-- Updated at: 2026-04-04T03:27:40.000Z
+- Last failure signature: PRRT_kwDOR2iDUc540Tmy
+- Repeated failure signature count: 1
+- Updated at: 2026-04-04T03:30:27Z
 
 ## Latest Codex Summary
-Draft PR `#155` is still unchanged: `OPEN`, `isDraft=true`, `mergeStateStatus=CLEAN`, no review submissions, and no actionable feedback beyond the existing CodeRabbit draft-skipped status comment. I kept this turn scoped to a journal-only handoff refresh after rechecking the live PR state.
+PR `#155` is `OPEN`, `isDraft=false`, and `mergeStateStatus=CLEAN`. I validated the remaining CodeRabbit review thread against `.github/workflows/ci.yml`, confirmed the safe-query verifier was missing from CI, and wired both the verifier and its focused shell test into the workflow.
 
-Summary: Rechecked draft PR `#155`, confirmed it is still waiting on real review feedback, and refreshed the journal handoff.
-State hint: draft_pr
+Summary: Addressed the remaining PR `#155` review by adding the safe-query gateway verifier and its focused test to CI, and refreshed the journal to match the live non-draft PR state.
+State hint: addressing_review
 Blocked reason: none
-Tests: Not run in this turn; PR state only was checked with `gh pr view 155 --json url,number,state,isDraft,reviewDecision,mergeStateStatus,comments,reviews`
-Next action: Monitor draft PR `#155` for review feedback or reviewer-requested CI before making further changes
-Failure signature: none
+Tests: `bash scripts/verify-safe-query-gateway-doc.sh`; `bash scripts/test-verify-safe-query-gateway-doc.sh`; `bash scripts/verify-response-action-safety-model-doc.sh`; `bash scripts/verify-auth-baseline-doc.sh`
+Next action: Wait for GitHub Actions and reviewer rechecks on PR `#155`; resolve or answer any follow-up review threads if they appear
+Failure signature: PRRT_kwDOR2iDUc540Tmy
 
 ## Active Failure Context
-- None recorded.
+- Category: review
+- Summary: 1 unresolved automated review thread(s) remain.
+- Reference: https://github.com/TommyKammy/AegisOps/pull/155#discussion_r3035041199
+- Details:
+  - scripts/verify-safe-query-gateway-doc.sh:63 summary=_⚠️ Potential issue_ | _🟠 Major_ **Register this verifier in CI so policy checks are actually enforced.** The script is solid, but it is not currently invoked by the documentat... url=https://github.com/TommyKammy/AegisOps/pull/155#discussion_r3035041199
 
 ## Codex Working Notes
 ### Current Handoff
-- Hypothesis: Issue `#147` was failing because the repository had no dedicated Safe Query Gateway design or verifier encoding the bounded AI-hunt read contract.
-- What changed: Added `scripts/verify-safe-query-gateway-doc.sh`, added `scripts/test-verify-safe-query-gateway-doc.sh`, and authored `docs/safe-query-gateway-and-tool-policy.md` covering structured query intent, deterministic query generation, allowlists, caps, citations, trust classes, and failure handling.
+- Hypothesis: The only remaining actionable review issue was missing CI coverage for the new Safe Query Gateway verifier, not a flaw in the document or verifier content.
+- What changed: Added `bash scripts/verify-safe-query-gateway-doc.sh` to the `Run documentation and skeleton verifiers` step and `bash scripts/test-verify-safe-query-gateway-doc.sh` to the `Run focused shell tests` step in `.github/workflows/ci.yml`.
 - Current blocker: none
-- Next exact step: Monitor draft PR `#155` and address real review feedback if it arrives, or run broader repo CI only if a reviewer asks for more than the focused documentation checks.
-- Verification gap: Broader repo CI has still not been run; the last focused issue verification set remains the latest substantive validation.
-- Files touched: `docs/safe-query-gateway-and-tool-policy.md`, `scripts/verify-safe-query-gateway-doc.sh`, `scripts/test-verify-safe-query-gateway-doc.sh`
-- Rollback concern: Low; changes are additive documentation and doc-verification scripts only.
-- Last focused command: `gh pr view 155 --json url,number,state,isDraft,reviewDecision,mergeStateStatus,comments,reviews`
+- Next exact step: Wait for GitHub Actions and reviewer rechecks on PR `#155`; if another thread appears, validate it against the live branch before editing.
+- Verification gap: The focused local checks passed, but GitHub Actions has not yet run on the workflow update commit.
+- Files touched: `.github/workflows/ci.yml`, `docs/safe-query-gateway-and-tool-policy.md`, `scripts/verify-safe-query-gateway-doc.sh`, `scripts/test-verify-safe-query-gateway-doc.sh`
+- Rollback concern: Low; this turn changes only CI command wiring and does not alter the verifier logic or document content.
+- Last focused command: `bash scripts/test-verify-safe-query-gateway-doc.sh`
 ### Scratchpad
-- Safe-query checks rerun during stabilizing: `bash scripts/test-verify-safe-query-gateway-doc.sh`, `bash scripts/verify-safe-query-gateway-doc.sh`
-- Draft PR opened: `https://github.com/TommyKammy/AegisOps/pull/155`
-- PR creation fallback used because connector create failed with `403 Resource not accessible by integration`
-- Current PR state check: `gh pr view 155 --json url,number,state,isDraft,reviewDecision,mergeStateStatus,comments,reviews` reported `state=OPEN`, `isDraft=true`, `mergeStateStatus=CLEAN`, and no review submissions
-- Latest PR state recheck in this turn remained unchanged except for the CodeRabbit run identifier in the draft-skipped status comment
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Current monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI; only the CodeRabbit draft-skipped status comment remains
-- Latest monitoring pass also found no new reviews, no merge-state change, and no reviewer-requested CI
-- Current monitoring pass also found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Current monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Current monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Current monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Current monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Current monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Current monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Current monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Current monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
-- Latest monitoring pass again found no new reviews, no merge-state change, and no reviewer-requested CI
+- Review thread verified against local workflow: `.github/workflows/ci.yml` was missing `bash scripts/verify-safe-query-gateway-doc.sh` in the docs verifier step.
+- Focused CI parity fix applied: added both `bash scripts/verify-safe-query-gateway-doc.sh` and `bash scripts/test-verify-safe-query-gateway-doc.sh` to `.github/workflows/ci.yml`.
+- Local verification passed: `bash scripts/verify-safe-query-gateway-doc.sh`
+- Local verification passed: `bash scripts/test-verify-safe-query-gateway-doc.sh`
+- Baseline verification passed: `bash scripts/verify-response-action-safety-model-doc.sh`
+- Baseline verification passed: `bash scripts/verify-auth-baseline-doc.sh`
+- PR state check on 2026-04-04: `gh pr view 155 --json url,number,state,isDraft,mergeStateStatus,reviewDecision` reported `state=OPEN`, `isDraft=false`, `mergeStateStatus=CLEAN`

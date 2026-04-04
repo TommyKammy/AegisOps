@@ -55,6 +55,7 @@ jobs:
           bash scripts/verify-repository-structure-doc.sh
           bash scripts/verify-retention-baseline-doc.sh
           bash scripts/verify-runbook-doc.sh
+          bash scripts/verify-safe-query-gateway-doc.sh
           bash scripts/verify-secops-business-hours-operating-model-doc.sh
           bash scripts/verify-sigma-curated-skeleton.sh
           bash scripts/verify-sigma-n8n-skeleton-validation.sh
@@ -89,6 +90,7 @@ jobs:
           bash scripts/test-verify-repository-skeleton.sh
           bash scripts/test-verify-response-action-safety-model-doc.sh
           bash scripts/test-verify-retention-baseline-doc.sh
+          bash scripts/test-verify-safe-query-gateway-doc.sh
           bash scripts/test-verify-secops-business-hours-operating-model-doc.sh
           bash scripts/test-verify-secops-domain-model-doc.sh
           bash scripts/test-verify-sigma-curated-skeleton.sh
