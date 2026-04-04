@@ -69,11 +69,13 @@ validation_required_phrases=(
   "Confirmed the control-plane state model remains the normative source for ownership, source-of-truth boundaries, and future reconciliation duties before any live control-plane service or datastore exists."
   "Confirmed the repository reserves \`postgres/control-plane/\` as the reviewed placeholder home for future AegisOps-owned schema and migration assets without approving live deployment, credentials, or runtime migration execution."
   "Confirmed the placeholder PostgreSQL boundary stays explicitly separate from n8n-owned metadata and execution-state tables through the \`aegisops_control\` schema boundary and mirrored record-family placeholders, including reconciliation state."
+  "Confirmed the placeholder schema contract now fails closed if executable live-ish DDL or seed data appears in \`postgres/control-plane/\`, while placeholder comments about future reviewed DDL remain allowed."
   "Confirmed the foundation artifact set keeps reviewer-facing alignment between the top-level repository description, the repository-structure baseline, the control-plane state model, and the placeholder PostgreSQL assets."
   "\`README.md\` must continue to describe the \`postgres/control-plane/\` directory as the repository home for placeholder control-plane schema assets so contributor-facing orientation stays aligned with the approved repository layout."
   "\`docs/repository-structure-baseline.md\` must continue to describe \`postgres/\` as the home for placeholder control-plane schema and migration assets and must keep the explicit \`control-plane/schema.sql\` and \`control-plane/migrations/\` reservation statement reviewable."
   "\`docs/control-plane-state-model.md\` must continue to cite \`postgres/control-plane/\` as the version-controlled placeholder home for the future boundary so the state-model baseline and repository skeleton stay cross-linked."
   "\`postgres/control-plane/README.md\`, \`postgres/control-plane/schema.sql\`, and \`postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql\` must continue to agree on the \`aegisops_control\` boundary and the placeholder homes for \`alert\`, \`case\`, \`evidence\`, \`observation\`, \`lead\`, \`recommendation\`, \`approval_decision\`, \`action_request\`, \`hunt\`, \`hunt_run\`, \`ai_trace\`, and \`reconciliation\` records."
+  "\`postgres/control-plane/README.md\` and the schema-skeleton verifier must continue to make the fail-closed placeholder boundary reviewable by forbidding executable live-ish DDL while allowing placeholder comments that describe future reviewed DDL intent."
   "This validation record must remain aligned with the reviewed foundation artifacts above and fail closed if any required artifact, required cross-link, schema-boundary statement, or record-family placeholder alignment is removed."
   "No deviations found."
 )
@@ -101,10 +103,13 @@ for artifact in "${required_artifacts[@]}"; do
 done
 
 require_fixed_string "${readme_path}" 'Within `postgres/`, the `control-plane/` directory reserves the repository home for placeholder AegisOps-owned control-plane schema and migration assets. It does not introduce a live datastore or runtime migration flow.'
+require_fixed_string "${readme_path}" 'That placeholder boundary fails closed if executable live-ish control-plane DDL or seed data appears before explicit persistence approval.'
 require_fixed_string "${structure_doc}" '| `postgres/` | PostgreSQL deployment assets such as compose definitions for the n8n metadata and execution-state store, plus placeholder schema and migration assets for the future AegisOps-owned control-plane boundary. |'
 require_fixed_string "${structure_doc}" 'Within `postgres/`, placeholder files may reserve approved homes such as `control-plane/schema.sql` and `control-plane/migrations/` before any live control-plane service, credentials, or runtime migration execution is approved.'
 require_fixed_string "${state_model_doc}" 'The repository may reserve a version-controlled placeholder home for that future boundary under `postgres/control-plane/`, including schema manifests and migration skeleton files that document reviewed record-family intent without claiming live readiness.'
 require_fixed_string "${control_plane_readme}" 'The reserved schema boundary is `aegisops_control`, kept separate from n8n-owned PostgreSQL metadata and execution-state tables.'
+require_fixed_string "${control_plane_readme}" 'Executable runtime-oriented SQL such as `CREATE TABLE`, `ALTER TABLE`, index creation, constraint DDL, and seed data is out of bounds for this placeholder-only directory until control-plane persistence implementation is explicitly approved.'
+require_fixed_string "${control_plane_readme}" 'Placeholder comments may describe future reviewed DDL intent, but executable live-ish SQL must fail closed during validation.'
 
 record_families=(
   "alert"

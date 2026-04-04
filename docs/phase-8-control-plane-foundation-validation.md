@@ -23,6 +23,8 @@ Confirmed the repository reserves `postgres/control-plane/` as the reviewed plac
 
 Confirmed the placeholder PostgreSQL boundary stays explicitly separate from n8n-owned metadata and execution-state tables through the `aegisops_control` schema boundary and mirrored record-family placeholders, including reconciliation state.
 
+Confirmed the placeholder schema contract now fails closed if executable live-ish DDL or seed data appears in `postgres/control-plane/`, while placeholder comments about future reviewed DDL remain allowed.
+
 Confirmed the foundation artifact set keeps reviewer-facing alignment between the top-level repository description, the repository-structure baseline, the control-plane state model, and the placeholder PostgreSQL assets.
 
 ## Cross-Link Review
@@ -34,6 +36,8 @@ Confirmed the foundation artifact set keeps reviewer-facing alignment between th
 `docs/control-plane-state-model.md` must continue to cite `postgres/control-plane/` as the version-controlled placeholder home for the future boundary so the state-model baseline and repository skeleton stay cross-linked.
 
 `postgres/control-plane/README.md`, `postgres/control-plane/schema.sql`, and `postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql` must continue to agree on the `aegisops_control` boundary and the placeholder homes for `alert`, `case`, `evidence`, `observation`, `lead`, `recommendation`, `approval_decision`, `action_request`, `hunt`, `hunt_run`, `ai_trace`, and `reconciliation` records.
+
+`postgres/control-plane/README.md` and the schema-skeleton verifier must continue to make the fail-closed placeholder boundary reviewable by forbidding executable live-ish DDL while allowing placeholder comments that describe future reviewed DDL intent.
 
 ## Deviations
 

@@ -83,6 +83,8 @@ Within `sigma/`, the `curated/` directory is reserved for reviewed Sigma rules t
 
 Within `postgres/`, the `control-plane/` directory reserves the repository home for placeholder AegisOps-owned control-plane schema and migration assets. It does not introduce a live datastore or runtime migration flow.
 
+That placeholder boundary fails closed if executable live-ish control-plane DDL or seed data appears before explicit persistence approval.
+
 ---
 
 ## Documentation
