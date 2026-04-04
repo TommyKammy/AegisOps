@@ -13,7 +13,7 @@ It translates the repository structure guidance from `docs/requirements-baseline
 | `sigma/` | Sigma detection content, including reviewed rules, curated subsets, suppressions, field mappings, and placeholder markers that keep approved onboarding paths explicit before real rule content is added. |
 | `n8n/` | n8n workflow assets, approval patterns, credential templates, and webhook contract definitions. |
 | `ingest/` | Log ingestion assets such as pipelines, parsers, and source definitions. |
-| `postgres/` | PostgreSQL deployment assets such as compose definitions for the n8n metadata and execution-state store. |
+| `postgres/` | PostgreSQL deployment assets such as compose definitions for the n8n metadata and execution-state store, plus placeholder schema and migration assets for the future AegisOps-owned control-plane boundary. |
 | `proxy/` | Reverse proxy configuration for controlled access and TLS termination. |
 | `scripts/` | Repository maintenance, validation, and operator helper scripts that support reproducible execution. |
 | `config/` | Shared non-secret configuration artifacts and parameter files referenced by the platform components. |
@@ -32,3 +32,5 @@ It translates the repository structure guidance from `docs/requirements-baseline
 - This document defines structure only and does not authorize runtime, deployment, or workflow implementation.
 
 Within `sigma/`, placeholder marker files may reserve approved homes such as `curated/` and `suppressed/` before any real detection or suppression content is admitted.
+
+Within `postgres/`, placeholder files may reserve approved homes such as `control-plane/schema.sql` and `control-plane/migrations/` before any live control-plane service, credentials, or runtime migration execution is approved.

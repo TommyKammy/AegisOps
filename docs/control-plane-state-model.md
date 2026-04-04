@@ -70,6 +70,8 @@ The approved ownership split for a future PostgreSQL-backed implementation is:
 
 This boundary approves where future authoritative control-plane records belong conceptually, but it does not approve live PostgreSQL provisioning, schema migrations, credentials, or runtime deployment changes in this phase.
 
+The repository may reserve a version-controlled placeholder home for that future boundary under `postgres/control-plane/`, including schema manifests and migration skeleton files that document reviewed record-family intent without claiming live readiness.
+
 ## 5. Reconciliation Responsibilities
 
 The control plane is responsible for reconciling approved action intent against observed n8n execution outcomes and for recording when reconciliation is incomplete, stale, or failed.

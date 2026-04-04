@@ -52,7 +52,7 @@ Log Sources
 
 Supporting services:
 
-- **PostgreSQL** — n8n metadata and execution state
+- **PostgreSQL** — n8n metadata and execution state, plus placeholder control-plane schema assets
 - **Redis** — optional future component for queue-based scaling
 - **Reverse Proxy** — controlled user-facing access and TLS termination
 
@@ -80,6 +80,8 @@ For the detailed approved structure, see:
 - `docs/requirements-baseline.md`
 
 Within `sigma/`, the `curated/` directory is reserved for reviewed Sigma rules that are approved for future onboarding, and the `suppressed/` directory is reserved for future documented suppression decisions. Placeholder markers may exist there before any actual rule or suppression content is admitted.
+
+Within `postgres/`, the `control-plane/` directory reserves the repository home for placeholder AegisOps-owned control-plane schema and migration assets. It does not introduce a live datastore or runtime migration flow.
 
 ---
 
