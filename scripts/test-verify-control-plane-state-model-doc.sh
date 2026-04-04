@@ -50,7 +50,27 @@ OpenSearch findings and alerts remain upstream analytic signals for reconciliati
 
 The minimum control-plane record families for this baseline are Alert, Case, Evidence, Observation, Lead, Recommendation, Approval Decision, Action Request, Hunt, Hunt Run, AI Trace, and the execution-plane Action Execution record that must later reconcile with them.
 
-## 4. Reconciliation Responsibilities
+## 4. Approved Future Persistence Boundary
+
+The approved future persistence boundary for those platform-owned control records is an AegisOps-owned PostgreSQL-backed control-plane datastore boundary.
+
+That future PostgreSQL-backed boundary may share a PostgreSQL engine class with n8n, but it must not collapse control-plane ownership into n8n-owned metadata tables or runtime workflow state.
+
+If a future implementation uses one PostgreSQL cluster for both concerns, it must still preserve an explicit ownership split through separate AegisOps-controlled schemas, tables, migration history, and access controls for control-plane records.
+
+OpenSearch must not become the authoritative store for alert lifecycle, case state, evidence custody, approval decisions, action-request intent, hunt lifecycle, hunt-run status, or AI trace review state.
+
+n8n metadata tables and workflow execution history must not become the authoritative store for alert ownership, case ownership, evidence linkage, recommendation review state, approval decisions, or action-request intent.
+
+The approved ownership split for a future PostgreSQL-backed implementation is:
+
+- AegisOps control-plane storage owns authoritative platform records, including alerts, cases, evidence, observations, leads, recommendations, approval decisions, action requests, hunts, hunt runs, AI traces, and reconciliation state that binds those records to analytics and execution outcomes.
+- n8n-owned PostgreSQL storage owns runtime workflow metadata, execution attempts, step progress, connector-local execution details, retry artifacts internal to a running workflow, and similar orchestration-engine state.
+- OpenSearch owns telemetry, findings, and OpenSearch-native analytic or alerting artifacts that act as upstream signals rather than downstream control-plane truth.
+
+This boundary approves where future authoritative control-plane records belong conceptually, but it does not approve live PostgreSQL provisioning, schema migrations, credentials, or runtime deployment changes in this phase.
+
+## 5. Reconciliation Responsibilities
 
 The control plane is responsible for reconciling approved action intent against observed n8n execution outcomes and for recording when reconciliation is incomplete, stale, or failed.
 
@@ -72,7 +92,7 @@ AI trace records must preserve generation, review, acceptance, rejection, supers
 
 Disagreement between analytics, control-plane, and execution-plane records must remain auditable rather than silently overwritten.
 
-## 5. Retry, Dead-Letter, and Manual Recovery Responsibilities
+## 6. Retry, Dead-Letter, and Manual Recovery Responsibilities
 
 Retry policy belongs to the control-plane intent record, while duplicate suppression and step-level retry behavior inside a running workflow belong to n8n.
 
@@ -80,11 +100,11 @@ Dead-letter responsibility begins when the platform can no longer prove whether 
 
 Manual recovery procedures must support re-drive, cancellation, supersession, and explicit operator annotation without rewriting historical approval or execution evidence.
 
-## 6. Idempotency and Audit Expectations
+## 7. Idempotency and Audit Expectations
 
 Every action request and execution attempt must carry a stable idempotency key that survives retries, duplicate delivery, and reconciliation replays.
 
-## 7. Baseline Alignment Notes
+## 8. Baseline Alignment Notes
 
 A future implementation may materialize these control-plane records in a dedicated service or datastore, but this baseline explicitly defers that runtime choice.
 '
@@ -160,3 +180,9 @@ create_repo "${missing_idempotency_repo}"
 write_doc "${missing_idempotency_repo}" "${valid_doc_content/Every action request and execution attempt must carry a stable idempotency key that survives retries, duplicate delivery, and reconciliation replays./}"
 commit_fixture "${missing_idempotency_repo}"
 assert_fails_with "${missing_idempotency_repo}" "Every action request and execution attempt must carry a stable idempotency key that survives retries, duplicate delivery, and reconciliation replays."
+
+missing_ownership_split_repo="${workdir}/missing-ownership-split"
+create_repo "${missing_ownership_split_repo}"
+write_doc "${missing_ownership_split_repo}" "${valid_doc_content/The approved ownership split for a future PostgreSQL-backed implementation is:/}"
+commit_fixture "${missing_ownership_split_repo}"
+assert_fails_with "${missing_ownership_split_repo}" "The approved ownership split for a future PostgreSQL-backed implementation is:"
