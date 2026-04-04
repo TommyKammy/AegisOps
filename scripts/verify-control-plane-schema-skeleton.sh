@@ -86,12 +86,12 @@ for family in "${record_families[@]}"; do
   require_fixed_string "${migration_path}" "-- reserve table home: ${family}_records"
 done
 
-if grep -En '^[[:space:]]*insert[[:space:]]' "${schema_path}" >/dev/null; then
+if grep -Ein '^[[:space:]]*insert[[:space:]]' "${schema_path}" >/dev/null; then
   echo "Control-plane schema skeleton manifest must not seed live control-plane data." >&2
   exit 1
 fi
 
-if grep -En '^[[:space:]]*insert[[:space:]]' "${migration_path}" >/dev/null; then
+if grep -Ein '^[[:space:]]*insert[[:space:]]' "${migration_path}" >/dev/null; then
   echo "Control-plane migration skeleton must not seed live control-plane data." >&2
   exit 1
 fi

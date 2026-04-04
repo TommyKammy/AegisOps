@@ -112,14 +112,14 @@ create_repo "${missing_readme_repo}"
 git -C "${missing_readme_repo}" commit -q --allow-empty -m "fixture"
 assert_fails_with "${missing_readme_repo}" "Missing control-plane schema skeleton README"
 
-missing_manifest_repo="${workdir}/missing-manifest"
-create_repo "${missing_manifest_repo}"
-printf '%s\n' "# Control-Plane Schema Skeleton" >"${missing_manifest_repo}/postgres/control-plane/README.md"
-printf '%s\n' "-- Migration skeleton only. Do not run in production." >"${missing_manifest_repo}/postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql"
-git -C "${missing_manifest_repo}" add postgres/control-plane/README.md
-git -C "${missing_manifest_repo}" add postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql
-git -C "${missing_manifest_repo}" commit -q -m "fixture"
-assert_fails_with "${missing_manifest_repo}" "Missing control-plane schema skeleton manifest"
+missing_schema_repo="${workdir}/missing-schema"
+create_repo "${missing_schema_repo}"
+printf '%s\n' "# Control-Plane Schema Skeleton" >"${missing_schema_repo}/postgres/control-plane/README.md"
+printf '%s\n' "-- Migration skeleton only. Do not run in production." >"${missing_schema_repo}/postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql"
+git -C "${missing_schema_repo}" add postgres/control-plane/README.md
+git -C "${missing_schema_repo}" add postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql
+git -C "${missing_schema_repo}" commit -q -m "fixture"
+assert_fails_with "${missing_schema_repo}" "Missing control-plane schema skeleton manifest"
 
 missing_family_repo="${workdir}/missing-family"
 create_repo "${missing_family_repo}"
