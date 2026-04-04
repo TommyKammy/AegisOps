@@ -5,6 +5,7 @@
 - **OpenSearch** — SIEM analytics and detection
 - **Sigma** — curated, reviewable detection logic
 - **n8n** — approval-gated orchestration, enrichment, and response
+- **Control Plane Runtime** — future authoritative AegisOps service boundary for platform state and reconciliation
 
 AegisOps is built to support **human-controlled security operations** — delivering a platform that is explainable, auditable, and designed to scale safely across deployment environments.
 
@@ -66,6 +67,7 @@ aegisops/
 ├── opensearch/
 ├── sigma/
 ├── n8n/
+├── control-plane/
 ├── postgres/
 ├── ingest/
 ├── proxy/
@@ -80,6 +82,8 @@ For the detailed approved structure, see:
 - `docs/requirements-baseline.md`
 
 Within `sigma/`, the `curated/` directory is reserved for reviewed Sigma rules that are approved for future onboarding, and the `suppressed/` directory is reserved for future documented suppression decisions. Placeholder markers may exist there before any actual rule or suppression content is admitted.
+
+Within `control-plane/`, the first live AegisOps-owned control-plane runtime will live as application code and service-local tests.
 
 Within `postgres/`, the `control-plane/` directory reserves the repository home for placeholder AegisOps-owned control-plane schema and migration assets. It does not introduce a live datastore or runtime migration flow.
 
@@ -104,6 +108,7 @@ Key documents that serve as the source of truth for implementation decisions:
 - `docs/asset-identity-privilege-context-baseline.md`
 - `docs/response-action-safety-model.md`
 - `docs/control-plane-state-model.md`
+- `docs/control-plane-runtime-service-boundary.md`
 - `docs/retention-evidence-and-replay-readiness-baseline.md`
 - `docs/runbook.md`
 - `docs/repository-structure-baseline.md`

@@ -12,6 +12,7 @@ expected_top_level_entries=(
   "LICENSE.txt"
   "README.md"
   "config"
+  "control-plane"
   "docs"
   "ingest"
   "n8n"

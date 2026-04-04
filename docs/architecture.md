@@ -26,6 +26,8 @@ At a high level, data enters through the ingest role, is stored and analyzed in 
 
 Supporting services exist to preserve those boundaries rather than to blur them. PostgreSQL holds n8n state, Redis remains optional for future queue-based scaling, and the proxy is the controlled access point for user-facing interfaces.
 
+A future live AegisOps control-plane service exists to materialize authoritative platform state and reconciliation logic between those planes without turning OpenSearch documents or n8n metadata into the system of record for AegisOps-owned workflows.
+
 ## 3. Component Responsibilities and Boundaries
 
 OpenSearch is the SIEM core for log ingestion, storage, search, analytics, and detection.

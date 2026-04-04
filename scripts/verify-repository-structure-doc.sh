@@ -11,6 +11,7 @@ required_entries=(
   "LICENSE.txt"
   "README.md"
   "docs/"
+  "control-plane/"
   "opensearch/"
   "sigma/"
   "n8n/"
