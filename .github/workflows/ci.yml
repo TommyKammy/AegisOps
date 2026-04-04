@@ -68,6 +68,9 @@ jobs:
           bash scripts/verify-source-onboarding-contract-doc.sh
           bash scripts/verify-windows-source-onboarding-assets.sh
 
+      - name: Run Phase 8 workflow coverage guard
+        run: bash scripts/test-verify-ci-phase-8-workflow-coverage.sh
+
       - name: Run focused shell tests
         run: |
           bash scripts/test-verify-asset-identity-privilege-context-baseline.sh

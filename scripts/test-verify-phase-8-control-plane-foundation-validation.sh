@@ -52,6 +52,16 @@ remove_text_from_doc() {
   git -C "${target}" add "${doc}"
 }
 
+replace_text_in_doc() {
+  local target="$1"
+  local doc="$2"
+  local old_text="$3"
+  local new_text="$4"
+
+  OLD_TEXT="${old_text}" NEW_TEXT="${new_text}" perl -0pi -e 's/\Q$ENV{OLD_TEXT}\E/$ENV{NEW_TEXT}/g' "${target}/${doc}"
+  git -C "${target}" add "${doc}"
+}
+
 remove_doc() {
   local target="$1"
   local doc="$2"
@@ -125,5 +135,12 @@ write_required_artifacts "${missing_artifact_listing_repo}"
 remove_text_from_doc "${missing_artifact_listing_repo}" "docs/phase-8-control-plane-foundation-validation.md" '- `README.md`'
 commit_fixture "${missing_artifact_listing_repo}"
 assert_fails_with "${missing_artifact_listing_repo}" "Phase 8 foundation validation record must list required artifact: README.md"
+
+modified_validation_status_repo="${workdir}/modified-validation-status"
+create_repo "${modified_validation_status_repo}"
+write_required_artifacts "${modified_validation_status_repo}"
+replace_text_in_doc "${modified_validation_status_repo}" "docs/phase-8-control-plane-foundation-validation.md" "- Validation status: PASS" "- Validation status: PASS (temporary)"
+commit_fixture "${modified_validation_status_repo}"
+assert_fails_with "${modified_validation_status_repo}" "Missing required line in ${modified_validation_status_repo}/docs/phase-8-control-plane-foundation-validation.md: - Validation status: PASS"
 
 echo "verify-phase-8-control-plane-foundation-validation tests passed"

@@ -79,7 +79,7 @@ validation_required_phrases=(
 )
 
 for phrase in "${validation_required_phrases[@]}"; do
-  require_substring "${validation_doc}" "${phrase}" "Missing Phase 8 validation statement"
+  require_fixed_string "${validation_doc}" "${phrase}"
 done
 
 required_artifacts=(
