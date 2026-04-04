@@ -53,15 +53,23 @@ An observation is a recorded fact, pattern, or notable condition gathered during
 
 An observation may support a finding or a lead, but it is not itself a finding because it does not assert that reviewed detection logic matched.
 
+An observation may attach to a hunt run, alert, case, or stand-alone investigative thread, but attachment does not convert the observation into evidence custody, alert state, or case state.
+
 A lead is a triage-worthy investigative signal derived from one or more observations, findings, or contextual facts that justifies additional analyst attention.
 
 A lead may promote into alert or case work when triage determines the signal warrants tracked investigation, but the lead remains distinct from the alert or case record it informs.
 
+The lead record remains the system of record for the pre-promotion hypothesis, triage rationale, and promotion decision. AI trace text, case notes, or alert notes may reference that decision, but they must not replace the lead record itself.
+
 A recommendation is a proposed analyst or system action derived from findings, hunt conclusions, or AI-assisted interpretation that still requires human review within the appropriate approval boundary.
+
+A recommendation may attach to a hunt, hunt run, lead, alert, or case, but it remains advisory context until an explicit downstream task, approval, or action-request record is created.
 
 An AI trace is the preserved record of AI-assisted interpretation inputs, prompts, model outputs, confidence notes, and review context associated with a SecOps record.
 
 An AI trace is not evidence. It preserves how AI-assisted interpretation was produced and reviewed, while evidence preserves the underlying supporting artifacts and chain of custody.
+
+An AI trace may attach to a hunt, hunt run, observation, lead, recommendation, alert, or case, but it does not own the lifecycle of those records and must not become the implicit source of truth for promotion, approval, or closure.
 
 AI-assisted interpretation may summarize, rank, or recommend, but it must not overwrite deterministic finding output, evidence custody, approval decisions, or action execution records.
 
@@ -137,6 +145,8 @@ A hunt may produce observations, leads, recommendations, or supporting context f
 A lead promotes to an alert only when triage decides the investigative signal requires durable analyst queueing or response handling.
 
 A lead may be attached directly to an existing case when the signal materially advances an active investigation without requiring a separate alert lifecycle.
+
+Lead promotion must preserve explicit linkage from the lead to the destination alert or case so future workflow and schema work can reconstruct why tracked investigation began without mining case notes or AI trace history.
 
 Correlation links records by shared context, but it does not by itself create an alert, open a case, or declare an incident.
 

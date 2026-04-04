@@ -120,7 +120,7 @@ Disagreement between analytics, control-plane, and execution-plane records must 
 
 ## 6. Minimum Record Identifiers and Lifecycle States
 
-The baseline must define immutable record-family identifiers and explicit lifecycle states for Alert, Case, Evidence, Approval Decision, and Action Request records before any live control-plane implementation exists.
+The baseline must define immutable record-family identifiers and explicit lifecycle states for Alert, Case, Evidence, Observation, Lead, Recommendation, Hunt, Hunt Run, AI Trace, Approval Decision, and Action Request records before any live control-plane implementation exists.
 
 These identifiers and states are minimum control-plane expectations. They must not be inferred from OpenSearch alert status, OpenSearch document updates, n8n execution status, or ad hoc analyst notes.
 
@@ -191,7 +191,145 @@ Minimum lifecycle states for an Evidence record:
 | `superseded` | A newer or more authoritative evidence record replaced this one without deleting its historical relevance. |
 | `withdrawn` | The evidence remains historically visible, but it must no longer be relied on because provenance, integrity, or scope was invalidated. |
 
-### 6.4 Approval Decision
+### 6.4 Observation
+
+Minimum identifier expectation for an Observation record:
+
+| Field | Minimum expectation |
+| ---- | ---- |
+| `observation_id` | Immutable AegisOps control-plane identifier for one observation record. |
+| `hunt_id`, `hunt_run_id`, `alert_id`, or `case_id` | Required linkage showing whether the observation belongs to a stand-alone hunt workflow or to tracked alert or case work. |
+| Supporting evidence linkage set | Required explicit references to supporting evidence, source artifacts, or analytic records when the observation relies on them. |
+| Author and scope metadata | Required authorship, timestamp, and scope statement describing what was observed, where, and under what bounded context. |
+
+Minimum lifecycle states for an Observation record:
+
+| State | Meaning |
+| ---- | ---- |
+| `captured` | The observation is recorded with authorship, scope, and initial supporting context. |
+| `confirmed` | The observation was reviewed and remains a valid investigative fact within the stated scope. |
+| `challenged` | Review found ambiguity, contradiction, or insufficient support that must remain visible until resolved. |
+| `superseded` | A newer or more precise observation replaced this one while preserving historical linkage. |
+| `withdrawn` | The observation remains visible for auditability, but it must no longer be relied on because it was invalidated or recorded against the wrong scope. |
+
+### 6.5 Lead
+
+Minimum identifier expectation for a Lead record:
+
+| Field | Minimum expectation |
+| ---- | ---- |
+| `lead_id` | Immutable AegisOps control-plane identifier for one lead record. |
+| `observation_id`, `finding_id`, or `hunt_run_id` | Required originating context that explains which observation, analytic output, or bounded hunt execution produced the lead. |
+| `alert_id` or `case_id` | Optional promotion linkage that becomes required once the lead is explicitly promoted into alert or case work. |
+| Triage owner and rationale | Required accountable owner, creation timestamp, and preserved statement of why the lead merits or no longer merits follow-up. |
+
+Minimum lifecycle states for a Lead record:
+
+| State | Meaning |
+| ---- | ---- |
+| `open` | The lead exists as a triage-worthy signal awaiting or undergoing analyst review. |
+| `triaged` | An analyst reviewed the lead and recorded whether it should remain under observation, promote, or close. |
+| `promoted_to_alert` | The lead remains historically visible while an explicitly linked alert now owns the routed analyst queue lifecycle. |
+| `promoted_to_case` | The lead remains historically visible while an explicitly linked case now owns the durable investigation lifecycle. |
+| `closed` | The lead no longer requires follow-up, with rationale preserved on the lead record itself. |
+| `superseded` | Another lead, alert, or case replaced this lead as the primary investigative signal while preserving promotion linkage. |
+
+### 6.6 Recommendation
+
+Minimum identifier expectation for a Recommendation record:
+
+| Field | Minimum expectation |
+| ---- | ---- |
+| `recommendation_id` | Immutable AegisOps control-plane identifier for one recommendation record. |
+| `lead_id`, `hunt_run_id`, `alert_id`, or `case_id` | Required upstream context showing which investigative work item or hunt activity the recommendation informs. |
+| `ai_trace_id` | Required when AI-assisted interpretation materially contributed to the recommendation text or ranking. |
+| Review owner and intended outcome | Required accountable reviewer, creation timestamp, and preserved statement of the proposed next step or decision being advised. |
+
+Minimum lifecycle states for a Recommendation record:
+
+| State | Meaning |
+| ---- | ---- |
+| `proposed` | The recommendation exists as advisory guidance and has not yet been reviewed by the accountable operator. |
+| `under_review` | The recommendation is actively being evaluated for acceptance, rejection, or revision. |
+| `accepted` | Review accepted the recommendation as valid guidance, but further records are still required for execution or case state. |
+| `rejected` | Review determined the recommendation should not guide further action. |
+| `materialized` | The recommendation produced an explicit downstream action request, task, or analyst-owned follow-up while remaining reviewable as advisory context. |
+| `superseded` | A newer recommendation replaced this one for the same investigative question or operational target. |
+| `withdrawn` | The recommendation remains historically visible, but it must no longer be relied on because its basis or scope was invalidated. |
+
+### 6.7 Hunt
+
+Minimum identifier expectation for a Hunt record:
+
+| Field | Minimum expectation |
+| ---- | ---- |
+| `hunt_id` | Immutable AegisOps control-plane identifier for one hunt record. |
+| Hypothesis statement and version | Required preserved hypothesis text plus revision or version metadata so later runs can be evaluated against the same question. |
+| Owner and scope boundary | Required accountable owner, intended target scope, and opening timestamp for the analyst-directed hunt. |
+| `alert_id` or `case_id` | Optional linkage when the hunt is attached to existing tracked work rather than remaining a stand-alone hunt workflow. |
+
+Minimum lifecycle states for a Hunt record:
+
+| State | Meaning |
+| ---- | ---- |
+| `draft` | The hunt exists as a hypothesis and planned scope but is not yet active analyst work. |
+| `active` | The hunt is approved or assigned for analyst execution and may accumulate multiple bounded runs. |
+| `on_hold` | The hunt remains open but is intentionally paused pending more context, access, or competing priority. |
+| `concluded` | The hunt question reached a reviewable outcome and no additional runs are currently planned. |
+| `closed` | The hunt is complete with preserved rationale, closure summary, and any linked downstream records. |
+| `superseded` | A revised or replacement hunt now owns the active hypothesis while this hunt remains historically visible. |
+
+### 6.8 Hunt Run
+
+Minimum identifier expectation for a Hunt Run record:
+
+| Field | Minimum expectation |
+| ---- | ---- |
+| `hunt_run_id` | Immutable AegisOps control-plane identifier for one bounded hunt-run record. |
+| `hunt_id` | Required linkage to the hunt whose hypothesis and ownership context this run evaluates. |
+| Scope snapshot and execution plan | Required bounded time window, dataset or target scope, and query or procedure reference for the specific run. |
+| Output linkage set | Required explicit links to any findings, observations, leads, recommendations, alerts, or cases that the run influenced. |
+
+Minimum lifecycle states for a Hunt Run record:
+
+| State | Meaning |
+| ---- | ---- |
+| `planned` | The run is defined with bounded scope and intent but execution has not started. |
+| `running` | Execution of the bounded hunt scope is in progress and intermediate outputs may still arrive. |
+| `completed` | The run finished with a reviewable outcome summary and preserved output linkages. |
+| `canceled` | The run was intentionally stopped before completing its planned scope. |
+| `superseded` | Another run replaced this run for the same hypothesis and scope boundary under revised execution context. |
+| `unresolved` | Operators cannot yet prove whether the run completed correctly, produced complete outputs, or requires manual follow-up. |
+
+### 6.9 AI Trace
+
+Minimum identifier expectation for an AI Trace record:
+
+| Field | Minimum expectation |
+| ---- | ---- |
+| `ai_trace_id` | Immutable AegisOps control-plane identifier for one AI-trace record. |
+| Subject linkage set | Required explicit links to the hunt, hunt run, observation, lead, recommendation, alert, or case records the trace informed. |
+| Model and prompt provenance | Required model identity, prompt or instruction version, generation timestamp, and material input references. |
+| Reviewer and disposition metadata | Required reviewer identity and recorded decision about whether the trace remains usable as advisory context. |
+
+Minimum lifecycle states for an AI Trace record:
+
+| State | Meaning |
+| ---- | ---- |
+| `generated` | The AI trace was produced and linked to the context it interpreted, but no review outcome exists yet. |
+| `under_review` | The trace is being evaluated for whether it may remain linked as advisory context. |
+| `accepted_for_reference` | Reviewers allowed the trace to remain linked as advisory context, but it still does not replace evidence, lead state, or case state. |
+| `rejected_for_reference` | Review determined the trace must not be relied on for ongoing investigative or response work. |
+| `superseded` | A newer or better-reviewed trace replaced this one for the same interpretive context. |
+| `withdrawn` | The trace remains historically visible, but it must no longer be used because its inputs, provenance, or review basis were invalidated. |
+
+Promotion of a lead into alert or case work must create or update the destination alert or case record while preserving the original lead as a first-class control-plane record with explicit promotion linkage.
+
+Observation records, recommendation records, AI trace records, and case notes may contribute context to promotion decisions, but none of them may become the sole system of record for lead state or lead promotion history.
+
+Hunt, hunt-run, observation, lead, recommendation, and AI trace records may attach to alerts, cases, or stand-alone hunt workflows, but attachment alone does not transfer lifecycle ownership or collapse one record family into another.
+
+### 6.10 Approval Decision
 
 Minimum identifier expectation for an Approval Decision record:
 
@@ -213,7 +351,7 @@ Minimum lifecycle states for an Approval Decision record:
 | `canceled` | The approval decision was intentionally stopped because the underlying request was withdrawn or replaced before completion. |
 | `superseded` | A newer approval decision replaced this decision for the same requested intent under revised reviewed context. |
 
-### 6.5 Action Request
+### 6.11 Action Request
 
 Minimum identifier expectation for an Action Request record:
 

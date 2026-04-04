@@ -49,7 +49,7 @@ required_phrases=(
   "The control plane is responsible for reconciling approved action intent against observed n8n execution outcomes and for recording when reconciliation is incomplete, stale, or failed."
   "Reconciliation must prefer deterministic correlation keys such as finding identifiers, action-request identifiers, approval identifiers, workflow identifiers, and idempotency keys rather than fuzzy time-window matching."
   "Stable reconciliation keys must allow operators to compare OpenSearch analytics output, control-plane records, and n8n execution outcomes without assuming those systems share one lifecycle or one authoritative identifier."
-  "The baseline must define immutable record-family identifiers and explicit lifecycle states for Alert, Case, Evidence, Approval Decision, and Action Request records before any live control-plane implementation exists."
+  "The baseline must define immutable record-family identifiers and explicit lifecycle states for Alert, Case, Evidence, Observation, Lead, Recommendation, Hunt, Hunt Run, AI Trace, Approval Decision, and Action Request records before any live control-plane implementation exists."
   "These identifiers and states are minimum control-plane expectations. They must not be inferred from OpenSearch alert status, OpenSearch document updates, n8n execution status, or ad hoc analyst notes."
   '| `alert_id` | Immutable AegisOps control-plane identifier for one alert record. |'
   '| `finding_id` | Required upstream analytic linkage to the originating finding that justified alert creation or update. |'
@@ -116,6 +116,27 @@ required_phrases=(
   "Hunt-run reconciliation must preserve whether a run was planned, started, completed, canceled, superseded, or left unresolved, plus which findings, observations, leads, recommendations, or cases it did or did not influence."
   "AI trace records must preserve generation, review, acceptance, rejection, supersession, and linkage expectations as explicit control-plane state rather than silent prompt history."
   "Disagreement between analytics, control-plane, and execution-plane records must remain auditable rather than silently overwritten."
+  "Minimum identifier expectation for an Observation record:"
+  '| `observation_id` | Immutable AegisOps control-plane identifier for one observation record. |'
+  '| `captured` | The observation is recorded with authorship, scope, and initial supporting context. |'
+  "Minimum identifier expectation for a Lead record:"
+  '| `lead_id` | Immutable AegisOps control-plane identifier for one lead record. |'
+  '| `promoted_to_alert` | The lead remains historically visible while an explicitly linked alert now owns the routed analyst queue lifecycle. |'
+  "Minimum identifier expectation for a Recommendation record:"
+  '| `recommendation_id` | Immutable AegisOps control-plane identifier for one recommendation record. |'
+  '| `materialized` | The recommendation produced an explicit downstream action request, task, or analyst-owned follow-up while remaining reviewable as advisory context. |'
+  "Minimum identifier expectation for a Hunt record:"
+  '| `hunt_id` | Immutable AegisOps control-plane identifier for one hunt record. |'
+  '| `active` | The hunt is approved or assigned for analyst execution and may accumulate multiple bounded runs. |'
+  "Minimum identifier expectation for a Hunt Run record:"
+  '| `hunt_run_id` | Immutable AegisOps control-plane identifier for one bounded hunt-run record. |'
+  '| `running` | Execution of the bounded hunt scope is in progress and intermediate outputs may still arrive. |'
+  "Minimum identifier expectation for an AI Trace record:"
+  '| `ai_trace_id` | Immutable AegisOps control-plane identifier for one AI-trace record. |'
+  '| `accepted_for_reference` | Reviewers allowed the trace to remain linked as advisory context, but it still does not replace evidence, lead state, or case state. |'
+  "Promotion of a lead into alert or case work must create or update the destination alert or case record while preserving the original lead as a first-class control-plane record with explicit promotion linkage."
+  "Observation records, recommendation records, AI trace records, and case notes may contribute context to promotion decisions, but none of them may become the sole system of record for lead state or lead promotion history."
+  "Hunt, hunt-run, observation, lead, recommendation, and AI trace records may attach to alerts, cases, or stand-alone hunt workflows, but attachment alone does not transfer lifecycle ownership or collapse one record family into another."
   "Retry policy belongs to the control-plane intent record, while duplicate suppression and step-level retry behavior inside a running workflow belong to n8n."
   "Dead-letter responsibility begins when the platform can no longer prove whether an approved intent was never executed, is still executing, or executed with an unknown result."
   "Manual recovery procedures must support re-drive, cancellation, supersession, and explicit operator annotation without rewriting historical approval or execution evidence."
