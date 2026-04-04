@@ -46,6 +46,7 @@ jobs:
           bash scripts/verify-parameter-category-docs.sh
           bash scripts/verify-parameter-config-files.sh
           bash scripts/verify-phase-5-semantic-contract-validation.sh
+          bash scripts/verify-phase-7-ai-hunt-design-validation.sh
           bash scripts/verify-phase-6-initial-telemetry-slice-doc.sh
           bash scripts/verify-phase-6-opensearch-detector-artifacts.sh
           bash scripts/verify-phase-6-replay-to-notify-validation.sh
@@ -86,6 +87,7 @@ jobs:
           bash scripts/test-verify-ci-phase-6-workflow-coverage.sh
           bash scripts/test-verify-detection-lifecycle-and-rule-qa-framework.sh
           bash scripts/test-verify-phase-5-semantic-contract-validation.sh
+          bash scripts/test-verify-phase-7-ai-hunt-design-validation.sh
           bash scripts/test-verify-phase-6-initial-telemetry-slice-doc.sh
           bash scripts/test-verify-phase-6-opensearch-detector-artifacts.sh
           bash scripts/test-verify-phase-6-replay-to-notify-validation.sh

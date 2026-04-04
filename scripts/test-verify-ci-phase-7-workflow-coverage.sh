@@ -6,11 +6,13 @@ repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 workflow_path="${repo_root}/.github/workflows/ci.yml"
 
 required_verifiers=(
+  "bash scripts/verify-phase-7-ai-hunt-design-validation.sh"
   "bash scripts/verify-asset-identity-privilege-context-baseline.sh"
   "bash scripts/verify-ai-hunt-plane-adr.sh"
 )
 
 required_tests=(
+  "bash scripts/test-verify-phase-7-ai-hunt-design-validation.sh"
   "bash scripts/test-verify-asset-identity-privilege-context-baseline.sh"
   "bash scripts/test-verify-ci-phase-7-workflow-coverage.sh"
 )
