@@ -20,6 +20,10 @@ Straight-through translation is allowed only when all of the following remain tr
 - The rule depends on normalized event fields rather than hidden collector behavior, undocumented enrichment, or ad hoc analyst interpretation.
 - The translated OpenSearch detector content can preserve the same analytic intent, scope, and operator expectations without adding unstated runtime semantics.
 
+A source family that remains `schema-reviewed` may be sufficient for staging translation review only when the rule declares which fields are match-required, triage-required, activation-gating, or confidence-degrading.
+
+Production activation requires `detection-ready` source evidence for every activation-gating dependency and must not treat `schema-reviewed` coverage alone as sufficient.
+
 If those conditions are not satisfied, the rule is not eligible for baseline Sigma translation.
 
 ## 3. Supported Sigma Subset for the Approved Baseline
@@ -43,7 +47,7 @@ For the approved baseline, a supported Sigma rule should generally:
 
 ## 4. Required Rule Metadata and Source Prerequisites
 
-Each rule proposed for translation must declare rule identity, owner, severity, purpose, ATT&CK mapping, normalized field dependencies, source-family prerequisites, and known false-positive considerations.
+Each rule proposed for translation must declare rule identity, owner, severity, purpose, ATT&CK mapping, split field semantics, source-family prerequisites, and known false-positive considerations.
 
 Required metadata and prerequisite mapping for future OpenSearch detector work:
 
@@ -54,7 +58,7 @@ Required metadata and prerequisite mapping for future OpenSearch detector work:
 | Purpose and analytic intent | States what the rule is trying to detect | Maps to detector description and expected behavior notes |
 | Severity | Preserves analyst triage expectations | Maps to alert severity or detector priority metadata |
 | ATT&CK mapping | Keeps adversary-technique context reviewable | Maps to detector tags and downstream triage context |
-| Normalized field dependencies | Prevents silent field remapping during translation | Maps to detector query fields and validation targets |
+| Split field semantics (`match_required`, `triage_required`, `activation_gating`, `confidence_degrading`) | Prevents silent field remapping or ambiguous readiness claims during translation | Maps to detector query fields, rollout gates, and validation targets |
 | Source-family prerequisites | Confirms which telemetry families may support the rule | Maps to detector index or log source eligibility checks |
 | Known false-positive considerations | Makes review tradeoffs explicit before activation | Maps to detector rollout notes and tuning prerequisites |
 | Validation evidence reference | Shows that field coverage and rule intent were tested or reviewed | Maps to detector validation artifacts and future staging checks |
@@ -88,7 +92,7 @@ Interpretation notes:
 
 When a detection requirement cannot be translated safely from the approved Sigma subset, the detection must remain OpenSearch-native and carry explicit documentation that Sigma is not the source of truth for that rule.
 
-OpenSearch-native fallback content must still preserve owner, purpose, source prerequisites, field dependencies, validation evidence, and false-positive notes so review standards remain consistent.
+OpenSearch-native fallback content must still preserve owner, purpose, source prerequisites, split field semantics, validation evidence, and false-positive notes so review standards remain consistent.
 
 Fallback rules:
 

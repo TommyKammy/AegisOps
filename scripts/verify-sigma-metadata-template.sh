@@ -21,6 +21,15 @@ required_phrases=(
   "logsource:"
   "  product: <required log source product>"
   "  service: <required log source service or subtype>"
+  "field_semantics:"
+  "  match_required:"
+  "    - <field required for the match logic to retain its intended meaning>"
+  "  triage_required:"
+  "    - <field required for analysts to investigate a match responsibly>"
+  "  activation_gating:"
+  "    - <field or prerequisite that must be detection-ready before production activation>"
+  "  confidence_degrading:"
+  "    - <known gap that does not block staging but reduces confidence or scope>"
   "source_prerequisites:"
   "  - <required log source, retention, field, or normalization dependency>"
   "detection:"
@@ -34,6 +43,7 @@ required_phrases=(
 forbidden_patterns=(
   '^status:[[:space:]]*stable$'
   '^status:[[:space:]]*test$'
+  '^[[:space:]]*field_dependencies:'
   '^[[:space:]]*selection:'
   '^[[:space:]]*keywords:'
   '^[[:space:]]*CommandLine:'

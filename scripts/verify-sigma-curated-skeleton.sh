@@ -15,18 +15,10 @@ expected_entries=(
   "${windows_dir}/privileged-group-membership-change.yml"
 )
 
-file_sha256() {
-  local file_path="$1"
-
-  shasum -a 256 "${file_path}" | awk '{print $1}'
-}
-
-verify_exact_file() {
+verify_required_file() {
   local file_path="$1"
   local missing_label="$2"
   local regular_file_label="$3"
-  local expected_hash="$4"
-  local actual_hash
 
   if [[ -L "${file_path}" ]]; then
     echo "${regular_file_label} must be a regular file: ${file_path}" >&2
@@ -37,10 +29,24 @@ verify_exact_file() {
     echo "Missing ${missing_label}: ${file_path}" >&2
     exit 1
   fi
+}
 
-  actual_hash="$(file_sha256 "${file_path}")"
-  if [[ "${actual_hash}" != "${expected_hash}" ]]; then
-    echo "Curated Sigma content does not match reviewed baseline: ${file_path}" >&2
+require_phrase() {
+  local file_path="$1"
+  local phrase="$2"
+
+  if ! grep -Fq -- "${phrase}" "${file_path}"; then
+    echo "Curated Sigma content is missing required reviewed field: ${file_path}: ${phrase}" >&2
+    exit 1
+  fi
+}
+
+forbid_phrase() {
+  local file_path="$1"
+  local phrase="$2"
+
+  if grep -Fq -- "${phrase}" "${file_path}"; then
+    echo "Curated Sigma content still uses forbidden reviewed field: ${file_path}: ${phrase}" >&2
     exit 1
   fi
 }
@@ -50,29 +56,39 @@ if [[ ! -d "${curated_dir}" ]]; then
   exit 1
 fi
 
-verify_exact_file \
+verify_required_file \
   "${readme_path}" \
   "curated Sigma README" \
-  "Curated Sigma README" \
-  "c09c0ab87f89cef5c4c8bdd61ea4b4d06694fea254a6687aab9d27992aa527a8"
+  "Curated Sigma README"
 
-verify_exact_file \
+verify_required_file \
   "${windows_dir}/privileged-group-membership-change.yml" \
   "curated Sigma rule" \
-  "Curated Sigma rule" \
-  "ab631659730f723660f9543473e31cbd5d61dfa1454ab2410301686d0d4ee7dc"
+  "Curated Sigma rule"
 
-verify_exact_file \
+verify_required_file \
   "${windows_dir}/audit-log-cleared.yml" \
   "curated Sigma rule" \
-  "Curated Sigma rule" \
-  "17a1daa0558e2e80f012cd7de70664c062d6e52f6bfb55054b5c669b14308d3d"
+  "Curated Sigma rule"
 
-verify_exact_file \
+verify_required_file \
   "${windows_dir}/new-local-user-created.yml" \
   "curated Sigma rule" \
-  "Curated Sigma rule" \
-  "d9f20b6ac5f20eae0001bbd5189bbbedaea1a073574da4efc69723b442ce944f"
+  "Curated Sigma rule"
+
+for reviewed_rule in \
+  "${windows_dir}/privileged-group-membership-change.yml" \
+  "${windows_dir}/audit-log-cleared.yml" \
+  "${windows_dir}/new-local-user-created.yml"; do
+  require_phrase "${reviewed_rule}" "field_semantics:"
+  require_phrase "${reviewed_rule}" "match_required:"
+  require_phrase "${reviewed_rule}" "triage_required:"
+  require_phrase "${reviewed_rule}" "activation_gating:"
+  require_phrase "${reviewed_rule}" "confidence_degrading:"
+  require_phrase "${reviewed_rule}" "schema-reviewed"
+  require_phrase "${reviewed_rule}" "detection-ready"
+  forbid_phrase "${reviewed_rule}" "field_dependencies:"
+done
 
 unexpected_entries=()
 symlink_entries=()

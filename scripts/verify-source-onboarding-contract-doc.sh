@@ -42,6 +42,7 @@ required_phrases=(
   "Sample datasets must preserve provenance, capture representative success and failure cases, and document any redaction or synthetic substitutions."
   "Sources that are not yet detection-ready must state their explicit non-goals, known schema gaps, and why downstream detections must not depend on them yet."
   'Readiness states must distinguish at least `candidate`, `schema-reviewed`, and `detection-ready` source families.'
+  '`schema-reviewed` is sufficient only for staging translation design review against documented field coverage. It is not sufficient for production activation or for claiming source-level detection readiness.'
   '`detection-ready` means the family has completed the required evidence package, has no unresolved intentionally deferred required coverage, and may be referenced by future detection content subject to separate detector and rollout review.'
   '`detection-ready` may rely on an explicit exception path only when the exception states which required coverage is missing, why the gap does not block the approved readiness scope, and which downstream detections remain prohibited.'
   "This contract is schema-driven and family-oriented. It must not become source-specific ad hoc guidance for individual products."

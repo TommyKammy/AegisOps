@@ -23,12 +23,14 @@ required_phrases=(
   "AegisOps supports only single-rule, single-event Sigma detections whose logic can be translated into reviewable OpenSearch detector content without changing the rule's meaning."
   'The approved baseline supports selection-based field matching, boolean condition composition using `and`, `or`, and `not`, and stable comparisons on normalized fields that have documented source coverage.'
   "The baseline does not support Sigma correlation, aggregations, temporal counting semantics, cross-index joins, multi-source dependencies, or field logic that depends on unsupported modifiers without a separate approved design."
-  "Each rule proposed for translation must declare rule identity, owner, severity, purpose, ATT&CK mapping, normalized field dependencies, source-family prerequisites, and known false-positive considerations."
+  "Each rule proposed for translation must declare rule identity, owner, severity, purpose, ATT&CK mapping, split field semantics, source-family prerequisites, and known false-positive considerations."
+  'A source family that remains `schema-reviewed` may be sufficient for staging translation review only when the rule declares which fields are match-required, triage-required, activation-gating, or confidence-degrading.'
+  'Production activation requires `detection-ready` source evidence for every activation-gating dependency and must not treat `schema-reviewed` coverage alone as sufficient.'
   "| Supported for baseline translation | Simple single-event selections on normalized fields; boolean combinations that preserve straight-through detector meaning |"
   "| Deferred pending separate design | Correlation blocks; aggregation or threshold semantics; temporal sequences; multi-source joins |"
   "| Forbidden for straight-through translation | Content that requires hidden enrichment assumptions, undocumented field remapping, or runtime behavior outside approved OpenSearch detector responsibilities |"
   "When a detection requirement cannot be translated safely from the approved Sigma subset, the detection must remain OpenSearch-native and carry explicit documentation that Sigma is not the source of truth for that rule."
-  "OpenSearch-native fallback content must still preserve owner, purpose, source prerequisites, field dependencies, validation evidence, and false-positive notes so review standards remain consistent."
+  "OpenSearch-native fallback content must still preserve owner, purpose, source prerequisites, split field semantics, validation evidence, and false-positive notes so review standards remain consistent."
   'This strategy remains aligned with `docs/requirements-baseline.md`, `docs/source-onboarding-contract.md`, and `docs/secops-domain-model.md`.'
 )
 

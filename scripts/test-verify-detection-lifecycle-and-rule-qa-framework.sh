@@ -95,13 +95,17 @@ Detection content must not move to `staging` until source prerequisites, field c
 
 Detection content must not move to `active` until replay or staged validation evidence, expected-volume review, and false-positive review are recorded and reviewable.
 
+Staging readiness is sufficient for controlled translation and validation only when source prerequisites and activation-gating field dependencies are explicit and reviewable.
+
+Production activation requires detection-ready source evidence for activation-gating dependencies and must not rely on schema-reviewed coverage alone.
+
 ## 5. Minimum QA Evidence Before Activation
 
 Activation readiness requires evidence for source prerequisite checks, canonical field coverage checks, replay or staged tests, expected alert volume review, and false-positive review.
 
 Source prerequisite checks must confirm that the required source family is admitted under the source onboarding contract, that required indices or datasets exist, and that the rule does not depend on undeclared telemetry.
 
-Field coverage checks must identify the required normalized fields, any optional fields, known gaps, and whether missing fields block staging or active use.
+Field coverage checks must identify the match-required fields, triage-required fields, activation-gating fields, confidence-degrading gaps, and whether each missing field blocks staging or active use.
 
 Replay or staged test evidence must show that the detection logic was exercised against representative data before activation decisions are made.
 
