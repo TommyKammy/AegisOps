@@ -14,6 +14,7 @@ class PostgresControlPlaneStore:
     """In-process authoritative store for reviewed control-plane record families."""
 
     dsn: str
+    persistence_mode: str = field(default="in_memory", init=False)
     _records: dict[str, dict[str, ControlPlaneRecord]] = field(
         default_factory=dict,
         init=False,

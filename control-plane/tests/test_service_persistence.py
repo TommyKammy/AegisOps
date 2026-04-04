@@ -16,6 +16,16 @@ from aegisops_control_plane.service import AegisOpsControlPlaneService
 
 
 class ControlPlaneServicePersistenceTests(unittest.TestCase):
+    def test_runtime_snapshot_reports_current_in_process_persistence_mode(self) -> None:
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops")
+        )
+
+        snapshot = service.describe_runtime()
+
+        self.assertEqual(snapshot.persistence_mode, "in_memory")
+        self.assertEqual(snapshot.postgres_dsn, "postgresql://control-plane.local/aegisops")
+
     def test_service_round_trips_records_by_control_plane_identifier(self) -> None:
         service = AegisOpsControlPlaneService(
             RuntimeConfig(

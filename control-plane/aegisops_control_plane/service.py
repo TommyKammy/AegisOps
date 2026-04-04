@@ -19,6 +19,7 @@ class RuntimeSnapshot:
     bind_host: str
     bind_port: int
     postgres_dsn: str
+    persistence_mode: str
     opensearch_url: str
     n8n_base_url: str
     ownership_boundary: dict[str, str]
@@ -42,6 +43,7 @@ class AegisOpsControlPlaneService:
             bind_host=self._config.host,
             bind_port=self._config.port,
             postgres_dsn=self._store.dsn,
+            persistence_mode=self._store.persistence_mode,
             opensearch_url=self._signal_intake.base_url,
             n8n_base_url=self._reconciliation.base_url,
             ownership_boundary={

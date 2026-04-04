@@ -19,6 +19,7 @@ class RuntimeSkeletonTests(unittest.TestCase):
         self.assertEqual(snapshot.bind_host, "127.0.0.1")
         self.assertEqual(snapshot.bind_port, 8080)
         self.assertEqual(snapshot.postgres_dsn, "<set-me>")
+        self.assertEqual(snapshot.persistence_mode, "in_memory")
         self.assertEqual(snapshot.opensearch_url, "<set-me>")
         self.assertEqual(snapshot.n8n_base_url, "<set-me>")
 

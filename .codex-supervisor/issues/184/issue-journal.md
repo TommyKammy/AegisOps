@@ -6,25 +6,25 @@
 - Workspace: .
 - Journal: .codex-supervisor/issues/184/issue-journal.md
 - Current phase: draft_pr
-- Attempt count: 2 (implementation=1, repair=1)
-- Last head SHA: 7b4db41cda23db72f88c8fd4c669133488302795
+- Attempt count: 3 (implementation=1, repair=2)
+- Last head SHA: fc561839f3cb685c423d31ca7c4b35516d9d0992
 - Blocked reason: none
 - Last failure signature: none
 - Repeated failure signature count: 0
-- Updated at: 2026-04-04T22:03:45.859Z
+- Updated at: 2026-04-04T22:08:08.780Z
 
 ## Latest Codex Summary
-Implemented the first control-plane persistence slice in [models.py](control-plane/aegisops_control_plane/models.py), [postgres.py](control-plane/aegisops_control_plane/adapters/postgres.py), and [service.py](control-plane/aegisops_control_plane/service.py). The runtime now has typed record families for the reviewed Phase 9 control-plane records plus `save()`/`get()` persistence behavior keyed on AegisOps-owned IDs, with explicit linkage fields preserved instead of treating OpenSearch or n8n identifiers as lifecycle keys.
+Added a narrow runtime-facing verification slice in [test_service_persistence.py](control-plane/tests/test_service_persistence.py). It proves `AegisOpsControlPlaneService.persist_record()` and `get_record()` preserve AegisOps-owned identifiers for persisted records and do not resolve records by approval or n8n workflow-execution linkage fields.
 
-Added the focused reproducing/verification test in [test_postgres_store.py](control-plane/tests/test_postgres_store.py), committed the work on `codex/issue-184` (`7b4db41`), pushed the branch, and opened draft PR [#196](https://github.com/TommyKammy/AegisOps/pull/196). Remaining gap: this is still an in-process persistence layer, not live PostgreSQL-backed integration yet. The only leftover local changes are untracked supervisor files under `.codex-supervisor/`.
+Updated the issue journal handoff, committed the change as `fc56183` (`Add service persistence verification`), and pushed it to the existing draft PR. Remaining gap is unchanged: persistence is still in-process rather than backed by live PostgreSQL.
 
-Added `control-plane/tests/test_service_persistence.py` to verify the runtime service itself round-trips persisted records by AegisOps-owned identifiers and does not resolve records by approval or workflow-execution linkage fields.
+Made the current storage mode explicit by surfacing `persistence_mode="in_memory"` in runtime snapshots and covering it with focused tests, because the environment currently has neither a Python PostgreSQL client nor `psql`.
 
-Summary: Added typed control-plane persistence records, focused store/retrieve tests, pushed branch, and opened draft PR #196.
+Summary: Added service-level persistence verification and pushed it to draft PR #196.
 State hint: draft_pr
 Blocked reason: none
-Tests: `python3 -m unittest control-plane/tests/test_postgres_store.py -v`; `python3 -m unittest discover -s control-plane/tests -v`; `rg -n "alert_id|case_id|evidence_id|observation_id|lead_id|recommendation_id|hunt_id|hunt_run_id|ai_trace_id|approval_decision_id|action_request_id" control-plane postgres`; `rg -n "finding_id|analytic_signal_id|workflow_execution_id|idempotency" control-plane postgres`
-Next action: Extend this checkpoint toward live PostgreSQL-backed persistence or service-level persistence verification on PR #196.
+Tests: `python3 -m unittest control-plane/tests/test_service_persistence.py -v`; `python3 -m unittest discover -s control-plane/tests -v`
+Next action: Decide whether issue #184 stops at this in-process persistence checkpoint or expands into live PostgreSQL-backed persistence work.
 Failure signature: none
 
 ## Active Failure Context
@@ -33,10 +33,10 @@ Failure signature: none
 ## Codex Working Notes
 ### Current Handoff
 - Hypothesis: The issue was not an existing regression in schema assets; the runtime gap was that `PostgresControlPlaneStore` had no persistence API or typed record model, so the control-plane service could not authoritatively store or retrieve any approved record family.
-- What changed: Added `control-plane/aegisops_control_plane/models.py` with typed record families for alert, case, evidence, observation, lead, recommendation, approval decision, action request, hunt, hunt run, AI trace, and reconciliation records; implemented in-process `save`/`get` behavior in `control-plane/aegisops_control_plane/adapters/postgres.py`; added service delegation methods in `control-plane/aegisops_control_plane/service.py`; added `control-plane/tests/test_postgres_store.py` to prove adapter-level round-trip persistence by AegisOps-owned identifiers and negative lookups by upstream linkage IDs; added `control-plane/tests/test_service_persistence.py` to verify the same invariant at the runtime service boundary.
+- What changed: Added `control-plane/aegisops_control_plane/models.py` with typed record families for alert, case, evidence, observation, lead, recommendation, approval decision, action request, hunt, hunt run, AI trace, and reconciliation records; implemented in-process `save`/`get` behavior in `control-plane/aegisops_control_plane/adapters/postgres.py`; added service delegation methods in `control-plane/aegisops_control_plane/service.py`; added `control-plane/tests/test_postgres_store.py` to prove adapter-level round-trip persistence by AegisOps-owned identifiers and negative lookups by upstream linkage IDs; added `control-plane/tests/test_service_persistence.py` to verify the same invariant at the runtime service boundary; exposed `persistence_mode="in_memory"` in runtime snapshots so the current implementation fails closed about not yet being live PostgreSQL-backed.
 - Current blocker: none
-- Next exact step: Commit and push the service-level persistence verification update to draft PR #196, then decide whether issue #184 should stop at this in-process persistence checkpoint or grow into live PostgreSQL-backed storage work in a follow-up issue.
-- Verification gap: No live PostgreSQL integration exists yet; verification now covers adapter and service boundaries, but still only in-process.
+- Next exact step: Commit and push the persistence-mode clarification to draft PR #196, then decide whether live PostgreSQL-backed persistence should be follow-up work gated on adding PostgreSQL client tooling.
+- Verification gap: No live PostgreSQL integration exists yet; verification now covers adapter, service, and runtime-snapshot boundaries, but storage is still only in-process because neither a Python PostgreSQL client nor `psql` is available in this environment.
 - Files touched: .codex-supervisor/issues/184/issue-journal.md; control-plane/aegisops_control_plane/__init__.py; control-plane/aegisops_control_plane/adapters/postgres.py; control-plane/aegisops_control_plane/models.py; control-plane/aegisops_control_plane/service.py; control-plane/tests/test_postgres_store.py; control-plane/tests/test_service_persistence.py
 - Rollback concern: Low. The new persistence API is additive and isolated to the control-plane runtime scaffold.
 - Last focused command: python3 -m unittest discover -s control-plane/tests -v
