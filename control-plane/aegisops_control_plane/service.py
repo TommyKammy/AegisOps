@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Mapping
+from typing import Mapping, Type, TypeVar
 
 from .adapters.n8n import N8NReconciliationAdapter
 from .adapters.opensearch import OpenSearchSignalAdapter
 from .adapters.postgres import PostgresControlPlaneStore
 from .config import RuntimeConfig
+from .models import ControlPlaneRecord
+
+
+RecordT = TypeVar("RecordT", bound=ControlPlaneRecord)
 
 
 @dataclass(frozen=True)
@@ -47,6 +51,12 @@ class AegisOpsControlPlaneService:
                 "execution_plane": "n8n/",
             },
         )
+
+    def persist_record(self, record: RecordT) -> RecordT:
+        return self._store.save(record)
+
+    def get_record(self, record_type: Type[RecordT], record_id: str) -> RecordT | None:
+        return self._store.get(record_type, record_id)
 
 
 def build_runtime_snapshot(environ: Mapping[str, str] | None = None) -> RuntimeSnapshot:
