@@ -59,7 +59,7 @@ write_valid_fixture() {
     "  case_id text primary key," \
     "  alert_id text," \
     "  finding_id text," \
-    "  evidence_ids text[] not null default '{}'::text[]," \
+    "  evidence_ids text[] not null," \
     "  lifecycle_state text not null," \
     "  created_at timestamptz not null default timezone('utc', now())," \
     "  updated_at timestamptz not null default timezone('utc', now())," \
@@ -90,7 +90,7 @@ write_valid_fixture() {
     "  hunt_run_id text," \
     "  alert_id text," \
     "  case_id text," \
-    "  supporting_evidence_ids text[] not null default '{}'::text[]," \
+    "  supporting_evidence_ids text[] not null," \
     "  author_identity text not null," \
     "  observed_at timestamptz not null," \
     "  scope_statement text not null," \
@@ -137,7 +137,7 @@ write_valid_fixture() {
     "create table if not exists aegisops_control.approval_decision_records (" \
     "  approval_decision_id text primary key," \
     "  action_request_id text not null," \
-    "  approver_identities text[] not null default '{}'::text[]," \
+    "  approver_identities text[] not null," \
     "  target_snapshot jsonb not null," \
     "  payload_hash text not null," \
     "  decided_at timestamptz," \
