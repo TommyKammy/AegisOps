@@ -22,9 +22,9 @@
 ## Codex Working Notes
 ### Current Handoff
 - Hypothesis: The missing issue slice was a bounded read-only inspection surface; persisted control-plane records existed in the service/store boundary, but there was no service or CLI path to inspect them or summarize reconciliation state.
-- What changed: Added a focused reproducing test for missing inspection methods, implemented read-only record-family and reconciliation-status snapshots in the control-plane service, exposed them via `control-plane/main.py` subcommands, added CLI coverage, and updated the control-plane README to describe the read-only inspection path.
+- What changed: Added a focused reproducing test for missing inspection methods, implemented read-only record-family and reconciliation-status snapshots in the control-plane service, exposed them via `control-plane/main.py` subcommands, added CLI coverage, updated the control-plane README to describe the read-only inspection path, committed the slice as `098e54a`, and opened draft PR #199.
 - Current blocker: none
-- Next exact step: Commit the checkpoint and open a draft PR for branch `codex/issue-190`.
+- Next exact step: Hold for review feedback or continue with follow-up polish only if new scope appears.
 - Verification gap: No live PostgreSQL-backed inspection path exists yet; verification is limited to the in-memory control-plane scaffold and CLI/service tests.
 - Files touched: control-plane/aegisops_control_plane/service.py; control-plane/main.py; control-plane/tests/test_service_persistence.py; control-plane/tests/test_cli_inspection.py; control-plane/aegisops_control_plane/__init__.py; control-plane/README.md
 - Rollback concern: Low; the new surface is read-only and additive, but callers relying on `main.py` always printing only the runtime snapshot now need to either keep the default command or pass an explicit subcommand.
