@@ -9,7 +9,12 @@ from .adapters.n8n import N8NReconciliationAdapter
 from .adapters.opensearch import OpenSearchSignalAdapter
 from .adapters.postgres import PostgresControlPlaneStore
 from .config import RuntimeConfig
-from .models import AlertRecord, ControlPlaneRecord, ReconciliationRecord
+from .models import (
+    ActionRequestRecord,
+    AlertRecord,
+    ControlPlaneRecord,
+    ReconciliationRecord,
+)
 
 
 RecordT = TypeVar("RecordT", bound=ControlPlaneRecord)
@@ -200,6 +205,104 @@ class AegisOpsControlPlaneService:
             disposition=disposition,
         )
 
+    def reconcile_action_execution(
+        self,
+        *,
+        action_request_id: str,
+        workflow_id: str,
+        observed_executions: tuple[Mapping[str, object], ...],
+        compared_at: datetime,
+        stale_after: datetime,
+    ) -> ReconciliationRecord:
+        action_request = self._store.get(ActionRequestRecord, action_request_id)
+        if action_request is None:
+            raise LookupError(f"Missing action request {action_request_id!r}")
+
+        normalized_executions = self._normalize_observed_executions(observed_executions)
+        linked_execution_ids = tuple(
+            execution["workflow_execution_id"] for execution in normalized_executions
+        )
+        latest_execution = normalized_executions[-1] if normalized_executions else None
+
+        subject_linkage: dict[str, object] = {
+            "action_request_ids": (action_request.action_request_id,),
+            "workflow_ids": (workflow_id,),
+        }
+        if action_request.approval_decision_id is not None:
+            subject_linkage["approval_decision_ids"] = (
+                action_request.approval_decision_id,
+            )
+        if action_request.alert_id is not None:
+            subject_linkage["alert_ids"] = (action_request.alert_id,)
+        if action_request.case_id is not None:
+            subject_linkage["case_ids"] = (action_request.case_id,)
+        if action_request.finding_id is not None:
+            subject_linkage["finding_ids"] = (action_request.finding_id,)
+
+        ingest_disposition: str
+        lifecycle_state: str
+        mismatch_summary: str
+        workflow_execution_id: str | None = None
+        last_seen_at = action_request.requested_at
+
+        if latest_execution is None:
+            ingest_disposition = "missing"
+            lifecycle_state = "pending"
+            mismatch_summary = (
+                "missing downstream execution for approved action request correlation"
+            )
+        else:
+            workflow_execution_id = latest_execution["workflow_execution_id"]
+            last_seen_at = latest_execution["observed_at"]
+            observed_workflow_id = latest_execution["workflow_id"]
+            observed_idempotency_key = latest_execution["idempotency_key"]
+            if last_seen_at < stale_after and compared_at >= stale_after:
+                ingest_disposition = "stale"
+                lifecycle_state = "stale"
+                mismatch_summary = "stale downstream execution observation requires refresh"
+            elif len(linked_execution_ids) > 1:
+                ingest_disposition = "duplicate"
+                lifecycle_state = "mismatched"
+                mismatch_summary = (
+                    "duplicate downstream executions observed for one approved request"
+                )
+            elif (
+                observed_workflow_id != workflow_id
+                or observed_idempotency_key != action_request.idempotency_key
+            ):
+                ingest_disposition = "mismatch"
+                lifecycle_state = "mismatched"
+                mismatch_summary = (
+                    "workflow/idempotency mismatch between approved request and observed execution"
+                )
+            else:
+                ingest_disposition = "matched"
+                lifecycle_state = "matched"
+                mismatch_summary = (
+                    "matched approved action request to downstream workflow execution"
+                )
+
+        return self.persist_record(
+            ReconciliationRecord(
+                reconciliation_id=self._next_identifier("reconciliation"),
+                subject_linkage=subject_linkage,
+                alert_id=action_request.alert_id,
+                finding_id=action_request.finding_id,
+                analytic_signal_id=None,
+                workflow_execution_id=workflow_execution_id,
+                linked_execution_ids=linked_execution_ids,
+                correlation_key=(
+                    f"{action_request.action_request_id}:{workflow_id}:{action_request.idempotency_key}"
+                ),
+                first_seen_at=action_request.requested_at,
+                last_seen_at=last_seen_at,
+                ingest_disposition=ingest_disposition,
+                mismatch_summary=mismatch_summary,
+                compared_at=compared_at,
+                lifecycle_state=lifecycle_state,
+            )
+        )
+
     @staticmethod
     def _merge_linked_ids(
         existing_values: object,
@@ -217,6 +320,36 @@ class AegisOpsControlPlaneService:
     @staticmethod
     def _linked_id_exists(existing_values: object, candidate: str) -> bool:
         return isinstance(existing_values, (list, tuple)) and candidate in existing_values
+
+    @staticmethod
+    def _normalize_observed_executions(
+        observed_executions: tuple[Mapping[str, object], ...],
+    ) -> tuple[dict[str, object], ...]:
+        normalized: list[dict[str, object]] = []
+        for execution in observed_executions:
+            workflow_execution_id = execution.get("workflow_execution_id")
+            workflow_id = execution.get("workflow_id")
+            idempotency_key = execution.get("idempotency_key")
+            observed_at = execution.get("observed_at")
+            if not isinstance(workflow_execution_id, str):
+                raise ValueError("observed execution must include string workflow_execution_id")
+            if not isinstance(workflow_id, str):
+                raise ValueError("observed execution must include string workflow_id")
+            if not isinstance(idempotency_key, str):
+                raise ValueError("observed execution must include string idempotency_key")
+            if not isinstance(observed_at, datetime):
+                raise ValueError("observed execution must include datetime observed_at")
+            normalized.append(
+                {
+                    "workflow_execution_id": workflow_execution_id,
+                    "workflow_id": workflow_id,
+                    "idempotency_key": idempotency_key,
+                    "observed_at": observed_at,
+                }
+            )
+
+        normalized.sort(key=lambda execution: execution["observed_at"])
+        return tuple(normalized)
 
     @staticmethod
     def _next_identifier(prefix: str) -> str:

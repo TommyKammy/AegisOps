@@ -23,4 +23,6 @@ The v1 baseline materializes the approved control-plane record families:
 
 The schema keeps the reconciliation boundary explicit by recording cross-system linkage and mismatch state in dedicated control-plane tables rather than collapsing that state into n8n-owned execution metadata.
 
+`reconciliation_records.ingest_disposition` covers both analytic-ingest outcomes (`created`, `updated`, `deduplicated`, `restated`, `matched`) and execution-correlation exceptions (`missing`, `duplicate`, `mismatch`, `stale`) so operators can distinguish downstream execution gaps from normal alert lifecycle state.
+
 Future work remains explicit: online rollout sequencing, environment-specific access controls, stricter foreign-key enforcement across cyclic record families, and additional index tuning stay out of scope for this baseline.

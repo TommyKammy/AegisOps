@@ -188,6 +188,18 @@ create table if not exists aegisops_control.reconciliation_records (
   updated_at timestamptz not null default timezone('utc', now()),
   check (finding_id is not null or analytic_signal_id is not null or workflow_execution_id is not null),
   check (first_seen_at is null or last_seen_at is null or first_seen_at <= last_seen_at),
-  check (ingest_disposition in ('created','updated','deduplicated','restated','matched')),
+  check (
+    ingest_disposition in (
+      'created',
+      'updated',
+      'deduplicated',
+      'restated',
+      'matched',
+      'missing',
+      'duplicate',
+      'mismatch',
+      'stale'
+    )
+  ),
   check (lifecycle_state in ('pending','matched','mismatched','stale','resolved','superseded'))
 );
