@@ -19,4 +19,10 @@ Current scaffold:
 - `tests/` contains focused service-root tests for the local runtime skeleton.
 - `config/local.env.sample` defines non-secret local placeholders for PostgreSQL, OpenSearch, and n8n integration boundaries.
 
+Current persistence status:
+
+- The reviewed record families now have typed control-plane models plus runtime `save()` and `get()` behavior rooted under `control-plane/`.
+- The runtime snapshot reports `persistence_mode="in_memory"` so the current branch does not imply live PostgreSQL-backed storage.
+- Live PostgreSQL persistence remains follow-up work and depends on adding explicit PostgreSQL client tooling to the runtime environment.
+
 This scaffold is intentionally minimal. It does not introduce real credentials, production deployment, analyst UI, or live detector execution.

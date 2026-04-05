@@ -1,12 +1,27 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Mapping
+from typing import Mapping, Protocol, Type, TypeVar
 
 from .adapters.n8n import N8NReconciliationAdapter
 from .adapters.opensearch import OpenSearchSignalAdapter
 from .adapters.postgres import PostgresControlPlaneStore
 from .config import RuntimeConfig
+from .models import ControlPlaneRecord
+
+
+RecordT = TypeVar("RecordT", bound=ControlPlaneRecord)
+
+
+class ControlPlaneStore(Protocol):
+    dsn: str
+    persistence_mode: str
+
+    def save(self, record: RecordT) -> RecordT:
+        ...
+
+    def get(self, record_type: Type[RecordT], record_id: str) -> RecordT | None:
+        ...
 
 
 @dataclass(frozen=True)
@@ -15,6 +30,7 @@ class RuntimeSnapshot:
     bind_host: str
     bind_port: int
     postgres_dsn: str
+    persistence_mode: str
     opensearch_url: str
     n8n_base_url: str
     ownership_boundary: dict[str, str]
@@ -26,10 +42,14 @@ class RuntimeSnapshot:
 class AegisOpsControlPlaneService:
     """Minimal local runtime skeleton for the first control-plane service."""
 
-    def __init__(self, config: RuntimeConfig) -> None:
+    def __init__(
+        self,
+        config: RuntimeConfig,
+        store: ControlPlaneStore | None = None,
+    ) -> None:
         self._config = config
         self._signal_intake = OpenSearchSignalAdapter(config.opensearch_url)
-        self._store = PostgresControlPlaneStore(config.postgres_dsn)
+        self._store = store or PostgresControlPlaneStore(config.postgres_dsn)
         self._reconciliation = N8NReconciliationAdapter(config.n8n_base_url)
 
     def describe_runtime(self) -> RuntimeSnapshot:
@@ -38,6 +58,7 @@ class AegisOpsControlPlaneService:
             bind_host=self._config.host,
             bind_port=self._config.port,
             postgres_dsn=self._store.dsn,
+            persistence_mode=self._store.persistence_mode,
             opensearch_url=self._signal_intake.base_url,
             n8n_base_url=self._reconciliation.base_url,
             ownership_boundary={
@@ -47,6 +68,12 @@ class AegisOpsControlPlaneService:
                 "execution_plane": "n8n/",
             },
         )
+
+    def persist_record(self, record: RecordT) -> RecordT:
+        return self._store.save(record)
+
+    def get_record(self, record_type: Type[RecordT], record_id: str) -> RecordT | None:
+        return self._store.get(record_type, record_id)
 
 
 def build_runtime_snapshot(environ: Mapping[str, str] | None = None) -> RuntimeSnapshot:

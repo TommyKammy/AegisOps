@@ -9,16 +9,21 @@ CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
+from aegisops_control_plane import AlertRecord, ControlPlaneRecord
 from aegisops_control_plane.service import build_runtime_snapshot
 
 
 class RuntimeSkeletonTests(unittest.TestCase):
+    def test_package_root_exports_control_plane_record_models(self) -> None:
+        self.assertTrue(issubclass(AlertRecord, ControlPlaneRecord))
+
     def test_runtime_snapshot_uses_non_secret_local_defaults(self) -> None:
         snapshot = build_runtime_snapshot({})
 
         self.assertEqual(snapshot.bind_host, "127.0.0.1")
         self.assertEqual(snapshot.bind_port, 8080)
         self.assertEqual(snapshot.postgres_dsn, "<set-me>")
+        self.assertEqual(snapshot.persistence_mode, "in_memory")
         self.assertEqual(snapshot.opensearch_url, "<set-me>")
         self.assertEqual(snapshot.n8n_base_url, "<set-me>")
 
