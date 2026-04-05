@@ -2,6 +2,8 @@
 
 This directory reserves the reviewed repository home for future AegisOps-owned control-plane schema and migration assets.
 
+It also documents the reviewed runtime-ready control-plane schema baseline for the AegisOps-owned PostgreSQL boundary.
+
 The schema remains separate from n8n-owned PostgreSQL metadata and execution-state tables even when both live on the same engine class.
 
 These repository assets do not authorize live deployment, production data migration, or credentials.
