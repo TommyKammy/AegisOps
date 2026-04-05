@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import pathlib
 import sys
@@ -17,6 +18,7 @@ from aegisops_control_plane.models import (
     AlertRecord,
     ApprovalDecisionRecord,
     CaseRecord,
+    ControlPlaneRecord,
     EvidenceRecord,
     HuntRecord,
     HuntRunRecord,
@@ -25,6 +27,15 @@ from aegisops_control_plane.models import (
     ReconciliationRecord,
     RecommendationRecord,
 )
+
+
+@dataclass(frozen=True)
+class UnsupportedRecord(ControlPlaneRecord):
+    record_family = "unsupported"
+    identifier_field = "unsupported_id"
+
+    unsupported_id: str
+    lifecycle_state: str
 
 
 class PostgresControlPlaneStoreTests(unittest.TestCase):
@@ -337,6 +348,27 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
                 ReconciliationRecord,
                 "reconciliation-invalid",
             ),
+            (
+                "invalid reconciliation ingest disposition",
+                ReconciliationRecord(
+                    reconciliation_id="reconciliation-invalid-disposition",
+                    subject_linkage={"action_request_ids": ["action-request-001"]},
+                    alert_id=None,
+                    finding_id="finding-001",
+                    analytic_signal_id=None,
+                    workflow_execution_id=None,
+                    linked_execution_ids=(),
+                    correlation_key="action-request-001:idempotency-001",
+                    first_seen_at=timestamp,
+                    last_seen_at=timestamp,
+                    ingest_disposition="invalid",
+                    mismatch_summary="invalid disposition",
+                    compared_at=timestamp,
+                    lifecycle_state="matched",
+                ),
+                ReconciliationRecord,
+                "reconciliation-invalid-disposition",
+            ),
         )
 
         for label, record, record_type, record_id in invalid_cases:
@@ -345,6 +377,20 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
                     store.save(record)
                 self.assertIsNone(store.get(record_type, record_id))
                 self.assertEqual(store.list(record_type), ())
+
+    def test_store_rejects_unsupported_record_family_with_type_error(self) -> None:
+        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+
+        with self.assertRaisesRegex(
+            TypeError,
+            "Unsupported control-plane record type: UnsupportedRecord",
+        ):
+            store.save(
+                UnsupportedRecord(
+                    unsupported_id="unsupported-001",
+                    lifecycle_state="new",
+                )
+            )
 
 
 if __name__ == "__main__":

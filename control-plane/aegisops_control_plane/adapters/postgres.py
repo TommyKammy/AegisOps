@@ -111,9 +111,27 @@ _LIFECYCLE_STATES_BY_FAMILY: dict[str, frozenset[str]] = {
     ),
 }
 
+_RECONCILIATION_INGEST_DISPOSITIONS = frozenset(
+    {
+        "created",
+        "updated",
+        "deduplicated",
+        "restated",
+        "matched",
+        "missing",
+        "duplicate",
+        "mismatch",
+        "stale",
+    }
+)
+
 
 def _validate_lifecycle_state(record: ControlPlaneRecord) -> None:
-    allowed_states = _LIFECYCLE_STATES_BY_FAMILY[record.record_family]
+    allowed_states = _LIFECYCLE_STATES_BY_FAMILY.get(record.record_family)
+    if allowed_states is None:
+        raise TypeError(
+            f"Unsupported control-plane record type: {type(record).__name__}"
+        )
     if record.lifecycle_state not in allowed_states:  # type: ignore[attr-defined]
         raise ValueError(
             f"{record.record_family} record {record.record_id!r} has invalid lifecycle_state "
@@ -177,6 +195,12 @@ def _validate_record(record: ControlPlaneRecord) -> None:
             record,
             ("finding_id", "analytic_signal_id", "workflow_execution_id"),
         )
+        if record.ingest_disposition not in _RECONCILIATION_INGEST_DISPOSITIONS:
+            raise ValueError(
+                f"reconciliation record {record.record_id!r} has invalid ingest_disposition "
+                f"{record.ingest_disposition!r}; expected one of "
+                f"{sorted(_RECONCILIATION_INGEST_DISPOSITIONS)!r}"
+            )
         if (
             record.first_seen_at is not None
             and record.last_seen_at is not None

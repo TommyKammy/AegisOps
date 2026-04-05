@@ -180,6 +180,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
             store=store,
         )
+        timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
 
         with self.assertRaises(ValueError):
             service.persist_record(
@@ -192,11 +193,37 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 )
             )
 
-        snapshot = service.inspect_records("alert")
+        with self.assertRaises(ValueError):
+            service.persist_record(
+                ReconciliationRecord(
+                    reconciliation_id="reconciliation-invalid",
+                    subject_linkage={"action_request_ids": ["action-request-001"]},
+                    alert_id=None,
+                    finding_id="finding-001",
+                    analytic_signal_id=None,
+                    workflow_execution_id=None,
+                    linked_execution_ids=(),
+                    correlation_key="action-request-001:idempotency-001",
+                    first_seen_at=timestamp,
+                    last_seen_at=timestamp,
+                    ingest_disposition="invalid",
+                    mismatch_summary="invalid disposition",
+                    compared_at=timestamp,
+                    lifecycle_state="matched",
+                )
+            )
 
-        self.assertEqual(snapshot.total_records, 0)
-        self.assertEqual(snapshot.records, ())
+        alert_snapshot = service.inspect_records("alert")
+        reconciliation_snapshot = service.inspect_records("reconciliation")
+
+        self.assertEqual(alert_snapshot.total_records, 0)
+        self.assertEqual(alert_snapshot.records, ())
         self.assertIsNone(service.get_record(AlertRecord, "alert-invalid"))
+        self.assertEqual(reconciliation_snapshot.total_records, 0)
+        self.assertEqual(reconciliation_snapshot.records, ())
+        self.assertIsNone(
+            service.get_record(ReconciliationRecord, "reconciliation-invalid")
+        )
 
     def test_service_upserts_alert_lifecycle_from_upstream_signals(self) -> None:
         store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
