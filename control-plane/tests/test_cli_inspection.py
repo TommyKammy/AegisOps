@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import contextlib
+from datetime import datetime, timezone
 import io
 import json
 import pathlib
@@ -125,16 +125,27 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(exc_info.exception.code, 2)
         self.assertIn("Unsupported control-plane record family", stderr.getvalue())
 
-    def test_cli_rejects_standalone_inspection_against_in_memory_runtime(self) -> None:
-        stderr = io.StringIO()
+    def test_cli_renders_standalone_inspection_views_against_in_memory_runtime(self) -> None:
+        records_stdout = io.StringIO()
+        status_stdout = io.StringIO()
 
-        with contextlib.redirect_stderr(stderr):
-            with self.assertRaises(SystemExit) as exc_info:
-                main.main(["inspect-records", "--family", "alert"])
+        main.main(["inspect-records", "--family", "alert"], stdout=records_stdout)
+        main.main(["inspect-reconciliation-status"], stdout=status_stdout)
 
-        self.assertEqual(exc_info.exception.code, 2)
-        self.assertIn("require a persisted control-plane store", stderr.getvalue())
-        self.assertIn("persistence_mode='in_memory'", stderr.getvalue())
+        records_payload = json.loads(records_stdout.getvalue())
+        status_payload = json.loads(status_stdout.getvalue())
+
+        self.assertTrue(records_payload["read_only"])
+        self.assertEqual(records_payload["record_family"], "alert")
+        self.assertEqual(records_payload["total_records"], 0)
+        self.assertEqual(records_payload["records"], [])
+
+        self.assertTrue(status_payload["read_only"])
+        self.assertEqual(status_payload["total_records"], 0)
+        self.assertIsNone(status_payload["latest_compared_at"])
+        self.assertEqual(status_payload["by_lifecycle_state"], {})
+        self.assertEqual(status_payload["by_ingest_disposition"], {})
+        self.assertEqual(status_payload["records"], [])
 
 
 if __name__ == "__main__":
