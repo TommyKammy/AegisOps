@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import contextlib
 import io
 import json
 import pathlib
@@ -83,6 +84,35 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             status_payload["latest_compared_at"],
             "2026-04-05T12:00:00+00:00",
         )
+
+    def test_cli_rejects_unknown_record_family_as_usage_error(self) -> None:
+        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        stderr = io.StringIO()
+
+        with contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit) as exc_info:
+                main.main(
+                    ["inspect-records", "--family", "unknown-family"],
+                    service=service,
+                )
+
+        self.assertEqual(exc_info.exception.code, 2)
+        self.assertIn("Unsupported control-plane record family", stderr.getvalue())
+
+    def test_cli_rejects_standalone_inspection_against_in_memory_runtime(self) -> None:
+        stderr = io.StringIO()
+
+        with contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit) as exc_info:
+                main.main(["inspect-records", "--family", "alert"])
+
+        self.assertEqual(exc_info.exception.code, 2)
+        self.assertIn("require a persisted control-plane store", stderr.getvalue())
+        self.assertIn("persistence_mode='in_memory'", stderr.getvalue())
 
 
 if __name__ == "__main__":
