@@ -172,16 +172,22 @@ create table if not exists aegisops_control.ai_trace_records (
 create table if not exists aegisops_control.reconciliation_records (
   reconciliation_id text primary key,
   subject_linkage jsonb not null,
+  alert_id text,
   finding_id text,
   analytic_signal_id text,
   workflow_execution_id text,
   linked_execution_ids text[] not null default '{}'::text[],
   correlation_key text not null,
+  first_seen_at timestamptz,
+  last_seen_at timestamptz,
+  ingest_disposition text not null default 'matched',
   mismatch_summary text not null,
   compared_at timestamptz not null,
   lifecycle_state text not null,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
   check (finding_id is not null or analytic_signal_id is not null or workflow_execution_id is not null),
+  check (first_seen_at is null or last_seen_at is null or first_seen_at <= last_seen_at),
+  check (ingest_disposition in ('created','updated','deduplicated','restated','matched')),
   check (lifecycle_state in ('pending','matched','mismatched','stale','resolved','superseded'))
 );

@@ -207,11 +207,15 @@ class ReconciliationRecord(ControlPlaneRecord):
 
     reconciliation_id: str
     subject_linkage: Mapping[str, object]
+    alert_id: str | None
     finding_id: str | None
     analytic_signal_id: str | None
     workflow_execution_id: str | None
     linked_execution_ids: tuple[str, ...]
     correlation_key: str
+    first_seen_at: datetime | None
+    last_seen_at: datetime | None
+    ingest_disposition: str
     mismatch_summary: str
     compared_at: datetime
     lifecycle_state: str
