@@ -60,13 +60,7 @@ def main(
             else build_runtime_snapshot().to_dict()
         )
     else:
-        using_runtime_service = service is None
         service = service or build_runtime_service()
-        if using_runtime_service and service.describe_runtime().persistence_mode == "in_memory":
-            parser.error(
-                "read-only inspection commands require a persisted control-plane store; "
-                "current runtime uses persistence_mode='in_memory'"
-            )
         if command == "inspect-records":
             try:
                 payload = service.inspect_records(parsed.family).to_dict()

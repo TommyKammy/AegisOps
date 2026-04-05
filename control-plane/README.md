@@ -23,8 +23,9 @@ Current persistence status:
 
 - The reviewed record families now have typed control-plane models plus runtime `save()` and `get()` behavior rooted under `control-plane/`.
 - The in-memory authoritative path fails closed against the reviewed v1 schema invariants in `postgres/control-plane/schema.sql` for lifecycle-state enums, required linkage fields, non-empty required tuple sets, and reconciliation timestamp ordering before records become inspectable runtime state.
-- The local CLI now exposes read-only `inspect-records` and `inspect-reconciliation-status` views so operators and reviewers can inspect control-plane state without touching raw PostgreSQL tables directly.
-- The runtime snapshot reports `persistence_mode="in_memory"` so the current branch does not imply live PostgreSQL-backed storage.
+- The approved reviewed local runtime path is the shipped CLI entrypoint: `python3 control-plane/main.py runtime`, `python3 control-plane/main.py inspect-records --family alert`, and `python3 control-plane/main.py inspect-reconciliation-status`.
+- Those inspection commands are explicitly read-only and run against the same process-local `persistence_mode="in_memory"` runtime used by the current local entrypoint, so they can render empty or locally-seeded inspection views without touching raw PostgreSQL tables directly.
+- The runtime snapshot reports `persistence_mode="in_memory"` to make clear that the current branch does not imply live PostgreSQL-backed storage, write-capable runtime authority, or production deployment readiness.
 - Live PostgreSQL persistence remains follow-up work and depends on adding explicit PostgreSQL client tooling to the runtime environment.
 
 This scaffold is intentionally minimal. It does not introduce real credentials, production deployment, analyst UI, or live detector execution.
