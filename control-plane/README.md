@@ -22,6 +22,7 @@ Current scaffold:
 Current persistence status:
 
 - The reviewed record families now have typed control-plane models plus runtime `save()` and `get()` behavior rooted under `control-plane/`.
+- The in-memory authoritative path fails closed against the reviewed v1 schema invariants in `postgres/control-plane/schema.sql` for lifecycle-state enums, required linkage fields, non-empty required tuple sets, and reconciliation timestamp ordering before records become inspectable runtime state.
 - The local CLI now exposes read-only `inspect-records` and `inspect-reconciliation-status` views so operators and reviewers can inspect control-plane state without touching raw PostgreSQL tables directly.
 - The runtime snapshot reports `persistence_mode="in_memory"` so the current branch does not imply live PostgreSQL-backed storage.
 - Live PostgreSQL persistence remains follow-up work and depends on adding explicit PostgreSQL client tooling to the runtime environment.

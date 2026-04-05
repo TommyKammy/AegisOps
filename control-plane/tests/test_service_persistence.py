@@ -174,6 +174,57 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             ("reconciliation-001", "reconciliation-002"),
         )
 
+    def test_service_rejects_schema_invalid_records_before_they_are_inspectable(self) -> None:
+        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+
+        with self.assertRaises(ValueError):
+            service.persist_record(
+                AlertRecord(
+                    alert_id="alert-invalid",
+                    finding_id="finding-001",
+                    analytic_signal_id=None,
+                    case_id=None,
+                    lifecycle_state="invalid",
+                )
+            )
+
+        with self.assertRaises(ValueError):
+            service.persist_record(
+                ReconciliationRecord(
+                    reconciliation_id="reconciliation-invalid",
+                    subject_linkage={"action_request_ids": ["action-request-001"]},
+                    alert_id=None,
+                    finding_id="finding-001",
+                    analytic_signal_id=None,
+                    workflow_execution_id=None,
+                    linked_execution_ids=(),
+                    correlation_key="action-request-001:idempotency-001",
+                    first_seen_at=timestamp,
+                    last_seen_at=timestamp,
+                    ingest_disposition="invalid",
+                    mismatch_summary="invalid disposition",
+                    compared_at=timestamp,
+                    lifecycle_state="matched",
+                )
+            )
+
+        alert_snapshot = service.inspect_records("alert")
+        reconciliation_snapshot = service.inspect_records("reconciliation")
+
+        self.assertEqual(alert_snapshot.total_records, 0)
+        self.assertEqual(alert_snapshot.records, ())
+        self.assertIsNone(service.get_record(AlertRecord, "alert-invalid"))
+        self.assertEqual(reconciliation_snapshot.total_records, 0)
+        self.assertEqual(reconciliation_snapshot.records, ())
+        self.assertIsNone(
+            service.get_record(ReconciliationRecord, "reconciliation-invalid")
+        )
+
     def test_service_upserts_alert_lifecycle_from_upstream_signals(self) -> None:
         store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
         service = AegisOpsControlPlaneService(
@@ -429,13 +480,13 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             approval_decision_id="approval-001",
             case_id=None,
             alert_id=None,
-            finding_id=None,
+            finding_id="finding-001",
             idempotency_key="idempotency-001",
             target_scope={"asset_id": "asset-001"},
             payload_hash="payload-hash-001",
             requested_at=requested_at,
             expires_at=None,
-            lifecycle_state="pending",
+            lifecycle_state="pending_approval",
         )
         service.persist_record(action_request)
 
@@ -460,7 +511,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             approval_decision_id="approval-001",
             case_id=None,
             alert_id=None,
-            finding_id=None,
+            finding_id="finding-001",
             idempotency_key="idempotency-001",
             target_scope={"asset_id": "asset-001"},
             payload_hash="payload-hash-001",
@@ -509,7 +560,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             approval_decision_id="approval-001",
             case_id=None,
             alert_id=None,
-            finding_id=None,
+            finding_id="finding-001",
             idempotency_key="idempotency-001",
             target_scope={"asset_id": "asset-001"},
             payload_hash="payload-hash-001",
