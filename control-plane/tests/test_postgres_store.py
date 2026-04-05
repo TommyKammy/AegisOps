@@ -218,6 +218,75 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         with self.assertRaises(TypeError):
             record.target_scope["asset_id"] = "asset-003"  # type: ignore[index]
 
+    def test_store_lists_execution_reconciliation_records_separately(self) -> None:
+        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        compared_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        records = (
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-001",
+                subject_linkage={
+                    "action_request_ids": ["action-request-001"],
+                    "workflow_ids": ["workflow-remediate-host"],
+                },
+                alert_id="alert-001",
+                finding_id="finding-001",
+                analytic_signal_id=None,
+                workflow_execution_id=None,
+                linked_execution_ids=(),
+                correlation_key=(
+                    "action-request-001:workflow-remediate-host:idempotency-001"
+                ),
+                first_seen_at=requested_at,
+                last_seen_at=requested_at,
+                ingest_disposition="missing",
+                mismatch_summary=(
+                    "missing downstream execution for approved action request correlation"
+                ),
+                compared_at=compared_at,
+                lifecycle_state="pending",
+            ),
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-002",
+                subject_linkage={
+                    "action_request_ids": ["action-request-001"],
+                    "workflow_ids": ["workflow-remediate-host"],
+                },
+                alert_id="alert-001",
+                finding_id="finding-001",
+                analytic_signal_id=None,
+                workflow_execution_id="exec-002",
+                linked_execution_ids=("exec-001", "exec-002"),
+                correlation_key=(
+                    "action-request-001:workflow-remediate-host:idempotency-001"
+                ),
+                first_seen_at=requested_at,
+                last_seen_at=compared_at,
+                ingest_disposition="duplicate",
+                mismatch_summary=(
+                    "duplicate downstream executions observed for one approved request"
+                ),
+                compared_at=compared_at,
+                lifecycle_state="mismatched",
+            ),
+        )
+
+        for record in records:
+            store.save(record)
+
+        stored_records = store.list(ReconciliationRecord)
+
+        self.assertEqual(stored_records, records)
+        self.assertEqual(
+            tuple(record.ingest_disposition for record in stored_records),
+            ("missing", "duplicate"),
+        )
+        self.assertIsNone(store.get(ReconciliationRecord, "exec-002"))
+        self.assertEqual(
+            store.get(ReconciliationRecord, "reconciliation-002"),
+            records[1],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
