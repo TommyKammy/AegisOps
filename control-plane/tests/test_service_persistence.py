@@ -111,6 +111,8 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         )
         first_seen = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
         restated_seen = datetime(2026, 4, 5, 12, 15, tzinfo=timezone.utc)
+        updated_seen = datetime(2026, 4, 5, 12, 30, tzinfo=timezone.utc)
+        duplicate_seen = datetime(2026, 4, 5, 12, 45, tzinfo=timezone.utc)
 
         created = service.ingest_finding_alert(
             finding_id="finding-001",
@@ -126,15 +128,38 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             first_seen_at=first_seen,
             last_seen_at=restated_seen,
         )
+        updated = service.ingest_finding_alert(
+            finding_id="finding-003",
+            analytic_signal_id="signal-003",
+            correlation_key="claim:host-001:privilege-escalation",
+            first_seen_at=updated_seen,
+            last_seen_at=updated_seen,
+            materially_new_work=True,
+        )
+        deduplicated = service.ingest_finding_alert(
+            finding_id="finding-003",
+            analytic_signal_id="signal-003",
+            correlation_key="claim:host-001:privilege-escalation",
+            first_seen_at=updated_seen,
+            last_seen_at=duplicate_seen,
+        )
 
         self.assertEqual(created.disposition, "created")
         self.assertEqual(restated.disposition, "restated")
+        self.assertEqual(updated.disposition, "updated")
+        self.assertEqual(deduplicated.disposition, "deduplicated")
         self.assertEqual(restated.alert.alert_id, created.alert.alert_id)
+        self.assertEqual(updated.alert.alert_id, created.alert.alert_id)
+        self.assertEqual(deduplicated.alert.alert_id, created.alert.alert_id)
         self.assertEqual(restated.alert.finding_id, "finding-001")
         self.assertEqual(restated.alert.analytic_signal_id, "signal-001")
+        self.assertEqual(updated.alert.finding_id, "finding-003")
+        self.assertEqual(updated.alert.analytic_signal_id, "signal-003")
+        self.assertEqual(deduplicated.alert.finding_id, "finding-003")
+        self.assertEqual(deduplicated.alert.analytic_signal_id, "signal-003")
 
         stored_alert = service.get_record(AlertRecord, created.alert.alert_id)
-        self.assertEqual(stored_alert, created.alert)
+        self.assertEqual(stored_alert, updated.alert)
         self.assertEqual(stored_alert.lifecycle_state, "new")
 
         created_reconciliation = service.get_record(
@@ -142,6 +167,12 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         )
         restated_reconciliation = service.get_record(
             ReconciliationRecord, restated.reconciliation.reconciliation_id
+        )
+        updated_reconciliation = service.get_record(
+            ReconciliationRecord, updated.reconciliation.reconciliation_id
+        )
+        deduplicated_reconciliation = service.get_record(
+            ReconciliationRecord, deduplicated.reconciliation.reconciliation_id
         )
         self.assertEqual(created_reconciliation.alert_id, created.alert.alert_id)
         self.assertEqual(created_reconciliation.ingest_disposition, "created")
@@ -158,6 +189,32 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(
             restated_reconciliation.subject_linkage["analytic_signal_ids"],
             ("signal-001", "signal-002"),
+        )
+        self.assertEqual(updated_reconciliation.alert_id, created.alert.alert_id)
+        self.assertEqual(updated_reconciliation.ingest_disposition, "updated")
+        self.assertEqual(updated_reconciliation.first_seen_at, first_seen)
+        self.assertEqual(updated_reconciliation.last_seen_at, updated_seen)
+        self.assertEqual(
+            updated_reconciliation.subject_linkage["finding_ids"],
+            ("finding-001", "finding-002", "finding-003"),
+        )
+        self.assertEqual(
+            updated_reconciliation.subject_linkage["analytic_signal_ids"],
+            ("signal-001", "signal-002", "signal-003"),
+        )
+        self.assertEqual(deduplicated_reconciliation.alert_id, created.alert.alert_id)
+        self.assertEqual(
+            deduplicated_reconciliation.ingest_disposition, "deduplicated"
+        )
+        self.assertEqual(deduplicated_reconciliation.first_seen_at, first_seen)
+        self.assertEqual(deduplicated_reconciliation.last_seen_at, duplicate_seen)
+        self.assertEqual(
+            deduplicated_reconciliation.subject_linkage["finding_ids"],
+            ("finding-001", "finding-002", "finding-003"),
+        )
+        self.assertEqual(
+            deduplicated_reconciliation.subject_linkage["analytic_signal_ids"],
+            ("signal-001", "signal-002", "signal-003"),
         )
 
 

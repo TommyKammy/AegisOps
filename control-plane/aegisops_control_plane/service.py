@@ -95,6 +95,7 @@ class AegisOpsControlPlaneService:
         correlation_key: str,
         first_seen_at: datetime,
         last_seen_at: datetime,
+        materially_new_work: bool = False,
     ) -> FindingAlertIngestResult:
         existing_reconciliations = [
             record
@@ -130,13 +131,16 @@ class AegisOpsControlPlaneService:
                 raise LookupError(
                     f"Missing alert {latest_reconciliation.alert_id!r} for correlation key {correlation_key!r}"
                 )
-            disposition = "restated"
+            existing_finding_ids = latest_reconciliation.subject_linkage.get("finding_ids")
+            existing_signal_ids = latest_reconciliation.subject_linkage.get(
+                "analytic_signal_ids"
+            )
             linked_finding_ids = self._merge_linked_ids(
-                latest_reconciliation.subject_linkage.get("finding_ids"),
+                existing_finding_ids,
                 finding_id,
             )
             linked_signal_ids = self._merge_linked_ids(
-                latest_reconciliation.subject_linkage.get("analytic_signal_ids"),
+                existing_signal_ids,
                 analytic_signal_id,
             )
             persisted_first_seen = min(
@@ -147,6 +151,25 @@ class AegisOpsControlPlaneService:
                 latest_reconciliation.last_seen_at or last_seen_at,
                 last_seen_at,
             )
+            already_linked = self._linked_id_exists(existing_finding_ids, finding_id) or (
+                analytic_signal_id is not None
+                and self._linked_id_exists(existing_signal_ids, analytic_signal_id)
+            )
+            if materially_new_work:
+                alert = self.persist_record(
+                    AlertRecord(
+                        alert_id=alert.alert_id,
+                        finding_id=finding_id,
+                        analytic_signal_id=analytic_signal_id,
+                        case_id=alert.case_id,
+                        lifecycle_state=alert.lifecycle_state,
+                    )
+                )
+                disposition = "updated"
+            elif already_linked:
+                disposition = "deduplicated"
+            else:
+                disposition = "restated"
 
         reconciliation = self.persist_record(
             ReconciliationRecord(
@@ -190,6 +213,10 @@ class AegisOpsControlPlaneService:
         if incoming_value is not None and incoming_value not in merged:
             merged.append(incoming_value)
         return tuple(merged)
+
+    @staticmethod
+    def _linked_id_exists(existing_values: object, candidate: str) -> bool:
+        return isinstance(existing_values, (list, tuple)) and candidate in existing_values
 
     @staticmethod
     def _next_identifier(prefix: str) -> str:
