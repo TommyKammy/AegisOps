@@ -36,3 +36,11 @@ class PostgresControlPlaneStore:
                 f"Stored {record.record_family} record did not match requested type {record_type.__name__}"
             )
         return record
+
+    def list(self, record_type: Type[RecordT]) -> tuple[RecordT, ...]:
+        family_records = self._records.get(record_type.record_family, {})
+        return tuple(
+            record
+            for record in family_records.values()
+            if isinstance(record, record_type)
+        )

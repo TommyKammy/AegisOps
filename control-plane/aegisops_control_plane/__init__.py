@@ -16,7 +16,12 @@ from .models import (
     ReconciliationRecord,
     RecommendationRecord,
 )
-from .service import AegisOpsControlPlaneService, RuntimeSnapshot, build_runtime_snapshot
+from .service import (
+    AegisOpsControlPlaneService,
+    FindingAlertIngestResult,
+    RuntimeSnapshot,
+    build_runtime_snapshot,
+)
 
 __all__ = [
     "AITraceRecord",
@@ -27,6 +32,7 @@ __all__ = [
     "CaseRecord",
     "ControlPlaneRecord",
     "EvidenceRecord",
+    "FindingAlertIngestResult",
     "HuntRecord",
     "HuntRunRecord",
     "LeadRecord",
