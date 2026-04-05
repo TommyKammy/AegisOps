@@ -168,22 +168,51 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         for record in records:
             store.save(record)
 
-        self.assertEqual(store.get(AlertRecord, "alert-001"), records[0])
-        self.assertEqual(store.get(CaseRecord, "case-001"), records[1])
-        self.assertEqual(store.get(EvidenceRecord, "evidence-001"), records[2])
-        self.assertEqual(store.get(ObservationRecord, "observation-001"), records[3])
-        self.assertEqual(store.get(LeadRecord, "lead-001"), records[4])
-        self.assertEqual(store.get(RecommendationRecord, "recommendation-001"), records[5])
-        self.assertEqual(store.get(ApprovalDecisionRecord, "approval-001"), records[6])
-        self.assertEqual(store.get(ActionRequestRecord, "action-request-001"), records[7])
-        self.assertEqual(store.get(HuntRecord, "hunt-001"), records[8])
-        self.assertEqual(store.get(HuntRunRecord, "hunt-run-001"), records[9])
-        self.assertEqual(store.get(AITraceRecord, "ai-trace-001"), records[10])
-        self.assertEqual(store.get(ReconciliationRecord, "reconciliation-001"), records[11])
+        expected_records = [
+            (AlertRecord, "alert-001", records[0]),
+            (CaseRecord, "case-001", records[1]),
+            (EvidenceRecord, "evidence-001", records[2]),
+            (ObservationRecord, "observation-001", records[3]),
+            (LeadRecord, "lead-001", records[4]),
+            (RecommendationRecord, "recommendation-001", records[5]),
+            (ApprovalDecisionRecord, "approval-001", records[6]),
+            (ActionRequestRecord, "action-request-001", records[7]),
+            (HuntRecord, "hunt-001", records[8]),
+            (HuntRunRecord, "hunt-run-001", records[9]),
+            (AITraceRecord, "ai-trace-001", records[10]),
+            (ReconciliationRecord, "reconciliation-001", records[11]),
+        ]
+
+        for record_type, record_id, expected_record in expected_records:
+            with self.subTest(record_type=record_type.__name__, record_id=record_id):
+                self.assertEqual(store.get(record_type, record_id), expected_record)
 
         self.assertIsNone(store.get(AlertRecord, "finding-001"))
         self.assertIsNone(store.get(ActionRequestRecord, "approval-001"))
         self.assertIsNone(store.get(ReconciliationRecord, "n8n-exec-001"))
+
+    def test_store_copies_mapping_fields_before_persistence(self) -> None:
+        timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        target_scope = {"asset_id": "asset-001"}
+        record = ActionRequestRecord(
+            action_request_id="action-request-001",
+            approval_decision_id="approval-001",
+            case_id="case-001",
+            alert_id="alert-001",
+            finding_id="finding-001",
+            idempotency_key="idempotency-001",
+            target_scope=target_scope,
+            payload_hash="payload-hash-001",
+            requested_at=timestamp,
+            expires_at=None,
+            lifecycle_state="approved",
+        )
+
+        target_scope["asset_id"] = "asset-002"
+
+        self.assertEqual(record.target_scope["asset_id"], "asset-001")
+        with self.assertRaises(TypeError):
+            record.target_scope["asset_id"] = "asset-003"  # type: ignore[index]
 
 
 if __name__ == "__main__":

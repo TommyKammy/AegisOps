@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Mapping, Type, TypeVar
+from typing import Mapping, Protocol, Type, TypeVar
 
 from .adapters.n8n import N8NReconciliationAdapter
 from .adapters.opensearch import OpenSearchSignalAdapter
@@ -11,6 +11,17 @@ from .models import ControlPlaneRecord
 
 
 RecordT = TypeVar("RecordT", bound=ControlPlaneRecord)
+
+
+class ControlPlaneStore(Protocol):
+    dsn: str
+    persistence_mode: str
+
+    def save(self, record: RecordT) -> RecordT:
+        ...
+
+    def get(self, record_type: Type[RecordT], record_id: str) -> RecordT | None:
+        ...
 
 
 @dataclass(frozen=True)
@@ -31,10 +42,14 @@ class RuntimeSnapshot:
 class AegisOpsControlPlaneService:
     """Minimal local runtime skeleton for the first control-plane service."""
 
-    def __init__(self, config: RuntimeConfig) -> None:
+    def __init__(
+        self,
+        config: RuntimeConfig,
+        store: ControlPlaneStore | None = None,
+    ) -> None:
         self._config = config
         self._signal_intake = OpenSearchSignalAdapter(config.opensearch_url)
-        self._store = PostgresControlPlaneStore(config.postgres_dsn)
+        self._store = store or PostgresControlPlaneStore(config.postgres_dsn)
         self._reconciliation = N8NReconciliationAdapter(config.n8n_base_url)
 
     def describe_runtime(self) -> RuntimeSnapshot:

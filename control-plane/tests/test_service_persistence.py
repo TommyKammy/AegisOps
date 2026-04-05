@@ -11,6 +11,7 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
 from aegisops_control_plane.config import RuntimeConfig
+from aegisops_control_plane.adapters.postgres import PostgresControlPlaneStore
 from aegisops_control_plane.models import ActionRequestRecord, ReconciliationRecord
 from aegisops_control_plane.service import AegisOpsControlPlaneService
 
@@ -27,12 +28,14 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(snapshot.postgres_dsn, "postgresql://control-plane.local/aegisops")
 
     def test_service_round_trips_records_by_control_plane_identifier(self) -> None:
+        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
         service = AegisOpsControlPlaneService(
             RuntimeConfig(
                 postgres_dsn="postgresql://control-plane.local/aegisops",
                 opensearch_url="https://opensearch.internal",
                 n8n_base_url="https://n8n.internal",
-            )
+            ),
+            store=store,
         )
         timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
 
@@ -75,6 +78,18 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         )
         self.assertIsNone(service.get_record(ActionRequestRecord, "approval-001"))
         self.assertIsNone(service.get_record(ReconciliationRecord, "n8n-exec-001"))
+
+    def test_service_accepts_injected_store_for_runtime_snapshot(self) -> None:
+        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://ignored.local/aegisops"),
+            store=store,
+        )
+
+        snapshot = service.describe_runtime()
+
+        self.assertEqual(snapshot.postgres_dsn, "postgresql://control-plane.local/aegisops")
+        self.assertEqual(snapshot.persistence_mode, "in_memory")
 
 
 if __name__ == "__main__":

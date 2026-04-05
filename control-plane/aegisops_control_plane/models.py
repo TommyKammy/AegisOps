@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import ClassVar, Union
+from types import MappingProxyType
+from typing import ClassVar, Mapping, Union
+
+
+def _freeze_mapping(value: Mapping[str, object]) -> Mapping[str, object]:
+    return MappingProxyType(dict(value))
 
 
 @dataclass(frozen=True)
@@ -112,10 +117,13 @@ class ApprovalDecisionRecord(ControlPlaneRecord):
     approval_decision_id: str
     action_request_id: str
     approver_identities: tuple[str, ...]
-    target_snapshot: dict[str, object]
+    target_snapshot: Mapping[str, object]
     payload_hash: str
     decided_at: datetime | None
     lifecycle_state: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "target_snapshot", _freeze_mapping(self.target_snapshot))
 
 
 @dataclass(frozen=True)
@@ -129,11 +137,14 @@ class ActionRequestRecord(ControlPlaneRecord):
     alert_id: str | None
     finding_id: str | None
     idempotency_key: str
-    target_scope: dict[str, object]
+    target_scope: Mapping[str, object]
     payload_hash: str
     requested_at: datetime
     expires_at: datetime | None
     lifecycle_state: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "target_scope", _freeze_mapping(self.target_scope))
 
 
 @dataclass(frozen=True)
@@ -159,12 +170,16 @@ class HuntRunRecord(ControlPlaneRecord):
 
     hunt_run_id: str
     hunt_id: str
-    scope_snapshot: dict[str, object]
+    scope_snapshot: Mapping[str, object]
     execution_plan_reference: str
-    output_linkage: dict[str, object]
+    output_linkage: Mapping[str, object]
     started_at: datetime | None
     completed_at: datetime | None
     lifecycle_state: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "scope_snapshot", _freeze_mapping(self.scope_snapshot))
+        object.__setattr__(self, "output_linkage", _freeze_mapping(self.output_linkage))
 
 
 @dataclass(frozen=True)
@@ -173,13 +188,16 @@ class AITraceRecord(ControlPlaneRecord):
     identifier_field: ClassVar[str] = "ai_trace_id"
 
     ai_trace_id: str
-    subject_linkage: dict[str, object]
+    subject_linkage: Mapping[str, object]
     model_identity: str
     prompt_version: str
     generated_at: datetime
     material_input_refs: tuple[str, ...]
     reviewer_identity: str
     lifecycle_state: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "subject_linkage", _freeze_mapping(self.subject_linkage))
 
 
 @dataclass(frozen=True)
@@ -188,7 +206,7 @@ class ReconciliationRecord(ControlPlaneRecord):
     identifier_field: ClassVar[str] = "reconciliation_id"
 
     reconciliation_id: str
-    subject_linkage: dict[str, object]
+    subject_linkage: Mapping[str, object]
     finding_id: str | None
     analytic_signal_id: str | None
     workflow_execution_id: str | None
@@ -197,6 +215,9 @@ class ReconciliationRecord(ControlPlaneRecord):
     mismatch_summary: str
     compared_at: datetime
     lifecycle_state: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "subject_linkage", _freeze_mapping(self.subject_linkage))
 
 
 AnyControlPlaneRecord = Union[
