@@ -92,6 +92,14 @@ class AegisOpsControlPlaneService:
     def get_record(self, record_type: Type[RecordT], record_id: str) -> RecordT | None:
         return self._store.get(record_type, record_id)
 
+    @staticmethod
+    def _require_aware_datetime(value: object, field_name: str) -> datetime:
+        if not isinstance(value, datetime):
+            raise ValueError(f"{field_name} must be a datetime")
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError(f"{field_name} must be timezone-aware")
+        return value
+
     def ingest_finding_alert(
         self,
         *,
@@ -214,14 +222,22 @@ class AegisOpsControlPlaneService:
         compared_at: datetime,
         stale_after: datetime,
     ) -> ReconciliationRecord:
+        compared_at = self._require_aware_datetime(compared_at, "compared_at")
+        stale_after = self._require_aware_datetime(stale_after, "stale_after")
         action_request = self._store.get(ActionRequestRecord, action_request_id)
         if action_request is None:
             raise LookupError(f"Missing action request {action_request_id!r}")
+        if action_request.lifecycle_state != "approved":
+            raise ValueError(
+                f"Action request {action_request_id!r} is not approved "
+                f"(state={action_request.lifecycle_state!r})"
+            )
 
         normalized_executions = self._normalize_observed_executions(observed_executions)
         linked_execution_ids = tuple(
             execution["workflow_execution_id"] for execution in normalized_executions
         )
+        unique_execution_ids = tuple(dict.fromkeys(linked_execution_ids))
         latest_execution = normalized_executions[-1] if normalized_executions else None
 
         subject_linkage: dict[str, object] = {
@@ -260,7 +276,7 @@ class AegisOpsControlPlaneService:
                 ingest_disposition = "stale"
                 lifecycle_state = "stale"
                 mismatch_summary = "stale downstream execution observation requires refresh"
-            elif len(linked_execution_ids) > 1:
+            elif len(unique_execution_ids) > 1:
                 ingest_disposition = "duplicate"
                 lifecycle_state = "mismatched"
                 mismatch_summary = (
@@ -339,6 +355,10 @@ class AegisOpsControlPlaneService:
                 raise ValueError("observed execution must include string idempotency_key")
             if not isinstance(observed_at, datetime):
                 raise ValueError("observed execution must include datetime observed_at")
+            observed_at = AegisOpsControlPlaneService._require_aware_datetime(
+                observed_at,
+                "observed_at",
+            )
             normalized.append(
                 {
                     "workflow_execution_id": workflow_execution_id,

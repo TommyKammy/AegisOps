@@ -342,6 +342,134 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             action_request,
         )
 
+    def test_service_reconcile_action_execution_rejects_non_approved_requests(self) -> None:
+        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        action_request = ActionRequestRecord(
+            action_request_id="action-request-pending",
+            approval_decision_id="approval-001",
+            case_id=None,
+            alert_id=None,
+            finding_id=None,
+            idempotency_key="idempotency-001",
+            target_scope={"asset_id": "asset-001"},
+            payload_hash="payload-hash-001",
+            requested_at=requested_at,
+            expires_at=None,
+            lifecycle_state="pending",
+        )
+        service.persist_record(action_request)
+
+        with self.assertRaisesRegex(ValueError, "is not approved"):
+            service.reconcile_action_execution(
+                action_request_id="action-request-pending",
+                workflow_id="workflow-remediate-host",
+                observed_executions=(),
+                compared_at=requested_at,
+                stale_after=datetime(2026, 4, 5, 12, 30, tzinfo=timezone.utc),
+            )
+
+    def test_service_reconcile_action_execution_requires_aware_datetimes(self) -> None:
+        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        action_request = ActionRequestRecord(
+            action_request_id="action-request-001",
+            approval_decision_id="approval-001",
+            case_id=None,
+            alert_id=None,
+            finding_id=None,
+            idempotency_key="idempotency-001",
+            target_scope={"asset_id": "asset-001"},
+            payload_hash="payload-hash-001",
+            requested_at=requested_at,
+            expires_at=None,
+            lifecycle_state="approved",
+        )
+        service.persist_record(action_request)
+
+        with self.assertRaisesRegex(ValueError, "compared_at must be timezone-aware"):
+            service.reconcile_action_execution(
+                action_request_id="action-request-001",
+                workflow_id="workflow-remediate-host",
+                observed_executions=(),
+                compared_at=datetime(2026, 4, 5, 12, 0),
+                stale_after=datetime(2026, 4, 5, 12, 30, tzinfo=timezone.utc),
+            )
+
+        with self.assertRaisesRegex(ValueError, "observed_at must be timezone-aware"):
+            service.reconcile_action_execution(
+                action_request_id="action-request-001",
+                workflow_id="workflow-remediate-host",
+                observed_executions=(
+                    {
+                        "workflow_execution_id": "exec-001",
+                        "workflow_id": "workflow-remediate-host",
+                        "idempotency_key": "idempotency-001",
+                        "observed_at": datetime(2026, 4, 5, 12, 5),
+                    },
+                ),
+                compared_at=requested_at,
+                stale_after=datetime(2026, 4, 5, 12, 30, tzinfo=timezone.utc),
+            )
+
+    def test_service_reconcile_action_execution_ignores_repeated_polls_of_same_execution(
+        self,
+    ) -> None:
+        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        action_request = ActionRequestRecord(
+            action_request_id="action-request-001",
+            approval_decision_id="approval-001",
+            case_id=None,
+            alert_id=None,
+            finding_id=None,
+            idempotency_key="idempotency-001",
+            target_scope={"asset_id": "asset-001"},
+            payload_hash="payload-hash-001",
+            requested_at=requested_at,
+            expires_at=None,
+            lifecycle_state="approved",
+        )
+        service.persist_record(action_request)
+
+        reconciliation = service.reconcile_action_execution(
+            action_request_id="action-request-001",
+            workflow_id="workflow-remediate-host",
+            observed_executions=(
+                {
+                    "workflow_execution_id": "exec-001",
+                    "workflow_id": "workflow-remediate-host",
+                    "idempotency_key": "idempotency-001",
+                    "observed_at": datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc),
+                },
+                {
+                    "workflow_execution_id": "exec-001",
+                    "workflow_id": "workflow-remediate-host",
+                    "idempotency_key": "idempotency-001",
+                    "observed_at": datetime(2026, 4, 5, 12, 6, tzinfo=timezone.utc),
+                },
+            ),
+            compared_at=datetime(2026, 4, 5, 12, 6, tzinfo=timezone.utc),
+            stale_after=datetime(2026, 4, 5, 12, 30, tzinfo=timezone.utc),
+        )
+
+        self.assertEqual(reconciliation.ingest_disposition, "matched")
+        self.assertEqual(reconciliation.lifecycle_state, "matched")
+        self.assertEqual(reconciliation.workflow_execution_id, "exec-001")
+        self.assertEqual(reconciliation.linked_execution_ids, ("exec-001", "exec-001"))
+
 
 if __name__ == "__main__":
     unittest.main()
