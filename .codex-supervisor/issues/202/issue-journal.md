@@ -40,11 +40,12 @@ Failure signature: none
 - Hypothesis: The local runtime path was already capable of rendering read-only inspection snapshots through the service layer, but `control-plane/main.py` incorrectly treated non-persistent local state as a hard blocker instead of allowing empty or locally-seeded read-only views.
 - What changed: Removed the in-memory persistence rejection from the CLI entrypoint, tightened `control-plane/tests/test_cli_inspection.py` to require standalone read-only inspection rendering against the default local runtime, and updated `control-plane/README.md` to document the approved local path and its non-production scope.
 - Current blocker: none
-- Next exact step: Commit the refreshed journal note, open the draft PR for `codex/issue-202`, and hand the branch off for review.
+- Next exact step: Monitor draft PR #211 for local review feedback and promote it once the current stabilizing phase is cleared.
 - Verification gap: Focused issue verification was rerun successfully this turn; broader unittest coverage outside `control-plane/tests/test_cli_inspection.py` was still not rerun.
 - Files touched: control-plane/main.py; control-plane/tests/test_cli_inspection.py; control-plane/README.md; .codex-supervisor/issues/202/issue-journal.md
 - Rollback concern: Low; the change only removes a CLI-only guard that contradicted existing service behavior, while tests now pin the read-only in-memory inspection contract.
 - Last focused command: rg -n "inspect-records|inspect-reconciliation-status|persistence_mode=\"in_memory\"|read-only" control-plane
 ### Scratchpad
 - 2026-04-05: Re-ran focused verification in stabilizing phase. `python3 -m unittest control-plane/tests/test_cli_inspection.py`, `python3 control-plane/main.py runtime`, `python3 control-plane/main.py inspect-records --family alert`, `python3 control-plane/main.py inspect-reconciliation-status`, and the targeted `rg` acceptance grep all passed against `ebfc46e`.
+- 2026-04-05: Pushed `codex/issue-202` and opened draft PR #211 (`Enable local read-only inspection CLI`) from this checkpoint.
 - Keep this section short. The supervisor may compact older notes automatically.
