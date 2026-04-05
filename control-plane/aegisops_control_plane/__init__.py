@@ -19,7 +19,10 @@ from .models import (
 from .service import (
     AegisOpsControlPlaneService,
     FindingAlertIngestResult,
+    ReconciliationStatusSnapshot,
+    RecordInspectionSnapshot,
     RuntimeSnapshot,
+    build_runtime_service,
     build_runtime_snapshot,
 )
 
@@ -38,8 +41,11 @@ __all__ = [
     "LeadRecord",
     "ObservationRecord",
     "ReconciliationRecord",
+    "ReconciliationStatusSnapshot",
     "RecommendationRecord",
+    "RecordInspectionSnapshot",
     "RuntimeConfig",
     "RuntimeSnapshot",
+    "build_runtime_service",
     "build_runtime_snapshot",
 ]

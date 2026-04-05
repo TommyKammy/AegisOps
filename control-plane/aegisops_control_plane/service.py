@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from collections import Counter
+from dataclasses import asdict, dataclass, fields
 from datetime import datetime, timezone
 import uuid
 from typing import Mapping, Protocol, Type, TypeVar
@@ -10,10 +11,19 @@ from .adapters.opensearch import OpenSearchSignalAdapter
 from .adapters.postgres import PostgresControlPlaneStore
 from .config import RuntimeConfig
 from .models import (
+    AITraceRecord,
     ActionRequestRecord,
     AlertRecord,
+    ApprovalDecisionRecord,
+    CaseRecord,
     ControlPlaneRecord,
+    EvidenceRecord,
+    HuntRecord,
+    HuntRunRecord,
+    LeadRecord,
+    ObservationRecord,
     ReconciliationRecord,
+    RecommendationRecord,
 )
 
 
@@ -56,6 +66,84 @@ class FindingAlertIngestResult:
     disposition: str
 
 
+@dataclass(frozen=True)
+class RecordInspectionSnapshot:
+    read_only: bool
+    record_family: str
+    total_records: int
+    records: tuple[dict[str, object], ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return _json_ready(
+            {
+                "read_only": self.read_only,
+                "record_family": self.record_family,
+                "total_records": self.total_records,
+                "records": self.records,
+            }
+        )
+
+
+@dataclass(frozen=True)
+class ReconciliationStatusSnapshot:
+    read_only: bool
+    total_records: int
+    latest_compared_at: datetime | None
+    by_lifecycle_state: dict[str, int]
+    by_ingest_disposition: dict[str, int]
+    records: tuple[dict[str, object], ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return _json_ready(
+            {
+                "read_only": self.read_only,
+                "total_records": self.total_records,
+                "latest_compared_at": self.latest_compared_at,
+                "by_lifecycle_state": self.by_lifecycle_state,
+                "by_ingest_disposition": self.by_ingest_disposition,
+                "records": self.records,
+            }
+        )
+
+
+RECORD_TYPES_BY_FAMILY: dict[str, Type[ControlPlaneRecord]] = {
+    record_type.record_family: record_type
+    for record_type in (
+        AlertRecord,
+        CaseRecord,
+        EvidenceRecord,
+        ObservationRecord,
+        LeadRecord,
+        RecommendationRecord,
+        ApprovalDecisionRecord,
+        ActionRequestRecord,
+        HuntRecord,
+        HuntRunRecord,
+        AITraceRecord,
+        ReconciliationRecord,
+    )
+}
+
+
+def _json_ready(value: object) -> object:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, Mapping):
+        return {str(key): _json_ready(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_json_ready(item) for item in value]
+    if isinstance(value, list):
+        return [_json_ready(item) for item in value]
+    return value
+
+
+def _record_to_dict(record: ControlPlaneRecord) -> dict[str, object]:
+    return {
+        field.name: getattr(record, field.name)
+        for field in fields(record)
+    }
+
+
 class AegisOpsControlPlaneService:
     """Minimal local runtime skeleton for the first control-plane service."""
 
@@ -91,6 +179,44 @@ class AegisOpsControlPlaneService:
 
     def get_record(self, record_type: Type[RecordT], record_id: str) -> RecordT | None:
         return self._store.get(record_type, record_id)
+
+    def inspect_records(self, record_family: str) -> RecordInspectionSnapshot:
+        record_type = RECORD_TYPES_BY_FAMILY.get(record_family)
+        if record_type is None:
+            known_families = ", ".join(sorted(RECORD_TYPES_BY_FAMILY))
+            raise ValueError(
+                f"Unsupported control-plane record family {record_family!r}; "
+                f"expected one of: {known_families}"
+            )
+
+        records = tuple(_record_to_dict(record) for record in self._store.list(record_type))
+        return RecordInspectionSnapshot(
+            read_only=True,
+            record_family=record_family,
+            total_records=len(records),
+            records=records,
+        )
+
+    def inspect_reconciliation_status(self) -> ReconciliationStatusSnapshot:
+        records = self._store.list(ReconciliationRecord)
+        latest_compared_at = max(
+            (record.compared_at for record in records),
+            default=None,
+        )
+        by_lifecycle_state = dict(
+            sorted(Counter(record.lifecycle_state for record in records).items())
+        )
+        by_ingest_disposition = dict(
+            sorted(Counter(record.ingest_disposition for record in records).items())
+        )
+        return ReconciliationStatusSnapshot(
+            read_only=True,
+            total_records=len(records),
+            latest_compared_at=latest_compared_at,
+            by_lifecycle_state=by_lifecycle_state,
+            by_ingest_disposition=by_ingest_disposition,
+            records=tuple(_record_to_dict(record) for record in records),
+        )
 
     @staticmethod
     def _require_aware_datetime(value: object, field_name: str) -> datetime:
@@ -380,3 +506,10 @@ def build_runtime_snapshot(environ: Mapping[str, str] | None = None) -> RuntimeS
     config = RuntimeConfig.from_env(environ)
     service = AegisOpsControlPlaneService(config)
     return service.describe_runtime()
+
+
+def build_runtime_service(
+    environ: Mapping[str, str] | None = None,
+) -> AegisOpsControlPlaneService:
+    config = RuntimeConfig.from_env(environ)
+    return AegisOpsControlPlaneService(config)
