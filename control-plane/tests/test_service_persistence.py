@@ -174,6 +174,30 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             ("reconciliation-001", "reconciliation-002"),
         )
 
+    def test_service_rejects_schema_invalid_records_before_they_are_inspectable(self) -> None:
+        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+
+        with self.assertRaises(ValueError):
+            service.persist_record(
+                AlertRecord(
+                    alert_id="alert-invalid",
+                    finding_id="finding-001",
+                    analytic_signal_id=None,
+                    case_id=None,
+                    lifecycle_state="invalid",
+                )
+            )
+
+        snapshot = service.inspect_records("alert")
+
+        self.assertEqual(snapshot.total_records, 0)
+        self.assertEqual(snapshot.records, ())
+        self.assertIsNone(service.get_record(AlertRecord, "alert-invalid"))
+
     def test_service_upserts_alert_lifecycle_from_upstream_signals(self) -> None:
         store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
         service = AegisOpsControlPlaneService(
@@ -429,13 +453,13 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             approval_decision_id="approval-001",
             case_id=None,
             alert_id=None,
-            finding_id=None,
+            finding_id="finding-001",
             idempotency_key="idempotency-001",
             target_scope={"asset_id": "asset-001"},
             payload_hash="payload-hash-001",
             requested_at=requested_at,
             expires_at=None,
-            lifecycle_state="pending",
+            lifecycle_state="pending_approval",
         )
         service.persist_record(action_request)
 
@@ -460,7 +484,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             approval_decision_id="approval-001",
             case_id=None,
             alert_id=None,
-            finding_id=None,
+            finding_id="finding-001",
             idempotency_key="idempotency-001",
             target_scope={"asset_id": "asset-001"},
             payload_hash="payload-hash-001",
@@ -509,7 +533,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             approval_decision_id="approval-001",
             case_id=None,
             alert_id=None,
-            finding_id=None,
+            finding_id="finding-001",
             idempotency_key="idempotency-001",
             target_scope={"asset_id": "asset-001"},
             payload_hash="payload-hash-001",
