@@ -21,6 +21,28 @@ from aegisops_control_plane.service import AegisOpsControlPlaneService
 
 
 class ControlPlaneCliInspectionTests(unittest.TestCase):
+    def test_runtime_command_honors_injected_service_snapshot(self) -> None:
+        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=9411,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                opensearch_url="https://opensearch.internal",
+                n8n_base_url="https://n8n.internal",
+            ),
+            store=store,
+        )
+        stdout = io.StringIO()
+
+        main.main(["runtime"], stdout=stdout, service=service)
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["bind_host"], "127.0.0.1")
+        self.assertEqual(payload["bind_port"], 9411)
+        self.assertEqual(payload["postgres_dsn"], "postgresql://control-plane.local/aegisops")
+        self.assertEqual(payload["persistence_mode"], "in_memory")
+
     def test_cli_renders_read_only_record_and_reconciliation_views(self) -> None:
         store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
         service = AegisOpsControlPlaneService(

@@ -54,7 +54,11 @@ def main(
     stdout = stdout or sys.stdout
 
     if command == "runtime":
-        payload = build_runtime_snapshot().to_dict()
+        payload = (
+            service.describe_runtime().to_dict()
+            if service is not None
+            else build_runtime_snapshot().to_dict()
+        )
     else:
         using_runtime_service = service is None
         service = service or build_runtime_service()
