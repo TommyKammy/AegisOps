@@ -99,6 +99,81 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(snapshot.postgres_dsn, "postgresql://control-plane.local/aegisops")
         self.assertEqual(snapshot.persistence_mode, "in_memory")
 
+    def test_service_exposes_read_only_record_and_reconciliation_inspection(self) -> None:
+        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                opensearch_url="https://opensearch.internal",
+                n8n_base_url="https://n8n.internal",
+            ),
+            store=store,
+        )
+        first_compared_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        latest_compared_at = datetime(2026, 4, 5, 12, 30, tzinfo=timezone.utc)
+        alert = AlertRecord(
+            alert_id="alert-001",
+            finding_id="finding-001",
+            analytic_signal_id="signal-001",
+            case_id=None,
+            lifecycle_state="triaged",
+        )
+        matched = ReconciliationRecord(
+            reconciliation_id="reconciliation-001",
+            subject_linkage={"alert_ids": ("alert-001",), "finding_ids": ("finding-001",)},
+            alert_id="alert-001",
+            finding_id="finding-001",
+            analytic_signal_id="signal-001",
+            workflow_execution_id=None,
+            linked_execution_ids=(),
+            correlation_key="claim:host-001:privilege-escalation",
+            first_seen_at=first_compared_at,
+            last_seen_at=first_compared_at,
+            ingest_disposition="matched",
+            mismatch_summary="matched upstream signal into alert lifecycle",
+            compared_at=first_compared_at,
+            lifecycle_state="matched",
+        )
+        stale = ReconciliationRecord(
+            reconciliation_id="reconciliation-002",
+            subject_linkage={"alert_ids": ("alert-001",), "finding_ids": ("finding-001",)},
+            alert_id="alert-001",
+            finding_id="finding-001",
+            analytic_signal_id="signal-001",
+            workflow_execution_id="exec-001",
+            linked_execution_ids=("exec-001",),
+            correlation_key="action-request-001:workflow-remediate-host:idempotency-001",
+            first_seen_at=first_compared_at,
+            last_seen_at=latest_compared_at,
+            ingest_disposition="stale",
+            mismatch_summary="stale downstream execution observation requires refresh",
+            compared_at=latest_compared_at,
+            lifecycle_state="stale",
+        )
+
+        service.persist_record(alert)
+        service.persist_record(matched)
+        service.persist_record(stale)
+
+        records_view = service.inspect_records("alert")
+        status_view = service.inspect_reconciliation_status()
+
+        self.assertTrue(records_view.read_only)
+        self.assertEqual(records_view.record_family, "alert")
+        self.assertEqual(records_view.total_records, 1)
+        self.assertEqual(records_view.records[0]["alert_id"], "alert-001")
+        self.assertEqual(records_view.records[0]["lifecycle_state"], "triaged")
+
+        self.assertTrue(status_view.read_only)
+        self.assertEqual(status_view.total_records, 2)
+        self.assertEqual(status_view.by_lifecycle_state, {"matched": 1, "stale": 1})
+        self.assertEqual(status_view.by_ingest_disposition, {"matched": 1, "stale": 1})
+        self.assertEqual(status_view.latest_compared_at, latest_compared_at)
+        self.assertEqual(
+            tuple(record["reconciliation_id"] for record in status_view.records),
+            ("reconciliation-001", "reconciliation-002"),
+        )
+
     def test_service_upserts_alert_lifecycle_from_upstream_signals(self) -> None:
         store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
         service = AegisOpsControlPlaneService(
