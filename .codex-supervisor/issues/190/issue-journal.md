@@ -6,23 +6,23 @@
 - Workspace: .
 - Journal: .codex-supervisor/issues/190/issue-journal.md
 - Current phase: draft_pr
-- Attempt count: 3 (implementation=1, repair=2)
-- Last head SHA: 00fc8102e48c45bcfa767ecac90d8e4b55ecb68a
+- Attempt count: 4 (implementation=1, repair=3)
+- Last head SHA: eb3f2f674337ed0c433dd77b469ea79d28f2a698
 - Blocked reason: none
 - Last failure signature: none
 - Repeated failure signature count: 0
-- Updated at: 2026-04-05T02:57:29.132Z
+- Updated at: 2026-04-05T03:01:01.392Z
 
 ## Latest Codex Summary
-No implementation changes were needed. I checked draft PR #199, confirmed there are still no actionable review comments, refreshed the issue journal handoff to reflect the current draft state, committed that journal update as `00fc810`, and pushed it to `codex/issue-190`.
+No implementation changes were needed. I checked draft PR #199 again, confirmed there are still no actionable review comments, refreshed the issue journal handoff to reflect that the last full CI/report was green, committed the journal update as `eb3f2f6`, and pushed it to `codex/issue-190`.
 
-PR #199 remains open and draft: https://github.com/TommyKammy/AegisOps/pull/199. After the metadata push, CI is queued again.
+After the latest metadata-only push, PR #199 is still draft and open: https://github.com/TommyKammy/AegisOps/pull/199. GitHub has not reported fresh check statuses yet for that new head.
 
-Summary: Refreshed the issue journal handoff, pushed the branch, and confirmed draft PR #199 is waiting on CI with no actionable reviews yet.
+Summary: Refreshed the issue journal handoff, pushed the draft branch, and confirmed PR #199 still has no actionable review feedback.
 State hint: waiting_ci
 Blocked reason: none
 Tests: Not run locally this turn; checked PR state with `gh pr view 199 --json number,url,state,isDraft,reviewDecision,statusCheckRollup,comments,reviews` and `gh pr view 199 --json number,url,isDraft,state,statusCheckRollup`
-Next action: Wait for CI on draft PR #199 to finish and address any review or check feedback if it appears.
+Next action: Wait for fresh CI/reporting on draft PR #199 and address any review or check feedback if it appears.
 Failure signature: none
 
 ## Active Failure Context
@@ -31,7 +31,7 @@ Failure signature: none
 ## Codex Working Notes
 ### Current Handoff
 - Hypothesis: The missing issue slice was a bounded read-only inspection surface; persisted control-plane records existed in the service/store boundary, but there was no service or CLI path to inspect them or summarize reconciliation state.
-- What changed: Added a focused reproducing test for missing inspection methods, implemented read-only record-family and reconciliation-status snapshots in the control-plane service, exposed them via `control-plane/main.py` subcommands, added CLI coverage, updated the control-plane README to describe the read-only inspection path, committed the slice as `098e54a`, and opened draft PR #199.
+- What changed: Added a focused reproducing test for missing inspection methods, implemented read-only record-family and reconciliation-status snapshots in the control-plane service, exposed them via `control-plane/main.py` subcommands, added CLI coverage, updated the control-plane README to describe the read-only inspection path, opened draft PR #199, and most recently refreshed the journal/status handoff at `eb3f2f6`.
 - Current blocker: none
 - Next exact step: Hold for review feedback on draft PR #199; the current reported CI and CodeRabbit statuses are green and there are still no actionable review comments.
 - Verification gap: No live PostgreSQL-backed inspection path exists yet; verification is limited to the in-memory control-plane scaffold and CLI/service tests.
