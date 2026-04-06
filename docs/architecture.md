@@ -12,82 +12,137 @@ This overview exists to make the approved high-level architecture explicit befor
 
 It defines:
 
-- the primary platform components,
-- the responsibility boundary for each component,
-- the separation between detection and workflow execution,
-- the approved high-level access model, and
+- the primary architecture layers,
+- the responsibility boundary for each layer,
+- the mainline policy-sensitive path across those layers,
+- the separation between governance, automation, and execution, and
 - the baseline assumptions that future issues must preserve unless an ADR approves a change.
 
 ## 2. Architecture Overview
 
-AegisOps is an internally managed SOC and SOAR platform built around a small number of clearly separated roles.
+AegisOps is a governed SecOps control plane above external detection and automation substrates.
 
-At a high level, data enters through the ingest role, is stored and analyzed in OpenSearch, is matched against reviewed Sigma-derived detection content, and then flows into n8n for enrichment, approval handling, routing, and controlled downstream actions.
+The approved baseline is organized around four roles:
 
-Supporting services exist to preserve those boundaries rather than to blur them. PostgreSQL holds n8n state, Redis remains optional for future queue-based scaling, and the proxy is the controlled access point for user-facing interfaces.
+- the detection substrate,
+- the AegisOps control plane,
+- the routine automation substrate, and
+- the controlled execution surface.
 
-A future live AegisOps control-plane service exists to materialize authoritative platform state and reconciliation logic between those planes without turning OpenSearch documents or n8n metadata into the system of record for AegisOps-owned workflows.
+The initial standard detection substrate is Wazuh.
+
+The initial standard routine automation substrate is Shuffle.
+
+The AegisOps control plane is the authoritative owner of policy-sensitive records, approval decisions, evidence linkage, action intent, and reconciliation truth across substrate boundaries.
+
+The controlled execution surface is the isolated executor path for higher-risk actions that require tighter execution controls than routine automation should own.
+
+The normative mainline policy-sensitive path is:
+
+`Substrate Detection Record -> Analytic Signal -> Alert or Case -> Action Request -> Approval Decision -> Approved Automation Substrate or Executor -> Reconciliation`
+
+That path must remain explicit, reviewable, and auditable.
+
+Direct substrate-to-automation shortcuts must not become the policy-sensitive system-of-record path.
+
+Detection substrates may emit substrate detection records and analytic signals, and automation substrates may perform delegated work, but neither may become the authority for alert truth, case truth, approval truth, action intent, evidence custody, or reconciliation truth.
+
+OpenSearch, Sigma, and n8n may still appear in the repository structure as optional, transitional, or experimental components, but they are no longer the product core in the approved architecture baseline.
 
 ## 3. Component Responsibilities and Boundaries
 
-OpenSearch is the SIEM core for log ingestion, storage, search, analytics, and detection.
+### Detection Substrate
 
-Its approved boundary is analytics and detection. It is not the place for response execution logic, approval handling, or ad-hoc orchestration behavior.
+The detection substrate is responsible for telemetry analysis, detection generation, correlation, and substrate-native alerting artifacts.
 
-Sigma defines detection logic only and is not a runtime execution engine.
+Wazuh is the initial standard detection substrate in the approved baseline.
 
-Its role is to provide standardized, reviewable detection definitions that can be translated into approved detection content without taking on storage, orchestration, or response responsibilities.
+Its approved boundary is upstream detection and analytic-signal production.
 
-n8n handles enrichment, routing, orchestration, approval workflows, and downstream integration.
+The detection substrate must not directly own cases, approval decisions, evidence truth, or execution truth for AegisOps-governed workflows.
 
-Its approved boundary is controlled workflow execution and integration handling after alerts or findings have been validated and routed into the SOAR layer.
+OpenSearch may still be used as an optional or transitional analytics substrate.
 
-PostgreSQL stores n8n metadata and execution state.
+Sigma may still be used as an optional or transitional rule-definition format or translation source.
 
-It supports workflow persistence and operational state for n8n, but it is not a substitute analytics store or a general-purpose platform data lake.
+Those tools remain subordinate to the approved control-plane boundary and must not redefine the architecture narrative around themselves.
 
-Redis is reserved for optional future workflow queueing and future scaling.
+### AegisOps Control Plane
 
-It is not required for the initial baseline and should be understood as a bounded supporting component for later queue-mode operation rather than a new control surface.
+The AegisOps control plane is the authoritative decision and execution governance layer.
 
-The proxy provides TLS termination and controlled user-facing access.
+It owns the platform records and policy decisions for alerts, cases, evidence, observations, leads, recommendations, approval decisions, action requests, hunts, hunt runs, AI traces, and reconciliation.
 
-Its approved role is ingress for user-facing UI access and related access controls, not backend analytics, workflow execution, or direct data processing.
+Its approved boundary includes policy evaluation, approval handling, evidence linkage, execution delegation, and cross-substrate reconciliation.
 
-The ingest role handles syslog, API-based, and agent-based collection and parsing before data reaches analytics systems.
+It is the authoritative system of record for policy-sensitive workflow state.
 
-Its approved boundary is collection and preparation of incoming telemetry rather than long-term analytics, approval logic, or operator-facing UI responsibilities.
+Neither detection substrates nor automation substrates may bypass this boundary and become the durable authority path for AegisOps-owned workflow truth.
+
+### Routine Automation Substrate
+
+The routine automation substrate performs approved automation that the control plane delegates within bounded scope.
+
+Shuffle is the initial standard routine automation substrate in the approved baseline.
+
+Its approved boundary is routine enrichment, routing, integration handling, and approved automation execution after the control plane has produced the governing action request and approval decision context.
+
+The routine automation substrate must not mint or overwrite approval truth, action intent, evidence truth, or reconciliation truth.
+
+n8n may still be used as an optional, transitional, or experimental executor or orchestration substrate.
+
+That status does not make it a product core or an authority surface.
+
+### Controlled Execution Surface
+
+The controlled execution surface is the isolated executor path for higher-risk actions.
+
+Its approved boundary is tightly controlled action execution under the authority of the AegisOps control plane.
+
+The executor is an execution surface, not a policy engine and not a workflow system of record.
+
+It receives bounded, approved intent from the control plane and returns execution outcomes for reconciliation.
+
+Implementation of executor code, substrate connectors, and UI work remains out of scope for this architecture baseline.
 
 ## 4. Control Plane vs Execution Plane
 
-Detection and execution remain strictly separated in the approved baseline.
+Detection, control, automation, and execution remain explicitly separated in the approved baseline.
 
-OpenSearch performs detection and analytics only and must not directly execute response actions.
+Detection substrates perform detection and correlation only.
 
-Sigma remains part of the control logic for defining what should be detected, but it does not execute workflows and does not perform runtime actions itself.
+The AegisOps control plane owns the policy-sensitive path from analytic signal intake through alert or case state, action request generation, approval decisions, and reconciliation.
 
-n8n may execute approved workflows only after validation and approval requirements are satisfied.
+Routine automation substrates execute delegated automation only after control-plane validation and approval requirements are satisfied.
+
+The controlled execution surface handles higher-risk actions only within the explicit authority and safety controls defined by the control plane.
 
 This means the decision to detect, the decision to approve, and the act of execution are intentionally reviewable steps rather than a single opaque automation path.
 
-The approved baseline therefore treats analytics and detection as one plane of responsibility, while workflow execution and downstream action handling remain in a separate orchestration plane under explicit control.
+The approved baseline forbids direct substrate-to-automation shortcuts from becoming the mainline policy-sensitive path, even if such shortcuts appear operationally convenient.
+
+Substrate-native records may support observability or local operations, but they must not displace the AegisOps control plane as the authority for approval, evidence, and reconciliation truth.
 
 ## 5. Approved Access Model
 
 All external UI access must traverse the approved reverse proxy.
 
-The proxy is the approved entry point for user-facing interfaces such as OpenSearch Dashboards, the n8n UI, and similar future web surfaces that may be introduced within the baseline.
+The proxy is the approved entry point for user-facing interfaces such as Wazuh, Shuffle, OpenSearch Dashboards, n8n, and similar future web surfaces that may be introduced within the baseline.
 
 Direct unaudited exposure of internal service ports is not part of the approved baseline.
 
-OpenSearch cluster interfaces, PostgreSQL, Redis, ingest services, and similar backend components remain internal by default and should be reached only through approved internal or administrative paths.
+Detection substrates, automation substrates, PostgreSQL, Redis, ingest services, the executor, and similar backend components remain internal by default and should be reached only through approved internal or administrative paths.
 
-Administrative access must remain documented and consistent with the baseline network exposure policy. This overview does not authorize alternative ingress paths, direct publication of backend services, or always-on outbound dependencies beyond separately reviewed policy.
+Administrative access must remain documented and consistent with the baseline network exposure policy.
+
+This overview does not authorize alternative ingress paths, direct publication of backend services, or always-on outbound dependencies beyond separately reviewed policy.
 
 ## 6. Baseline Alignment Notes
 
 This overview reflects the current approved baseline and must not be used to infer unapproved architecture changes.
 
-In particular, it does not introduce multi-site design, unrestricted automation, tenant isolation changes, new data stores, or additional externally exposed service roles.
+In particular, it does not introduce live substrate connectors, executor implementation, schema rollout, unrestricted automation, multi-site design, tenant-isolation changes, new data stores, or additional externally exposed service roles.
 
-Any future change to component boundaries, approval behavior, access paths, storage responsibilities, or operating model still requires explicit review through the project’s ADR and baseline governance process.
+Future substrate substitutions remain possible, but they must preserve the AegisOps-owned authority boundary for approval, evidence, action intent, and reconciliation unless a later ADR explicitly changes that governance model.
+
+Any future change to component boundaries, approval behavior, access paths, storage responsibilities, or operating model still requires explicit review through the project's ADR and baseline governance process.
