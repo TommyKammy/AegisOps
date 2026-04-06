@@ -183,15 +183,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 _load_wazuh_fixture("agent-origin-alert.json")
             ),
         )
-        service.persist_record(
-            AlertRecord(
-                alert_id=admitted.alert.alert_id,
-                finding_id=admitted.alert.finding_id,
-                analytic_signal_id=admitted.alert.analytic_signal_id,
-                case_id="case-queue-001",
-                lifecycle_state="escalated_to_case",
-            )
-        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
 
         stdout = io.StringIO()
         main.main(["inspect-analyst-queue"], stdout=stdout, service=service)
@@ -206,6 +198,8 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             "business_hours_triage",
         )
         self.assertEqual(payload["records"][0]["review_state"], "case_required")
+        self.assertEqual(payload["records"][0]["case_id"], promoted_case.case_id)
+        self.assertEqual(payload["records"][0]["case_lifecycle_state"], "open")
         self.assertEqual(payload["records"][0]["source_system"], "wazuh")
         self.assertEqual(
             payload["records"][0]["accountable_source_identities"],

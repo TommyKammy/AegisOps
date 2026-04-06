@@ -49,6 +49,8 @@ The minimum control-plane record families for this baseline are Alert, Case, Evi
 
 Analytic signals remain admitted vendor-neutral intake primitives with stable `analytic_signal_id` linkage and first-class control-plane persistence, but they remain distinct from the downstream analyst work-tracking record families listed above.
 
+Reviewed case-promotion for Wazuh-driven alerts must preserve that boundary: the Wazuh-native record and admitted analytic signal continue to own source lineage, while the promoted `Case` becomes the durable investigation owner only after AegisOps review explicitly links the alert, analytic signal, evidence set, and case record.
+
 At the approved baseline level, the source-of-truth expectations are:
 
 - substrate detection records and findings remain upstream substrate or analytics-plane facts, while analytic signals remain the admitted vendor-neutral intake primitive for control-plane routing and are preserved as first-class control-plane records;
@@ -195,6 +197,8 @@ Minimum lifecycle states for a Case record:
 | `closed` | Case handling is complete with recorded disposition, closure rationale, and any follow-up requirements. |
 | `reopened` | The case returned to active handling after closure because new facts or failed validation invalidated the prior closure. |
 | `superseded` | The case was intentionally replaced or merged into another case or incident while preserving linkage and audit history. |
+
+For reviewed Wazuh-origin handling, case-promotion must create or update the `Case` record as part of the control-plane path that changes the alert into `escalated_to_case`; durable case ownership must not depend on separately preseeded case rows inserted outside ingest or review handling.
 
 ### 6.3 Evidence
 

@@ -109,7 +109,9 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             },
         )
 
-    def test_service_extends_promoted_wazuh_alert_with_existing_case_linkage(self) -> None:
+    def test_service_extends_promoted_wazuh_alert_with_existing_case_linkage(
+        self,
+    ) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
@@ -122,24 +124,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 _load_wazuh_fixture("agent-origin-alert.json")
             ),
         )
-        service.persist_record(
-            AlertRecord(
-                alert_id=created.alert.alert_id,
-                finding_id=created.alert.finding_id,
-                analytic_signal_id=created.alert.analytic_signal_id,
-                case_id="case-001",
-                lifecycle_state="escalated_to_case",
-            )
-        )
-        service.persist_record(
-            CaseRecord(
-                case_id="case-001",
-                alert_id=created.alert.alert_id,
-                finding_id=created.alert.finding_id,
-                evidence_ids=("evidence-001",),
-                lifecycle_state="investigating",
-            )
-        )
+        promoted_case = service.promote_alert_to_case(created.alert.alert_id)
 
         restated_payload = _load_wazuh_fixture("agent-origin-alert.json")
         restated_payload["id"] = "1731595888.5000001"
@@ -160,11 +145,22 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         self.assertEqual(restated.disposition, "restated")
         self.assertEqual(restated.alert.alert_id, created.alert.alert_id)
-        self.assertEqual(restated.alert.case_id, "case-001")
+        self.assertEqual(restated.alert.case_id, promoted_case.case_id)
+        self.assertEqual(restated.alert.lifecycle_state, "escalated_to_case")
         self.assertIsNotNone(restated_signal)
-        self.assertEqual(restated_signal.case_ids, ("case-001",))
+        self.assertEqual(restated_signal.case_ids, (promoted_case.case_id,))
         self.assertIsNotNone(reconciliation)
-        self.assertEqual(reconciliation.subject_linkage["case_ids"], ("case-001",))
+        self.assertEqual(
+            reconciliation.subject_linkage["case_ids"],
+            (promoted_case.case_id,),
+        )
+
+        persisted_case = service.get_record(CaseRecord, promoted_case.case_id)
+        self.assertIsNotNone(persisted_case)
+        self.assertEqual(persisted_case.alert_id, created.alert.alert_id)
+        self.assertEqual(persisted_case.finding_id, created.alert.finding_id)
+        self.assertEqual(persisted_case.lifecycle_state, "open")
+        self.assertGreaterEqual(len(persisted_case.evidence_ids), 1)
 
     def test_service_keeps_distinct_wazuh_incidents_separate_when_native_context_differs(
         self,
@@ -674,15 +670,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 _load_wazuh_fixture("agent-origin-alert.json")
             ),
         )
-        service.persist_record(
-            AlertRecord(
-                alert_id=admitted.alert.alert_id,
-                finding_id=admitted.alert.finding_id,
-                analytic_signal_id=admitted.alert.analytic_signal_id,
-                case_id="case-analyst-001",
-                lifecycle_state="escalated_to_case",
-            )
-        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
 
         queue_view = service.inspect_analyst_queue()
 
@@ -702,7 +690,8 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             queue_view.records[0]["accountable_source_identities"],
             ("agent:007",),
         )
-        self.assertEqual(queue_view.records[0]["case_id"], "case-analyst-001")
+        self.assertEqual(queue_view.records[0]["case_id"], promoted_case.case_id)
+        self.assertEqual(queue_view.records[0]["case_lifecycle_state"], "open")
         self.assertEqual(
             queue_view.records[0]["native_rule"],
             {

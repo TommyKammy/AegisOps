@@ -430,6 +430,135 @@ class AegisOpsControlPlaneService:
             )
         )
 
+    def promote_alert_to_case(
+        self,
+        alert_id: str,
+        *,
+        case_id: str | None = None,
+        case_lifecycle_state: str = "open",
+    ) -> CaseRecord:
+        alert_id = self._require_non_empty_string(alert_id, "alert_id")
+        requested_case_id = self._normalize_optional_string(case_id, "case_id")
+        case_lifecycle_state = self._require_non_empty_string(
+            case_lifecycle_state,
+            "case_lifecycle_state",
+        )
+        with self._store.transaction():
+            alert = self._store.get(AlertRecord, alert_id)
+            if alert is None:
+                raise LookupError(f"Missing alert {alert_id!r}")
+
+            if alert.case_id is not None:
+                resolved_case_id = alert.case_id
+                if (
+                    requested_case_id is not None
+                    and requested_case_id != resolved_case_id
+                ):
+                    raise ValueError(
+                        f"Alert {alert_id!r} is already linked to case {resolved_case_id!r}"
+                    )
+            else:
+                resolved_case_id = requested_case_id or self._next_identifier("case")
+
+            evidence_records = self._list_alert_evidence_records(
+                alert_id=alert.alert_id,
+                case_id=resolved_case_id,
+            )
+            if not evidence_records:
+                raise ValueError(
+                    f"Alert {alert_id!r} has no linked evidence to promote into a case"
+                )
+
+            merged_evidence_ids: tuple[str, ...] = ()
+            for evidence in evidence_records:
+                merged_evidence_ids = self._merge_linked_ids(
+                    merged_evidence_ids,
+                    evidence.evidence_id,
+                )
+                updated_lifecycle_state = (
+                    "linked"
+                    if evidence.lifecycle_state == "collected"
+                    else evidence.lifecycle_state
+                )
+                if (
+                    evidence.case_id == resolved_case_id
+                    and updated_lifecycle_state == evidence.lifecycle_state
+                ):
+                    continue
+                self.persist_record(
+                    EvidenceRecord(
+                        evidence_id=evidence.evidence_id,
+                        source_record_id=evidence.source_record_id,
+                        alert_id=evidence.alert_id,
+                        case_id=resolved_case_id,
+                        source_system=evidence.source_system,
+                        collector_identity=evidence.collector_identity,
+                        acquired_at=evidence.acquired_at,
+                        derivation_relationship=evidence.derivation_relationship,
+                        lifecycle_state=updated_lifecycle_state,
+                    )
+                )
+
+            existing_case = self._store.get(CaseRecord, resolved_case_id)
+            if existing_case is not None:
+                if (
+                    existing_case.alert_id is not None
+                    and existing_case.alert_id != alert.alert_id
+                ):
+                    raise ValueError(
+                        f"Case {resolved_case_id!r} is already linked to alert {existing_case.alert_id!r}"
+                    )
+                if (
+                    existing_case.finding_id is not None
+                    and existing_case.finding_id != alert.finding_id
+                ):
+                    raise ValueError(
+                        f"Case {resolved_case_id!r} is already linked to finding {existing_case.finding_id!r}"
+                    )
+            merged_case_evidence_ids = self._merge_linked_ids(
+                existing_case.evidence_ids if existing_case is not None else (),
+                None,
+            )
+            for evidence_id in merged_evidence_ids:
+                merged_case_evidence_ids = self._merge_linked_ids(
+                    merged_case_evidence_ids,
+                    evidence_id,
+                )
+
+            promoted_case = self.persist_record(
+                CaseRecord(
+                    case_id=resolved_case_id,
+                    alert_id=alert.alert_id,
+                    finding_id=alert.finding_id,
+                    evidence_ids=merged_case_evidence_ids,
+                    lifecycle_state=(
+                        existing_case.lifecycle_state
+                        if existing_case is not None
+                        else case_lifecycle_state
+                    ),
+                )
+            )
+            promoted_alert = self.persist_record(
+                AlertRecord(
+                    alert_id=alert.alert_id,
+                    finding_id=alert.finding_id,
+                    analytic_signal_id=alert.analytic_signal_id,
+                    case_id=promoted_case.case_id,
+                    lifecycle_state="escalated_to_case",
+                )
+            )
+            if promoted_alert.analytic_signal_id is not None:
+                self._link_case_to_analytic_signals(
+                    (promoted_alert.analytic_signal_id,),
+                    promoted_case.case_id,
+                )
+            self._link_case_to_alert_reconciliations(
+                alert_id=promoted_alert.alert_id,
+                case_id=promoted_case.case_id,
+                evidence_ids=merged_evidence_ids,
+            )
+            return promoted_case
+
     def ingest_native_detection_record(
         self,
         adapter: NativeDetectionRecordAdapter,
@@ -957,6 +1086,73 @@ class AegisOpsControlPlaneService:
                     first_seen_at=existing_signal.first_seen_at,
                     last_seen_at=existing_signal.last_seen_at,
                     lifecycle_state=existing_signal.lifecycle_state,
+                )
+            )
+
+    def _list_alert_evidence_records(
+        self,
+        *,
+        alert_id: str,
+        case_id: str | None,
+    ) -> tuple[EvidenceRecord, ...]:
+        evidence_records: list[EvidenceRecord] = []
+        for evidence in self._store.list(EvidenceRecord):
+            if evidence.alert_id == alert_id or (
+                case_id is not None and evidence.case_id == case_id
+            ):
+                evidence_records.append(evidence)
+        return tuple(evidence_records)
+
+    def _link_case_to_alert_reconciliations(
+        self,
+        *,
+        alert_id: str,
+        case_id: str,
+        evidence_ids: tuple[str, ...],
+    ) -> None:
+        for reconciliation in self._store.list(ReconciliationRecord):
+            if reconciliation.alert_id != alert_id:
+                continue
+            subject_linkage = dict(reconciliation.subject_linkage)
+            updated_case_ids = self._merge_linked_ids(
+                subject_linkage.get("case_ids"),
+                case_id,
+            )
+            updated_evidence_ids = self._merge_linked_ids(
+                subject_linkage.get("evidence_ids"),
+                None,
+            )
+            for evidence_id in evidence_ids:
+                updated_evidence_ids = self._merge_linked_ids(
+                    updated_evidence_ids,
+                    evidence_id,
+                )
+            if (
+                tuple(subject_linkage.get("case_ids", ())) == updated_case_ids
+                and tuple(subject_linkage.get("evidence_ids", ()))
+                == updated_evidence_ids
+            ):
+                continue
+            subject_linkage["case_ids"] = updated_case_ids
+            subject_linkage["evidence_ids"] = updated_evidence_ids
+            self.persist_record(
+                ReconciliationRecord(
+                    reconciliation_id=reconciliation.reconciliation_id,
+                    subject_linkage=subject_linkage,
+                    alert_id=reconciliation.alert_id,
+                    finding_id=reconciliation.finding_id,
+                    analytic_signal_id=reconciliation.analytic_signal_id,
+                    execution_run_id=reconciliation.execution_run_id,
+                    linked_execution_run_ids=(
+                        reconciliation.linked_execution_run_ids
+                    ),
+                    correlation_key=reconciliation.correlation_key,
+                    first_seen_at=reconciliation.first_seen_at,
+                    last_seen_at=reconciliation.last_seen_at,
+                    ingest_disposition=reconciliation.ingest_disposition,
+                    mismatch_summary=reconciliation.mismatch_summary,
+                    compared_at=reconciliation.compared_at,
+                    lifecycle_state=reconciliation.lifecycle_state,
                 )
             )
 
