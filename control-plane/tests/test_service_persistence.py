@@ -109,7 +109,9 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             },
         )
 
-    def test_service_restates_reviewed_wazuh_alert_after_case_promotion(self) -> None:
+    def test_service_extends_promoted_wazuh_alert_with_existing_case_linkage(
+        self,
+    ) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
