@@ -474,6 +474,25 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
 
         self.assertEqual(second_store.get(AlertRecord, "alert-001"), record)
 
+    def test_store_transaction_rolls_back_changes_when_error_is_raised(self) -> None:
+        store, _ = make_store()
+        record = AlertRecord(
+            alert_id="alert-001",
+            finding_id="finding-001",
+            analytic_signal_id="signal-001",
+            case_id=None,
+            lifecycle_state="new",
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "rollback transaction"):
+            with store.transaction():
+                store.save(record)
+                self.assertEqual(store.get(AlertRecord, "alert-001"), record)
+                raise RuntimeError("rollback transaction")
+
+        self.assertIsNone(store.get(AlertRecord, "alert-001"))
+        self.assertEqual(store.list(AlertRecord), ())
+
 
 if __name__ == "__main__":
     unittest.main()

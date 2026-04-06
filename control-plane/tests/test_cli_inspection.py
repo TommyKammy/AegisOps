@@ -16,6 +16,7 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 import main
 from aegisops_control_plane.config import RuntimeConfig
+from aegisops_control_plane.adapters.wazuh import WazuhAlertAdapter
 from aegisops_control_plane.models import (
     AlertRecord,
     AnalyticSignalRecord,
@@ -23,6 +24,13 @@ from aegisops_control_plane.models import (
 )
 from aegisops_control_plane.service import AegisOpsControlPlaneService
 from postgres_test_support import make_store
+
+
+FIXTURES_ROOT = pathlib.Path(__file__).resolve().parent / "fixtures" / "wazuh"
+
+
+def _load_wazuh_fixture(name: str) -> dict[str, object]:
+    return json.loads((FIXTURES_ROOT / name).read_text(encoding="utf-8"))
 
 
 class ControlPlaneCliInspectionTests(unittest.TestCase):
@@ -160,6 +168,56 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(
             status_payload["latest_compared_at"],
             "2026-04-05T12:00:00+00:00",
+        )
+
+    def test_cli_renders_wazuh_business_hours_analyst_queue_view(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+        admitted = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(
+                _load_wazuh_fixture("agent-origin-alert.json")
+            ),
+        )
+        service.persist_record(
+            AlertRecord(
+                alert_id=admitted.alert.alert_id,
+                finding_id=admitted.alert.finding_id,
+                analytic_signal_id=admitted.alert.analytic_signal_id,
+                case_id="case-queue-001",
+                lifecycle_state="escalated_to_case",
+            )
+        )
+
+        stdout = io.StringIO()
+        main.main(["inspect-analyst-queue"], stdout=stdout, service=service)
+
+        payload = json.loads(stdout.getvalue())
+        self.assertTrue(payload["read_only"])
+        self.assertEqual(payload["queue_name"], "analyst_review")
+        self.assertEqual(payload["total_records"], 1)
+        self.assertEqual(payload["records"][0]["alert_id"], admitted.alert.alert_id)
+        self.assertEqual(
+            payload["records"][0]["queue_selection"],
+            "business_hours_triage",
+        )
+        self.assertEqual(payload["records"][0]["review_state"], "case_required")
+        self.assertEqual(payload["records"][0]["source_system"], "wazuh")
+        self.assertEqual(
+            payload["records"][0]["accountable_source_identities"],
+            ["agent:007"],
+        )
+        self.assertEqual(
+            payload["records"][0]["native_rule"]["description"],
+            "SSH brute force attempt",
+        )
+        self.assertEqual(
+            payload["records"][0]["substrate_detection_record_ids"],
+            ["wazuh:1731594986.4931506"],
         )
 
     def test_cli_rejects_unknown_record_family_as_usage_error(self) -> None:

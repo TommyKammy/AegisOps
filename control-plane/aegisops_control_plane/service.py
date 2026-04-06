@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import AbstractContextManager
 from collections import Counter
 from dataclasses import asdict, dataclass, fields
 from datetime import datetime, timezone
@@ -43,6 +44,9 @@ class ControlPlaneStore(Protocol):
         ...
 
     def list(self, record_type: Type[RecordT]) -> tuple[RecordT, ...]:
+        ...
+
+    def transaction(self) -> AbstractContextManager[None]:
         ...
 
 
@@ -113,6 +117,24 @@ class ReconciliationStatusSnapshot:
                 "latest_compared_at": self.latest_compared_at,
                 "by_lifecycle_state": self.by_lifecycle_state,
                 "by_ingest_disposition": self.by_ingest_disposition,
+                "records": self.records,
+            }
+        )
+
+
+@dataclass(frozen=True)
+class AnalystQueueSnapshot:
+    read_only: bool
+    queue_name: str
+    total_records: int
+    records: tuple[dict[str, object], ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return _json_ready(
+            {
+                "read_only": self.read_only,
+                "queue_name": self.queue_name,
+                "total_records": self.total_records,
                 "records": self.records,
             }
         )
@@ -231,6 +253,133 @@ class AegisOpsControlPlaneService:
             records=tuple(_record_to_dict(record) for record in records),
         )
 
+    def inspect_analyst_queue(self) -> AnalystQueueSnapshot:
+        latest_reconciliation_by_alert_id: dict[str, ReconciliationRecord] = {}
+        for record in self._store.list(ReconciliationRecord):
+            if (
+                record.alert_id is None
+                or not self._reconciliation_has_detection_lineage(record)
+            ):
+                continue
+            current = latest_reconciliation_by_alert_id.get(record.alert_id)
+            if current is None or record.compared_at > current.compared_at:
+                latest_reconciliation_by_alert_id[record.alert_id] = record
+
+        active_alert_states = {
+            "new",
+            "triaged",
+            "investigating",
+            "escalated_to_case",
+            "reopened",
+        }
+        queue_records: list[dict[str, object]] = []
+        for alert in self._store.list(AlertRecord):
+            if alert.lifecycle_state not in active_alert_states:
+                continue
+            reconciliation = latest_reconciliation_by_alert_id.get(alert.alert_id)
+            if reconciliation is None:
+                continue
+
+            source_systems = self._merge_linked_ids(
+                reconciliation.subject_linkage.get("source_systems"),
+                None,
+            )
+            substrate_detection_record_ids = self._merge_linked_ids(
+                reconciliation.subject_linkage.get("substrate_detection_record_ids"),
+                None,
+            )
+            is_wazuh_origin = "wazuh" in source_systems or any(
+                detection_id.startswith("wazuh:")
+                for detection_id in substrate_detection_record_ids
+            )
+            if not is_wazuh_origin:
+                continue
+
+            case_record = (
+                self._store.get(CaseRecord, alert.case_id)
+                if alert.case_id is not None
+                else None
+            )
+            review_state = self._alert_review_state(alert)
+            queue_records.append(
+                {
+                    "alert_id": alert.alert_id,
+                    "finding_id": alert.finding_id,
+                    "analytic_signal_id": alert.analytic_signal_id,
+                    "case_id": alert.case_id,
+                    "case_lifecycle_state": (
+                        case_record.lifecycle_state if case_record is not None else None
+                    ),
+                    "queue_selection": "business_hours_triage",
+                    "review_state": review_state,
+                    "escalation_boundary": self._alert_escalation_boundary(alert),
+                    "source_system": (
+                        "wazuh"
+                        if is_wazuh_origin
+                        else (source_systems[0] if source_systems else "wazuh")
+                    ),
+                    "substrate_detection_record_ids": substrate_detection_record_ids,
+                    "accountable_source_identities": self._merge_linked_ids(
+                        reconciliation.subject_linkage.get(
+                            "accountable_source_identities"
+                        ),
+                        None,
+                    ),
+                    "native_rule": reconciliation.subject_linkage.get(
+                        "latest_native_rule"
+                    ),
+                    "evidence_ids": self._merge_linked_ids(
+                        reconciliation.subject_linkage.get("evidence_ids"),
+                        None,
+                    ),
+                    "correlation_key": reconciliation.correlation_key,
+                    "first_seen_at": reconciliation.first_seen_at,
+                    "last_seen_at": reconciliation.last_seen_at,
+                }
+            )
+
+        queue_records.sort(
+            key=lambda record: (
+                record["last_seen_at"]
+                or datetime.min.replace(tzinfo=timezone.utc),
+                record["alert_id"],
+            ),
+            reverse=True,
+        )
+        return AnalystQueueSnapshot(
+            read_only=True,
+            queue_name="analyst_review",
+            total_records=len(queue_records),
+            records=tuple(queue_records),
+        )
+
+    def _reconciliation_has_detection_lineage(
+        self, record: ReconciliationRecord
+    ) -> bool:
+        return any(
+            (
+                record.analytic_signal_id is not None,
+                bool(
+                    self._merge_linked_ids(
+                        record.subject_linkage.get("analytic_signal_ids"),
+                        None,
+                    )
+                ),
+                bool(
+                    self._merge_linked_ids(
+                        record.subject_linkage.get("substrate_detection_record_ids"),
+                        None,
+                    )
+                ),
+                bool(
+                    self._merge_linked_ids(
+                        record.subject_linkage.get("source_systems"),
+                        None,
+                    )
+                ),
+            )
+        )
+
     @staticmethod
     def _require_aware_datetime(value: object, field_name: str) -> datetime:
         if not isinstance(value, datetime):
@@ -317,7 +466,13 @@ class AegisOpsControlPlaneService:
             last_seen_at=admission.last_seen_at,
             materially_new_work=admission.materially_new_work,
         )
-        return self._ingest_analytic_signal_admission(admission)
+        with self._store.transaction():
+            result = self._ingest_analytic_signal_admission(admission)
+            return self._attach_native_detection_context(
+                record=record,
+                ingest_result=result,
+                substrate_detection_record_id=substrate_detection_record_id,
+            )
 
     def _ingest_analytic_signal_admission(
         self,
@@ -530,6 +685,106 @@ class AegisOpsControlPlaneService:
             alert=alert,
             reconciliation=reconciliation,
             disposition=disposition,
+        )
+
+    def _attach_native_detection_context(
+        self,
+        *,
+        record: NativeDetectionRecord,
+        ingest_result: FindingAlertIngestResult,
+        substrate_detection_record_id: str,
+    ) -> FindingAlertIngestResult:
+        source_system = self._normalize_optional_string(
+            record.metadata.get("source_system"),
+            "metadata.source_system",
+        ) or record.substrate_key
+        evidence_id = f"evidence-{uuid.uuid5(uuid.NAMESPACE_URL, substrate_detection_record_id)}"
+        evidence = self.persist_record(
+            EvidenceRecord(
+                evidence_id=evidence_id,
+                source_record_id=substrate_detection_record_id,
+                alert_id=ingest_result.alert.alert_id,
+                case_id=ingest_result.alert.case_id,
+                source_system=source_system,
+                collector_identity=f"{record.substrate_key}-native-detection-adapter",
+                acquired_at=self._require_aware_datetime(
+                    record.first_seen_at,
+                    "record.first_seen_at",
+                ),
+                derivation_relationship="native_detection_record",
+                lifecycle_state="collected",
+            )
+        )
+
+        subject_linkage = dict(ingest_result.reconciliation.subject_linkage)
+        subject_linkage["evidence_ids"] = self._merge_linked_ids(
+            subject_linkage.get("evidence_ids"),
+            evidence.evidence_id,
+        )
+        subject_linkage["source_systems"] = self._merge_linked_ids(
+            subject_linkage.get("source_systems"),
+            source_system,
+        )
+
+        source_provenance = record.metadata.get("source_provenance")
+        if isinstance(source_provenance, Mapping):
+            accountable_source_identity = self._normalize_optional_string(
+                source_provenance.get("accountable_source_identity"),
+                "metadata.source_provenance.accountable_source_identity",
+            )
+            if accountable_source_identity is not None:
+                subject_linkage["accountable_source_identities"] = (
+                    self._merge_linked_ids(
+                        subject_linkage.get("accountable_source_identities"),
+                        accountable_source_identity,
+                    )
+                )
+
+        native_rule = record.metadata.get("native_rule")
+        if isinstance(native_rule, Mapping):
+            native_rule_id = self._normalize_optional_string(
+                native_rule.get("id"),
+                "metadata.native_rule.id",
+            )
+            native_rule_description = self._normalize_optional_string(
+                native_rule.get("description"),
+                "metadata.native_rule.description",
+            )
+            rule_level = native_rule.get("level")
+            subject_linkage["latest_native_rule"] = {
+                "id": native_rule_id,
+                "level": rule_level if isinstance(rule_level, int) else None,
+                "description": native_rule_description,
+            }
+
+        raw_alert = record.metadata.get("raw_alert")
+        if isinstance(raw_alert, Mapping):
+            subject_linkage["latest_native_payload"] = dict(raw_alert)
+
+        reconciliation = self.persist_record(
+            ReconciliationRecord(
+                reconciliation_id=ingest_result.reconciliation.reconciliation_id,
+                subject_linkage=subject_linkage,
+                alert_id=ingest_result.reconciliation.alert_id,
+                finding_id=ingest_result.reconciliation.finding_id,
+                analytic_signal_id=ingest_result.reconciliation.analytic_signal_id,
+                execution_run_id=ingest_result.reconciliation.execution_run_id,
+                linked_execution_run_ids=(
+                    ingest_result.reconciliation.linked_execution_run_ids
+                ),
+                correlation_key=ingest_result.reconciliation.correlation_key,
+                first_seen_at=ingest_result.reconciliation.first_seen_at,
+                last_seen_at=ingest_result.reconciliation.last_seen_at,
+                ingest_disposition=ingest_result.reconciliation.ingest_disposition,
+                mismatch_summary=ingest_result.reconciliation.mismatch_summary,
+                compared_at=ingest_result.reconciliation.compared_at,
+                lifecycle_state=ingest_result.reconciliation.lifecycle_state,
+            )
+        )
+        return FindingAlertIngestResult(
+            alert=ingest_result.alert,
+            reconciliation=reconciliation,
+            disposition=ingest_result.disposition,
         )
 
     def reconcile_action_execution(
@@ -791,6 +1046,22 @@ class AegisOpsControlPlaneService:
     @staticmethod
     def _next_identifier(prefix: str) -> str:
         return f"{prefix}-{uuid.uuid4()}"
+
+    @staticmethod
+    def _alert_review_state(alert: AlertRecord) -> str:
+        if alert.lifecycle_state in {"new", "reopened"}:
+            return "pending_review"
+        if alert.lifecycle_state == "escalated_to_case":
+            return "case_required"
+        if alert.lifecycle_state == "investigating":
+            return "investigating"
+        return "triaged"
+
+    @staticmethod
+    def _alert_escalation_boundary(alert: AlertRecord) -> str:
+        if alert.lifecycle_state == "escalated_to_case":
+            return "tracked_case"
+        return "next_business_hours_review"
 
     @staticmethod
     def _require_non_empty_string(value: object, field_name: str) -> str:

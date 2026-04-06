@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from contextvars import ContextVar
 from contextlib import contextmanager
 from dataclasses import dataclass, field, fields
 import importlib
 import json
-from typing import Any, Callable, Mapping, Protocol, Type, TypeVar
+from typing import Any, Callable, Iterator, Mapping, Protocol, Type, TypeVar
 
 from ..models import (
     AITraceRecord,
@@ -404,6 +405,14 @@ class PostgresControlPlaneStore:
     dsn: str
     connection_factory: ConnectionFactory | None = None
     persistence_mode: str = field(default="postgresql", init=False)
+    _active_connection: ContextVar[ConnectionProtocol | None] = field(
+        default_factory=lambda: ContextVar(
+            "postgres_control_plane_store_active_connection",
+            default=None,
+        ),
+        init=False,
+        repr=False,
+    )
 
     @contextmanager
     def _connection(self) -> Any:
@@ -417,6 +426,30 @@ class PostgresControlPlaneStore:
             raise
         finally:
             connection.close()
+
+    @contextmanager
+    def transaction(self) -> Iterator[None]:
+        active_connection = self._active_connection.get()
+        if active_connection is not None:
+            yield
+            return
+
+        with self._connection() as connection:
+            token = self._active_connection.set(connection)
+            try:
+                yield
+            finally:
+                self._active_connection.reset(token)
+
+    @contextmanager
+    def _borrow_connection(self) -> Iterator[ConnectionProtocol]:
+        active_connection = self._active_connection.get()
+        if active_connection is not None:
+            yield active_connection
+            return
+
+        with self._connection() as connection:
+            yield connection
 
     @staticmethod
     def _table_config(record_type: Type[ControlPlaneRecord]) -> TableConfig:
@@ -490,7 +523,7 @@ class PostgresControlPlaneStore:
             f"on conflict ({table.identifier_field}) do update set {assignments}"
         )
 
-        with self._connection() as connection:
+        with self._borrow_connection() as connection:
             cursor = connection.cursor()
             try:
                 cursor.execute(query, params)
@@ -506,7 +539,7 @@ class PostgresControlPlaneStore:
             f"where {table.identifier_field} = %s"
         )
 
-        with self._connection() as connection:
+        with self._borrow_connection() as connection:
             cursor = connection.cursor()
             try:
                 cursor.execute(query, (record_id,))
@@ -526,7 +559,7 @@ class PostgresControlPlaneStore:
             f"order by {table.identifier_field}"
         )
 
-        with self._connection() as connection:
+        with self._borrow_connection() as connection:
             cursor = connection.cursor()
             try:
                 cursor.execute(query)

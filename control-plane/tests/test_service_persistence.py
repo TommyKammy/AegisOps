@@ -19,6 +19,7 @@ from aegisops_control_plane.models import (
     AnalyticSignalRecord,
     AlertRecord,
     CaseRecord,
+    EvidenceRecord,
     NativeDetectionRecord,
     ReconciliationRecord,
 )
@@ -197,6 +198,53 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             signals[0].substrate_detection_record_id,
             "test-substrate:native-001",
         )
+
+    def test_service_rolls_back_native_ingest_when_evidence_timestamp_is_naive(
+        self,
+    ) -> None:
+        @dataclass(frozen=True)
+        class TimestampNormalizingNativeRecordAdapter(NativeDetectionRecordAdapter):
+            substrate_key: str = "test-substrate"
+
+            def build_analytic_signal_admission(
+                self, record: NativeDetectionRecord
+            ) -> AnalyticSignalAdmission:
+                return AnalyticSignalAdmission(
+                    finding_id=f"finding::{record.native_record_id}",
+                    analytic_signal_id=f"signal::{record.native_record_id}",
+                    substrate_detection_record_id=record.native_record_id,
+                    correlation_key=record.correlation_key,
+                    first_seen_at=datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc),
+                    last_seen_at=datetime(2026, 4, 5, 12, 15, tzinfo=timezone.utc),
+                )
+
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "record.first_seen_at must be timezone-aware",
+        ):
+            service.ingest_native_detection_record(
+                TimestampNormalizingNativeRecordAdapter(),
+                NativeDetectionRecord(
+                    substrate_key="test-substrate",
+                    native_record_id="native-001",
+                    record_kind="alert",
+                    correlation_key="claim:host-001:privilege-escalation",
+                    first_seen_at=datetime(2026, 4, 5, 12, 0),
+                    last_seen_at=datetime(2026, 4, 5, 12, 15),
+                    metadata={"vendor": "test"},
+                ),
+            )
+
+        self.assertEqual(store.list(AlertRecord), ())
+        self.assertEqual(store.list(AnalyticSignalRecord), ())
+        self.assertEqual(store.list(ReconciliationRecord), ())
+        self.assertEqual(store.list(EvidenceRecord), ())
 
     def test_service_namespaces_fallback_substrate_detection_ids_by_substrate(self) -> None:
         @dataclass(frozen=True)
@@ -541,6 +589,245 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(
             tuple(record["reconciliation_id"] for record in status_view.records),
             ("reconciliation-001", "reconciliation-002"),
+        )
+
+    def test_service_exposes_wazuh_origin_alerts_in_business_hours_analyst_queue(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+
+        admitted = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(
+                _load_wazuh_fixture("agent-origin-alert.json")
+            ),
+        )
+        service.persist_record(
+            AlertRecord(
+                alert_id=admitted.alert.alert_id,
+                finding_id=admitted.alert.finding_id,
+                analytic_signal_id=admitted.alert.analytic_signal_id,
+                case_id="case-analyst-001",
+                lifecycle_state="escalated_to_case",
+            )
+        )
+
+        queue_view = service.inspect_analyst_queue()
+
+        self.assertTrue(queue_view.read_only)
+        self.assertEqual(queue_view.queue_name, "analyst_review")
+        self.assertEqual(queue_view.total_records, 1)
+        self.assertEqual(queue_view.records[0]["alert_id"], admitted.alert.alert_id)
+        self.assertEqual(queue_view.records[0]["queue_selection"], "business_hours_triage")
+        self.assertEqual(queue_view.records[0]["review_state"], "case_required")
+        self.assertEqual(queue_view.records[0]["escalation_boundary"], "tracked_case")
+        self.assertEqual(queue_view.records[0]["source_system"], "wazuh")
+        self.assertEqual(
+            queue_view.records[0]["substrate_detection_record_ids"],
+            ("wazuh:1731594986.4931506",),
+        )
+        self.assertEqual(
+            queue_view.records[0]["accountable_source_identities"],
+            ("agent:007",),
+        )
+        self.assertEqual(queue_view.records[0]["case_id"], "case-analyst-001")
+        self.assertEqual(
+            queue_view.records[0]["native_rule"],
+            {
+                "id": "5710",
+                "level": 10,
+                "description": "SSH brute force attempt",
+            },
+        )
+        self.assertEqual(len(queue_view.records[0]["evidence_ids"]), 1)
+
+    def test_service_analyst_queue_prefers_explicit_wazuh_source_for_multi_source_linkage(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+
+        admitted = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(
+                _load_wazuh_fixture("agent-origin-alert.json")
+            ),
+        )
+        reconciliation = service.get_record(
+            ReconciliationRecord,
+            admitted.reconciliation.reconciliation_id,
+        )
+        self.assertIsNotNone(reconciliation)
+
+        subject_linkage = dict(reconciliation.subject_linkage)
+        subject_linkage["source_systems"] = ("opensearch", "wazuh")
+        service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id=reconciliation.reconciliation_id,
+                subject_linkage=subject_linkage,
+                alert_id=reconciliation.alert_id,
+                finding_id=reconciliation.finding_id,
+                analytic_signal_id=reconciliation.analytic_signal_id,
+                execution_run_id=reconciliation.execution_run_id,
+                linked_execution_run_ids=reconciliation.linked_execution_run_ids,
+                correlation_key=reconciliation.correlation_key,
+                first_seen_at=reconciliation.first_seen_at,
+                last_seen_at=reconciliation.last_seen_at,
+                ingest_disposition=reconciliation.ingest_disposition,
+                mismatch_summary=reconciliation.mismatch_summary,
+                compared_at=reconciliation.compared_at,
+                lifecycle_state=reconciliation.lifecycle_state,
+            )
+        )
+
+        queue_view = service.inspect_analyst_queue()
+
+        self.assertEqual(queue_view.total_records, 1)
+        self.assertEqual(queue_view.records[0]["source_system"], "wazuh")
+
+    def test_service_analyst_queue_ignores_newer_action_execution_reconciliation(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+
+        admitted = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(
+                _load_wazuh_fixture("agent-origin-alert.json")
+            ),
+        )
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-queue-001",
+                approval_decision_id="approval-queue-001",
+                case_id=None,
+                alert_id=admitted.alert.alert_id,
+                finding_id=admitted.alert.finding_id,
+                idempotency_key="idempotency-queue-001",
+                target_scope={"asset_id": "asset-queue-001"},
+                payload_hash="payload-hash-queue-001",
+                requested_at=datetime(2026, 4, 5, 12, 10, tzinfo=timezone.utc),
+                expires_at=None,
+                lifecycle_state="approved",
+            )
+        )
+        service.reconcile_action_execution(
+            action_request_id="action-request-queue-001",
+            execution_surface_type="automation_substrate",
+            execution_surface_id="n8n",
+            observed_executions=(
+                {
+                    "execution_run_id": "exec-queue-001",
+                    "execution_surface_id": "n8n",
+                    "idempotency_key": "idempotency-queue-001",
+                    "observed_at": datetime(2026, 4, 5, 12, 20, tzinfo=timezone.utc),
+                },
+            ),
+            compared_at=datetime(2026, 4, 5, 12, 20, tzinfo=timezone.utc),
+            stale_after=datetime(2026, 4, 5, 12, 30, tzinfo=timezone.utc),
+        )
+
+        queue_view = service.inspect_analyst_queue()
+
+        self.assertEqual(queue_view.total_records, 1)
+        self.assertEqual(queue_view.records[0]["alert_id"], admitted.alert.alert_id)
+        self.assertEqual(
+            queue_view.records[0]["correlation_key"],
+            admitted.reconciliation.correlation_key,
+        )
+        self.assertEqual(queue_view.records[0]["source_system"], "wazuh")
+
+    def test_service_analyst_queue_sorts_unknown_last_seen_after_real_timestamps(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        seen_at = datetime(2026, 4, 5, 12, 15, tzinfo=timezone.utc)
+
+        service.persist_record(
+            AlertRecord(
+                alert_id="alert-known-last-seen",
+                finding_id="finding-known-last-seen",
+                analytic_signal_id="signal-known-last-seen",
+                case_id=None,
+                lifecycle_state="new",
+            )
+        )
+        service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-known-last-seen",
+                subject_linkage={
+                    "alert_ids": ("alert-known-last-seen",),
+                    "analytic_signal_ids": ("signal-known-last-seen",),
+                    "substrate_detection_record_ids": ("wazuh:known-last-seen",),
+                    "source_systems": ("wazuh",),
+                },
+                alert_id="alert-known-last-seen",
+                finding_id="finding-known-last-seen",
+                analytic_signal_id="signal-known-last-seen",
+                execution_run_id=None,
+                linked_execution_run_ids=(),
+                correlation_key="wazuh:known-last-seen",
+                first_seen_at=seen_at,
+                last_seen_at=seen_at,
+                ingest_disposition="created",
+                mismatch_summary="known last-seen timestamp",
+                compared_at=seen_at,
+                lifecycle_state="matched",
+            )
+        )
+        service.persist_record(
+            AlertRecord(
+                alert_id="alert-unknown-last-seen",
+                finding_id="finding-unknown-last-seen",
+                analytic_signal_id="signal-unknown-last-seen",
+                case_id=None,
+                lifecycle_state="new",
+            )
+        )
+        service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-unknown-last-seen",
+                subject_linkage={
+                    "alert_ids": ("alert-unknown-last-seen",),
+                    "analytic_signal_ids": ("signal-unknown-last-seen",),
+                    "substrate_detection_record_ids": ("wazuh:unknown-last-seen",),
+                    "source_systems": ("wazuh",),
+                },
+                alert_id="alert-unknown-last-seen",
+                finding_id="finding-unknown-last-seen",
+                analytic_signal_id="signal-unknown-last-seen",
+                execution_run_id=None,
+                linked_execution_run_ids=(),
+                correlation_key="wazuh:unknown-last-seen",
+                first_seen_at=seen_at,
+                last_seen_at=None,
+                ingest_disposition="created",
+                mismatch_summary="unknown last-seen timestamp",
+                compared_at=seen_at,
+                lifecycle_state="matched",
+            )
+        )
+
+        queue_view = service.inspect_analyst_queue()
+
+        self.assertEqual(queue_view.total_records, 2)
+        self.assertEqual(
+            tuple(record["alert_id"] for record in queue_view.records),
+            ("alert-known-last-seen", "alert-unknown-last-seen"),
         )
 
     def test_service_rejects_schema_invalid_records_before_they_are_inspectable(self) -> None:
