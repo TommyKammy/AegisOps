@@ -67,6 +67,68 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(admitted.disposition, "created")
         self.assertEqual(admitted.alert.finding_id, "finding::native-001")
         self.assertEqual(admitted.alert.analytic_signal_id, "signal::native-001")
+        signals = store.list(AnalyticSignalRecord)
+        self.assertEqual(len(signals), 1)
+        self.assertEqual(
+            signals[0].substrate_detection_record_id,
+            "test-substrate:native-001",
+        )
+
+    def test_service_namespaces_fallback_substrate_detection_ids_by_substrate(self) -> None:
+        @dataclass(frozen=True)
+        class FallbackNativeRecordAdapter(NativeDetectionRecordAdapter):
+            substrate_key: str
+
+            def build_analytic_signal_admission(
+                self, record: NativeDetectionRecord
+            ) -> AnalyticSignalAdmission:
+                return AnalyticSignalAdmission(
+                    finding_id="finding::shared",
+                    analytic_signal_id=None,
+                    substrate_detection_record_id=None,
+                    correlation_key=record.correlation_key,
+                    first_seen_at=record.first_seen_at,
+                    last_seen_at=record.last_seen_at,
+                )
+
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+
+        first = service.ingest_native_detection_record(
+            FallbackNativeRecordAdapter(substrate_key="substrate-a"),
+            NativeDetectionRecord(
+                substrate_key="substrate-a",
+                native_record_id="native-001",
+                record_kind="alert",
+                correlation_key="claim:host-001:privilege-escalation",
+                first_seen_at=first_seen_at,
+                last_seen_at=first_seen_at,
+                metadata={"vendor": "a"},
+            ),
+        )
+        second = service.ingest_native_detection_record(
+            FallbackNativeRecordAdapter(substrate_key="substrate-b"),
+            NativeDetectionRecord(
+                substrate_key="substrate-b",
+                native_record_id="native-001",
+                record_kind="alert",
+                correlation_key="claim:host-001:privilege-escalation",
+                first_seen_at=first_seen_at,
+                last_seen_at=datetime(2026, 4, 5, 12, 15, tzinfo=timezone.utc),
+                metadata={"vendor": "b"},
+            ),
+        )
+
+        self.assertEqual(first.disposition, "created")
+        self.assertEqual(second.disposition, "restated")
+        self.assertEqual(
+            second.reconciliation.subject_linkage["substrate_detection_record_ids"],
+            ("substrate-a:native-001", "substrate-b:native-001"),
+        )
 
     def test_runtime_snapshot_reports_postgresql_authoritative_persistence_mode(self) -> None:
         service = AegisOpsControlPlaneService(

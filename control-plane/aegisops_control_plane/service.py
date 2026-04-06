@@ -273,16 +273,19 @@ class AegisOpsControlPlaneService:
                 f"({record.substrate_key!r} != {adapter.substrate_key!r})"
             )
         admission = adapter.build_analytic_signal_admission(record)
-        if admission.substrate_detection_record_id is None:
-            admission = AnalyticSignalAdmission(
-                finding_id=admission.finding_id,
-                analytic_signal_id=admission.analytic_signal_id,
-                substrate_detection_record_id=record.native_record_id,
-                correlation_key=admission.correlation_key,
-                first_seen_at=admission.first_seen_at,
-                last_seen_at=admission.last_seen_at,
-                materially_new_work=admission.materially_new_work,
-            )
+        substrate_detection_record_id = self._normalize_substrate_detection_record_id(
+            record.substrate_key,
+            admission.substrate_detection_record_id or record.native_record_id,
+        )
+        admission = AnalyticSignalAdmission(
+            finding_id=admission.finding_id,
+            analytic_signal_id=admission.analytic_signal_id,
+            substrate_detection_record_id=substrate_detection_record_id,
+            correlation_key=admission.correlation_key,
+            first_seen_at=admission.first_seen_at,
+            last_seen_at=admission.last_seen_at,
+            materially_new_work=admission.materially_new_work,
+        )
         return self._ingest_analytic_signal_admission(admission)
 
     def _ingest_analytic_signal_admission(
@@ -593,6 +596,16 @@ class AegisOpsControlPlaneService:
     @staticmethod
     def _linked_id_exists(existing_values: object, candidate: str) -> bool:
         return isinstance(existing_values, (list, tuple)) and candidate in existing_values
+
+    @staticmethod
+    def _normalize_substrate_detection_record_id(
+        substrate_key: str,
+        substrate_detection_record_id: str,
+    ) -> str:
+        namespaced_prefix = f"{substrate_key}:"
+        if substrate_detection_record_id.startswith(namespaced_prefix):
+            return substrate_detection_record_id
+        return f"{namespaced_prefix}{substrate_detection_record_id}"
 
     @staticmethod
     def _normalize_observed_executions(
