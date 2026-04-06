@@ -149,7 +149,7 @@ assert_fails_with "${missing_validation_repo}" "Missing Phase 9 control-plane ru
 missing_readme_cross_link_repo="${workdir}/missing-readme-cross-link"
 create_repo "${missing_readme_cross_link_repo}"
 write_required_artifacts "${missing_readme_cross_link_repo}"
-remove_text_from_doc "${missing_readme_cross_link_repo}" "README.md" 'Within `postgres/`, the `control-plane/` directory reserves the repository home for placeholder AegisOps-owned control-plane schema and migration assets. It does not introduce a live datastore or runtime migration flow.'
+remove_text_from_doc "${missing_readme_cross_link_repo}" "README.md" 'Within `postgres/`, the `control-plane/` directory is the repository home for the reviewed AegisOps-owned control-plane schema baseline and migration assets. It does not authorize live deployment, production data migration, or credentials.'
 commit_fixture "${missing_readme_cross_link_repo}"
 assert_fails_with "${missing_readme_cross_link_repo}" "Missing required line in ${missing_readme_cross_link_repo}/README.md"
 
