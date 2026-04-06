@@ -1,0 +1,24 @@
+{
+  "id": "1731594999.4931507",
+  "timestamp": "2026-04-05T12:05:00+00:00",
+  "rule": {
+    "id": "100001",
+    "level": 7,
+    "description": "Manager-side integration warning",
+    "groups": [
+      "wazuh",
+      "integration"
+    ]
+  },
+  "manager": {
+    "name": "wazuh-manager-2"
+  },
+  "decoder": {
+    "name": "json"
+  },
+  "location": "manager/integrations",
+  "data": {
+    "integration": "virustotal",
+    "event_type": "warning"
+  }
+}
