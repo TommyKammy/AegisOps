@@ -293,8 +293,18 @@ class AegisOpsControlPlaneService:
         analytic_signal_id = admission.analytic_signal_id
         substrate_detection_record_id = admission.substrate_detection_record_id
         correlation_key = admission.correlation_key
-        first_seen_at = admission.first_seen_at
-        last_seen_at = admission.last_seen_at
+        first_seen_at = self._require_aware_datetime(
+            admission.first_seen_at,
+            "first_seen_at",
+        )
+        last_seen_at = self._require_aware_datetime(
+            admission.last_seen_at,
+            "last_seen_at",
+        )
+        if last_seen_at < first_seen_at:
+            raise ValueError(
+                "last_seen_at must be greater than or equal to first_seen_at"
+            )
         materially_new_work = admission.materially_new_work
 
         existing_reconciliations = [
@@ -362,9 +372,19 @@ class AegisOpsControlPlaneService:
                 latest_reconciliation.last_seen_at or last_seen_at,
                 last_seen_at,
             )
-            already_linked = self._linked_id_exists(existing_finding_ids, finding_id) or (
-                analytic_signal_id is not None
-                and self._linked_id_exists(existing_signal_ids, analytic_signal_id)
+            already_linked = (
+                self._linked_id_exists(existing_finding_ids, finding_id)
+                and (
+                    analytic_signal_id is None
+                    or self._linked_id_exists(existing_signal_ids, analytic_signal_id)
+                )
+                and (
+                    substrate_detection_record_id is None
+                    or self._linked_id_exists(
+                        existing_substrate_detection_ids,
+                        substrate_detection_record_id,
+                    )
+                )
             )
             if materially_new_work:
                 alert = self.persist_record(

@@ -447,6 +447,100 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(signal_three.first_seen_at, updated_seen)
         self.assertEqual(signal_three.last_seen_at, duplicate_seen)
 
+    def test_service_restates_when_repeated_finding_adds_new_signal_identity(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        second_seen = datetime(2026, 4, 5, 12, 15, tzinfo=timezone.utc)
+
+        created = service.ingest_finding_alert(
+            finding_id="finding-001",
+            analytic_signal_id="signal-001",
+            substrate_detection_record_id="substrate-detection-001",
+            correlation_key="claim:host-001:privilege-escalation",
+            first_seen_at=first_seen,
+            last_seen_at=first_seen,
+        )
+        restated = service.ingest_finding_alert(
+            finding_id="finding-001",
+            analytic_signal_id="signal-002",
+            substrate_detection_record_id="substrate-detection-002",
+            correlation_key="claim:host-001:privilege-escalation",
+            first_seen_at=first_seen,
+            last_seen_at=second_seen,
+        )
+
+        self.assertEqual(created.disposition, "created")
+        self.assertEqual(restated.disposition, "restated")
+        self.assertEqual(restated.alert.alert_id, created.alert.alert_id)
+
+        reconciliation = service.get_record(
+            ReconciliationRecord, restated.reconciliation.reconciliation_id
+        )
+        self.assertEqual(reconciliation.ingest_disposition, "restated")
+        self.assertEqual(
+            reconciliation.subject_linkage["finding_ids"],
+            ["finding-001"],
+        )
+        self.assertEqual(
+            reconciliation.subject_linkage["analytic_signal_ids"],
+            ["signal-001", "signal-002"],
+        )
+        self.assertEqual(
+            reconciliation.subject_linkage["substrate_detection_record_ids"],
+            ["substrate-detection-001", "substrate-detection-002"],
+        )
+
+    def test_service_rejects_naive_intake_timestamps(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+
+        with self.assertRaisesRegex(ValueError, "first_seen_at must be timezone-aware"):
+            service.ingest_finding_alert(
+                finding_id="finding-001",
+                analytic_signal_id="signal-001",
+                substrate_detection_record_id="substrate-detection-001",
+                correlation_key="claim:host-001:privilege-escalation",
+                first_seen_at=datetime(2026, 4, 5, 12, 0),
+                last_seen_at=datetime(2026, 4, 5, 12, 15, tzinfo=timezone.utc),
+            )
+
+        with self.assertRaisesRegex(ValueError, "last_seen_at must be timezone-aware"):
+            service.ingest_finding_alert(
+                finding_id="finding-001",
+                analytic_signal_id="signal-001",
+                substrate_detection_record_id="substrate-detection-001",
+                correlation_key="claim:host-001:privilege-escalation",
+                first_seen_at=datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc),
+                last_seen_at=datetime(2026, 4, 5, 12, 15),
+            )
+
+    def test_service_rejects_inverted_intake_timestamps(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "last_seen_at must be greater than or equal to first_seen_at",
+        ):
+            service.ingest_finding_alert(
+                finding_id="finding-001",
+                analytic_signal_id="signal-001",
+                substrate_detection_record_id="substrate-detection-001",
+                correlation_key="claim:host-001:privilege-escalation",
+                first_seen_at=datetime(2026, 4, 5, 12, 15, tzinfo=timezone.utc),
+                last_seen_at=datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc),
+            )
+
     def test_service_inspects_analytic_signal_records_as_first_class_records(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
