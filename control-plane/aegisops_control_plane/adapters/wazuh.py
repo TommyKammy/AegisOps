@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Mapping
+from urllib.parse import quote
 
 from ..models import AnalyticSignalAdmission, NativeDetectionRecord
 
@@ -36,6 +37,13 @@ def _optional_string_tuple(value: object) -> tuple[str, ...]:
 @dataclass(frozen=True)
 class WazuhAlertAdapter:
     substrate_key: str = "wazuh"
+    reviewed_correlation_fields: tuple[str, ...] = (
+        "location",
+        "data.srcip",
+        "data.srcuser",
+        "data.integration",
+        "data.event_type",
+    )
 
     def build_native_detection_record(
         self,
@@ -62,8 +70,13 @@ class WazuhAlertAdapter:
             agent,
             manager,
         )
-        correlation_key = (
-            f"wazuh:rule:{rule_id}:source:{accountable_source_identity}"
+        reviewed_correlation_context = self._build_reviewed_correlation_context(
+            native_alert
+        )
+        correlation_key = self._build_correlation_key(
+            rule_id,
+            accountable_source_identity,
+            reviewed_correlation_context,
         )
 
         metadata = {
@@ -85,6 +98,7 @@ class WazuhAlertAdapter:
                 ),
                 "location": _optional_string(native_alert.get("location")),
             },
+            "reviewed_correlation_context": dict(reviewed_correlation_context),
         }
 
         return NativeDetectionRecord(
@@ -148,3 +162,39 @@ class WazuhAlertAdapter:
         raise ValueError(
             "agent.id or manager.name must provide an accountable source identity"
         )
+
+    def _build_reviewed_correlation_context(
+        self,
+        alert: Mapping[str, object],
+    ) -> tuple[tuple[str, str], ...]:
+        context: list[tuple[str, str]] = []
+        for field_path in self.reviewed_correlation_fields:
+            value = self._extract_reviewed_correlation_value(alert, field_path)
+            if value is not None:
+                context.append((field_path, value))
+        return tuple(context)
+
+    def _build_correlation_key(
+        self,
+        rule_id: str,
+        accountable_source_identity: str,
+        reviewed_correlation_context: tuple[tuple[str, str], ...],
+    ) -> str:
+        correlation_key = (
+            f"wazuh:rule:{rule_id}:source:{accountable_source_identity}"
+        )
+        for field_path, value in reviewed_correlation_context:
+            correlation_key += f":{field_path}={quote(value, safe='')}"
+        return correlation_key
+
+    @staticmethod
+    def _extract_reviewed_correlation_value(
+        alert: Mapping[str, object],
+        field_path: str,
+    ) -> str | None:
+        current: object = alert
+        for segment in field_path.split("."):
+            if not isinstance(current, Mapping):
+                return None
+            current = current.get(segment)
+        return _optional_string(current)

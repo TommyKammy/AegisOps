@@ -100,7 +100,27 @@ The admitted signal must preserve:
 - reviewed timing from Wazuh `timestamp`; and
 - enough preserved source context to explain why later alert or case routing happened.
 
-Correlation or deduplication inputs may additionally use Wazuh `rule.groups`, `agent.name`, `location`, selected `data.*` fields, and other reviewed source-family fields, but those fields remain correlation inputs rather than lifecycle identifiers.
+The current reviewed Wazuh correlation boundary uses the following native fields in addition to `rule.id` and accountable source identity:
+
+- `location`
+- `data.srcip`
+- `data.srcuser`
+- `data.integration`
+- `data.event_type`
+
+Those fields may separate distinct incidents during deduplication or restatement decisions, but they still remain reviewed correlation inputs rather than lifecycle identifiers.
+
+The following preserved native fields remain provenance-only context in the shipped adapter and must not change alert lineage by themselves:
+
+- `rule.level`
+- `rule.description`
+- `rule.groups`
+- `rule.mitre.*`
+- `agent.name`
+- `agent.ip`
+- `manager.name` beyond its accountable-source role when no agent identity is present
+- `decoder.name`
+- additional `data.*` fields outside the reviewed correlation allowlist above
 
 ## 7. Provenance Expectations
 

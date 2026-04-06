@@ -70,7 +70,12 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         )
         self.assertEqual(
             signals[0].correlation_key,
-            "wazuh:rule:5710:source:agent:007",
+            (
+                "wazuh:rule:5710:source:agent:007"
+                ":location=%2Fvar%2Flog%2Fauth.log"
+                ":data.srcip=198.51.100.24"
+                ":data.srcuser=invalid-user"
+            ),
         )
         self.assertEqual(
             signals[0].first_seen_at,
@@ -94,6 +99,14 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(
             reconciliation.subject_linkage["analytic_signal_ids"],
             (admitted.alert.analytic_signal_id,),
+        )
+        self.assertEqual(
+            reconciliation.subject_linkage["reviewed_correlation_context"],
+            {
+                "location": "/var/log/auth.log",
+                "data.srcip": "198.51.100.24",
+                "data.srcuser": "invalid-user",
+            },
         )
 
     def test_service_extends_promoted_wazuh_alert_with_existing_case_linkage(self) -> None:
@@ -152,6 +165,62 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(restated_signal.case_ids, ("case-001",))
         self.assertIsNotNone(reconciliation)
         self.assertEqual(reconciliation.subject_linkage["case_ids"], ("case-001",))
+
+    def test_service_keeps_distinct_wazuh_incidents_separate_when_native_context_differs(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+
+        first_payload = _load_wazuh_fixture("agent-origin-alert.json")
+        second_payload = _load_wazuh_fixture("agent-origin-alert.json")
+        second_payload["id"] = "1731595888.5000001"
+        second_payload["timestamp"] = "2026-04-05T12:15:00+00:00"
+        second_payload["location"] = "/var/log/secure"
+        second_payload["data"] = {
+            "srcip": "203.0.113.77",
+            "srcuser": "invalid-user",
+        }
+
+        created = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(first_payload),
+        )
+        distinct = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(second_payload),
+        )
+
+        self.assertEqual(created.disposition, "created")
+        self.assertEqual(distinct.disposition, "created")
+        self.assertNotEqual(distinct.alert.alert_id, created.alert.alert_id)
+
+        alerts = store.list(AlertRecord)
+        self.assertEqual(len(alerts), 2)
+
+        first_reconciliation = service.get_record(
+            ReconciliationRecord,
+            created.reconciliation.reconciliation_id,
+        )
+        second_reconciliation = service.get_record(
+            ReconciliationRecord,
+            distinct.reconciliation.reconciliation_id,
+        )
+
+        self.assertIsNotNone(first_reconciliation)
+        self.assertIsNotNone(second_reconciliation)
+        self.assertEqual(
+            first_reconciliation.subject_linkage["substrate_detection_record_ids"],
+            ("wazuh:1731594986.4931506",),
+        )
+        self.assertEqual(
+            second_reconciliation.subject_linkage["substrate_detection_record_ids"],
+            ("wazuh:1731595888.5000001",),
+        )
 
     def test_service_admits_native_detection_records_via_substrate_adapter_boundary(self) -> None:
         @dataclass(frozen=True)
