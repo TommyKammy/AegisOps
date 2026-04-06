@@ -138,4 +138,5 @@ jobs:
           bash scripts/test-verify-sigma-n8n-skeleton-validation.sh
           bash scripts/test-verify-sigma-to-opensearch-translation-strategy-doc.sh
           bash scripts/test-verify-source-onboarding-contract-doc.sh
+          bash scripts/test-verify-wazuh-rule-lifecycle-runbook.sh
           bash scripts/test-verify-windows-source-onboarding-assets.sh
