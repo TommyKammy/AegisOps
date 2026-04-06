@@ -120,4 +120,18 @@ append_text_to_doc "${contradiction_repo}" "README.md" "**AegisOps** is primaril
 commit_fixture "${contradiction_repo}"
 assert_fails_with "${contradiction_repo}" "Forbidden thesis contradiction in README.md: **AegisOps** is primarily an OpenSearch-and-n8n product core."
 
+stale_child_verifier_repo="${workdir}/stale-child-verifier"
+create_repo "${stale_child_verifier_repo}"
+write_canonical_docs "${stale_child_verifier_repo}"
+append_text_to_doc "${stale_child_verifier_repo}" "README.md" "> This repository is currently in the foundation-building phase. It is **not yet a production-ready SOC platform**."
+commit_fixture "${stale_child_verifier_repo}"
+assert_fails_with "${stale_child_verifier_repo}" "Forbidden legacy README statement present: > This repository is currently in the foundation-building phase. It is **not yet a production-ready SOC platform**."
+
+stale_control_plane_child_repo="${workdir}/stale-control-plane-child"
+create_repo "${stale_control_plane_child_repo}"
+write_canonical_docs "${stale_control_plane_child_repo}"
+append_text_to_doc "${stale_control_plane_child_repo}" "docs/control-plane-state-model.md" "The future AegisOps control layer is responsible for:"
+commit_fixture "${stale_control_plane_child_repo}"
+assert_fails_with "${stale_control_plane_child_repo}" "Forbidden control-plane state model statement still present: The future AegisOps control layer is responsible for:"
+
 echo "Phase 10 thesis consistency verifier fails closed for missing artifacts and obvious thesis drift."
