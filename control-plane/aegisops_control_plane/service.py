@@ -245,6 +245,19 @@ class AegisOpsControlPlaneService:
             raise ValueError(f"{field_name} must be a non-empty string")
         return value
 
+    @staticmethod
+    def _normalize_optional_string(
+        value: object,
+        field_name: str,
+    ) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError(f"{field_name} must be a string when provided")
+        if not value.strip():
+            return None
+        return value
+
     def ingest_finding_alert(
         self,
         *,
@@ -310,10 +323,22 @@ class AegisOpsControlPlaneService:
         self,
         admission: AnalyticSignalAdmission,
     ) -> FindingAlertIngestResult:
-        finding_id = admission.finding_id
-        analytic_signal_id = admission.analytic_signal_id
-        substrate_detection_record_id = admission.substrate_detection_record_id
-        correlation_key = admission.correlation_key
+        finding_id = self._require_non_empty_string(
+            admission.finding_id,
+            "finding_id",
+        )
+        analytic_signal_id = self._normalize_optional_string(
+            admission.analytic_signal_id,
+            "analytic_signal_id",
+        )
+        substrate_detection_record_id = self._normalize_optional_string(
+            admission.substrate_detection_record_id,
+            "substrate_detection_record_id",
+        )
+        correlation_key = self._require_non_empty_string(
+            admission.correlation_key,
+            "correlation_key",
+        )
         first_seen_at = self._require_aware_datetime(
             admission.first_seen_at,
             "first_seen_at",
