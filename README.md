@@ -1,13 +1,15 @@
 # AegisOps
 
-**AegisOps** is an internal SOC + SOAR platform blueprint designed for flexible deployment across on-premise infrastructure and cloud environments, including AWS and other providers.
+**AegisOps** is a governed SecOps control plane above external detection and automation substrates.
 
-- **OpenSearch** — SIEM analytics and detection
-- **Sigma** — curated, reviewable detection logic
-- **n8n** — approval-gated orchestration, enrichment, and response
+- **OpenSearch** — optional or transitional analytics substrate, not the product core
+- **Sigma** — optional or transitional rule-definition format or translation source, not the product core
+- **n8n** — optional, transitional, or experimental orchestration substrate, not the product core
 - **Control Plane Runtime** — future authoritative AegisOps service boundary for platform state and reconciliation
 
-AegisOps is built to support **human-controlled security operations** — delivering a platform that is explainable, auditable, and designed to scale safely across deployment environments.
+AegisOps is built to support **human-controlled security operations** with an explicit authority boundary for approvals, evidence, action intent, and reconciliation.
+
+OpenSearch, Sigma, and n8n remain repository-tracked assets, but they are subordinate to the approved control-plane thesis and must not redefine the product narrative around themselves.
 
 ---
 
@@ -34,26 +36,25 @@ Current scope:
 - **Architecture changes require explicit review**
 - **One issue represents one behavior delta**
 
-These principles ensure the platform remains governable, auditable, and safe to evolve — regardless of the underlying infrastructure.
+These principles ensure the platform remains governable, auditable, and safe to evolve across changing substrate choices.
 
 ---
 
 ## Architecture Overview
 
 ```text
-Log Sources
-  -> Ingest
-  -> OpenSearch
-  -> Detection Content
-  -> Findings / Alerts
-  -> n8n
-  -> Enrichment / Approval / Routing
-  -> Controlled Downstream Actions
+Substrate Detection Record
+  -> Analytic Signal
+  -> Alert or Case
+  -> Action Request
+  -> Approval Decision
+  -> Approved Automation Substrate or Executor
+  -> Reconciliation
 ```
 
 Supporting services:
 
-- **PostgreSQL** — n8n metadata and execution state, plus the reviewed control-plane schema baseline
+- **PostgreSQL** — reviewed control-plane schema baseline and any separately governed substrate-local metadata stores
 - **Redis** — optional future component for queue-based scaling
 - **Reverse Proxy** — controlled user-facing access and TLS termination
 
@@ -81,11 +82,11 @@ For the detailed approved structure, see:
 - `docs/repository-structure-baseline.md`
 - `docs/requirements-baseline.md`
 
+The current top-level tree still includes older substrate-specific directories and should be treated as transitional until a later ADR approves any substrate-specific repository rebaseline.
+
 Within `sigma/`, the `curated/` directory is reserved for reviewed Sigma rules that are approved for future onboarding, and the `suppressed/` directory is reserved for future documented suppression decisions. Placeholder markers may exist there before any actual rule or suppression content is admitted.
 
 Within `control-plane/`, the first live AegisOps-owned control-plane runtime will live as application code and service-local tests.
-
-Within `postgres/`, the `control-plane/` directory reserves the repository home for placeholder AegisOps-owned control-plane schema and migration assets. It does not introduce a live datastore or runtime migration flow.
 
 Within `postgres/`, the `control-plane/` directory is the repository home for the reviewed AegisOps-owned control-plane schema baseline and migration assets. It does not authorize live deployment, production data migration, or credentials.
 

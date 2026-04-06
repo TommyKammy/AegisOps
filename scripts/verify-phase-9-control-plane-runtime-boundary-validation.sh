@@ -98,7 +98,7 @@ done
 
 require_fixed_string "${readme_path}" '- **Control Plane Runtime** — future authoritative AegisOps service boundary for platform state and reconciliation'
 require_fixed_string "${readme_path}" 'Within `control-plane/`, the first live AegisOps-owned control-plane runtime will live as application code and service-local tests.'
-require_fixed_string "${readme_path}" 'Within `postgres/`, the `control-plane/` directory reserves the repository home for placeholder AegisOps-owned control-plane schema and migration assets. It does not introduce a live datastore or runtime migration flow.'
+require_fixed_string "${readme_path}" 'Within `postgres/`, the `control-plane/` directory is the repository home for the reviewed AegisOps-owned control-plane schema baseline and migration assets. It does not authorize live deployment, production data migration, or credentials.'
 require_fixed_string "${architecture_doc}" 'The AegisOps control plane is the authoritative owner of policy-sensitive records, approval decisions, evidence linkage, action intent, and reconciliation truth across substrate boundaries.'
 require_fixed_string "${structure_doc}" '| `control-plane/` | Live AegisOps control-plane application code, service bootstrapping, adapters, tests, and service-local documentation for the approved runtime boundary. |'
 require_fixed_string "${runtime_readme}" 'This directory is the approved repository home for live AegisOps control-plane application code.'

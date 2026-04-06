@@ -4,14 +4,18 @@ This document intentionally defines the approved top-level repository layout and
 
 It translates the repository structure guidance from `docs/requirements-baseline.md` into a standalone baseline reference for future issues and reviews.
 
+The current top-level structure remains transitional because it still reflects earlier repository phases and substrate-specific directory ownership.
+
+Until a later ADR approves a repository rebaseline, contributors must treat the existing top-level tree as the reviewed baseline even where it does not yet match the long-term control-plane thesis.
+
 ## Approved Top-Level Structure
 
 | Path | Purpose |
 | ---- | ------- |
 | `docs/` | Architecture, ADRs, parameters, runbooks, and other human-readable project documentation. |
-| `opensearch/` | OpenSearch configuration assets such as compose definitions, detectors, templates, ILM policies, and snapshot-related configuration. |
-| `sigma/` | Sigma detection content, including reviewed rules, curated subsets, suppressions, field mappings, and placeholder markers that keep approved onboarding paths explicit before real rule content is added. |
-| `n8n/` | n8n workflow assets, approval patterns, credential templates, and webhook contract definitions. |
+| `opensearch/` | Transitional or optional OpenSearch repository assets such as compose definitions, detectors, templates, ILM policies, and snapshot-related configuration. Their presence does not make OpenSearch the product core. |
+| `sigma/` | Transitional or optional Sigma repository assets, including reviewed rules, curated subsets, suppressions, field mappings, and placeholder markers that keep approved onboarding paths explicit before real rule content is added. Their presence does not make Sigma the product core. |
+| `n8n/` | Transitional, optional, or experimental n8n workflow assets, approval patterns, credential templates, and webhook contract definitions. Their presence does not make n8n the product core or authority surface. |
 | `ingest/` | Log ingestion assets such as pipelines, parsers, and source definitions. |
 | `control-plane/` | Live AegisOps control-plane application code, service bootstrapping, adapters, tests, and service-local documentation for the approved runtime boundary. |
 | `postgres/` | PostgreSQL deployment assets such as compose definitions for the n8n metadata and execution-state store, plus the reviewed schema and migration baseline for the AegisOps-owned control-plane boundary. |
@@ -29,6 +33,7 @@ It translates the repository structure guidance from `docs/requirements-baseline
 - Secrets must not be committed anywhere in the repository.
 - Real environment files are not approved repository assets.
 - New top-level directories require explicit approval because they change the repository baseline.
+- The reviewed top-level tree remains transitional relative to the control-plane thesis until a later ADR explicitly approves a different repository rebaseline.
 - Only reviewable supervisor metadata such as tracked issue journals are approved under `.codex-supervisor/`; transient execution files in that directory must remain untracked.
 - This document defines structure only and does not authorize runtime, deployment, or workflow implementation.
 
