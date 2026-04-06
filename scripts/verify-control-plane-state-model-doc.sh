@@ -64,7 +64,7 @@ required_phrases=(
   "These identifiers and states are minimum control-plane expectations. They must not be inferred from substrate-local alert status, substrate document updates, n8n execution status, or ad hoc analyst notes."
   '| `alert_id` | Immutable AegisOps control-plane identifier for one alert record. |'
   '| `substrate_detection_record_id` | Required upstream linkage to the originating substrate-native detection, correlation, or alerting record that justified alert creation or update. |'
-  '| `analytic_signal_id` | Required admitted vendor-neutral analytic-signal identifier for the routed upstream signal that created or updated the alert. |'
+  '| `analytic_signal_id` | Required vendor-neutral analytic-signal identifier for the admitted upstream signal that created or updated the alert. |'
   '| `case_id` | Optional linkage that becomes required once the alert is promoted into a tracked case. |'
   '| `new` | The alert record exists and awaits analyst triage. |'
   '| `triaged` | Initial analyst or policy review classified the alert and decided whether deeper work is required. |'

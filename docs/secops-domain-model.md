@@ -47,7 +47,7 @@ A `Substrate Detection Record` is the substrate-native detection, correlation, o
 
 A substrate detection record preserves the substrate's own identifiers, timestamps, and local semantics. It must not be mistaken for an AegisOps alert, case, approval, or execution record.
 
-A `Analytic Signal` is the vendor-neutral upstream SecOps primitive admitted by AegisOps from one or more substrate detection records.
+An `Analytic Signal` is the vendor-neutral upstream SecOps primitive admitted by AegisOps from one or more substrate detection records.
 
 An analytic signal preserves durable references back to the originating substrate detection records, but it remains distinct from both those substrate-native records and the downstream alert or case lifecycle that AegisOps may create from it.
 
