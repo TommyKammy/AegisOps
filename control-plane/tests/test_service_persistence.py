@@ -18,6 +18,7 @@ from aegisops_control_plane.models import (
     AnalyticSignalAdmission,
     AnalyticSignalRecord,
     AlertRecord,
+    CaseRecord,
     NativeDetectionRecord,
     ReconciliationRecord,
 )
@@ -93,6 +94,63 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             reconciliation.subject_linkage["analytic_signal_ids"],
             (admitted.alert.analytic_signal_id,),
         )
+
+    def test_service_extends_promoted_wazuh_alert_with_existing_case_linkage(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+        created = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(
+                _load_wazuh_fixture("agent-origin-alert.json")
+            ),
+        )
+        service.persist_record(
+            AlertRecord(
+                alert_id=created.alert.alert_id,
+                finding_id=created.alert.finding_id,
+                analytic_signal_id=created.alert.analytic_signal_id,
+                case_id="case-001",
+                lifecycle_state="escalated_to_case",
+            )
+        )
+        service.persist_record(
+            CaseRecord(
+                case_id="case-001",
+                alert_id=created.alert.alert_id,
+                finding_id=created.alert.finding_id,
+                evidence_ids=("evidence-001",),
+                lifecycle_state="investigating",
+            )
+        )
+
+        restated_payload = _load_wazuh_fixture("agent-origin-alert.json")
+        restated_payload["id"] = "1731595888.5000001"
+        restated_payload["timestamp"] = "2026-04-05T12:15:00+00:00"
+        restated = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(restated_payload),
+        )
+
+        restated_signal = service.get_record(
+            AnalyticSignalRecord,
+            restated.alert.analytic_signal_id,
+        )
+        reconciliation = service.get_record(
+            ReconciliationRecord,
+            restated.reconciliation.reconciliation_id,
+        )
+
+        self.assertEqual(restated.disposition, "restated")
+        self.assertEqual(restated.alert.alert_id, created.alert.alert_id)
+        self.assertEqual(restated.alert.case_id, "case-001")
+        self.assertIsNotNone(restated_signal)
+        self.assertEqual(restated_signal.case_ids, ("case-001",))
+        self.assertIsNotNone(reconciliation)
+        self.assertEqual(reconciliation.subject_linkage["case_ids"], ("case-001",))
 
     def test_service_admits_native_detection_records_via_substrate_adapter_boundary(self) -> None:
         @dataclass(frozen=True)

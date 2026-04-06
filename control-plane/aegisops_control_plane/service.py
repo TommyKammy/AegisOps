@@ -390,6 +390,7 @@ class AegisOpsControlPlaneService:
                 (),
                 substrate_detection_record_id,
             )
+            linked_case_ids = self._merge_linked_ids((), alert.case_id)
             persisted_first_seen = first_seen_at
             persisted_last_seen = last_seen_at
         else:
@@ -405,6 +406,7 @@ class AegisOpsControlPlaneService:
             existing_substrate_detection_ids = latest_reconciliation.subject_linkage.get(
                 "substrate_detection_record_ids"
             )
+            existing_case_ids = latest_reconciliation.subject_linkage.get("case_ids")
             linked_finding_ids = self._merge_linked_ids(
                 existing_finding_ids,
                 finding_id,
@@ -416,6 +418,10 @@ class AegisOpsControlPlaneService:
             linked_substrate_detection_ids = self._merge_linked_ids(
                 existing_substrate_detection_ids,
                 substrate_detection_record_id,
+            )
+            linked_case_ids = self._merge_linked_ids(
+                existing_case_ids,
+                alert.case_id,
             )
             persisted_first_seen = min(
                 latest_reconciliation.first_seen_at or first_seen_at,
@@ -493,11 +499,14 @@ class AegisOpsControlPlaneService:
                 )
             )
 
+        self._link_case_to_analytic_signals(linked_signal_ids, alert.case_id)
+
         reconciliation = self.persist_record(
             ReconciliationRecord(
                 reconciliation_id=self._next_identifier("reconciliation"),
                 subject_linkage={
                     "alert_ids": (alert.alert_id,),
+                    "case_ids": linked_case_ids,
                     "substrate_detection_record_ids": linked_substrate_detection_ids,
                     "finding_ids": linked_finding_ids,
                     "analytic_signal_ids": linked_signal_ids,
@@ -656,6 +665,37 @@ class AegisOpsControlPlaneService:
     @staticmethod
     def _linked_id_exists(existing_values: object, candidate: str) -> bool:
         return isinstance(existing_values, (list, tuple)) and candidate in existing_values
+
+    def _link_case_to_analytic_signals(
+        self,
+        analytic_signal_ids: tuple[str, ...],
+        case_id: str | None,
+    ) -> None:
+        if case_id is None:
+            return
+
+        for analytic_signal_id in analytic_signal_ids:
+            existing_signal = self._store.get(AnalyticSignalRecord, analytic_signal_id)
+            if existing_signal is None:
+                continue
+            linked_case_ids = self._merge_linked_ids(existing_signal.case_ids, case_id)
+            if linked_case_ids == existing_signal.case_ids:
+                continue
+            self.persist_record(
+                AnalyticSignalRecord(
+                    analytic_signal_id=existing_signal.analytic_signal_id,
+                    substrate_detection_record_id=(
+                        existing_signal.substrate_detection_record_id
+                    ),
+                    finding_id=existing_signal.finding_id,
+                    alert_ids=existing_signal.alert_ids,
+                    case_ids=linked_case_ids,
+                    correlation_key=existing_signal.correlation_key,
+                    first_seen_at=existing_signal.first_seen_at,
+                    last_seen_at=existing_signal.last_seen_at,
+                    lifecycle_state=existing_signal.lifecycle_state,
+                )
+            )
 
     def _resolve_analytic_signal_id(
         self,
