@@ -19,11 +19,13 @@ OpenSearch, Sigma, and n8n remain repository-tracked assets, but they are subord
 
 Current scope:
 
-- Approved control-plane baseline for alerts, cases, evidence, approvals, actions, and reconciliation
-- Wazuh as the initial standard detection substrate for upstream substrate detection records and analytic signals
-- Shuffle as the initial standard routine automation substrate for approved delegated automation
-- Transitional repository scaffolding for optional or experimental OpenSearch, Sigma, and n8n assets
-- Implementation guardrails for future AegisOps-owned runtime and AI-assisted development
+- Platform baseline definition
+- Architecture design and operating guidance
+- Repository scaffolding
+- Parameter catalog structure
+- Implementation guardrails for AI-assisted development
+
+Within that scope, Wazuh is the initial standard detection substrate, Shuffle is the initial standard routine automation substrate, and the AegisOps-owned control-plane runtime remains not yet live.
 
 ---
 
