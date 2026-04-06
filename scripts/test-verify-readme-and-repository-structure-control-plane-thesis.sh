@@ -141,6 +141,22 @@ replace_text_in_doc "${legacy_readme_repo}" "README.md" "**AegisOps** is a gover
 commit_fixture "${legacy_readme_repo}"
 assert_fails_with "${legacy_readme_repo}" "Forbidden legacy README statement present: **AegisOps** is an internal SOC + SOAR platform blueprint designed for flexible deployment across on-premise infrastructure and cloud environments, including AWS and other providers."
 
+stale_foundation_phase_repo="${workdir}/stale-foundation-phase"
+create_repo "${stale_foundation_phase_repo}"
+write_valid_docs "${stale_foundation_phase_repo}"
+printf '\n> This repository is currently in the foundation-building phase. It is **not yet a production-ready SOC platform**.\n' >> "${stale_foundation_phase_repo}/README.md"
+git -C "${stale_foundation_phase_repo}" add README.md
+commit_fixture "${stale_foundation_phase_repo}"
+assert_fails_with "${stale_foundation_phase_repo}" "Forbidden legacy README statement present: > This repository is currently in the foundation-building phase. It is **not yet a production-ready SOC platform**."
+
+stale_opensearch_n8n_principle_repo="${workdir}/stale-opensearch-n8n-principle"
+create_repo "${stale_opensearch_n8n_principle_repo}"
+write_valid_docs "${stale_opensearch_n8n_principle_repo}"
+printf '\n- **Detection and execution are separated** — OpenSearch detects; n8n orchestrates\n' >> "${stale_opensearch_n8n_principle_repo}/README.md"
+git -C "${stale_opensearch_n8n_principle_repo}" add README.md
+commit_fixture "${stale_opensearch_n8n_principle_repo}"
+assert_fails_with "${stale_opensearch_n8n_principle_repo}" "Forbidden legacy README statement present: - **Detection and execution are separated** — OpenSearch detects; n8n orchestrates"
+
 missing_structure_phrase_repo="${workdir}/missing-structure-phrase"
 create_repo "${missing_structure_phrase_repo}"
 write_valid_docs "${missing_structure_phrase_repo}"

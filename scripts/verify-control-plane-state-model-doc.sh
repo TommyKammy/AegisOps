@@ -169,6 +169,8 @@ forbidden_phrases=(
   "Until a future implementation materializes a dedicated control schema or API boundary, this document is the normative definition of which component owns which state and what must later be reconciled across component boundaries."
   "The approved future persistence boundary for those platform-owned control records is an AegisOps-owned PostgreSQL-backed control-plane datastore boundary."
   "The approved ownership split for a future PostgreSQL-backed implementation is:"
+  "The future AegisOps control layer is responsible for:"
+  "Reconciliation must preserve auditable disagreement. When OpenSearch, n8n, and the future control record disagree, the platform must retain that mismatch as an explicit state that operators can inspect and resolve rather than overwriting one side to make the data look clean."
 )
 
 if [[ ! -f "${doc_path}" ]]; then

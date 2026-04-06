@@ -132,4 +132,20 @@ git -C "${stale_pre_runtime_repo}" add docs/control-plane-state-model.md
 commit_fixture "${stale_pre_runtime_repo}"
 assert_fails_with "${stale_pre_runtime_repo}" "Forbidden control-plane state model statement still present: This document defines the approved baseline control-plane state model for AegisOps before any dedicated control service or datastore is implemented."
 
+stale_future_control_layer_repo="${workdir}/stale-future-control-layer"
+create_repo "${stale_future_control_layer_repo}"
+write_canonical_doc "${stale_future_control_layer_repo}"
+printf '%s\n' "The future AegisOps control layer is responsible for:" >> "${stale_future_control_layer_repo}/docs/control-plane-state-model.md"
+git -C "${stale_future_control_layer_repo}" add docs/control-plane-state-model.md
+commit_fixture "${stale_future_control_layer_repo}"
+assert_fails_with "${stale_future_control_layer_repo}" "Forbidden control-plane state model statement still present: The future AegisOps control layer is responsible for:"
+
+stale_future_control_record_repo="${workdir}/stale-future-control-record"
+create_repo "${stale_future_control_record_repo}"
+write_canonical_doc "${stale_future_control_record_repo}"
+printf '%s\n' "Reconciliation must preserve auditable disagreement. When OpenSearch, n8n, and the future control record disagree, the platform must retain that mismatch as an explicit state that operators can inspect and resolve rather than overwriting one side to make the data look clean." >> "${stale_future_control_record_repo}/docs/control-plane-state-model.md"
+git -C "${stale_future_control_record_repo}" add docs/control-plane-state-model.md
+commit_fixture "${stale_future_control_record_repo}"
+assert_fails_with "${stale_future_control_record_repo}" "Forbidden control-plane state model statement still present: Reconciliation must preserve auditable disagreement. When OpenSearch, n8n, and the future control record disagree, the platform must retain that mismatch as an explicit state that operators can inspect and resolve rather than overwriting one side to make the data look clean."
+
 echo "Control-plane state model verifier enforces required policy statements."

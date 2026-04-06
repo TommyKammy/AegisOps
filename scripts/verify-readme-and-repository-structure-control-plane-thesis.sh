@@ -24,6 +24,8 @@ readme_required_phrases=(
 
 readme_forbidden_phrases=(
   "**AegisOps** is an internal SOC + SOAR platform blueprint designed for flexible deployment across on-premise infrastructure and cloud environments, including AWS and other providers."
+  "> This repository is currently in the foundation-building phase. It is **not yet a production-ready SOC platform**."
+  "- **Detection and execution are separated** — OpenSearch detects; n8n orchestrates"
   "- **OpenSearch** — SIEM analytics and detection"
   "- **Sigma** — curated, reviewable detection logic"
   "- **n8n** — approval-gated orchestration, enrichment, and response"
