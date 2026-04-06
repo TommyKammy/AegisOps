@@ -9,6 +9,7 @@ from typing import Any, Callable, Mapping, Protocol, Type, TypeVar
 from ..models import (
     AITraceRecord,
     ActionRequestRecord,
+    AnalyticSignalRecord,
     AlertRecord,
     ApprovalDecisionRecord,
     CaseRecord,
@@ -87,6 +88,7 @@ _LIFECYCLE_STATES_BY_FAMILY: dict[str, frozenset[str]] = {
             "superseded",
         }
     ),
+    "analytic_signal": frozenset({"active", "superseded", "withdrawn"}),
     "case": frozenset(
         {
             "open",
@@ -180,6 +182,11 @@ _RECONCILIATION_INGEST_DISPOSITIONS = frozenset(
 
 _TABLES_BY_RECORD_TYPE: dict[Type[ControlPlaneRecord], TableConfig] = {
     AlertRecord: TableConfig(AlertRecord, "alert_records"),
+    AnalyticSignalRecord: TableConfig(
+        AnalyticSignalRecord,
+        "analytic_signal_records",
+        array_fields=frozenset({"alert_ids", "case_ids"}),
+    ),
     CaseRecord: TableConfig(CaseRecord, "case_records", array_fields=frozenset({"evidence_ids"})),
     EvidenceRecord: TableConfig(EvidenceRecord, "evidence_records"),
     ObservationRecord: TableConfig(
@@ -262,6 +269,17 @@ def _require_non_empty_tuple(
 def _validate_record(record: ControlPlaneRecord) -> None:
     _validate_lifecycle_state(record)
 
+    if isinstance(record, AnalyticSignalRecord):
+        _require_any_linkage(
+            record,
+            ("substrate_detection_record_id", "finding_id"),
+        )
+        if record.first_seen_at is not None and record.last_seen_at is not None:
+            if record.first_seen_at > record.last_seen_at:
+                raise ValueError(
+                    f"analytic_signal record {record.record_id!r} requires first_seen_at <= last_seen_at"
+                )
+        return
     if isinstance(record, CaseRecord):
         _require_any_linkage(record, ("finding_id", "alert_id"))
         _require_non_empty_tuple(record, "evidence_ids")

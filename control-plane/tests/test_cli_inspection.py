@@ -15,7 +15,11 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 import main
 from aegisops_control_plane.config import RuntimeConfig
-from aegisops_control_plane.models import AlertRecord, ReconciliationRecord
+from aegisops_control_plane.models import (
+    AlertRecord,
+    AnalyticSignalRecord,
+    ReconciliationRecord,
+)
 from aegisops_control_plane.service import AegisOpsControlPlaneService
 from postgres_test_support import make_store
 
@@ -60,6 +64,19 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             )
         )
         service.persist_record(
+            AnalyticSignalRecord(
+                analytic_signal_id="signal-001",
+                substrate_detection_record_id="substrate-detection-001",
+                finding_id="finding-001",
+                alert_ids=("alert-001",),
+                case_ids=(),
+                correlation_key="claim:host-001:privilege-escalation",
+                first_seen_at=compared_at,
+                last_seen_at=compared_at,
+                lifecycle_state="active",
+            )
+        )
+        service.persist_record(
             ReconciliationRecord(
                 reconciliation_id="reconciliation-001",
                 subject_linkage={"alert_ids": ("alert-001",)},
@@ -79,11 +96,17 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         )
 
         records_stdout = io.StringIO()
+        analytic_signals_stdout = io.StringIO()
         status_stdout = io.StringIO()
 
         main.main(
             ["inspect-records", "--family", "alert"],
             stdout=records_stdout,
+            service=service,
+        )
+        main.main(
+            ["inspect-records", "--family", "analytic_signal"],
+            stdout=analytic_signals_stdout,
             service=service,
         )
         main.main(
@@ -93,11 +116,23 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         )
 
         records_payload = json.loads(records_stdout.getvalue())
+        analytic_signals_payload = json.loads(analytic_signals_stdout.getvalue())
         status_payload = json.loads(status_stdout.getvalue())
 
         self.assertTrue(records_payload["read_only"])
         self.assertEqual(records_payload["record_family"], "alert")
         self.assertEqual(records_payload["records"][0]["alert_id"], "alert-001")
+
+        self.assertTrue(analytic_signals_payload["read_only"])
+        self.assertEqual(analytic_signals_payload["record_family"], "analytic_signal")
+        self.assertEqual(
+            analytic_signals_payload["records"][0]["analytic_signal_id"],
+            "signal-001",
+        )
+        self.assertEqual(
+            analytic_signals_payload["records"][0]["substrate_detection_record_id"],
+            "substrate-detection-001",
+        )
 
         self.assertTrue(status_payload["read_only"])
         self.assertEqual(status_payload["total_records"], 1)

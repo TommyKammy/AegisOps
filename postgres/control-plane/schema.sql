@@ -15,6 +15,23 @@ create table if not exists aegisops_control.alert_records (
   check (lifecycle_state in ('new','triaged','investigating','escalated_to_case','closed','reopened','superseded'))
 );
 
+create table if not exists aegisops_control.analytic_signal_records (
+  analytic_signal_id text primary key,
+  substrate_detection_record_id text,
+  finding_id text,
+  alert_ids text[] not null default '{}'::text[],
+  case_ids text[] not null default '{}'::text[],
+  correlation_key text not null,
+  first_seen_at timestamptz,
+  last_seen_at timestamptz,
+  lifecycle_state text not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (substrate_detection_record_id is not null or finding_id is not null),
+  check (first_seen_at is null or last_seen_at is null or first_seen_at <= last_seen_at),
+  check (lifecycle_state in ('active','superseded','withdrawn'))
+);
+
 create table if not exists aegisops_control.case_records (
   case_id text primary key,
   alert_id text,
