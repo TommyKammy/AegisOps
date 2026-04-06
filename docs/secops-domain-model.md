@@ -15,7 +15,9 @@ This document defines baseline semantics, ownership boundaries, and state transi
 | `Raw Event` | Source telemetry as received before AegisOps normalization or analytic shaping. |
 | `Normalized Event` | Telemetry transformed into the approved event schema used by the analytics plane. |
 | `Detection Rule` | Reviewed detection logic that evaluates normalized telemetry and declares matching conditions. |
-| `Finding` | Detection result produced when a detection rule matches relevant telemetry. |
+| `Substrate Detection Record` | Vendor-native detection, correlation, or alerting record emitted by an approved upstream detection substrate before AegisOps admits or interprets it. |
+| `Analytic Signal` | Vendor-neutral upstream SecOps primitive admitted by AegisOps from one or more substrate detection records and used to decide whether analyst-facing alert or case work should begin. |
+| `Finding` | Detection result produced when reviewed detection logic matches relevant telemetry. A finding may be represented by a substrate detection record or preserved as source context for an analytic signal, but it is not the universal product primitive for all substrates. |
 | `Hunt` | Analyst-directed exploration record created to test a threat hypothesis or investigate suspicious conditions beyond deterministic detection output. |
 | `Hunt Hypothesis` | Explicit statement of what the analyst believes may be happening, why it is worth testing, and what evidence or observations would support or refute it. |
 | `Hunt Run` | One bounded execution of a specific hunt hypothesis against a defined scope, time window, dataset, or query plan. |
@@ -41,7 +43,17 @@ A `Raw Event` becomes a `Normalized Event` when the analytics plane has accepted
 
 A `Detection Rule` evaluates `Normalized Event` records. It does not own source telemetry, approvals, or action execution.
 
+A `Substrate Detection Record` is the substrate-native detection, correlation, or alerting artifact emitted by an approved upstream detection substrate.
+
+A substrate detection record preserves the substrate's own identifiers, timestamps, and local semantics. It must not be mistaken for an AegisOps alert, case, approval, or execution record.
+
+A `Analytic Signal` is the vendor-neutral upstream SecOps primitive admitted by AegisOps from one or more substrate detection records.
+
+An analytic signal preserves durable references back to the originating substrate detection records, but it remains distinct from both those substrate-native records and the downstream alert or case lifecycle that AegisOps may create from it.
+
 A finding is the normalized analytic assertion that detection logic matched relevant telemetry.
+
+A finding may supply analytic meaning to an analytic signal, but a finding does not replace the vendor-neutral analytic-signal boundary and is not interchangeable with an alert, case, or action execution.
 
 A hunt is an analyst-directed exploration record created to test a threat hypothesis or investigate suspicious conditions beyond deterministic detection output.
 
@@ -105,7 +117,7 @@ An `Action Execution` is not approval. Execution records what was attempted or c
 
 `Disposition` is a classification outcome owned by the lifecycle of the record it closes. A finding disposition does not replace alert disposition, and a case disposition does not replace incident disposition.
 
-OpenSearch findings, n8n workflow runs, and future case state must remain separate records and must not be treated as interchangeable identifiers or lifecycle states.
+Substrate detection records, analytic signals, workflow runs, and future case state must remain separate records and must not be treated as interchangeable identifiers or lifecycle states.
 
 ## 4. Baseline System of Record
 
@@ -114,6 +126,8 @@ OpenSearch findings, n8n workflow runs, and future case state must remain separa
 | `Raw Event` | OpenSearch ingestion and analytics plane | Raw telemetry lands and persists in the analytics plane before any higher-level SecOps interpretation. |
 | `Normalized Event` | OpenSearch ingestion and analytics plane | The analytics plane owns normalized telemetry shape and analytic readiness. |
 | `Detection Rule` | Sigma for reviewed source definition; OpenSearch for deployed runtime materialization | Sigma remains the reviewable rule-definition source, while OpenSearch owns the deployed detector representation used at runtime. |
+| `Substrate Detection Record` | Approved upstream detection substrate | The substrate owns its native detection, correlation, or alerting record shape and identifier semantics before AegisOps admits them as upstream input. |
+| `Analytic Signal` | AegisOps analytic-signal intake boundary referencing approved upstream detection substrates | The analytic signal is the vendor-neutral upstream product primitive for control-plane intake, while still preserving links to substrate-native records. |
 | `Finding` | OpenSearch detection and analytics plane | A finding is an analytics-plane output and must not be redefined as workflow state. |
 | `Hunt` | Future AegisOps hunt management control layer | Hunt lifecycle belongs to the analyst-directed exploration record and must remain separate from deterministic findings, alerts, and cases. |
 | `Hunt Hypothesis` | Future AegisOps hunt management control layer | Hypothesis ownership stays with the hunt record family so the analytic question remains reviewable across multiple runs. |
@@ -136,13 +150,15 @@ OpenSearch findings, n8n workflow runs, and future case state must remain separa
 
 ## 5. Promotion and Correlation Rules
 
-A finding promotes to an alert only when triage policy determines that analyst attention, tracking, notification, or downstream workflow handling is required.
+An analytic signal is the common upstream product primitive from which alert or case routing decisions begin.
 
-Finding-to-alert routing must preserve the distinction between the upstream finding, any distinct analytic signal emitted by OpenSearch alerting or correlation logic, and the downstream alert record created for analyst work.
+An analytic signal promotes to an alert only when triage policy determines that analyst attention, tracking, notification, or downstream workflow handling is required.
 
-A finding identifier, an analytic signal identifier, and an alert identifier are related references, not interchangeable lifecycle keys.
+Analytic-signal-to-alert routing must preserve the distinction between the substrate detection record, any admitted analytic signal, any finding or correlation claim preserved as source context, and the downstream alert record created for analyst work.
 
-A finding may remain a finding without becoming an alert when the result is retained only for analytics, threshold accumulation, tuning review, or later correlation and does not yet require direct operator handling.
+A substrate detection record identifier, an analytic signal identifier, and an alert identifier are related references, not interchangeable lifecycle keys.
+
+A finding may remain source analytic context without becoming an alert when the result is retained only for analytics, threshold accumulation, tuning review, or later correlation and does not yet require direct operator handling.
 
 A hunt may produce observations, leads, recommendations, or supporting context for findings, alerts, and cases, but hunt records do not replace those records.
 
@@ -198,6 +214,6 @@ Disposition must not be used to hide unresolved ownership. If the operator canno
 
 This baseline keeps detection, investigation, approval, and execution as separate first-class concerns.
 
-It explicitly prevents OpenSearch findings from being treated as if they were alerts, prevents n8n workflow state from becoming the case system of record, and prevents approval state from being inferred from execution metadata.
+It explicitly prevents substrate-native detection records or findings from being treated as if they were alerts, prevents n8n workflow state from becoming the case system of record, and prevents approval state from being inferred from execution metadata.
 
 Future implementation may materialize additional control layers for alerts, cases, incidents, approvals, evidence, assets, and identities, but those runtime changes require separate approved work.
