@@ -543,6 +543,59 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             ("reconciliation-001", "reconciliation-002"),
         )
 
+    def test_service_exposes_wazuh_origin_alerts_in_business_hours_analyst_queue(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+
+        admitted = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(
+                _load_wazuh_fixture("agent-origin-alert.json")
+            ),
+        )
+        service.persist_record(
+            AlertRecord(
+                alert_id=admitted.alert.alert_id,
+                finding_id=admitted.alert.finding_id,
+                analytic_signal_id=admitted.alert.analytic_signal_id,
+                case_id="case-analyst-001",
+                lifecycle_state="escalated_to_case",
+            )
+        )
+
+        queue_view = service.inspect_analyst_queue()
+
+        self.assertTrue(queue_view.read_only)
+        self.assertEqual(queue_view.queue_name, "analyst_review")
+        self.assertEqual(queue_view.total_records, 1)
+        self.assertEqual(queue_view.records[0]["alert_id"], admitted.alert.alert_id)
+        self.assertEqual(queue_view.records[0]["queue_selection"], "business_hours_triage")
+        self.assertEqual(queue_view.records[0]["review_state"], "case_required")
+        self.assertEqual(queue_view.records[0]["escalation_boundary"], "tracked_case")
+        self.assertEqual(queue_view.records[0]["source_system"], "wazuh")
+        self.assertEqual(
+            queue_view.records[0]["substrate_detection_record_ids"],
+            ("wazuh:1731594986.4931506",),
+        )
+        self.assertEqual(
+            queue_view.records[0]["accountable_source_identities"],
+            ("agent:007",),
+        )
+        self.assertEqual(queue_view.records[0]["case_id"], "case-analyst-001")
+        self.assertEqual(
+            queue_view.records[0]["native_rule"],
+            {
+                "id": "5710",
+                "level": 10,
+                "description": "SSH brute force attempt",
+            },
+        )
+        self.assertEqual(len(queue_view.records[0]["evidence_ids"]), 1)
+
     def test_service_rejects_schema_invalid_records_before_they_are_inspectable(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(

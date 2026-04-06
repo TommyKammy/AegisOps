@@ -38,6 +38,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "inspect-reconciliation-status",
         help="Render a read-only reconciliation status summary.",
     )
+    subparsers.add_parser(
+        "inspect-analyst-queue",
+        help="Render the business-hours analyst review queue view.",
+    )
     return parser
 
 
@@ -64,6 +68,8 @@ def main(
                 parser.error(str(exc))
         elif command == "inspect-reconciliation-status":
             payload = service.inspect_reconciliation_status().to_dict()
+        elif command == "inspect-analyst-queue":
+            payload = service.inspect_analyst_queue().to_dict()
         else:
             raise AssertionError(f"Unhandled command: {command}")
 
