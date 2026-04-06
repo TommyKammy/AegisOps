@@ -49,6 +49,31 @@ class AnalyticSignalRecord(ControlPlaneRecord):
 
 
 @dataclass(frozen=True)
+class NativeDetectionRecord:
+    substrate_key: str
+    native_record_id: str
+    record_kind: str
+    correlation_key: str
+    first_seen_at: datetime
+    last_seen_at: datetime
+    metadata: Mapping[str, object]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "metadata", _freeze_mapping(self.metadata))
+
+
+@dataclass(frozen=True)
+class AnalyticSignalAdmission:
+    finding_id: str
+    analytic_signal_id: str | None
+    substrate_detection_record_id: str | None
+    correlation_key: str
+    first_seen_at: datetime
+    last_seen_at: datetime
+    materially_new_work: bool = False
+
+
+@dataclass(frozen=True)
 class CaseRecord(ControlPlaneRecord):
     record_family: ClassVar[str] = "case"
     identifier_field: ClassVar[str] = "case_id"

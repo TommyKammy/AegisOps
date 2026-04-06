@@ -44,7 +44,14 @@ class RuntimeSkeletonTests(unittest.TestCase):
         self.assertEqual(snapshot.service_name, "aegisops-control-plane")
         self.assertEqual(snapshot.ownership_boundary["runtime_root"], "control-plane/")
         self.assertEqual(snapshot.ownership_boundary["postgres_contract_root"], "postgres/control-plane/")
-        self.assertEqual(snapshot.ownership_boundary["signal_source"], "opensearch/")
+        self.assertEqual(
+            snapshot.ownership_boundary["native_detection_intake"],
+            "substrate-adapters/",
+        )
+        self.assertEqual(
+            snapshot.ownership_boundary["admitted_signal_model"],
+            "control-plane/analytic-signals",
+        )
         self.assertEqual(snapshot.ownership_boundary["execution_plane"], "n8n/")
 
     def test_runtime_snapshot_rejects_non_integer_port(self) -> None:
