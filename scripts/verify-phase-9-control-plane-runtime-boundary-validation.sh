@@ -61,7 +61,7 @@ validation_required_phrases=(
   '## Deviations'
   'Confirmed the repository now reserves `control-plane/` as the approved live application home for the first AegisOps-owned control-plane service.'
   'Confirmed `postgres/control-plane/` remains the reviewed persistence-contract home for schema and migration assets rather than the repository home for runtime application code.'
-  'Confirmed the runtime-boundary document keeps OpenSearch as the analytics and detection plane, keeps n8n as the execution plane, and defines the control-plane service as the authoritative owner of AegisOps platform records and reconciliation behavior.'
+  'Confirmed the runtime-boundary document keeps OpenSearch as the analytics and detection plane, preserves the current n8n-backed execution path without making it the only execution model, and defines the control-plane service as the authoritative owner of AegisOps platform records and reconciliation behavior.'
   'Confirmed the approved Phase 9 slice includes only the minimum internal control-plane runtime needed to materialize authoritative state and reconcile against external systems.'
   'Confirmed analyst UI, live telemetry expansion, AI runtime, and write-capable response execution remain explicitly out of scope for this boundary.'
   '`README.md` must continue to describe `control-plane/` as the live application home and `postgres/control-plane/` as the separate persistence-contract home.'

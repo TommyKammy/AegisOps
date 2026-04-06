@@ -251,8 +251,8 @@ class ReconciliationRecord(ControlPlaneRecord):
     alert_id: str | None
     finding_id: str | None
     analytic_signal_id: str | None
-    workflow_execution_id: str | None
-    linked_execution_ids: tuple[str, ...]
+    execution_run_id: str | None
+    linked_execution_run_ids: tuple[str, ...]
     correlation_key: str
     first_seen_at: datetime | None
     last_seen_at: datetime | None

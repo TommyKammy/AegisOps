@@ -24,7 +24,7 @@ Confirmed `postgres/control-plane/` remains the reviewed persistence-contract ho
 
 Confirmed the `control-plane/` runtime home now includes a local entrypoint, non-secret sample configuration, adapter placeholders, and focused tests without introducing deployment credentials.
 
-Confirmed the runtime-boundary document keeps OpenSearch as the analytics and detection plane, keeps n8n as the execution plane, and defines the control-plane service as the authoritative owner of AegisOps platform records and reconciliation behavior.
+Confirmed the runtime-boundary document keeps OpenSearch as the analytics and detection plane, preserves the current n8n-backed execution path without making it the only execution model, and defines the control-plane service as the authoritative owner of AegisOps platform records and reconciliation behavior.
 
 Confirmed the approved Phase 9 slice includes only the minimum internal control-plane runtime needed to materialize authoritative state and reconcile against external systems.
 

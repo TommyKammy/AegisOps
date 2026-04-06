@@ -498,8 +498,8 @@ class AegisOpsControlPlaneService:
                 alert_id=alert.alert_id,
                 finding_id=finding_id,
                 analytic_signal_id=analytic_signal_id,
-                workflow_execution_id=None,
-                linked_execution_ids=(),
+                execution_run_id=None,
+                linked_execution_run_ids=(),
                 correlation_key=correlation_key,
                 first_seen_at=persisted_first_seen,
                 last_seen_at=persisted_last_seen,
@@ -520,13 +520,22 @@ class AegisOpsControlPlaneService:
         self,
         *,
         action_request_id: str,
-        workflow_id: str,
+        execution_surface_type: str,
+        execution_surface_id: str,
         observed_executions: tuple[Mapping[str, object], ...],
         compared_at: datetime,
         stale_after: datetime,
     ) -> ReconciliationRecord:
         compared_at = self._require_aware_datetime(compared_at, "compared_at")
         stale_after = self._require_aware_datetime(stale_after, "stale_after")
+        execution_surface_type = self._require_non_empty_string(
+            execution_surface_type,
+            "execution_surface_type",
+        )
+        execution_surface_id = self._require_non_empty_string(
+            execution_surface_id,
+            "execution_surface_id",
+        )
         action_request = self._store.get(ActionRequestRecord, action_request_id)
         if action_request is None:
             raise LookupError(f"Missing action request {action_request_id!r}")
@@ -537,15 +546,16 @@ class AegisOpsControlPlaneService:
             )
 
         normalized_executions = self._normalize_observed_executions(observed_executions)
-        linked_execution_ids = tuple(
-            execution["workflow_execution_id"] for execution in normalized_executions
+        linked_execution_run_ids = tuple(
+            execution["execution_run_id"] for execution in normalized_executions
         )
-        unique_execution_ids = tuple(dict.fromkeys(linked_execution_ids))
+        unique_execution_run_ids = tuple(dict.fromkeys(linked_execution_run_ids))
         latest_execution = normalized_executions[-1] if normalized_executions else None
 
         subject_linkage: dict[str, object] = {
             "action_request_ids": (action_request.action_request_id,),
-            "workflow_ids": (workflow_id,),
+            "execution_surface_types": (execution_surface_type,),
+            "execution_surface_ids": (execution_surface_id,),
         }
         if action_request.approval_decision_id is not None:
             subject_linkage["approval_decision_ids"] = (
@@ -561,7 +571,7 @@ class AegisOpsControlPlaneService:
         ingest_disposition: str
         lifecycle_state: str
         mismatch_summary: str
-        workflow_execution_id: str | None = None
+        execution_run_id: str | None = None
         last_seen_at = action_request.requested_at
 
         if latest_execution is None:
@@ -571,34 +581,34 @@ class AegisOpsControlPlaneService:
                 "missing downstream execution for approved action request correlation"
             )
         else:
-            workflow_execution_id = latest_execution["workflow_execution_id"]
+            execution_run_id = latest_execution["execution_run_id"]
             last_seen_at = latest_execution["observed_at"]
-            observed_workflow_id = latest_execution["workflow_id"]
+            observed_execution_surface_id = latest_execution["execution_surface_id"]
             observed_idempotency_key = latest_execution["idempotency_key"]
             if last_seen_at < stale_after and compared_at >= stale_after:
                 ingest_disposition = "stale"
                 lifecycle_state = "stale"
                 mismatch_summary = "stale downstream execution observation requires refresh"
-            elif len(unique_execution_ids) > 1:
+            elif len(unique_execution_run_ids) > 1:
                 ingest_disposition = "duplicate"
                 lifecycle_state = "mismatched"
                 mismatch_summary = (
                     "duplicate downstream executions observed for one approved request"
                 )
             elif (
-                observed_workflow_id != workflow_id
+                observed_execution_surface_id != execution_surface_id
                 or observed_idempotency_key != action_request.idempotency_key
             ):
                 ingest_disposition = "mismatch"
                 lifecycle_state = "mismatched"
                 mismatch_summary = (
-                    "workflow/idempotency mismatch between approved request and observed execution"
+                    "execution surface/idempotency mismatch between approved request and observed execution"
                 )
             else:
                 ingest_disposition = "matched"
                 lifecycle_state = "matched"
                 mismatch_summary = (
-                    "matched approved action request to downstream workflow execution"
+                    "matched approved action request to reviewed execution run"
                 )
 
         return self.persist_record(
@@ -608,10 +618,10 @@ class AegisOpsControlPlaneService:
                 alert_id=action_request.alert_id,
                 finding_id=action_request.finding_id,
                 analytic_signal_id=None,
-                workflow_execution_id=workflow_execution_id,
-                linked_execution_ids=linked_execution_ids,
+                execution_run_id=execution_run_id,
+                linked_execution_run_ids=linked_execution_run_ids,
                 correlation_key=(
-                    f"{action_request.action_request_id}:{workflow_id}:{action_request.idempotency_key}"
+                    f"{action_request.action_request_id}:{execution_surface_type}:{execution_surface_id}:{action_request.idempotency_key}"
                 ),
                 first_seen_at=action_request.requested_at,
                 last_seen_at=last_seen_at,
@@ -656,14 +666,16 @@ class AegisOpsControlPlaneService:
     ) -> tuple[dict[str, object], ...]:
         normalized: list[dict[str, object]] = []
         for execution in observed_executions:
-            workflow_execution_id = execution.get("workflow_execution_id")
-            workflow_id = execution.get("workflow_id")
+            execution_run_id = execution.get("execution_run_id")
+            execution_surface_id = execution.get("execution_surface_id")
             idempotency_key = execution.get("idempotency_key")
             observed_at = execution.get("observed_at")
-            if not isinstance(workflow_execution_id, str):
-                raise ValueError("observed execution must include string workflow_execution_id")
-            if not isinstance(workflow_id, str):
-                raise ValueError("observed execution must include string workflow_id")
+            if not isinstance(execution_run_id, str):
+                raise ValueError("observed execution must include string execution_run_id")
+            if not isinstance(execution_surface_id, str):
+                raise ValueError(
+                    "observed execution must include string execution_surface_id"
+                )
             if not isinstance(idempotency_key, str):
                 raise ValueError("observed execution must include string idempotency_key")
             if not isinstance(observed_at, datetime):
@@ -674,8 +686,8 @@ class AegisOpsControlPlaneService:
             )
             normalized.append(
                 {
-                    "workflow_execution_id": workflow_execution_id,
-                    "workflow_id": workflow_id,
+                    "execution_run_id": execution_run_id,
+                    "execution_surface_id": execution_surface_id,
                     "idempotency_key": idempotency_key,
                     "observed_at": observed_at,
                 }
@@ -687,6 +699,12 @@ class AegisOpsControlPlaneService:
     @staticmethod
     def _next_identifier(prefix: str) -> str:
         return f"{prefix}-{uuid.uuid4()}"
+
+    @staticmethod
+    def _require_non_empty_string(value: object, field_name: str) -> str:
+        if not isinstance(value, str) or value.strip() == "":
+            raise ValueError(f"{field_name} must be a non-empty string")
+        return value
 
 
 def build_runtime_snapshot(environ: Mapping[str, str] | None = None) -> RuntimeSnapshot:

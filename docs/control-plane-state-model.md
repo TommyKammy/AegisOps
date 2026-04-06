@@ -114,7 +114,7 @@ The minimum stable reconciliation key set for this baseline is:
 - `approval_decision_id` and `action_request_id` for authorized response intent;
 - `hunt_id` and `hunt_run_id` for analyst-directed exploration and each bounded execution of that exploration;
 - `ai_trace_id` for preserved AI-assisted interpretation or recommendation context; and
-- `workflow_id`, `workflow_execution_id`, and an action idempotency key for the n8n execution-plane record.
+- `execution_surface_type`, `execution_surface_id`, `execution_run_id`, and an action idempotency key for the reviewed automation-substrate or executor run being reconciled.
 
 The AegisOps control-plane runtime is responsible for:
 
@@ -408,7 +408,7 @@ Minimum identifier expectation for a Reconciliation record:
 | ---- | ---- |
 | `reconciliation_id` | Immutable AegisOps control-plane identifier for one reconciliation record. |
 | Subject linkage set | Required explicit references to the alert, case, approval decision, action request, hunt, hunt run, AI trace, and execution records or upstream analytic identifiers being compared. |
-| `substrate_detection_record_id`, `analytic_signal_id`, or `workflow_execution_id` | Required external or execution-plane correlation identifiers proving which cross-system records were evaluated. |
+| `substrate_detection_record_id`, `analytic_signal_id`, or `execution_run_id` | Required external or execution-plane correlation identifiers proving which cross-system records were evaluated. |
 | Correlation key and mismatch summary | Required deterministic comparison key, reconciliation scope, and preserved statement of which fields or lifecycle facts aligned or diverged. |
 
 Minimum lifecycle states for a Reconciliation record:

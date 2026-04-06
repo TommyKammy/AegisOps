@@ -195,8 +195,8 @@ create table if not exists aegisops_control.reconciliation_records (
   alert_id text,
   finding_id text,
   analytic_signal_id text,
-  workflow_execution_id text,
-  linked_execution_ids text[] not null default '{}'::text[],
+  execution_run_id text,
+  linked_execution_run_ids text[] not null default '{}'::text[],
   correlation_key text not null,
   first_seen_at timestamptz,
   last_seen_at timestamptz,
@@ -206,7 +206,7 @@ create table if not exists aegisops_control.reconciliation_records (
   lifecycle_state text not null,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
-  check (finding_id is not null or analytic_signal_id is not null or workflow_execution_id is not null),
+  check (finding_id is not null or analytic_signal_id is not null or execution_run_id is not null),
   check (first_seen_at is null or last_seen_at is null or first_seen_at <= last_seen_at),
   check (
     ingest_disposition in (
