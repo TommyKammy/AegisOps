@@ -130,6 +130,86 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             ("substrate-a:native-001", "substrate-b:native-001"),
         )
 
+    def test_service_rejects_blank_substrate_keys_at_native_detection_boundary(self) -> None:
+        @dataclass(frozen=True)
+        class BlankSubstrateAdapter(NativeDetectionRecordAdapter):
+            substrate_key: str = "   "
+
+            def build_analytic_signal_admission(
+                self, record: NativeDetectionRecord
+            ) -> AnalyticSignalAdmission:
+                return AnalyticSignalAdmission(
+                    finding_id="finding::shared",
+                    analytic_signal_id=None,
+                    substrate_detection_record_id=record.native_record_id,
+                    correlation_key=record.correlation_key,
+                    first_seen_at=record.first_seen_at,
+                    last_seen_at=record.last_seen_at,
+                )
+
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "adapter\\.substrate_key must be a non-empty string",
+        ):
+            service.ingest_native_detection_record(
+                BlankSubstrateAdapter(),
+                NativeDetectionRecord(
+                    substrate_key="   ",
+                    native_record_id="native-001",
+                    record_kind="alert",
+                    correlation_key="claim:host-001:privilege-escalation",
+                    first_seen_at=datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc),
+                    last_seen_at=datetime(2026, 4, 5, 12, 15, tzinfo=timezone.utc),
+                    metadata={"vendor": "test"},
+                ),
+            )
+
+    def test_service_rejects_blank_detection_id_at_native_detection_boundary(self) -> None:
+        @dataclass(frozen=True)
+        class BlankDetectionIdAdapter(NativeDetectionRecordAdapter):
+            substrate_key: str = "test-substrate"
+
+            def build_analytic_signal_admission(
+                self, record: NativeDetectionRecord
+            ) -> AnalyticSignalAdmission:
+                return AnalyticSignalAdmission(
+                    finding_id="finding::shared",
+                    analytic_signal_id=None,
+                    substrate_detection_record_id="   ",
+                    correlation_key=record.correlation_key,
+                    first_seen_at=record.first_seen_at,
+                    last_seen_at=record.last_seen_at,
+                )
+
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "substrate_detection_record_id/native_record_id must be a non-empty string",
+        ):
+            service.ingest_native_detection_record(
+                BlankDetectionIdAdapter(),
+                NativeDetectionRecord(
+                    substrate_key="test-substrate",
+                    native_record_id="native-001",
+                    record_kind="alert",
+                    correlation_key="claim:host-001:privilege-escalation",
+                    first_seen_at=datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc),
+                    last_seen_at=datetime(2026, 4, 5, 12, 15, tzinfo=timezone.utc),
+                    metadata={"vendor": "test"},
+                ),
+            )
+
     def test_runtime_snapshot_reports_postgresql_authoritative_persistence_mode(self) -> None:
         service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops")

@@ -239,6 +239,12 @@ class AegisOpsControlPlaneService:
             raise ValueError(f"{field_name} must be timezone-aware")
         return value
 
+    @staticmethod
+    def _require_non_empty_string(value: object, field_name: str) -> str:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{field_name} must be a non-empty string")
+        return value
+
     def ingest_finding_alert(
         self,
         *,
@@ -267,15 +273,27 @@ class AegisOpsControlPlaneService:
         adapter: NativeDetectionRecordAdapter,
         record: NativeDetectionRecord,
     ) -> FindingAlertIngestResult:
-        if record.substrate_key != adapter.substrate_key:
+        adapter_substrate_key = self._require_non_empty_string(
+            adapter.substrate_key,
+            "adapter.substrate_key",
+        )
+        record_substrate_key = self._require_non_empty_string(
+            record.substrate_key,
+            "record.substrate_key",
+        )
+        if record_substrate_key != adapter_substrate_key:
             raise ValueError(
                 "native detection record substrate does not match adapter boundary "
-                f"({record.substrate_key!r} != {adapter.substrate_key!r})"
+                f"({record_substrate_key!r} != {adapter_substrate_key!r})"
             )
         admission = adapter.build_analytic_signal_admission(record)
-        substrate_detection_record_id = self._normalize_substrate_detection_record_id(
-            record.substrate_key,
+        raw_substrate_detection_record_id = self._require_non_empty_string(
             admission.substrate_detection_record_id or record.native_record_id,
+            "substrate_detection_record_id/native_record_id",
+        )
+        substrate_detection_record_id = self._normalize_substrate_detection_record_id(
+            record_substrate_key,
+            raw_substrate_detection_record_id,
         )
         admission = AnalyticSignalAdmission(
             finding_id=admission.finding_id,
