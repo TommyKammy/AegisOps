@@ -96,7 +96,7 @@ done
 
 require_pattern "${schema_path}" 'check \(' \
   "Control-plane schema manifest must constrain lifecycle states with explicit checks."
-require_pattern "${schema_path}" 'linked_execution_ids text\[\] not null default '\''\{\}'\''::text\[\]' \
+require_pattern "${schema_path}" 'linked_execution_run_ids text\[\] not null default '\''\{\}'\''::text\[\]' \
   "Control-plane schema manifest must preserve explicit reconciliation linkage to execution-plane records."
 
 if grep -Ein '^[[:space:]]*insert[[:space:]]' "${schema_path}" >/dev/null; then

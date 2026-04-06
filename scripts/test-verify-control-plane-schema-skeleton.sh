@@ -214,15 +214,15 @@ write_valid_fixture() {
     "  subject_linkage jsonb not null," \
     "  finding_id text," \
     "  analytic_signal_id text," \
-    "  workflow_execution_id text," \
-    "  linked_execution_ids text[] not null default '{}'::text[]," \
+    "  execution_run_id text," \
+    "  linked_execution_run_ids text[] not null default '{}'::text[]," \
     "  correlation_key text not null," \
     "  mismatch_summary text not null," \
     "  compared_at timestamptz not null," \
     "  lifecycle_state text not null," \
     "  created_at timestamptz not null default timezone('utc', now())," \
     "  updated_at timestamptz not null default timezone('utc', now())," \
-    "  check (finding_id is not null or analytic_signal_id is not null or workflow_execution_id is not null)," \
+    "  check (finding_id is not null or analytic_signal_id is not null or execution_run_id is not null)," \
     "  check (lifecycle_state in ('pending','matched','mismatched','stale','resolved','superseded'))" \
     ");" \
     >"${target}/postgres/control-plane/schema.sql"
@@ -304,7 +304,7 @@ assert_fails_with "${missing_table_repo}" "must materialize reconciliation_recor
 missing_reconciliation_link_repo="${workdir}/missing-reconciliation-link"
 create_repo "${missing_reconciliation_link_repo}"
 write_valid_fixture "${missing_reconciliation_link_repo}"
-perl -0pi -e "s/\\n  linked_execution_ids text\\[\\] not null default '\\{\\}'::text\\[\\],//" \
+perl -0pi -e "s/\\n  linked_execution_run_ids text\\[\\] not null default '\\{\\}'::text\\[\\],//" \
   "${missing_reconciliation_link_repo}/postgres/control-plane/schema.sql"
 git -C "${missing_reconciliation_link_repo}" add postgres/control-plane/schema.sql
 git -C "${missing_reconciliation_link_repo}" commit -q -m "fixture update"
