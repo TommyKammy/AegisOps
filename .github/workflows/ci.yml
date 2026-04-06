@@ -57,6 +57,7 @@ jobs:
           bash scripts/verify-proxy-compose-skeleton.sh
           bash scripts/verify-response-action-safety-model-doc.sh
           bash scripts/verify-requirements-baseline-control-plane-thesis.sh
+          bash scripts/verify-readme-and-repository-structure-control-plane-thesis.sh
           bash scripts/verify-repository-skeleton.sh
           bash scripts/verify-repository-structure-doc.sh
           bash scripts/verify-retention-baseline-doc.sh
@@ -110,6 +111,7 @@ jobs:
           bash scripts/test-verify-phase-6-opensearch-detector-artifacts.sh
           bash scripts/test-verify-phase-6-replay-to-notify-validation.sh
           bash scripts/test-verify-requirements-baseline-control-plane-thesis.sh
+          bash scripts/test-verify-readme-and-repository-structure-control-plane-thesis.sh
           bash scripts/test-verify-repository-skeleton.sh
           bash scripts/test-verify-response-action-safety-model-doc.sh
           bash scripts/test-verify-retention-baseline-doc.sh
