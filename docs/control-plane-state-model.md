@@ -8,6 +8,8 @@ It supplements `docs/architecture.md`, `docs/secops-domain-model.md`, and `docs/
 
 This document defines ownership, source-of-truth expectations, and recovery responsibilities only. It does not introduce a live datastore, schema migration, API service, or runtime deployment in this phase.
 
+For the reviewed Wazuh-specific intake mapping into first-class analytic signals, see `docs/wazuh-alert-ingest-contract.md`.
+
 ## 2. Baseline Design Constraints
 
 The baseline must keep platform-owned control state explicit across the shipped `control-plane/` runtime boundary and the reviewed `postgres/control-plane/` persistence-contract home.
@@ -93,6 +95,8 @@ Substrate-record-to-alert ingestion contract requirements:
 The ingestion boundary must treat `substrate_detection_record_id`, `analytic_signal_id`, and `alert_id` as related but non-interchangeable identifiers.
 
 The ingest path must preserve the upstream `substrate_detection_record_id` as the durable substrate-origin reference, preserve `analytic_signal_id` for the admitted vendor-neutral signal created or updated from that substrate record set, and assign a separate control-plane `alert_id` for the analyst-facing record created or updated from that signal.
+
+For Wazuh-origin substrate alerts, `docs/wazuh-alert-ingest-contract.md` defines the reviewed input contract, the required Wazuh-native provenance set, and the mapping from Wazuh `id` and `timestamp` into this identifier boundary.
 
 The control plane must evaluate whether an incoming upstream signal creates a new alert, updates an existing alert, or is recorded only as a duplicate or restatement linked to an existing alert.
 

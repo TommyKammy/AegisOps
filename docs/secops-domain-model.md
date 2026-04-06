@@ -8,6 +8,8 @@ It gives future implementation work a shared vocabulary for detection, investiga
 
 This document defines baseline semantics, ownership boundaries, and state transitions only. It does not introduce runtime behavior, workflow automation, or architecture changes.
 
+For the reviewed Wazuh-specific intake boundary, see `docs/wazuh-alert-ingest-contract.md`.
+
 ## 2. Core Domain Objects
 
 | Object | Definition |
@@ -50,6 +52,8 @@ A substrate detection record preserves the substrate's own identifiers, timestam
 An `Analytic Signal` is the vendor-neutral upstream SecOps primitive admitted by AegisOps from one or more substrate detection records.
 
 An analytic signal preserves durable references back to the originating substrate detection records, but it remains distinct from both those substrate-native records and the downstream alert or case lifecycle that AegisOps may create from it.
+
+For Wazuh-origin alerts, `docs/wazuh-alert-ingest-contract.md` defines the reviewed required fields, optional fields, provenance set, and mapping from the Wazuh-native alert into the admitted analytic-signal boundary.
 
 A finding is the normalized analytic assertion that detection logic matched relevant telemetry.
 
