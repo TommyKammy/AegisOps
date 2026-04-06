@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import re
 
 from aegisops_control_plane.adapters.postgres import PostgresControlPlaneStore
@@ -36,14 +37,16 @@ class FakePostgresConnection:
     def __init__(self, backend: FakePostgresBackend, dsn: str) -> None:
         self.backend = backend
         self.dsn = dsn
+        self.tables = copy.deepcopy(backend.tables)
 
     def cursor(self) -> "FakePostgresCursor":
-        return FakePostgresCursor(self.backend)
+        return FakePostgresCursor(self.backend, self.tables)
 
     def commit(self) -> None:
-        return None
+        self.backend.tables = copy.deepcopy(self.tables)
 
     def rollback(self) -> None:
+        self.tables = copy.deepcopy(self.backend.tables)
         return None
 
     def close(self) -> None:
@@ -51,8 +54,13 @@ class FakePostgresConnection:
 
 
 class FakePostgresCursor:
-    def __init__(self, backend: FakePostgresBackend) -> None:
+    def __init__(
+        self,
+        backend: FakePostgresBackend,
+        tables: dict[str, dict[str, dict[str, object]]],
+    ) -> None:
         self.backend = backend
+        self.tables = tables
         self.description: tuple[tuple[str], ...] | None = None
         self._rows: list[dict[str, object]] = []
 
@@ -94,7 +102,7 @@ class FakePostgresCursor:
         row = dict(zip(column_names, params or ()))
         identifier_field = column_names[0]
         identifier_value = row[identifier_field]
-        table_rows = self.backend.tables.setdefault(table, {})
+        table_rows = self.tables.setdefault(table, {})
         table_rows[str(identifier_value)] = row
         self.description = None
         self._rows = []
@@ -107,7 +115,7 @@ class FakePostgresCursor:
     ) -> None:
         column_names = [column.strip() for column in columns.split(",")]
         identifier_value = str((params or ("",))[0])
-        row = self.backend.tables.get(table, {}).get(identifier_value)
+        row = self.tables.get(table, {}).get(identifier_value)
         self.description = tuple((name,) for name in column_names)
         self._rows = [self._project_row(row, column_names)] if row is not None else []
 
@@ -117,7 +125,7 @@ class FakePostgresCursor:
         columns: str,
     ) -> None:
         column_names = [column.strip() for column in columns.split(",")]
-        rows = self.backend.tables.get(table, {})
+        rows = self.tables.get(table, {})
         self.description = tuple((name,) for name in column_names)
         self._rows = [
             self._project_row(rows[record_id], column_names)

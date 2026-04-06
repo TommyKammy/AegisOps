@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import AbstractContextManager
 from collections import Counter
 from dataclasses import asdict, dataclass, fields
 from datetime import datetime, timezone
@@ -43,6 +44,9 @@ class ControlPlaneStore(Protocol):
         ...
 
     def list(self, record_type: Type[RecordT]) -> tuple[RecordT, ...]:
+        ...
+
+    def transaction(self) -> AbstractContextManager[None]:
         ...
 
 
@@ -309,7 +313,11 @@ class AegisOpsControlPlaneService:
                     "queue_selection": "business_hours_triage",
                     "review_state": review_state,
                     "escalation_boundary": self._alert_escalation_boundary(alert),
-                    "source_system": source_systems[0] if source_systems else "wazuh",
+                    "source_system": (
+                        "wazuh"
+                        if is_wazuh_origin
+                        else (source_systems[0] if source_systems else "wazuh")
+                    ),
                     "substrate_detection_record_ids": substrate_detection_record_ids,
                     "accountable_source_identities": self._merge_linked_ids(
                         reconciliation.subject_linkage.get(
@@ -458,12 +466,13 @@ class AegisOpsControlPlaneService:
             last_seen_at=admission.last_seen_at,
             materially_new_work=admission.materially_new_work,
         )
-        result = self._ingest_analytic_signal_admission(admission)
-        return self._attach_native_detection_context(
-            record=record,
-            ingest_result=result,
-            substrate_detection_record_id=substrate_detection_record_id,
-        )
+        with self._store.transaction():
+            result = self._ingest_analytic_signal_admission(admission)
+            return self._attach_native_detection_context(
+                record=record,
+                ingest_result=result,
+                substrate_detection_record_id=substrate_detection_record_id,
+            )
 
     def _ingest_analytic_signal_admission(
         self,
@@ -698,7 +707,10 @@ class AegisOpsControlPlaneService:
                 case_id=ingest_result.alert.case_id,
                 source_system=source_system,
                 collector_identity=f"{record.substrate_key}-native-detection-adapter",
-                acquired_at=record.first_seen_at,
+                acquired_at=self._require_aware_datetime(
+                    record.first_seen_at,
+                    "record.first_seen_at",
+                ),
                 derivation_relationship="native_detection_record",
                 lifecycle_state="collected",
             )
