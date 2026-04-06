@@ -27,6 +27,7 @@ from aegisops_control_plane.models import (
     ReconciliationRecord,
     RecommendationRecord,
 )
+from postgres_test_support import FakePostgresBackend, make_store
 
 
 @dataclass(frozen=True)
@@ -39,14 +40,14 @@ class UnsupportedRecord(ControlPlaneRecord):
 
 
 class PostgresControlPlaneStoreTests(unittest.TestCase):
-    def test_store_reports_current_in_process_persistence_mode(self) -> None:
+    def test_store_reports_postgresql_authoritative_persistence_mode(self) -> None:
         store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
 
-        self.assertEqual(store.persistence_mode, "in_memory")
+        self.assertEqual(store.persistence_mode, "postgresql")
         self.assertEqual(store.dsn, "postgresql://control-plane.local/aegisops")
 
     def test_store_round_trips_reviewed_record_families_by_aegisops_ids(self) -> None:
-        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        store, _ = make_store()
         timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
 
         records = [
@@ -230,7 +231,7 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             record.target_scope["asset_id"] = "asset-003"  # type: ignore[index]
 
     def test_store_lists_execution_reconciliation_records_separately(self) -> None:
-        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        store, _ = make_store()
         requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
         compared_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
         records = (
@@ -299,7 +300,7 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         )
 
     def test_store_rejects_schema_invalid_records_before_persistence(self) -> None:
-        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        store, _ = make_store()
         timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
 
         invalid_cases = (
@@ -379,7 +380,7 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
                 self.assertEqual(store.list(record_type), ())
 
     def test_store_rejects_unsupported_record_family_with_type_error(self) -> None:
-        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        store, _ = make_store()
 
         with self.assertRaisesRegex(
             TypeError,
@@ -391,6 +392,24 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
                     lifecycle_state="new",
                 )
             )
+
+    def test_store_persists_records_across_store_instances_sharing_postgres_backend(
+        self,
+    ) -> None:
+        backend = FakePostgresBackend()
+        first_store, _ = make_store(backend)
+        second_store, _ = make_store(backend)
+        record = AlertRecord(
+            alert_id="alert-001",
+            finding_id="finding-001",
+            analytic_signal_id="signal-001",
+            case_id=None,
+            lifecycle_state="new",
+        )
+
+        first_store.save(record)
+
+        self.assertEqual(second_store.get(AlertRecord, "alert-001"), record)
 
 
 if __name__ == "__main__":

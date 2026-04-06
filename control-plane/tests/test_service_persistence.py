@@ -11,28 +11,28 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
 from aegisops_control_plane.config import RuntimeConfig
-from aegisops_control_plane.adapters.postgres import PostgresControlPlaneStore
 from aegisops_control_plane.models import (
     ActionRequestRecord,
     AlertRecord,
     ReconciliationRecord,
 )
 from aegisops_control_plane.service import AegisOpsControlPlaneService
+from postgres_test_support import make_store
 
 
 class ControlPlaneServicePersistenceTests(unittest.TestCase):
-    def test_runtime_snapshot_reports_current_in_process_persistence_mode(self) -> None:
+    def test_runtime_snapshot_reports_postgresql_authoritative_persistence_mode(self) -> None:
         service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops")
         )
 
         snapshot = service.describe_runtime()
 
-        self.assertEqual(snapshot.persistence_mode, "in_memory")
+        self.assertEqual(snapshot.persistence_mode, "postgresql")
         self.assertEqual(snapshot.postgres_dsn, "postgresql://control-plane.local/aegisops")
 
     def test_service_round_trips_records_by_control_plane_identifier(self) -> None:
-        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        store, _ = make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(
                 postgres_dsn="postgresql://control-plane.local/aegisops",
@@ -88,7 +88,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertIsNone(service.get_record(ReconciliationRecord, "n8n-exec-001"))
 
     def test_service_accepts_injected_store_for_runtime_snapshot(self) -> None:
-        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        store, _ = make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://ignored.local/aegisops"),
             store=store,
@@ -97,10 +97,10 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         snapshot = service.describe_runtime()
 
         self.assertEqual(snapshot.postgres_dsn, "postgresql://control-plane.local/aegisops")
-        self.assertEqual(snapshot.persistence_mode, "in_memory")
+        self.assertEqual(snapshot.persistence_mode, "postgresql")
 
     def test_service_exposes_read_only_record_and_reconciliation_inspection(self) -> None:
-        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        store, _ = make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(
                 postgres_dsn="postgresql://control-plane.local/aegisops",
@@ -175,7 +175,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         )
 
     def test_service_rejects_schema_invalid_records_before_they_are_inspectable(self) -> None:
-        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        store, _ = make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
             store=store,
@@ -226,7 +226,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         )
 
     def test_service_upserts_alert_lifecycle_from_upstream_signals(self) -> None:
-        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        store, _ = make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(
                 postgres_dsn="postgresql://control-plane.local/aegisops",
@@ -310,11 +310,11 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(restated_reconciliation.last_seen_at, restated_seen)
         self.assertEqual(
             restated_reconciliation.subject_linkage["finding_ids"],
-            ("finding-001", "finding-002"),
+            ["finding-001", "finding-002"],
         )
         self.assertEqual(
             restated_reconciliation.subject_linkage["analytic_signal_ids"],
-            ("signal-001", "signal-002"),
+            ["signal-001", "signal-002"],
         )
         self.assertEqual(updated_reconciliation.alert_id, created.alert.alert_id)
         self.assertEqual(updated_reconciliation.ingest_disposition, "updated")
@@ -322,11 +322,11 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(updated_reconciliation.last_seen_at, updated_seen)
         self.assertEqual(
             updated_reconciliation.subject_linkage["finding_ids"],
-            ("finding-001", "finding-002", "finding-003"),
+            ["finding-001", "finding-002", "finding-003"],
         )
         self.assertEqual(
             updated_reconciliation.subject_linkage["analytic_signal_ids"],
-            ("signal-001", "signal-002", "signal-003"),
+            ["signal-001", "signal-002", "signal-003"],
         )
         self.assertEqual(deduplicated_reconciliation.alert_id, created.alert.alert_id)
         self.assertEqual(
@@ -336,15 +336,15 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(deduplicated_reconciliation.last_seen_at, duplicate_seen)
         self.assertEqual(
             deduplicated_reconciliation.subject_linkage["finding_ids"],
-            ("finding-001", "finding-002", "finding-003"),
+            ["finding-001", "finding-002", "finding-003"],
         )
         self.assertEqual(
             deduplicated_reconciliation.subject_linkage["analytic_signal_ids"],
-            ("signal-001", "signal-002", "signal-003"),
+            ["signal-001", "signal-002", "signal-003"],
         )
 
     def test_service_records_execution_correlation_mismatch_states_separately(self) -> None:
-        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        store, _ = make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(
                 postgres_dsn="postgresql://control-plane.local/aegisops",
@@ -460,8 +460,8 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         stored_reconciliations = store.list(ReconciliationRecord)
         self.assertEqual(len(stored_reconciliations), 4)
         self.assertEqual(
-            [record.ingest_disposition for record in stored_reconciliations],
-            ["missing", "duplicate", "mismatch", "stale"],
+            sorted(record.ingest_disposition for record in stored_reconciliations),
+            ["duplicate", "mismatch", "missing", "stale"],
         )
         self.assertEqual(
             service.get_record(ActionRequestRecord, "action-request-001"),
@@ -469,7 +469,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         )
 
     def test_service_reconcile_action_execution_rejects_non_approved_requests(self) -> None:
-        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        store, _ = make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
             store=store,
@@ -500,7 +500,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             )
 
     def test_service_reconcile_action_execution_requires_aware_datetimes(self) -> None:
-        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        store, _ = make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
             store=store,
@@ -549,7 +549,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
     def test_service_reconcile_action_execution_ignores_repeated_polls_of_same_execution(
         self,
     ) -> None:
-        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        store, _ = make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
             store=store,
