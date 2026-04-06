@@ -10,7 +10,6 @@ from typing import Sequence, TextIO
 from aegisops_control_plane.service import (
     AegisOpsControlPlaneService,
     build_runtime_service,
-    build_runtime_snapshot,
 )
 
 
@@ -53,14 +52,11 @@ def main(
     command = parsed.command or "runtime"
     stdout = stdout or sys.stdout
 
+    service = service or build_runtime_service()
+
     if command == "runtime":
-        payload = (
-            service.describe_runtime().to_dict()
-            if service is not None
-            else build_runtime_snapshot().to_dict()
-        )
+        payload = service.describe_runtime().to_dict()
     else:
-        service = service or build_runtime_service()
         if command == "inspect-records":
             try:
                 payload = service.inspect_records(parsed.family).to_dict()

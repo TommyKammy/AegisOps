@@ -7,6 +7,7 @@ import json
 import pathlib
 import sys
 import unittest
+from unittest import mock
 
 
 CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -25,6 +26,25 @@ from postgres_test_support import make_store
 
 
 class ControlPlaneCliInspectionTests(unittest.TestCase):
+    def test_runtime_command_uses_runtime_service_builder_when_not_injected(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        stdout = io.StringIO()
+
+        with mock.patch.object(
+            main,
+            "build_runtime_service",
+            return_value=service,
+        ) as build_runtime_service:
+            main.main(["runtime"], stdout=stdout)
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["persistence_mode"], "postgresql")
+        build_runtime_service.assert_called_once_with()
+
     def test_runtime_command_honors_injected_service_snapshot(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
