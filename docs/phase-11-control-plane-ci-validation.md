@@ -25,6 +25,8 @@ Confirmed native detection intake remains constrained by explicit substrate-adap
 
 Confirmed reconciliation coverage preserves vendor-neutral `execution_surface_type`, `execution_surface_id`, and `execution_run_id` assumptions so the reviewed tests do not hard-code one automation substrate implementation.
 
+Confirmed the control-plane state model describes `Action Execution` and reconciliation in terms of reviewed automation-substrate and executor surfaces rather than one named implementation.
+
 Confirmed CI now runs a dedicated Phase 11 validation step and a workflow coverage guard so failures point to this reviewed boundary instead of only surfacing through broad unit-test discovery.
 
 ## Cross-Link Review
