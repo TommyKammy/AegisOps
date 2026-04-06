@@ -16,7 +16,7 @@ The design constraint is to prevent OpenSearch documents, OpenSearch alerting ar
 
 The repository already ships a dedicated control-plane runtime home, so this document is the normative definition of which component owns which state and what must be reconciled across runtime, persistence, analytics, and execution boundaries.
 
-No new live datastore rollout is approved in this phase. The current control-plane runtime remains `persistence_mode="in_memory"`, `postgres/control-plane/` remains the reviewed schema and migration home for future PostgreSQL-backed persistence work, and OpenSearch remains the analytics-plane store for telemetry and detection outputs.
+The reviewed local control-plane runtime now reports `persistence_mode="postgresql"` and treats the PostgreSQL-backed control-plane store as the authoritative persistence path for local runtime and inspection flows, while `postgres/control-plane/` remains the reviewed schema and migration home and OpenSearch remains the analytics-plane store for telemetry and detection outputs.
 
 ## 3. Baseline Ownership and Source of Truth
 
