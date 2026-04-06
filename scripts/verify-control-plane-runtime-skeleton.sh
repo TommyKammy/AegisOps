@@ -67,8 +67,8 @@ if ! grep -Fq 'AegisOpsControlPlaneService' "${repo_root}/control-plane/aegisops
   exit 1
 fi
 
-if ! grep -Fq 'build_runtime_snapshot' "${repo_root}/control-plane/main.py"; then
-  echo "Control-plane entrypoint must build a runtime snapshot." >&2
+if ! grep -Fq 'build_runtime_service' "${repo_root}/control-plane/main.py"; then
+  echo "Control-plane entrypoint must build the reviewed runtime service path." >&2
   exit 1
 fi
 

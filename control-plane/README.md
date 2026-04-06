@@ -24,6 +24,7 @@ Current persistence status:
 - The reviewed record families now have typed control-plane models plus PostgreSQL-backed runtime `save()`, `get()`, and `list()` behavior rooted under `control-plane/`.
 - The runtime adapter validates records against the reviewed v1 schema invariants in `postgres/control-plane/schema.sql` before writing them into the `aegisops_control` PostgreSQL boundary.
 - The approved reviewed local runtime path is the shipped CLI entrypoint: `python3 control-plane/main.py runtime`, `python3 control-plane/main.py inspect-records --family alert`, and `python3 control-plane/main.py inspect-reconciliation-status`.
+- Those runtime and inspection commands now construct the same reviewed control-plane service path, so PostgreSQL-backed runtime configuration remains the authoritative local operator flow while injected in-memory stores stay limited to tests and local doubles.
 - The runtime snapshot now reports `persistence_mode="postgresql"` so the reviewed control-plane runtime makes its authoritative store explicit.
 - Live read/write access still depends on PostgreSQL client tooling in the runtime environment, but the control-plane adapter no longer models the reviewed authority path as process-local in-memory state.
 
