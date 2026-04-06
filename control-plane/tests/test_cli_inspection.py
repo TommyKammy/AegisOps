@@ -14,15 +14,15 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
 import main
-from aegisops_control_plane.adapters.postgres import PostgresControlPlaneStore
 from aegisops_control_plane.config import RuntimeConfig
 from aegisops_control_plane.models import AlertRecord, ReconciliationRecord
 from aegisops_control_plane.service import AegisOpsControlPlaneService
+from postgres_test_support import make_store
 
 
 class ControlPlaneCliInspectionTests(unittest.TestCase):
     def test_runtime_command_honors_injected_service_snapshot(self) -> None:
-        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        store, _ = make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(
                 host="127.0.0.1",
@@ -41,10 +41,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(payload["bind_host"], "127.0.0.1")
         self.assertEqual(payload["bind_port"], 9411)
         self.assertEqual(payload["postgres_dsn"], "postgresql://control-plane.local/aegisops")
-        self.assertEqual(payload["persistence_mode"], "in_memory")
+        self.assertEqual(payload["persistence_mode"], "postgresql")
 
     def test_cli_renders_read_only_record_and_reconciliation_views(self) -> None:
-        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        store, _ = make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
             store=store,
@@ -108,7 +108,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         )
 
     def test_cli_rejects_unknown_record_family_as_usage_error(self) -> None:
-        store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
+        store, _ = make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
             store=store,
@@ -125,12 +125,25 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(exc_info.exception.code, 2)
         self.assertIn("Unsupported control-plane record family", stderr.getvalue())
 
-    def test_cli_renders_standalone_inspection_views_against_in_memory_runtime(self) -> None:
+    def test_cli_renders_inspection_views_against_empty_postgresql_store(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
         records_stdout = io.StringIO()
         status_stdout = io.StringIO()
 
-        main.main(["inspect-records", "--family", "alert"], stdout=records_stdout)
-        main.main(["inspect-reconciliation-status"], stdout=status_stdout)
+        main.main(
+            ["inspect-records", "--family", "alert"],
+            stdout=records_stdout,
+            service=service,
+        )
+        main.main(
+            ["inspect-reconciliation-status"],
+            stdout=status_stdout,
+            service=service,
+        )
 
         records_payload = json.loads(records_stdout.getvalue())
         status_payload = json.loads(status_stdout.getvalue())

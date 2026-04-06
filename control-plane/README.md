@@ -21,11 +21,10 @@ Current scaffold:
 
 Current persistence status:
 
-- The reviewed record families now have typed control-plane models plus runtime `save()` and `get()` behavior rooted under `control-plane/`.
-- The in-memory authoritative path fails closed against the reviewed v1 schema invariants in `postgres/control-plane/schema.sql` for lifecycle-state enums, required linkage fields, non-empty required tuple sets, and reconciliation timestamp ordering before records become inspectable runtime state.
+- The reviewed record families now have typed control-plane models plus PostgreSQL-backed runtime `save()`, `get()`, and `list()` behavior rooted under `control-plane/`.
+- The runtime adapter validates records against the reviewed v1 schema invariants in `postgres/control-plane/schema.sql` before writing them into the `aegisops_control` PostgreSQL boundary.
 - The approved reviewed local runtime path is the shipped CLI entrypoint: `python3 control-plane/main.py runtime`, `python3 control-plane/main.py inspect-records --family alert`, and `python3 control-plane/main.py inspect-reconciliation-status`.
-- Those inspection commands are explicitly read-only and run against the same process-local `persistence_mode="in_memory"` runtime used by the current local entrypoint, so they can render empty or locally-seeded inspection views without touching raw PostgreSQL tables directly.
-- The runtime snapshot reports `persistence_mode="in_memory"` to make clear that the current branch does not imply live PostgreSQL-backed storage, write-capable runtime authority, or production deployment readiness.
-- Live PostgreSQL persistence remains follow-up work and depends on adding explicit PostgreSQL client tooling to the runtime environment.
+- The runtime snapshot now reports `persistence_mode="postgresql"` so the reviewed control-plane runtime makes its authoritative store explicit.
+- Live read/write access still depends on PostgreSQL client tooling in the runtime environment, but the control-plane adapter no longer models the reviewed authority path as process-local in-memory state.
 
 This scaffold is intentionally minimal. It does not introduce real credentials, production deployment, analyst UI, or live detector execution.
