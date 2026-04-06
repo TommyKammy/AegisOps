@@ -47,6 +47,25 @@ class WazuhAlertIngestContractDocsTests(unittest.TestCase):
             DOMAIN_MODEL_DOC.read_text(encoding="utf-8"),
         )
 
+    def test_wazuh_contract_doc_names_reviewed_correlation_allowlist_and_provenance_only_fields(
+        self,
+    ) -> None:
+        text = CONTRACT_DOC.read_text(encoding="utf-8")
+
+        required_terms = (
+            "current reviewed Wazuh correlation boundary uses the following native fields",
+            "`location`",
+            "`data.srcip`",
+            "`data.srcuser`",
+            "`data.integration`",
+            "`data.event_type`",
+            "provenance-only context",
+            "`rule.groups`",
+            "`decoder.name`",
+        )
+        for term in required_terms:
+            self.assertIn(term, text)
+
 
 if __name__ == "__main__":
     unittest.main()

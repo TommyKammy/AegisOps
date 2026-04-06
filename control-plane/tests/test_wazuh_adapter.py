@@ -32,7 +32,15 @@ class WazuhAlertAdapterTests(unittest.TestCase):
         self.assertEqual(record.substrate_key, "wazuh")
         self.assertEqual(record.native_record_id, "1731594986.4931506")
         self.assertEqual(record.record_kind, "alert")
-        self.assertEqual(record.correlation_key, "wazuh:rule:5710:source:agent:007")
+        self.assertEqual(
+            record.correlation_key,
+            (
+                "wazuh:rule:5710:source:agent:007"
+                ":location=%2Fvar%2Flog%2Fauth.log"
+                ":data.srcip=198.51.100.24"
+                ":data.srcuser=invalid-user"
+            ),
+        )
         self.assertEqual(
             record.first_seen_at,
             datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc),
@@ -53,6 +61,14 @@ class WazuhAlertAdapterTests(unittest.TestCase):
             record.metadata["source_provenance"]["location"],
             "/var/log/auth.log",
         )
+        self.assertEqual(
+            record.metadata["reviewed_correlation_context"],
+            {
+                "location": "/var/log/auth.log",
+                "data.srcip": "198.51.100.24",
+                "data.srcuser": "invalid-user",
+            },
+        )
 
     def test_adapter_accepts_manager_origin_fixture_when_agent_identity_is_absent(self) -> None:
         adapter = WazuhAlertAdapter()
@@ -64,7 +80,12 @@ class WazuhAlertAdapterTests(unittest.TestCase):
 
         self.assertEqual(
             record.correlation_key,
-            "wazuh:rule:100001:source:manager:wazuh-manager-2",
+            (
+                "wazuh:rule:100001:source:manager:wazuh-manager-2"
+                ":location=manager%2Fintegrations"
+                ":data.integration=virustotal"
+                ":data.event_type=warning"
+            ),
         )
         self.assertEqual(
             record.metadata["source_provenance"]["accountable_source_identity"],
@@ -75,6 +96,23 @@ class WazuhAlertAdapterTests(unittest.TestCase):
             "finding:wazuh:rule:100001:source:manager:wazuh-manager-2:alert:1731594999.4931507",
         )
         self.assertIsNone(admission.analytic_signal_id)
+
+    def test_adapter_distinguishes_same_rule_and_source_when_reviewed_context_changes(
+        self,
+    ) -> None:
+        adapter = WazuhAlertAdapter()
+        first_alert = _load_fixture("agent-origin-alert.json")
+        second_alert = _load_fixture("agent-origin-alert.json")
+        second_alert["location"] = "/var/log/secure"
+        second_alert["data"] = {
+            "srcip": "203.0.113.77",
+            "srcuser": "invalid-user",
+        }
+
+        first_record = adapter.build_native_detection_record(first_alert)
+        second_record = adapter.build_native_detection_record(second_alert)
+
+        self.assertNotEqual(first_record.correlation_key, second_record.correlation_key)
 
 
 if __name__ == "__main__":

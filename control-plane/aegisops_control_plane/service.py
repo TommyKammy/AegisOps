@@ -757,6 +757,14 @@ class AegisOpsControlPlaneService:
                 "description": native_rule_description,
             }
 
+        reviewed_correlation_context = record.metadata.get("reviewed_correlation_context")
+        if isinstance(reviewed_correlation_context, Mapping):
+            subject_linkage["reviewed_correlation_context"] = {
+                str(field_name): field_value
+                for field_name, field_value in reviewed_correlation_context.items()
+                if isinstance(field_value, str) and field_value.strip()
+            }
+
         raw_alert = record.metadata.get("raw_alert")
         if isinstance(raw_alert, Mapping):
             subject_linkage["latest_native_payload"] = dict(raw_alert)
