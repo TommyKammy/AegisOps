@@ -1,18 +1,17 @@
 # AegisOps
 
 ## Platform Requirements Baseline
-**(OpenSearch + Sigma + n8n)**
 
 ---
 
 ## 0. Document Control
 
-- **Version**: 0.3.0
+- **Version**: 0.4.0
 - **Status**: Draft
 - **Owner**: IT Operations, Information Systems Department
-- **Last Updated**: 1 April 2026
+- **Last Updated**: 6 April 2026
 
-This document defines the **non-negotiable implementation baseline** for the internal SOC + SOAR platform, **AegisOps**.
+This document defines the **non-negotiable implementation baseline** for **AegisOps** as a **governed control plane above commodity detection and automation substrates**.
 
 Any deviation from this baseline **MUST** be documented and approved via an Architecture Decision Record (ADR) before implementation.
 
@@ -24,22 +23,42 @@ This document is intended to serve as both:
 
 ## 1. Purpose
 
-This project aims to design and build **AegisOps**, an **internally managed SOC (Security Operations Center) and SOAR (Security Orchestration, Automation, and Response) platform** using open technologies, aligned with the company’s current on-premise infrastructure, security posture, and operational maturity.
+This project aims to design and build **AegisOps** as an internally managed SecOps platform aligned with the company’s current infrastructure, security posture, and operational maturity.
 
-The platform is built on the following core components:
+AegisOps is a governed SecOps control plane.
 
-- **OpenSearch** – SIEM core (log ingestion, storage, search, and detection)
-- **Sigma** – standardized detection rule definition
-- **n8n** – SOAR orchestration, enrichment, approval, and integration engine
+AegisOps owns the authoritative platform records and policy decisions for:
+
+- Alert
+- Case
+- Evidence
+- Observation
+- Lead
+- Recommendation
+- Approval Decision
+- Action Request
+- Hunt
+- Hunt Run
+- AI Trace
+- Reconciliation
+
+Upstream detections, findings, correlations, and product-native alerting artifacts from external substrates are treated as **Analytic Signals**.
+
+Analytic Signals are upstream inputs to AegisOps, not the durable system of record for analyst workflow, approval state, evidence custody, or reconciliation.
+
+OpenSearch, Sigma, and n8n are **not** co-equal product cores for AegisOps.
+OpenSearch MAY be used as an optional or transitional analytics substrate.
+Sigma MAY be used as an optional or transitional rule-definition format.
+n8n MAY be used as an optional, transitional, or experimental execution substrate.
 
 The objectives are to:
 
-- Centralize security-relevant logs across internal systems, network infrastructure, and SaaS platforms
-- Detect security events using curated, explainable, and reviewable detection rules
-- Support analysts with automated enrichment, triage assistance, and controlled response workflows
+- Govern the analyst-facing lifecycle for alerts, cases, evidence, approvals, actions, hunts, and reconciliation above external substrates
+- Accept and normalize upstream Analytic Signals from approved detection substrates
+- Support analysts with enrichment, triage assistance, approval handling, and controlled downstream execution
 - Ensure auditability, approval control, and operational transparency
-- Establish a foundation that can expand over time without requiring redesign of core architecture
-- Enable future collaboration with external service providers or partial outsourcing if needed
+- Establish a foundation that can expand over time without redefining AegisOps around one specific analytics or automation product
+- Enable future collaboration with external service providers or partial outsourcing if needed without giving those systems authority over platform-owned state
 
 > AegisOps is designed to **support human decision-making**, not to fully automate security response.
 
@@ -51,19 +70,22 @@ The objectives are to:
 
 The following items are in scope for the initial implementation phases:
 
-- OpenSearch cluster deployment at a single on-premise site
-- OpenSearch Dashboards
-- OpenSearch Security Analytics (detectors, findings, alerts)
-- Sigma rule integration using a curated and reviewed subset only
-- n8n workflow engine for SOAR orchestration
-- PostgreSQL for n8n metadata and execution state
+- Control-plane policy, documentation, and review baselines for alerts, cases, evidence, approvals, actions, and reconciliation
+- Intake and normalization expectations for vendor-neutral Analytic Signals from approved upstream detection substrates
+- Approval-gated execution expectations for approved downstream automation substrates or executors
+- Optional or transitional OpenSearch-based analytics deployment at a single on-premise site
+- Optional or transitional OpenSearch Dashboards usage
+- Optional or transitional OpenSearch Security Analytics usage for detectors and related analytic artifacts
+- Optional or transitional Sigma rule integration using a curated and reviewed subset only
+- Optional, transitional, or experimental n8n workflow usage for controlled orchestration
+- PostgreSQL for n8n metadata and execution state, plus the separately governed future control-plane persistence boundary
 - Redis as an optional future component for queue mode
 - Reverse proxy for TLS termination and controlled access
 - Log ingestion pipelines, including:
   - Syslog-based ingestion
   - API-based ingestion
   - Agent-based ingestion
-- Alert-to-SOAR integration with approval gating
+- Analytic-Signal-to-action-request routing with approval gating
 - Documentation, validation, and operator runbooks required for maintainable implementation
 
 ### 2.2 Explicitly Out of Scope (Initial Phases)
@@ -79,6 +101,8 @@ The following items are explicitly out of scope for the initial phases:
 - 24/7 SOC staffing and round-the-clock human operations
 - Broad endpoint remediation orchestration across all enterprise platforms
 - SIEM content parity with commercial enterprise products at launch
+- AegisOps will **not** rebuild Wazuh-class detection breadth in-house.
+- AegisOps will **not** rebuild Shuffle-class routine automation breadth in-house.
 
 ### 2.3 Initial Operating Model
 
@@ -106,7 +130,7 @@ The following constraints are **mandatory** and non-negotiable.
 
 - Secrets **MUST NOT** be stored in Git repositories
 - Environment variables, mounted secret files, or approved secret-management mechanisms MUST be used
-- SOAR workflows performing write or destructive actions **MUST require explicit approval by default**
+- Controlled execution workflows performing write or destructive actions **MUST require explicit approval by default**
 - Logs and audit data MUST remain within domestic storage boundaries
 - Platform changes MUST be reproducible from version-controlled artifacts
 - Implementation MUST favor auditability and rollback capability over convenience
@@ -117,13 +141,13 @@ The following constraints are **mandatory** and non-negotiable.
 
 ### 4.1 Responsibility Separation
 
-| Component  | Responsibility |
-| ---------- | -------------- |
-| OpenSearch | Log ingestion, storage, search, analytics, detection |
-| Sigma      | Detection logic definition only |
-| n8n        | Enrichment, routing, orchestration, approval workflows, downstream integration |
-| PostgreSQL | n8n metadata and execution state |
-| Redis      | Optional workflow queueing for future scaling |
+| Component / Boundary | Responsibility |
+| -------------------- | -------------- |
+| AegisOps control plane | Alert, case, evidence, observation, lead, recommendation, approval, action-request, hunt, AI-trace, and reconciliation ownership |
+| Upstream Analytic Signal substrates | Detection, correlation, and substrate-native alerting artifacts that feed AegisOps without becoming downstream workflow truth |
+| Downstream execution substrates | Approved automation execution within the scope delegated by AegisOps |
+| PostgreSQL | n8n metadata and execution state, plus the future control-plane persistence boundary under separate governance |
+| Redis | Optional workflow queueing for future scaling |
 
 Each component has a **single, clearly defined responsibility**.
 
@@ -131,9 +155,10 @@ No component should silently absorb another component’s responsibility without
 
 ### 4.2 Control vs Execution
 
-- **Detection and execution MUST be strictly separated**
-- OpenSearch performs detection only and MUST NOT directly execute response actions
-- n8n executes approved workflows only after validation and approval requirements are satisfied
+- **Detection, control, and execution MUST remain explicitly separated**
+- Upstream Analytic Signal substrates perform detection or correlation only and MUST NOT directly define AegisOps-owned approval, case, or reconciliation truth
+- AegisOps owns approval decisions, action intent, evidence linkage, and reconciliation
+- Optional execution substrates execute approved workflows only after validation and approval requirements are satisfied
 - External systems MUST NOT directly trigger unrestricted execution logic
 - High-risk response actions are prohibited without human oversight
 - Automation MUST remain explainable and auditable
@@ -165,12 +190,12 @@ Manual-only procedures are unacceptable as the primary deployment or recovery me
 
 ### 5.1 Virtual Machine Baseline (Initial Target)
 
-| Role       | vCPU | RAM      | Notes |
-| ---------- | ---- | -------- | ----- |
-| OpenSearch | 8    | 32–64 GB | JVM heap target approximately 50% of RAM |
-| n8n        | 4    | 8–16 GB  | Depends on workflow volume and integrations |
-| Ingest     | 4    | 8 GB     | Syslog / API collectors / parsing layer |
-| Proxy      | 2    | 4 GB     | Reverse proxy and controlled access only |
+| Role | vCPU | RAM | Notes |
+| ---- | ---- | --- | ----- |
+| Analytics substrate (optional / transitional) | 8 | 32–64 GB | OpenSearch remains one supported example; JVM heap target approximately 50% of RAM when used |
+| Execution substrate (optional / transitional) | 4 | 8–16 GB | n8n remains one supported example; sizing depends on workflow volume and integrations |
+| Ingest | 4 | 8 GB | Syslog / API collectors / parsing layer |
+| Proxy | 2 | 4 GB | Reverse proxy and controlled access only |
 
 Common baseline requirements:
 
@@ -217,6 +242,9 @@ This baseline document defines policy and architecture. Detailed implementation 
 ## 6. Repository Structure
 
 All AegisOps components are treated as **code assets** and MUST be managed via version control.
+
+The repository structure and approval boundary in this document remain reviewable baseline constraints.
+This rebaseline does **not** by itself approve runtime implementation changes, new adapters, or repository-structure expansion.
 
 Recommended repository structure:
 
@@ -382,7 +410,7 @@ Recommended patterns:
 
 Examples:
 
-* `aegisops_alert_ingest_opensearch_findings`
+* `aegisops_alert_ingest_analytic_signals`
 * `aegisops_enrich_ip_reputation`
 * `aegisops_approve_host_isolation`
 
@@ -495,7 +523,7 @@ Security requirements in this section are mandatory unless superseded by an appr
 * Root execution inside containers SHOULD be avoided where practical
 * Security-impacting exceptions MUST be documented
 
-### 10.3 SOAR Safety Rules
+### 10.3 Controlled Execution Safety Rules
 
 * Destructive or high-impact actions require approval
 * All executed actions MUST be logged
@@ -511,7 +539,7 @@ Detection quality is prioritized over detection quantity.
 
 ### 11.1 Rule Governance
 
-* Sigma rules MUST NOT be deployed directly to production without review
+* Optional Sigma-derived rules MUST NOT be deployed directly to production without review
 * All rules MUST be validated in a staging environment or test index before activation
 * False positives MUST be addressed through refinement, tuning, or suppression
 * Detection content MUST be version controlled
@@ -546,7 +574,7 @@ Permanent suppressions without recorded rationale are prohibited.
 
 ---
 
-## 12. SOAR Approval Model
+## 12. Approval and Controlled Execution Model
 
 ### 12.1 Action Classification
 
@@ -561,7 +589,7 @@ Permanent suppressions without recorded rationale are prohibited.
 
 Approval MAY be performed through:
 
-* n8n UI
+* n8n UI when n8n is the approved execution substrate
 * Teams Adaptive Cards
 * other explicitly approved controlled approval interfaces
 
@@ -607,8 +635,8 @@ The following are prohibited in initial phases:
 
 ### Phase 1 – Assisted Response
 
-* Curated Sigma rule set
-* Approval-based SOAR workflows
+* Curated optional or transitional detection-content onboarding
+* Approval-based controlled execution workflows
 * Lightweight incident tracking
 * Controlled enrichment and analyst-support automation
 
@@ -713,9 +741,10 @@ AegisOps is intended to evolve deliberately, not opportunistically.
 
 The following references SHOULD be maintained and kept current:
 
-* OpenSearch official documentation
-* SigmaHQ official repository and documentation
-* n8n official documentation
+* Approved substrate documentation for the current analytics and execution path
+* OpenSearch official documentation when OpenSearch is in approved use
+* SigmaHQ official repository and documentation when Sigma is in approved use
+* n8n official documentation when n8n is in approved use
 * Internal ADR repository
 * Internal runbooks
 * Internal parameter baseline documents
