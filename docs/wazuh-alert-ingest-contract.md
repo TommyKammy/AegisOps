@@ -161,6 +161,8 @@ The reviewed mapping is:
 
 Downstream alert and case lifecycle state must remain AegisOps-owned even when the native Wazuh record is restated, updated, or disappears from the substrate view.
 
+The reviewed Wazuh case-promotion path must create or update the durable `CaseRecord` when reviewed alert handling moves an alert into `escalated_to_case`; later Wazuh restatements must preserve that promoted `case_id` linkage rather than depending on a manually prelinked case created outside the ingest and review path.
+
 ## 9. Non-Goals
 
 This contract does not:
