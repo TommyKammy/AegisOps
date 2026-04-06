@@ -223,7 +223,7 @@ _TABLES_BY_RECORD_TYPE: dict[Type[ControlPlaneRecord], TableConfig] = {
         ReconciliationRecord,
         "reconciliation_records",
         json_fields=frozenset({"subject_linkage"}),
-        array_fields=frozenset({"linked_execution_ids"}),
+        array_fields=frozenset({"linked_execution_run_ids"}),
     ),
 }
 
@@ -314,7 +314,7 @@ def _validate_record(record: ControlPlaneRecord) -> None:
     if isinstance(record, ReconciliationRecord):
         _require_any_linkage(
             record,
-            ("finding_id", "analytic_signal_id", "workflow_execution_id"),
+            ("finding_id", "analytic_signal_id", "execution_run_id"),
         )
         if record.ingest_disposition not in _RECONCILIATION_INGEST_DISPOSITIONS:
             raise ValueError(

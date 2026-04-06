@@ -23,7 +23,7 @@ The v1 baseline materializes the approved control-plane record families:
 - `ai_trace_records`
 - `reconciliation_records`
 
-The schema keeps the reconciliation boundary explicit by recording cross-system linkage and mismatch state in dedicated control-plane tables rather than collapsing that state into n8n-owned execution metadata.
+The schema keeps the reconciliation boundary explicit by recording cross-system linkage and mismatch state in dedicated control-plane tables rather than collapsing that state into automation-substrate or executor-local execution metadata.
 
 `reconciliation_records.ingest_disposition` covers both analytic-ingest outcomes (`created`, `updated`, `deduplicated`, `restated`, `matched`) and execution-correlation exceptions (`missing`, `duplicate`, `mismatch`, `stale`) so operators can distinguish downstream execution gaps from normal alert lifecycle state.
 

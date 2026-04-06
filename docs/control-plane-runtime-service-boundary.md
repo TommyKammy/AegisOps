@@ -19,9 +19,9 @@ The first live control-plane service owns AegisOps-authored application behavior
 Its approved responsibilities are:
 
 - ingesting or accepting reviewed upstream analytic signals and converting them into AegisOps control-plane records under the approved state model;
-- assigning and preserving AegisOps control-plane identifiers and lifecycle state instead of reusing OpenSearch document identity or n8n execution identity as the primary key;
+- assigning and preserving AegisOps control-plane identifiers and lifecycle state instead of reusing OpenSearch document identity or substrate-local execution identity as the primary key;
 - persisting authoritative control-plane records in the AegisOps-owned PostgreSQL boundary described by `docs/control-plane-state-model.md` and reserved under `postgres/control-plane/`;
-- reconciling upstream OpenSearch signals and downstream n8n execution outcomes against authoritative control-plane intent; and
+- reconciling upstream OpenSearch signals and downstream automation-substrate or executor outcomes against authoritative control-plane intent; and
 - exposing internal service-local application interfaces needed to create, update, query, and reconcile control-plane records.
 
 The first live control-plane service does not own telemetry ingestion, SIEM analytics, detection execution, workflow execution, or connector-specific action logic.
@@ -61,7 +61,7 @@ Included capabilities are:
 - a live internal control-plane service rooted under `control-plane/`;
 - materialization of authoritative AegisOps control-plane records in the approved PostgreSQL-backed boundary;
 - explicit ingestion or synchronization logic for upstream OpenSearch findings or alert-like analytic signals into control-plane-owned records;
-- explicit reconciliation logic that can compare control-plane intent with n8n execution outcomes using stable identifiers; and
+- explicit reconciliation logic that can compare control-plane intent with reviewed automation-substrate or executor outcomes using stable identifiers; and
 - repository-local service scaffolding that preserves the ownership split already approved by the state-model baseline.
 
 ## 5. Explicit Non-Goals
