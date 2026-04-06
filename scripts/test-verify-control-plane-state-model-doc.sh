@@ -105,9 +105,9 @@ assert_fails_with "${missing_doc_repo}" "Missing control-plane state model docum
 missing_reconciliation_repo="${workdir}/missing-reconciliation"
 create_repo "${missing_reconciliation_repo}"
 write_canonical_doc "${missing_reconciliation_repo}"
-remove_text_from_doc "${missing_reconciliation_repo}" "The control plane is responsible for reconciling approved action intent against observed n8n execution outcomes and for recording when reconciliation is incomplete, stale, or failed."
+remove_text_from_doc "${missing_reconciliation_repo}" "The control plane is responsible for reconciling approved action intent against observed execution-surface outcomes and for recording when reconciliation is incomplete, stale, or failed."
 commit_fixture "${missing_reconciliation_repo}"
-assert_fails_with "${missing_reconciliation_repo}" "The control plane is responsible for reconciling approved action intent against observed n8n execution outcomes and for recording when reconciliation is incomplete, stale, or failed."
+assert_fails_with "${missing_reconciliation_repo}" "The control plane is responsible for reconciling approved action intent against observed execution-surface outcomes and for recording when reconciliation is incomplete, stale, or failed."
 
 missing_idempotency_repo="${workdir}/missing-idempotency"
 create_repo "${missing_idempotency_repo}"
@@ -133,9 +133,9 @@ assert_fails_with "${missing_evidence_withdrawn_state_repo}" '| `withdrawn` | Th
 missing_reconciliation_record_repo="${workdir}/missing-reconciliation-record"
 create_repo "${missing_reconciliation_record_repo}"
 write_canonical_doc "${missing_reconciliation_record_repo}"
-remove_text_from_doc "${missing_reconciliation_record_repo}" '| `Reconciliation` | AegisOps control-plane reconciliation record | Cross-system linkage, mismatch tracking, and resolution state must not dissolve into alert fields, case notes, or n8n metadata. |'
+remove_text_from_doc "${missing_reconciliation_record_repo}" '| `Reconciliation` | AegisOps control-plane reconciliation record | Cross-system linkage, mismatch tracking, and resolution state must not dissolve into alert fields, case notes, or execution-surface metadata. |'
 commit_fixture "${missing_reconciliation_record_repo}"
-assert_fails_with "${missing_reconciliation_record_repo}" '| `Reconciliation` | AegisOps control-plane reconciliation record | Cross-system linkage, mismatch tracking, and resolution state must not dissolve into alert fields, case notes, or n8n metadata. |'
+assert_fails_with "${missing_reconciliation_record_repo}" '| `Reconciliation` | AegisOps control-plane reconciliation record | Cross-system linkage, mismatch tracking, and resolution state must not dissolve into alert fields, case notes, or execution-surface metadata. |'
 
 missing_substrate_signal_repo="${workdir}/missing-substrate-signal"
 create_repo "${missing_substrate_signal_repo}"
@@ -167,5 +167,25 @@ printf '%s\n' "Reconciliation must preserve auditable disagreement. When OpenSea
 git -C "${stale_future_control_record_repo}" add docs/control-plane-state-model.md
 commit_fixture "${stale_future_control_record_repo}"
 assert_fails_with "${stale_future_control_record_repo}" "Forbidden control-plane state model statement still present: Reconciliation must preserve auditable disagreement. When OpenSearch, n8n, and the future control record disagree, the platform must retain that mismatch as an explicit state that operators can inspect and resolve rather than overwriting one side to make the data look clean."
+
+stale_n8n_execution_surface_repo="${workdir}/stale-n8n-execution-surface"
+create_repo "${stale_n8n_execution_surface_repo}"
+write_canonical_doc "${stale_n8n_execution_surface_repo}"
+replace_text_in_doc \
+  "${stale_n8n_execution_surface_repo}" \
+  '| `Action Execution` | Reviewed automation substrate or controlled executor surface | The execution surface owns execution-attempt state, step progress, and surface-specific runtime details for the reviewed automation-substrate or executor run. |' \
+  '| `Action Execution` | n8n execution plane with PostgreSQL-backed workflow state | n8n owns execution-attempt state, step progress, and connector-specific runtime details. |'
+commit_fixture "${stale_n8n_execution_surface_repo}"
+assert_fails_with "${stale_n8n_execution_surface_repo}" "| \`Action Execution\` | Reviewed automation substrate or controlled executor surface | The execution surface owns execution-attempt state, step progress, and surface-specific runtime details for the reviewed automation-substrate or executor run. |"
+
+stale_n8n_reconciliation_repo="${workdir}/stale-n8n-reconciliation"
+create_repo "${stale_n8n_reconciliation_repo}"
+write_canonical_doc "${stale_n8n_reconciliation_repo}"
+replace_text_in_doc \
+  "${stale_n8n_reconciliation_repo}" \
+  "The control plane is responsible for reconciling approved action intent against observed execution-surface outcomes and for recording when reconciliation is incomplete, stale, or failed." \
+  "The control plane is responsible for reconciling approved action intent against observed n8n execution outcomes and for recording when reconciliation is incomplete, stale, or failed."
+commit_fixture "${stale_n8n_reconciliation_repo}"
+assert_fails_with "${stale_n8n_reconciliation_repo}" "The control plane is responsible for reconciling approved action intent against observed execution-surface outcomes and for recording when reconciliation is incomplete, stale, or failed."
 
 echo "Control-plane state model verifier enforces required policy statements."

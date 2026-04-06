@@ -68,6 +68,7 @@ validation_required_phrases=(
   'Confirmed analytic signals remain first-class control-plane records with durable `analytic_signal_id` and `substrate_detection_record_id` linkage instead of collapsing into alert-only state.'
   "Confirmed native detection intake remains constrained by explicit substrate-adapter boundaries and non-empty substrate-origin identifiers."
   'Confirmed reconciliation coverage preserves vendor-neutral `execution_surface_type`, `execution_surface_id`, and `execution_run_id` assumptions so the reviewed tests do not hard-code one automation substrate implementation.'
+  'Confirmed the control-plane state model describes `Action Execution` and reconciliation in terms of reviewed automation-substrate and executor surfaces rather than one named implementation.'
   "Confirmed CI now runs a dedicated Phase 11 validation step and a workflow coverage guard so failures point to this reviewed boundary instead of only surfacing through broad unit-test discovery."
   '`docs/control-plane-state-model.md` must continue to describe the reviewed local runtime as `persistence_mode="postgresql"` and the PostgreSQL-backed control-plane store as the authoritative local persistence path.'
   '`control-plane/README.md` must continue to describe the reviewed runtime and inspection commands as the authoritative local operator flow while keeping injected in-memory stores limited to tests and local doubles.'

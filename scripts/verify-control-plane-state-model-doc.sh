@@ -37,11 +37,12 @@ required_phrases=(
   '| `Hunt` | AegisOps control-plane hunt record | Hunt lifecycle must remain analyst-directed and reviewable rather than inferred from ad hoc queries or downstream workflow runs. |'
   '| `Hunt Run` | AegisOps control-plane hunt-run record | Each hunt run must preserve bounded scope, execution context, and outcome for one hunt iteration without replacing alerts or cases. |'
   '| `AI Trace` | AegisOps control-plane AI-trace record | AI trace records must preserve prompt, model, review, and linkage context without mutating evidence custody or analyst-owned dispositions. |'
-  '| `Reconciliation` | AegisOps control-plane reconciliation record | Cross-system linkage, mismatch tracking, and resolution state must not dissolve into alert fields, case notes, or n8n metadata. |'
-  '| `Action Execution` | n8n execution plane with PostgreSQL-backed workflow state | n8n owns execution-attempt state, step progress, and connector-specific runtime details. |'
-  "n8n execution history must not become the implicit system of record for case state, approval state, or action-request intent."
+  '| `Reconciliation` | AegisOps control-plane reconciliation record | Cross-system linkage, mismatch tracking, and resolution state must not dissolve into alert fields, case notes, or execution-surface metadata. |'
+  '| `Action Execution` | Reviewed automation substrate or controlled executor surface | The execution surface owns execution-attempt state, step progress, and surface-specific runtime details for the reviewed automation-substrate or executor run. |'
+  "Execution-surface runtime history must not become the implicit system of record for case state, approval state, or action-request intent."
   "Substrate-native detection records and admitted analytic signals remain upstream reconciliation inputs, but they do not own downstream case, approval, or execution-policy state."
   "The minimum control-plane record families for this baseline are Alert, Case, Evidence, Observation, Lead, Recommendation, Approval Decision, Action Request, Hunt, Hunt Run, AI Trace, Reconciliation, and the execution-plane Action Execution record that must later reconcile with them."
+  "- action execution state remains execution-surface runtime state owned by the reviewed automation substrate or executor surface and backed by that surface's runtime store; and"
   'The approved persistence boundary for those platform-owned control records is the AegisOps-owned PostgreSQL control-plane boundary reviewed under `postgres/control-plane/`.'
   "That reviewed PostgreSQL-backed boundary may share a PostgreSQL engine class with n8n, but it must not collapse control-plane ownership into n8n-owned metadata tables or runtime workflow state."
   "If a later deployment uses one PostgreSQL cluster for both concerns, it must still preserve an explicit ownership split through separate AegisOps-controlled schemas, tables, migration history, and access controls for control-plane records."
@@ -53,9 +54,10 @@ required_phrases=(
   "- OpenSearch owns telemetry, findings, and OpenSearch-native analytic or alerting artifacts that act as upstream signals rather than downstream control-plane truth."
   "This boundary approves where authoritative control-plane records belong for the live runtime boundary, but it does not approve live PostgreSQL provisioning, schema migrations, credentials, or runtime deployment changes in this phase."
   'The repository already materializes a version-controlled schema baseline for that boundary under `postgres/control-plane/`, including reviewed schema manifests and migration files that keep the approved record-family boundary explicit without authorizing live deployment, credentials, or production migration execution in this phase.'
-  "The control plane is responsible for reconciling approved action intent against observed n8n execution outcomes and for recording when reconciliation is incomplete, stale, or failed."
+  "The control plane is responsible for reconciling approved action intent against observed execution-surface outcomes and for recording when reconciliation is incomplete, stale, or failed."
   "Reconciliation must prefer deterministic correlation keys such as substrate detection record identifiers, analytic-signal identifiers, action-request identifiers, approval identifiers, workflow identifiers, and idempotency keys rather than fuzzy time-window matching."
-  "Stable reconciliation keys must allow operators to compare substrate-native detection output, admitted analytic signals, control-plane records, and n8n execution outcomes without assuming those systems share one lifecycle or one authoritative identifier."
+  "Stable reconciliation keys must allow operators to compare substrate-native detection output, admitted analytic signals, control-plane records, and execution-surface outcomes without assuming those systems share one lifecycle or one authoritative identifier."
+  "The reviewed automation substrate or executor surface is responsible for exposing enough run identifiers, timestamps, execution outcomes, and step-level failure detail that the control-plane runtime can correlate approved intent to observed execution behavior."
   'Substrate-record-to-alert ingestion contract requirements:'
   'The ingestion boundary must treat `substrate_detection_record_id`, `analytic_signal_id`, and `alert_id` as related but non-interchangeable identifiers.'
   'The ingest path must preserve the upstream `substrate_detection_record_id` as the durable substrate-origin reference, preserve `analytic_signal_id` for the admitted vendor-neutral signal created or updated from that substrate record set, and assign a separate control-plane `alert_id` for the analyst-facing record created or updated from that signal.'
@@ -123,7 +125,7 @@ required_phrases=(
   '| `failed` | Execution or required verification concluded unsuccessfully under the current approved request. |'
   '| `unresolved` | Operators cannot yet prove whether the request was executed correctly, failed partially, or needs manual recovery. |'
   "These lifecycle states establish the minimum reviewable transitions for later reconciliation, retry, expiry, duplicate suppression, and manual recovery work."
-  "No control-plane record family may silently inherit lifecycle from substrate-local alerts or n8n execution history. Cross-system state must be linked through explicit identifiers and reconciliation records instead."
+  "No control-plane record family may silently inherit lifecycle from substrate-local alerts or execution-surface runtime history. Cross-system state must be linked through explicit identifiers and reconciliation records instead."
   "Hunt records must preserve explicit lifecycle state, ownership, hypothesis linkage, and closure rationale even when no case is opened."
   "Observation records must preserve scoped analyst assertions, timestamps, authorship, and linkage to supporting evidence without turning evidence custody into free-form narrative."
   "Lead records must preserve investigative hypotheses, triage rationale, and disposition state without being treated as equivalent to alert state, case state, or recommendation text."
@@ -156,10 +158,12 @@ required_phrases=(
   "Promotion of a lead into alert or case work must create or update the destination alert or case record while preserving the original lead as a first-class control-plane record with explicit promotion linkage."
   "Observation records, recommendation records, AI trace records, and case notes may contribute context to promotion decisions, but none of them may become the sole system of record for lead state or lead promotion history."
   "Hunt, hunt-run, observation, lead, recommendation, and AI trace records may attach to alerts, cases, or stand-alone hunt workflows, but attachment alone does not transfer lifecycle ownership or collapse one record family into another."
-  "Retry policy belongs to the control-plane intent record, while duplicate suppression and step-level retry behavior inside a running workflow belong to n8n."
+  "- marking reconciliation exceptions when upstream substrate records or findings disappear, duplicate execution triggers arrive, or an execution surface reports an outcome that does not satisfy the approved intent record."
+  "Retry policy belongs to the control-plane intent record, while duplicate suppression and step-level retry behavior inside a running automation-substrate or executor run belong to the execution surface."
   "Dead-letter responsibility begins when the platform can no longer prove whether an approved intent was never executed, is still executing, or executed with an unknown result."
   "Manual recovery procedures must support re-drive, cancellation, supersession, and explicit operator annotation without rewriting historical approval or execution evidence."
   "Every action request and execution attempt must carry a stable idempotency key that survives retries, duplicate delivery, and reconciliation replays."
+  "- the execution-surface record that shows what actually ran and what outcome was observed."
   'This baseline already aligns to the shipped `control-plane/` runtime home and the reviewed `postgres/control-plane/` persistence contract. Later runtime and datastore work must preserve that authority boundary rather than redefine where authoritative control-plane truth lives.'
 )
 
@@ -172,6 +176,16 @@ forbidden_phrases=(
   "The future AegisOps control layer is responsible for:"
   "Reconciliation must preserve auditable disagreement. When OpenSearch, n8n, and the future control record disagree, the platform must retain that mismatch as an explicit state that operators can inspect and resolve rather than overwriting one side to make the data look clean."
   'No new live datastore rollout is approved in this phase. The current control-plane runtime remains `persistence_mode="in_memory"`, `postgres/control-plane/` remains the reviewed schema and migration home for future PostgreSQL-backed persistence work, and OpenSearch remains the analytics-plane store for telemetry and detection outputs.'
+  '| `Action Execution` | n8n execution plane with PostgreSQL-backed workflow state | n8n owns execution-attempt state, step progress, and connector-specific runtime details. |'
+  "n8n execution history must not become the implicit system of record for case state, approval state, or action-request intent."
+  "- action execution state remains execution-plane runtime state owned by n8n and backed by PostgreSQL; and"
+  "The control plane is responsible for reconciling approved action intent against observed n8n execution outcomes and for recording when reconciliation is incomplete, stale, or failed."
+  "Stable reconciliation keys must allow operators to compare substrate-native detection output, admitted analytic signals, control-plane records, and n8n execution outcomes without assuming those systems share one lifecycle or one authoritative identifier."
+  "n8n is responsible for exposing enough workflow-run identifiers, timestamps, execution outcomes, and step-level failure detail that the control-plane runtime can correlate approved intent to observed execution behavior."
+  "- marking reconciliation exceptions when upstream substrate records or findings disappear, duplicate workflow triggers arrive, or n8n reports an outcome that does not satisfy the approved intent record."
+  "No control-plane record family may silently inherit lifecycle from substrate-local alerts or n8n execution history. Cross-system state must be linked through explicit identifiers and reconciliation records instead."
+  "Retry policy belongs to the control-plane intent record, while duplicate suppression and step-level retry behavior inside a running workflow belong to n8n."
+  "- the n8n execution record that shows what actually ran and what outcome was observed."
 )
 
 if [[ ! -f "${doc_path}" ]]; then

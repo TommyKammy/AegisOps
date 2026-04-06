@@ -36,10 +36,10 @@ The reviewed local control-plane runtime now reports `persistence_mode="postgres
 | `Hunt` | AegisOps control-plane hunt record | Hunt lifecycle must remain analyst-directed and reviewable rather than inferred from ad hoc queries or downstream workflow runs. |
 | `Hunt Run` | AegisOps control-plane hunt-run record | Each hunt run must preserve bounded scope, execution context, and outcome for one hunt iteration without replacing alerts or cases. |
 | `AI Trace` | AegisOps control-plane AI-trace record | AI trace records must preserve prompt, model, review, and linkage context without mutating evidence custody or analyst-owned dispositions. |
-| `Reconciliation` | AegisOps control-plane reconciliation record | Cross-system linkage, mismatch tracking, and resolution state must not dissolve into alert fields, case notes, or n8n metadata. |
-| `Action Execution` | n8n execution plane with PostgreSQL-backed workflow state | n8n owns execution-attempt state, step progress, and connector-specific runtime details. |
+| `Reconciliation` | AegisOps control-plane reconciliation record | Cross-system linkage, mismatch tracking, and resolution state must not dissolve into alert fields, case notes, or execution-surface metadata. |
+| `Action Execution` | Reviewed automation substrate or controlled executor surface | The execution surface owns execution-attempt state, step progress, and surface-specific runtime details for the reviewed automation-substrate or executor run. |
 
-n8n execution history must not become the implicit system of record for case state, approval state, or action-request intent.
+Execution-surface runtime history must not become the implicit system of record for case state, approval state, or action-request intent.
 
 Substrate-native detection records and admitted analytic signals remain upstream reconciliation inputs, but they do not own downstream case, approval, or execution-policy state.
 
@@ -51,7 +51,7 @@ At the approved baseline level, the source-of-truth expectations are:
 
 - substrate detection records and findings remain upstream substrate or analytics-plane facts, while analytic signals remain the admitted vendor-neutral intake primitive for control-plane routing and are preserved as first-class control-plane records;
 - analytic signals, alerts, cases, evidence, observations, leads, recommendations, approvals, action requests, hunts, hunt runs, AI traces, and reconciliation records are platform-owned control records whose authoritative home is the AegisOps control-plane runtime boundary with the reviewed PostgreSQL contract rooted under `postgres/control-plane/`;
-- action execution state remains execution-plane runtime state owned by n8n and backed by PostgreSQL; and
+- action execution state remains execution-surface runtime state owned by the reviewed automation substrate or executor surface and backed by that surface's runtime store; and
 - evidence links across those records must be explicit rather than reconstructed from whichever component happens to log the most detail.
 
 ## 4. Approved Persistence Boundary
@@ -78,15 +78,15 @@ The repository already materializes a version-controlled schema baseline for tha
 
 ## 5. Reconciliation Responsibilities
 
-The control plane is responsible for reconciling approved action intent against observed n8n execution outcomes and for recording when reconciliation is incomplete, stale, or failed.
+The control plane is responsible for reconciling approved action intent against observed execution-surface outcomes and for recording when reconciliation is incomplete, stale, or failed.
 
 Reconciliation must prefer deterministic correlation keys such as substrate detection record identifiers, analytic-signal identifiers, action-request identifiers, approval identifiers, workflow identifiers, and idempotency keys rather than fuzzy time-window matching.
 
-Stable reconciliation keys must allow operators to compare substrate-native detection output, admitted analytic signals, control-plane records, and n8n execution outcomes without assuming those systems share one lifecycle or one authoritative identifier.
+Stable reconciliation keys must allow operators to compare substrate-native detection output, admitted analytic signals, control-plane records, and execution-surface outcomes without assuming those systems share one lifecycle or one authoritative identifier.
 
 Approved detection substrates are responsible for producing stable substrate-native identifiers and timestamps for substrate detection records and related analytic outputs that downstream control-plane logic may reference.
 
-n8n is responsible for exposing enough workflow-run identifiers, timestamps, execution outcomes, and step-level failure detail that the control-plane runtime can correlate approved intent to observed execution behavior.
+The reviewed automation substrate or executor surface is responsible for exposing enough run identifiers, timestamps, execution outcomes, and step-level failure detail that the control-plane runtime can correlate approved intent to observed execution behavior.
 
 Substrate-record-to-alert ingestion contract requirements:
 
@@ -122,7 +122,7 @@ The AegisOps control-plane runtime is responsible for:
 - deciding how evidence, observations, leads, recommendations, hunts, hunt runs, and AI traces are attached to alerts, cases, or independent analyst workflows without collapsing their ownership boundaries;
 - deciding whether an action request is pending approval, approved, rejected, expired, canceled, superseded, executing, completed, failed, or unresolved;
 - binding approval decisions to exact request context before execution is allowed; and
-- marking reconciliation exceptions when upstream substrate records or findings disappear, duplicate workflow triggers arrive, or n8n reports an outcome that does not satisfy the approved intent record.
+- marking reconciliation exceptions when upstream substrate records or findings disappear, duplicate execution triggers arrive, or an execution surface reports an outcome that does not satisfy the approved intent record.
 
 Observation records must preserve scoped analyst assertions, timestamps, authorship, and linkage to supporting evidence without turning evidence custody into free-form narrative.
 
@@ -426,11 +426,11 @@ Reconciliation records provide the explicit cross-system home for mismatch track
 
 These lifecycle states establish the minimum reviewable transitions for later reconciliation, retry, expiry, duplicate suppression, and manual recovery work.
 
-No control-plane record family may silently inherit lifecycle from substrate-local alerts or n8n execution history. Cross-system state must be linked through explicit identifiers and reconciliation records instead.
+No control-plane record family may silently inherit lifecycle from substrate-local alerts or execution-surface runtime history. Cross-system state must be linked through explicit identifiers and reconciliation records instead.
 
 ## 7. Retry, Dead-Letter, and Manual Recovery Responsibilities
 
-Retry policy belongs to the control-plane intent record, while duplicate suppression and step-level retry behavior inside a running workflow belong to n8n.
+Retry policy belongs to the control-plane intent record, while duplicate suppression and step-level retry behavior inside a running automation-substrate or executor run belong to the execution surface.
 
 OpenSearch may re-emit or restate analytic signals according to its own alerting behavior, but deduplication of downstream analyst work belongs to the AegisOps control-plane runtime rather than to OpenSearch.
 
@@ -460,7 +460,7 @@ Auditability requires separate evidence for:
 - the control-plane record that tracked alert or case ownership,
 - the approval decision that authorized or rejected action,
 - the action request that defined exact execution intent, and
-- the n8n execution record that shows what actually ran and what outcome was observed.
+- the execution-surface record that shows what actually ran and what outcome was observed.
 
 No single component log should be treated as sufficient to reconstruct the entire decision chain when that would blur responsibility boundaries or allow silent loss of approval evidence.
 

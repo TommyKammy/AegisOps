@@ -133,4 +133,14 @@ remove_text_from_file "${missing_ci_step_repo}" ".github/workflows/ci.yml" "    
 commit_fixture "${missing_ci_step_repo}"
 assert_fails_with "${missing_ci_step_repo}" "Missing required line in ${missing_ci_step_repo}/.github/workflows/ci.yml:       - name: Run Phase 11 control-plane validation"
 
+missing_vendor_neutral_review_repo="${workdir}/missing-vendor-neutral-review"
+create_repo "${missing_vendor_neutral_review_repo}"
+write_required_artifacts "${missing_vendor_neutral_review_repo}"
+remove_text_from_file \
+  "${missing_vendor_neutral_review_repo}" \
+  "docs/phase-11-control-plane-ci-validation.md" \
+  'Confirmed the control-plane state model describes `Action Execution` and reconciliation in terms of reviewed automation-substrate and executor surfaces rather than one named implementation.'
+commit_fixture "${missing_vendor_neutral_review_repo}"
+assert_fails_with "${missing_vendor_neutral_review_repo}" "Missing required line in ${missing_vendor_neutral_review_repo}/docs/phase-11-control-plane-ci-validation.md: Confirmed the control-plane state model describes \`Action Execution\` and reconciliation in terms of reviewed automation-substrate and executor surfaces rather than one named implementation."
+
 echo "Phase 11 control-plane CI validation verifier fails closed for missing reviewed coverage."
