@@ -596,6 +596,144 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         )
         self.assertEqual(len(queue_view.records[0]["evidence_ids"]), 1)
 
+    def test_service_analyst_queue_ignores_newer_action_execution_reconciliation(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+
+        admitted = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(
+                _load_wazuh_fixture("agent-origin-alert.json")
+            ),
+        )
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-queue-001",
+                approval_decision_id="approval-queue-001",
+                case_id=None,
+                alert_id=admitted.alert.alert_id,
+                finding_id=admitted.alert.finding_id,
+                idempotency_key="idempotency-queue-001",
+                target_scope={"asset_id": "asset-queue-001"},
+                payload_hash="payload-hash-queue-001",
+                requested_at=datetime(2026, 4, 5, 12, 10, tzinfo=timezone.utc),
+                expires_at=None,
+                lifecycle_state="approved",
+            )
+        )
+        service.reconcile_action_execution(
+            action_request_id="action-request-queue-001",
+            execution_surface_type="automation_substrate",
+            execution_surface_id="n8n",
+            observed_executions=(
+                {
+                    "execution_run_id": "exec-queue-001",
+                    "execution_surface_id": "n8n",
+                    "idempotency_key": "idempotency-queue-001",
+                    "observed_at": datetime(2026, 4, 5, 12, 20, tzinfo=timezone.utc),
+                },
+            ),
+            compared_at=datetime(2026, 4, 5, 12, 20, tzinfo=timezone.utc),
+            stale_after=datetime(2026, 4, 5, 12, 30, tzinfo=timezone.utc),
+        )
+
+        queue_view = service.inspect_analyst_queue()
+
+        self.assertEqual(queue_view.total_records, 1)
+        self.assertEqual(queue_view.records[0]["alert_id"], admitted.alert.alert_id)
+        self.assertEqual(
+            queue_view.records[0]["correlation_key"],
+            admitted.reconciliation.correlation_key,
+        )
+        self.assertEqual(queue_view.records[0]["source_system"], "wazuh")
+
+    def test_service_analyst_queue_sorts_unknown_last_seen_after_real_timestamps(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        seen_at = datetime(2026, 4, 5, 12, 15, tzinfo=timezone.utc)
+
+        service.persist_record(
+            AlertRecord(
+                alert_id="alert-known-last-seen",
+                finding_id="finding-known-last-seen",
+                analytic_signal_id="signal-known-last-seen",
+                case_id=None,
+                lifecycle_state="new",
+            )
+        )
+        service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-known-last-seen",
+                subject_linkage={
+                    "alert_ids": ("alert-known-last-seen",),
+                    "analytic_signal_ids": ("signal-known-last-seen",),
+                    "substrate_detection_record_ids": ("wazuh:known-last-seen",),
+                    "source_systems": ("wazuh",),
+                },
+                alert_id="alert-known-last-seen",
+                finding_id="finding-known-last-seen",
+                analytic_signal_id="signal-known-last-seen",
+                execution_run_id=None,
+                linked_execution_run_ids=(),
+                correlation_key="wazuh:known-last-seen",
+                first_seen_at=seen_at,
+                last_seen_at=seen_at,
+                ingest_disposition="created",
+                mismatch_summary="known last-seen timestamp",
+                compared_at=seen_at,
+                lifecycle_state="matched",
+            )
+        )
+        service.persist_record(
+            AlertRecord(
+                alert_id="alert-unknown-last-seen",
+                finding_id="finding-unknown-last-seen",
+                analytic_signal_id="signal-unknown-last-seen",
+                case_id=None,
+                lifecycle_state="new",
+            )
+        )
+        service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-unknown-last-seen",
+                subject_linkage={
+                    "alert_ids": ("alert-unknown-last-seen",),
+                    "analytic_signal_ids": ("signal-unknown-last-seen",),
+                    "substrate_detection_record_ids": ("wazuh:unknown-last-seen",),
+                    "source_systems": ("wazuh",),
+                },
+                alert_id="alert-unknown-last-seen",
+                finding_id="finding-unknown-last-seen",
+                analytic_signal_id="signal-unknown-last-seen",
+                execution_run_id=None,
+                linked_execution_run_ids=(),
+                correlation_key="wazuh:unknown-last-seen",
+                first_seen_at=seen_at,
+                last_seen_at=None,
+                ingest_disposition="created",
+                mismatch_summary="unknown last-seen timestamp",
+                compared_at=seen_at,
+                lifecycle_state="matched",
+            )
+        )
+
+        queue_view = service.inspect_analyst_queue()
+
+        self.assertEqual(queue_view.total_records, 2)
+        self.assertEqual(
+            tuple(record["alert_id"] for record in queue_view.records),
+            ("alert-known-last-seen", "alert-unknown-last-seen"),
+        )
+
     def test_service_rejects_schema_invalid_records_before_they_are_inspectable(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(

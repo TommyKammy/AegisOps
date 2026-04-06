@@ -252,7 +252,10 @@ class AegisOpsControlPlaneService:
     def inspect_analyst_queue(self) -> AnalystQueueSnapshot:
         latest_reconciliation_by_alert_id: dict[str, ReconciliationRecord] = {}
         for record in self._store.list(ReconciliationRecord):
-            if record.alert_id is None:
+            if (
+                record.alert_id is None
+                or not self._reconciliation_has_detection_lineage(record)
+            ):
                 continue
             current = latest_reconciliation_by_alert_id.get(record.alert_id)
             if current is None or record.compared_at > current.compared_at:
@@ -329,8 +332,8 @@ class AegisOpsControlPlaneService:
 
         queue_records.sort(
             key=lambda record: (
-                record["last_seen_at"] is None,
-                record["last_seen_at"],
+                record["last_seen_at"]
+                or datetime.min.replace(tzinfo=timezone.utc),
                 record["alert_id"],
             ),
             reverse=True,
@@ -340,6 +343,33 @@ class AegisOpsControlPlaneService:
             queue_name="analyst_review",
             total_records=len(queue_records),
             records=tuple(queue_records),
+        )
+
+    def _reconciliation_has_detection_lineage(
+        self, record: ReconciliationRecord
+    ) -> bool:
+        return any(
+            (
+                record.analytic_signal_id is not None,
+                bool(
+                    self._merge_linked_ids(
+                        record.subject_linkage.get("analytic_signal_ids"),
+                        None,
+                    )
+                ),
+                bool(
+                    self._merge_linked_ids(
+                        record.subject_linkage.get("substrate_detection_record_ids"),
+                        None,
+                    )
+                ),
+                bool(
+                    self._merge_linked_ids(
+                        record.subject_linkage.get("source_systems"),
+                        None,
+                    )
+                ),
+            )
         )
 
     @staticmethod
