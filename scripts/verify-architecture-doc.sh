@@ -2,7 +2,8 @@
 
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+default_repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="${1:-${default_repo_root}}"
 doc_path="${repo_root}/docs/architecture.md"
 
 required_headings=(
@@ -17,16 +18,16 @@ required_headings=(
 required_phrases=(
   "This document summarizes the approved baseline architecture for AegisOps."
   "This document describes the approved baseline only and does not introduce runtime changes."
-  "OpenSearch is the SIEM core for log ingestion, storage, search, analytics, and detection."
-  "Sigma defines detection logic only and is not a runtime execution engine."
-  "n8n handles enrichment, routing, orchestration, approval workflows, and downstream integration."
-  "PostgreSQL stores n8n metadata and execution state."
-  "Redis is reserved for optional future workflow queueing and future scaling."
-  "The proxy provides TLS termination and controlled user-facing access."
-  "The ingest role handles syslog, API-based, and agent-based collection and parsing before data reaches analytics systems."
-  "Detection and execution remain strictly separated in the approved baseline."
-  "OpenSearch performs detection and analytics only and must not directly execute response actions."
-  "n8n may execute approved workflows only after validation and approval requirements are satisfied."
+  "AegisOps is a governed SecOps control plane above external detection and automation substrates."
+  "The initial standard detection substrate is Wazuh."
+  "The initial standard routine automation substrate is Shuffle."
+  "The AegisOps control plane is the authoritative owner of policy-sensitive records, approval decisions, evidence linkage, action intent, and reconciliation truth across substrate boundaries."
+  "The controlled execution surface is the isolated executor path for higher-risk actions that require tighter execution controls than routine automation should own."
+  "\`Substrate Detection Record -> Analytic Signal -> Alert or Case -> Action Request -> Approval Decision -> Approved Automation Substrate or Executor -> Reconciliation\`"
+  "Direct substrate-to-automation shortcuts must not become the policy-sensitive system-of-record path."
+  "Detection substrates may emit substrate detection records and analytic signals, and automation substrates may perform delegated work, but neither may become the authority for alert truth, case truth, approval truth, action intent, evidence custody, or reconciliation truth."
+  "OpenSearch, Sigma, and n8n may still appear in the repository structure as optional, transitional, or experimental components, but they are no longer the product core in the approved architecture baseline."
+  "Detection, control, automation, and execution remain explicitly separated in the approved baseline."
   "All external UI access must traverse the approved reverse proxy."
   "Direct unaudited exposure of internal service ports is not part of the approved baseline."
   "This overview reflects the current approved baseline and must not be used to infer unapproved architecture changes."

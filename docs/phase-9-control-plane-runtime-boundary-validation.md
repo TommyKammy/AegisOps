@@ -34,7 +34,7 @@ Confirmed analyst UI, live telemetry expansion, AI runtime, and write-capable re
 
 `README.md` must continue to describe `control-plane/` as the live application home and `postgres/control-plane/` as the separate persistence-contract home.
 
-`docs/architecture.md` must continue to identify the live control-plane service as a distinct runtime boundary between OpenSearch analytics and n8n workflow execution.
+`docs/architecture.md` must continue to define the AegisOps control plane as the authoritative owner of the policy-sensitive path across substrate boundaries.
 
 `docs/control-plane-state-model.md` must continue to define the ownership split that the runtime-boundary document implements.
 
