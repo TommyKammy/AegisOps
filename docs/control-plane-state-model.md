@@ -23,7 +23,7 @@ No new live datastore rollout is approved in this phase. The current control-pla
 | Record family | Baseline owner | Ownership note |
 | ---- | ---- | ---- |
 | `Substrate Detection Record` | Approved upstream detection substrate | The detection substrate remains the system of record for substrate-native detection, correlation, and alerting artifacts plus their native identifiers. |
-| `Analytic Signal` | AegisOps control-plane analytic-signal record boundary referencing approved upstream detection substrates | Analytic signals are admitted upstream product inputs that preserve substrate-native linkage as first-class control-plane records without becoming the analyst work-tracking record for the platform. |
+| `Analytic Signal` | AegisOps control-plane intake boundary referencing approved upstream detection substrates | Analytic signals are admitted upstream product inputs that preserve substrate-native linkage without becoming the durable analyst work-tracking record for the platform. |
 | `Finding` | Approved detection substrate or analytics plane | Findings remain upstream analytic assertions and must not be reused as downstream control-plane lifecycle state. |
 | `Alert` | AegisOps control-plane alert record | Alert lifecycle must not be inferred from OpenSearch alert documents or n8n execution history alone. |
 | `Case` | AegisOps control-plane case record | Case ownership, analyst status, and evidence linkage must not dissolve into workflow runs or dashboard state. |
@@ -43,7 +43,9 @@ n8n execution history must not become the implicit system of record for case sta
 
 Substrate-native detection records and admitted analytic signals remain upstream reconciliation inputs, but they do not own downstream case, approval, or execution-policy state.
 
-The minimum control-plane record families for this baseline are Analytic Signal, Alert, Case, Evidence, Observation, Lead, Recommendation, Approval Decision, Action Request, Hunt, Hunt Run, AI Trace, Reconciliation, and the execution-plane Action Execution record that must later reconcile with them.
+The minimum control-plane record families for this baseline are Alert, Case, Evidence, Observation, Lead, Recommendation, Approval Decision, Action Request, Hunt, Hunt Run, AI Trace, Reconciliation, and the execution-plane Action Execution record that must later reconcile with them.
+
+Analytic signals remain admitted vendor-neutral intake primitives with stable `analytic_signal_id` linkage and first-class control-plane persistence, but they remain distinct from the downstream analyst work-tracking record families listed above.
 
 At the approved baseline level, the source-of-truth expectations are:
 
