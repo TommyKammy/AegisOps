@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import json
 import pathlib
 import sys
 import unittest
@@ -20,6 +21,7 @@ from aegisops_control_plane.models import (
     NativeDetectionRecord,
     ReconciliationRecord,
 )
+from aegisops_control_plane.adapters.wazuh import WazuhAlertAdapter
 from aegisops_control_plane.service import (
     AegisOpsControlPlaneService,
     NativeDetectionRecordAdapter,
@@ -27,7 +29,71 @@ from aegisops_control_plane.service import (
 from postgres_test_support import make_store
 
 
+FIXTURES_ROOT = pathlib.Path(__file__).resolve().parent / "fixtures" / "wazuh"
+
+
+def _load_wazuh_fixture(name: str) -> dict[str, object]:
+    return json.loads((FIXTURES_ROOT / name).read_text(encoding="utf-8"))
+
+
 class ControlPlaneServicePersistenceTests(unittest.TestCase):
+    def test_service_admits_wazuh_fixture_through_substrate_adapter_boundary(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+        native_record = adapter.build_native_detection_record(
+            _load_wazuh_fixture("agent-origin-alert.json")
+        )
+
+        admitted = service.ingest_native_detection_record(adapter, native_record)
+
+        self.assertEqual(admitted.disposition, "created")
+        self.assertIsNotNone(admitted.alert.analytic_signal_id)
+        self.assertEqual(
+            admitted.alert.finding_id,
+            "finding:wazuh:rule:5710:source:agent:007:alert:1731594986.4931506",
+        )
+        self.assertTrue(
+            admitted.alert.analytic_signal_id.startswith("analytic-signal-")
+        )
+
+        signals = store.list(AnalyticSignalRecord)
+        self.assertEqual(len(signals), 1)
+        self.assertEqual(
+            signals[0].substrate_detection_record_id,
+            "wazuh:1731594986.4931506",
+        )
+        self.assertEqual(
+            signals[0].correlation_key,
+            "wazuh:rule:5710:source:agent:007",
+        )
+        self.assertEqual(
+            signals[0].first_seen_at,
+            datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc),
+        )
+        self.assertEqual(
+            signals[0].last_seen_at,
+            datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc),
+        )
+        self.assertEqual(signals[0].alert_ids, (admitted.alert.alert_id,))
+
+        reconciliation = service.get_record(
+            ReconciliationRecord,
+            admitted.reconciliation.reconciliation_id,
+        )
+        self.assertEqual(reconciliation.ingest_disposition, "created")
+        self.assertEqual(
+            reconciliation.subject_linkage["substrate_detection_record_ids"],
+            ("wazuh:1731594986.4931506",),
+        )
+        self.assertEqual(
+            reconciliation.subject_linkage["analytic_signal_ids"],
+            (admitted.alert.analytic_signal_id,),
+        )
+
     def test_service_admits_native_detection_records_via_substrate_adapter_boundary(self) -> None:
         @dataclass(frozen=True)
         class TestNativeRecordAdapter(NativeDetectionRecordAdapter):

@@ -1,5 +1,6 @@
 """AegisOps control-plane runtime scaffold."""
 
+from .adapters import WazuhAlertAdapter
 from .config import RuntimeConfig
 from .models import (
     AITraceRecord,
@@ -52,6 +53,7 @@ __all__ = [
     "RecordInspectionSnapshot",
     "RuntimeConfig",
     "RuntimeSnapshot",
+    "WazuhAlertAdapter",
     "build_runtime_service",
     "build_runtime_snapshot",
 ]
