@@ -117,4 +117,11 @@ remove_text_from_doc "${missing_reconciliation_record_repo}" '| `Reconciliation`
 commit_fixture "${missing_reconciliation_record_repo}"
 assert_fails_with "${missing_reconciliation_record_repo}" '| `Reconciliation` | Future AegisOps control-plane reconciliation record | Cross-system linkage, mismatch tracking, and resolution state must not dissolve into alert fields, case notes, or n8n metadata. |'
 
+missing_substrate_signal_repo="${workdir}/missing-substrate-signal"
+create_repo "${missing_substrate_signal_repo}"
+write_canonical_doc "${missing_substrate_signal_repo}"
+remove_text_from_doc "${missing_substrate_signal_repo}" '| `Substrate Detection Record` | Approved upstream detection substrate | The detection substrate remains the system of record for substrate-native detection, correlation, and alerting artifacts plus their native identifiers. |'
+commit_fixture "${missing_substrate_signal_repo}"
+assert_fails_with "${missing_substrate_signal_repo}" '| `Substrate Detection Record` | Approved upstream detection substrate | The detection substrate remains the system of record for substrate-native detection, correlation, and alerting artifacts plus their native identifiers. |'
+
 echo "Control-plane state model verifier enforces required policy statements."

@@ -21,7 +21,9 @@ required_headings=(
 required_phrases=(
   "This document defines the approved baseline control-plane state model for AegisOps before any dedicated control service or datastore is implemented."
   "This document defines ownership, source-of-truth expectations, and recovery responsibilities only. It does not introduce a live datastore, schema migration, API service, or runtime deployment in this phase."
-  '| `Finding` | OpenSearch detection and analytics plane | OpenSearch remains the system of record for detection outputs and finding identifiers. |'
+  '| `Substrate Detection Record` | Approved upstream detection substrate | The detection substrate remains the system of record for substrate-native detection, correlation, and alerting artifacts plus their native identifiers. |'
+  '| `Analytic Signal` | AegisOps control-plane intake boundary referencing approved upstream detection substrates | Analytic signals are admitted upstream product inputs that preserve substrate-native linkage without becoming the durable analyst work-tracking record for the platform. |'
+  '| `Finding` | Approved detection substrate or analytics plane | Findings remain upstream analytic assertions and must not be reused as downstream control-plane lifecycle state. |'
   '| `Alert` | Future AegisOps control-plane alert record | Alert lifecycle must not be inferred from OpenSearch alert documents or n8n execution history alone. |'
   '| `Case` | Future AegisOps control-plane case record | Case ownership, analyst status, and evidence linkage must not dissolve into workflow runs or dashboard state. |'
   '| `Evidence` | Future AegisOps control-plane evidence record | Evidence custody, provenance, and record linkage must remain explicit instead of dissolving into case notes, AI output, or workflow metadata. |'
@@ -35,7 +37,7 @@ required_phrases=(
   '| `Reconciliation` | Future AegisOps control-plane reconciliation record | Cross-system linkage, mismatch tracking, and resolution state must not dissolve into alert fields, case notes, or n8n metadata. |'
   '| `Action Execution` | n8n execution plane with PostgreSQL-backed workflow state | n8n owns execution-attempt state, step progress, and connector-specific runtime details. |'
   "n8n execution history must not become the implicit system of record for case state, approval state, or action-request intent."
-  "OpenSearch findings and alerts remain upstream analytic signals for reconciliation input, but they do not own downstream case, approval, or execution-policy state."
+  "Substrate-native detection records and admitted analytic signals remain upstream reconciliation inputs, but they do not own downstream case, approval, or execution-policy state."
   "The minimum control-plane record families for this baseline are Alert, Case, Evidence, Observation, Lead, Recommendation, Approval Decision, Action Request, Hunt, Hunt Run, AI Trace, Reconciliation, and the execution-plane Action Execution record that must later reconcile with them."
   "The approved future persistence boundary for those platform-owned control records is an AegisOps-owned PostgreSQL-backed control-plane datastore boundary."
   "That future PostgreSQL-backed boundary may share a PostgreSQL engine class with n8n, but it must not collapse control-plane ownership into n8n-owned metadata tables or runtime workflow state."
@@ -48,21 +50,21 @@ required_phrases=(
   "- OpenSearch owns telemetry, findings, and OpenSearch-native analytic or alerting artifacts that act as upstream signals rather than downstream control-plane truth."
   "This boundary approves where future authoritative control-plane records belong conceptually, but it does not approve live PostgreSQL provisioning, schema migrations, credentials, or runtime deployment changes in this phase."
   "The control plane is responsible for reconciling approved action intent against observed n8n execution outcomes and for recording when reconciliation is incomplete, stale, or failed."
-  "Reconciliation must prefer deterministic correlation keys such as finding identifiers, action-request identifiers, approval identifiers, workflow identifiers, and idempotency keys rather than fuzzy time-window matching."
-  "Stable reconciliation keys must allow operators to compare OpenSearch analytics output, control-plane records, and n8n execution outcomes without assuming those systems share one lifecycle or one authoritative identifier."
-  'Finding-to-alert ingestion contract requirements:'
-  'The ingestion boundary must treat `finding_id`, `analytic_signal_id`, and `alert_id` as related but non-interchangeable identifiers.'
-  'A future ingest path must preserve the upstream `finding_id` as the durable analytic-origin reference, preserve `analytic_signal_id` when OpenSearch emits a distinct alerting or correlation artifact, and assign a separate control-plane `alert_id` for the analyst-facing record created or updated from that signal.'
+  "Reconciliation must prefer deterministic correlation keys such as substrate detection record identifiers, analytic-signal identifiers, action-request identifiers, approval identifiers, workflow identifiers, and idempotency keys rather than fuzzy time-window matching."
+  "Stable reconciliation keys must allow operators to compare substrate-native detection output, admitted analytic signals, control-plane records, and n8n execution outcomes without assuming those systems share one lifecycle or one authoritative identifier."
+  'Substrate-record-to-alert ingestion contract requirements:'
+  'The ingestion boundary must treat `substrate_detection_record_id`, `analytic_signal_id`, and `alert_id` as related but non-interchangeable identifiers.'
+  'A future ingest path must preserve the upstream `substrate_detection_record_id` as the durable substrate-origin reference, preserve `analytic_signal_id` for the admitted vendor-neutral signal created or updated from that substrate record set, and assign a separate control-plane `alert_id` for the analyst-facing record created or updated from that signal.'
   'The control plane must evaluate whether an incoming upstream signal creates a new alert, updates an existing alert, or is recorded only as a duplicate or restatement linked to an existing alert.'
   'Duplicate or restated upstream analytics signals must not mint a fresh `alert_id` when they do not represent materially new analyst work.'
-  'The minimum reconciliation fields for that boundary are `finding_id`, `analytic_signal_id` when distinct, `alert_id`, the control-plane deduplication or correlation key, first-seen and last-seen timestamps for the linked upstream signal set, and explicit ingest disposition showing whether the signal created, updated, deduplicated against, or restated an existing alert.'
-  'Reconciliation records must preserve which upstream findings or analytic signals were attached to an alert so later implementations can distinguish repeated analytics output from new analyst work.'
+  'The minimum reconciliation fields for that boundary are `substrate_detection_record_id`, `analytic_signal_id`, `alert_id`, the control-plane deduplication or correlation key, first-seen and last-seen timestamps for the linked upstream signal set, and explicit ingest disposition showing whether the signal created, updated, deduplicated against, or restated an existing alert.'
+  'Reconciliation records must preserve which substrate detection records and admitted analytic signals were attached to an alert so later implementations can distinguish repeated upstream output from new analyst work.'
   'Reconciliation records must also preserve how alerts, cases, approval decisions, action requests, hunts, hunt runs, AI traces, and execution outcomes were linked or found to disagree so mismatch tracking remains a first-class control-plane concern.'
   "The baseline must define immutable record-family identifiers and explicit lifecycle states for Alert, Case, Evidence, Observation, Lead, Recommendation, Hunt, Hunt Run, AI Trace, Approval Decision, Action Request, and Reconciliation records before any live control-plane implementation exists."
-  "These identifiers and states are minimum control-plane expectations. They must not be inferred from OpenSearch alert status, OpenSearch document updates, n8n execution status, or ad hoc analyst notes."
+  "These identifiers and states are minimum control-plane expectations. They must not be inferred from substrate-local alert status, substrate document updates, n8n execution status, or ad hoc analyst notes."
   '| `alert_id` | Immutable AegisOps control-plane identifier for one alert record. |'
-  '| `finding_id` | Required upstream analytic linkage to the originating finding that justified alert creation or update. |'
-  '| `analytic_signal_id` | Required when the routed OpenSearch alerting or correlation artifact is distinct from the underlying finding. |'
+  '| `substrate_detection_record_id` | Required upstream linkage to the originating substrate-native detection, correlation, or alerting record that justified alert creation or update. |'
+  '| `analytic_signal_id` | Required admitted vendor-neutral analytic-signal identifier for the routed upstream signal that created or updated the alert. |'
   '| `case_id` | Optional linkage that becomes required once the alert is promoted into a tracked case. |'
   '| `new` | The alert record exists and awaits analyst triage. |'
   '| `triaged` | Initial analyst or policy review classified the alert and decided whether deeper work is required. |'
@@ -73,7 +75,7 @@ required_phrases=(
   '| `superseded` | The alert is no longer the primary work-tracking record because another alert or case absorbed responsibility through an explicit linkage. |'
   '| `case_id` | Immutable AegisOps control-plane identifier for one investigation record. |'
   '| `alert_id` | Required linkage to the originating alert when the case came from alert promotion. |'
-  '| `finding_id` | Required when the case is opened directly from analytic output or needs durable linkage to the driving finding set. |'
+  '| `analytic_signal_id` or `substrate_detection_record_id` | Required when the case is opened directly from upstream analytic intake or needs durable linkage to the driving signal set. |'
   '| `evidence_id` | One or more explicit evidence links rather than implicit attachment through notes or workflow metadata. |'
   '| `open` | The case is created and awaits or has just begun analyst ownership. |'
   '| `investigating` | Investigation, evidence gathering, or coordination work is actively in progress. |'
@@ -103,7 +105,7 @@ required_phrases=(
   '| `superseded` | A newer approval decision replaced this decision for the same requested intent under revised reviewed context. |'
   '| `action_request_id` | Immutable AegisOps control-plane identifier for one requested response action. |'
   '| `approval_decision_id` | Explicit linkage to the governing approval decision once one exists. |'
-  '| `case_id`, `alert_id`, or `finding_id` | Required upstream context showing which investigative work item justified the request. |'
+  '| `case_id`, `alert_id`, or `analytic_signal_id` | Required upstream context showing which investigative work item or admitted analytic signal justified the request. |'
   '| Idempotency key | Required stable execution correlation key that survives retries and duplicate-delivery checks. |'
   '| `draft` | The request exists but is not yet ready to enter approval or execution handling. |'
   '| `pending_approval` | The request is complete enough for review and is waiting on approval outcome. |'
@@ -117,7 +119,7 @@ required_phrases=(
   '| `failed` | Execution or required verification concluded unsuccessfully under the current approved request. |'
   '| `unresolved` | Operators cannot yet prove whether the request was executed correctly, failed partially, or needs manual recovery. |'
   "These lifecycle states establish the minimum reviewable transitions for later reconciliation, retry, expiry, duplicate suppression, and manual recovery work."
-  "No control-plane record family may silently inherit lifecycle from OpenSearch alerts or n8n execution history. Cross-system state must be linked through explicit identifiers and reconciliation records instead."
+  "No control-plane record family may silently inherit lifecycle from substrate-local alerts or n8n execution history. Cross-system state must be linked through explicit identifiers and reconciliation records instead."
   "Hunt records must preserve explicit lifecycle state, ownership, hypothesis linkage, and closure rationale even when no case is opened."
   "Observation records must preserve scoped analyst assertions, timestamps, authorship, and linkage to supporting evidence without turning evidence custody into free-form narrative."
   "Lead records must preserve investigative hypotheses, triage rationale, and disposition state without being treated as equivalent to alert state, case state, or recommendation text."

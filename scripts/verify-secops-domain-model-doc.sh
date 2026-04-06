@@ -23,6 +23,8 @@ required_phrases=(
   '| `Raw Event` |'
   '| `Normalized Event` |'
   '| `Detection Rule` |'
+  '| `Substrate Detection Record` |'
+  '| `Analytic Signal` |'
   '| `Finding` |'
   '| `Hunt` |'
   '| `Hunt Hypothesis` |'
@@ -64,7 +66,7 @@ required_phrases=(
   "An incident is the higher-order security event declaration used when one or more cases represent a material security event that needs coordinated operational handling."
   "An approval decision records whether a specific action request is authorized, rejected, or expired."
   "An action execution records the actual downstream attempt or completion state for an approved or explicitly allowed action request."
-  "OpenSearch findings, n8n workflow runs, and future case state must remain separate records and must not be treated as interchangeable identifiers or lifecycle states."
+  "Substrate detection records, analytic signals, workflow runs, and future case state must remain separate records and must not be treated as interchangeable identifiers or lifecycle states."
   '| `Finding` | OpenSearch detection and analytics plane |'
   '| `Hunt` | Future AegisOps hunt management control layer |'
   '| `Hunt Hypothesis` | Future AegisOps hunt management control layer |'
@@ -78,9 +80,10 @@ required_phrases=(
   '| `Case` | Future AegisOps case management control layer |'
   '| `Approval Decision` | Future AegisOps approval control layer |'
   '| `Action Execution` | n8n execution plane with PostgreSQL-backed workflow state |'
-  "A finding promotes to an alert only when triage policy determines that analyst attention, tracking, notification, or downstream workflow handling is required."
-  "Finding-to-alert routing must preserve the distinction between the upstream finding, any distinct analytic signal emitted by OpenSearch alerting or correlation logic, and the downstream alert record created for analyst work."
-  "A finding identifier, an analytic signal identifier, and an alert identifier are related references, not interchangeable lifecycle keys."
+  "An analytic signal is the common upstream product primitive from which alert or case routing decisions begin."
+  "An analytic signal promotes to an alert only when triage policy determines that analyst attention, tracking, notification, or downstream workflow handling is required."
+  "Analytic-signal-to-alert routing must preserve the distinction between the substrate detection record, any admitted analytic signal, any finding or correlation claim preserved as source context, and the downstream alert record created for analyst work."
+  "A substrate detection record identifier, an analytic signal identifier, and an alert identifier are related references, not interchangeable lifecycle keys."
   "A hunt may produce observations, leads, recommendations, or supporting context for findings, alerts, and cases, but hunt records do not replace those records."
   "A lead promotes to an alert only when triage decides the investigative signal requires durable analyst queueing or response handling."
   "A lead may be attached directly to an existing case when the signal materially advances an active investigation without requiring a separate alert lifecycle."
