@@ -15,7 +15,7 @@ OpenSearch, Sigma, and n8n remain repository-tracked assets, but they are subord
 
 ## Status
 
-> This repository is currently in the foundation-building phase. It is **not yet a production-ready SOC platform**.
+> The control-plane thesis is approved, but the AegisOps-owned control-plane runtime is **not yet live**.
 
 Current scope:
 
@@ -25,11 +25,16 @@ Current scope:
 - Parameter catalog structure
 - Implementation guardrails for AI-assisted development
 
+Within that scope, Wazuh is the initial standard detection substrate, Shuffle is the initial standard routine automation substrate, and the AegisOps-owned control-plane runtime remains not yet live.
+
 ---
 
 ## Core Principles
 
-- **Detection and execution are separated** — OpenSearch detects; n8n orchestrates
+- **Detection, control, automation, and execution are explicitly separated**
+- **AegisOps is the authority for policy-sensitive workflow truth** — alerts, cases, evidence, approval decisions, action requests, and reconciliation remain AegisOps-owned records
+- **Detection substrates produce upstream analytic signals** — Wazuh is the initial standard detection substrate, while OpenSearch and Sigma remain optional or transitional support choices
+- **Automation substrates execute only approved delegated work** — Shuffle is the initial standard routine automation substrate, while n8n remains optional, transitional, or experimental
 - **Human approval is required by default for write or destructive actions**
 - **Secrets are never committed to Git**
 - **Platform behavior must be reproducible from version-controlled artifacts**
