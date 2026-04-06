@@ -6,8 +6,23 @@ from types import MappingProxyType
 from typing import ClassVar, Mapping, Union
 
 
+def _freeze_json_value(value: object) -> object:
+    if isinstance(value, Mapping):
+        return MappingProxyType(
+            {str(key): _freeze_json_value(item) for key, item in value.items()}
+        )
+    if isinstance(value, list):
+        return tuple(_freeze_json_value(item) for item in value)
+    if isinstance(value, tuple):
+        return tuple(_freeze_json_value(item) for item in value)
+    return value
+
+
 def _freeze_mapping(value: Mapping[str, object]) -> Mapping[str, object]:
-    return MappingProxyType(dict(value))
+    frozen = _freeze_json_value(value)
+    if not isinstance(frozen, Mapping):
+        raise TypeError("Expected mapping-compatible control-plane field value")
+    return frozen
 
 
 @dataclass(frozen=True)
