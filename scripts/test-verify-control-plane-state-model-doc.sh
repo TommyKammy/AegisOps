@@ -39,6 +39,16 @@ remove_text_from_doc() {
   git -C "${target}" add docs/control-plane-state-model.md
 }
 
+replace_text_in_doc() {
+  local target="$1"
+  local old_text="$2"
+  local new_text="$3"
+  local doc_path="${target}/docs/control-plane-state-model.md"
+
+  OLD_TEXT="${old_text}" NEW_TEXT="${new_text}" perl -0pi -e 's/\Q$ENV{OLD_TEXT}\E/$ENV{NEW_TEXT}/g' "${doc_path}"
+  git -C "${target}" add docs/control-plane-state-model.md
+}
+
 commit_fixture() {
   local target="$1"
 
@@ -76,6 +86,16 @@ create_repo "${valid_repo}"
 write_canonical_doc "${valid_repo}"
 commit_fixture "${valid_repo}"
 assert_passes "${valid_repo}"
+
+postgres_authoritative_repo="${workdir}/postgres-authoritative"
+create_repo "${postgres_authoritative_repo}"
+write_canonical_doc "${postgres_authoritative_repo}"
+replace_text_in_doc \
+  "${postgres_authoritative_repo}" \
+  'No new live datastore rollout is approved in this phase. The current control-plane runtime remains `persistence_mode="in_memory"`, `postgres/control-plane/` remains the reviewed schema and migration home for future PostgreSQL-backed persistence work, and OpenSearch remains the analytics-plane store for telemetry and detection outputs.' \
+  'The reviewed local control-plane runtime now reports `persistence_mode="postgresql"` and treats the PostgreSQL-backed control-plane store as the authoritative persistence path for local runtime and inspection flows, while `postgres/control-plane/` remains the reviewed schema and migration home and OpenSearch remains the analytics-plane store for telemetry and detection outputs.'
+commit_fixture "${postgres_authoritative_repo}"
+assert_passes "${postgres_authoritative_repo}"
 
 missing_doc_repo="${workdir}/missing-doc"
 create_repo "${missing_doc_repo}"

@@ -81,6 +81,14 @@ jobs:
       - name: Run Phase 10 workflow coverage guard
         run: bash scripts/test-verify-ci-phase-10-workflow-coverage.sh
 
+      - name: Run Phase 11 workflow coverage guard
+        run: bash scripts/test-verify-ci-phase-11-workflow-coverage.sh
+
+      - name: Run Phase 11 control-plane validation
+        run: |
+          bash scripts/verify-phase-11-control-plane-ci-validation.sh
+          python3 -m unittest control-plane.tests.test_service_persistence control-plane.tests.test_postgres_store control-plane.tests.test_cli_inspection
+
       - name: Run control-plane runtime unit tests
         run: python3 -m unittest discover -s control-plane/tests -p 'test_*.py'
 
@@ -107,12 +115,14 @@ jobs:
           bash scripts/test-verify-ci-phase-8-workflow-coverage.sh
           bash scripts/test-verify-ci-phase-9-workflow-coverage.sh
           bash scripts/test-verify-ci-phase-10-workflow-coverage.sh
+          bash scripts/test-verify-ci-phase-11-workflow-coverage.sh
           bash scripts/test-verify-detection-lifecycle-and-rule-qa-framework.sh
           bash scripts/test-verify-phase-5-semantic-contract-validation.sh
           bash scripts/test-verify-phase-7-ai-hunt-design-validation.sh
           bash scripts/test-verify-phase-8-control-plane-foundation-validation.sh
           bash scripts/test-verify-phase-9-control-plane-runtime-boundary-validation.sh
           bash scripts/test-verify-phase-10-thesis-consistency.sh
+          bash scripts/test-verify-phase-11-control-plane-ci-validation.sh
           bash scripts/test-verify-phase-6-initial-telemetry-slice-doc.sh
           bash scripts/test-verify-phase-6-opensearch-detector-artifacts.sh
           bash scripts/test-verify-phase-6-replay-to-notify-validation.sh
