@@ -363,6 +363,13 @@ class AegisOpsControlPlaneService:
             key=lambda record: record.compared_at,
             default=None,
         )
+        analytic_signal_id = self._resolve_analytic_signal_id(
+            analytic_signal_id=analytic_signal_id,
+            finding_id=finding_id,
+            correlation_key=correlation_key,
+            substrate_detection_record_id=substrate_detection_record_id,
+            latest_reconciliation=latest_reconciliation,
+        )
 
         if latest_reconciliation is None:
             alert = self.persist_record(
@@ -649,6 +656,51 @@ class AegisOpsControlPlaneService:
     @staticmethod
     def _linked_id_exists(existing_values: object, candidate: str) -> bool:
         return isinstance(existing_values, (list, tuple)) and candidate in existing_values
+
+    def _resolve_analytic_signal_id(
+        self,
+        *,
+        analytic_signal_id: str | None,
+        finding_id: str,
+        correlation_key: str,
+        substrate_detection_record_id: str | None,
+        latest_reconciliation: ReconciliationRecord | None,
+    ) -> str:
+        if analytic_signal_id is not None:
+            return analytic_signal_id
+
+        existing_signal_ids = self._merge_linked_ids(
+            (
+                latest_reconciliation.subject_linkage.get("analytic_signal_ids")
+                if latest_reconciliation is not None
+                else ()
+            ),
+            None,
+        )
+        if substrate_detection_record_id is not None:
+            for existing_signal_id in existing_signal_ids:
+                existing_signal = self._store.get(
+                    AnalyticSignalRecord,
+                    existing_signal_id,
+                )
+                if (
+                    existing_signal is not None
+                    and existing_signal.substrate_detection_record_id
+                    == substrate_detection_record_id
+                ):
+                    return existing_signal_id
+
+        if substrate_detection_record_id is None and len(existing_signal_ids) == 1:
+            return existing_signal_ids[0]
+
+        mint_material = "|".join(
+            (
+                finding_id,
+                correlation_key,
+                substrate_detection_record_id or "",
+            )
+        )
+        return f"analytic-signal-{uuid.uuid5(uuid.NAMESPACE_URL, mint_material)}"
 
     @staticmethod
     def _normalize_substrate_detection_record_id(

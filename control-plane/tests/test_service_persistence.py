@@ -125,10 +125,25 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         self.assertEqual(first.disposition, "created")
         self.assertEqual(second.disposition, "restated")
+        self.assertIsNotNone(first.reconciliation.analytic_signal_id)
+        self.assertIsNotNone(second.reconciliation.analytic_signal_id)
+        self.assertNotEqual(
+            first.reconciliation.analytic_signal_id,
+            second.reconciliation.analytic_signal_id,
+        )
         self.assertEqual(
             second.reconciliation.subject_linkage["substrate_detection_record_ids"],
             ("substrate-a:native-001", "substrate-b:native-001"),
         )
+        self.assertEqual(
+            second.reconciliation.subject_linkage["analytic_signal_ids"],
+            (
+                first.reconciliation.analytic_signal_id,
+                second.reconciliation.analytic_signal_id,
+            ),
+        )
+        signals = store.list(AnalyticSignalRecord)
+        self.assertEqual(len(signals), 2)
 
     def test_service_rejects_blank_substrate_keys_at_native_detection_boundary(self) -> None:
         @dataclass(frozen=True)
@@ -719,7 +734,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 last_seen_at=first_seen_at,
             )
 
-    def test_service_normalizes_blank_optional_admission_identities_to_none(self) -> None:
+    def test_service_mints_analytic_signal_identity_when_admission_leaves_it_blank(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
@@ -737,14 +752,26 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         )
 
         self.assertEqual(admitted.disposition, "created")
-        self.assertIsNone(admitted.alert.analytic_signal_id)
-        self.assertEqual(len(store.list(AnalyticSignalRecord)), 0)
+        self.assertIsNotNone(admitted.alert.analytic_signal_id)
+        self.assertTrue(admitted.alert.analytic_signal_id.startswith("analytic-signal-"))
+
+        signals = store.list(AnalyticSignalRecord)
+        self.assertEqual(len(signals), 1)
+        self.assertEqual(signals[0].analytic_signal_id, admitted.alert.analytic_signal_id)
+        self.assertIsNone(signals[0].substrate_detection_record_id)
+        self.assertEqual(signals[0].finding_id, "finding-001")
 
         reconciliation = service.get_record(
             ReconciliationRecord, admitted.reconciliation.reconciliation_id
         )
-        self.assertEqual(reconciliation.analytic_signal_id, None)
-        self.assertEqual(reconciliation.subject_linkage["analytic_signal_ids"], [])
+        self.assertEqual(
+            reconciliation.analytic_signal_id,
+            admitted.alert.analytic_signal_id,
+        )
+        self.assertEqual(
+            reconciliation.subject_linkage["analytic_signal_ids"],
+            [admitted.alert.analytic_signal_id],
+        )
         self.assertEqual(
             reconciliation.subject_linkage["substrate_detection_record_ids"],
             [],
