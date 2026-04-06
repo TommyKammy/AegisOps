@@ -147,4 +147,51 @@ docs/requirements-baseline.md remains the source of truth for naming policy.
 commit_fixture "${missing_saas_repo}"
 assert_fails_with "${missing_saas_repo}" "aegisops-logs-saas-*"
 
+legacy_case_repo="${workdir}/legacy-case"
+create_repo "${legacy_case_repo}"
+write_doc "${legacy_case_repo}" "# AegisOps Contributor Naming Guide
+
+## Purpose
+
+Guide text.
+
+## Baseline Source
+
+docs/requirements-baseline.md remains the source of truth for naming policy.
+
+## Naming Rules
+
+### Hosts
+
+- aegisops-opensearch-node-01
+- aegisops-n8n-node
+
+### Compose Projects
+
+- aegisops-opensearch
+
+### OpenSearch Indexes
+
+- aegisops-logs-windows-*
+- aegisops-logs-saas-*
+- aegisops-findings-*
+
+### Detectors
+
+- aegisops-windows-suspicious-powershell-high
+
+### n8n Workflows
+
+- aegisops_enrich_ip_reputation
+
+### Environment Variables and Secrets
+
+- AEGISOPS_OPENSEARCH_ADMIN_PASSWORD
+
+## Forbidden Legacy Names
+
+- Wazuh"
+commit_fixture "${legacy_case_repo}"
+assert_fails_with "${legacy_case_repo}" "Contributor naming guide contains legacy product naming."
+
 echo "verify-contributor-naming-guide-doc tests passed"

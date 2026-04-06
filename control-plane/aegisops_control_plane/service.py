@@ -265,6 +265,10 @@ class AegisOpsControlPlaneService:
             linked_signal_ids = (
                 (analytic_signal_id,) if analytic_signal_id is not None else tuple()
             )
+            linked_substrate_detection_ids = self._merge_linked_ids(
+                (),
+                substrate_detection_record_id,
+            )
             persisted_first_seen = first_seen_at
             persisted_last_seen = last_seen_at
         else:
@@ -277,6 +281,9 @@ class AegisOpsControlPlaneService:
             existing_signal_ids = latest_reconciliation.subject_linkage.get(
                 "analytic_signal_ids"
             )
+            existing_substrate_detection_ids = latest_reconciliation.subject_linkage.get(
+                "substrate_detection_record_ids"
+            )
             linked_finding_ids = self._merge_linked_ids(
                 existing_finding_ids,
                 finding_id,
@@ -284,6 +291,10 @@ class AegisOpsControlPlaneService:
             linked_signal_ids = self._merge_linked_ids(
                 existing_signal_ids,
                 analytic_signal_id,
+            )
+            linked_substrate_detection_ids = self._merge_linked_ids(
+                existing_substrate_detection_ids,
+                substrate_detection_record_id,
             )
             persisted_first_seen = min(
                 latest_reconciliation.first_seen_at or first_seen_at,
@@ -356,6 +367,7 @@ class AegisOpsControlPlaneService:
                 reconciliation_id=self._next_identifier("reconciliation"),
                 subject_linkage={
                     "alert_ids": (alert.alert_id,),
+                    "substrate_detection_record_ids": linked_substrate_detection_ids,
                     "finding_ids": linked_finding_ids,
                     "analytic_signal_ids": linked_signal_ids,
                 },

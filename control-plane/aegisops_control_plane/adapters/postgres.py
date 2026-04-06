@@ -245,13 +245,21 @@ def _require_any_linkage(
     record: ControlPlaneRecord,
     field_names: tuple[str, ...],
 ) -> None:
-    if any(getattr(record, field_name) is not None for field_name in field_names):
+    if any(_has_linkage_value(getattr(record, field_name)) for field_name in field_names):
         return
     required_fields = ", ".join(field_names)
     raise ValueError(
         f"{record.record_family} record {record.record_id!r} requires at least one linkage field: "
         f"{required_fields}"
     )
+
+
+def _has_linkage_value(value: object) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value.strip() != ""
+    return True
 
 
 def _require_non_empty_tuple(

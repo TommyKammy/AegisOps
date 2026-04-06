@@ -363,6 +363,22 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
                 "reconciliation-invalid",
             ),
             (
+                "blank analytic signal linkage",
+                AnalyticSignalRecord(
+                    analytic_signal_id="signal-invalid",
+                    substrate_detection_record_id="   ",
+                    finding_id="",
+                    alert_ids=(),
+                    case_ids=(),
+                    correlation_key="claim:host-001:privilege-escalation",
+                    first_seen_at=timestamp,
+                    last_seen_at=timestamp,
+                    lifecycle_state="active",
+                ),
+                AnalyticSignalRecord,
+                "signal-invalid",
+            ),
+            (
                 "invalid reconciliation ingest disposition",
                 ReconciliationRecord(
                     reconciliation_id="reconciliation-invalid-disposition",

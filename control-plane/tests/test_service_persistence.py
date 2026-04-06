@@ -244,6 +244,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         created = service.ingest_finding_alert(
             finding_id="finding-001",
             analytic_signal_id="signal-001",
+            substrate_detection_record_id="substrate-detection-001",
             correlation_key="claim:host-001:privilege-escalation",
             first_seen_at=first_seen,
             last_seen_at=first_seen,
@@ -251,6 +252,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         restated = service.ingest_finding_alert(
             finding_id="finding-002",
             analytic_signal_id="signal-002",
+            substrate_detection_record_id="substrate-detection-002",
             correlation_key="claim:host-001:privilege-escalation",
             first_seen_at=first_seen,
             last_seen_at=restated_seen,
@@ -258,6 +260,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         updated = service.ingest_finding_alert(
             finding_id="finding-003",
             analytic_signal_id="signal-003",
+            substrate_detection_record_id="substrate-detection-003",
             correlation_key="claim:host-001:privilege-escalation",
             first_seen_at=updated_seen,
             last_seen_at=updated_seen,
@@ -266,6 +269,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         deduplicated = service.ingest_finding_alert(
             finding_id="finding-003",
             analytic_signal_id="signal-003",
+            substrate_detection_record_id="substrate-detection-003",
             correlation_key="claim:host-001:privilege-escalation",
             first_seen_at=updated_seen,
             last_seen_at=duplicate_seen,
@@ -317,6 +321,10 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             restated_reconciliation.subject_linkage["analytic_signal_ids"],
             ["signal-001", "signal-002"],
         )
+        self.assertEqual(
+            restated_reconciliation.subject_linkage["substrate_detection_record_ids"],
+            ["substrate-detection-001", "substrate-detection-002"],
+        )
         self.assertEqual(updated_reconciliation.alert_id, created.alert.alert_id)
         self.assertEqual(updated_reconciliation.ingest_disposition, "updated")
         self.assertEqual(updated_reconciliation.first_seen_at, first_seen)
@@ -328,6 +336,14 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(
             updated_reconciliation.subject_linkage["analytic_signal_ids"],
             ["signal-001", "signal-002", "signal-003"],
+        )
+        self.assertEqual(
+            updated_reconciliation.subject_linkage["substrate_detection_record_ids"],
+            [
+                "substrate-detection-001",
+                "substrate-detection-002",
+                "substrate-detection-003",
+            ],
         )
         self.assertEqual(deduplicated_reconciliation.alert_id, created.alert.alert_id)
         self.assertEqual(
@@ -343,6 +359,14 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             deduplicated_reconciliation.subject_linkage["analytic_signal_ids"],
             ["signal-001", "signal-002", "signal-003"],
         )
+        self.assertEqual(
+            deduplicated_reconciliation.subject_linkage["substrate_detection_record_ids"],
+            [
+                "substrate-detection-001",
+                "substrate-detection-002",
+                "substrate-detection-003",
+            ],
+        )
 
         signal_one = service.get_record(AnalyticSignalRecord, "signal-001")
         signal_two = service.get_record(AnalyticSignalRecord, "signal-002")
@@ -351,17 +375,29 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(signal_one.alert_ids, (created.alert.alert_id,))
         self.assertEqual(signal_one.case_ids, ())
         self.assertEqual(signal_one.finding_id, "finding-001")
+        self.assertEqual(
+            signal_one.substrate_detection_record_id,
+            "substrate-detection-001",
+        )
         self.assertEqual(signal_one.correlation_key, "claim:host-001:privilege-escalation")
         self.assertEqual(signal_one.first_seen_at, first_seen)
         self.assertEqual(signal_one.last_seen_at, first_seen)
 
         self.assertEqual(signal_two.alert_ids, (created.alert.alert_id,))
         self.assertEqual(signal_two.finding_id, "finding-002")
+        self.assertEqual(
+            signal_two.substrate_detection_record_id,
+            "substrate-detection-002",
+        )
         self.assertEqual(signal_two.first_seen_at, first_seen)
         self.assertEqual(signal_two.last_seen_at, restated_seen)
 
         self.assertEqual(signal_three.alert_ids, (created.alert.alert_id,))
         self.assertEqual(signal_three.finding_id, "finding-003")
+        self.assertEqual(
+            signal_three.substrate_detection_record_id,
+            "substrate-detection-003",
+        )
         self.assertEqual(signal_three.first_seen_at, updated_seen)
         self.assertEqual(signal_three.last_seen_at, duplicate_seen)
 

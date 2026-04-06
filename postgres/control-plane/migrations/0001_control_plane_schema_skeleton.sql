@@ -25,7 +25,10 @@ create table if not exists aegisops_control.analytic_signal_records (
   lifecycle_state text not null,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
-  check (substrate_detection_record_id is not null or finding_id is not null),
+  check (
+    nullif(btrim(substrate_detection_record_id), '') is not null
+    or nullif(btrim(finding_id), '') is not null
+  ),
   check (first_seen_at is null or last_seen_at is null or first_seen_at <= last_seen_at),
   check (lifecycle_state in ('active','superseded','withdrawn'))
 );
