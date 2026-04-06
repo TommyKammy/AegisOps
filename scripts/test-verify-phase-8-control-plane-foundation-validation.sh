@@ -118,9 +118,9 @@ assert_fails_with "${missing_validation_repo}" "Missing Phase 8 control-plane fo
 missing_state_model_cross_link_repo="${workdir}/missing-state-model-cross-link"
 create_repo "${missing_state_model_cross_link_repo}"
 write_required_artifacts "${missing_state_model_cross_link_repo}"
-remove_text_from_doc "${missing_state_model_cross_link_repo}" "docs/control-plane-state-model.md" 'The repository may materialize a version-controlled schema baseline for that future boundary under `postgres/control-plane/`, including reviewed schema manifests and migration files that keep the approved record-family boundary explicit without authorizing live deployment, credentials, or production migration execution in this phase.'
+remove_text_from_doc "${missing_state_model_cross_link_repo}" "docs/control-plane-state-model.md" 'The repository already materializes a version-controlled schema baseline for that boundary under `postgres/control-plane/`, including reviewed schema manifests and migration files that keep the approved record-family boundary explicit without authorizing live deployment, credentials, or production migration execution in this phase.'
 commit_fixture "${missing_state_model_cross_link_repo}"
-assert_fails_with "${missing_state_model_cross_link_repo}" "Missing required line in ${missing_state_model_cross_link_repo}/docs/control-plane-state-model.md"
+assert_fails_with "${missing_state_model_cross_link_repo}" "Missing control-plane state model statement: The repository already materializes a version-controlled schema baseline for that boundary under \`postgres/control-plane/\`, including reviewed schema manifests and migration files that keep the approved record-family boundary explicit without authorizing live deployment, credentials, or production migration execution in this phase."
 
 missing_schema_boundary_repo="${workdir}/missing-schema-boundary"
 create_repo "${missing_schema_boundary_repo}"

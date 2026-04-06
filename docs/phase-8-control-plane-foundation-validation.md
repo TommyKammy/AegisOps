@@ -17,7 +17,7 @@
 
 ## Review Outcome
 
-Confirmed the control-plane state model remains the normative source for ownership, source-of-truth boundaries, and future reconciliation duties.
+Confirmed the control-plane state model remains the normative source for ownership, source-of-truth boundaries, and runtime plus persistence reconciliation duties.
 
 Confirmed the repository now materializes `postgres/control-plane/` as the reviewed schema v1 home for AegisOps-owned control-plane records without authorizing live deployment, production data migration, or credentials.
 
@@ -33,7 +33,7 @@ Confirmed the foundation artifact set keeps reviewer-facing alignment between th
 
 `docs/repository-structure-baseline.md` must continue to describe `postgres/` as the home for the reviewed control-plane schema and migration baseline while keeping `control-plane/` separate as the live runtime application home.
 
-`docs/control-plane-state-model.md` must continue to cite `postgres/control-plane/` as the version-controlled schema baseline home for the future boundary so the state-model baseline and repository skeleton stay cross-linked.
+`docs/control-plane-state-model.md` must continue to cite `postgres/control-plane/` as the version-controlled schema baseline home for the reviewed persistence boundary so the state-model baseline and repository skeleton stay cross-linked.
 
 `postgres/control-plane/README.md`, `postgres/control-plane/schema.sql`, and `postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql` must continue to agree on the `aegisops_control` boundary and the materialized homes for `alert`, `case`, `evidence`, `observation`, `lead`, `recommendation`, `approval_decision`, `action_request`, `hunt`, `hunt_run`, `ai_trace`, and `reconciliation` records.
 

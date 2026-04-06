@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-This document defines the approved baseline control-plane state model for AegisOps before any dedicated control service or datastore is implemented.
+This document defines the approved baseline control-plane state model for AegisOps across the live control-plane runtime boundary and the reviewed PostgreSQL control-plane persistence boundary.
 
 It supplements `docs/architecture.md`, `docs/secops-domain-model.md`, and `docs/response-action-safety-model.md` by making state ownership, source-of-truth boundaries, and reconciliation duties explicit enough for future implementation and review work.
 
@@ -10,13 +10,13 @@ This document defines ownership, source-of-truth expectations, and recovery resp
 
 ## 2. Baseline Design Constraints
 
-The baseline must keep platform-owned control state explicit even though no dedicated AegisOps control service exists yet.
+The baseline must keep platform-owned control state explicit across the shipped `control-plane/` runtime boundary and the reviewed `postgres/control-plane/` persistence-contract home.
 
 The design constraint is to prevent OpenSearch documents, OpenSearch alerting artifacts, n8n execution history, or ad hoc analyst notes from silently becoming the long-term database for case management, approval state, or execution policy.
 
-Until a future implementation materializes a dedicated control schema or API boundary, this document is the normative definition of which component owns which state and what must later be reconciled across component boundaries.
+The repository already ships a dedicated control-plane runtime home, so this document is the normative definition of which component owns which state and what must be reconciled across runtime, persistence, analytics, and execution boundaries.
 
-No new live datastore is approved in this phase. PostgreSQL remains the backing store for n8n runtime metadata and workflow execution state only, and OpenSearch remains the analytics-plane store for telemetry and detection outputs.
+No new live datastore rollout is approved in this phase. The current control-plane runtime remains `persistence_mode="in_memory"`, `postgres/control-plane/` remains the reviewed schema and migration home for future PostgreSQL-backed persistence work, and OpenSearch remains the analytics-plane store for telemetry and detection outputs.
 
 ## 3. Baseline Ownership and Source of Truth
 
@@ -25,18 +25,18 @@ No new live datastore is approved in this phase. PostgreSQL remains the backing 
 | `Substrate Detection Record` | Approved upstream detection substrate | The detection substrate remains the system of record for substrate-native detection, correlation, and alerting artifacts plus their native identifiers. |
 | `Analytic Signal` | AegisOps control-plane intake boundary referencing approved upstream detection substrates | Analytic signals are admitted upstream product inputs that preserve substrate-native linkage without becoming the durable analyst work-tracking record for the platform. |
 | `Finding` | Approved detection substrate or analytics plane | Findings remain upstream analytic assertions and must not be reused as downstream control-plane lifecycle state. |
-| `Alert` | Future AegisOps control-plane alert record | Alert lifecycle must not be inferred from OpenSearch alert documents or n8n execution history alone. |
-| `Case` | Future AegisOps control-plane case record | Case ownership, analyst status, and evidence linkage must not dissolve into workflow runs or dashboard state. |
-| `Evidence` | Future AegisOps control-plane evidence record | Evidence custody, provenance, and record linkage must remain explicit instead of dissolving into case notes, AI output, or workflow metadata. |
-| `Observation` | Future AegisOps control-plane observation record | Observations capture analyst-asserted investigative facts and must remain distinct from raw evidence artifacts, AI trace text, and case status fields. |
-| `Lead` | Future AegisOps control-plane lead record | Leads preserve candidate hypotheses or follow-up directions without silently promoting them into alerts, cases, or approved action intent. |
-| `Recommendation` | Future AegisOps control-plane recommendation record | Recommendations preserve proposed analyst or AI-advised next steps without replacing approval decisions, action requests, or execution outcomes. |
-| `Approval Decision` | Future AegisOps control-plane approval record | Approval is a first-class control decision and must not be reconstructed from whether a workflow happened to run. |
-| `Action Request` | Future AegisOps control-plane action-request record | Requested intent, target scope, payload binding, and expiry belong to the control layer rather than to workflow definitions or execution logs. |
-| `Hunt` | Future AegisOps control-plane hunt record | Hunt lifecycle must remain analyst-directed and reviewable rather than inferred from ad hoc queries or downstream workflow runs. |
-| `Hunt Run` | Future AegisOps control-plane hunt-run record | Each hunt run must preserve bounded scope, execution context, and outcome for one hunt iteration without replacing alerts or cases. |
-| `AI Trace` | Future AegisOps control-plane AI-trace record | AI trace records must preserve prompt, model, review, and linkage context without mutating evidence custody or analyst-owned dispositions. |
-| `Reconciliation` | Future AegisOps control-plane reconciliation record | Cross-system linkage, mismatch tracking, and resolution state must not dissolve into alert fields, case notes, or n8n metadata. |
+| `Alert` | AegisOps control-plane alert record | Alert lifecycle must not be inferred from OpenSearch alert documents or n8n execution history alone. |
+| `Case` | AegisOps control-plane case record | Case ownership, analyst status, and evidence linkage must not dissolve into workflow runs or dashboard state. |
+| `Evidence` | AegisOps control-plane evidence record | Evidence custody, provenance, and record linkage must remain explicit instead of dissolving into case notes, AI output, or workflow metadata. |
+| `Observation` | AegisOps control-plane observation record | Observations capture analyst-asserted investigative facts and must remain distinct from raw evidence artifacts, AI trace text, and case status fields. |
+| `Lead` | AegisOps control-plane lead record | Leads preserve candidate hypotheses or follow-up directions without silently promoting them into alerts, cases, or approved action intent. |
+| `Recommendation` | AegisOps control-plane recommendation record | Recommendations preserve proposed analyst or AI-advised next steps without replacing approval decisions, action requests, or execution outcomes. |
+| `Approval Decision` | AegisOps control-plane approval record | Approval is a first-class control decision and must not be reconstructed from whether a workflow happened to run. |
+| `Action Request` | AegisOps control-plane action-request record | Requested intent, target scope, payload binding, and expiry belong to the control layer rather than to workflow definitions or execution logs. |
+| `Hunt` | AegisOps control-plane hunt record | Hunt lifecycle must remain analyst-directed and reviewable rather than inferred from ad hoc queries or downstream workflow runs. |
+| `Hunt Run` | AegisOps control-plane hunt-run record | Each hunt run must preserve bounded scope, execution context, and outcome for one hunt iteration without replacing alerts or cases. |
+| `AI Trace` | AegisOps control-plane AI-trace record | AI trace records must preserve prompt, model, review, and linkage context without mutating evidence custody or analyst-owned dispositions. |
+| `Reconciliation` | AegisOps control-plane reconciliation record | Cross-system linkage, mismatch tracking, and resolution state must not dissolve into alert fields, case notes, or n8n metadata. |
 | `Action Execution` | n8n execution plane with PostgreSQL-backed workflow state | n8n owns execution-attempt state, step progress, and connector-specific runtime details. |
 
 n8n execution history must not become the implicit system of record for case state, approval state, or action-request intent.
@@ -48,31 +48,31 @@ The minimum control-plane record families for this baseline are Alert, Case, Evi
 At the approved baseline level, the source-of-truth expectations are:
 
 - substrate detection records and findings remain upstream substrate or analytics-plane facts, while analytic signals remain the admitted vendor-neutral intake primitive for control-plane routing;
-- alerts, cases, evidence, observations, leads, recommendations, approvals, action requests, hunts, hunt runs, AI traces, and reconciliation records are platform-owned control records whose future authoritative home is an AegisOps control schema or API boundary;
+- alerts, cases, evidence, observations, leads, recommendations, approvals, action requests, hunts, hunt runs, AI traces, and reconciliation records are platform-owned control records whose authoritative home is the AegisOps control-plane runtime boundary with the reviewed PostgreSQL contract rooted under `postgres/control-plane/`;
 - action execution state remains execution-plane runtime state owned by n8n and backed by PostgreSQL; and
 - evidence links across those records must be explicit rather than reconstructed from whichever component happens to log the most detail.
 
-## 4. Approved Future Persistence Boundary
+## 4. Approved Persistence Boundary
 
-The approved future persistence boundary for those platform-owned control records is an AegisOps-owned PostgreSQL-backed control-plane datastore boundary.
+The approved persistence boundary for those platform-owned control records is the AegisOps-owned PostgreSQL control-plane boundary reviewed under `postgres/control-plane/`.
 
-That future PostgreSQL-backed boundary may share a PostgreSQL engine class with n8n, but it must not collapse control-plane ownership into n8n-owned metadata tables or runtime workflow state.
+That reviewed PostgreSQL-backed boundary may share a PostgreSQL engine class with n8n, but it must not collapse control-plane ownership into n8n-owned metadata tables or runtime workflow state.
 
-If a future implementation uses one PostgreSQL cluster for both concerns, it must still preserve an explicit ownership split through separate AegisOps-controlled schemas, tables, migration history, and access controls for control-plane records.
+If a later deployment uses one PostgreSQL cluster for both concerns, it must still preserve an explicit ownership split through separate AegisOps-controlled schemas, tables, migration history, and access controls for control-plane records.
 
 OpenSearch must not become the authoritative store for alert lifecycle, case state, evidence custody, approval decisions, action-request intent, hunt lifecycle, hunt-run status, or AI trace review state.
 
 n8n metadata tables and workflow execution history must not become the authoritative store for alert ownership, case ownership, evidence linkage, recommendation review state, approval decisions, or action-request intent.
 
-The approved ownership split for a future PostgreSQL-backed implementation is:
+The approved ownership split for the reviewed PostgreSQL-backed boundary is:
 
 - AegisOps control-plane storage owns authoritative platform records, including alerts, cases, evidence, observations, leads, recommendations, approval decisions, action requests, hunts, hunt runs, AI traces, and reconciliation state that binds those records to analytics and execution outcomes.
 - n8n-owned PostgreSQL storage owns runtime workflow metadata, execution attempts, step progress, connector-local execution details, retry artifacts internal to a running workflow, and similar orchestration-engine state.
 - OpenSearch owns telemetry, findings, and OpenSearch-native analytic or alerting artifacts that act as upstream signals rather than downstream control-plane truth.
 
-This boundary approves where future authoritative control-plane records belong conceptually, but it does not approve live PostgreSQL provisioning, schema migrations, credentials, or runtime deployment changes in this phase.
+This boundary approves where authoritative control-plane records belong for the live runtime boundary, but it does not approve live PostgreSQL provisioning, schema migrations, credentials, or runtime deployment changes in this phase.
 
-The repository may materialize a version-controlled schema baseline for that future boundary under `postgres/control-plane/`, including reviewed schema manifests and migration files that keep the approved record-family boundary explicit without authorizing live deployment, credentials, or production migration execution in this phase.
+The repository already materializes a version-controlled schema baseline for that boundary under `postgres/control-plane/`, including reviewed schema manifests and migration files that keep the approved record-family boundary explicit without authorizing live deployment, credentials, or production migration execution in this phase.
 
 ## 5. Reconciliation Responsibilities
 
@@ -84,13 +84,13 @@ Stable reconciliation keys must allow operators to compare substrate-native dete
 
 Approved detection substrates are responsible for producing stable substrate-native identifiers and timestamps for substrate detection records and related analytic outputs that downstream control-plane logic may reference.
 
-n8n is responsible for exposing enough workflow-run identifiers, timestamps, execution outcomes, and step-level failure detail that a future control-plane layer can correlate approved intent to observed execution behavior.
+n8n is responsible for exposing enough workflow-run identifiers, timestamps, execution outcomes, and step-level failure detail that the control-plane runtime can correlate approved intent to observed execution behavior.
 
 Substrate-record-to-alert ingestion contract requirements:
 
 The ingestion boundary must treat `substrate_detection_record_id`, `analytic_signal_id`, and `alert_id` as related but non-interchangeable identifiers.
 
-A future ingest path must preserve the upstream `substrate_detection_record_id` as the durable substrate-origin reference, preserve `analytic_signal_id` for the admitted vendor-neutral signal created or updated from that substrate record set, and assign a separate control-plane `alert_id` for the analyst-facing record created or updated from that signal.
+The ingest path must preserve the upstream `substrate_detection_record_id` as the durable substrate-origin reference, preserve `analytic_signal_id` for the admitted vendor-neutral signal created or updated from that substrate record set, and assign a separate control-plane `alert_id` for the analyst-facing record created or updated from that signal.
 
 The control plane must evaluate whether an incoming upstream signal creates a new alert, updates an existing alert, or is recorded only as a duplicate or restatement linked to an existing alert.
 
@@ -114,7 +114,7 @@ The minimum stable reconciliation key set for this baseline is:
 - `ai_trace_id` for preserved AI-assisted interpretation or recommendation context; and
 - `workflow_id`, `workflow_execution_id`, and an action idempotency key for the n8n execution-plane record.
 
-The future AegisOps control layer is responsible for:
+The AegisOps control-plane runtime is responsible for:
 
 - deciding whether an analytic signal should create or update an alert or case record;
 - deciding how evidence, observations, leads, recommendations, hunts, hunt runs, and AI traces are attached to alerts, cases, or independent analyst workflows without collapsing their ownership boundaries;
@@ -134,13 +134,13 @@ Hunt-run reconciliation must preserve whether a run was planned, started, comple
 
 AI trace records must preserve generation, review, acceptance, rejection, supersession, and linkage expectations as explicit control-plane state rather than silent prompt history.
 
-Reconciliation must preserve auditable disagreement. When OpenSearch, n8n, and the future control record disagree, the platform must retain that mismatch as an explicit state that operators can inspect and resolve rather than overwriting one side to make the data look clean.
+Reconciliation must preserve auditable disagreement. When OpenSearch, n8n, and the authoritative control-plane record disagree, the platform must retain that mismatch as an explicit state that operators can inspect and resolve rather than overwriting one side to make the data look clean.
 
 Disagreement between analytics, control-plane, and execution-plane records must remain auditable rather than silently overwritten.
 
 ## 6. Minimum Record Identifiers and Lifecycle States
 
-The baseline must define immutable record-family identifiers and explicit lifecycle states for Alert, Case, Evidence, Observation, Lead, Recommendation, Hunt, Hunt Run, AI Trace, Approval Decision, Action Request, and Reconciliation records before any live control-plane implementation exists.
+The baseline defines immutable record-family identifiers and explicit lifecycle states for Alert, Case, Evidence, Observation, Lead, Recommendation, Hunt, Hunt Run, AI Trace, Approval Decision, Action Request, and Reconciliation records across the shipped runtime boundary and reviewed persistence contract.
 
 These identifiers and states are minimum control-plane expectations. They must not be inferred from substrate-local alert status, substrate document updates, n8n execution status, or ad hoc analyst notes.
 
@@ -430,11 +430,11 @@ No control-plane record family may silently inherit lifecycle from substrate-loc
 
 Retry policy belongs to the control-plane intent record, while duplicate suppression and step-level retry behavior inside a running workflow belong to n8n.
 
-OpenSearch may re-emit or restate analytic signals according to its own alerting behavior, but deduplication of downstream analyst work belongs to the future AegisOps control layer rather than to OpenSearch.
+OpenSearch may re-emit or restate analytic signals according to its own alerting behavior, but deduplication of downstream analyst work belongs to the AegisOps control-plane runtime rather than to OpenSearch.
 
 Dead-letter responsibility begins when the platform can no longer prove whether an approved intent was never executed, is still executing, or executed with an unknown result.
 
-The future control layer must be able to mark a record for manual review when:
+The control-plane runtime must be able to mark a record for manual review when:
 
 - approval expired before a correlated execution started;
 - an execution started without a reconcilable approved request;
@@ -464,8 +464,8 @@ No single component log should be treated as sufficient to reconstruct the entir
 
 ## 9. Baseline Alignment Notes
 
-This model keeps component boundaries explicit without approving a new live datastore in the current phase.
+This model keeps component boundaries explicit while aligning to the shipped `control-plane/` runtime home and the reviewed `postgres/control-plane/` persistence contract.
 
-It reinforces the requirements baseline rule that detection and execution remain separate, the domain-model rule that findings, approvals, and execution are distinct records, and the response-action safety rule that approval is not the same as execution.
+It reinforces the requirements baseline rule that detection and execution remain separate, the domain-model rule that findings, approvals, and execution are distinct records, the response-action safety rule that approval is not the same as execution, and the Phase 10 thesis that external detection and automation substrates do not become the authority for platform-owned workflow truth.
 
-A future implementation may materialize these control-plane records in a dedicated service or datastore, but this baseline explicitly defers that runtime choice.
+This baseline already aligns to the shipped `control-plane/` runtime home and the reviewed `postgres/control-plane/` persistence contract. Later runtime and datastore work must preserve that authority boundary rather than redefine where authoritative control-plane truth lives.

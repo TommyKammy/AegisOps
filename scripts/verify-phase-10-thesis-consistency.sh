@@ -64,7 +64,7 @@ check_marker "README.md" "AegisOps is built to support **human-controlled securi
 check_marker "docs/requirements-baseline.md" "OpenSearch, Sigma, and n8n are **not** co-equal product cores for AegisOps."
 check_marker "docs/architecture.md" "OpenSearch, Sigma, and n8n may still appear in the repository structure as optional, transitional, or experimental components, but they are no longer the product core in the approved architecture baseline."
 check_marker "docs/secops-domain-model.md" "An analytic signal is the common upstream product primitive from which alert or case routing decisions begin."
-check_marker "docs/control-plane-state-model.md" "The approved future persistence boundary for those platform-owned control records is an AegisOps-owned PostgreSQL-backed control-plane datastore boundary."
+check_marker "docs/control-plane-state-model.md" 'The approved persistence boundary for those platform-owned control records is the AegisOps-owned PostgreSQL control-plane boundary reviewed under `postgres/control-plane/`.'
 check_marker "docs/repository-structure-baseline.md" "The reviewed top-level tree remains transitional relative to the control-plane thesis until a later ADR explicitly approves a different repository rebaseline."
 
 check_forbidden "README.md" "**AegisOps** is primarily an OpenSearch-and-n8n product core."

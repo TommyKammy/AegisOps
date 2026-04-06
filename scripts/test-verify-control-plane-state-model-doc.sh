@@ -99,9 +99,9 @@ assert_fails_with "${missing_idempotency_repo}" "Every action request and execut
 missing_ownership_split_repo="${workdir}/missing-ownership-split"
 create_repo "${missing_ownership_split_repo}"
 write_canonical_doc "${missing_ownership_split_repo}"
-remove_text_from_doc "${missing_ownership_split_repo}" "The approved ownership split for a future PostgreSQL-backed implementation is:"
+remove_text_from_doc "${missing_ownership_split_repo}" "The approved ownership split for the reviewed PostgreSQL-backed boundary is:"
 commit_fixture "${missing_ownership_split_repo}"
-assert_fails_with "${missing_ownership_split_repo}" "The approved ownership split for a future PostgreSQL-backed implementation is:"
+assert_fails_with "${missing_ownership_split_repo}" "The approved ownership split for the reviewed PostgreSQL-backed boundary is:"
 
 missing_evidence_withdrawn_state_repo="${workdir}/missing-evidence-withdrawn-state"
 create_repo "${missing_evidence_withdrawn_state_repo}"
@@ -113,9 +113,9 @@ assert_fails_with "${missing_evidence_withdrawn_state_repo}" '| `withdrawn` | Th
 missing_reconciliation_record_repo="${workdir}/missing-reconciliation-record"
 create_repo "${missing_reconciliation_record_repo}"
 write_canonical_doc "${missing_reconciliation_record_repo}"
-remove_text_from_doc "${missing_reconciliation_record_repo}" '| `Reconciliation` | Future AegisOps control-plane reconciliation record | Cross-system linkage, mismatch tracking, and resolution state must not dissolve into alert fields, case notes, or n8n metadata. |'
+remove_text_from_doc "${missing_reconciliation_record_repo}" '| `Reconciliation` | AegisOps control-plane reconciliation record | Cross-system linkage, mismatch tracking, and resolution state must not dissolve into alert fields, case notes, or n8n metadata. |'
 commit_fixture "${missing_reconciliation_record_repo}"
-assert_fails_with "${missing_reconciliation_record_repo}" '| `Reconciliation` | Future AegisOps control-plane reconciliation record | Cross-system linkage, mismatch tracking, and resolution state must not dissolve into alert fields, case notes, or n8n metadata. |'
+assert_fails_with "${missing_reconciliation_record_repo}" '| `Reconciliation` | AegisOps control-plane reconciliation record | Cross-system linkage, mismatch tracking, and resolution state must not dissolve into alert fields, case notes, or n8n metadata. |'
 
 missing_substrate_signal_repo="${workdir}/missing-substrate-signal"
 create_repo "${missing_substrate_signal_repo}"
@@ -123,5 +123,13 @@ write_canonical_doc "${missing_substrate_signal_repo}"
 remove_text_from_doc "${missing_substrate_signal_repo}" '| `Substrate Detection Record` | Approved upstream detection substrate | The detection substrate remains the system of record for substrate-native detection, correlation, and alerting artifacts plus their native identifiers. |'
 commit_fixture "${missing_substrate_signal_repo}"
 assert_fails_with "${missing_substrate_signal_repo}" '| `Substrate Detection Record` | Approved upstream detection substrate | The detection substrate remains the system of record for substrate-native detection, correlation, and alerting artifacts plus their native identifiers. |'
+
+stale_pre_runtime_repo="${workdir}/stale-pre-runtime"
+create_repo "${stale_pre_runtime_repo}"
+write_canonical_doc "${stale_pre_runtime_repo}"
+printf '%s\n' "This document defines the approved baseline control-plane state model for AegisOps before any dedicated control service or datastore is implemented." >> "${stale_pre_runtime_repo}/docs/control-plane-state-model.md"
+git -C "${stale_pre_runtime_repo}" add docs/control-plane-state-model.md
+commit_fixture "${stale_pre_runtime_repo}"
+assert_fails_with "${stale_pre_runtime_repo}" "Forbidden control-plane state model statement still present: This document defines the approved baseline control-plane state model for AegisOps before any dedicated control service or datastore is implemented."
 
 echo "Control-plane state model verifier enforces required policy statements."
