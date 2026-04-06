@@ -243,6 +243,38 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         with self.assertRaises(TypeError):
             record.target_scope["asset_id"] = "asset-003"  # type: ignore[index]
 
+    def test_store_freezes_nested_json_fields_after_round_trip(self) -> None:
+        store, _ = make_store()
+        timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        record = ReconciliationRecord(
+            reconciliation_id="reconciliation-immutable-001",
+            subject_linkage={
+                "action_request_ids": ["action-request-001"],
+                "targets": [{"asset_id": "asset-001"}],
+            },
+            alert_id=None,
+            finding_id="finding-001",
+            analytic_signal_id="signal-001",
+            execution_run_id="n8n-exec-001",
+            linked_execution_run_ids=("n8n-exec-001",),
+            correlation_key="action-request-001:automation_substrate:n8n:idempotency-001",
+            first_seen_at=timestamp,
+            last_seen_at=timestamp,
+            ingest_disposition="matched",
+            mismatch_summary="matched execution",
+            compared_at=timestamp,
+            lifecycle_state="matched",
+        )
+
+        store.save(record)
+        persisted = store.get(ReconciliationRecord, "reconciliation-immutable-001")
+
+        assert persisted is not None
+        with self.assertRaises(TypeError):
+            persisted.subject_linkage["action_request_ids"] += ("action-request-002",)
+        with self.assertRaises(TypeError):
+            persisted.subject_linkage["targets"][0]["asset_id"] = "asset-002"  # type: ignore[index]
+
     def test_store_lists_execution_reconciliation_records_separately(self) -> None:
         store, _ = make_store()
         requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)

@@ -303,6 +303,42 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(snapshot.postgres_dsn, "postgresql://control-plane.local/aegisops")
         self.assertEqual(snapshot.persistence_mode, "postgresql")
 
+    def test_service_returns_nested_immutable_json_backed_records(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+
+        record = ActionRequestRecord(
+            action_request_id="action-request-immutable-001",
+            approval_decision_id="approval-001",
+            case_id="case-001",
+            alert_id="alert-001",
+            finding_id="finding-001",
+            idempotency_key="idempotency-001",
+            target_scope={
+                "asset_ids": ["asset-001"],
+                "filters": {"environment": "prod"},
+            },
+            payload_hash="payload-hash-001",
+            requested_at=timestamp,
+            expires_at=None,
+            lifecycle_state="approved",
+        )
+
+        service.persist_record(record)
+        persisted = service.get_record(
+            ActionRequestRecord, "action-request-immutable-001"
+        )
+
+        assert persisted is not None
+        with self.assertRaises(TypeError):
+            persisted.target_scope["asset_ids"] += ("asset-002",)
+        with self.assertRaises(TypeError):
+            persisted.target_scope["filters"]["environment"] = "dev"  # type: ignore[index]
+
     def test_service_exposes_read_only_record_and_reconciliation_inspection(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
@@ -523,15 +559,15 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(restated_reconciliation.last_seen_at, restated_seen)
         self.assertEqual(
             restated_reconciliation.subject_linkage["finding_ids"],
-            ["finding-001", "finding-002"],
+            ("finding-001", "finding-002"),
         )
         self.assertEqual(
             restated_reconciliation.subject_linkage["analytic_signal_ids"],
-            ["signal-001", "signal-002"],
+            ("signal-001", "signal-002"),
         )
         self.assertEqual(
             restated_reconciliation.subject_linkage["substrate_detection_record_ids"],
-            ["substrate-detection-001", "substrate-detection-002"],
+            ("substrate-detection-001", "substrate-detection-002"),
         )
         self.assertEqual(updated_reconciliation.alert_id, created.alert.alert_id)
         self.assertEqual(updated_reconciliation.ingest_disposition, "updated")
@@ -539,19 +575,19 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(updated_reconciliation.last_seen_at, updated_seen)
         self.assertEqual(
             updated_reconciliation.subject_linkage["finding_ids"],
-            ["finding-001", "finding-002", "finding-003"],
+            ("finding-001", "finding-002", "finding-003"),
         )
         self.assertEqual(
             updated_reconciliation.subject_linkage["analytic_signal_ids"],
-            ["signal-001", "signal-002", "signal-003"],
+            ("signal-001", "signal-002", "signal-003"),
         )
         self.assertEqual(
             updated_reconciliation.subject_linkage["substrate_detection_record_ids"],
-            [
+            (
                 "substrate-detection-001",
                 "substrate-detection-002",
                 "substrate-detection-003",
-            ],
+            ),
         )
         self.assertEqual(deduplicated_reconciliation.alert_id, created.alert.alert_id)
         self.assertEqual(
@@ -561,19 +597,19 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(deduplicated_reconciliation.last_seen_at, duplicate_seen)
         self.assertEqual(
             deduplicated_reconciliation.subject_linkage["finding_ids"],
-            ["finding-001", "finding-002", "finding-003"],
+            ("finding-001", "finding-002", "finding-003"),
         )
         self.assertEqual(
             deduplicated_reconciliation.subject_linkage["analytic_signal_ids"],
-            ["signal-001", "signal-002", "signal-003"],
+            ("signal-001", "signal-002", "signal-003"),
         )
         self.assertEqual(
             deduplicated_reconciliation.subject_linkage["substrate_detection_record_ids"],
-            [
+            (
                 "substrate-detection-001",
                 "substrate-detection-002",
                 "substrate-detection-003",
-            ],
+            ),
         )
 
         signal_one = service.get_record(AnalyticSignalRecord, "signal-001")
@@ -645,15 +681,15 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(reconciliation.ingest_disposition, "restated")
         self.assertEqual(
             reconciliation.subject_linkage["finding_ids"],
-            ["finding-001"],
+            ("finding-001",),
         )
         self.assertEqual(
             reconciliation.subject_linkage["analytic_signal_ids"],
-            ["signal-001", "signal-002"],
+            ("signal-001", "signal-002"),
         )
         self.assertEqual(
             reconciliation.subject_linkage["substrate_detection_record_ids"],
-            ["substrate-detection-001", "substrate-detection-002"],
+            ("substrate-detection-001", "substrate-detection-002"),
         )
 
     def test_service_rejects_naive_intake_timestamps(self) -> None:
@@ -770,11 +806,11 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         )
         self.assertEqual(
             reconciliation.subject_linkage["analytic_signal_ids"],
-            [admitted.alert.analytic_signal_id],
+            (admitted.alert.analytic_signal_id,),
         )
         self.assertEqual(
             reconciliation.subject_linkage["substrate_detection_record_ids"],
-            [],
+            (),
         )
 
     def test_service_inspects_analytic_signal_records_as_first_class_records(self) -> None:
