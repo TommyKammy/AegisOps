@@ -30,7 +30,7 @@ required_phrases=(
   '- a live internal control-plane service rooted under `control-plane/`;'
   '- materialization of authoritative AegisOps control-plane records in the approved PostgreSQL-backed boundary;'
   '- explicit ingestion or synchronization logic for upstream OpenSearch findings or alert-like analytic signals into control-plane-owned records;'
-  '- explicit reconciliation logic that can compare control-plane intent with n8n execution outcomes using stable identifiers;'
+  '- explicit reconciliation logic that can compare control-plane intent with reviewed automation-substrate or executor outcomes using stable identifiers;'
   '- analyst UI or case-management frontend surfaces;'
   '- live telemetry expansion or source-onboarding growth;'
   '- AI runtime features, prompt execution, or AI-driven workflow authority;'
