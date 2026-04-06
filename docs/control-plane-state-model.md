@@ -45,10 +45,12 @@ Substrate-native detection records and admitted analytic signals remain upstream
 
 The minimum control-plane record families for this baseline are Alert, Case, Evidence, Observation, Lead, Recommendation, Approval Decision, Action Request, Hunt, Hunt Run, AI Trace, Reconciliation, and the execution-plane Action Execution record that must later reconcile with them.
 
+Analytic signals remain admitted vendor-neutral intake primitives with stable `analytic_signal_id` linkage and first-class control-plane persistence, but they remain distinct from the downstream analyst work-tracking record families listed above.
+
 At the approved baseline level, the source-of-truth expectations are:
 
-- substrate detection records and findings remain upstream substrate or analytics-plane facts, while analytic signals remain the admitted vendor-neutral intake primitive for control-plane routing;
-- alerts, cases, evidence, observations, leads, recommendations, approvals, action requests, hunts, hunt runs, AI traces, and reconciliation records are platform-owned control records whose authoritative home is the AegisOps control-plane runtime boundary with the reviewed PostgreSQL contract rooted under `postgres/control-plane/`;
+- substrate detection records and findings remain upstream substrate or analytics-plane facts, while analytic signals remain the admitted vendor-neutral intake primitive for control-plane routing and are preserved as first-class control-plane records;
+- analytic signals, alerts, cases, evidence, observations, leads, recommendations, approvals, action requests, hunts, hunt runs, AI traces, and reconciliation records are platform-owned control records whose authoritative home is the AegisOps control-plane runtime boundary with the reviewed PostgreSQL contract rooted under `postgres/control-plane/`;
 - action execution state remains execution-plane runtime state owned by n8n and backed by PostgreSQL; and
 - evidence links across those records must be explicit rather than reconstructed from whichever component happens to log the most detail.
 

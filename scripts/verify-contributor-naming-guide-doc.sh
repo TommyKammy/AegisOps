@@ -54,7 +54,13 @@ if ! grep -Fq "docs/requirements-baseline.md" "${doc_path}"; then
   exit 1
 fi
 
-if rg -n '\b(wazuh|elastic|elk|securityonion|security onion|splunk|sentinel)\b' "${doc_path}" >/dev/null; then
+legacy_pattern='\b(wazuh|elastic|elk|securityonion|security onion|splunk|sentinel)\b'
+if command -v rg >/dev/null 2>&1; then
+  if rg -ni "${legacy_pattern}" "${doc_path}" >/dev/null; then
+    echo "Contributor naming guide contains legacy product naming." >&2
+    exit 1
+  fi
+elif grep -Eni "${legacy_pattern}" "${doc_path}" >/dev/null; then
   echo "Contributor naming guide contains legacy product naming." >&2
   exit 1
 fi

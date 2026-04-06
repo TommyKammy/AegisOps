@@ -33,6 +33,22 @@ class AlertRecord(ControlPlaneRecord):
 
 
 @dataclass(frozen=True)
+class AnalyticSignalRecord(ControlPlaneRecord):
+    record_family: ClassVar[str] = "analytic_signal"
+    identifier_field: ClassVar[str] = "analytic_signal_id"
+
+    analytic_signal_id: str
+    substrate_detection_record_id: str | None
+    finding_id: str | None
+    alert_ids: tuple[str, ...]
+    case_ids: tuple[str, ...]
+    correlation_key: str
+    first_seen_at: datetime | None
+    last_seen_at: datetime | None
+    lifecycle_state: str
+
+
+@dataclass(frozen=True)
 class CaseRecord(ControlPlaneRecord):
     record_family: ClassVar[str] = "case"
     identifier_field: ClassVar[str] = "case_id"
@@ -226,6 +242,7 @@ class ReconciliationRecord(ControlPlaneRecord):
 
 AnyControlPlaneRecord = Union[
     AlertRecord,
+    AnalyticSignalRecord,
     CaseRecord,
     EvidenceRecord,
     ObservationRecord,

@@ -13,6 +13,7 @@ from .config import RuntimeConfig
 from .models import (
     AITraceRecord,
     ActionRequestRecord,
+    AnalyticSignalRecord,
     AlertRecord,
     ApprovalDecisionRecord,
     CaseRecord,
@@ -110,6 +111,7 @@ RECORD_TYPES_BY_FAMILY: dict[str, Type[ControlPlaneRecord]] = {
     record_type.record_family: record_type
     for record_type in (
         AlertRecord,
+        AnalyticSignalRecord,
         CaseRecord,
         EvidenceRecord,
         ObservationRecord,
@@ -231,6 +233,7 @@ class AegisOpsControlPlaneService:
         *,
         finding_id: str,
         analytic_signal_id: str | None,
+        substrate_detection_record_id: str | None = None,
         correlation_key: str,
         first_seen_at: datetime,
         last_seen_at: datetime,
@@ -262,6 +265,10 @@ class AegisOpsControlPlaneService:
             linked_signal_ids = (
                 (analytic_signal_id,) if analytic_signal_id is not None else tuple()
             )
+            linked_substrate_detection_ids = self._merge_linked_ids(
+                (),
+                substrate_detection_record_id,
+            )
             persisted_first_seen = first_seen_at
             persisted_last_seen = last_seen_at
         else:
@@ -274,6 +281,9 @@ class AegisOpsControlPlaneService:
             existing_signal_ids = latest_reconciliation.subject_linkage.get(
                 "analytic_signal_ids"
             )
+            existing_substrate_detection_ids = latest_reconciliation.subject_linkage.get(
+                "substrate_detection_record_ids"
+            )
             linked_finding_ids = self._merge_linked_ids(
                 existing_finding_ids,
                 finding_id,
@@ -281,6 +291,10 @@ class AegisOpsControlPlaneService:
             linked_signal_ids = self._merge_linked_ids(
                 existing_signal_ids,
                 analytic_signal_id,
+            )
+            linked_substrate_detection_ids = self._merge_linked_ids(
+                existing_substrate_detection_ids,
+                substrate_detection_record_id,
             )
             persisted_first_seen = min(
                 latest_reconciliation.first_seen_at or first_seen_at,
@@ -310,11 +324,50 @@ class AegisOpsControlPlaneService:
             else:
                 disposition = "restated"
 
+        if analytic_signal_id is not None:
+            existing_signal = self._store.get(AnalyticSignalRecord, analytic_signal_id)
+            signal_alert_ids = self._merge_linked_ids(
+                existing_signal.alert_ids if existing_signal is not None else (),
+                alert.alert_id,
+            )
+            signal_case_ids = self._merge_linked_ids(
+                existing_signal.case_ids if existing_signal is not None else (),
+                alert.case_id,
+            )
+            signal_first_seen = first_seen_at
+            if existing_signal is not None and existing_signal.first_seen_at is not None:
+                signal_first_seen = min(existing_signal.first_seen_at, first_seen_at)
+            signal_last_seen = last_seen_at
+            if existing_signal is not None and existing_signal.last_seen_at is not None:
+                signal_last_seen = max(existing_signal.last_seen_at, last_seen_at)
+            self.persist_record(
+                AnalyticSignalRecord(
+                    analytic_signal_id=analytic_signal_id,
+                    substrate_detection_record_id=(
+                        substrate_detection_record_id
+                        if substrate_detection_record_id is not None
+                        else (
+                            existing_signal.substrate_detection_record_id
+                            if existing_signal is not None
+                            else None
+                        )
+                    ),
+                    finding_id=finding_id,
+                    alert_ids=signal_alert_ids,
+                    case_ids=signal_case_ids,
+                    correlation_key=correlation_key,
+                    first_seen_at=signal_first_seen,
+                    last_seen_at=signal_last_seen,
+                    lifecycle_state="active",
+                )
+            )
+
         reconciliation = self.persist_record(
             ReconciliationRecord(
                 reconciliation_id=self._next_identifier("reconciliation"),
                 subject_linkage={
                     "alert_ids": (alert.alert_id,),
+                    "substrate_detection_record_ids": linked_substrate_detection_ids,
                     "finding_ids": linked_finding_ids,
                     "analytic_signal_ids": linked_signal_ids,
                 },

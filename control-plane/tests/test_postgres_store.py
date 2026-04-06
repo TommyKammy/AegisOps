@@ -15,6 +15,7 @@ from aegisops_control_plane.adapters.postgres import PostgresControlPlaneStore
 from aegisops_control_plane.models import (
     AITraceRecord,
     ActionRequestRecord,
+    AnalyticSignalRecord,
     AlertRecord,
     ApprovalDecisionRecord,
     CaseRecord,
@@ -57,6 +58,17 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
                 analytic_signal_id="signal-001",
                 case_id="case-001",
                 lifecycle_state="investigating",
+            ),
+            AnalyticSignalRecord(
+                analytic_signal_id="signal-001",
+                substrate_detection_record_id="substrate-detection-001",
+                finding_id="finding-001",
+                alert_ids=("alert-001",),
+                case_ids=("case-001",),
+                correlation_key="claim:host-001:privilege-escalation",
+                first_seen_at=timestamp,
+                last_seen_at=timestamp,
+                lifecycle_state="active",
             ),
             CaseRecord(
                 case_id="case-001",
@@ -186,17 +198,18 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
 
         expected_records = [
             (AlertRecord, "alert-001", records[0]),
-            (CaseRecord, "case-001", records[1]),
-            (EvidenceRecord, "evidence-001", records[2]),
-            (ObservationRecord, "observation-001", records[3]),
-            (LeadRecord, "lead-001", records[4]),
-            (RecommendationRecord, "recommendation-001", records[5]),
-            (ApprovalDecisionRecord, "approval-001", records[6]),
-            (ActionRequestRecord, "action-request-001", records[7]),
-            (HuntRecord, "hunt-001", records[8]),
-            (HuntRunRecord, "hunt-run-001", records[9]),
-            (AITraceRecord, "ai-trace-001", records[10]),
-            (ReconciliationRecord, "reconciliation-001", records[11]),
+            (AnalyticSignalRecord, "signal-001", records[1]),
+            (CaseRecord, "case-001", records[2]),
+            (EvidenceRecord, "evidence-001", records[3]),
+            (ObservationRecord, "observation-001", records[4]),
+            (LeadRecord, "lead-001", records[5]),
+            (RecommendationRecord, "recommendation-001", records[6]),
+            (ApprovalDecisionRecord, "approval-001", records[7]),
+            (ActionRequestRecord, "action-request-001", records[8]),
+            (HuntRecord, "hunt-001", records[9]),
+            (HuntRunRecord, "hunt-run-001", records[10]),
+            (AITraceRecord, "ai-trace-001", records[11]),
+            (ReconciliationRecord, "reconciliation-001", records[12]),
         ]
 
         for record_type, record_id, expected_record in expected_records:
@@ -348,6 +361,22 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
                 ),
                 ReconciliationRecord,
                 "reconciliation-invalid",
+            ),
+            (
+                "blank analytic signal linkage",
+                AnalyticSignalRecord(
+                    analytic_signal_id="signal-invalid",
+                    substrate_detection_record_id="   ",
+                    finding_id="",
+                    alert_ids=(),
+                    case_ids=(),
+                    correlation_key="claim:host-001:privilege-escalation",
+                    first_seen_at=timestamp,
+                    last_seen_at=timestamp,
+                    lifecycle_state="active",
+                ),
+                AnalyticSignalRecord,
+                "signal-invalid",
             ),
             (
                 "invalid reconciliation ingest disposition",

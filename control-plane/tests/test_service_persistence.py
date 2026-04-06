@@ -13,6 +13,7 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 from aegisops_control_plane.config import RuntimeConfig
 from aegisops_control_plane.models import (
     ActionRequestRecord,
+    AnalyticSignalRecord,
     AlertRecord,
     ReconciliationRecord,
 )
@@ -243,6 +244,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         created = service.ingest_finding_alert(
             finding_id="finding-001",
             analytic_signal_id="signal-001",
+            substrate_detection_record_id="substrate-detection-001",
             correlation_key="claim:host-001:privilege-escalation",
             first_seen_at=first_seen,
             last_seen_at=first_seen,
@@ -250,6 +252,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         restated = service.ingest_finding_alert(
             finding_id="finding-002",
             analytic_signal_id="signal-002",
+            substrate_detection_record_id="substrate-detection-002",
             correlation_key="claim:host-001:privilege-escalation",
             first_seen_at=first_seen,
             last_seen_at=restated_seen,
@@ -257,6 +260,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         updated = service.ingest_finding_alert(
             finding_id="finding-003",
             analytic_signal_id="signal-003",
+            substrate_detection_record_id="substrate-detection-003",
             correlation_key="claim:host-001:privilege-escalation",
             first_seen_at=updated_seen,
             last_seen_at=updated_seen,
@@ -265,6 +269,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         deduplicated = service.ingest_finding_alert(
             finding_id="finding-003",
             analytic_signal_id="signal-003",
+            substrate_detection_record_id="substrate-detection-003",
             correlation_key="claim:host-001:privilege-escalation",
             first_seen_at=updated_seen,
             last_seen_at=duplicate_seen,
@@ -316,6 +321,10 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             restated_reconciliation.subject_linkage["analytic_signal_ids"],
             ["signal-001", "signal-002"],
         )
+        self.assertEqual(
+            restated_reconciliation.subject_linkage["substrate_detection_record_ids"],
+            ["substrate-detection-001", "substrate-detection-002"],
+        )
         self.assertEqual(updated_reconciliation.alert_id, created.alert.alert_id)
         self.assertEqual(updated_reconciliation.ingest_disposition, "updated")
         self.assertEqual(updated_reconciliation.first_seen_at, first_seen)
@@ -327,6 +336,14 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(
             updated_reconciliation.subject_linkage["analytic_signal_ids"],
             ["signal-001", "signal-002", "signal-003"],
+        )
+        self.assertEqual(
+            updated_reconciliation.subject_linkage["substrate_detection_record_ids"],
+            [
+                "substrate-detection-001",
+                "substrate-detection-002",
+                "substrate-detection-003",
+            ],
         )
         self.assertEqual(deduplicated_reconciliation.alert_id, created.alert.alert_id)
         self.assertEqual(
@@ -341,6 +358,86 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(
             deduplicated_reconciliation.subject_linkage["analytic_signal_ids"],
             ["signal-001", "signal-002", "signal-003"],
+        )
+        self.assertEqual(
+            deduplicated_reconciliation.subject_linkage["substrate_detection_record_ids"],
+            [
+                "substrate-detection-001",
+                "substrate-detection-002",
+                "substrate-detection-003",
+            ],
+        )
+
+        signal_one = service.get_record(AnalyticSignalRecord, "signal-001")
+        signal_two = service.get_record(AnalyticSignalRecord, "signal-002")
+        signal_three = service.get_record(AnalyticSignalRecord, "signal-003")
+
+        self.assertEqual(signal_one.alert_ids, (created.alert.alert_id,))
+        self.assertEqual(signal_one.case_ids, ())
+        self.assertEqual(signal_one.finding_id, "finding-001")
+        self.assertEqual(
+            signal_one.substrate_detection_record_id,
+            "substrate-detection-001",
+        )
+        self.assertEqual(signal_one.correlation_key, "claim:host-001:privilege-escalation")
+        self.assertEqual(signal_one.first_seen_at, first_seen)
+        self.assertEqual(signal_one.last_seen_at, first_seen)
+
+        self.assertEqual(signal_two.alert_ids, (created.alert.alert_id,))
+        self.assertEqual(signal_two.finding_id, "finding-002")
+        self.assertEqual(
+            signal_two.substrate_detection_record_id,
+            "substrate-detection-002",
+        )
+        self.assertEqual(signal_two.first_seen_at, first_seen)
+        self.assertEqual(signal_two.last_seen_at, restated_seen)
+
+        self.assertEqual(signal_three.alert_ids, (created.alert.alert_id,))
+        self.assertEqual(signal_three.finding_id, "finding-003")
+        self.assertEqual(
+            signal_three.substrate_detection_record_id,
+            "substrate-detection-003",
+        )
+        self.assertEqual(signal_three.first_seen_at, updated_seen)
+        self.assertEqual(signal_three.last_seen_at, duplicate_seen)
+
+    def test_service_inspects_analytic_signal_records_as_first_class_records(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        analytic_signal = AnalyticSignalRecord(
+            analytic_signal_id="signal-001",
+            substrate_detection_record_id="substrate-detection-001",
+            finding_id="finding-001",
+            alert_ids=("alert-001",),
+            case_ids=("case-001",),
+            correlation_key="claim:host-001:privilege-escalation",
+            first_seen_at=datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc),
+            last_seen_at=datetime(2026, 4, 5, 12, 15, tzinfo=timezone.utc),
+            lifecycle_state="active",
+        )
+
+        service.persist_record(analytic_signal)
+
+        self.assertEqual(
+            service.get_record(AnalyticSignalRecord, "signal-001"),
+            analytic_signal,
+        )
+
+        inspection = service.inspect_records("analytic_signal")
+
+        self.assertTrue(inspection.read_only)
+        self.assertEqual(inspection.record_family, "analytic_signal")
+        self.assertEqual(inspection.total_records, 1)
+        self.assertEqual(
+            inspection.records[0]["analytic_signal_id"],
+            "signal-001",
+        )
+        self.assertEqual(
+            inspection.records[0]["substrate_detection_record_id"],
+            "substrate-detection-001",
         )
 
     def test_service_records_execution_correlation_mismatch_states_separately(self) -> None:
