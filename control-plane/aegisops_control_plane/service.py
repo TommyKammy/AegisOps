@@ -7,12 +7,12 @@ import uuid
 from typing import Mapping, Protocol, Type, TypeVar
 
 from .adapters.n8n import N8NReconciliationAdapter
-from .adapters.opensearch import OpenSearchSignalAdapter
 from .adapters.postgres import PostgresControlPlaneStore
 from .config import RuntimeConfig
 from .models import (
     AITraceRecord,
     ActionRequestRecord,
+    AnalyticSignalAdmission,
     AnalyticSignalRecord,
     AlertRecord,
     ApprovalDecisionRecord,
@@ -22,6 +22,7 @@ from .models import (
     HuntRecord,
     HuntRunRecord,
     LeadRecord,
+    NativeDetectionRecord,
     ObservationRecord,
     ReconciliationRecord,
     RecommendationRecord,
@@ -42,6 +43,16 @@ class ControlPlaneStore(Protocol):
         ...
 
     def list(self, record_type: Type[RecordT]) -> tuple[RecordT, ...]:
+        ...
+
+
+class NativeDetectionRecordAdapter(Protocol):
+    substrate_key: str
+
+    def build_analytic_signal_admission(
+        self,
+        record: NativeDetectionRecord,
+    ) -> AnalyticSignalAdmission:
         ...
 
 
@@ -155,7 +166,6 @@ class AegisOpsControlPlaneService:
         store: ControlPlaneStore | None = None,
     ) -> None:
         self._config = config
-        self._signal_intake = OpenSearchSignalAdapter(config.opensearch_url)
         self._store = store or PostgresControlPlaneStore(config.postgres_dsn)
         self._reconciliation = N8NReconciliationAdapter(config.n8n_base_url)
 
@@ -166,12 +176,13 @@ class AegisOpsControlPlaneService:
             bind_port=self._config.port,
             postgres_dsn=self._store.dsn,
             persistence_mode=self._store.persistence_mode,
-            opensearch_url=self._signal_intake.base_url,
+            opensearch_url=self._config.opensearch_url,
             n8n_base_url=self._reconciliation.base_url,
             ownership_boundary={
                 "runtime_root": "control-plane/",
                 "postgres_contract_root": "postgres/control-plane/",
-                "signal_source": "opensearch/",
+                "native_detection_intake": "substrate-adapters/",
+                "admitted_signal_model": "control-plane/analytic-signals",
                 "execution_plane": "n8n/",
             },
         )
@@ -239,6 +250,53 @@ class AegisOpsControlPlaneService:
         last_seen_at: datetime,
         materially_new_work: bool = False,
     ) -> FindingAlertIngestResult:
+        return self._ingest_analytic_signal_admission(
+            AnalyticSignalAdmission(
+                finding_id=finding_id,
+                analytic_signal_id=analytic_signal_id,
+                substrate_detection_record_id=substrate_detection_record_id,
+                correlation_key=correlation_key,
+                first_seen_at=first_seen_at,
+                last_seen_at=last_seen_at,
+                materially_new_work=materially_new_work,
+            )
+        )
+
+    def ingest_native_detection_record(
+        self,
+        adapter: NativeDetectionRecordAdapter,
+        record: NativeDetectionRecord,
+    ) -> FindingAlertIngestResult:
+        if record.substrate_key != adapter.substrate_key:
+            raise ValueError(
+                "native detection record substrate does not match adapter boundary "
+                f"({record.substrate_key!r} != {adapter.substrate_key!r})"
+            )
+        admission = adapter.build_analytic_signal_admission(record)
+        if admission.substrate_detection_record_id is None:
+            admission = AnalyticSignalAdmission(
+                finding_id=admission.finding_id,
+                analytic_signal_id=admission.analytic_signal_id,
+                substrate_detection_record_id=record.native_record_id,
+                correlation_key=admission.correlation_key,
+                first_seen_at=admission.first_seen_at,
+                last_seen_at=admission.last_seen_at,
+                materially_new_work=admission.materially_new_work,
+            )
+        return self._ingest_analytic_signal_admission(admission)
+
+    def _ingest_analytic_signal_admission(
+        self,
+        admission: AnalyticSignalAdmission,
+    ) -> FindingAlertIngestResult:
+        finding_id = admission.finding_id
+        analytic_signal_id = admission.analytic_signal_id
+        substrate_detection_record_id = admission.substrate_detection_record_id
+        correlation_key = admission.correlation_key
+        first_seen_at = admission.first_seen_at
+        last_seen_at = admission.last_seen_at
+        materially_new_work = admission.materially_new_work
+
         existing_reconciliations = [
             record
             for record in self._store.list(ReconciliationRecord)

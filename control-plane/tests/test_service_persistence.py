@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import pathlib
 import sys
@@ -13,15 +14,60 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 from aegisops_control_plane.config import RuntimeConfig
 from aegisops_control_plane.models import (
     ActionRequestRecord,
+    AnalyticSignalAdmission,
     AnalyticSignalRecord,
     AlertRecord,
+    NativeDetectionRecord,
     ReconciliationRecord,
 )
-from aegisops_control_plane.service import AegisOpsControlPlaneService
+from aegisops_control_plane.service import (
+    AegisOpsControlPlaneService,
+    NativeDetectionRecordAdapter,
+)
 from postgres_test_support import make_store
 
 
 class ControlPlaneServicePersistenceTests(unittest.TestCase):
+    def test_service_admits_native_detection_records_via_substrate_adapter_boundary(self) -> None:
+        @dataclass(frozen=True)
+        class TestNativeRecordAdapter(NativeDetectionRecordAdapter):
+            substrate_key: str = "test-substrate"
+
+            def build_analytic_signal_admission(
+                self, record: NativeDetectionRecord
+            ) -> AnalyticSignalAdmission:
+                return AnalyticSignalAdmission(
+                    finding_id=f"finding::{record.native_record_id}",
+                    analytic_signal_id=f"signal::{record.native_record_id}",
+                    substrate_detection_record_id=record.native_record_id,
+                    correlation_key=record.correlation_key,
+                    first_seen_at=record.first_seen_at,
+                    last_seen_at=record.last_seen_at,
+                )
+
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+
+        admitted = service.ingest_native_detection_record(
+            TestNativeRecordAdapter(),
+            NativeDetectionRecord(
+                substrate_key="test-substrate",
+                native_record_id="native-001",
+                record_kind="alert",
+                correlation_key="claim:host-001:privilege-escalation",
+                first_seen_at=datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc),
+                last_seen_at=datetime(2026, 4, 5, 12, 15, tzinfo=timezone.utc),
+                metadata={"vendor": "test"},
+            ),
+        )
+
+        self.assertEqual(admitted.disposition, "created")
+        self.assertEqual(admitted.alert.finding_id, "finding::native-001")
+        self.assertEqual(admitted.alert.analytic_signal_id, "signal::native-001")
+
     def test_runtime_snapshot_reports_postgresql_authoritative_persistence_mode(self) -> None:
         service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops")
