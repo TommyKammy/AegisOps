@@ -37,6 +37,7 @@ AegisOps owns the authoritative platform records and policy decisions for:
 - Recommendation
 - Approval Decision
 - Action Request
+- Action Execution
 - Hunt
 - Hunt Run
 - AI Trace
@@ -44,7 +45,7 @@ AegisOps owns the authoritative platform records and policy decisions for:
 
 Upstream detections, findings, correlations, and product-native alerting artifacts from external substrates are treated as **Analytic Signals**.
 
-Analytic Signals are upstream inputs to AegisOps, not the durable system of record for analyst workflow, approval state, evidence custody, or reconciliation.
+Analytic Signals are upstream inputs to AegisOps, not the durable system of record for analyst workflow, approval state, evidence custody, action-execution state, or reconciliation.
 
 OpenSearch, Sigma, and n8n are **not** co-equal product cores for AegisOps.
 OpenSearch MAY be used as an optional or transitional analytics substrate.

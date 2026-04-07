@@ -106,6 +106,13 @@ remove_text_from_doc "${missing_analytic_signal_repo}" "Upstream detections, fin
 commit_fixture "${missing_analytic_signal_repo}"
 assert_fails_with "${missing_analytic_signal_repo}" "Upstream detections, findings, correlations, and product-native alerting artifacts from external substrates are treated as **Analytic Signals**."
 
+missing_action_execution_repo="${workdir}/missing-action-execution"
+create_repo "${missing_action_execution_repo}"
+write_canonical_doc "${missing_action_execution_repo}"
+remove_text_from_doc "${missing_action_execution_repo}" "- Action Execution"
+commit_fixture "${missing_action_execution_repo}"
+assert_fails_with "${missing_action_execution_repo}" "- Action Execution"
+
 missing_non_goal_repo="${workdir}/missing-non-goal"
 create_repo "${missing_non_goal_repo}"
 write_canonical_doc "${missing_non_goal_repo}"
