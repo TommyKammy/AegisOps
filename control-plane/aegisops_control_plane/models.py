@@ -212,6 +212,37 @@ class ActionRequestRecord(ControlPlaneRecord):
 
 
 @dataclass(frozen=True)
+class ActionExecutionRecord(ControlPlaneRecord):
+    record_family: ClassVar[str] = "action_execution"
+    identifier_field: ClassVar[str] = "action_execution_id"
+
+    action_execution_id: str
+    action_request_id: str
+    approval_decision_id: str
+    delegation_id: str
+    execution_surface_type: str
+    execution_surface_id: str
+    execution_run_id: str
+    idempotency_key: str
+    target_scope: Mapping[str, object]
+    approved_payload: Mapping[str, object]
+    payload_hash: str
+    delegated_at: datetime
+    expires_at: datetime | None
+    provenance: Mapping[str, object]
+    lifecycle_state: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "target_scope", _freeze_mapping(self.target_scope))
+        object.__setattr__(
+            self,
+            "approved_payload",
+            _freeze_mapping(self.approved_payload),
+        )
+        object.__setattr__(self, "provenance", _freeze_mapping(self.provenance))
+
+
+@dataclass(frozen=True)
 class HuntRecord(ControlPlaneRecord):
     record_family: ClassVar[str] = "hunt"
     identifier_field: ClassVar[str] = "hunt_id"
@@ -298,6 +329,7 @@ AnyControlPlaneRecord = Union[
     RecommendationRecord,
     ApprovalDecisionRecord,
     ActionRequestRecord,
+    ActionExecutionRecord,
     HuntRecord,
     HuntRunRecord,
     AITraceRecord,

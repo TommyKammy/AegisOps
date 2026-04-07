@@ -14,6 +14,7 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 from aegisops_control_plane.adapters.postgres import PostgresControlPlaneStore
 from aegisops_control_plane.models import (
     AITraceRecord,
+    ActionExecutionRecord,
     ActionRequestRecord,
     AnalyticSignalRecord,
     AlertRecord,
@@ -159,6 +160,23 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
                 expires_at=None,
                 lifecycle_state="approved",
             ),
+            ActionExecutionRecord(
+                action_execution_id="action-execution-001",
+                action_request_id="action-request-001",
+                approval_decision_id="approval-001",
+                delegation_id="delegation-001",
+                execution_surface_type="automation_substrate",
+                execution_surface_id="shuffle",
+                execution_run_id="shuffle-run-delegation-001",
+                idempotency_key="idempotency-001",
+                target_scope={"asset_id": "asset-001"},
+                approved_payload={"action_type": "notify_identity_owner"},
+                payload_hash="payload-hash-001",
+                delegated_at=timestamp,
+                expires_at=None,
+                provenance={"delegation_issuer": "control-plane-service"},
+                lifecycle_state="queued",
+            ),
             HuntRecord(
                 hunt_id="hunt-001",
                 hypothesis_statement="suspicious persistence attempt",
@@ -221,10 +239,11 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             (RecommendationRecord, "recommendation-001", records[6]),
             (ApprovalDecisionRecord, "approval-001", records[7]),
             (ActionRequestRecord, "action-request-001", records[8]),
-            (HuntRecord, "hunt-001", records[9]),
-            (HuntRunRecord, "hunt-run-001", records[10]),
-            (AITraceRecord, "ai-trace-001", records[11]),
-            (ReconciliationRecord, "reconciliation-001", records[12]),
+            (ActionExecutionRecord, "action-execution-001", records[9]),
+            (HuntRecord, "hunt-001", records[10]),
+            (HuntRunRecord, "hunt-run-001", records[11]),
+            (AITraceRecord, "ai-trace-001", records[12]),
+            (ReconciliationRecord, "reconciliation-001", records[13]),
         ]
 
         for record_type, record_id, expected_record in expected_records:

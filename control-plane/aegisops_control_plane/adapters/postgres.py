@@ -9,6 +9,7 @@ from typing import Any, Callable, Iterator, Mapping, Protocol, Type, TypeVar
 
 from ..models import (
     AITraceRecord,
+    ActionExecutionRecord,
     ActionRequestRecord,
     AnalyticSignalRecord,
     AlertRecord,
@@ -146,6 +147,16 @@ _LIFECYCLE_STATES_BY_FAMILY: dict[str, frozenset[str]] = {
             "unresolved",
         }
     ),
+    "action_execution": frozenset(
+        {
+            "queued",
+            "running",
+            "succeeded",
+            "failed",
+            "canceled",
+            "superseded",
+        }
+    ),
     "hunt": frozenset(
         {"draft", "active", "on_hold", "concluded", "closed", "superseded"}
     ),
@@ -207,6 +218,11 @@ _TABLES_BY_RECORD_TYPE: dict[Type[ControlPlaneRecord], TableConfig] = {
         ActionRequestRecord,
         "action_request_records",
         json_fields=frozenset({"target_scope", "policy_basis", "policy_evaluation"}),
+    ),
+    ActionExecutionRecord: TableConfig(
+        ActionExecutionRecord,
+        "action_execution_records",
+        json_fields=frozenset({"target_scope", "approved_payload", "provenance"}),
     ),
     HuntRecord: TableConfig(HuntRecord, "hunt_records"),
     HuntRunRecord: TableConfig(
@@ -311,6 +327,8 @@ def _validate_record(record: ControlPlaneRecord) -> None:
         return
     if isinstance(record, ActionRequestRecord):
         _require_any_linkage(record, ("case_id", "alert_id", "finding_id"))
+        return
+    if isinstance(record, ActionExecutionRecord):
         return
     if isinstance(record, ReconciliationRecord):
         _require_any_linkage(
