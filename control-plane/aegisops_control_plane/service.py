@@ -1331,7 +1331,11 @@ class AegisOpsControlPlaneService:
                     "matched approved action request to reviewed execution run"
                 )
 
-        if authoritative_execution is not None and latest_execution is not None:
+        if (
+            authoritative_execution is not None
+            and latest_execution is not None
+            and ingest_disposition == "matched"
+        ):
             reconciled_lifecycle_state = self._action_execution_lifecycle_from_status(
                 latest_execution.get("status"),
                 authoritative_execution.lifecycle_state,
