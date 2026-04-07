@@ -4,6 +4,8 @@ from contextlib import AbstractContextManager
 from collections import Counter
 from dataclasses import asdict, dataclass, fields
 from datetime import datetime, timezone
+import hashlib
+import json
 import uuid
 from typing import Mapping, Protocol, Type, TypeVar
 
@@ -222,6 +224,25 @@ def _record_to_dict(record: ControlPlaneRecord) -> dict[str, object]:
     }
 
 
+def _approved_payload_binding_hash(
+    *,
+    target_scope: Mapping[str, object],
+    approved_payload: Mapping[str, object],
+    execution_surface_type: str,
+    execution_surface_id: str,
+) -> str:
+    binding = _json_ready(
+        {
+            "approved_payload": approved_payload,
+            "execution_surface_id": execution_surface_id,
+            "execution_surface_type": execution_surface_type,
+            "target_scope": target_scope,
+        }
+    )
+    encoded = json.dumps(binding, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
 class AegisOpsControlPlaneService:
     """Minimal local runtime skeleton for the first control-plane service."""
 
@@ -284,48 +305,23 @@ class AegisOpsControlPlaneService:
             "delegation_issuer",
         )
         normalized_payload = self._require_mapping(approved_payload, "approved_payload")
-        action_request = self._store.get(ActionRequestRecord, action_request_id)
-        if action_request is None:
-            raise LookupError(f"Missing action request {action_request_id!r}")
-        if action_request.lifecycle_state != "approved":
-            raise ValueError(
-                f"Action request {action_request_id!r} is not approved "
-                f"(state={action_request.lifecycle_state!r})"
-            )
-        approval_decision_id = self._require_non_empty_string(
-            action_request.approval_decision_id,
-            "action_request.approval_decision_id",
-        )
-        approval_decision = self._store.get(ApprovalDecisionRecord, approval_decision_id)
-        if approval_decision is None:
-            raise LookupError(
-                f"Missing approval decision {approval_decision_id!r} for action request "
-                f"{action_request_id!r}"
-            )
-        if approval_decision.lifecycle_state != "approved":
-            raise ValueError(
-                f"Approval decision {approval_decision_id!r} is not approved "
-                f"(state={approval_decision.lifecycle_state!r})"
-            )
-        if approval_decision.payload_hash != action_request.payload_hash:
-            raise ValueError(
-                "approval decision payload_hash does not match action request payload_hash"
-            )
-        policy_evaluation = action_request.policy_evaluation
-        if policy_evaluation.get("execution_surface_type") != "automation_substrate":
-            raise ValueError(
-                "approved action request is not delegated through the automation substrate path"
-            )
-        if policy_evaluation.get("execution_surface_id") != "shuffle":
-            raise ValueError(
-                "approved action request is not routed to the reviewed shuffle adapter"
-            )
-        if action_request.expires_at is not None and delegated_at > action_request.expires_at:
-            raise ValueError(
-                f"Action request {action_request_id!r} expired before shuffle delegation"
-            )
-
         with self._store.transaction():
+            action_request, approval_decision = self._load_approved_delegation_context(
+                action_request_id=action_request_id,
+                approved_payload=normalized_payload,
+                delegated_at=delegated_at,
+                execution_surface_type="automation_substrate",
+                execution_surface_id="shuffle",
+                invalid_execution_surface_type_message=(
+                    "approved action request is not delegated through the automation "
+                    "substrate path"
+                ),
+                invalid_execution_surface_id_message=(
+                    "approved action request is not routed to the reviewed shuffle adapter"
+                ),
+                delegation_label="shuffle",
+            )
+            approval_decision_id = approval_decision.approval_decision_id
             for existing in self._store.list(ActionExecutionRecord):
                 if (
                     existing.action_request_id == action_request.action_request_id
@@ -392,48 +388,23 @@ class AegisOpsControlPlaneService:
             "delegation_issuer",
         )
         normalized_payload = self._require_mapping(approved_payload, "approved_payload")
-        action_request = self._store.get(ActionRequestRecord, action_request_id)
-        if action_request is None:
-            raise LookupError(f"Missing action request {action_request_id!r}")
-        if action_request.lifecycle_state != "approved":
-            raise ValueError(
-                f"Action request {action_request_id!r} is not approved "
-                f"(state={action_request.lifecycle_state!r})"
-            )
-        approval_decision_id = self._require_non_empty_string(
-            action_request.approval_decision_id,
-            "action_request.approval_decision_id",
-        )
-        approval_decision = self._store.get(ApprovalDecisionRecord, approval_decision_id)
-        if approval_decision is None:
-            raise LookupError(
-                f"Missing approval decision {approval_decision_id!r} for action request "
-                f"{action_request_id!r}"
-            )
-        if approval_decision.lifecycle_state != "approved":
-            raise ValueError(
-                f"Approval decision {approval_decision_id!r} is not approved "
-                f"(state={approval_decision.lifecycle_state!r})"
-            )
-        if approval_decision.payload_hash != action_request.payload_hash:
-            raise ValueError(
-                "approval decision payload_hash does not match action request payload_hash"
-            )
-        policy_evaluation = action_request.policy_evaluation
-        if policy_evaluation.get("execution_surface_type") != "executor":
-            raise ValueError(
-                "approved action request is not delegated through the isolated executor path"
-            )
-        if policy_evaluation.get("execution_surface_id") != "isolated-executor":
-            raise ValueError(
-                "approved action request is not routed to the reviewed isolated executor"
-            )
-        if action_request.expires_at is not None and delegated_at > action_request.expires_at:
-            raise ValueError(
-                f"Action request {action_request_id!r} expired before isolated executor delegation"
-            )
-
         with self._store.transaction():
+            action_request, approval_decision = self._load_approved_delegation_context(
+                action_request_id=action_request_id,
+                approved_payload=normalized_payload,
+                delegated_at=delegated_at,
+                execution_surface_type="executor",
+                execution_surface_id="isolated-executor",
+                invalid_execution_surface_type_message=(
+                    "approved action request is not delegated through the isolated "
+                    "executor path"
+                ),
+                invalid_execution_surface_id_message=(
+                    "approved action request is not routed to the reviewed isolated executor"
+                ),
+                delegation_label="isolated executor",
+            )
+            approval_decision_id = approval_decision.approval_decision_id
             for existing in self._store.list(ActionExecutionRecord):
                 if (
                     existing.action_request_id == action_request.action_request_id
@@ -1791,6 +1762,95 @@ class AegisOpsControlPlaneService:
     @staticmethod
     def _next_identifier(prefix: str) -> str:
         return f"{prefix}-{uuid.uuid4()}"
+
+    @staticmethod
+    def _require_exact_approved_payload_binding(
+        *,
+        action_request: ActionRequestRecord,
+        approval_decision: ApprovalDecisionRecord,
+        approved_payload: Mapping[str, object],
+        execution_surface_type: str,
+        execution_surface_id: str,
+    ) -> None:
+        if approval_decision.action_request_id != action_request.action_request_id:
+            raise ValueError(
+                "approved payload binding does not match approved action request and approval decision"
+            )
+        if approval_decision.target_snapshot != action_request.target_scope:
+            raise ValueError(
+                "approved payload binding does not match approved action request and approval decision"
+            )
+
+        payload_hash = _approved_payload_binding_hash(
+            target_scope=action_request.target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type=execution_surface_type,
+            execution_surface_id=execution_surface_id,
+        )
+        if (
+            payload_hash != action_request.payload_hash
+            or payload_hash != approval_decision.payload_hash
+        ):
+            raise ValueError(
+                "approved payload binding does not match approved action request and approval decision"
+            )
+
+    def _load_approved_delegation_context(
+        self,
+        *,
+        action_request_id: str,
+        approved_payload: Mapping[str, object],
+        delegated_at: datetime,
+        execution_surface_type: str,
+        execution_surface_id: str,
+        invalid_execution_surface_type_message: str,
+        invalid_execution_surface_id_message: str,
+        delegation_label: str,
+    ) -> tuple[ActionRequestRecord, ApprovalDecisionRecord]:
+        action_request = self._store.get(ActionRequestRecord, action_request_id)
+        if action_request is None:
+            raise LookupError(f"Missing action request {action_request_id!r}")
+        if action_request.lifecycle_state != "approved":
+            raise ValueError(
+                f"Action request {action_request_id!r} is not approved "
+                f"(state={action_request.lifecycle_state!r})"
+            )
+        approval_decision_id = self._require_non_empty_string(
+            action_request.approval_decision_id,
+            "action_request.approval_decision_id",
+        )
+        approval_decision = self._store.get(ApprovalDecisionRecord, approval_decision_id)
+        if approval_decision is None:
+            raise LookupError(
+                f"Missing approval decision {approval_decision_id!r} for action request "
+                f"{action_request_id!r}"
+            )
+        if approval_decision.lifecycle_state != "approved":
+            raise ValueError(
+                f"Approval decision {approval_decision_id!r} is not approved "
+                f"(state={approval_decision.lifecycle_state!r})"
+            )
+        if approval_decision.payload_hash != action_request.payload_hash:
+            raise ValueError(
+                "approval decision payload_hash does not match action request payload_hash"
+            )
+        policy_evaluation = action_request.policy_evaluation
+        if policy_evaluation.get("execution_surface_type") != execution_surface_type:
+            raise ValueError(invalid_execution_surface_type_message)
+        if policy_evaluation.get("execution_surface_id") != execution_surface_id:
+            raise ValueError(invalid_execution_surface_id_message)
+        if action_request.expires_at is not None and delegated_at > action_request.expires_at:
+            raise ValueError(
+                f"Action request {action_request_id!r} expired before {delegation_label} delegation"
+            )
+        self._require_exact_approved_payload_binding(
+            action_request=action_request,
+            approval_decision=approval_decision,
+            approved_payload=approved_payload,
+            execution_surface_type=execution_surface_type,
+            execution_surface_id=execution_surface_id,
+        )
+        return action_request, approval_decision
 
     @staticmethod
     def _alert_review_state(alert: AlertRecord) -> str:
