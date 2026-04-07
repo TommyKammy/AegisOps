@@ -153,7 +153,7 @@ Substrate detection records, analytic signals, workflow runs, and future case st
 | `Evidence` | Future AegisOps evidence control layer | Evidence custody and references belong to a distinct record family rather than workflow execution metadata. |
 | `Action Request` | Future AegisOps response planning and approval control layer | The request is the authoritative statement of intended response scope before execution. |
 | `Approval Decision` | Future AegisOps approval control layer | Approval state must remain distinct from both request definition and execution status. |
-| `Action Execution` | Future AegisOps response execution control layer | `Action Execution` is the authoritative AegisOps record for approved-versus-actual execution, while reviewed automation substrates and executor surfaces remain downstream evidence sources for receipts, run identifiers, and surface-local runtime detail. |
+| `Action Execution` | AegisOps control-plane action-execution record | `Action Execution` remains the authoritative control-plane record for approved-versus-actual execution, while reviewed automation substrates and executor surfaces contribute correlated run identifiers, receipts, step progress, and other surface-local runtime evidence. |
 | `Disposition` | The owner of the record being closed | Disposition belongs to the lifecycle authority of the finding, alert, case, or incident it classifies. |
 
 ## 5. Promotion and Correlation Rules

@@ -429,18 +429,18 @@ Minimum lifecycle states for an Action Execution record:
 
 | State | Meaning |
 | ---- | ---- |
-| `pending` | The approved execution was delegated, but the reviewed surface has not yet reported that the run started. |
+| `queued` | The approved execution was delegated and recorded, but the reviewed surface has not yet reported active execution. |
 | `running` | The reviewed surface reported that execution is actively in progress under the bound delegation context. |
 | `succeeded` | The observed run completed and reported a successful execution outcome, pending any later reconciliation updates. |
 | `failed` | The observed run completed with an execution failure or post-action verification failure under the current approved intent. |
 | `canceled` | The execution attempt was intentionally stopped before successful completion under operator or policy control. |
-| `timed_out` | The reviewed surface or control plane could not confirm completion before the bounded execution window expired. |
 | `superseded` | A newer execution record replaced this one for the same approved request after an explicit retry, re-drive, or recovery decision. |
-| `unresolved` | Operators cannot yet prove whether the observed run matched the approved intent closely enough to classify it as succeeded, failed, or canceled. |
 
 `Action Execution` records provide the authoritative control-plane home for approved-versus-actual execution state without turning workflow-local runtime logs or executor-local receipts into the system of record.
 
 They must preserve enough linkage to prove which approved request, approval decision, delegation, reviewed execution surface, downstream run, payload hash, and idempotency key produced the recorded outcome.
+
+Timeouts, stale execution evidence, and other cases where operators cannot yet prove whether observed execution satisfied the approved intent must remain explicit reconciliation outcomes unless and until the shipped action-execution runtime contract gains a corresponding first-class lifecycle state.
 
 ### 6.13 Reconciliation
 
