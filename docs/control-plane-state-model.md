@@ -41,13 +41,13 @@ The reviewed local control-plane runtime now reports `persistence_mode="postgres
 | `Hunt Run` | AegisOps control-plane hunt-run record | Each hunt run must preserve bounded scope, execution context, and outcome for one hunt iteration without replacing alerts or cases. |
 | `AI Trace` | AegisOps control-plane AI-trace record | AI trace records must preserve prompt, model, review, and linkage context without mutating evidence custody or analyst-owned dispositions. |
 | `Reconciliation` | AegisOps control-plane reconciliation record | Cross-system linkage, mismatch tracking, and resolution state must not dissolve into alert fields, case notes, or execution-surface metadata. |
-| `Action Execution` | Reviewed automation substrate or controlled executor surface | The execution surface owns execution-attempt state, step progress, and surface-specific runtime details for the reviewed automation-substrate or executor run. |
+| `Action Execution` | AegisOps control-plane action-execution record | `Action Execution` remains the authoritative control-plane record for approved-versus-actual execution, while reviewed automation substrates and executor surfaces contribute correlated run identifiers, receipts, step progress, and other surface-local runtime evidence. |
 
 Execution-surface runtime history must not become the implicit system of record for case state, approval state, or action-request intent.
 
 Substrate-native detection records and admitted analytic signals remain upstream reconciliation inputs, but they do not own downstream case, approval, or execution-policy state.
 
-The minimum control-plane record families for this baseline are Alert, Case, Evidence, Observation, Lead, Recommendation, Approval Decision, Action Request, Hunt, Hunt Run, AI Trace, Reconciliation, and the execution-plane Action Execution record that must later reconcile with them.
+The minimum control-plane record families for this baseline are Alert, Case, Evidence, Observation, Lead, Recommendation, Approval Decision, Action Request, Hunt, Hunt Run, AI Trace, Reconciliation, and Action Execution.
 
 Analytic signals remain admitted vendor-neutral intake primitives with stable `analytic_signal_id` linkage and first-class control-plane persistence, but they remain distinct from the downstream analyst work-tracking record families listed above.
 
@@ -56,8 +56,8 @@ Reviewed case-promotion for Wazuh-driven alerts must preserve that boundary: the
 At the approved baseline level, the source-of-truth expectations are:
 
 - substrate detection records and findings remain upstream substrate or analytics-plane facts, while analytic signals remain the admitted vendor-neutral intake primitive for control-plane routing and are preserved as first-class control-plane records;
-- analytic signals, alerts, cases, evidence, observations, leads, recommendations, approvals, action requests, hunts, hunt runs, AI traces, and reconciliation records are platform-owned control records whose authoritative home is the AegisOps control-plane runtime boundary with the reviewed PostgreSQL contract rooted under `postgres/control-plane/`;
-- action execution state remains execution-surface runtime state owned by the reviewed automation substrate or executor surface and backed by that surface's runtime store; and
+- analytic signals, alerts, cases, evidence, observations, leads, recommendations, approvals, action requests, hunts, hunt runs, AI traces, action-execution records, and reconciliation records are platform-owned control records whose authoritative home is the AegisOps control-plane runtime boundary with the reviewed PostgreSQL contract rooted under `postgres/control-plane/`;
+- reviewed automation substrates and executor surfaces remain the owners of workflow-local runtime state, queued jobs, step progress, receipts, retry artifacts internal to a running surface, and similar execution evidence that the control plane must correlate into authoritative `Action Execution` and `Reconciliation` records; and
 - evidence links across those records must be explicit rather than reconstructed from whichever component happens to log the most detail.
 
 ## 4. Approved Persistence Boundary
@@ -74,7 +74,7 @@ n8n metadata tables and workflow execution history must not become the authorita
 
 The approved ownership split for the reviewed PostgreSQL-backed boundary is:
 
-- AegisOps control-plane storage owns authoritative platform records, including alerts, cases, evidence, observations, leads, recommendations, approval decisions, action requests, hunts, hunt runs, AI traces, and reconciliation state that binds those records to analytics and execution outcomes.
+- AegisOps control-plane storage owns authoritative platform records, including alerts, cases, evidence, observations, leads, recommendations, approval decisions, action requests, hunts, hunt runs, AI traces, action-execution records, and reconciliation state that binds those records to analytics and execution outcomes.
 - n8n-owned PostgreSQL storage owns runtime workflow metadata, execution attempts, step progress, connector-local execution details, retry artifacts internal to a running workflow, and similar orchestration-engine state.
 - OpenSearch owns telemetry, findings, and OpenSearch-native analytic or alerting artifacts that act as upstream signals rather than downstream control-plane truth.
 

@@ -103,4 +103,11 @@ remove_text_from_doc "${missing_signal_repo}" "An analytic signal is the common 
 commit_fixture "${missing_signal_repo}"
 assert_fails_with "${missing_signal_repo}" "An analytic signal is the common upstream product primitive from which alert or case routing decisions begin."
 
+missing_action_execution_ownership_repo="${workdir}/missing-action-execution-ownership"
+create_repo "${missing_action_execution_ownership_repo}"
+write_canonical_doc "${missing_action_execution_ownership_repo}"
+remove_text_from_doc "${missing_action_execution_ownership_repo}" '| `Action Execution` | Future AegisOps response execution control layer | `Action Execution` is the authoritative AegisOps record for approved-versus-actual execution, while reviewed automation substrates and executor surfaces remain downstream evidence sources for receipts, run identifiers, and surface-local runtime detail. |'
+commit_fixture "${missing_action_execution_ownership_repo}"
+assert_fails_with "${missing_action_execution_ownership_repo}" '| `Action Execution` | Future AegisOps response execution control layer | `Action Execution` is the authoritative AegisOps record for approved-versus-actual execution, while reviewed automation substrates and executor surfaces remain downstream evidence sources for receipts, run identifiers, and surface-local runtime detail. |'
+
 echo "verify-secops-domain-model-doc tests passed"

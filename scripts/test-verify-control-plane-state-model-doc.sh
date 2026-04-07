@@ -173,10 +173,17 @@ create_repo "${stale_n8n_execution_surface_repo}"
 write_canonical_doc "${stale_n8n_execution_surface_repo}"
 replace_text_in_doc \
   "${stale_n8n_execution_surface_repo}" \
-  '| `Action Execution` | Reviewed automation substrate or controlled executor surface | The execution surface owns execution-attempt state, step progress, and surface-specific runtime details for the reviewed automation-substrate or executor run. |' \
+  '| `Action Execution` | AegisOps control-plane action-execution record | `Action Execution` remains the authoritative control-plane record for approved-versus-actual execution, while reviewed automation substrates and executor surfaces contribute correlated run identifiers, receipts, step progress, and other surface-local runtime evidence. |' \
   '| `Action Execution` | n8n execution plane with PostgreSQL-backed workflow state | n8n owns execution-attempt state, step progress, and connector-specific runtime details. |'
 commit_fixture "${stale_n8n_execution_surface_repo}"
-assert_fails_with "${stale_n8n_execution_surface_repo}" "| \`Action Execution\` | Reviewed automation substrate or controlled executor surface | The execution surface owns execution-attempt state, step progress, and surface-specific runtime details for the reviewed automation-substrate or executor run. |"
+assert_fails_with "${stale_n8n_execution_surface_repo}" "| \`Action Execution\` | AegisOps control-plane action-execution record | \`Action Execution\` remains the authoritative control-plane record for approved-versus-actual execution, while reviewed automation substrates and executor surfaces contribute correlated run identifiers, receipts, step progress, and other surface-local runtime evidence. |"
+
+missing_action_execution_authority_repo="${workdir}/missing-action-execution-authority"
+create_repo "${missing_action_execution_authority_repo}"
+write_canonical_doc "${missing_action_execution_authority_repo}"
+remove_text_from_doc "${missing_action_execution_authority_repo}" '| `Action Execution` | AegisOps control-plane action-execution record | `Action Execution` remains the authoritative control-plane record for approved-versus-actual execution, while reviewed automation substrates and executor surfaces contribute correlated run identifiers, receipts, step progress, and other surface-local runtime evidence. |'
+commit_fixture "${missing_action_execution_authority_repo}"
+assert_fails_with "${missing_action_execution_authority_repo}" '| `Action Execution` | AegisOps control-plane action-execution record | `Action Execution` remains the authoritative control-plane record for approved-versus-actual execution, while reviewed automation substrates and executor surfaces contribute correlated run identifiers, receipts, step progress, and other surface-local runtime evidence. |'
 
 stale_n8n_reconciliation_repo="${workdir}/stale-n8n-reconciliation"
 create_repo "${stale_n8n_reconciliation_repo}"

@@ -104,6 +104,32 @@ class WazuhAlertIngestContractDocsTests(unittest.TestCase):
         for term in required_terms:
             self.assertIn(term, automation_contract_text)
 
+    def test_action_execution_ownership_is_consistent_across_shared_docs(self) -> None:
+        domain_text = DOMAIN_MODEL_DOC.read_text(encoding="utf-8")
+        state_model_text = STATE_MODEL_DOC.read_text(encoding="utf-8")
+        automation_contract_text = AUTOMATION_CONTRACT_DOC.read_text(encoding="utf-8")
+
+        domain_ownership_line = (
+            "| `Action Execution` | Future AegisOps response execution control layer | "
+            "`Action Execution` is the authoritative AegisOps record for approved-versus-actual execution, "
+            "while reviewed automation substrates and executor surfaces remain downstream evidence sources "
+            "for receipts, run identifiers, and surface-local runtime detail. |"
+        )
+        state_model_ownership_line = (
+            "| `Action Execution` | AegisOps control-plane action-execution record | "
+            "`Action Execution` remains the authoritative control-plane record for approved-versus-actual execution, "
+            "while reviewed automation substrates and executor surfaces contribute correlated run identifiers, "
+            "receipts, step progress, and other surface-local runtime evidence. |"
+        )
+
+        self.assertIn(domain_ownership_line, domain_text)
+        self.assertIn(state_model_ownership_line, state_model_text)
+        self.assertIn(
+            "Execution-surface receipts, vendor run identifiers, and step logs are downstream evidence inputs. "
+            "They must not replace the AegisOps-owned `Action Execution` or `Reconciliation` records.",
+            automation_contract_text,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
