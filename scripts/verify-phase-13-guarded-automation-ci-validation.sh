@@ -118,6 +118,7 @@ require_test_name "${service_tests}" "test_service_rejects_shuffle_delegation_fo
 require_test_name "${service_tests}" "test_service_delegates_approved_high_risk_action_through_isolated_executor"
 require_test_name "${service_tests}" "test_service_reconciles_shuffle_run_back_into_authoritative_action_execution"
 require_test_name "${service_tests}" "test_service_reconciles_isolated_executor_run_back_into_authoritative_action_execution"
+require_test_name "${wazuh_contract_doc_tests}" "test_reconciliation_identity_is_consistent_with_delegation_contract"
 
 require_fixed_string "${workflow_path}" "      - name: Run Phase 13 workflow coverage guard"
 require_fixed_string "${workflow_path}" "      - name: Run Phase 13 guarded automation validation"
