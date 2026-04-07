@@ -10,6 +10,8 @@ This document defines baseline semantics, ownership boundaries, and state transi
 
 For the reviewed Wazuh-specific intake boundary, see `docs/wazuh-alert-ingest-contract.md`.
 
+For the reviewed downstream approval-bound delegation contract into automation substrates and executor surfaces, see `docs/automation-substrate-contract.md`.
+
 ## 2. Core Domain Objects
 
 | Object | Definition |
@@ -119,6 +121,8 @@ An action execution records the actual downstream attempt or completion state fo
 
 An `Action Execution` is not approval. Execution records what was attempted or completed in the execution plane after approval requirements were satisfied or an approved exception path allowed it.
 
+The reviewed delegation contract for carrying approved payload, idempotency, expiry, provenance, and execution-surface identity into downstream execution is defined in `docs/automation-substrate-contract.md`.
+
 `Disposition` is a classification outcome owned by the lifecycle of the record it closes. A finding disposition does not replace alert disposition, and a case disposition does not replace incident disposition.
 
 Substrate detection records, analytic signals, workflow runs, and future case state must remain separate records and must not be treated as interchangeable identifiers or lifecycle states.
@@ -149,7 +153,7 @@ Substrate detection records, analytic signals, workflow runs, and future case st
 | `Evidence` | Future AegisOps evidence control layer | Evidence custody and references belong to a distinct record family rather than workflow execution metadata. |
 | `Action Request` | Future AegisOps response planning and approval control layer | The request is the authoritative statement of intended response scope before execution. |
 | `Approval Decision` | Future AegisOps approval control layer | Approval state must remain distinct from both request definition and execution status. |
-| `Action Execution` | n8n execution plane with PostgreSQL-backed workflow state | n8n and its workflow state store own execution attempts and completion records, not the approval verdict. |
+| `Action Execution` | Reviewed automation substrate or controlled executor surface | The reviewed execution surface owns execution attempts and completion records, but it does not own the approval verdict or reconciliation truth. |
 | `Disposition` | The owner of the record being closed | Disposition belongs to the lifecycle authority of the finding, alert, case, or incident it classifies. |
 
 ## 5. Promotion and Correlation Rules

@@ -31,6 +31,7 @@ jobs:
           bash scripts/verify-compose-skeleton-validation.sh
           bash scripts/verify-compose-skeleton-overview-doc.sh
           bash scripts/verify-control-plane-state-model-doc.sh
+          bash scripts/verify-automation-substrate-contract-doc.sh
           bash scripts/verify-control-plane-schema-skeleton.sh
           bash scripts/verify-detection-lifecycle-and-rule-qa-framework.sh
           bash scripts/verify-documentation-ownership-map.sh
@@ -117,6 +118,7 @@ jobs:
           bash scripts/test-verify-proxy-compose-skeleton.sh
           bash scripts/test-verify-compose-skeleton-validation.sh
           bash scripts/test-verify-compose-skeleton-overview-doc.sh
+          bash scripts/test-verify-automation-substrate-contract-doc.sh
           bash scripts/test-verify-control-plane-state-model-doc.sh
           bash scripts/test-verify-control-plane-schema-skeleton.sh
           bash scripts/test-verify-ci-phase-5-workflow-coverage.sh

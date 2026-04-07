@@ -8,6 +8,8 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 CONTRACT_DOC = REPO_ROOT / "docs" / "wazuh-alert-ingest-contract.md"
 STATE_MODEL_DOC = REPO_ROOT / "docs" / "control-plane-state-model.md"
 DOMAIN_MODEL_DOC = REPO_ROOT / "docs" / "secops-domain-model.md"
+ACTION_SAFETY_DOC = REPO_ROOT / "docs" / "response-action-safety-model.md"
+AUTOMATION_CONTRACT_DOC = REPO_ROOT / "docs" / "automation-substrate-contract.md"
 
 
 class WazuhAlertIngestContractDocsTests(unittest.TestCase):
@@ -65,6 +67,42 @@ class WazuhAlertIngestContractDocsTests(unittest.TestCase):
         )
         for term in required_terms:
             self.assertIn(term, text)
+
+    def test_shared_docs_cross_link_to_the_reviewed_automation_contract(self) -> None:
+        contract_path = "`docs/automation-substrate-contract.md`"
+        self.assertTrue(
+            AUTOMATION_CONTRACT_DOC.exists(),
+            f"expected reviewed automation contract doc at {AUTOMATION_CONTRACT_DOC}",
+        )
+        automation_contract_text = AUTOMATION_CONTRACT_DOC.read_text(encoding="utf-8")
+
+        self.assertIn(
+            contract_path,
+            STATE_MODEL_DOC.read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            contract_path,
+            DOMAIN_MODEL_DOC.read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            contract_path,
+            ACTION_SAFETY_DOC.read_text(encoding="utf-8"),
+        )
+
+        required_terms = (
+            "Approved Automation Delegation Contract",
+            "delegation_id",
+            "action_request_id",
+            "approval_decision_id",
+            "execution_surface_type",
+            "execution_surface_id",
+            "idempotency_key",
+            "payload_hash",
+            "Action Execution",
+            "Reconciliation",
+        )
+        for term in required_terms:
+            self.assertIn(term, automation_contract_text)
 
 
 if __name__ == "__main__":
