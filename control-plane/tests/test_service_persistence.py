@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from contextlib import contextmanager
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import hashlib
 import json
 import pathlib
 import sys
+from typing import Callable, Iterator
 import unittest
 
 
@@ -56,6 +58,38 @@ def _approved_binding_hash(
     }
     encoded = json.dumps(binding, separators=(",", ":"), sort_keys=True).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+@dataclass
+class _TransactionMutationStore:
+    inner: object
+    mutate_once: Callable[[object], None]
+    _mutated: bool = False
+
+    @property
+    def dsn(self) -> str:
+        return self.inner.dsn
+
+    @property
+    def persistence_mode(self) -> str:
+        return self.inner.persistence_mode
+
+    def save(self, record: object) -> object:
+        return self.inner.save(record)
+
+    def get(self, record_type: object, record_id: str) -> object | None:
+        return self.inner.get(record_type, record_id)
+
+    def list(self, record_type: object) -> tuple[object, ...]:
+        return self.inner.list(record_type)
+
+    @contextmanager
+    def transaction(self) -> Iterator[None]:
+        with self.inner.transaction():
+            if not self._mutated:
+                self.mutate_once(self.inner)
+                self._mutated = True
+            yield
 
 
 class ControlPlaneServicePersistenceTests(unittest.TestCase):
@@ -2102,6 +2136,80 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             execution,
         )
 
+    def test_service_rechecks_shuffle_approval_inside_transaction(self) -> None:
+        inner_store, _ = make_store()
+        seed_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=inner_store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        approved_target_scope = {"asset_id": "workstation-001"}
+        approved_payload = {
+            "action_type": "notify_identity_owner",
+            "asset_id": "workstation-001",
+        }
+        payload_hash = _approved_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
+        approval_decision = ApprovalDecisionRecord(
+            approval_decision_id="approval-routine-tx-recheck-001",
+            action_request_id="action-request-routine-tx-recheck-001",
+            approver_identities=("approver-001",),
+            target_snapshot=approved_target_scope,
+            payload_hash=payload_hash,
+            decided_at=requested_at,
+            lifecycle_state="approved",
+        )
+        seed_service.persist_record(approval_decision)
+        seed_service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-routine-tx-recheck-001",
+                approval_decision_id="approval-routine-tx-recheck-001",
+                case_id="case-001",
+                alert_id="alert-001",
+                finding_id="finding-001",
+                idempotency_key="idempotency-routine-tx-recheck-001",
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=None,
+                lifecycle_state="approved",
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "shuffle",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+        store = _TransactionMutationStore(
+            inner=inner_store,
+            mutate_once=lambda transactional_store: transactional_store.save(
+                replace(approval_decision, lifecycle_state="rejected")
+            ),
+        )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "Approval decision 'approval-routine-tx-recheck-001' is not approved",
+        ):
+            service.delegate_approved_action_to_shuffle(
+                action_request_id="action-request-routine-tx-recheck-001",
+                approved_payload=approved_payload,
+                delegated_at=delegated_at,
+                delegation_issuer="control-plane-service",
+            )
+
+        self.assertEqual(inner_store.list(ActionExecutionRecord), ())
+
     def test_service_rejects_shuffle_delegation_when_payload_binding_drifts(
         self,
     ) -> None:
@@ -2387,6 +2495,70 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             service.get_record(ActionExecutionRecord, execution.action_execution_id),
             execution,
         )
+
+    def test_service_rejects_isolated_executor_delegation_for_cross_linked_approval(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        approved_target_scope = {"asset_id": "critical-host-002"}
+        approved_payload = {
+            "action_type": "disable_identity",
+            "asset_id": "critical-host-002",
+        }
+        payload_hash = _approved_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="executor",
+            execution_surface_id="isolated-executor",
+        )
+        service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-executor-cross-link-001",
+                action_request_id="action-request-executor-cross-link-other",
+                approver_identities=("approver-001",),
+                target_snapshot=approved_target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+            )
+        )
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-executor-cross-link-001",
+                approval_decision_id="approval-executor-cross-link-001",
+                case_id="case-001",
+                alert_id="alert-001",
+                finding_id="finding-001",
+                idempotency_key="idempotency-executor-cross-link-001",
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=None,
+                lifecycle_state="approved",
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "approval",
+                    "execution_surface_type": "executor",
+                    "execution_surface_id": "isolated-executor",
+                },
+            )
+        )
+
+        with self.assertRaisesRegex(ValueError, "approved payload binding does not match"):
+            service.delegate_approved_action_to_isolated_executor(
+                action_request_id="action-request-executor-cross-link-001",
+                approved_payload=approved_payload,
+                delegated_at=delegated_at,
+                delegation_issuer="control-plane-service",
+            )
+
+        self.assertEqual(store.list(ActionExecutionRecord), ())
 
     def test_service_rejects_isolated_executor_delegation_when_payload_binding_drifts(
         self,
