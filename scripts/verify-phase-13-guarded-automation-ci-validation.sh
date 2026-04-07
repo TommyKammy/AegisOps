@@ -37,8 +37,9 @@ require_fixed_string() {
 require_test_name() {
   local file_path="$1"
   local test_name="$2"
+  local pattern="^[[:space:]]*def[[:space:]]+${test_name}[[:space:]]*\\("
 
-  if ! grep -Fq -- "def ${test_name}" "${file_path}" >/dev/null; then
+  if ! grep -Eq -- "${pattern}" "${file_path}" >/dev/null; then
     echo "Missing required Phase 13 test in ${file_path}: ${test_name}" >&2
     exit 1
   fi
