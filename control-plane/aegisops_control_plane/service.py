@@ -4,6 +4,8 @@ from contextlib import AbstractContextManager
 from collections import Counter
 from dataclasses import asdict, dataclass, fields
 from datetime import datetime, timezone
+import hashlib
+import json
 import uuid
 from typing import Mapping, Protocol, Type, TypeVar
 
@@ -222,6 +224,25 @@ def _record_to_dict(record: ControlPlaneRecord) -> dict[str, object]:
     }
 
 
+def _approved_payload_binding_hash(
+    *,
+    target_scope: Mapping[str, object],
+    approved_payload: Mapping[str, object],
+    execution_surface_type: str,
+    execution_surface_id: str,
+) -> str:
+    binding = _json_ready(
+        {
+            "approved_payload": approved_payload,
+            "execution_surface_id": execution_surface_id,
+            "execution_surface_type": execution_surface_type,
+            "target_scope": target_scope,
+        }
+    )
+    encoded = json.dumps(binding, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
 class AegisOpsControlPlaneService:
     """Minimal local runtime skeleton for the first control-plane service."""
 
@@ -324,6 +345,13 @@ class AegisOpsControlPlaneService:
             raise ValueError(
                 f"Action request {action_request_id!r} expired before shuffle delegation"
             )
+        self._require_exact_approved_payload_binding(
+            action_request=action_request,
+            approval_decision=approval_decision,
+            approved_payload=normalized_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
 
         with self._store.transaction():
             for existing in self._store.list(ActionExecutionRecord):
@@ -432,6 +460,13 @@ class AegisOpsControlPlaneService:
             raise ValueError(
                 f"Action request {action_request_id!r} expired before isolated executor delegation"
             )
+        self._require_exact_approved_payload_binding(
+            action_request=action_request,
+            approval_decision=approval_decision,
+            approved_payload=normalized_payload,
+            execution_surface_type="executor",
+            execution_surface_id="isolated-executor",
+        )
 
         with self._store.transaction():
             for existing in self._store.list(ActionExecutionRecord):
@@ -1791,6 +1826,34 @@ class AegisOpsControlPlaneService:
     @staticmethod
     def _next_identifier(prefix: str) -> str:
         return f"{prefix}-{uuid.uuid4()}"
+
+    @staticmethod
+    def _require_exact_approved_payload_binding(
+        *,
+        action_request: ActionRequestRecord,
+        approval_decision: ApprovalDecisionRecord,
+        approved_payload: Mapping[str, object],
+        execution_surface_type: str,
+        execution_surface_id: str,
+    ) -> None:
+        if approval_decision.target_snapshot != action_request.target_scope:
+            raise ValueError(
+                "approved payload binding does not match approved action request and approval decision"
+            )
+
+        payload_hash = _approved_payload_binding_hash(
+            target_scope=action_request.target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type=execution_surface_type,
+            execution_surface_id=execution_surface_id,
+        )
+        if (
+            payload_hash != action_request.payload_hash
+            or payload_hash != approval_decision.payload_hash
+        ):
+            raise ValueError(
+                "approved payload binding does not match approved action request and approval decision"
+            )
 
     @staticmethod
     def _alert_review_state(alert: AlertRecord) -> str:

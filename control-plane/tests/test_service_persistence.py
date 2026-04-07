@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import hashlib
 import json
 import pathlib
 import sys
@@ -38,6 +39,23 @@ FIXTURES_ROOT = pathlib.Path(__file__).resolve().parent / "fixtures" / "wazuh"
 
 def _load_wazuh_fixture(name: str) -> dict[str, object]:
     return json.loads((FIXTURES_ROOT / name).read_text(encoding="utf-8"))
+
+
+def _approved_binding_hash(
+    *,
+    target_scope: dict[str, object],
+    approved_payload: dict[str, object],
+    execution_surface_type: str,
+    execution_surface_id: str,
+) -> str:
+    binding = {
+        "approved_payload": approved_payload,
+        "execution_surface_id": execution_surface_id,
+        "execution_surface_type": execution_surface_type,
+        "target_scope": target_scope,
+    }
+    encoded = json.dumps(binding, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 class ControlPlaneServicePersistenceTests(unittest.TestCase):
@@ -1680,13 +1698,24 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
         delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
         compared_at = datetime(2026, 4, 5, 12, 12, tzinfo=timezone.utc)
+        approved_target_scope = {"asset_id": "workstation-001"}
+        approved_payload = {
+            "action_type": "notify_identity_owner",
+            "asset_id": "workstation-001",
+        }
+        payload_hash = _approved_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
         service.persist_record(
             ApprovalDecisionRecord(
                 approval_decision_id="approval-routine-reconcile-001",
                 action_request_id="action-request-routine-reconcile-001",
                 approver_identities=("approver-001",),
-                target_snapshot={"asset_id": "workstation-001"},
-                payload_hash="payload-hash-routine-reconcile-001",
+                target_snapshot=approved_target_scope,
+                payload_hash=payload_hash,
                 decided_at=requested_at,
                 lifecycle_state="approved",
             )
@@ -1699,8 +1728,8 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 alert_id="alert-001",
                 finding_id="finding-001",
                 idempotency_key="idempotency-routine-reconcile-001",
-                target_scope={"asset_id": "workstation-001"},
-                payload_hash="payload-hash-routine-reconcile-001",
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
                 requested_at=requested_at,
                 expires_at=None,
                 lifecycle_state="approved",
@@ -1715,10 +1744,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         execution = service.delegate_approved_action_to_shuffle(
             action_request_id="action-request-routine-reconcile-001",
-            approved_payload={
-                "action_type": "notify_identity_owner",
-                "asset_id": "workstation-001",
-            },
+            approved_payload=approved_payload,
             delegated_at=delegated_at,
             delegation_issuer="control-plane-service",
             evidence_ids=("evidence-001",),
@@ -1781,13 +1807,24 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
         compared_at = datetime(2026, 4, 5, 12, 14, tzinfo=timezone.utc)
         expires_at = datetime(2026, 4, 5, 13, 0, tzinfo=timezone.utc)
+        approved_target_scope = {"asset_id": "critical-host-003"}
+        approved_payload = {
+            "action_type": "disable_identity",
+            "asset_id": "critical-host-003",
+        }
+        payload_hash = _approved_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="executor",
+            execution_surface_id="isolated-executor",
+        )
         service.persist_record(
             ApprovalDecisionRecord(
                 approval_decision_id="approval-executor-reconcile-001",
                 action_request_id="action-request-executor-reconcile-001",
                 approver_identities=("approver-001",),
-                target_snapshot={"asset_id": "critical-host-003"},
-                payload_hash="payload-hash-executor-reconcile-001",
+                target_snapshot=approved_target_scope,
+                payload_hash=payload_hash,
                 decided_at=requested_at,
                 lifecycle_state="approved",
             )
@@ -1800,8 +1837,8 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 alert_id="alert-001",
                 finding_id="finding-001",
                 idempotency_key="idempotency-executor-reconcile-001",
-                target_scope={"asset_id": "critical-host-003"},
-                payload_hash="payload-hash-executor-reconcile-001",
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
                 requested_at=requested_at,
                 expires_at=expires_at,
                 lifecycle_state="approved",
@@ -1816,10 +1853,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         execution = service.delegate_approved_action_to_isolated_executor(
             action_request_id="action-request-executor-reconcile-001",
-            approved_payload={
-                "action_type": "disable_identity",
-                "asset_id": "critical-host-003",
-            },
+            approved_payload=approved_payload,
             delegated_at=delegated_at,
             delegation_issuer="control-plane-service",
             evidence_ids=("evidence-002",),
@@ -1969,13 +2003,24 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
         delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
         expires_at = datetime(2026, 4, 5, 13, 0, tzinfo=timezone.utc)
+        approved_target_scope = {"asset_id": "workstation-001"}
+        approved_payload = {
+            "action_type": "notify_identity_owner",
+            "asset_id": "workstation-001",
+        }
+        payload_hash = _approved_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
         service.persist_record(
             ApprovalDecisionRecord(
                 approval_decision_id="approval-routine-001",
                 action_request_id="action-request-routine-001",
                 approver_identities=("approver-001",),
-                target_snapshot={"asset_id": "workstation-001"},
-                payload_hash="payload-hash-routine-001",
+                target_snapshot=approved_target_scope,
+                payload_hash=payload_hash,
                 decided_at=requested_at,
                 lifecycle_state="approved",
             )
@@ -1988,8 +2033,8 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 alert_id="alert-001",
                 finding_id="finding-001",
                 idempotency_key="idempotency-routine-001",
-                target_scope={"asset_id": "workstation-001"},
-                payload_hash="payload-hash-routine-001",
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
                 requested_at=requested_at,
                 expires_at=expires_at,
                 lifecycle_state="approved",
@@ -2013,10 +2058,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         execution = service.delegate_approved_action_to_shuffle(
             action_request_id="action-request-routine-001",
-            approved_payload={
-                "action_type": "notify_identity_owner",
-                "asset_id": "workstation-001",
-            },
+            approved_payload=approved_payload,
             delegated_at=delegated_at,
             delegation_issuer="control-plane-service",
             evidence_ids=("evidence-001",),
@@ -2036,7 +2078,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             execution.idempotency_key,
             "idempotency-routine-001",
         )
-        self.assertEqual(execution.payload_hash, "payload-hash-routine-001")
+        self.assertEqual(execution.payload_hash, payload_hash)
         self.assertEqual(
             execution.approved_payload,
             {
@@ -2059,6 +2101,73 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             service.get_record(ActionExecutionRecord, execution.action_execution_id),
             execution,
         )
+
+    def test_service_rejects_shuffle_delegation_when_payload_binding_drifts(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        approved_target_scope = {"asset_id": "workstation-001"}
+        approved_payload = {
+            "action_type": "notify_identity_owner",
+            "asset_id": "workstation-001",
+        }
+        payload_hash = _approved_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
+        service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-routine-mismatch-001",
+                action_request_id="action-request-routine-mismatch-001",
+                approver_identities=("approver-001",),
+                target_snapshot=approved_target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+            )
+        )
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-routine-mismatch-001",
+                approval_decision_id="approval-routine-mismatch-001",
+                case_id="case-001",
+                alert_id="alert-001",
+                finding_id="finding-001",
+                idempotency_key="idempotency-routine-mismatch-001",
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=None,
+                lifecycle_state="approved",
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "shuffle",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+
+        with self.assertRaisesRegex(ValueError, "approved payload binding does not match"):
+            service.delegate_approved_action_to_shuffle(
+                action_request_id="action-request-routine-mismatch-001",
+                approved_payload={
+                    "action_type": "notify_identity_owner",
+                    "asset_id": "workstation-999",
+                },
+                delegated_at=delegated_at,
+                delegation_issuer="control-plane-service",
+            )
+
+        self.assertEqual(store.list(ActionExecutionRecord), ())
 
     def test_service_rejects_shuffle_delegation_for_non_shuffle_execution_policy(
         self,
@@ -2124,13 +2233,24 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
         delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
         expires_at = datetime(2026, 4, 5, 13, 0, tzinfo=timezone.utc)
+        approved_target_scope = {"asset_id": "critical-host-002"}
+        approved_payload = {
+            "action_type": "disable_identity",
+            "asset_id": "critical-host-002",
+        }
+        payload_hash = _approved_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="executor",
+            execution_surface_id="isolated-executor",
+        )
         service.persist_record(
             ApprovalDecisionRecord(
                 approval_decision_id="approval-executor-002",
                 action_request_id="action-request-executor-002",
                 approver_identities=("approver-001",),
-                target_snapshot={"asset_id": "critical-host-002"},
-                payload_hash="payload-hash-executor-002",
+                target_snapshot=approved_target_scope,
+                payload_hash=payload_hash,
                 decided_at=requested_at,
                 lifecycle_state="approved",
             )
@@ -2143,8 +2263,8 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 alert_id="alert-001",
                 finding_id="finding-001",
                 idempotency_key="idempotency-executor-002",
-                target_scope={"asset_id": "critical-host-002"},
-                payload_hash="payload-hash-executor-002",
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
                 requested_at=requested_at,
                 expires_at=expires_at,
                 lifecycle_state="approved",
@@ -2168,10 +2288,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         execution = service.delegate_approved_action_to_isolated_executor(
             action_request_id="action-request-executor-002",
-            approved_payload={
-                "action_type": "disable_identity",
-                "asset_id": "critical-host-002",
-            },
+            approved_payload=approved_payload,
             delegated_at=delegated_at,
             delegation_issuer="control-plane-service",
             evidence_ids=("evidence-002",),
@@ -2182,7 +2299,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(execution.execution_surface_type, "executor")
         self.assertEqual(execution.execution_surface_id, "isolated-executor")
         self.assertEqual(execution.idempotency_key, "idempotency-executor-002")
-        self.assertEqual(execution.payload_hash, "payload-hash-executor-002")
+        self.assertEqual(execution.payload_hash, payload_hash)
         self.assertEqual(
             execution.approved_payload,
             {
@@ -2205,6 +2322,73 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             service.get_record(ActionExecutionRecord, execution.action_execution_id),
             execution,
         )
+
+    def test_service_rejects_isolated_executor_delegation_when_payload_binding_drifts(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        approved_target_scope = {"asset_id": "critical-host-002"}
+        approved_payload = {
+            "action_type": "disable_identity",
+            "asset_id": "critical-host-002",
+        }
+        payload_hash = _approved_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="executor",
+            execution_surface_id="isolated-executor",
+        )
+        service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-executor-mismatch-001",
+                action_request_id="action-request-executor-mismatch-001",
+                approver_identities=("approver-001",),
+                target_snapshot=approved_target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+            )
+        )
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-executor-mismatch-001",
+                approval_decision_id="approval-executor-mismatch-001",
+                case_id="case-001",
+                alert_id="alert-001",
+                finding_id="finding-001",
+                idempotency_key="idempotency-executor-mismatch-001",
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=None,
+                lifecycle_state="approved",
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "approval",
+                    "execution_surface_type": "executor",
+                    "execution_surface_id": "isolated-executor",
+                },
+            )
+        )
+
+        with self.assertRaisesRegex(ValueError, "approved payload binding does not match"):
+            service.delegate_approved_action_to_isolated_executor(
+                action_request_id="action-request-executor-mismatch-001",
+                approved_payload={
+                    "action_type": "disable_account",
+                    "asset_id": "critical-host-002",
+                },
+                delegated_at=delegated_at,
+                delegation_issuer="control-plane-service",
+            )
+
+        self.assertEqual(store.list(ActionExecutionRecord), ())
 
 
 if __name__ == "__main__":
