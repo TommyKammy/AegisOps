@@ -13,6 +13,7 @@ class RuntimeConfig:
     opensearch_url: str = "<set-me>"
     n8n_base_url: str = "<set-me>"
     shuffle_base_url: str = "<set-me>"
+    isolated_executor_base_url: str = "<set-me>"
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> "RuntimeConfig":
@@ -41,5 +42,9 @@ class RuntimeConfig:
             shuffle_base_url=source.get(
                 "AEGISOPS_CONTROL_PLANE_SHUFFLE_BASE_URL",
                 cls.shuffle_base_url,
+            ),
+            isolated_executor_base_url=source.get(
+                "AEGISOPS_CONTROL_PLANE_ISOLATED_EXECUTOR_BASE_URL",
+                cls.isolated_executor_base_url,
             ),
         )
