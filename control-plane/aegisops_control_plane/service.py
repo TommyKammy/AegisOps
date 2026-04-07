@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import uuid
 from typing import Mapping, Protocol, Type, TypeVar
 
+from .adapters.executor import IsolatedExecutorAdapter
 from .adapters.n8n import N8NReconciliationAdapter
 from .adapters.postgres import PostgresControlPlaneStore
 from .adapters.shuffle import ShuffleActionAdapter
@@ -72,6 +73,7 @@ class RuntimeSnapshot:
     opensearch_url: str
     n8n_base_url: str
     shuffle_base_url: str
+    isolated_executor_base_url: str
     ownership_boundary: dict[str, str]
 
     def to_dict(self) -> dict[str, object]:
@@ -232,6 +234,9 @@ class AegisOpsControlPlaneService:
         self._store = store or PostgresControlPlaneStore(config.postgres_dsn)
         self._reconciliation = N8NReconciliationAdapter(config.n8n_base_url)
         self._shuffle = ShuffleActionAdapter(config.shuffle_base_url)
+        self._isolated_executor = IsolatedExecutorAdapter(
+            config.isolated_executor_base_url
+        )
 
     def describe_runtime(self) -> RuntimeSnapshot:
         return RuntimeSnapshot(
@@ -243,12 +248,14 @@ class AegisOpsControlPlaneService:
             opensearch_url=self._config.opensearch_url,
             n8n_base_url=self._reconciliation.base_url,
             shuffle_base_url=self._shuffle.base_url,
+            isolated_executor_base_url=self._isolated_executor.base_url,
             ownership_boundary={
                 "runtime_root": "control-plane/",
                 "postgres_contract_root": "postgres/control-plane/",
                 "native_detection_intake": "substrate-adapters/",
                 "admitted_signal_model": "control-plane/analytic-signals",
-                "execution_plane": "shuffle/",
+                "routine_automation_substrate": "shuffle/",
+                "controlled_execution_surface": "executor/isolated-executor",
             },
         )
 
@@ -330,6 +337,114 @@ class AegisOpsControlPlaneService:
 
             delegation_id = self._next_identifier("delegation")
             receipt = self._shuffle.dispatch_approved_action(
+                delegation_id=delegation_id,
+                action_request_id=action_request.action_request_id,
+                approval_decision_id=approval_decision_id,
+                payload_hash=action_request.payload_hash,
+                idempotency_key=action_request.idempotency_key,
+                approved_payload=normalized_payload,
+                delegated_at=delegated_at,
+            )
+            provenance: dict[str, object] = {
+                "delegation_issuer": delegation_issuer,
+                "evidence_ids": evidence_ids,
+                "adapter": receipt.adapter,
+            }
+            if receipt.base_url.strip() and receipt.base_url != "<set-me>":
+                provenance["adapter_base_url"] = receipt.base_url
+
+            return self.persist_record(
+                ActionExecutionRecord(
+                    action_execution_id=self._next_identifier("action-execution"),
+                    action_request_id=action_request.action_request_id,
+                    approval_decision_id=approval_decision_id,
+                    delegation_id=delegation_id,
+                    execution_surface_type=receipt.execution_surface_type,
+                    execution_surface_id=receipt.execution_surface_id,
+                    execution_run_id=receipt.execution_run_id,
+                    idempotency_key=action_request.idempotency_key,
+                    target_scope=action_request.target_scope,
+                    approved_payload=normalized_payload,
+                    payload_hash=action_request.payload_hash,
+                    delegated_at=delegated_at,
+                    expires_at=action_request.expires_at,
+                    provenance=provenance,
+                    lifecycle_state="queued",
+                )
+            )
+
+    def delegate_approved_action_to_isolated_executor(
+        self,
+        *,
+        action_request_id: str,
+        approved_payload: Mapping[str, object],
+        delegated_at: datetime,
+        delegation_issuer: str,
+        evidence_ids: tuple[str, ...] = (),
+    ) -> ActionExecutionRecord:
+        delegated_at = self._require_aware_datetime(delegated_at, "delegated_at")
+        action_request_id = self._require_non_empty_string(
+            action_request_id,
+            "action_request_id",
+        )
+        delegation_issuer = self._require_non_empty_string(
+            delegation_issuer,
+            "delegation_issuer",
+        )
+        normalized_payload = self._require_mapping(approved_payload, "approved_payload")
+        action_request = self._store.get(ActionRequestRecord, action_request_id)
+        if action_request is None:
+            raise LookupError(f"Missing action request {action_request_id!r}")
+        if action_request.lifecycle_state != "approved":
+            raise ValueError(
+                f"Action request {action_request_id!r} is not approved "
+                f"(state={action_request.lifecycle_state!r})"
+            )
+        approval_decision_id = self._require_non_empty_string(
+            action_request.approval_decision_id,
+            "action_request.approval_decision_id",
+        )
+        approval_decision = self._store.get(ApprovalDecisionRecord, approval_decision_id)
+        if approval_decision is None:
+            raise LookupError(
+                f"Missing approval decision {approval_decision_id!r} for action request "
+                f"{action_request_id!r}"
+            )
+        if approval_decision.lifecycle_state != "approved":
+            raise ValueError(
+                f"Approval decision {approval_decision_id!r} is not approved "
+                f"(state={approval_decision.lifecycle_state!r})"
+            )
+        if approval_decision.payload_hash != action_request.payload_hash:
+            raise ValueError(
+                "approval decision payload_hash does not match action request payload_hash"
+            )
+        policy_evaluation = action_request.policy_evaluation
+        if policy_evaluation.get("execution_surface_type") != "executor":
+            raise ValueError(
+                "approved action request is not delegated through the isolated executor path"
+            )
+        if policy_evaluation.get("execution_surface_id") != "isolated-executor":
+            raise ValueError(
+                "approved action request is not routed to the reviewed isolated executor"
+            )
+        if action_request.expires_at is not None and delegated_at > action_request.expires_at:
+            raise ValueError(
+                f"Action request {action_request_id!r} expired before isolated executor delegation"
+            )
+
+        with self._store.transaction():
+            for existing in self._store.list(ActionExecutionRecord):
+                if (
+                    existing.action_request_id == action_request.action_request_id
+                    and existing.execution_surface_type == "executor"
+                    and existing.execution_surface_id == "isolated-executor"
+                    and existing.idempotency_key == action_request.idempotency_key
+                ):
+                    return existing
+
+            delegation_id = self._next_identifier("delegation")
+            receipt = self._isolated_executor.dispatch_approved_action(
                 delegation_id=delegation_id,
                 action_request_id=action_request.action_request_id,
                 approval_decision_id=approval_decision_id,

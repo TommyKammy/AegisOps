@@ -1924,6 +1924,99 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 delegation_issuer="control-plane-service",
             )
 
+    def test_service_delegates_approved_high_risk_action_through_isolated_executor(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        expires_at = datetime(2026, 4, 5, 13, 0, tzinfo=timezone.utc)
+        service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-executor-002",
+                action_request_id="action-request-executor-002",
+                approver_identities=("approver-001",),
+                target_snapshot={"asset_id": "critical-host-002"},
+                payload_hash="payload-hash-executor-002",
+                decided_at=requested_at,
+                lifecycle_state="approved",
+            )
+        )
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-executor-002",
+                approval_decision_id="approval-executor-002",
+                case_id="case-001",
+                alert_id="alert-001",
+                finding_id="finding-001",
+                idempotency_key="idempotency-executor-002",
+                target_scope={"asset_id": "critical-host-002"},
+                payload_hash="payload-hash-executor-002",
+                requested_at=requested_at,
+                expires_at=expires_at,
+                lifecycle_state="approved",
+                policy_basis={
+                    "severity": "critical",
+                    "target_scope": "single_asset",
+                    "action_reversibility": "irreversible",
+                    "asset_criticality": "critical",
+                    "identity_criticality": "high",
+                    "blast_radius": "organization",
+                    "execution_constraint": "requires_isolated_executor",
+                },
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "approval",
+                    "execution_surface_type": "executor",
+                    "execution_surface_id": "isolated-executor",
+                },
+            )
+        )
+
+        execution = service.delegate_approved_action_to_isolated_executor(
+            action_request_id="action-request-executor-002",
+            approved_payload={
+                "action_type": "disable_identity",
+                "asset_id": "critical-host-002",
+            },
+            delegated_at=delegated_at,
+            delegation_issuer="control-plane-service",
+            evidence_ids=("evidence-002",),
+        )
+
+        self.assertEqual(execution.action_request_id, "action-request-executor-002")
+        self.assertEqual(execution.approval_decision_id, "approval-executor-002")
+        self.assertEqual(execution.execution_surface_type, "executor")
+        self.assertEqual(execution.execution_surface_id, "isolated-executor")
+        self.assertEqual(execution.idempotency_key, "idempotency-executor-002")
+        self.assertEqual(execution.payload_hash, "payload-hash-executor-002")
+        self.assertEqual(
+            execution.approved_payload,
+            {
+                "action_type": "disable_identity",
+                "asset_id": "critical-host-002",
+            },
+        )
+        self.assertEqual(
+            execution.provenance,
+            {
+                "delegation_issuer": "control-plane-service",
+                "evidence_ids": ("evidence-002",),
+                "adapter": "isolated-executor",
+            },
+        )
+        self.assertEqual(execution.lifecycle_state, "queued")
+        self.assertTrue(execution.delegation_id.startswith("delegation-"))
+        self.assertTrue(execution.execution_run_id.startswith("executor-run-"))
+        self.assertEqual(
+            service.get_record(ActionExecutionRecord, execution.action_execution_id),
+            execution,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
