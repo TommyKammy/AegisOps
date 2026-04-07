@@ -2169,6 +2169,71 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         self.assertEqual(store.list(ActionExecutionRecord), ())
 
+    def test_service_rejects_shuffle_delegation_when_target_scope_drifts(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        approval_target_scope = {"asset_id": "workstation-001"}
+        requested_target_scope = {"asset_id": "workstation-777"}
+        approved_payload = {
+            "action_type": "notify_identity_owner",
+            "asset_id": "workstation-001",
+        }
+        payload_hash = _approved_binding_hash(
+            target_scope=requested_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
+        service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-routine-target-mismatch-001",
+                action_request_id="action-request-routine-target-mismatch-001",
+                approver_identities=("approver-001",),
+                target_snapshot=approval_target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+            )
+        )
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-routine-target-mismatch-001",
+                approval_decision_id="approval-routine-target-mismatch-001",
+                case_id="case-001",
+                alert_id="alert-001",
+                finding_id="finding-001",
+                idempotency_key="idempotency-routine-target-mismatch-001",
+                target_scope=requested_target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=None,
+                lifecycle_state="approved",
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "shuffle",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+
+        with self.assertRaisesRegex(ValueError, "approved payload binding does not match"):
+            service.delegate_approved_action_to_shuffle(
+                action_request_id="action-request-routine-target-mismatch-001",
+                approved_payload=approved_payload,
+                delegated_at=delegated_at,
+                delegation_issuer="control-plane-service",
+            )
+
+        self.assertEqual(store.list(ActionExecutionRecord), ())
+
     def test_service_rejects_shuffle_delegation_for_non_shuffle_execution_policy(
         self,
     ) -> None:
@@ -2384,6 +2449,71 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                     "action_type": "disable_account",
                     "asset_id": "critical-host-002",
                 },
+                delegated_at=delegated_at,
+                delegation_issuer="control-plane-service",
+            )
+
+        self.assertEqual(store.list(ActionExecutionRecord), ())
+
+    def test_service_rejects_isolated_executor_delegation_when_target_scope_drifts(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        approval_target_scope = {"asset_id": "critical-host-002"}
+        requested_target_scope = {"asset_id": "critical-host-999"}
+        approved_payload = {
+            "action_type": "disable_identity",
+            "asset_id": "critical-host-002",
+        }
+        payload_hash = _approved_binding_hash(
+            target_scope=requested_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="executor",
+            execution_surface_id="isolated-executor",
+        )
+        service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-executor-target-mismatch-001",
+                action_request_id="action-request-executor-target-mismatch-001",
+                approver_identities=("approver-001",),
+                target_snapshot=approval_target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+            )
+        )
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-executor-target-mismatch-001",
+                approval_decision_id="approval-executor-target-mismatch-001",
+                case_id="case-001",
+                alert_id="alert-001",
+                finding_id="finding-001",
+                idempotency_key="idempotency-executor-target-mismatch-001",
+                target_scope=requested_target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=None,
+                lifecycle_state="approved",
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "approval",
+                    "execution_surface_type": "executor",
+                    "execution_surface_id": "isolated-executor",
+                },
+            )
+        )
+
+        with self.assertRaisesRegex(ValueError, "approved payload binding does not match"):
+            service.delegate_approved_action_to_isolated_executor(
+                action_request_id="action-request-executor-target-mismatch-001",
+                approved_payload=approved_payload,
                 delegated_at=delegated_at,
                 delegation_issuer="control-plane-service",
             )
