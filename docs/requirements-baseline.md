@@ -9,7 +9,7 @@
 - **Version**: 0.4.0
 - **Status**: Draft
 - **Owner**: IT Operations, Information Systems Department
-- **Last Updated**: 6 April 2026
+- **Last Updated**: 7 April 2026
 
 This document defines the **non-negotiable implementation baseline** for **AegisOps** as a **governed control plane above commodity detection and automation substrates**.
 
@@ -37,6 +37,7 @@ AegisOps owns the authoritative platform records and policy decisions for:
 - Recommendation
 - Approval Decision
 - Action Request
+- Action Execution
 - Hunt
 - Hunt Run
 - AI Trace
@@ -44,7 +45,7 @@ AegisOps owns the authoritative platform records and policy decisions for:
 
 Upstream detections, findings, correlations, and product-native alerting artifacts from external substrates are treated as **Analytic Signals**.
 
-Analytic Signals are upstream inputs to AegisOps, not the durable system of record for analyst workflow, approval state, evidence custody, or reconciliation.
+Analytic Signals are upstream inputs to AegisOps, not the durable system of record for analyst workflow, approval state, evidence custody, action-execution state, or reconciliation.
 
 OpenSearch, Sigma, and n8n are **not** co-equal product cores for AegisOps.
 OpenSearch MAY be used as an optional or transitional analytics substrate.
@@ -143,7 +144,7 @@ The following constraints are **mandatory** and non-negotiable.
 
 | Component / Boundary | Responsibility |
 | -------------------- | -------------- |
-| AegisOps control plane | Alert, case, evidence, observation, lead, recommendation, approval, action-request, hunt, AI-trace, and reconciliation ownership |
+| AegisOps control plane | Alert, case, evidence, observation, lead, recommendation, approval, action-request, action-execution, hunt, AI-trace, and reconciliation ownership |
 | Upstream Analytic Signal substrates | Detection, correlation, and substrate-native alerting artifacts that feed AegisOps without becoming downstream workflow truth |
 | Downstream execution substrates | Approved automation execution within the scope delegated by AegisOps |
 | PostgreSQL | n8n metadata and execution state, plus the future control-plane persistence boundary under separate governance |
@@ -157,7 +158,7 @@ No component should silently absorb another component’s responsibility without
 
 - **Detection, control, and execution MUST remain explicitly separated**
 - Upstream Analytic Signal substrates perform detection or correlation only and MUST NOT directly define AegisOps-owned approval, case, or reconciliation truth
-- AegisOps owns approval decisions, action intent, evidence linkage, and reconciliation
+- AegisOps owns approval decisions, action intent, action-execution truth, evidence linkage, and reconciliation
 - Optional execution substrates execute approved workflows only after validation and approval requirements are satisfied
 - External systems MUST NOT directly trigger unrestricted execution logic
 - High-risk response actions are prohibited without human oversight

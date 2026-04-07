@@ -106,12 +106,39 @@ remove_text_from_doc "${missing_analytic_signal_repo}" "Upstream detections, fin
 commit_fixture "${missing_analytic_signal_repo}"
 assert_fails_with "${missing_analytic_signal_repo}" "Upstream detections, findings, correlations, and product-native alerting artifacts from external substrates are treated as **Analytic Signals**."
 
+missing_action_execution_repo="${workdir}/missing-action-execution"
+create_repo "${missing_action_execution_repo}"
+write_canonical_doc "${missing_action_execution_repo}"
+remove_text_from_doc "${missing_action_execution_repo}" "- Action Execution"
+commit_fixture "${missing_action_execution_repo}"
+assert_fails_with "${missing_action_execution_repo}" "- Action Execution"
+
+missing_action_execution_summary_repo="${workdir}/missing-action-execution-summary"
+create_repo "${missing_action_execution_summary_repo}"
+write_canonical_doc "${missing_action_execution_summary_repo}"
+replace_text_in_doc \
+  "${missing_action_execution_summary_repo}" \
+  "| AegisOps control plane | Alert, case, evidence, observation, lead, recommendation, approval, action-request, action-execution, hunt, AI-trace, and reconciliation ownership |" \
+  "| AegisOps control plane | Alert, case, evidence, observation, lead, recommendation, approval, action-request, hunt, AI-trace, and reconciliation ownership |"
+commit_fixture "${missing_action_execution_summary_repo}"
+assert_fails_with "${missing_action_execution_summary_repo}" "action-request, action-execution, hunt, AI-trace, and reconciliation ownership"
+
 missing_non_goal_repo="${workdir}/missing-non-goal"
 create_repo "${missing_non_goal_repo}"
 write_canonical_doc "${missing_non_goal_repo}"
 remove_text_from_doc "${missing_non_goal_repo}" "AegisOps will **not** rebuild Shuffle-class routine automation breadth in-house."
 commit_fixture "${missing_non_goal_repo}"
 assert_fails_with "${missing_non_goal_repo}" "AegisOps will **not** rebuild Shuffle-class routine automation breadth in-house."
+
+missing_action_execution_truth_repo="${workdir}/missing-action-execution-truth"
+create_repo "${missing_action_execution_truth_repo}"
+write_canonical_doc "${missing_action_execution_truth_repo}"
+replace_text_in_doc \
+  "${missing_action_execution_truth_repo}" \
+  "AegisOps owns approval decisions, action intent, action-execution truth, evidence linkage, and reconciliation" \
+  "AegisOps owns approval decisions, action intent, evidence linkage, and reconciliation"
+commit_fixture "${missing_action_execution_truth_repo}"
+assert_fails_with "${missing_action_execution_truth_repo}" "AegisOps owns approval decisions, action intent, action-execution truth, evidence linkage, and reconciliation"
 
 legacy_phrase_repo="${workdir}/legacy-phrase"
 create_repo "${legacy_phrase_repo}"
