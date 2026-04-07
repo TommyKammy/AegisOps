@@ -154,7 +154,7 @@ Disagreement between analytics, control-plane, and execution-plane records must 
 
 ## 6. Minimum Record Identifiers and Lifecycle States
 
-The baseline defines immutable record-family identifiers and explicit lifecycle states for Alert, Case, Evidence, Observation, Lead, Recommendation, Hunt, Hunt Run, AI Trace, Approval Decision, Action Request, and Reconciliation records across the shipped runtime boundary and reviewed persistence contract.
+The baseline defines immutable record-family identifiers and explicit lifecycle states for Alert, Case, Evidence, Observation, Lead, Recommendation, Hunt, Hunt Run, AI Trace, Approval Decision, Action Request, Action Execution, and Reconciliation records across the shipped runtime boundary and reviewed persistence contract.
 
 These identifiers and states are minimum control-plane expectations. They must not be inferred from substrate-local alert status, substrate document updates, n8n execution status, or ad hoc analyst notes.
 
@@ -414,7 +414,35 @@ Minimum lifecycle states for an Action Request record:
 | `failed` | Execution or required verification concluded unsuccessfully under the current approved request. |
 | `unresolved` | Operators cannot yet prove whether the request was executed correctly, failed partially, or needs manual recovery. |
 
-### 6.12 Reconciliation
+### 6.12 Action Execution
+
+Minimum identifier expectation for an Action Execution record:
+
+| Field | Minimum expectation |
+| ---- | ---- |
+| `action_execution_id` | Immutable AegisOps control-plane identifier for one action-execution record. |
+| `action_request_id`, `approval_decision_id`, and `delegation_id` | Required lineage proving which approved request and emitted delegation the execution record represents. |
+| `execution_surface_type`, `execution_surface_id`, and `execution_run_id` | Required downstream correlation fields identifying the reviewed surface and observed run. |
+| Payload hash and idempotency key | Required binding fields proving the execution remained attached to the approved execution intent. |
+
+Minimum lifecycle states for an Action Execution record:
+
+| State | Meaning |
+| ---- | ---- |
+| `queued` | The approved execution was delegated and recorded, but the reviewed surface has not yet reported active execution. |
+| `running` | The reviewed surface reported that execution is actively in progress under the bound delegation context. |
+| `succeeded` | The observed run completed and reported a successful execution outcome, pending any later reconciliation updates. |
+| `failed` | The observed run completed with an execution failure or post-action verification failure under the current approved intent. |
+| `canceled` | The execution attempt was intentionally stopped before successful completion under operator or policy control. |
+| `superseded` | A newer execution record replaced this one for the same approved request after an explicit retry, re-drive, or recovery decision. |
+
+`Action Execution` records provide the authoritative control-plane home for approved-versus-actual execution state without turning workflow-local runtime logs or executor-local receipts into the system of record.
+
+They must preserve enough linkage to prove which approved request, approval decision, delegation, reviewed execution surface, downstream run, payload hash, and idempotency key produced the recorded outcome.
+
+Timeouts, stale execution evidence, and other cases where operators cannot yet prove whether observed execution satisfied the approved intent must remain explicit reconciliation outcomes unless and until the shipped action-execution runtime contract gains a corresponding first-class lifecycle state.
+
+### 6.13 Reconciliation
 
 Minimum identifier expectation for a Reconciliation record:
 

@@ -81,7 +81,7 @@ required_phrases=(
   '| `Alert` | Future AegisOps alert routing and triage control layer |'
   '| `Case` | Future AegisOps case management control layer |'
   '| `Approval Decision` | Future AegisOps approval control layer |'
-  '| `Action Execution` | Future AegisOps response execution control layer | `Action Execution` is the authoritative AegisOps record for approved-versus-actual execution, while reviewed automation substrates and executor surfaces remain downstream evidence sources for receipts, run identifiers, and surface-local runtime detail. |'
+  '| `Action Execution` | AegisOps control-plane action-execution record | `Action Execution` remains the authoritative control-plane record for approved-versus-actual execution, while reviewed automation substrates and executor surfaces contribute correlated run identifiers, receipts, step progress, and other surface-local runtime evidence. |'
   "An analytic signal is the common upstream product primitive from which alert or case routing decisions begin."
   "An analytic signal promotes to an alert only when triage policy determines that analyst attention, tracking, notification, or downstream workflow handling is required."
   "Analytic-signal-to-alert routing must preserve the distinction between the substrate detection record, any admitted analytic signal, any finding or correlation claim preserved as source context, and the downstream alert record created for analyst work."

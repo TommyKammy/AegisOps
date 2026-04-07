@@ -106,8 +106,8 @@ assert_fails_with "${missing_signal_repo}" "An analytic signal is the common ups
 missing_action_execution_ownership_repo="${workdir}/missing-action-execution-ownership"
 create_repo "${missing_action_execution_ownership_repo}"
 write_canonical_doc "${missing_action_execution_ownership_repo}"
-remove_text_from_doc "${missing_action_execution_ownership_repo}" '| `Action Execution` | Future AegisOps response execution control layer | `Action Execution` is the authoritative AegisOps record for approved-versus-actual execution, while reviewed automation substrates and executor surfaces remain downstream evidence sources for receipts, run identifiers, and surface-local runtime detail. |'
+remove_text_from_doc "${missing_action_execution_ownership_repo}" '| `Action Execution` | AegisOps control-plane action-execution record | `Action Execution` remains the authoritative control-plane record for approved-versus-actual execution, while reviewed automation substrates and executor surfaces contribute correlated run identifiers, receipts, step progress, and other surface-local runtime evidence. |'
 commit_fixture "${missing_action_execution_ownership_repo}"
-assert_fails_with "${missing_action_execution_ownership_repo}" '| `Action Execution` | Future AegisOps response execution control layer | `Action Execution` is the authoritative AegisOps record for approved-versus-actual execution, while reviewed automation substrates and executor surfaces remain downstream evidence sources for receipts, run identifiers, and surface-local runtime detail. |'
+assert_fails_with "${missing_action_execution_ownership_repo}" '| `Action Execution` | AegisOps control-plane action-execution record | `Action Execution` remains the authoritative control-plane record for approved-versus-actual execution, while reviewed automation substrates and executor surfaces contribute correlated run identifiers, receipts, step progress, and other surface-local runtime evidence. |'
 
 echo "verify-secops-domain-model-doc tests passed"
