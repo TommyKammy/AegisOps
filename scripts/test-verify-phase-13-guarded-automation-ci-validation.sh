@@ -133,7 +133,7 @@ replace_text_in_file \
   'If the downstream surface reports the wrong payload hash, wrong target scope, wrong execution surface, or missing idempotency key, AegisOps must preserve that mismatch as explicit reconciliation state instead of normalizing it away.' \
   'If the downstream surface reports mismatched execution details, operators may review vendor-local state before deciding whether reconciliation changes are needed.'
 commit_fixture "${stale_contract_repo}"
-assert_fails_with "${stale_contract_repo}" "Missing required line in ${stale_contract_repo}/docs/automation-substrate-contract.md: If the downstream surface reports the wrong payload hash, wrong target scope, wrong execution surface, or missing idempotency key, AegisOps must preserve that mismatch as explicit reconciliation state instead of normalizing it away."
+assert_fails_with "${stale_contract_repo}" "Missing automation substrate contract statement: If the downstream surface reports the wrong payload hash, wrong target scope, wrong execution surface, or missing idempotency key, AegisOps must preserve that mismatch as explicit reconciliation state instead of normalizing it away."
 
 missing_ci_step_repo="${workdir}/missing-ci-step"
 create_repo "${missing_ci_step_repo}"

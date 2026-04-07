@@ -33,14 +33,19 @@ required_phrases=(
   '| Provenance set | Required requester, approver, delegation issuer, issuance timestamp, and related evidence references needed to reconstruct who authorized and emitted the handoff. |'
   'The approved payload must remain bound to one `Action Request`, one approval context, one reviewed target scope, and one reviewed execution surface at the time of delegation.'
   "A reused approval decision must not authorize a materially different payload, target set, execution surface, or expiry window."
+  "If target state, target identity, requested payload, or execution-surface destination drifts after approval, the old delegation contract is no longer valid for execution."
   'The downstream execution intent must preserve `action_request_id`, `approval_decision_id`, `delegation_id`, `execution_surface_type`, `execution_surface_id`, `idempotency_key`, and `payload_hash` so later `Action Execution` and `Reconciliation` records can prove what was authorized and what actually ran.'
   'Execution-surface receipts, vendor run identifiers, and step logs are downstream evidence inputs. They must not replace the AegisOps-owned `Action Execution` or `Reconciliation` records.'
   'Each later `Action Execution` record must link back to the originating `Action Request`, the governing `Approval Decision`, the emitted `delegation_id`, and the downstream `execution_run_id` observed on the reviewed surface.'
   'Each later `Reconciliation` record must preserve whether the observed downstream execution matched the approved payload, approved target scope, reviewed execution surface, idempotency key, and expiry window.'
   "If the downstream surface reports a run without a matching approved delegation record, AegisOps must treat that result as a reconciliation exception rather than infer approval from execution."
+  "If the downstream surface reports the wrong payload hash, wrong target scope, wrong execution surface, or missing idempotency key, AegisOps must preserve that mismatch as explicit reconciliation state instead of normalizing it away."
   "If a delegation expires before the reviewed surface starts execution, the run must not be treated as newly approved by virtue of still having a vendor-local queued job."
+  'The `idempotency_key` belongs to the approved execution intent, not to a vendor-local retry counter or queue implementation detail.'
+  "Duplicate delivery, replay, retried dispatch, or duplicate substrate triggers must remain correlated to the same approved delegation context rather than being interpreted as fresh approvals."
   "Retries are allowed only when the retry remains inside the same approved payload binding, target scope, execution surface, and expiry window."
   "A new approval path is required before retry when the payload hash, target snapshot, execution surface, or expiry window changes."
+  "If the execution surface cannot prove whether a received duplicate is the same approved intent or a changed request, AegisOps must keep the result in explicit reconciliation exception state until an operator resolves it."
   "This contract aligns the approved handoff model to the shipped vendor-neutral execution-surface vocabulary rather than reintroducing substrate-local approval or reconciliation authority."
 )
 
