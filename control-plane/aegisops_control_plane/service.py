@@ -1274,6 +1274,19 @@ class AegisOpsControlPlaneService:
         )
         unique_execution_run_ids = tuple(dict.fromkeys(linked_execution_run_ids))
         latest_execution = normalized_executions[-1] if normalized_executions else None
+        authoritative_execution = self._find_authoritative_action_execution(
+            action_request_id=action_request.action_request_id,
+            execution_surface_type=execution_surface_type,
+            execution_surface_id=execution_surface_id,
+            execution_run_id=(
+                None if latest_execution is None else latest_execution["execution_run_id"]
+            ),
+            idempotency_key=(
+                action_request.idempotency_key
+                if latest_execution is None
+                else latest_execution["idempotency_key"]
+            ),
+        )
 
         subject_linkage: dict[str, object] = {
             "action_request_ids": (action_request.action_request_id,),
@@ -1290,6 +1303,16 @@ class AegisOpsControlPlaneService:
             subject_linkage["case_ids"] = (action_request.case_id,)
         if action_request.finding_id is not None:
             subject_linkage["finding_ids"] = (action_request.finding_id,)
+        if authoritative_execution is not None:
+            subject_linkage["action_execution_ids"] = (
+                authoritative_execution.action_execution_id,
+            )
+            evidence_ids = self._merge_linked_ids(
+                authoritative_execution.provenance.get("evidence_ids"),
+                None,
+            )
+            if evidence_ids:
+                subject_linkage["evidence_ids"] = evidence_ids
 
         ingest_disposition: str
         lifecycle_state: str
@@ -1332,6 +1355,32 @@ class AegisOpsControlPlaneService:
                 lifecycle_state = "matched"
                 mismatch_summary = (
                     "matched approved action request to reviewed execution run"
+                )
+
+        if authoritative_execution is not None and latest_execution is not None:
+            reconciled_lifecycle_state = self._action_execution_lifecycle_from_status(
+                latest_execution.get("status"),
+                authoritative_execution.lifecycle_state,
+            )
+            if reconciled_lifecycle_state != authoritative_execution.lifecycle_state:
+                authoritative_execution = self.persist_record(
+                    ActionExecutionRecord(
+                        action_execution_id=authoritative_execution.action_execution_id,
+                        action_request_id=authoritative_execution.action_request_id,
+                        approval_decision_id=authoritative_execution.approval_decision_id,
+                        delegation_id=authoritative_execution.delegation_id,
+                        execution_surface_type=authoritative_execution.execution_surface_type,
+                        execution_surface_id=authoritative_execution.execution_surface_id,
+                        execution_run_id=authoritative_execution.execution_run_id,
+                        idempotency_key=authoritative_execution.idempotency_key,
+                        target_scope=authoritative_execution.target_scope,
+                        approved_payload=authoritative_execution.approved_payload,
+                        payload_hash=authoritative_execution.payload_hash,
+                        delegated_at=authoritative_execution.delegated_at,
+                        expires_at=authoritative_execution.expires_at,
+                        provenance=authoritative_execution.provenance,
+                        lifecycle_state=reconciled_lifecycle_state,
+                    )
                 )
 
         return self.persist_record(
@@ -1658,11 +1707,58 @@ class AegisOpsControlPlaneService:
                     "execution_surface_id": execution_surface_id,
                     "idempotency_key": idempotency_key,
                     "observed_at": observed_at,
+                    "status": execution.get("status"),
                 }
             )
 
         normalized.sort(key=lambda execution: execution["observed_at"])
         return tuple(normalized)
+
+    def _find_authoritative_action_execution(
+        self,
+        *,
+        action_request_id: str,
+        execution_surface_type: str,
+        execution_surface_id: str,
+        execution_run_id: str | None,
+        idempotency_key: str,
+    ) -> ActionExecutionRecord | None:
+        matches = [
+            execution
+            for execution in self._store.list(ActionExecutionRecord)
+            if (
+                execution.action_request_id == action_request_id
+                and execution.execution_surface_type == execution_surface_type
+                and execution.execution_surface_id == execution_surface_id
+                and execution.idempotency_key == idempotency_key
+            )
+        ]
+        if execution_run_id is not None:
+            for execution in matches:
+                if execution.execution_run_id == execution_run_id:
+                    return execution
+        return matches[0] if matches else None
+
+    @staticmethod
+    def _action_execution_lifecycle_from_status(
+        status: object,
+        current_lifecycle_state: str,
+    ) -> str:
+        if not isinstance(status, str):
+            return current_lifecycle_state
+
+        normalized_status = status.strip().lower()
+        if normalized_status in {"queued", "pending"}:
+            return "queued"
+        if normalized_status in {"running", "in_progress"}:
+            return "running"
+        if normalized_status in {"success", "succeeded", "completed"}:
+            return "succeeded"
+        if normalized_status in {"failed", "error"}:
+            return "failed"
+        if normalized_status in {"canceled", "cancelled"}:
+            return "canceled"
+        return current_lifecycle_state
 
     @staticmethod
     def _next_identifier(prefix: str) -> str:
