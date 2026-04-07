@@ -35,6 +35,7 @@ If a document inside one of these areas has its own `Owner` or `Owners` field, t
 | `docs/auth-baseline.md` | Authentication, authorization, and service account ownership baseline | IT Operations, Information Systems Department |
 | `docs/asset-identity-privilege-context-baseline.md` | Asset, identity, and privilege context baseline | IT Operations, Information Systems Department |
 | `docs/response-action-safety-model.md` | Response action safety and approval binding baseline | IT Operations, Information Systems Department |
+| `docs/automation-substrate-contract.md` | Approved automation delegation contract baseline | IT Operations, Information Systems Department |
 | `docs/control-plane-state-model.md` | Control-plane state and reconciliation baseline | IT Operations, Information Systems Department |
 | `docs/control-plane-runtime-service-boundary.md` | Live control-plane runtime service boundary and repository placement baseline | IT Operations, Information Systems Department |
 | `docs/retention-evidence-and-replay-readiness-baseline.md` | Retention, evidence lifecycle, and replay readiness baseline | IT Operations, Information Systems Department |
@@ -56,6 +57,8 @@ The auth baseline remains the policy reference for operator personas, least-priv
 The asset, identity, and privilege context baseline remains the Phase 7 design reference for reviewed alias handling, ownership expectations, criticality context, and privilege-relevant entity reasoning without implying live CMDB or IdP authority.
 
 The response action safety model remains the baseline policy reference for action classes, approval binding, idempotency expectations, and post-approval drift protection for future response execution work.
+
+The approved automation delegation contract remains the baseline handoff reference for payload binding, provenance, downstream execution identity, idempotency, expiry, and reconciliation expectations across automation substrates and executor surfaces.
 
 The control-plane state model remains the baseline ownership reference for which records stay in OpenSearch, which stay in n8n, and which require future AegisOps control-plane authority rather than implicit storage inside component-local state.
 

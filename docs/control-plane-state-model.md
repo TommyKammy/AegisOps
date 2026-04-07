@@ -4,11 +4,13 @@
 
 This document defines the approved baseline control-plane state model for AegisOps across the live control-plane runtime boundary and the reviewed PostgreSQL control-plane persistence boundary.
 
-It supplements `docs/architecture.md`, `docs/secops-domain-model.md`, and `docs/response-action-safety-model.md` by making state ownership, source-of-truth boundaries, and reconciliation duties explicit enough for future implementation and review work.
+It supplements `docs/architecture.md`, `docs/secops-domain-model.md`, `docs/response-action-safety-model.md`, and `docs/automation-substrate-contract.md` by making state ownership, source-of-truth boundaries, and reconciliation duties explicit enough for future implementation and review work.
 
 This document defines ownership, source-of-truth expectations, and recovery responsibilities only. It does not introduce a live datastore, schema migration, API service, or runtime deployment in this phase.
 
 For the reviewed Wazuh-specific intake mapping into first-class analytic signals, see `docs/wazuh-alert-ingest-contract.md`.
+
+For the reviewed downstream delegation contract that binds approved payload, provenance, idempotency, expiry, and execution-surface identity before handoff, see `docs/automation-substrate-contract.md`.
 
 ## 2. Baseline Design Constraints
 

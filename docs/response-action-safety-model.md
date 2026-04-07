@@ -4,7 +4,7 @@
 
 This document defines the baseline safety model and approval binding requirements for future AegisOps response actions.
 
-It supplements `docs/requirements-baseline.md` and `docs/secops-domain-model.md` by making approval-gated response expectations specific enough to review, audit, and verify before any live workflow implementation exists.
+It supplements `docs/requirements-baseline.md`, `docs/secops-domain-model.md`, and `docs/automation-substrate-contract.md` by making approval-gated response expectations specific enough to review, audit, and verify before any live workflow implementation exists.
 
 This document defines policy and evidence requirements only. It does not introduce live workflows, approval-exempt write paths, or autonomous response behavior.
 
@@ -99,3 +99,5 @@ This model preserves the baseline separation between detection, approval, and ex
 It reinforces the requirements baseline rule that destructive or high-impact actions require approval, that executed actions must be logged, that dry-run behavior should exist where applicable, and that write actions need rollback or containment guidance.
 
 It also keeps `Action Request`, `Approval Decision`, and `Action Execution` aligned with the domain-model boundaries already defined in `docs/secops-domain-model.md`.
+
+For the reviewed downstream delegation payload, provenance, idempotency, expiry, and execution-surface binding contract, see `docs/automation-substrate-contract.md`.

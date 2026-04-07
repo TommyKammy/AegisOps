@@ -20,6 +20,7 @@ required_headings=(
 required_phrases=(
   "This document defines the first-class SecOps domain model for the AegisOps baseline."
   "This document defines baseline semantics, ownership boundaries, and state transitions only. It does not introduce runtime behavior, workflow automation, or architecture changes."
+  'For the reviewed downstream approval-bound delegation contract into automation substrates and executor surfaces, see `docs/automation-substrate-contract.md`.'
   '| `Raw Event` |'
   '| `Normalized Event` |'
   '| `Detection Rule` |'
@@ -66,6 +67,7 @@ required_phrases=(
   "An incident is the higher-order security event declaration used when one or more cases represent a material security event that needs coordinated operational handling."
   "An approval decision records whether a specific action request is authorized, rejected, or expired."
   "An action execution records the actual downstream attempt or completion state for an approved or explicitly allowed action request."
+  'The reviewed delegation contract for carrying approved payload, idempotency, expiry, provenance, and execution-surface identity into downstream execution is defined in `docs/automation-substrate-contract.md`.'
   "Substrate detection records, analytic signals, workflow runs, and future case state must remain separate records and must not be treated as interchangeable identifiers or lifecycle states."
   '| `Finding` | OpenSearch detection and analytics plane |'
   '| `Hunt` | Future AegisOps hunt management control layer |'
@@ -79,7 +81,7 @@ required_phrases=(
   '| `Alert` | Future AegisOps alert routing and triage control layer |'
   '| `Case` | Future AegisOps case management control layer |'
   '| `Approval Decision` | Future AegisOps approval control layer |'
-  '| `Action Execution` | n8n execution plane with PostgreSQL-backed workflow state |'
+  '| `Action Execution` | Reviewed automation substrate or controlled executor surface | The reviewed execution surface owns execution attempts and completion records, but it does not own the approval verdict or reconciliation truth. |'
   "An analytic signal is the common upstream product primitive from which alert or case routing decisions begin."
   "An analytic signal promotes to an alert only when triage policy determines that analyst attention, tracking, notification, or downstream workflow handling is required."
   "Analytic-signal-to-alert routing must preserve the distinction between the substrate detection record, any admitted analytic signal, any finding or correlation claim preserved as source context, and the downstream alert record created for analyst work."
