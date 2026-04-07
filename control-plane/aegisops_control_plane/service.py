@@ -828,12 +828,13 @@ class AegisOpsControlPlaneService:
             "metadata.source_system",
         ) or record.substrate_key
         evidence_id = f"evidence-{uuid.uuid5(uuid.NAMESPACE_URL, substrate_detection_record_id)}"
+        case_id = ingest_result.alert.case_id
         evidence = self.persist_record(
             EvidenceRecord(
                 evidence_id=evidence_id,
                 source_record_id=substrate_detection_record_id,
                 alert_id=ingest_result.alert.alert_id,
-                case_id=ingest_result.alert.case_id,
+                case_id=case_id,
                 source_system=source_system,
                 collector_identity=f"{record.substrate_key}-native-detection-adapter",
                 acquired_at=self._require_aware_datetime(
@@ -841,9 +842,27 @@ class AegisOpsControlPlaneService:
                     "record.first_seen_at",
                 ),
                 derivation_relationship="native_detection_record",
-                lifecycle_state="collected",
+                lifecycle_state="linked" if case_id is not None else "collected",
             )
         )
+
+        if case_id is not None:
+            existing_case = self._store.get(CaseRecord, case_id)
+            if existing_case is not None:
+                merged_case_evidence_ids = self._merge_linked_ids(
+                    existing_case.evidence_ids,
+                    evidence.evidence_id,
+                )
+                if merged_case_evidence_ids != existing_case.evidence_ids:
+                    self.persist_record(
+                        CaseRecord(
+                            case_id=existing_case.case_id,
+                            alert_id=existing_case.alert_id,
+                            finding_id=existing_case.finding_id,
+                            evidence_ids=merged_case_evidence_ids,
+                            lifecycle_state=existing_case.lifecycle_state,
+                        )
+                    )
 
         subject_linkage = dict(ingest_result.reconciliation.subject_linkage)
         subject_linkage["evidence_ids"] = self._merge_linked_ids(

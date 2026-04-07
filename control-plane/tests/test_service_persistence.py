@@ -160,7 +160,23 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(persisted_case.alert_id, created.alert.alert_id)
         self.assertEqual(persisted_case.finding_id, created.alert.finding_id)
         self.assertEqual(persisted_case.lifecycle_state, "open")
-        self.assertGreaterEqual(len(persisted_case.evidence_ids), 1)
+        evidence_records = sorted(
+            (
+                evidence
+                for evidence in store.list(EvidenceRecord)
+                if evidence.alert_id == created.alert.alert_id
+            ),
+            key=lambda evidence: evidence.evidence_id,
+        )
+        self.assertEqual(len(evidence_records), 2)
+        self.assertEqual(
+            sorted(evidence.evidence_id for evidence in evidence_records),
+            sorted(persisted_case.evidence_ids),
+        )
+        self.assertEqual(
+            tuple(evidence.case_id for evidence in evidence_records),
+            (promoted_case.case_id, promoted_case.case_id),
+        )
 
     def test_service_keeps_distinct_wazuh_incidents_separate_when_native_context_differs(
         self,
