@@ -1669,6 +1669,183 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             ("isolated-executor",),
         )
 
+    def test_service_reconciles_shuffle_run_back_into_authoritative_action_execution(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        compared_at = datetime(2026, 4, 5, 12, 12, tzinfo=timezone.utc)
+        service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-routine-reconcile-001",
+                action_request_id="action-request-routine-reconcile-001",
+                approver_identities=("approver-001",),
+                target_snapshot={"asset_id": "workstation-001"},
+                payload_hash="payload-hash-routine-reconcile-001",
+                decided_at=requested_at,
+                lifecycle_state="approved",
+            )
+        )
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-routine-reconcile-001",
+                approval_decision_id="approval-routine-reconcile-001",
+                case_id="case-001",
+                alert_id="alert-001",
+                finding_id="finding-001",
+                idempotency_key="idempotency-routine-reconcile-001",
+                target_scope={"asset_id": "workstation-001"},
+                payload_hash="payload-hash-routine-reconcile-001",
+                requested_at=requested_at,
+                expires_at=None,
+                lifecycle_state="approved",
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "shuffle",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id="action-request-routine-reconcile-001",
+            approved_payload={
+                "action_type": "notify_identity_owner",
+                "asset_id": "workstation-001",
+            },
+            delegated_at=delegated_at,
+            delegation_issuer="control-plane-service",
+            evidence_ids=("evidence-001",),
+        )
+
+        reconciliation = service.reconcile_action_execution(
+            action_request_id="action-request-routine-reconcile-001",
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(
+                {
+                    "execution_run_id": execution.execution_run_id,
+                    "execution_surface_id": "shuffle",
+                    "idempotency_key": "idempotency-routine-reconcile-001",
+                    "observed_at": compared_at,
+                    "status": "success",
+                },
+            ),
+            compared_at=compared_at,
+            stale_after=datetime(2026, 4, 5, 12, 30, tzinfo=timezone.utc),
+        )
+
+        stored_execution = service.get_record(
+            ActionExecutionRecord,
+            execution.action_execution_id,
+        )
+        self.assertIsNotNone(stored_execution)
+        self.assertEqual(stored_execution.lifecycle_state, "succeeded")
+        self.assertEqual(stored_execution.execution_run_id, execution.execution_run_id)
+        self.assertEqual(
+            reconciliation.subject_linkage["action_execution_ids"],
+            (execution.action_execution_id,),
+        )
+        self.assertEqual(
+            reconciliation.subject_linkage["evidence_ids"],
+            ("evidence-001",),
+        )
+
+    def test_service_reconciles_isolated_executor_run_back_into_authoritative_action_execution(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        compared_at = datetime(2026, 4, 5, 12, 14, tzinfo=timezone.utc)
+        expires_at = datetime(2026, 4, 5, 13, 0, tzinfo=timezone.utc)
+        service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-executor-reconcile-001",
+                action_request_id="action-request-executor-reconcile-001",
+                approver_identities=("approver-001",),
+                target_snapshot={"asset_id": "critical-host-003"},
+                payload_hash="payload-hash-executor-reconcile-001",
+                decided_at=requested_at,
+                lifecycle_state="approved",
+            )
+        )
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-executor-reconcile-001",
+                approval_decision_id="approval-executor-reconcile-001",
+                case_id="case-001",
+                alert_id="alert-001",
+                finding_id="finding-001",
+                idempotency_key="idempotency-executor-reconcile-001",
+                target_scope={"asset_id": "critical-host-003"},
+                payload_hash="payload-hash-executor-reconcile-001",
+                requested_at=requested_at,
+                expires_at=expires_at,
+                lifecycle_state="approved",
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "approval",
+                    "execution_surface_type": "executor",
+                    "execution_surface_id": "isolated-executor",
+                },
+            )
+        )
+
+        execution = service.delegate_approved_action_to_isolated_executor(
+            action_request_id="action-request-executor-reconcile-001",
+            approved_payload={
+                "action_type": "disable_identity",
+                "asset_id": "critical-host-003",
+            },
+            delegated_at=delegated_at,
+            delegation_issuer="control-plane-service",
+            evidence_ids=("evidence-002",),
+        )
+
+        reconciliation = service.reconcile_action_execution(
+            action_request_id="action-request-executor-reconcile-001",
+            execution_surface_type="executor",
+            execution_surface_id="isolated-executor",
+            observed_executions=(
+                {
+                    "execution_run_id": execution.execution_run_id,
+                    "execution_surface_id": "isolated-executor",
+                    "idempotency_key": "idempotency-executor-reconcile-001",
+                    "observed_at": compared_at,
+                    "status": "failed",
+                },
+            ),
+            compared_at=compared_at,
+            stale_after=datetime(2026, 4, 5, 12, 30, tzinfo=timezone.utc),
+        )
+
+        stored_execution = service.get_record(
+            ActionExecutionRecord,
+            execution.action_execution_id,
+        )
+        self.assertIsNotNone(stored_execution)
+        self.assertEqual(stored_execution.lifecycle_state, "failed")
+        self.assertEqual(stored_execution.execution_run_id, execution.execution_run_id)
+        self.assertEqual(
+            reconciliation.subject_linkage["action_execution_ids"],
+            (execution.action_execution_id,),
+        )
+        self.assertEqual(
+            reconciliation.subject_linkage["evidence_ids"],
+            ("evidence-002",),
+        )
+
     def test_service_evaluates_action_policy_into_approval_and_isolated_executor(
         self,
     ) -> None:
