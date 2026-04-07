@@ -1756,6 +1756,18 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             reconciliation.subject_linkage["evidence_ids"],
             ("evidence-001",),
         )
+        self.assertEqual(
+            reconciliation.subject_linkage["delegation_ids"],
+            (execution.delegation_id,),
+        )
+        self.assertEqual(
+            reconciliation.correlation_key,
+            (
+                "action-request-routine-reconcile-001:approval-routine-reconcile-001:"
+                f"{execution.delegation_id}:automation_substrate:shuffle:"
+                "idempotency-routine-reconcile-001"
+            ),
+        )
 
     def test_service_reconciles_isolated_executor_run_back_into_authoritative_action_execution(
         self,

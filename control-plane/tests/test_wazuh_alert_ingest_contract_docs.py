@@ -130,6 +130,24 @@ class WazuhAlertIngestContractDocsTests(unittest.TestCase):
             automation_contract_text,
         )
 
+    def test_reconciliation_identity_is_consistent_with_delegation_contract(self) -> None:
+        state_model_text = STATE_MODEL_DOC.read_text(encoding="utf-8")
+        automation_contract_text = AUTOMATION_CONTRACT_DOC.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "The downstream execution intent must preserve `action_request_id`, `approval_decision_id`, "
+            "`delegation_id`, `execution_surface_type`, `execution_surface_id`, `idempotency_key`, "
+            "and `payload_hash` so later `Action Execution` and `Reconciliation` records can prove what "
+            "was authorized and what actually ran.",
+            automation_contract_text,
+        )
+        self.assertIn(
+            "- `approval_decision_id`, `action_request_id`, `delegation_id`, "
+            "`execution_surface_type`, `execution_surface_id`, `execution_run_id`, "
+            "and an action idempotency key for the reviewed automation-substrate or executor run being reconciled.",
+            state_model_text,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
