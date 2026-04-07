@@ -103,7 +103,7 @@ required_phrases=(
   '| `approval_decision_id` | Immutable AegisOps control-plane identifier for one approval decision record. |'
   '| `action_request_id` | Required linkage to the exact action request under review. |'
   '| Approver identity set | Required accountable identity for each approver or reviewer participating in the decision. |'
-  '| Target snapshot and payload hash | Required binding inputs that prove which reviewed context the decision authorized or rejected. |'
+  '| Target snapshot, payload hash, and approved expiry window | Required binding inputs that prove which reviewed context and execution window the decision authorized or rejected. |'
   '| `pending` | The approval decision is open and quorum or reviewer action is not yet complete. |'
   '| `approved` | The required approval outcome and quorum, if any, were satisfied before expiry. |'
   '| `rejected` | The reviewed request was explicitly denied. |'

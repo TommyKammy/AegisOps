@@ -16,6 +16,8 @@ Neither an automation substrate nor an executor surface may mint, overwrite, or 
 
 Delegation is allowed only after AegisOps has a bounded `Action Request` and a still-valid `Approval Decision` whose binding fields exactly match the downstream execution intent.
 
+The approval record must persist an immutable approved expiry value or equivalent approved time bound so delegation can reject post-approval expiry drift against the approved record rather than trusting only mutable request state.
+
 Substrate-local queued jobs, workflow definitions, connector payload history, and executor-local run logs may provide downstream evidence, but they do not become the approval authority or the reconciliation authority for the approved action path.
 
 ## 3. Approved Delegation Contract
