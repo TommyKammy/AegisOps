@@ -291,6 +291,18 @@ def _require_non_empty_tuple(
     )
 
 
+def _require_non_blank_fields(
+    record: ControlPlaneRecord,
+    field_names: tuple[str, ...],
+) -> None:
+    for field_name in field_names:
+        if _has_linkage_value(getattr(record, field_name)):
+            continue
+        raise ValueError(
+            f"{record.record_family} record {record.record_id!r} requires non-blank {field_name}"
+        )
+
+
 def _validate_record(record: ControlPlaneRecord) -> None:
     _validate_lifecycle_state(record)
 
@@ -329,6 +341,24 @@ def _validate_record(record: ControlPlaneRecord) -> None:
         _require_any_linkage(record, ("case_id", "alert_id", "finding_id"))
         return
     if isinstance(record, ActionExecutionRecord):
+        _require_non_blank_fields(
+            record,
+            (
+                "action_execution_id",
+                "action_request_id",
+                "approval_decision_id",
+                "delegation_id",
+                "execution_surface_type",
+                "execution_surface_id",
+                "execution_run_id",
+                "idempotency_key",
+                "payload_hash",
+            ),
+        )
+        if record.expires_at is not None and record.expires_at < record.delegated_at:
+            raise ValueError(
+                f"action_execution record {record.record_id!r} requires expires_at >= delegated_at"
+            )
         return
     if isinstance(record, ReconciliationRecord):
         _require_any_linkage(

@@ -164,6 +164,20 @@ create table if not exists aegisops_control.action_execution_records (
   lifecycle_state text not null,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
+  constraint action_execution_records_identifiers_non_blank check (
+    nullif(btrim(action_execution_id), '') is not null
+    and nullif(btrim(action_request_id), '') is not null
+    and nullif(btrim(approval_decision_id), '') is not null
+    and nullif(btrim(delegation_id), '') is not null
+    and nullif(btrim(execution_surface_type), '') is not null
+    and nullif(btrim(execution_surface_id), '') is not null
+    and nullif(btrim(execution_run_id), '') is not null
+    and nullif(btrim(idempotency_key), '') is not null
+    and nullif(btrim(payload_hash), '') is not null
+  ),
+  constraint action_execution_records_expiry_not_before_delegation check (
+    expires_at is null or expires_at >= delegated_at
+  ),
   check (lifecycle_state in ('queued','running','succeeded','failed','canceled','superseded'))
 );
 
