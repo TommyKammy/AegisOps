@@ -18,6 +18,8 @@ required_phrases=(
   "- Action Request"
   "- Action Execution"
   "- Reconciliation"
+  "| AegisOps control plane | Alert, case, evidence, observation, lead, recommendation, approval, action-request, action-execution, hunt, AI-trace, and reconciliation ownership |"
+  "AegisOps owns approval decisions, action intent, action-execution truth, evidence linkage, and reconciliation"
   "Analytic Signals are upstream inputs to AegisOps, not the durable system of record for analyst workflow, approval state, evidence custody, action-execution state, or reconciliation."
   "Upstream detections, findings, correlations, and product-native alerting artifacts from external substrates are treated as **Analytic Signals**."
   "OpenSearch, Sigma, and n8n are **not** co-equal product cores for AegisOps."
