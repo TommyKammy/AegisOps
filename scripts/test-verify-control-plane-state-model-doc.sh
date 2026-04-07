@@ -185,6 +185,13 @@ remove_text_from_doc "${missing_action_execution_authority_repo}" '| `Action Exe
 commit_fixture "${missing_action_execution_authority_repo}"
 assert_fails_with "${missing_action_execution_authority_repo}" '| `Action Execution` | AegisOps control-plane action-execution record | `Action Execution` remains the authoritative control-plane record for approved-versus-actual execution, while reviewed automation substrates and executor surfaces contribute correlated run identifiers, receipts, step progress, and other surface-local runtime evidence. |'
 
+missing_action_execution_lifecycle_contract_repo="${workdir}/missing-action-execution-lifecycle-contract"
+create_repo "${missing_action_execution_lifecycle_contract_repo}"
+write_canonical_doc "${missing_action_execution_lifecycle_contract_repo}"
+remove_text_from_doc "${missing_action_execution_lifecycle_contract_repo}" "The baseline defines immutable record-family identifiers and explicit lifecycle states for Alert, Case, Evidence, Observation, Lead, Recommendation, Hunt, Hunt Run, AI Trace, Approval Decision, Action Request, Action Execution, and Reconciliation records across the shipped runtime boundary and reviewed persistence contract."
+commit_fixture "${missing_action_execution_lifecycle_contract_repo}"
+assert_fails_with "${missing_action_execution_lifecycle_contract_repo}" "The baseline defines immutable record-family identifiers and explicit lifecycle states for Alert, Case, Evidence, Observation, Lead, Recommendation, Hunt, Hunt Run, AI Trace, Approval Decision, Action Request, Action Execution, and Reconciliation records across the shipped runtime boundary and reviewed persistence contract."
+
 stale_n8n_reconciliation_repo="${workdir}/stale-n8n-reconciliation"
 create_repo "${stale_n8n_reconciliation_repo}"
 write_canonical_doc "${stale_n8n_reconciliation_repo}"
