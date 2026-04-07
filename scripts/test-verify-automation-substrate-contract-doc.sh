@@ -42,6 +42,8 @@ Neither an automation substrate nor an executor surface may mint, overwrite, or 
 
 Delegation is allowed only after AegisOps has a bounded `Action Request` and a still-valid `Approval Decision` whose binding fields exactly match the downstream execution intent.
 
+The approval record must persist an immutable approved expiry value or equivalent approved time bound so delegation can reject post-approval expiry drift against the approved record rather than trusting only mutable request state.
+
 ## 3. Approved Delegation Contract
 
 | Field | Required delegation meaning |
@@ -167,6 +169,11 @@ assert_missing_statement_case \
   "missing-binding" \
   "Neither an automation substrate nor an executor surface may mint, overwrite, or become the system of record for approval truth, action-request truth, evidence custody, or reconciliation truth." \
   "Neither an automation substrate nor an executor surface may mint, overwrite, or become the system of record for approval truth, action-request truth, evidence custody, or reconciliation truth."
+
+assert_missing_statement_case \
+  "missing-approved-expiry-binding" \
+  "The approval record must persist an immutable approved expiry value or equivalent approved time bound so delegation can reject post-approval expiry drift against the approved record rather than trusting only mutable request state." \
+  "The approval record must persist an immutable approved expiry value or equivalent approved time bound so delegation can reject post-approval expiry drift against the approved record rather than trusting only mutable request state."
 
 assert_missing_statement_case \
   "missing-reconciliation" \
