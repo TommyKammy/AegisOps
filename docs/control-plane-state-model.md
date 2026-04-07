@@ -112,6 +112,10 @@ Reconciliation records must preserve which substrate detection records and admit
 
 Reconciliation records must also preserve how alerts, cases, approval decisions, action requests, hunts, hunt runs, AI traces, and execution outcomes were linked or found to disagree so mismatch tracking remains a first-class control-plane concern.
 
+Reconciliation records must also preserve emitted delegation records and their identifiers once AegisOps has handed an approved request into a reviewed automation substrate or executor surface.
+
+For approved downstream execution correlation, `delegation_id` becomes a first-class reconciliation key as soon as AegisOps emits the reviewed handoff. Later `Reconciliation` records and their deterministic correlation keys must preserve that delegation identity alongside the governing approval and execution-surface identifiers so the reviewed baseline stays aligned with `docs/automation-substrate-contract.md`.
+
 The minimum stable reconciliation key set for this baseline is:
 
 - `substrate_detection_record_id` for the upstream substrate-native detection, correlation, or alerting record;
@@ -119,10 +123,10 @@ The minimum stable reconciliation key set for this baseline is:
 - `alert_id` and `case_id` for control-plane triage and investigation ownership;
 - `evidence_id` plus preserved provenance metadata for linked artifacts or derived material;
 - `observation_id`, `lead_id`, and `recommendation_id` for analyst assertions, investigative direction, and proposed next steps that must remain independently reviewable;
-- `approval_decision_id` and `action_request_id` for authorized response intent;
+- `approval_decision_id`, `action_request_id`, `delegation_id`, `execution_surface_type`, `execution_surface_id`, `execution_run_id`, and an action idempotency key for the reviewed automation-substrate or executor run being reconciled.
 - `hunt_id` and `hunt_run_id` for analyst-directed exploration and each bounded execution of that exploration;
 - `ai_trace_id` for preserved AI-assisted interpretation or recommendation context; and
-- `execution_surface_type`, `execution_surface_id`, `execution_run_id`, and an action idempotency key for the reviewed automation-substrate or executor run being reconciled.
+- a deterministic reconciliation correlation key that preserves the approved request identity and, once delegation occurs, the governing `approval_decision_id` plus emitted `delegation_id` instead of collapsing correlation into downstream runtime metadata alone.
 
 The AegisOps control-plane runtime is responsible for:
 

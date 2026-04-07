@@ -1307,6 +1307,9 @@ class AegisOpsControlPlaneService:
             subject_linkage["action_execution_ids"] = (
                 authoritative_execution.action_execution_id,
             )
+            subject_linkage["delegation_ids"] = (
+                authoritative_execution.delegation_id,
+            )
             evidence_ids = self._merge_linked_ids(
                 authoritative_execution.provenance.get("evidence_ids"),
                 None,
@@ -1392,8 +1395,11 @@ class AegisOpsControlPlaneService:
                 analytic_signal_id=None,
                 execution_run_id=execution_run_id,
                 linked_execution_run_ids=linked_execution_run_ids,
-                correlation_key=(
-                    f"{action_request.action_request_id}:{execution_surface_type}:{execution_surface_id}:{action_request.idempotency_key}"
+                correlation_key=self._build_action_execution_reconciliation_key(
+                    action_request=action_request,
+                    execution_surface_type=execution_surface_type,
+                    execution_surface_id=execution_surface_id,
+                    authoritative_execution=authoritative_execution,
                 ),
                 first_seen_at=action_request.requested_at,
                 last_seen_at=last_seen_at,
@@ -1403,6 +1409,28 @@ class AegisOpsControlPlaneService:
                 lifecycle_state=lifecycle_state,
             )
         )
+
+    def _build_action_execution_reconciliation_key(
+        self,
+        *,
+        action_request: ActionRequestRecord,
+        execution_surface_type: str,
+        execution_surface_id: str,
+        authoritative_execution: ActionExecutionRecord | None,
+    ) -> str:
+        components = [action_request.action_request_id]
+        if action_request.approval_decision_id is not None:
+            components.append(action_request.approval_decision_id)
+        if authoritative_execution is not None:
+            components.append(authoritative_execution.delegation_id)
+        components.extend(
+            (
+                execution_surface_type,
+                execution_surface_id,
+                action_request.idempotency_key,
+            )
+        )
+        return ":".join(components)
 
     def _normalize_action_policy_basis(
         self,
