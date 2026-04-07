@@ -21,6 +21,7 @@ required_phrases=(
   'AegisOps remains the authority for `Action Request`, `Approval Decision`, evidence linkage, `Action Execution` correlation, and `Reconciliation` state even when a reviewed automation substrate or executor surface performs downstream work.'
   "Neither an automation substrate nor an executor surface may mint, overwrite, or become the system of record for approval truth, action-request truth, evidence custody, or reconciliation truth."
   'Delegation is allowed only after AegisOps has a bounded `Action Request` and a still-valid `Approval Decision` whose binding fields exactly match the downstream execution intent.'
+  "The approval record must persist an immutable approved expiry value or equivalent approved time bound so delegation can reject post-approval expiry drift against the approved record rather than trusting only mutable request state."
   '| `delegation_id` | Immutable AegisOps delegation record identifier for one approved handoff into an automation substrate or executor surface. |'
   '| `action_request_id` | Required AegisOps identifier for the exact request whose approved intent is being delegated. |'
   '| `approval_decision_id` | Required AegisOps identifier for the approval outcome that authorizes the delegated intent. |'

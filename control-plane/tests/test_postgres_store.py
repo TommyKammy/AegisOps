@@ -131,6 +131,7 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
                 payload_hash="payload-hash-001",
                 decided_at=timestamp,
                 lifecycle_state="approved",
+                approved_expires_at=timestamp,
             ),
             ActionRequestRecord(
                 action_request_id="action-request-001",

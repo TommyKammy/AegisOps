@@ -177,6 +177,7 @@ class ApprovalDecisionRecord(ControlPlaneRecord):
     payload_hash: str
     decided_at: datetime | None
     lifecycle_state: str
+    approved_expires_at: datetime | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "target_snapshot", _freeze_mapping(self.target_snapshot))

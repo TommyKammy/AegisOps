@@ -203,6 +203,21 @@ class WazuhAlertIngestContractDocsTests(unittest.TestCase):
             "`execution_run_id` observed on the reviewed surface.",
             automation_contract_text,
         )
+        self.assertIn(
+            "The approval record must persist an immutable approved expiry value or equivalent approved time bound "
+            "so delegation can reject post-approval expiry drift against the approved record rather than trusting "
+            "only mutable request state.",
+            automation_contract_text,
+        )
+        approval_section = _extract_markdown_section(
+            state_model_text,
+            "### 6.10 Approval Decision",
+        )
+        self.assertIn(
+            "| Target snapshot, payload hash, and approved expiry window | Required binding inputs that prove "
+            "which reviewed context and execution window the decision authorized or rejected. |",
+            approval_section,
+        )
 
 
 if __name__ == "__main__":

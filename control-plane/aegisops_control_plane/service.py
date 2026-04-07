@@ -1799,6 +1799,24 @@ class AegisOpsControlPlaneService:
                 "approved payload binding does not match approved action request and approval decision"
             )
 
+    @staticmethod
+    def _require_exact_approved_expiry_binding(
+        *,
+        action_request: ActionRequestRecord,
+        approval_decision: ApprovalDecisionRecord,
+        delegated_at: datetime,
+        delegation_label: str,
+    ) -> None:
+        if approval_decision.approved_expires_at != action_request.expires_at:
+            raise ValueError("approved expiry window does not match action request expiry")
+        if (
+            approval_decision.approved_expires_at is not None
+            and delegated_at > approval_decision.approved_expires_at
+        ):
+            raise ValueError(
+                f"Action request {action_request.action_request_id!r} expired before {delegation_label} delegation"
+            )
+
     def _load_approved_delegation_context(
         self,
         *,
@@ -1843,16 +1861,18 @@ class AegisOpsControlPlaneService:
             raise ValueError(invalid_execution_surface_type_message)
         if policy_evaluation.get("execution_surface_id") != execution_surface_id:
             raise ValueError(invalid_execution_surface_id_message)
-        if action_request.expires_at is not None and delegated_at > action_request.expires_at:
-            raise ValueError(
-                f"Action request {action_request_id!r} expired before {delegation_label} delegation"
-            )
         self._require_exact_approved_payload_binding(
             action_request=action_request,
             approval_decision=approval_decision,
             approved_payload=approved_payload,
             execution_surface_type=execution_surface_type,
             execution_surface_id=execution_surface_id,
+        )
+        self._require_exact_approved_expiry_binding(
+            action_request=action_request,
+            approval_decision=approval_decision,
+            delegated_at=delegated_at,
+            delegation_label=delegation_label,
         )
         return action_request, approval_decision
 
