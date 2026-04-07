@@ -15,9 +15,11 @@ fail_stderr="${workdir}/fail.err"
 
 required_artifacts=(
   "docs/automation-substrate-contract.md"
+  "docs/control-plane-state-model.md"
   "docs/architecture.md"
   "docs/phase-13-guarded-automation-ci-validation.md"
   "control-plane/tests/test_service_persistence.py"
+  "control-plane/tests/test_wazuh_alert_ingest_contract_docs.py"
   ".github/workflows/ci.yml"
 )
 
@@ -134,6 +136,20 @@ replace_text_in_file \
   'If the downstream surface reports mismatched execution details, operators may review vendor-local state before deciding whether reconciliation changes are needed.'
 commit_fixture "${stale_contract_repo}"
 assert_fails_with "${stale_contract_repo}" "Missing required line in ${stale_contract_repo}/docs/automation-substrate-contract.md: If the downstream surface reports the wrong payload hash, wrong target scope, wrong execution surface, or missing idempotency key, AegisOps must preserve that mismatch as explicit reconciliation state instead of normalizing it away."
+
+missing_state_model_cross_link_repo="${workdir}/missing-state-model-cross-link"
+create_repo "${missing_state_model_cross_link_repo}"
+write_required_artifacts "${missing_state_model_cross_link_repo}"
+remove_text_from_file "${missing_state_model_cross_link_repo}" "docs/phase-13-guarded-automation-ci-validation.md" '- `docs/control-plane-state-model.md`'
+commit_fixture "${missing_state_model_cross_link_repo}"
+assert_fails_with "${missing_state_model_cross_link_repo}" "Phase 13 validation record must list required artifact: docs/control-plane-state-model.md"
+
+missing_doc_contract_test_repo="${workdir}/missing-doc-contract-test"
+create_repo "${missing_doc_contract_test_repo}"
+write_required_artifacts "${missing_doc_contract_test_repo}"
+remove_text_from_file "${missing_doc_contract_test_repo}" "docs/phase-13-guarded-automation-ci-validation.md" '- `control-plane/tests/test_wazuh_alert_ingest_contract_docs.py`'
+commit_fixture "${missing_doc_contract_test_repo}"
+assert_fails_with "${missing_doc_contract_test_repo}" "Phase 13 validation record must list required artifact: control-plane/tests/test_wazuh_alert_ingest_contract_docs.py"
 
 missing_ci_step_repo="${workdir}/missing-ci-step"
 create_repo "${missing_ci_step_repo}"
