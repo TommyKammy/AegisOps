@@ -30,7 +30,7 @@ At minimum, the contract must preserve:
 | `action_request_id` | Required AegisOps identifier for the exact request whose approved intent is being delegated. |
 | `approval_decision_id` | Required AegisOps identifier for the approval outcome that authorizes the delegated intent. |
 | `execution_surface_type` | Required reviewed surface class, constrained to approved automation-substrate or executor categories rather than vendor-local workflow labels. |
-| `execution_surface_id` | Required reviewed identifier for the specific automation substrate or executor surface receiving the handoff. |
+| `execution_surface_id` | Required identifier for the specific reviewed automation substrate or executor surface receiving the handoff. |
 | `approved_payload` | Required exact payload or payload reference that downstream execution must honor. |
 | `payload_hash` | Required integrity value that binds approval, delegation, execution, and reconciliation to the same reviewed payload. |
 | `idempotency_key` | Required replay-safe key for the exact approved execution intent. |
