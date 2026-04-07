@@ -148,6 +148,41 @@ create table if not exists aegisops_control.action_request_records (
   check (lifecycle_state in ('draft','pending_approval','approved','rejected','expired','canceled','superseded','executing','completed','failed','unresolved'))
 );
 
+create table if not exists aegisops_control.action_execution_records (
+  action_execution_id text primary key,
+  action_request_id text not null,
+  approval_decision_id text not null,
+  delegation_id text not null,
+  execution_surface_type text not null,
+  execution_surface_id text not null,
+  execution_run_id text not null,
+  idempotency_key text not null,
+  target_scope jsonb not null,
+  approved_payload jsonb not null,
+  payload_hash text not null,
+  delegated_at timestamptz not null,
+  expires_at timestamptz,
+  provenance jsonb not null default '{}'::jsonb,
+  lifecycle_state text not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  constraint action_execution_records_identifiers_non_blank check (
+    nullif(btrim(action_execution_id), '') is not null
+    and nullif(btrim(action_request_id), '') is not null
+    and nullif(btrim(approval_decision_id), '') is not null
+    and nullif(btrim(delegation_id), '') is not null
+    and nullif(btrim(execution_surface_type), '') is not null
+    and nullif(btrim(execution_surface_id), '') is not null
+    and nullif(btrim(execution_run_id), '') is not null
+    and nullif(btrim(idempotency_key), '') is not null
+    and nullif(btrim(payload_hash), '') is not null
+  ),
+  constraint action_execution_records_expiry_not_before_delegation check (
+    expires_at is null or expires_at >= delegated_at
+  ),
+  check (lifecycle_state in ('queued','running','succeeded','failed','canceled','superseded'))
+);
+
 create table if not exists aegisops_control.hunt_records (
   hunt_id text primary key,
   hypothesis_statement text not null,

@@ -14,10 +14,12 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 from aegisops_control_plane.config import RuntimeConfig
 from aegisops_control_plane.models import (
+    ActionExecutionRecord,
     ActionRequestRecord,
     AnalyticSignalAdmission,
     AnalyticSignalRecord,
     AlertRecord,
+    ApprovalDecisionRecord,
     CaseRecord,
     EvidenceRecord,
     NativeDetectionRecord,
@@ -1766,6 +1768,161 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 "execution_surface_id": "shuffle",
             },
         )
+
+    def test_service_delegates_approved_low_risk_action_through_shuffle_adapter(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        expires_at = datetime(2026, 4, 5, 13, 0, tzinfo=timezone.utc)
+        service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-routine-001",
+                action_request_id="action-request-routine-001",
+                approver_identities=("approver-001",),
+                target_snapshot={"asset_id": "workstation-001"},
+                payload_hash="payload-hash-routine-001",
+                decided_at=requested_at,
+                lifecycle_state="approved",
+            )
+        )
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-routine-001",
+                approval_decision_id="approval-routine-001",
+                case_id="case-001",
+                alert_id="alert-001",
+                finding_id="finding-001",
+                idempotency_key="idempotency-routine-001",
+                target_scope={"asset_id": "workstation-001"},
+                payload_hash="payload-hash-routine-001",
+                requested_at=requested_at,
+                expires_at=expires_at,
+                lifecycle_state="approved",
+                policy_basis={
+                    "severity": "low",
+                    "target_scope": "single_asset",
+                    "action_reversibility": "reversible",
+                    "asset_criticality": "standard",
+                    "identity_criticality": "standard",
+                    "blast_radius": "single_target",
+                    "execution_constraint": "routine_allowed",
+                },
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "shuffle",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id="action-request-routine-001",
+            approved_payload={
+                "action_type": "notify_identity_owner",
+                "asset_id": "workstation-001",
+            },
+            delegated_at=delegated_at,
+            delegation_issuer="control-plane-service",
+            evidence_ids=("evidence-001",),
+        )
+
+        self.assertEqual(
+            execution.action_request_id,
+            "action-request-routine-001",
+        )
+        self.assertEqual(
+            execution.approval_decision_id,
+            "approval-routine-001",
+        )
+        self.assertEqual(execution.execution_surface_type, "automation_substrate")
+        self.assertEqual(execution.execution_surface_id, "shuffle")
+        self.assertEqual(
+            execution.idempotency_key,
+            "idempotency-routine-001",
+        )
+        self.assertEqual(execution.payload_hash, "payload-hash-routine-001")
+        self.assertEqual(
+            execution.approved_payload,
+            {
+                "action_type": "notify_identity_owner",
+                "asset_id": "workstation-001",
+            },
+        )
+        self.assertEqual(
+            execution.provenance,
+            {
+                "delegation_issuer": "control-plane-service",
+                "evidence_ids": ("evidence-001",),
+                "adapter": "shuffle",
+            },
+        )
+        self.assertEqual(execution.lifecycle_state, "queued")
+        self.assertTrue(execution.delegation_id.startswith("delegation-"))
+        self.assertTrue(execution.execution_run_id.startswith("shuffle-run-"))
+        self.assertEqual(
+            service.get_record(ActionExecutionRecord, execution.action_execution_id),
+            execution,
+        )
+
+    def test_service_rejects_shuffle_delegation_for_non_shuffle_execution_policy(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-executor-001",
+                action_request_id="action-request-executor-001",
+                approver_identities=("approver-001",),
+                target_snapshot={"asset_id": "critical-host-001"},
+                payload_hash="payload-hash-executor-001",
+                decided_at=requested_at,
+                lifecycle_state="approved",
+            )
+        )
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-executor-001",
+                approval_decision_id="approval-executor-001",
+                case_id="case-001",
+                alert_id="alert-001",
+                finding_id="finding-001",
+                idempotency_key="idempotency-executor-001",
+                target_scope={"asset_id": "critical-host-001"},
+                payload_hash="payload-hash-executor-001",
+                requested_at=requested_at,
+                expires_at=None,
+                lifecycle_state="approved",
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "approval",
+                    "execution_surface_type": "executor",
+                    "execution_surface_id": "isolated-executor",
+                },
+            )
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "not delegated through the automation substrate path",
+        ):
+            service.delegate_approved_action_to_shuffle(
+                action_request_id="action-request-executor-001",
+                approved_payload={"action_type": "disable_identity"},
+                delegated_at=datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc),
+                delegation_issuer="control-plane-service",
+            )
 
 
 if __name__ == "__main__":

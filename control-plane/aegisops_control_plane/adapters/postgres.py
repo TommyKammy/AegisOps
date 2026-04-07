@@ -9,6 +9,7 @@ from typing import Any, Callable, Iterator, Mapping, Protocol, Type, TypeVar
 
 from ..models import (
     AITraceRecord,
+    ActionExecutionRecord,
     ActionRequestRecord,
     AnalyticSignalRecord,
     AlertRecord,
@@ -146,6 +147,16 @@ _LIFECYCLE_STATES_BY_FAMILY: dict[str, frozenset[str]] = {
             "unresolved",
         }
     ),
+    "action_execution": frozenset(
+        {
+            "queued",
+            "running",
+            "succeeded",
+            "failed",
+            "canceled",
+            "superseded",
+        }
+    ),
     "hunt": frozenset(
         {"draft", "active", "on_hold", "concluded", "closed", "superseded"}
     ),
@@ -207,6 +218,11 @@ _TABLES_BY_RECORD_TYPE: dict[Type[ControlPlaneRecord], TableConfig] = {
         ActionRequestRecord,
         "action_request_records",
         json_fields=frozenset({"target_scope", "policy_basis", "policy_evaluation"}),
+    ),
+    ActionExecutionRecord: TableConfig(
+        ActionExecutionRecord,
+        "action_execution_records",
+        json_fields=frozenset({"target_scope", "approved_payload", "provenance"}),
     ),
     HuntRecord: TableConfig(HuntRecord, "hunt_records"),
     HuntRunRecord: TableConfig(
@@ -275,6 +291,18 @@ def _require_non_empty_tuple(
     )
 
 
+def _require_non_blank_fields(
+    record: ControlPlaneRecord,
+    field_names: tuple[str, ...],
+) -> None:
+    for field_name in field_names:
+        if _has_linkage_value(getattr(record, field_name)):
+            continue
+        raise ValueError(
+            f"{record.record_family} record {record.record_id!r} requires non-blank {field_name}"
+        )
+
+
 def _validate_record(record: ControlPlaneRecord) -> None:
     _validate_lifecycle_state(record)
 
@@ -311,6 +339,26 @@ def _validate_record(record: ControlPlaneRecord) -> None:
         return
     if isinstance(record, ActionRequestRecord):
         _require_any_linkage(record, ("case_id", "alert_id", "finding_id"))
+        return
+    if isinstance(record, ActionExecutionRecord):
+        _require_non_blank_fields(
+            record,
+            (
+                "action_execution_id",
+                "action_request_id",
+                "approval_decision_id",
+                "delegation_id",
+                "execution_surface_type",
+                "execution_surface_id",
+                "execution_run_id",
+                "idempotency_key",
+                "payload_hash",
+            ),
+        )
+        if record.expires_at is not None and record.expires_at < record.delegated_at:
+            raise ValueError(
+                f"action_execution record {record.record_id!r} requires expires_at >= delegated_at"
+            )
         return
     if isinstance(record, ReconciliationRecord):
         _require_any_linkage(

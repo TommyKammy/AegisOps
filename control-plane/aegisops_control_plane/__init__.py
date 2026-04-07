@@ -4,6 +4,7 @@ from .adapters import WazuhAlertAdapter
 from .config import RuntimeConfig
 from .models import (
     AITraceRecord,
+    ActionExecutionRecord,
     ActionRequestRecord,
     AnalyticSignalAdmission,
     AlertRecord,
@@ -33,6 +34,7 @@ from .service import (
 __all__ = [
     "AITraceRecord",
     "AegisOpsControlPlaneService",
+    "ActionExecutionRecord",
     "ActionRequestRecord",
     "AnalyticSignalAdmission",
     "AlertRecord",

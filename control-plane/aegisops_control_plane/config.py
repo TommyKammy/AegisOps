@@ -12,6 +12,7 @@ class RuntimeConfig:
     postgres_dsn: str = "<set-me>"
     opensearch_url: str = "<set-me>"
     n8n_base_url: str = "<set-me>"
+    shuffle_base_url: str = "<set-me>"
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> "RuntimeConfig":
@@ -37,4 +38,8 @@ class RuntimeConfig:
             postgres_dsn=source.get("AEGISOPS_CONTROL_PLANE_POSTGRES_DSN", cls.postgres_dsn),
             opensearch_url=source.get("AEGISOPS_CONTROL_PLANE_OPENSEARCH_URL", cls.opensearch_url),
             n8n_base_url=source.get("AEGISOPS_CONTROL_PLANE_N8N_BASE_URL", cls.n8n_base_url),
+            shuffle_base_url=source.get(
+                "AEGISOPS_CONTROL_PLANE_SHUFFLE_BASE_URL",
+                cls.shuffle_base_url,
+            ),
         )

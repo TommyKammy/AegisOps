@@ -26,6 +26,7 @@ class RuntimeSkeletonTests(unittest.TestCase):
         self.assertEqual(snapshot.persistence_mode, "postgresql")
         self.assertEqual(snapshot.opensearch_url, "<set-me>")
         self.assertEqual(snapshot.n8n_base_url, "<set-me>")
+        self.assertEqual(snapshot.shuffle_base_url, "<set-me>")
 
     def test_runtime_snapshot_uses_default_port_when_env_is_empty(self) -> None:
         snapshot = build_runtime_snapshot({"AEGISOPS_CONTROL_PLANE_PORT": ""})
@@ -38,6 +39,7 @@ class RuntimeSkeletonTests(unittest.TestCase):
                 "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN": "postgresql://control-plane.local",
                 "AEGISOPS_CONTROL_PLANE_OPENSEARCH_URL": "https://opensearch.internal",
                 "AEGISOPS_CONTROL_PLANE_N8N_BASE_URL": "https://n8n.internal",
+                "AEGISOPS_CONTROL_PLANE_SHUFFLE_BASE_URL": "https://shuffle.internal",
             }
         )
 
@@ -52,7 +54,7 @@ class RuntimeSkeletonTests(unittest.TestCase):
             snapshot.ownership_boundary["admitted_signal_model"],
             "control-plane/analytic-signals",
         )
-        self.assertEqual(snapshot.ownership_boundary["execution_plane"], "n8n/")
+        self.assertEqual(snapshot.ownership_boundary["execution_plane"], "shuffle/")
 
     def test_runtime_snapshot_rejects_non_integer_port(self) -> None:
         with self.assertRaisesRegex(
