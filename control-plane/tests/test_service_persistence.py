@@ -1667,6 +1667,106 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             ("isolated-executor",),
         )
 
+    def test_service_evaluates_action_policy_into_approval_and_isolated_executor(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-policy-high-risk",
+                approval_decision_id=None,
+                case_id="case-001",
+                alert_id="alert-001",
+                finding_id="finding-001",
+                idempotency_key="idempotency-policy-high-risk",
+                target_scope={"asset_id": "prod-domain-controller-001"},
+                payload_hash="payload-hash-policy-high-risk",
+                requested_at=requested_at,
+                expires_at=None,
+                lifecycle_state="draft",
+                policy_basis={
+                    "severity": "critical",
+                    "target_scope": "single_asset",
+                    "action_reversibility": "irreversible",
+                    "asset_criticality": "critical",
+                    "identity_criticality": "high",
+                    "blast_radius": "organization",
+                    "execution_constraint": "requires_isolated_executor",
+                },
+            )
+        )
+
+        evaluated = service.evaluate_action_policy(
+            "action-request-policy-high-risk"
+        )
+
+        self.assertEqual(
+            evaluated.policy_evaluation,
+            {
+                "approval_requirement": "human_required",
+                "routing_target": "approval",
+                "execution_surface_type": "executor",
+                "execution_surface_id": "isolated-executor",
+            },
+        )
+        self.assertEqual(
+            service.get_record(
+                ActionRequestRecord, "action-request-policy-high-risk"
+            ),
+            evaluated,
+        )
+
+    def test_service_evaluates_action_policy_into_shuffle_without_human_approval(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-policy-routine",
+                approval_decision_id=None,
+                case_id="case-001",
+                alert_id="alert-001",
+                finding_id="finding-001",
+                idempotency_key="idempotency-policy-routine",
+                target_scope={"asset_id": "workstation-001"},
+                payload_hash="payload-hash-policy-routine",
+                requested_at=requested_at,
+                expires_at=None,
+                lifecycle_state="draft",
+                policy_basis={
+                    "severity": "low",
+                    "target_scope": "single_asset",
+                    "action_reversibility": "reversible",
+                    "asset_criticality": "standard",
+                    "identity_criticality": "standard",
+                    "blast_radius": "single_target",
+                    "execution_constraint": "routine_allowed",
+                },
+            )
+        )
+
+        evaluated = service.evaluate_action_policy("action-request-policy-routine")
+
+        self.assertEqual(
+            evaluated.policy_evaluation,
+            {
+                "approval_requirement": "policy_authorized",
+                "routing_target": "shuffle",
+                "execution_surface_type": "automation_substrate",
+                "execution_surface_id": "shuffle",
+            },
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

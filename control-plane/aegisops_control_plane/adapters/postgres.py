@@ -206,7 +206,7 @@ _TABLES_BY_RECORD_TYPE: dict[Type[ControlPlaneRecord], TableConfig] = {
     ActionRequestRecord: TableConfig(
         ActionRequestRecord,
         "action_request_records",
-        json_fields=frozenset({"target_scope"}),
+        json_fields=frozenset({"target_scope", "policy_basis", "policy_evaluation"}),
     ),
     HuntRecord: TableConfig(HuntRecord, "hunt_records"),
     HuntRunRecord: TableConfig(

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from types import MappingProxyType
 from typing import ClassVar, Mapping, Union
@@ -198,9 +198,17 @@ class ActionRequestRecord(ControlPlaneRecord):
     requested_at: datetime
     expires_at: datetime | None
     lifecycle_state: str
+    policy_basis: Mapping[str, object] = field(default_factory=dict)
+    policy_evaluation: Mapping[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "target_scope", _freeze_mapping(self.target_scope))
+        object.__setattr__(self, "policy_basis", _freeze_mapping(self.policy_basis))
+        object.__setattr__(
+            self,
+            "policy_evaluation",
+            _freeze_mapping(self.policy_evaluation),
+        )
 
 
 @dataclass(frozen=True)
