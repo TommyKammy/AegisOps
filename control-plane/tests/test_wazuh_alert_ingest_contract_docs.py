@@ -148,6 +148,45 @@ class WazuhAlertIngestContractDocsTests(unittest.TestCase):
             state_model_text,
         )
 
+    def test_action_execution_state_model_definition_matches_delegation_contract(self) -> None:
+        state_model_text = STATE_MODEL_DOC.read_text(encoding="utf-8")
+        automation_contract_text = AUTOMATION_CONTRACT_DOC.read_text(encoding="utf-8")
+
+        self.assertIn("### 6.12 Action Execution", state_model_text)
+        self.assertIn(
+            "| `action_execution_id` | Immutable AegisOps control-plane identifier for one action-execution record. |",
+            state_model_text,
+        )
+        self.assertIn(
+            "| `action_request_id`, `approval_decision_id`, and `delegation_id` | Required lineage proving which approved request and emitted delegation the execution record represents. |",
+            state_model_text,
+        )
+        self.assertIn(
+            "| `execution_surface_type`, `execution_surface_id`, and `execution_run_id` | Required downstream correlation fields identifying the reviewed surface and observed run. |",
+            state_model_text,
+        )
+        self.assertIn(
+            "| Payload hash and idempotency key | Required binding fields proving the execution remained attached to the approved execution intent. |",
+            state_model_text,
+        )
+        for state in (
+            "`pending`",
+            "`running`",
+            "`succeeded`",
+            "`failed`",
+            "`canceled`",
+            "`timed_out`",
+            "`superseded`",
+            "`unresolved`",
+        ):
+            self.assertIn(state, state_model_text)
+        self.assertIn(
+            "Each later `Action Execution` record must link back to the originating `Action Request`, "
+            "the governing `Approval Decision`, the emitted `delegation_id`, and the downstream "
+            "`execution_run_id` observed on the reviewed surface.",
+            automation_contract_text,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
