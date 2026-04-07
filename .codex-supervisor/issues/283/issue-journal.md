@@ -42,6 +42,6 @@ Failure signature: verify:fail
 - Verification gap: Focused local reproduction and regression coverage now include the exact failing thesis verifier plus the earlier `Action Execution` unittest; broader suite coverage still is not required for this docs-and-verifier repair.
 - Files touched: `.codex-supervisor/issues/283/issue-journal.md`, `docs/control-plane-state-model.md`, `control-plane/tests/test_wazuh_alert_ingest_contract_docs.py`, `scripts/verify-control-plane-state-model-doc.sh`, `scripts/test-verify-control-plane-state-model-doc.sh`
 - Rollback concern: Low; the repair only aligns a stale string-based guardrail and adds a narrow regression case for the approved `Action Execution` lifecycle contract.
-- Last focused commands: `python3 /Users/jp.infra/.codex/plugins/cache/openai-curated/github/f78e3ad49297672a905eb7afb6aa0cef34edc79e/skills/gh-fix-ci/scripts/inspect_pr_checks.py --repo . --pr 290 --json`; `bash scripts/verify-phase-10-thesis-consistency.sh`; `bash scripts/test-verify-control-plane-state-model-doc.sh`; `python3 -m unittest control-plane.tests.test_wazuh_alert_ingest_contract_docs`
+- Last focused commands: `python3 <redacted-local-path> --repo . --pr 290 --json`; `bash scripts/verify-phase-10-thesis-consistency.sh`; `bash scripts/test-verify-control-plane-state-model-doc.sh`; `python3 -m unittest control-plane.tests.test_wazuh_alert_ingest_contract_docs`
 ### Scratchpad
 - Keep this section short. The supervisor may compact older notes automatically.
