@@ -33,11 +33,13 @@ Failure signature: none
 - Hypothesis: The reconciliation path was updating authoritative execution lifecycle state whenever any latest observation existed, even if reconciliation classified that observation as non-authoritative (`mismatch`, `duplicate`, `stale`).
 - What changed: Added a focused regression test for wrong-surface mismatch behavior and gated authoritative `ActionExecutionRecord` lifecycle mutation on `ingest_disposition == "matched"` inside `reconcile_action_execution`.
 - Current blocker: none
-- Next exact step: Push `codex/issue-293` to a branch-specific remote ref and open a draft PR for review.
+- Next exact step: Review draft PR `#297` and monitor CI or reviewer feedback.
 - Verification gap: None in local tests; focused regression and full test discovery both pass.
 - Files touched: `control-plane/aegisops_control_plane/service.py`, `control-plane/tests/test_service_persistence.py`, `.codex-supervisor/issues/293/issue-journal.md`
 - Rollback concern: Low; change only narrows when authoritative execution state may be mutated and leaves reconciliation record creation intact.
 - Last focused command: `python3 -m unittest discover -s control-plane/tests -p 'test_*.py'`
 - 2026-04-07T21:31:02Z verification refresh: `python3 -m unittest control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_records_execution_correlation_mismatch_states_separately control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_reconciles_shuffle_run_back_into_authoritative_action_execution control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_reconciles_isolated_executor_run_back_into_authoritative_action_execution`; `python3 -m unittest control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_reconciliation_mismatch_does_not_mutate_authoritative_execution`; `python3 -m unittest discover -s control-plane/tests -p 'test_*.py'`
+- Draft PR: `#297` `[codex] Guard authoritative execution reconciliation state` <https://github.com/TommyKammy/AegisOps/pull/297>
+- Publish note: GitHub app PR creation returned `403 Resource not accessible by integration`; used authenticated `gh pr create --draft` fallback successfully.
 ### Scratchpad
 - Keep this section short. The supervisor may compact older notes automatically.
