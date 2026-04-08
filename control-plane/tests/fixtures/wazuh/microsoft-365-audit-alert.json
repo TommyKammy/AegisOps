@@ -1,0 +1,58 @@
+{
+  "id": "1731595400.2233445",
+  "timestamp": "2026-04-05T12:30:00+00:00",
+  "rule": {
+    "id": "microsoft-365-audit-privilege-change",
+    "level": 7,
+    "description": "Microsoft 365 audit mailbox permission change",
+    "groups": [
+      "microsoft365",
+      "audit",
+      "privilege_change"
+    ]
+  },
+  "manager": {
+    "name": "wazuh-manager-m365-1"
+  },
+  "decoder": {
+    "name": "microsoft_365_audit"
+  },
+  "location": "microsoft365/contoso/exchange",
+  "data": {
+    "source_family": "microsoft_365_audit",
+    "audit_action": "Add-MailboxPermission",
+    "workload": "exchange",
+    "operation": "Add-MailboxPermission",
+    "record_type": "Microsoft 365 audit",
+    "actor": {
+      "type": "user",
+      "id": "alex@contoso.com",
+      "name": "Alex Rivera"
+    },
+    "target": {
+      "type": "mailbox",
+      "id": "shared-mailbox-finance",
+      "name": "shared-mailbox-finance"
+    },
+    "tenant": {
+      "id": "tenant-001",
+      "name": "Contoso"
+    },
+    "app": {
+      "id": "app-365-exchange",
+      "name": "Exchange Online",
+      "type": "workload"
+    },
+    "authentication": {
+      "method": "oauth2",
+      "client_app": "Outlook",
+      "result": "success"
+    },
+    "privilege": {
+      "change_type": "permission_grant",
+      "scope": "mailbox",
+      "permission": "full_access"
+    },
+    "request_id": "M365-REQ-0001"
+  }
+}
