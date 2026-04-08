@@ -1062,7 +1062,7 @@ class AegisOpsControlPlaneService:
         if analytic_signal_id is not None:
             existing_signal = self._store.get(AnalyticSignalRecord, analytic_signal_id)
             signal_reviewed_context = _merge_reviewed_context(
-                existing_signal.reviewed_context if existing_signal is not None else {},
+                alert.reviewed_context,
                 admission.reviewed_context,
             )
             signal_alert_ids = self._merge_linked_ids(
@@ -1180,6 +1180,7 @@ class AegisOpsControlPlaneService:
                             finding_id=existing_case.finding_id,
                             evidence_ids=merged_case_evidence_ids,
                             lifecycle_state=existing_case.lifecycle_state,
+                            reviewed_context=existing_case.reviewed_context,
                         )
                     )
 

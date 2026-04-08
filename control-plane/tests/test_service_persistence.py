@@ -312,7 +312,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         )
         materially_updated = service.ingest_finding_alert(
             finding_id="finding-merge-002",
-            analytic_signal_id="signal-merge-002",
+            analytic_signal_id="signal-merge-001",
             substrate_detection_record_id="substrate-detection-merge-002",
             correlation_key="claim:asset-repo-001:privilege-review",
             first_seen_at=first_seen_at,
@@ -338,8 +338,79 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         })
         self.assertEqual(materially_updated.alert.reviewed_context, merged_reviewed_context)
         self.assertEqual(
+            service.get_record(AnalyticSignalRecord, created.alert.analytic_signal_id).reviewed_context,
             service.get_record(AlertRecord, created.alert.alert_id).reviewed_context,
-            merged_reviewed_context,
+        )
+
+    def test_service_preserves_reviewed_context_when_native_detection_links_existing_case(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        reviewed_context = {
+            "asset": {
+                "asset_id": "asset-repo-001",
+                "ownership": "platform-security",
+            },
+            "identity": {
+                "identity_id": "principal-001",
+            },
+            "privilege": {
+                "privilege_scope": "repository_admin",
+            },
+        }
+
+        admitted = service.ingest_finding_alert(
+            finding_id="finding-native-link-001",
+            analytic_signal_id="signal-native-link-001",
+            substrate_detection_record_id="substrate-detection-native-link-001",
+            correlation_key="claim:asset-repo-001:native-link",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            reviewed_context=reviewed_context,
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-native-link-001",
+                source_record_id="substrate-detection-native-link-001",
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=first_seen_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        refreshed_result = replace(
+            admitted,
+            alert=service.get_record(AlertRecord, admitted.alert.alert_id),
+        )
+        native_record = NativeDetectionRecord(
+            substrate_key="wazuh",
+            native_record_id="native-detection-001",
+            record_kind="alert",
+            correlation_key="claim:asset-repo-001:native-link",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            metadata={},
+        )
+
+        linked = service._attach_native_detection_context(
+            record=native_record,
+            ingest_result=refreshed_result,
+            substrate_detection_record_id="substrate-detection-native-link-001",
+        )
+
+        self.assertEqual(linked.alert.case_id, promoted_case.case_id)
+        self.assertEqual(
+            service.get_record(CaseRecord, promoted_case.case_id).reviewed_context,
+            service.get_record(AlertRecord, admitted.alert.alert_id).reviewed_context,
         )
 
     def test_service_extends_promoted_wazuh_alert_with_existing_case_linkage(

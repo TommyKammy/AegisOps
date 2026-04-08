@@ -6,21 +6,19 @@
 - Workspace: .
 - Journal: .codex-supervisor/issues/301/issue-journal.md
 - Current phase: local_review_fix
-- Attempt count: 3 (implementation=1, repair=2)
-- Last head SHA: 398d714a86ea9a480fb0c183a192c36268d412b7
+- Attempt count: 4 (implementation=1, repair=3)
+- Last head SHA: 927e6da7d0182f8084f9ae9d3c42aee8be329797
 - Blocked reason: none
-- Last failure signature: none
-- Repeated failure signature count: 0
-- Updated at: 2026-04-08T14:09:39Z
+- Last failure signature: local-review:high:none:2:0:clean
+- Repeated failure signature count: 2
+- Updated at: 2026-04-08T14:19:50.819Z
 
 ## Latest Codex Summary
-Fixed the reviewed-context update regression in alert ingestion by assigning a disposition in the reviewed-context-only branch and merging reviewed context before existing-alert updates; validated the repair with focused persistence, CLI, and baseline checks; committed as `398d714` on `codex/issue-301`.
-
-Summary: Fixed reviewed-context alert update control flow and preserved merged reviewed context
+Summary: Patched the alert-update and case-link persistence paths so reviewed asset, identity, and privilege context survives repeated ingests, then reran the required verification and focused regressions.
 State hint: local_review_fix
 Blocked reason: none
-Tests: `python3 -m unittest control-plane.tests.test_service_persistence control-plane.tests.test_cli_inspection`; `python3 -m unittest control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_merges_reviewed_context_for_existing_alert_updates`; `bash scripts/test-verify-asset-identity-privilege-context-baseline.sh`; `python3 -m unittest control-plane.tests.test_postgres_store`
-Next action: refresh local review on updated head `398d714`
+Tests: `python3 -m unittest control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_merges_reviewed_context_for_existing_alert_updates control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_preserves_reviewed_context_when_native_detection_links_existing_case`; `bash scripts/test-verify-asset-identity-privilege-context-baseline.sh`; `python3 -m unittest control-plane.tests.test_service_persistence control-plane.tests.test_cli_inspection`
+Next action: commit the repair and refresh local review on the updated branch head
 Failure signature: none
 
 ## Active Failure Context
@@ -28,13 +26,13 @@ Failure signature: none
 
 ## Codex Working Notes
 ### Current Handoff
-- Hypothesis: existing-alert admissions need a merged vendor-neutral reviewed context and an explicit disposition so identity-centric enrichment can complete without dropping previously reviewed asset, identity, or privilege detail.
-- What changed: made the reviewed-context-only alert update path assign `disposition = "updated"` and switched existing-alert alert persistence to use an explicit merged reviewed-context value; added a regression test for context-only and materially-new update flows.
+- Hypothesis: existing-alert admissions and native-detection case-link updates both need to preserve the already-reviewed vendor-neutral asset, identity, and privilege context across repeated ingests.
+- What changed: `service.py` now preserves `reviewed_context` when appending evidence to an existing case and reuses the alert's current merged reviewed context when persisting the analytic signal; the persistence tests now cover both the materially-new signal replay and the native-detection case-link path.
 - Current blocker: none.
-- Next exact step: refresh local review on the updated head.
-- Verification gap: none for the scoped repair; focused unit suites and the baseline verifier passed after the fix.
+- Next exact step: commit the repair, then refresh local review on the updated head.
+- Verification gap: none for the scoped repair; the baseline verifier and focused unit suites passed on this turn.
 - Files touched: `control-plane/aegisops_control_plane/service.py`, `control-plane/tests/test_service_persistence.py`.
 - Rollback concern: the merged reviewed-context behavior must remain aligned across alert ingestion and downstream reconciliation records.
-- Last focused command: `python3 -m unittest control-plane.tests.test_service_persistence control-plane.tests.test_cli_inspection`
+- Last focused command: `python3 -m unittest control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_merges_reviewed_context_for_existing_alert_updates control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_preserves_reviewed_context_when_native_detection_links_existing_case`
 ### Scratchpad
 - Keep this section short. The supervisor may compact older notes automatically.
