@@ -93,8 +93,8 @@ assert_fails_with() {
     exit 1
   fi
 
-  if ! grep -F -- "${expected}" "${fail_stderr}" >/dev/null; then
-    echo "Expected failure output to contain: ${expected}" >&2
+  if ! grep -Fqx -- "${expected}" "${fail_stderr}" >/dev/null; then
+    echo "Expected failure output to equal: ${expected}" >&2
     cat "${fail_stderr}" >&2
     exit 1
   fi
@@ -112,7 +112,7 @@ write_required_artifacts "${missing_validation_repo}"
 rm "${missing_validation_repo}/docs/phase-14-identity-rich-source-expansion-ci-validation.md"
 git -C "${missing_validation_repo}" add -u docs/phase-14-identity-rich-source-expansion-ci-validation.md
 commit_fixture "${missing_validation_repo}"
-assert_fails_with "${missing_validation_repo}" "Missing Phase 14 identity-rich source expansion CI validation record"
+assert_fails_with "${missing_validation_repo}" "Missing Phase 14 identity-rich source expansion CI validation record: ${missing_validation_repo}/docs/phase-14-identity-rich-source-expansion-ci-validation.md"
 
 missing_parser_ownership_repo="${workdir}/missing-parser-ownership"
 create_repo "${missing_parser_ownership_repo}"
