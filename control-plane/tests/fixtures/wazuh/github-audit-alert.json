@@ -1,0 +1,51 @@
+{
+  "id": "1731595300.1234567",
+  "timestamp": "2026-04-05T12:20:00+00:00",
+  "rule": {
+    "id": "github-audit-privilege-change",
+    "level": 8,
+    "description": "GitHub audit repository privilege change",
+    "groups": [
+      "github",
+      "audit",
+      "privilege_change"
+    ]
+  },
+  "manager": {
+    "name": "wazuh-manager-github-1"
+  },
+  "decoder": {
+    "name": "github_audit"
+  },
+  "location": "github/orgs/TommyKammy/repos/AegisOps/audit",
+  "data": {
+    "source_family": "github_audit",
+    "audit_action": "member.added",
+    "actor": {
+      "type": "user",
+      "id": "octocat",
+      "name": "octocat"
+    },
+    "target": {
+      "type": "team",
+      "id": "security-reviews",
+      "name": "security-reviews"
+    },
+    "organization": {
+      "id": "org-001",
+      "name": "TommyKammy"
+    },
+    "repository": {
+      "id": "repo-001",
+      "name": "AegisOps",
+      "full_name": "TommyKammy/AegisOps"
+    },
+    "privilege": {
+      "change_type": "membership_change",
+      "scope": "repository_admin",
+      "permission": "admin",
+      "role": "maintainer"
+    },
+    "request_id": "GH-REQ-0001"
+  }
+}

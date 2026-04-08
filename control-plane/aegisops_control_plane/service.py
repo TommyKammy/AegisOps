@@ -1259,6 +1259,10 @@ class AegisOpsControlPlaneService:
                 if isinstance(field_value, str) and field_value.strip()
             }
 
+        reviewed_source_profile = record.metadata.get("reviewed_source_profile")
+        if isinstance(reviewed_source_profile, Mapping):
+            subject_linkage["reviewed_source_profile"] = dict(reviewed_source_profile)
+
         raw_alert = record.metadata.get("raw_alert")
         if isinstance(raw_alert, Mapping):
             subject_linkage["latest_native_payload"] = dict(raw_alert)

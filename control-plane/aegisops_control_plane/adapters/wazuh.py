@@ -43,6 +43,20 @@ class WazuhAlertAdapter:
         "data.srcuser",
         "data.integration",
         "data.event_type",
+        "data.source_family",
+        "data.audit_action",
+        "data.actor.id",
+        "data.actor.name",
+        "data.actor.login",
+        "data.target.id",
+        "data.target.name",
+        "data.target.login",
+        "data.organization.name",
+        "data.repository.full_name",
+        "data.privilege.change_type",
+        "data.privilege.scope",
+        "data.privilege.permission",
+        "data.privilege.role",
     )
 
     def build_native_detection_record(
@@ -73,6 +87,24 @@ class WazuhAlertAdapter:
         reviewed_correlation_context = self._build_reviewed_correlation_context(
             native_alert
         )
+        source_provenance = {
+            "accountable_source_identity": accountable_source_identity,
+            "agent": dict(agent or {}),
+            "manager": dict(manager or {}),
+            "decoder_name": _optional_string(
+                (_optional_mapping(native_alert.get("decoder")) or {}).get("name")
+            ),
+            "location": _optional_string(native_alert.get("location")),
+        }
+        reviewed_source_profile = self._build_reviewed_source_profile(
+            native_alert=native_alert,
+            source_provenance=source_provenance,
+            native_rule={
+                "id": rule_id,
+                "level": rule_level,
+                "description": rule_description,
+            },
+        )
         correlation_key = self._build_correlation_key(
             rule_id,
             accountable_source_identity,
@@ -89,17 +121,11 @@ class WazuhAlertAdapter:
                 "groups": _optional_string_tuple(rule.get("groups")),
                 "mitre": dict(_optional_mapping(rule.get("mitre")) or {}),
             },
-            "source_provenance": {
-                "accountable_source_identity": accountable_source_identity,
-                "agent": dict(agent or {}),
-                "manager": dict(manager or {}),
-                "decoder_name": _optional_string(
-                    (_optional_mapping(native_alert.get("decoder")) or {}).get("name")
-                ),
-                "location": _optional_string(native_alert.get("location")),
-            },
+            "source_provenance": source_provenance,
             "reviewed_correlation_context": dict(reviewed_correlation_context),
         }
+        if reviewed_source_profile is not None:
+            metadata["reviewed_source_profile"] = reviewed_source_profile
 
         return NativeDetectionRecord(
             substrate_key=self.substrate_key,
@@ -116,6 +142,9 @@ class WazuhAlertAdapter:
         record: NativeDetectionRecord,
     ) -> AnalyticSignalAdmission:
         native_rule = _require_mapping(record.metadata.get("native_rule"), "native_rule")
+        reviewed_source_profile = _optional_mapping(
+            record.metadata.get("reviewed_source_profile")
+        )
         reviewed_correlation_context = _optional_mapping(
             record.metadata.get("reviewed_correlation_context")
         )
@@ -126,6 +155,7 @@ class WazuhAlertAdapter:
             ).get("accountable_source_identity"),
             "source_provenance.accountable_source_identity",
         )
+        reviewed_context = reviewed_source_profile or reviewed_correlation_context or {}
         finding_id = (
             "finding:"
             f"{self.substrate_key}:"
@@ -140,7 +170,7 @@ class WazuhAlertAdapter:
             correlation_key=record.correlation_key,
             first_seen_at=record.first_seen_at,
             last_seen_at=record.last_seen_at,
-            reviewed_context=dict(reviewed_correlation_context or {}),
+            reviewed_context=dict(reviewed_context),
         )
 
     @staticmethod
@@ -190,6 +220,176 @@ class WazuhAlertAdapter:
         for field_path, value in reviewed_correlation_context:
             correlation_key += f":{field_path}={quote(value, safe='')}"
         return correlation_key
+
+    def _build_reviewed_source_profile(
+        self,
+        *,
+        native_alert: Mapping[str, object],
+        source_provenance: Mapping[str, object],
+        native_rule: Mapping[str, object],
+    ) -> dict[str, object] | None:
+        data = _optional_mapping(native_alert.get("data"))
+        if data is None:
+            return None
+
+        actor = self._build_identity_entity(_optional_mapping(data.get("actor")))
+        target = self._build_identity_entity(_optional_mapping(data.get("target")))
+        organization = self._build_organization_entity(
+            _optional_mapping(data.get("organization"))
+        )
+        repository = self._build_repository_entity(
+            _optional_mapping(data.get("repository"))
+        )
+        privilege = self._build_privilege_entity(
+            _optional_mapping(data.get("privilege"))
+        )
+        audit_action = _optional_string(data.get("audit_action"))
+        source_family = _optional_string(data.get("source_family"))
+        if source_family != "github_audit":
+            return None
+
+        has_github_context = any(
+            value is not None
+            for value in (
+                actor,
+                target,
+                organization,
+                repository,
+                privilege,
+                audit_action,
+                source_family,
+            )
+        )
+        if not has_github_context:
+            return None
+
+        profile: dict[str, object] = {
+            "source": {
+                "source_system": self.substrate_key,
+                "source_family": source_family or "github_audit",
+                "accountable_source_identity": _require_non_empty_string(
+                    source_provenance.get("accountable_source_identity"),
+                    "source_provenance.accountable_source_identity",
+                ),
+                "delivery_path": _optional_string(native_alert.get("location"))
+                or _optional_string(source_provenance.get("location"))
+                or "github_audit",
+            },
+            "provenance": {
+                "rule_id": _require_non_empty_string(
+                    native_rule.get("id"),
+                    "native_rule.id",
+                ),
+                "rule_level": native_rule.get("level"),
+                "rule_description": _require_non_empty_string(
+                    native_rule.get("description"),
+                    "native_rule.description",
+                ),
+            },
+        }
+        provenance = profile["provenance"]
+        decoder_name = _optional_string(source_provenance.get("decoder_name"))
+        if decoder_name is not None:
+            provenance["decoder_name"] = decoder_name
+        location = _optional_string(source_provenance.get("location"))
+        if location is not None:
+            provenance["location"] = location
+        if audit_action is not None:
+            provenance["audit_action"] = audit_action
+        request_id = _optional_string(data.get("request_id"))
+        if request_id is not None:
+            provenance["request_id"] = request_id
+        if actor is not None or target is not None:
+            identity_profile: dict[str, object] = {}
+            if actor is not None:
+                identity_profile["actor"] = actor
+            if target is not None:
+                identity_profile["target"] = target
+            profile["identity"] = identity_profile
+        if organization is not None or repository is not None:
+            asset_profile: dict[str, object] = {}
+            if organization is not None:
+                asset_profile["organization"] = organization
+            if repository is not None:
+                asset_profile["repository"] = repository
+            profile["asset"] = asset_profile
+        if privilege is not None:
+            profile["privilege"] = privilege
+        return profile
+
+    @staticmethod
+    def _build_identity_entity(
+        entity: Mapping[str, object] | None,
+    ) -> dict[str, object] | None:
+        if entity is None:
+            return None
+        profile: dict[str, object] = {}
+        entity_type = _optional_string(entity.get("type"))
+        if entity_type is not None:
+            profile["identity_type"] = entity_type
+        entity_id = _optional_string(entity.get("id"))
+        if entity_id is not None:
+            profile["identity_id"] = entity_id
+        display_name = _optional_string(entity.get("name")) or _optional_string(
+            entity.get("login")
+        )
+        if display_name is not None:
+            profile["display_name"] = display_name
+        if not profile:
+            return None
+        return profile
+
+    @staticmethod
+    def _build_organization_entity(
+        entity: Mapping[str, object] | None,
+    ) -> dict[str, object] | None:
+        if entity is None:
+            return None
+        profile: dict[str, object] = {}
+        organization_id = _optional_string(entity.get("id"))
+        if organization_id is not None:
+            profile["organization_id"] = organization_id
+        organization_name = _optional_string(entity.get("name"))
+        if organization_name is not None:
+            profile["organization_name"] = organization_name
+        if not profile:
+            return None
+        return profile
+
+    @staticmethod
+    def _build_repository_entity(
+        entity: Mapping[str, object] | None,
+    ) -> dict[str, object] | None:
+        if entity is None:
+            return None
+        profile: dict[str, object] = {}
+        repository_id = _optional_string(entity.get("id"))
+        if repository_id is not None:
+            profile["repository_id"] = repository_id
+        repository_name = _optional_string(entity.get("name"))
+        if repository_name is not None:
+            profile["repository_name"] = repository_name
+        repository_full_name = _optional_string(entity.get("full_name"))
+        if repository_full_name is not None:
+            profile["repository_full_name"] = repository_full_name
+        if not profile:
+            return None
+        return profile
+
+    @staticmethod
+    def _build_privilege_entity(
+        entity: Mapping[str, object] | None,
+    ) -> dict[str, object] | None:
+        if entity is None:
+            return None
+        profile: dict[str, object] = {}
+        for field_name in ("change_type", "scope", "permission", "role"):
+            value = _optional_string(entity.get(field_name))
+            if value is not None:
+                profile[field_name] = value
+        if not profile:
+            return None
+        return profile
 
     @staticmethod
     def _extract_reviewed_correlation_value(
