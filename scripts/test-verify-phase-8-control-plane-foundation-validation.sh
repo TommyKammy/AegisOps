@@ -21,7 +21,6 @@ required_artifacts=(
   "postgres/control-plane/README.md"
   "postgres/control-plane/schema.sql"
   "postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql"
-  "postgres/control-plane/migrations/0002_phase_14_reviewed_context_columns.sql"
 )
 
 create_repo() {
@@ -42,6 +41,15 @@ write_required_artifacts() {
     cp "${repo_root}/${artifact}" "${target}/${artifact}"
     git -C "${target}" add "${artifact}"
   done
+}
+
+write_forward_migration_artifact() {
+  local target="$1"
+  local artifact="postgres/control-plane/migrations/0002_phase_14_reviewed_context_columns.sql"
+
+  mkdir -p "${target}/$(dirname "${artifact}")"
+  cp "${repo_root}/${artifact}" "${target}/${artifact}"
+  git -C "${target}" add "${artifact}"
 }
 
 remove_text_from_doc() {
@@ -106,12 +114,14 @@ assert_fails_with() {
 valid_repo="${workdir}/valid"
 create_repo "${valid_repo}"
 write_required_artifacts "${valid_repo}"
+write_forward_migration_artifact "${valid_repo}"
 commit_fixture "${valid_repo}"
 assert_passes "${valid_repo}"
 
 missing_validation_repo="${workdir}/missing-validation"
 create_repo "${missing_validation_repo}"
 write_required_artifacts "${missing_validation_repo}"
+write_forward_migration_artifact "${missing_validation_repo}"
 remove_doc "${missing_validation_repo}" "docs/phase-8-control-plane-foundation-validation.md"
 commit_fixture "${missing_validation_repo}"
 assert_fails_with "${missing_validation_repo}" "Missing Phase 8 control-plane foundation validation record:"
@@ -119,6 +129,7 @@ assert_fails_with "${missing_validation_repo}" "Missing Phase 8 control-plane fo
 missing_state_model_cross_link_repo="${workdir}/missing-state-model-cross-link"
 create_repo "${missing_state_model_cross_link_repo}"
 write_required_artifacts "${missing_state_model_cross_link_repo}"
+write_forward_migration_artifact "${missing_state_model_cross_link_repo}"
 remove_text_from_doc "${missing_state_model_cross_link_repo}" "docs/control-plane-state-model.md" 'The repository already materializes a version-controlled schema baseline for that boundary under `postgres/control-plane/`, including reviewed schema manifests and migration files that keep the approved record-family boundary explicit without authorizing live deployment, credentials, or production migration execution in this phase.'
 commit_fixture "${missing_state_model_cross_link_repo}"
 assert_fails_with "${missing_state_model_cross_link_repo}" "Missing control-plane state model statement: The repository already materializes a version-controlled schema baseline for that boundary under \`postgres/control-plane/\`, including reviewed schema manifests and migration files that keep the approved record-family boundary explicit without authorizing live deployment, credentials, or production migration execution in this phase."
@@ -126,6 +137,7 @@ assert_fails_with "${missing_state_model_cross_link_repo}" "Missing control-plan
 missing_schema_boundary_repo="${workdir}/missing-schema-boundary"
 create_repo "${missing_schema_boundary_repo}"
 write_required_artifacts "${missing_schema_boundary_repo}"
+write_forward_migration_artifact "${missing_schema_boundary_repo}"
 remove_text_from_doc "${missing_schema_boundary_repo}" "postgres/control-plane/README.md" 'The schema remains separate from n8n-owned PostgreSQL metadata and execution-state tables even when both live on the same engine class.'
 commit_fixture "${missing_schema_boundary_repo}"
 assert_fails_with "${missing_schema_boundary_repo}" "Control-plane schema README must preserve the n8n ownership boundary"
@@ -133,6 +145,7 @@ assert_fails_with "${missing_schema_boundary_repo}" "Control-plane schema README
 missing_artifact_listing_repo="${workdir}/missing-artifact-listing"
 create_repo "${missing_artifact_listing_repo}"
 write_required_artifacts "${missing_artifact_listing_repo}"
+write_forward_migration_artifact "${missing_artifact_listing_repo}"
 remove_text_from_doc "${missing_artifact_listing_repo}" "docs/phase-8-control-plane-foundation-validation.md" '- `README.md`'
 commit_fixture "${missing_artifact_listing_repo}"
 assert_fails_with "${missing_artifact_listing_repo}" "Phase 8 foundation validation record must list required artifact: README.md"
@@ -140,6 +153,7 @@ assert_fails_with "${missing_artifact_listing_repo}" "Phase 8 foundation validat
 modified_validation_status_repo="${workdir}/modified-validation-status"
 create_repo "${modified_validation_status_repo}"
 write_required_artifacts "${modified_validation_status_repo}"
+write_forward_migration_artifact "${modified_validation_status_repo}"
 replace_text_in_doc "${modified_validation_status_repo}" "docs/phase-8-control-plane-foundation-validation.md" "- Validation status: PASS" "- Validation status: PASS (temporary)"
 commit_fixture "${modified_validation_status_repo}"
 assert_fails_with "${modified_validation_status_repo}" "Missing required line in ${modified_validation_status_repo}/docs/phase-8-control-plane-foundation-validation.md: - Validation status: PASS"
@@ -147,6 +161,7 @@ assert_fails_with "${modified_validation_status_repo}" "Missing required line in
 missing_reconciliation_record_repo="${workdir}/missing-reconciliation-record"
 create_repo "${missing_reconciliation_record_repo}"
 write_required_artifacts "${missing_reconciliation_record_repo}"
+write_forward_migration_artifact "${missing_reconciliation_record_repo}"
 remove_text_from_doc "${missing_reconciliation_record_repo}" "postgres/control-plane/README.md" '- `reconciliation_records`'
 commit_fixture "${missing_reconciliation_record_repo}"
 assert_fails_with "${missing_reconciliation_record_repo}" "Missing required line in ${missing_reconciliation_record_repo}/postgres/control-plane/README.md: - \`reconciliation_records\`"
