@@ -14,13 +14,13 @@
 - Updated at: 2026-04-08T15:41:16.210Z
 
 ## Latest Codex Summary
-Applied the remaining review fixes in [control-plane/aegisops_control_plane/adapters/wazuh.py](control-plane/aegisops_control_plane/adapters/wazuh.py#L37) by adding `actor.login` / `target.login` to reviewed correlation fields and gating the reviewed source-profile builder to the GitHub audit family. Added regressions in [control-plane/tests/test_wazuh_adapter.py](control-plane/tests/test_wazuh_adapter.py#L202) for the sparse GitHub source-family path, the login-only identity path, and the non-GitHub family rejection path.
+Applied the remaining review fixes in [control-plane/aegisops_control_plane/adapters/wazuh.py](control-plane/aegisops_control_plane/adapters/wazuh.py#L37) by adding `actor.login` / `target.login` to reviewed correlation fields and gating the reviewed source-profile builder to the GitHub audit family. Added regressions in [control-plane/tests/test_wazuh_adapter.py](control-plane/tests/test_wazuh_adapter.py#L202) for the sparse GitHub source-family path, the login-only identity path, and the non-GitHub family rejection path. The review-fix commits were pushed as `4c0ec61` and `a42ab87`.
 
 Summary: `WazuhAlertAdapter` now preserves login-only GitHub audit identities in the correlation key and no longer applies GitHub defaults to non-GitHub families
 State hint: addressing_review
 Blocked reason: none
 Tests: `python3 -m unittest control-plane.tests.test_wazuh_adapter control-plane.tests.test_service_persistence`; `bash scripts/test-verify-source-onboarding-contract-doc.sh`
-Next action: Commit and push the review fix to refresh PR `#309`
+Next action: Await GitHub/CodeRabbit refresh or manual resolution for the remaining unresolved thread on `control-plane/aegisops_control_plane/adapters/wazuh.py`
 Failure signature: PRRT_kwDOR2iDUc55m8sR|PRRT_kwDOR2iDUc55m8sf
 
 ## Active Failure Context
@@ -36,11 +36,11 @@ Failure signature: PRRT_kwDOR2iDUc55m8sR|PRRT_kwDOR2iDUc55m8sf
 - Hypothesis: GitHub audit Wazuh alerts need a structured reviewed source profile, not just the generic flat Wazuh correlation context, so the control-plane can preserve accountable source identity, actor/target identity, repository context, privilege-change metadata, and login-only identity fallbacks without broadening to unrelated families.
 - What changed: Added `actor.login` / `target.login` to reviewed correlation fields, gated GitHub defaults to the approved family, and added regressions for sparse GitHub, login-only GitHub, and non-GitHub alerts.
 - Current blocker: None.
-- Next exact step: Commit the review fix on `codex/issue-302` and update PR `#309`.
+- Next exact step: Wait for GitHub/CodeRabbit to clear the remaining unresolved thread or get manual resolution guidance.
 - Verification gap: None for the focused slice; the Wazuh adapter/service tests and the source-onboarding-contract verifier now pass.
-- Files touched: `control-plane/aegisops_control_plane/adapters/wazuh.py`, `control-plane/tests/test_wazuh_adapter.py`, `control-plane/tests/test_service_persistence.py`, `.codex-supervisor/issues/302/issue-journal.md`
+- Files touched: `control-plane/aegisops_control_plane/adapters/wazuh.py`, `control-plane/tests/test_wazuh_adapter.py`, `.codex-supervisor/issues/302/issue-journal.md`
 - Rollback concern: The new GitHub-specific profile is additive and leaves the existing non-GitHub Wazuh fixtures/tests unchanged.
 - Last focused command:
-- Last focused commands: `python3 -m unittest control-plane.tests.test_wazuh_adapter control-plane.tests.test_service_persistence`; `bash scripts/test-verify-source-onboarding-contract-doc.sh`
+- Last focused commands: `python3 -m unittest control-plane.tests.test_wazuh_adapter control-plane.tests.test_service_persistence`; `bash scripts/test-verify-source-onboarding-contract-doc.sh`; `fetch_comments.py`-based thread-state check via `gh api graphql`
 ### Scratchpad
 - Keep this section short. The supervisor may compact older notes automatically.
