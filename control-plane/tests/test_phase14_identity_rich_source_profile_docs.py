@@ -153,6 +153,60 @@ class Phase14IdentityRichSourceProfileDocsTests(unittest.TestCase):
             for term in shared_terms + terms:
                 self.assertIn(term, text)
 
+    def test_phase14_onboarding_packages_define_reviewed_ownership_and_prerequisites(
+        self,
+    ) -> None:
+        github_text = (
+            REPO_ROOT
+            / "docs"
+            / "source-families"
+            / "github-audit"
+            / "onboarding-package.md"
+        ).read_text(encoding="utf-8")
+        microsoft_text = (
+            REPO_ROOT
+            / "docs"
+            / "source-families"
+            / "microsoft-365-audit"
+            / "onboarding-package.md"
+        ).read_text(encoding="utf-8")
+        entra_text = (
+            REPO_ROOT
+            / "docs"
+            / "source-families"
+            / "entra-id"
+            / "onboarding-package.md"
+        ).read_text(encoding="utf-8")
+
+        shared_terms = (
+            "Readiness state: `schema-reviewed`",
+            "Parser ownership remains with IT Operations, Information Systems Department.",
+            "Representative raw payload references are stored in `control-plane/tests/fixtures/wazuh/`.",
+            "The reviewed fixture is sufficient for future parser and mapping validation without claiming that live source onboarding is approved.",
+            "Versioned parser changes remain future implementation work.",
+        )
+        family_specific_terms = {
+            github_text: (
+                "This package does not approve live GitHub API actioning, response automation, source-side credentials, or non-audit GitHub telemetry families.",
+                "GitHub repository privilege change",
+                "GitHub audit",
+            ),
+            microsoft_text: (
+                "This package does not approve direct Microsoft 365 actioning, non-audit Microsoft 365 telemetry families, source-side credentials, or runtime automation.",
+                "Microsoft 365 mailbox permission change",
+                "Microsoft 365 audit",
+            ),
+            entra_text: (
+                "This package does not approve direct Entra ID actioning, non-audit Entra ID telemetry families, source-side credentials, or runtime automation.",
+                "Entra ID privileged role assignment",
+                "Entra ID",
+            ),
+        }
+
+        for text, terms in family_specific_terms.items():
+            for term in shared_terms + terms:
+                self.assertIn(term, text)
+
 
 if __name__ == "__main__":
     unittest.main()
