@@ -40,6 +40,8 @@ Wazuh remains the reviewed ingestion and normalization path for the approved Pha
 
 GitHub audit signals are expected to be high-value approval-context inputs because repository and workflow changes often map directly to access, release, and approval boundaries.
 
+The reviewed GitHub audit onboarding package lives at `docs/source-families/github-audit/onboarding-package.md`, and the reviewed analyst triage runbook lives at `docs/source-families/github-audit/analyst-triage-runbook.md`.
+
 ### 4.2 Entra ID
 
 | Aspect | Review expectation |
@@ -52,6 +54,8 @@ GitHub audit signals are expected to be high-value approval-context inputs becau
 
 Entra ID signals are expected to provide the strongest directory and privilege context for analyst triage and approval review.
 
+The reviewed Entra ID onboarding package lives at `docs/source-families/entra-id/onboarding-package.md`, and the reviewed analyst triage runbook lives at `docs/source-families/entra-id/analyst-triage-runbook.md`.
+
 ### 4.3 Microsoft 365 audit
 
 | Aspect | Review expectation |
@@ -63,6 +67,8 @@ Entra ID signals are expected to provide the strongest directory and privilege c
 | Provenance | Workload, operation, record type, actor id, target id, and event time must remain preserved. |
 
 Microsoft 365 audit signals are expected to broaden approval-context coverage without becoming a generic platform-wide telemetry grab bag.
+
+The reviewed Microsoft 365 audit onboarding package lives at `docs/source-families/microsoft-365-audit/onboarding-package.md`, and the reviewed analyst triage runbook lives at `docs/source-families/microsoft-365-audit/analyst-triage-runbook.md`.
 
 ## 5. Explicit Non-Goals
 
