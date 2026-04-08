@@ -5,29 +5,36 @@
 - Branch: codex/issue-301
 - Workspace: .
 - Journal: .codex-supervisor/issues/301/issue-journal.md
-- Current phase: reproducing
-- Attempt count: 1 (implementation=1, repair=0)
-- Last head SHA: 113a37764cd6086c1efa62a31a16969ae316a3c3
+- Current phase: local_review_fix
+- Attempt count: 3 (implementation=1, repair=2)
+- Last head SHA: 398d714a86ea9a480fb0c183a192c36268d412b7
 - Blocked reason: none
 - Last failure signature: none
 - Repeated failure signature count: 0
-- Updated at: 2026-04-08T13:21:45.716Z
+- Updated at: 2026-04-08T14:09:39Z
 
 ## Latest Codex Summary
-- None yet.
+Fixed the reviewed-context update regression in alert ingestion by assigning a disposition in the reviewed-context-only branch and merging reviewed context before existing-alert updates; validated the repair with focused persistence, CLI, and baseline checks; committed as `398d714` on `codex/issue-301`.
+
+Summary: Fixed reviewed-context alert update control flow and preserved merged reviewed context
+State hint: local_review_fix
+Blocked reason: none
+Tests: `python3 -m unittest control-plane.tests.test_service_persistence control-plane.tests.test_cli_inspection`; `python3 -m unittest control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_merges_reviewed_context_for_existing_alert_updates`; `bash scripts/test-verify-asset-identity-privilege-context-baseline.sh`; `python3 -m unittest control-plane.tests.test_postgres_store`
+Next action: refresh local review on updated head `398d714`
+Failure signature: none
 
 ## Active Failure Context
 - None recorded.
 
 ## Codex Working Notes
 ### Current Handoff
-- Hypothesis: identity-centric analytic signals, alerts, cases, and recommendations needed a shared vendor-neutral reviewed context for asset, identity, and privilege detail instead of source-local field leakage.
-- What changed: added `reviewed_context` to the relevant control-plane record models, threaded it through alert ingestion and case promotion, persisted it in PostgreSQL as JSON, and tightened the asset/identity/privilege baseline doc and verifier.
+- Hypothesis: existing-alert admissions need a merged vendor-neutral reviewed context and an explicit disposition so identity-centric enrichment can complete without dropping previously reviewed asset, identity, or privilege detail.
+- What changed: made the reviewed-context-only alert update path assign `disposition = "updated"` and switched existing-alert alert persistence to use an explicit merged reviewed-context value; added a regression test for context-only and materially-new update flows.
 - Current blocker: none.
-- Next exact step: commit the checkpoint on `codex/issue-301`.
-- Verification gap: none for the scoped change; focused unit suites and schema/baseline verifiers are passing.
-- Files touched: `control-plane/aegisops_control_plane/models.py`, `control-plane/aegisops_control_plane/service.py`, `control-plane/aegisops_control_plane/adapters/postgres.py`, `control-plane/tests/test_service_persistence.py`, `docs/asset-identity-privilege-context-baseline.md`, `postgres/control-plane/schema.sql`, `postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql`, `scripts/verify-asset-identity-privilege-context-baseline.sh`, `scripts/test-verify-asset-identity-privilege-context-baseline.sh`.
-- Rollback concern: the new JSON-backed `reviewed_context` column and model field must stay in sync across schema, adapter, and service copies.
+- Next exact step: refresh local review on the updated head.
+- Verification gap: none for the scoped repair; focused unit suites and the baseline verifier passed after the fix.
+- Files touched: `control-plane/aegisops_control_plane/service.py`, `control-plane/tests/test_service_persistence.py`.
+- Rollback concern: the merged reviewed-context behavior must remain aligned across alert ingestion and downstream reconciliation records.
 - Last focused command: `python3 -m unittest control-plane.tests.test_service_persistence control-plane.tests.test_cli_inspection`
 ### Scratchpad
 - Keep this section short. The supervisor may compact older notes automatically.
