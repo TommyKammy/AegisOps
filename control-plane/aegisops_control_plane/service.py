@@ -1059,6 +1059,25 @@ class AegisOpsControlPlaneService:
             else:
                 disposition = "restated"
 
+            if alert.case_id is not None:
+                existing_case = self._store.get(CaseRecord, alert.case_id)
+                if existing_case is not None:
+                    merged_case_reviewed_context = _merge_reviewed_context(
+                        existing_case.reviewed_context,
+                        alert.reviewed_context,
+                    )
+                    if merged_case_reviewed_context != existing_case.reviewed_context:
+                        self.persist_record(
+                            CaseRecord(
+                                case_id=existing_case.case_id,
+                                alert_id=existing_case.alert_id,
+                                finding_id=existing_case.finding_id,
+                                evidence_ids=existing_case.evidence_ids,
+                                lifecycle_state=existing_case.lifecycle_state,
+                                reviewed_context=merged_case_reviewed_context,
+                            )
+                        )
+
         if analytic_signal_id is not None:
             existing_signal = self._store.get(AnalyticSignalRecord, analytic_signal_id)
             signal_reviewed_context = _merge_reviewed_context(

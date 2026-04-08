@@ -309,6 +309,20 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             last_seen_at=first_seen_at,
             reviewed_context=reviewed_context,
         )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-merge-001",
+                source_record_id="substrate-detection-merge-001",
+                alert_id=created.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=first_seen_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(created.alert.alert_id)
         context_updated = service.ingest_finding_alert(
             finding_id="finding-merge-001",
             analytic_signal_id="signal-merge-001",
@@ -333,6 +347,8 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(materially_updated.disposition, "updated")
         self.assertEqual(context_updated.alert.alert_id, created.alert.alert_id)
         self.assertEqual(materially_updated.alert.alert_id, created.alert.alert_id)
+        self.assertEqual(context_updated.alert.case_id, promoted_case.case_id)
+        self.assertEqual(materially_updated.alert.case_id, promoted_case.case_id)
         self.assertEqual(context_updated.alert.reviewed_context, {
             "asset": {
                 "asset_id": "asset-repo-001",
@@ -345,6 +361,10 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             },
         })
         self.assertEqual(materially_updated.alert.reviewed_context, merged_reviewed_context)
+        self.assertEqual(
+            service.get_record(CaseRecord, promoted_case.case_id).reviewed_context,
+            merged_reviewed_context,
+        )
         self.assertEqual(
             service.get_record(AnalyticSignalRecord, created.alert.analytic_signal_id).reviewed_context,
             service.get_record(AlertRecord, created.alert.alert_id).reviewed_context,
