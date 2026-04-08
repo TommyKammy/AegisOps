@@ -116,6 +116,9 @@ class WazuhAlertAdapter:
         record: NativeDetectionRecord,
     ) -> AnalyticSignalAdmission:
         native_rule = _require_mapping(record.metadata.get("native_rule"), "native_rule")
+        reviewed_correlation_context = _optional_mapping(
+            record.metadata.get("reviewed_correlation_context")
+        )
         accountable_source_identity = _require_non_empty_string(
             _require_mapping(
                 record.metadata.get("source_provenance"),
@@ -137,6 +140,7 @@ class WazuhAlertAdapter:
             correlation_key=record.correlation_key,
             first_seen_at=record.first_seen_at,
             last_seen_at=record.last_seen_at,
+            reviewed_context=dict(reviewed_correlation_context or {}),
         )
 
     @staticmethod

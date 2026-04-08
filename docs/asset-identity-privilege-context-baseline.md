@@ -112,3 +112,9 @@ It aligns with the SecOps domain model by keeping contextual reference entities 
 It aligns with the auth baseline by preserving distinct treatment for human identities, service accounts, approval roles, and least-privilege expectations.
 
 It aligns with the Phase 7 AI hunt ADR by allowing only bounded, reviewable context claims rather than silent live enrichment or externally hosted authority over internal identity and asset records.
+
+Identity-centric analytic signals, alerts, cases, and recommendations may also carry reviewed asset, identity, and privilege context when later reviewed source families provide it.
+
+That control-plane context must remain vendor-neutral. It may describe the reviewed asset, principal, group, role, ownership, criticality, or privilege scope that matters for triage or approval, but it must not leak source-local field names into control-plane semantics.
+
+GitHub audit, Microsoft 365 audit, and Entra ID are expected to populate this reviewed context through approved source-family mappings without turning the control plane into a source-authoritative inventory or directory.

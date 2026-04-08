@@ -96,4 +96,11 @@ remove_text_from_doc "${missing_non_goal_repo}" "Production privilege sync, enti
 commit_fixture "${missing_non_goal_repo}"
 assert_fails_with "${missing_non_goal_repo}" "Production privilege sync, entitlement reconciliation, and automatic authorization changes are out of scope."
 
+missing_reviewed_context_repo="${workdir}/missing-reviewed-context"
+create_repo "${missing_reviewed_context_repo}"
+write_canonical_doc "${missing_reviewed_context_repo}"
+remove_text_from_doc "${missing_reviewed_context_repo}" "Identity-centric analytic signals, alerts, cases, and recommendations may also carry reviewed asset, identity, and privilege context when later reviewed source families provide it."
+commit_fixture "${missing_reviewed_context_repo}"
+assert_fails_with "${missing_reviewed_context_repo}" "Identity-centric analytic signals, alerts, cases, and recommendations may also carry reviewed asset, identity, and privilege context when later reviewed source families provide it."
+
 echo "verify-asset-identity-privilege-context-baseline tests passed"

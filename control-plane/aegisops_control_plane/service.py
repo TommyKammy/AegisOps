@@ -243,6 +243,26 @@ def _approved_payload_binding_hash(
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _merge_reviewed_context(
+    existing_context: Mapping[str, object] | None,
+    incoming_context: Mapping[str, object] | None,
+) -> dict[str, object]:
+    merged: dict[str, object] = {}
+    if isinstance(existing_context, Mapping):
+        merged.update({str(key): value for key, value in existing_context.items()})
+    if not isinstance(incoming_context, Mapping):
+        return merged
+
+    for key, value in incoming_context.items():
+        normalized_key = str(key)
+        existing_value = merged.get(normalized_key)
+        if isinstance(existing_value, Mapping) and isinstance(value, Mapping):
+            merged[normalized_key] = _merge_reviewed_context(existing_value, value)
+        else:
+            merged[normalized_key] = value
+    return merged
+
+
 class AegisOpsControlPlaneService:
     """Minimal local runtime skeleton for the first control-plane service."""
 
@@ -684,6 +704,7 @@ class AegisOpsControlPlaneService:
         first_seen_at: datetime,
         last_seen_at: datetime,
         materially_new_work: bool = False,
+        reviewed_context: Mapping[str, object] | None = None,
     ) -> FindingAlertIngestResult:
         return self._ingest_analytic_signal_admission(
             AnalyticSignalAdmission(
@@ -694,6 +715,7 @@ class AegisOpsControlPlaneService:
                 first_seen_at=first_seen_at,
                 last_seen_at=last_seen_at,
                 materially_new_work=materially_new_work,
+                reviewed_context=reviewed_context or {},
             )
         )
 
@@ -803,6 +825,10 @@ class AegisOpsControlPlaneService:
                         if existing_case is not None
                         else case_lifecycle_state
                     ),
+                    reviewed_context=_merge_reviewed_context(
+                        existing_case.reviewed_context if existing_case is not None else {},
+                        alert.reviewed_context,
+                    ),
                 )
             )
             promoted_alert = self.persist_record(
@@ -812,6 +838,7 @@ class AegisOpsControlPlaneService:
                     analytic_signal_id=alert.analytic_signal_id,
                     case_id=promoted_case.case_id,
                     lifecycle_state="escalated_to_case",
+                    reviewed_context=alert.reviewed_context,
                 )
             )
             if promoted_alert.analytic_signal_id is not None:
@@ -861,6 +888,7 @@ class AegisOpsControlPlaneService:
             first_seen_at=admission.first_seen_at,
             last_seen_at=admission.last_seen_at,
             materially_new_work=admission.materially_new_work,
+            reviewed_context=admission.reviewed_context,
         )
         with self._store.transaction():
             result = self._ingest_analytic_signal_admission(admission)
@@ -903,6 +931,7 @@ class AegisOpsControlPlaneService:
                 "last_seen_at must be greater than or equal to first_seen_at"
             )
         materially_new_work = admission.materially_new_work
+        reviewed_context = _merge_reviewed_context({}, admission.reviewed_context)
 
         existing_reconciliations = [
             record
@@ -930,6 +959,7 @@ class AegisOpsControlPlaneService:
                     analytic_signal_id=analytic_signal_id,
                     case_id=None,
                     lifecycle_state="new",
+                    reviewed_context=reviewed_context,
                 )
             )
             disposition = "created"
@@ -950,6 +980,10 @@ class AegisOpsControlPlaneService:
                 raise LookupError(
                     f"Missing alert {latest_reconciliation.alert_id!r} for correlation key {correlation_key!r}"
                 )
+            merged_reviewed_context = _merge_reviewed_context(
+                alert.reviewed_context,
+                admission.reviewed_context,
+            )
             existing_finding_ids = latest_reconciliation.subject_linkage.get("finding_ids")
             existing_signal_ids = latest_reconciliation.subject_linkage.get(
                 "analytic_signal_ids"
@@ -1004,6 +1038,19 @@ class AegisOpsControlPlaneService:
                         analytic_signal_id=analytic_signal_id,
                         case_id=alert.case_id,
                         lifecycle_state=alert.lifecycle_state,
+                        reviewed_context=merged_reviewed_context,
+                    )
+                )
+                disposition = "updated"
+            elif merged_reviewed_context != alert.reviewed_context:
+                alert = self.persist_record(
+                    AlertRecord(
+                        alert_id=alert.alert_id,
+                        finding_id=alert.finding_id,
+                        analytic_signal_id=alert.analytic_signal_id,
+                        case_id=alert.case_id,
+                        lifecycle_state=alert.lifecycle_state,
+                        reviewed_context=merged_reviewed_context,
                     )
                 )
                 disposition = "updated"
@@ -1012,8 +1059,31 @@ class AegisOpsControlPlaneService:
             else:
                 disposition = "restated"
 
+            if alert.case_id is not None:
+                existing_case = self._store.get(CaseRecord, alert.case_id)
+                if existing_case is not None:
+                    merged_case_reviewed_context = _merge_reviewed_context(
+                        existing_case.reviewed_context,
+                        alert.reviewed_context,
+                    )
+                    if merged_case_reviewed_context != existing_case.reviewed_context:
+                        self.persist_record(
+                            CaseRecord(
+                                case_id=existing_case.case_id,
+                                alert_id=existing_case.alert_id,
+                                finding_id=existing_case.finding_id,
+                                evidence_ids=existing_case.evidence_ids,
+                                lifecycle_state=existing_case.lifecycle_state,
+                                reviewed_context=merged_case_reviewed_context,
+                            )
+                        )
+
         if analytic_signal_id is not None:
             existing_signal = self._store.get(AnalyticSignalRecord, analytic_signal_id)
+            signal_reviewed_context = _merge_reviewed_context(
+                alert.reviewed_context,
+                admission.reviewed_context,
+            )
             signal_alert_ids = self._merge_linked_ids(
                 existing_signal.alert_ids if existing_signal is not None else (),
                 alert.alert_id,
@@ -1047,6 +1117,7 @@ class AegisOpsControlPlaneService:
                     first_seen_at=signal_first_seen,
                     last_seen_at=signal_last_seen,
                     lifecycle_state="active",
+                    reviewed_context=signal_reviewed_context,
                 )
             )
 
@@ -1120,7 +1191,14 @@ class AegisOpsControlPlaneService:
                     existing_case.evidence_ids,
                     evidence.evidence_id,
                 )
-                if merged_case_evidence_ids != existing_case.evidence_ids:
+                merged_case_reviewed_context = _merge_reviewed_context(
+                    existing_case.reviewed_context,
+                    ingest_result.alert.reviewed_context,
+                )
+                if (
+                    merged_case_evidence_ids != existing_case.evidence_ids
+                    or merged_case_reviewed_context != existing_case.reviewed_context
+                ):
                     self.persist_record(
                         CaseRecord(
                             case_id=existing_case.case_id,
@@ -1128,6 +1206,7 @@ class AegisOpsControlPlaneService:
                             finding_id=existing_case.finding_id,
                             evidence_ids=merged_case_evidence_ids,
                             lifecycle_state=existing_case.lifecycle_state,
+                            reviewed_context=merged_case_reviewed_context,
                         )
                     )
 
@@ -1555,6 +1634,7 @@ class AegisOpsControlPlaneService:
                     first_seen_at=existing_signal.first_seen_at,
                     last_seen_at=existing_signal.last_seen_at,
                     lifecycle_state=existing_signal.lifecycle_state,
+                    reviewed_context=existing_signal.reviewed_context,
                 )
             )
 

@@ -193,13 +193,23 @@ _RECONCILIATION_INGEST_DISPOSITIONS = frozenset(
 )
 
 _TABLES_BY_RECORD_TYPE: dict[Type[ControlPlaneRecord], TableConfig] = {
-    AlertRecord: TableConfig(AlertRecord, "alert_records"),
+    AlertRecord: TableConfig(
+        AlertRecord,
+        "alert_records",
+        json_fields=frozenset({"reviewed_context"}),
+    ),
     AnalyticSignalRecord: TableConfig(
         AnalyticSignalRecord,
         "analytic_signal_records",
+        json_fields=frozenset({"reviewed_context"}),
         array_fields=frozenset({"alert_ids", "case_ids"}),
     ),
-    CaseRecord: TableConfig(CaseRecord, "case_records", array_fields=frozenset({"evidence_ids"})),
+    CaseRecord: TableConfig(
+        CaseRecord,
+        "case_records",
+        json_fields=frozenset({"reviewed_context"}),
+        array_fields=frozenset({"evidence_ids"}),
+    ),
     EvidenceRecord: TableConfig(EvidenceRecord, "evidence_records"),
     ObservationRecord: TableConfig(
         ObservationRecord,
@@ -207,7 +217,11 @@ _TABLES_BY_RECORD_TYPE: dict[Type[ControlPlaneRecord], TableConfig] = {
         array_fields=frozenset({"supporting_evidence_ids"}),
     ),
     LeadRecord: TableConfig(LeadRecord, "lead_records"),
-    RecommendationRecord: TableConfig(RecommendationRecord, "recommendation_records"),
+    RecommendationRecord: TableConfig(
+        RecommendationRecord,
+        "recommendation_records",
+        json_fields=frozenset({"reviewed_context"}),
+    ),
     ApprovalDecisionRecord: TableConfig(
         ApprovalDecisionRecord,
         "approval_decision_records",
