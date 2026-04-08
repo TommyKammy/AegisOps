@@ -130,6 +130,7 @@ class Phase14IdentityRichSourceProfileDocsTests(unittest.TestCase):
         )
         family_specific_terms = (
             (
+                "github-audit",
                 github_text,
                 (
                     "GitHub audit",
@@ -139,6 +140,7 @@ class Phase14IdentityRichSourceProfileDocsTests(unittest.TestCase):
                 ),
             ),
             (
+                "microsoft-365-audit",
                 microsoft_text,
                 (
                     "Microsoft 365 audit",
@@ -148,6 +150,7 @@ class Phase14IdentityRichSourceProfileDocsTests(unittest.TestCase):
                 ),
             ),
             (
+                "entra-id",
                 entra_text,
                 (
                     "Entra ID",
@@ -158,9 +161,10 @@ class Phase14IdentityRichSourceProfileDocsTests(unittest.TestCase):
             ),
         )
 
-        for text, terms in family_specific_terms:
-            for term in shared_terms + terms:
-                self.assertIn(term, text)
+        for family_name, text, terms in family_specific_terms:
+            with self.subTest(family=family_name):
+                for term in shared_terms + terms:
+                    self.assertIn(term, text)
 
     def test_phase14_onboarding_packages_define_reviewed_ownership_and_prerequisites(
         self,
@@ -194,27 +198,40 @@ class Phase14IdentityRichSourceProfileDocsTests(unittest.TestCase):
             "The reviewed fixture is sufficient for future parser and mapping validation without claiming that live source onboarding is approved.",
             "Versioned parser changes remain future implementation work.",
         )
-        family_specific_terms = {
-            github_text: (
-                "This package does not approve live GitHub API actioning, response automation, source-side credentials, or non-audit GitHub telemetry families.",
-                "GitHub repository privilege change",
-                "GitHub audit",
+        family_specific_terms = (
+            (
+                "github-audit",
+                github_text,
+                (
+                    "This package does not approve live GitHub API actioning, response automation, source-side credentials, or non-audit GitHub telemetry families.",
+                    "GitHub repository privilege change",
+                    "GitHub audit",
+                ),
             ),
-            microsoft_text: (
-                "This package does not approve direct Microsoft 365 actioning, non-audit Microsoft 365 telemetry families, source-side credentials, or runtime automation.",
-                "Microsoft 365 mailbox permission change",
-                "Microsoft 365 audit",
+            (
+                "microsoft-365-audit",
+                microsoft_text,
+                (
+                    "This package does not approve direct Microsoft 365 actioning, non-audit Microsoft 365 telemetry families, source-side credentials, or runtime automation.",
+                    "Microsoft 365 mailbox permission change",
+                    "Microsoft 365 audit",
+                ),
             ),
-            entra_text: (
-                "This package does not approve direct Entra ID actioning, non-audit Entra ID telemetry families, source-side credentials, or runtime automation.",
-                "Entra ID privileged role assignment",
-                "Entra ID",
+            (
+                "entra-id",
+                entra_text,
+                (
+                    "This package does not approve direct Entra ID actioning, non-audit Entra ID telemetry families, source-side credentials, or runtime automation.",
+                    "Entra ID privileged role assignment",
+                    "Entra ID",
+                ),
             ),
-        }
+        )
 
-        for text, terms in family_specific_terms.items():
-            for term in shared_terms + terms:
-                self.assertIn(term, text)
+        for family_name, text, terms in family_specific_terms:
+            with self.subTest(family=family_name):
+                for term in shared_terms + terms:
+                    self.assertIn(term, text)
 
 
 if __name__ == "__main__":
