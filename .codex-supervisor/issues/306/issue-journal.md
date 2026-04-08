@@ -34,9 +34,9 @@ Failure signature: PRRT_kwDOR2iDUc55pZY8
 - What changed: Tightened `assert_fails_with` in `scripts/test-verify-phase-14-identity-rich-source-expansion-ci-validation.sh` to use `grep -Fqx` and updated the missing-validation fixture to assert the full path-qualified stderr line.
 - Current blocker: None.
 - Next exact step: commit the review fix on `codex/issue-306` and publish the updated branch state.
-- Verification gap: None for the review fix; `bash -n scripts/test-verify-phase-14-identity-rich-source-expansion-ci-validation.sh`, `bash scripts/test-verify-phase-14-identity-rich-source-expansion-ci-validation.sh`, and `bash scripts/verify-phase-14-identity-rich-source-expansion-ci-validation.sh /Users/jp.infra/Dev/AegisOps-worktrees/issue-306` all passed.
+- Verification gap: None for the review fix; `bash -n scripts/test-verify-phase-14-identity-rich-source-expansion-ci-validation.sh`, `bash scripts/test-verify-phase-14-identity-rich-source-expansion-ci-validation.sh`, and `bash scripts/verify-phase-14-identity-rich-source-expansion-ci-validation.sh <redacted-local-path>` all passed.
 - Files touched: `scripts/test-verify-phase-14-identity-rich-source-expansion-ci-validation.sh`
 - Rollback concern: Low; the change is isolated to the Phase 14 shell test harness and only narrows the assertion.
-- Last focused command: `bash scripts/verify-phase-14-identity-rich-source-expansion-ci-validation.sh /Users/jp.infra/Dev/AegisOps-worktrees/issue-306`
+- Last focused command: `bash scripts/verify-phase-14-identity-rich-source-expansion-ci-validation.sh <redacted-local-path>`
 ### Scratchpad
 - Keep this section short. The supervisor may compact older notes automatically.
