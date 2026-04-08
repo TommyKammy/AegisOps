@@ -137,22 +137,24 @@ assert_fails_with "${missing_false_positive_repo}" "Missing required line in ${m
 missing_entra_service_test_repo="${workdir}/missing-entra-service-test"
 create_repo "${missing_entra_service_test_repo}"
 write_required_artifacts "${missing_entra_service_test_repo}"
-remove_text_from_file \
+replace_text_in_file \
   "${missing_entra_service_test_repo}" \
   "control-plane/tests/test_service_persistence.py" \
-  "    def test_service_admits_entra_id_fixture_through_wazuh_source_profile("
+  "    def test_service_admits_entra_id_fixture_through_wazuh_source_profile(" \
+  "    def _missing_service_admits_entra_id_fixture_through_wazuh_source_profile("
 commit_fixture "${missing_entra_service_test_repo}"
-assert_fails_with "${missing_entra_service_test_repo}" "Missing required Phase 14 test in ${missing_entra_service_test_repo}/control-plane/tests/test_service_persistence.py: test_service_admits_entra_id_fixture_through_wazuh_source_profile"
+assert_fails_with "${missing_entra_service_test_repo}" "Missing required Phase 14 unittest-discoverable test in ${missing_entra_service_test_repo}/control-plane/tests/test_service_persistence.py: test_service_admits_entra_id_fixture_through_wazuh_source_profile"
 
 missing_prerequisite_test_repo="${workdir}/missing-prerequisite-test"
 create_repo "${missing_prerequisite_test_repo}"
 write_required_artifacts "${missing_prerequisite_test_repo}"
-remove_text_from_file \
+replace_text_in_file \
   "${missing_prerequisite_test_repo}" \
   "control-plane/tests/test_phase14_identity_rich_source_profile_docs.py" \
-  "    def test_phase14_onboarding_packages_define_reviewed_ownership_and_prerequisites("
+  "    def test_phase14_onboarding_packages_define_reviewed_ownership_and_prerequisites(" \
+  "    def _missing_test_phase14_onboarding_packages_define_reviewed_ownership_and_prerequisites("
 commit_fixture "${missing_prerequisite_test_repo}"
-assert_fails_with "${missing_prerequisite_test_repo}" "Missing required Phase 14 test in ${missing_prerequisite_test_repo}/control-plane/tests/test_phase14_identity_rich_source_profile_docs.py: test_phase14_onboarding_packages_define_reviewed_ownership_and_prerequisites"
+assert_fails_with "${missing_prerequisite_test_repo}" "Missing required Phase 14 unittest-discoverable test in ${missing_prerequisite_test_repo}/control-plane/tests/test_phase14_identity_rich_source_profile_docs.py: test_phase14_onboarding_packages_define_reviewed_ownership_and_prerequisites"
 
 missing_ci_step_repo="${workdir}/missing-ci-step"
 create_repo "${missing_ci_step_repo}"
