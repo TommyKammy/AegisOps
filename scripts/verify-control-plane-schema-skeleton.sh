@@ -56,6 +56,7 @@ require_table_contains_line() {
   local needle="$3"
 
   if ! awk -v table_name="${table_name}" -v needle="${needle}" '
+    { sub(/\r$/, "", $0) }
     $0 == "create table if not exists aegisops_control." table_name " (" { in_table = 1; next }
     in_table && $0 == ");" { in_table = 0 }
     in_table && index($0, needle) > 0 { found = 1 }
