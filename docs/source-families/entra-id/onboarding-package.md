@@ -29,7 +29,7 @@ The reviewed success-path reference in this package covers a privileged role ass
 Raw payload reference set:
 
 | File | Scenario | Notes |
-| ---- | ---- | ---- | ---- |
+| ---- | ---- | ---- |
 | `entra-id-alert.json` | Entra ID privileged role assignment | Synthetic Wazuh alert shaped after an Entra ID audit record; preserves tenant context, actor identity, target identity, authentication context, directory provenance, and privilege-change metadata. |
 
 All raw payload references in this package are synthetic review artifacts. They exist to anchor mapping review and replay validation, not to stand in for production enrollment evidence.
