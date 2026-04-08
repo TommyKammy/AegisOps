@@ -27,4 +27,6 @@ The schema keeps the reconciliation boundary explicit by recording cross-system 
 
 `reconciliation_records.ingest_disposition` covers both analytic-ingest outcomes (`created`, `updated`, `deduplicated`, `restated`, `matched`) and execution-correlation exceptions (`missing`, `duplicate`, `mismatch`, `stale`) so operators can distinguish downstream execution gaps from normal alert lifecycle state.
 
+The Phase 14 forward migration path adds `reviewed_context` to `alert_records`, `analytic_signal_records`, `case_records`, and `recommendation_records` so upgraded databases can accept identity-rich reviewed writes without schema recreation.
+
 Future work remains explicit: online rollout sequencing, environment-specific access controls, stricter foreign-key enforcement across cyclic record families, and additional index tuning stay out of scope for this baseline.

@@ -7,6 +7,7 @@ repo_root="${1:-${default_repo_root}}"
 readme_path="${repo_root}/postgres/control-plane/README.md"
 schema_path="${repo_root}/postgres/control-plane/schema.sql"
 migration_path="${repo_root}/postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql"
+forward_migration_path="${repo_root}/postgres/control-plane/migrations/0002_phase_14_reviewed_context_columns.sql"
 
 if [[ ! -f "${readme_path}" ]]; then
   echo "Missing control-plane schema README: ${readme_path}" >&2
@@ -20,6 +21,11 @@ fi
 
 if [[ ! -f "${migration_path}" ]]; then
   echo "Missing control-plane schema migration: ${migration_path}" >&2
+  exit 1
+fi
+
+if [[ ! -f "${forward_migration_path}" ]]; then
+  echo "Missing Phase 14 forward control-plane migration: ${forward_migration_path}" >&2
   exit 1
 fi
 
@@ -40,6 +46,23 @@ require_pattern() {
 
   if ! grep -En "${pattern}" "${file_path}" >/dev/null; then
     echo "${message}" >&2
+    exit 1
+  fi
+}
+
+require_table_contains_line() {
+  local file_path="$1"
+  local table_name="$2"
+  local needle="$3"
+
+  if ! awk -v table_name="${table_name}" -v needle="${needle}" '
+    { sub(/\r$/, "", $0) }
+    $0 == "create table if not exists aegisops_control." table_name " (" { in_table = 1; next }
+    in_table && $0 == ");" { in_table = 0 }
+    in_table && index($0, needle) > 0 { found = 1 }
+    END { exit found ? 0 : 1 }
+  ' "${file_path}"; then
+    echo "Missing required line in ${file_path} within ${table_name}: ${needle}" >&2
     exit 1
   fi
 }
@@ -70,6 +93,17 @@ require_pattern "${migration_path}" '^commit;$' \
 require_pattern "${migration_path}" '^create schema if not exists aegisops_control;$' \
   "Control-plane migration must reserve the aegisops_control schema."
 
+require_fixed_string "${forward_migration_path}" "-- Phase 14 forward migration for reviewed_context on identity-rich reviewed record families."
+require_pattern "${forward_migration_path}" '^begin;$' \
+  "Phase 14 forward migration must start an explicit transaction."
+require_pattern "${forward_migration_path}" '^commit;$' \
+  "Phase 14 forward migration must end an explicit transaction."
+require_fixed_string "${forward_migration_path}" "alter table if exists aegisops_control.alert_records"
+require_fixed_string "${forward_migration_path}" "alter table if exists aegisops_control.analytic_signal_records"
+require_fixed_string "${forward_migration_path}" "alter table if exists aegisops_control.case_records"
+require_fixed_string "${forward_migration_path}" "alter table if exists aegisops_control.recommendation_records"
+require_fixed_string "${forward_migration_path}" "  add column if not exists reviewed_context jsonb not null default '{}'::jsonb;"
+
 record_families=(
   "alert"
   "case"
@@ -88,10 +122,14 @@ record_families=(
 for family in "${record_families[@]}"; do
   require_pattern "${schema_path}" "^create table if not exists aegisops_control\\.${family}_records \\($" \
     "Control-plane schema manifest must materialize ${family}_records."
-  require_pattern "${schema_path}" "^\\s+lifecycle_state text not null,$" \
+  require_pattern "${schema_path}" "^[[:space:]]+lifecycle_state text not null,$" \
     "Control-plane schema manifest must define lifecycle_state columns."
   require_pattern "${migration_path}" "^create table if not exists aegisops_control\\.${family}_records \\($" \
     "Control-plane migration must materialize ${family}_records."
+done
+
+for family in alert analytic_signal case recommendation; do
+  require_table_contains_line "${schema_path}" "${family}_records" "reviewed_context jsonb not null default '{}'::jsonb,"
 done
 
 require_pattern "${schema_path}" 'check \(' \
