@@ -163,6 +163,14 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 "data.srcuser": "invalid-user",
             },
         )
+        self.assertEqual(
+            admitted.alert.reviewed_context,
+            {
+                "location": "/var/log/auth.log",
+                "data.srcip": "198.51.100.24",
+                "data.srcuser": "invalid-user",
+            },
+        )
 
     def test_service_preserves_reviewed_context_across_identity_centric_records(self) -> None:
         store, _ = make_store()

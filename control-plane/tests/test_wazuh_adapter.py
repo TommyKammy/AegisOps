@@ -69,6 +69,14 @@ class WazuhAlertAdapterTests(unittest.TestCase):
                 "data.srcuser": "invalid-user",
             },
         )
+        self.assertEqual(
+            adapter.build_analytic_signal_admission(record).reviewed_context,
+            {
+                "location": "/var/log/auth.log",
+                "data.srcip": "198.51.100.24",
+                "data.srcuser": "invalid-user",
+            },
+        )
 
     def test_adapter_accepts_manager_origin_fixture_when_agent_identity_is_absent(self) -> None:
         adapter = WazuhAlertAdapter()
