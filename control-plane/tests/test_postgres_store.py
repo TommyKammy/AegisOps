@@ -48,6 +48,40 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         self.assertEqual(store.persistence_mode, "postgresql")
         self.assertEqual(store.dsn, "postgresql://control-plane.local/aegisops")
 
+    def test_phase14_reviewed_context_forward_migration_asset_exists(self) -> None:
+        migration_path = (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0002_phase_14_reviewed_context_columns.sql"
+        )
+
+        self.assertTrue(
+            migration_path.exists(),
+            f"Missing Phase 14 forward migration asset: {migration_path}",
+        )
+
+        migration_sql = migration_path.read_text(encoding="utf-8")
+        expected_tables = (
+            "alert_records",
+            "analytic_signal_records",
+            "case_records",
+            "recommendation_records",
+        )
+
+        self.assertIn("begin;", migration_sql.lower())
+        self.assertIn("commit;", migration_sql.lower())
+        for table_name in expected_tables:
+            self.assertIn(
+                f"alter table if exists aegisops_control.{table_name}",
+                migration_sql.lower(),
+            )
+            self.assertIn(
+                "add column if not exists reviewed_context jsonb not null default '{}'::jsonb;",
+                migration_sql.lower(),
+            )
+
     def test_store_round_trips_reviewed_record_families_by_aegisops_ids(self) -> None:
         store, _ = make_store()
         timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
@@ -59,6 +93,10 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
                 analytic_signal_id="signal-001",
                 case_id="case-001",
                 lifecycle_state="investigating",
+                reviewed_context={
+                    "review": {"status": "approved"},
+                    "analyst": {"identity_id": "analyst-001"},
+                },
             ),
             AnalyticSignalRecord(
                 analytic_signal_id="signal-001",
@@ -70,6 +108,10 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
                 first_seen_at=timestamp,
                 last_seen_at=timestamp,
                 lifecycle_state="active",
+                reviewed_context={
+                    "review": {"status": "approved"},
+                    "source": {"source_family": "wazuh"},
+                },
             ),
             CaseRecord(
                 case_id="case-001",
@@ -77,6 +119,10 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
                 finding_id="finding-001",
                 evidence_ids=("evidence-001",),
                 lifecycle_state="investigating",
+                reviewed_context={
+                    "review": {"status": "approved"},
+                    "case_owner": {"identity_id": "analyst-001"},
+                },
             ),
             EvidenceRecord(
                 evidence_id="evidence-001",
@@ -122,6 +168,10 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
                 review_owner="reviewer-001",
                 intended_outcome="escalate for action review",
                 lifecycle_state="under_review",
+                reviewed_context={
+                    "review": {"status": "approved"},
+                    "priority": "high",
+                },
             ),
             ApprovalDecisionRecord(
                 approval_decision_id="approval-001",
@@ -250,6 +300,23 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         for record_type, record_id, expected_record in expected_records:
             with self.subTest(record_type=record_type.__name__, record_id=record_id):
                 self.assertEqual(store.get(record_type, record_id), expected_record)
+
+        self.assertEqual(
+            store.get(AlertRecord, "alert-001").reviewed_context,
+            records[0].reviewed_context,
+        )
+        self.assertEqual(
+            store.get(AnalyticSignalRecord, "signal-001").reviewed_context,
+            records[1].reviewed_context,
+        )
+        self.assertEqual(
+            store.get(CaseRecord, "case-001").reviewed_context,
+            records[2].reviewed_context,
+        )
+        self.assertEqual(
+            store.get(RecommendationRecord, "recommendation-001").reviewed_context,
+            records[6].reviewed_context,
+        )
 
         self.assertIsNone(store.get(AlertRecord, "finding-001"))
         self.assertIsNone(store.get(ActionRequestRecord, "approval-001"))

@@ -49,10 +49,32 @@ write_valid_fixture() {
     "  finding_id text not null," \
     "  analytic_signal_id text," \
     "  case_id text," \
+    "  reviewed_context jsonb not null default '{}'::jsonb," \
     "  lifecycle_state text not null," \
     "  created_at timestamptz not null default timezone('utc', now())," \
     "  updated_at timestamptz not null default timezone('utc', now())," \
     "  check (lifecycle_state in ('new','triaged','investigating','escalated_to_case','closed','reopened','superseded'))" \
+    ");" \
+    "" \
+    "create table if not exists aegisops_control.analytic_signal_records (" \
+    "  analytic_signal_id text primary key," \
+    "  substrate_detection_record_id text," \
+    "  finding_id text," \
+    "  alert_ids text[] not null default '{}'::text[]," \
+    "  case_ids text[] not null default '{}'::text[]," \
+    "  reviewed_context jsonb not null default '{}'::jsonb," \
+    "  correlation_key text not null," \
+    "  first_seen_at timestamptz," \
+    "  last_seen_at timestamptz," \
+    "  lifecycle_state text not null," \
+    "  created_at timestamptz not null default timezone('utc', now())," \
+    "  updated_at timestamptz not null default timezone('utc', now())," \
+    "  check (" \
+    "    nullif(btrim(substrate_detection_record_id), '') is not null" \
+    "    or nullif(btrim(finding_id), '') is not null" \
+    "  )," \
+    "  check (first_seen_at is null or last_seen_at is null or first_seen_at <= last_seen_at)," \
+    "  check (lifecycle_state in ('active','superseded','withdrawn'))" \
     ");" \
     "" \
     "create table if not exists aegisops_control.case_records (" \
@@ -60,6 +82,7 @@ write_valid_fixture() {
     "  alert_id text," \
     "  finding_id text," \
     "  evidence_ids text[] not null," \
+    "  reviewed_context jsonb not null default '{}'::jsonb," \
     "  lifecycle_state text not null," \
     "  created_at timestamptz not null default timezone('utc', now())," \
     "  updated_at timestamptz not null default timezone('utc', now())," \
@@ -127,6 +150,7 @@ write_valid_fixture() {
     "  ai_trace_id text," \
     "  review_owner text not null," \
     "  intended_outcome text not null," \
+    "  reviewed_context jsonb not null default '{}'::jsonb," \
     "  created_at timestamptz not null default timezone('utc', now())," \
     "  updated_at timestamptz not null default timezone('utc', now())," \
     "  lifecycle_state text not null," \
@@ -234,10 +258,13 @@ write_valid_fixture() {
   perl -0pi -e "s/\\A(-- Control-plane schema v1 baseline migration\\.\\n)/\$1begin;\\n/" \
     "${target}/postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql"
   printf '\ncommit;\n' >>"${target}/postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql"
+  cp "${repo_root}/postgres/control-plane/migrations/0002_phase_14_reviewed_context_columns.sql" \
+    "${target}/postgres/control-plane/migrations/0002_phase_14_reviewed_context_columns.sql"
 
   git -C "${target}" add postgres/control-plane/README.md
   git -C "${target}" add postgres/control-plane/schema.sql
   git -C "${target}" add postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql
+  git -C "${target}" add postgres/control-plane/migrations/0002_phase_14_reviewed_context_columns.sql
   git -C "${target}" commit -q -m "fixture"
 }
 
@@ -309,6 +336,14 @@ perl -0pi -e "s/\\n  linked_execution_run_ids text\\[\\] not null default '\\{\\
 git -C "${missing_reconciliation_link_repo}" add postgres/control-plane/schema.sql
 git -C "${missing_reconciliation_link_repo}" commit -q -m "fixture update"
 assert_fails_with "${missing_reconciliation_link_repo}" "must preserve explicit reconciliation linkage to execution-plane records"
+
+missing_forward_migration_repo="${workdir}/missing-forward-migration"
+create_repo "${missing_forward_migration_repo}"
+write_valid_fixture "${missing_forward_migration_repo}"
+rm -f "${missing_forward_migration_repo}/postgres/control-plane/migrations/0002_phase_14_reviewed_context_columns.sql"
+git -C "${missing_forward_migration_repo}" add -A postgres/control-plane/migrations
+git -C "${missing_forward_migration_repo}" commit -q -m "fixture update"
+assert_fails_with "${missing_forward_migration_repo}" "Missing Phase 14 forward control-plane migration"
 
 schema_seed_repo="${workdir}/schema-seed"
 create_repo "${schema_seed_repo}"

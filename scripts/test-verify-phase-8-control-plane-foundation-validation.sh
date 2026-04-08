@@ -21,6 +21,7 @@ required_artifacts=(
   "postgres/control-plane/README.md"
   "postgres/control-plane/schema.sql"
   "postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql"
+  "postgres/control-plane/migrations/0002_phase_14_reviewed_context_columns.sql"
 )
 
 create_repo() {
