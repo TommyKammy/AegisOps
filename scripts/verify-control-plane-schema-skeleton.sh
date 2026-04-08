@@ -122,7 +122,7 @@ record_families=(
 for family in "${record_families[@]}"; do
   require_pattern "${schema_path}" "^create table if not exists aegisops_control\\.${family}_records \\($" \
     "Control-plane schema manifest must materialize ${family}_records."
-  require_pattern "${schema_path}" "^\\s+lifecycle_state text not null,$" \
+  require_pattern "${schema_path}" "^[[:space:]]+lifecycle_state text not null,$" \
     "Control-plane schema manifest must define lifecycle_state columns."
   require_pattern "${migration_path}" "^create table if not exists aegisops_control\\.${family}_records \\($" \
     "Control-plane migration must materialize ${family}_records."

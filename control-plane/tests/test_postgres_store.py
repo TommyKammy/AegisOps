@@ -78,7 +78,10 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
                 migration_sql.lower(),
             )
             self.assertIn(
-                "add column if not exists reviewed_context jsonb not null default '{}'::jsonb;",
+                (
+                    f"alter table if exists aegisops_control.{table_name}\n"
+                    "  add column if not exists reviewed_context jsonb not null default '{}'::jsonb;"
+                ),
                 migration_sql.lower(),
             )
 
