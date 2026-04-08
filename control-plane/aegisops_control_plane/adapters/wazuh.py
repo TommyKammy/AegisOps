@@ -46,8 +46,10 @@ class WazuhAlertAdapter:
         "data.audit_action",
         "data.actor.id",
         "data.actor.name",
+        "data.actor.login",
         "data.target.id",
         "data.target.name",
+        "data.target.login",
         "data.organization.name",
         "data.repository.full_name",
         "data.privilege.change_type",
@@ -240,6 +242,7 @@ class WazuhAlertAdapter:
         )
         audit_action = _optional_string(data.get("audit_action"))
         source_family = _optional_string(data.get("source_family"))
+        is_github_family = source_family is None or source_family == "github_audit"
 
         has_github_context = any(
             value is not None
@@ -253,7 +256,7 @@ class WazuhAlertAdapter:
                 source_family,
             )
         )
-        if not has_github_context:
+        if not is_github_family or not has_github_context:
             return None
 
         profile: dict[str, object] = {

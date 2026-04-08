@@ -232,6 +232,67 @@ class WazuhAlertAdapterTests(unittest.TestCase):
             expected_profile,
         )
 
+    def test_adapter_does_not_apply_github_profile_defaults_to_non_github_family(
+        self,
+    ) -> None:
+        adapter = WazuhAlertAdapter()
+        foreign_alert = _load_fixture("github-audit-alert.json")
+        foreign_alert["data"]["source_family"] = "okta_audit"
+
+        record = adapter.build_native_detection_record(foreign_alert)
+
+        self.assertNotIn("reviewed_source_profile", record.metadata)
+        self.assertEqual(
+            adapter.build_analytic_signal_admission(record).reviewed_context,
+            record.metadata["reviewed_correlation_context"],
+        )
+
+    def test_adapter_uses_login_fields_when_reviewed_identity_names_are_absent(
+        self,
+    ) -> None:
+        adapter = WazuhAlertAdapter()
+        login_only_alert = _load_fixture("github-audit-alert.json")
+        login_only_alert["data"] = {
+            "source_family": "github_audit",
+            "audit_action": "member.added",
+            "actor": {
+                "type": "user",
+                "id": "octocat",
+                "login": "octocat",
+            },
+            "target": {
+                "type": "team",
+                "id": "security-reviews",
+                "login": "security-reviews",
+            },
+        }
+
+        record = adapter.build_native_detection_record(login_only_alert)
+
+        self.assertEqual(
+            record.correlation_key,
+            (
+                "wazuh:rule:github-audit-privilege-change:source:manager:wazuh-manager-github-1"
+                ":location=github%2Forgs%2FTommyKammy%2Frepos%2FAegisOps%2Faudit"
+                ":data.audit_action=member.added"
+                ":data.actor.id=octocat"
+                ":data.actor.login=octocat"
+                ":data.target.id=security-reviews"
+                ":data.target.login=security-reviews"
+            ),
+        )
+        self.assertEqual(
+            record.metadata["reviewed_correlation_context"],
+            {
+                "location": "github/orgs/TommyKammy/repos/AegisOps/audit",
+                "data.audit_action": "member.added",
+                "data.actor.id": "octocat",
+                "data.actor.login": "octocat",
+                "data.target.id": "security-reviews",
+                "data.target.login": "security-reviews",
+            },
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
