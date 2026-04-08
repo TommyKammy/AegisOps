@@ -980,7 +980,7 @@ class AegisOpsControlPlaneService:
                 raise LookupError(
                     f"Missing alert {latest_reconciliation.alert_id!r} for correlation key {correlation_key!r}"
                 )
-            reviewed_context = _merge_reviewed_context(
+            merged_reviewed_context = _merge_reviewed_context(
                 alert.reviewed_context,
                 admission.reviewed_context,
             )
@@ -1038,11 +1038,11 @@ class AegisOpsControlPlaneService:
                         analytic_signal_id=analytic_signal_id,
                         case_id=alert.case_id,
                         lifecycle_state=alert.lifecycle_state,
-                        reviewed_context=reviewed_context,
+                        reviewed_context=merged_reviewed_context,
                     )
                 )
                 disposition = "updated"
-            elif reviewed_context != alert.reviewed_context:
+            elif merged_reviewed_context != alert.reviewed_context:
                 alert = self.persist_record(
                     AlertRecord(
                         alert_id=alert.alert_id,
@@ -1050,9 +1050,10 @@ class AegisOpsControlPlaneService:
                         analytic_signal_id=alert.analytic_signal_id,
                         case_id=alert.case_id,
                         lifecycle_state=alert.lifecycle_state,
-                        reviewed_context=reviewed_context,
+                        reviewed_context=merged_reviewed_context,
                     )
                 )
+                disposition = "updated"
             elif already_linked:
                 disposition = "deduplicated"
             else:

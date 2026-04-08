@@ -246,6 +246,102 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             reviewed_context,
         )
 
+    def test_service_merges_reviewed_context_for_existing_alert_updates(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        reviewed_context = {
+            "asset": {
+                "asset_id": "asset-repo-001",
+                "ownership": "platform-security",
+            },
+            "identity": {
+                "identity_id": "principal-001",
+            },
+        }
+        reviewed_context_update = {
+            "asset": {
+                "criticality": "high",
+            },
+            "identity": {
+                "owner": "identity-operations",
+            },
+        }
+        materially_new_reviewed_context = {
+            "privilege": {
+                "privilege_scope": "repository_admin",
+                "delegated_authority": "reviewed",
+            }
+        }
+        merged_reviewed_context = {
+            "asset": {
+                "asset_id": "asset-repo-001",
+                "ownership": "platform-security",
+                "criticality": "high",
+            },
+            "identity": {
+                "identity_id": "principal-001",
+                "owner": "identity-operations",
+            },
+            "privilege": {
+                "privilege_scope": "repository_admin",
+                "delegated_authority": "reviewed",
+            },
+        }
+
+        created = service.ingest_finding_alert(
+            finding_id="finding-merge-001",
+            analytic_signal_id="signal-merge-001",
+            substrate_detection_record_id="substrate-detection-merge-001",
+            correlation_key="claim:asset-repo-001:privilege-review",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            reviewed_context=reviewed_context,
+        )
+        context_updated = service.ingest_finding_alert(
+            finding_id="finding-merge-001",
+            analytic_signal_id="signal-merge-001",
+            substrate_detection_record_id="substrate-detection-merge-001",
+            correlation_key="claim:asset-repo-001:privilege-review",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            reviewed_context=reviewed_context_update,
+        )
+        materially_updated = service.ingest_finding_alert(
+            finding_id="finding-merge-002",
+            analytic_signal_id="signal-merge-002",
+            substrate_detection_record_id="substrate-detection-merge-002",
+            correlation_key="claim:asset-repo-001:privilege-review",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            materially_new_work=True,
+            reviewed_context=materially_new_reviewed_context,
+        )
+
+        self.assertEqual(context_updated.disposition, "updated")
+        self.assertEqual(materially_updated.disposition, "updated")
+        self.assertEqual(context_updated.alert.alert_id, created.alert.alert_id)
+        self.assertEqual(materially_updated.alert.alert_id, created.alert.alert_id)
+        self.assertEqual(context_updated.alert.reviewed_context, {
+            "asset": {
+                "asset_id": "asset-repo-001",
+                "ownership": "platform-security",
+                "criticality": "high",
+            },
+            "identity": {
+                "identity_id": "principal-001",
+                "owner": "identity-operations",
+            },
+        })
+        self.assertEqual(materially_updated.alert.reviewed_context, merged_reviewed_context)
+        self.assertEqual(
+            service.get_record(AlertRecord, created.alert.alert_id).reviewed_context,
+            merged_reviewed_context,
+        )
+
     def test_service_extends_promoted_wazuh_alert_with_existing_case_linkage(
         self,
     ) -> None:
