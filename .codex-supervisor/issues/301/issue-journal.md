@@ -7,18 +7,18 @@
 - Journal: .codex-supervisor/issues/301/issue-journal.md
 - Current phase: local_review_fix
 - Attempt count: 6 (implementation=1, repair=5)
-- Last head SHA: 566bbffb729a5da1fd735a78e4be8ef9bf0efae3
+- Last head SHA: 1d34628c8fb4a5caab7a2ebfca0a66dbf1ee21e0
 - Blocked reason: none
 - Last failure signature: none
 - Repeated failure signature count: 0
-- Updated at: 2026-04-08T14:33:21.707Z
+- Updated at: 2026-04-08T14:34:55Z
 
 ## Latest Codex Summary
-Summary: Merged the alert’s current reviewed context into native-detection case rewrites, added a regression for the promote-update-link sequence, and committed the fix as `566bbff`
+Summary: Populated Wazuh native admissions with reviewed correlation context, added regression coverage for adapter and persistence paths, and committed the fix as `1d34628`
 State hint: local_review_fix
 Blocked reason: none
 Tests: `python3 -m unittest control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_merges_reviewed_context_for_existing_alert_updates control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_preserves_reviewed_context_when_native_detection_links_existing_case`; `bash scripts/test-verify-asset-identity-privilege-context-baseline.sh`; `python3 -m unittest control-plane.tests.test_service_persistence control-plane.tests.test_cli_inspection`
-Next action: refresh local review on branch head `566bbff`
+Next action: refresh local review on branch head `1d34628`
 Failure signature: none
 
 ## Active Failure Context
