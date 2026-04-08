@@ -254,6 +254,93 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             reviewed_context,
         )
 
+    def test_service_exposes_analyst_assistant_context_with_linked_evidence(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        reviewed_context = {
+            "asset": {
+                "asset_id": "asset-repo-001",
+                "ownership": "platform-security",
+                "criticality": "high",
+            },
+            "identity": {
+                "identity_id": "principal-001",
+                "owner": "identity-operations",
+            },
+            "privilege": {
+                "privilege_scope": "repository_admin",
+                "delegated_authority": "reviewed",
+            },
+        }
+
+        admitted = service.ingest_finding_alert(
+            finding_id="finding-assistant-001",
+            analytic_signal_id="signal-assistant-001",
+            substrate_detection_record_id="substrate-detection-assistant-001",
+            correlation_key="claim:asset-repo-001:assistant-review",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            reviewed_context=reviewed_context,
+        )
+        evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-assistant-001",
+                source_record_id="substrate-detection-assistant-001",
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=first_seen_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-assistant-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=admitted.alert.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id=None,
+                review_owner="reviewer-001",
+                intended_outcome="follow reviewed evidence",
+                lifecycle_state="under_review",
+                reviewed_context=reviewed_context,
+            )
+        )
+
+        snapshot = service.inspect_assistant_context("case", promoted_case.case_id)
+
+        self.assertTrue(snapshot.read_only)
+        self.assertEqual(snapshot.record_family, "case")
+        self.assertEqual(snapshot.record_id, promoted_case.case_id)
+        self.assertEqual(snapshot.record["case_id"], promoted_case.case_id)
+        self.assertEqual(snapshot.reviewed_context, reviewed_context)
+        self.assertEqual(snapshot.linked_evidence_ids, (evidence.evidence_id,))
+        self.assertEqual(
+            snapshot.linked_evidence_records[0]["evidence_id"],
+            evidence.evidence_id,
+        )
+        self.assertEqual(
+            snapshot.linked_evidence_records[0]["alert_id"],
+            admitted.alert.alert_id,
+        )
+        self.assertIn(admitted.alert.alert_id, snapshot.linked_alert_ids)
+        self.assertIn(
+            recommendation.recommendation_id,
+            snapshot.linked_recommendation_ids,
+        )
+        self.assertIn(
+            admitted.reconciliation.reconciliation_id,
+            snapshot.linked_reconciliation_ids,
+        )
+
     def test_service_merges_reviewed_context_for_existing_alert_updates(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(

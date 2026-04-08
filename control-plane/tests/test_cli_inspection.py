@@ -20,6 +20,8 @@ from aegisops_control_plane.adapters.wazuh import WazuhAlertAdapter
 from aegisops_control_plane.models import (
     AlertRecord,
     AnalyticSignalRecord,
+    EvidenceRecord,
+    RecommendationRecord,
     ReconciliationRecord,
 )
 from aegisops_control_plane.service import AegisOpsControlPlaneService
@@ -216,6 +218,96 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(
             payload["records"][0]["substrate_detection_record_ids"],
             ["wazuh:1731594986.4931506"],
+        )
+
+    def test_cli_renders_analyst_assistant_context_view_for_a_case(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        compared_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        reviewed_context = {
+            "asset": {
+                "asset_id": "asset-repo-001",
+                "criticality": "high",
+                "ownership": "platform-security",
+            },
+            "identity": {
+                "identity_id": "principal-001",
+                "owner": "identity-operations",
+            },
+        }
+        admitted = service.ingest_finding_alert(
+            finding_id="finding-assistant-cli-001",
+            analytic_signal_id="signal-assistant-cli-001",
+            substrate_detection_record_id="substrate-detection-assistant-cli-001",
+            correlation_key="claim:asset-repo-001:assistant-cli-review",
+            first_seen_at=compared_at,
+            last_seen_at=compared_at,
+            reviewed_context=reviewed_context,
+        )
+        evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-assistant-cli-001",
+                source_record_id="substrate-detection-assistant-cli-001",
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=compared_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-assistant-cli-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=admitted.alert.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id=None,
+                review_owner="reviewer-001",
+                intended_outcome="follow reviewed evidence",
+                lifecycle_state="under_review",
+                reviewed_context=reviewed_context,
+            )
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            [
+                "inspect-assistant-context",
+                "--family",
+                "case",
+                "--record-id",
+                promoted_case.case_id,
+            ],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertTrue(payload["read_only"])
+        self.assertEqual(payload["record_family"], "case")
+        self.assertEqual(payload["record_id"], promoted_case.case_id)
+        self.assertEqual(payload["record"]["case_id"], promoted_case.case_id)
+        self.assertEqual(payload["reviewed_context"], reviewed_context)
+        self.assertEqual(payload["linked_evidence_ids"], [evidence.evidence_id])
+        self.assertEqual(
+            payload["linked_evidence_records"][0]["evidence_id"],
+            evidence.evidence_id,
+        )
+        self.assertIn(admitted.alert.alert_id, payload["linked_alert_ids"])
+        self.assertIn(
+            recommendation.recommendation_id,
+            payload["linked_recommendation_ids"],
+        )
+        self.assertIn(
+            admitted.reconciliation.reconciliation_id,
+            payload["linked_reconciliation_ids"],
         )
 
     def test_cli_renders_identity_rich_analyst_queue_view_with_reviewed_context(

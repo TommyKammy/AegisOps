@@ -22,6 +22,7 @@ from .models import (
 )
 from .service import (
     AegisOpsControlPlaneService,
+    AnalystAssistantContextSnapshot,
     FindingAlertIngestResult,
     NativeDetectionRecordAdapter,
     ReconciliationStatusSnapshot,
@@ -34,6 +35,7 @@ from .service import (
 __all__ = [
     "AITraceRecord",
     "AegisOpsControlPlaneService",
+    "AnalystAssistantContextSnapshot",
     "ActionExecutionRecord",
     "ActionRequestRecord",
     "AnalyticSignalAdmission",
