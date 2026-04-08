@@ -1,0 +1,86 @@
+from __future__ import annotations
+
+import pathlib
+import unittest
+
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+
+
+class Phase15IdentityGroundedAnalystAssistantBoundaryDocsTests(unittest.TestCase):
+    def test_phase15_boundary_design_doc_exists(self) -> None:
+        design_doc = REPO_ROOT / "docs" / "phase-15-identity-grounded-analyst-assistant-boundary.md"
+
+        self.assertTrue(design_doc.exists(), f"expected Phase 15 design doc at {design_doc}")
+
+    def test_phase15_validation_doc_exists(self) -> None:
+        validation_doc = (
+            REPO_ROOT
+            / "docs"
+            / "phase-15-identity-grounded-analyst-assistant-boundary-validation.md"
+        )
+
+        self.assertTrue(
+            validation_doc.exists(),
+            f"expected Phase 15 validation doc at {validation_doc}",
+        )
+
+    def test_phase15_boundary_design_doc_defines_the_reviewed_grounding_inputs(self) -> None:
+        text = (
+            REPO_ROOT
+            / "docs"
+            / "phase-15-identity-grounded-analyst-assistant-boundary.md"
+        ).read_text(encoding="utf-8")
+
+        for term in (
+            "AegisOps Phase 15 Identity-Grounded Analyst-Assistant Boundary",
+            "This document defines the approved advisory-only analyst-assistant boundary",
+            "first-class grounding inputs",
+            "Alert",
+            "Case",
+            "Evidence",
+            "Recommendation",
+            "Reconciliation",
+            "linked evidence",
+            "reviewed context",
+        ):
+            self.assertIn(term, text)
+
+    def test_phase15_boundary_design_doc_fails_closed_on_ambiguous_identity_metadata(self) -> None:
+        text = (
+            REPO_ROOT
+            / "docs"
+            / "phase-15-identity-grounded-analyst-assistant-boundary.md"
+        ).read_text(encoding="utf-8")
+
+        for term in (
+            "alias-style",
+            "stable identifier",
+            "must fail closed",
+            "must not assert equality",
+            "identity ambiguity",
+        ):
+            self.assertIn(term, text)
+
+    def test_phase15_validation_doc_cross_links_the_boundary_set(self) -> None:
+        text = (
+            REPO_ROOT
+            / "docs"
+            / "phase-15-identity-grounded-analyst-assistant-boundary-validation.md"
+        ).read_text(encoding="utf-8")
+
+        for term in (
+            "Phase 15 Identity-Grounded Analyst-Assistant Boundary Validation",
+            "docs/phase-15-identity-grounded-analyst-assistant-boundary.md",
+            "docs/control-plane-state-model.md",
+            "docs/control-plane-runtime-service-boundary.md",
+            "docs/asset-identity-privilege-context-baseline.md",
+            "docs/phase-14-identity-rich-source-family-design.md",
+            "docs/phase-13-guarded-automation-ci-validation.md",
+            "advisory-only",
+        ):
+            self.assertIn(term, text)
+
+
+if __name__ == "__main__":
+    unittest.main()
