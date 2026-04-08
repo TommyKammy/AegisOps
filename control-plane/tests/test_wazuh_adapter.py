@@ -247,6 +247,21 @@ class WazuhAlertAdapterTests(unittest.TestCase):
             record.metadata["reviewed_correlation_context"],
         )
 
+    def test_adapter_does_not_promote_github_shaped_payload_without_family_marker(
+        self,
+    ) -> None:
+        adapter = WazuhAlertAdapter()
+        ambiguous_alert = _load_fixture("github-audit-alert.json")
+        ambiguous_alert["data"].pop("source_family")
+
+        record = adapter.build_native_detection_record(ambiguous_alert)
+
+        self.assertNotIn("reviewed_source_profile", record.metadata)
+        self.assertEqual(
+            adapter.build_analytic_signal_admission(record).reviewed_context,
+            record.metadata["reviewed_correlation_context"],
+        )
+
     def test_adapter_uses_login_fields_when_reviewed_identity_names_are_absent(
         self,
     ) -> None:

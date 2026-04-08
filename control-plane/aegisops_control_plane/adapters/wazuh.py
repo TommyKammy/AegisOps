@@ -242,7 +242,7 @@ class WazuhAlertAdapter:
         )
         audit_action = _optional_string(data.get("audit_action"))
         source_family = _optional_string(data.get("source_family"))
-        if source_family is not None and source_family != "github_audit":
+        if source_family != "github_audit":
             return None
 
         has_github_context = any(
