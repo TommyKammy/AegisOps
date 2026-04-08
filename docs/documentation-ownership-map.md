@@ -40,6 +40,7 @@ If a document inside one of these areas has its own `Owner` or `Owners` field, t
 | `docs/control-plane-runtime-service-boundary.md` | Live control-plane runtime service boundary and repository placement baseline | IT Operations, Information Systems Department |
 | `docs/retention-evidence-and-replay-readiness-baseline.md` | Retention, evidence lifecycle, and replay readiness baseline | IT Operations, Information Systems Department |
 | `docs/phase-7-ai-hunt-evaluation-baseline.md` | Phase 7 AI hunt evaluation baseline | IT Operations, Information Systems Department |
+| `docs/source-families/` | Approved source-family onboarding and analyst triage runbooks | IT Operations, Information Systems Department |
 | `docs/adr/` | Architecture Decision Records (ADRs) | IT Operations, Information Systems Department |
 | `docs/parameters/` | Parameter documentation | IT Operations, Information Systems Department |
 | `docs/runbook.md` | Runbooks | IT Operations, Information Systems Department |
