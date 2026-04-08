@@ -721,6 +721,119 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             },
         )
 
+    def test_service_admits_microsoft_365_audit_fixture_through_wazuh_source_profile(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+        native_record = adapter.build_native_detection_record(
+            _load_wazuh_fixture("microsoft-365-audit-alert.json")
+        )
+
+        admitted = service.ingest_native_detection_record(adapter, native_record)
+
+        expected_profile = {
+            "source": {
+                "source_system": "wazuh",
+                "source_family": "microsoft_365_audit",
+                "accountable_source_identity": "manager:wazuh-manager-m365-1",
+                "delivery_path": "microsoft365/contoso/exchange",
+            },
+            "identity": {
+                "actor": {
+                    "identity_type": "user",
+                    "identity_id": "alex@contoso.com",
+                    "display_name": "Alex Rivera",
+                },
+                "target": {
+                    "identity_type": "mailbox",
+                    "identity_id": "shared-mailbox-finance",
+                    "display_name": "shared-mailbox-finance",
+                },
+            },
+            "asset": {
+                "tenant": {
+                    "tenant_id": "tenant-001",
+                    "tenant_name": "Contoso",
+                },
+                "app": {
+                    "app_id": "app-365-exchange",
+                    "app_name": "Exchange Online",
+                    "app_type": "workload",
+                },
+            },
+            "authentication": {
+                "method": "oauth2",
+                "client_app": "Outlook",
+                "result": "success",
+            },
+            "privilege": {
+                "change_type": "permission_grant",
+                "scope": "mailbox",
+                "permission": "full_access",
+            },
+            "provenance": {
+                "audit_action": "Add-MailboxPermission",
+                "request_id": "M365-REQ-0001",
+                "workload": "exchange",
+                "operation": "Add-MailboxPermission",
+                "record_type": "Microsoft 365 audit",
+                "rule_id": "microsoft-365-audit-privilege-change",
+                "rule_level": 7,
+                "rule_description": "Microsoft 365 audit mailbox permission change",
+                "decoder_name": "microsoft_365_audit",
+                "location": "microsoft365/contoso/exchange",
+            },
+        }
+
+        self.assertEqual(admitted.disposition, "created")
+        self.assertEqual(admitted.alert.reviewed_context, expected_profile)
+        self.assertEqual(
+            service.get_record(AnalyticSignalRecord, admitted.alert.analytic_signal_id).reviewed_context,
+            expected_profile,
+        )
+        self.assertEqual(
+            service.get_record(AlertRecord, admitted.alert.alert_id).reviewed_context,
+            expected_profile,
+        )
+        reconciliation = service.get_record(
+            ReconciliationRecord,
+            admitted.reconciliation.reconciliation_id,
+        )
+        self.assertEqual(
+            reconciliation.subject_linkage["reviewed_source_profile"],
+            expected_profile,
+        )
+        self.assertEqual(
+            reconciliation.subject_linkage["reviewed_correlation_context"],
+            {
+                "location": "microsoft365/contoso/exchange",
+                "data.source_family": "microsoft_365_audit",
+                "data.audit_action": "Add-MailboxPermission",
+                "data.workload": "exchange",
+                "data.operation": "Add-MailboxPermission",
+                "data.record_type": "Microsoft 365 audit",
+                "data.actor.id": "alex@contoso.com",
+                "data.actor.name": "Alex Rivera",
+                "data.target.id": "shared-mailbox-finance",
+                "data.target.name": "shared-mailbox-finance",
+                "data.tenant.id": "tenant-001",
+                "data.tenant.name": "Contoso",
+                "data.app.id": "app-365-exchange",
+                "data.app.name": "Exchange Online",
+                "data.authentication.method": "oauth2",
+                "data.authentication.client_app": "Outlook",
+                "data.authentication.result": "success",
+                "data.privilege.change_type": "permission_grant",
+                "data.privilege.scope": "mailbox",
+                "data.privilege.permission": "full_access",
+            },
+        )
+
     def test_service_admits_native_detection_records_via_substrate_adapter_boundary(self) -> None:
         @dataclass(frozen=True)
         class TestNativeRecordAdapter(NativeDetectionRecordAdapter):

@@ -1,0 +1,59 @@
+{
+  "id": "1731595500.9988776",
+  "timestamp": "2026-04-05T12:40:00+00:00",
+  "rule": {
+    "id": "entra-id-role-assignment",
+    "level": 8,
+    "description": "Entra ID privileged role assignment",
+    "groups": [
+      "entra",
+      "audit",
+      "privilege_change"
+    ]
+  },
+  "manager": {
+    "name": "wazuh-manager-entra-1"
+  },
+  "decoder": {
+    "name": "entra_id"
+  },
+  "location": "entra/contoso/directory",
+  "data": {
+    "source_family": "entra_id",
+    "audit_action": "Add member to role",
+    "operation": "Add member to role",
+    "record_type": "Entra ID audit",
+    "correlation_id": "entra-corr-0001",
+    "actor": {
+      "type": "service_principal",
+      "id": "spn-operations",
+      "name": "Operations Automation"
+    },
+    "target": {
+      "type": "role",
+      "id": "role-global-admin",
+      "name": "Global Administrator"
+    },
+    "tenant": {
+      "id": "tenant-001",
+      "name": "Contoso"
+    },
+    "app": {
+      "id": "app-entra-admin",
+      "name": "Azure Portal",
+      "type": "service"
+    },
+    "authentication": {
+      "method": "mfa",
+      "client_app": "Azure Portal",
+      "result": "success"
+    },
+    "privilege": {
+      "change_type": "role_assignment",
+      "scope": "directory_role",
+      "permission": "Global Administrator",
+      "role": "Privileged Role Administrator"
+    },
+    "request_id": "ENTRA-REQ-0001"
+  }
+}

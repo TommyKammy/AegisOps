@@ -45,12 +45,23 @@ class WazuhAlertAdapter:
         "data.event_type",
         "data.source_family",
         "data.audit_action",
+        "data.workload",
+        "data.operation",
+        "data.record_type",
+        "data.correlation_id",
         "data.actor.id",
         "data.actor.name",
         "data.actor.login",
         "data.target.id",
         "data.target.name",
         "data.target.login",
+        "data.tenant.id",
+        "data.tenant.name",
+        "data.app.id",
+        "data.app.name",
+        "data.authentication.method",
+        "data.authentication.client_app",
+        "data.authentication.result",
         "data.organization.name",
         "data.repository.full_name",
         "data.privilege.change_type",
@@ -232,6 +243,14 @@ class WazuhAlertAdapter:
         if data is None:
             return None
 
+        source_family = _optional_string(data.get("source_family"))
+        if source_family not in {
+            "github_audit",
+            "microsoft_365_audit",
+            "entra_id",
+        }:
+            return None
+
         actor = self._build_identity_entity(_optional_mapping(data.get("actor")))
         target = self._build_identity_entity(_optional_mapping(data.get("target")))
         organization = self._build_organization_entity(
@@ -240,40 +259,27 @@ class WazuhAlertAdapter:
         repository = self._build_repository_entity(
             _optional_mapping(data.get("repository"))
         )
+        tenant = self._build_tenant_entity(_optional_mapping(data.get("tenant")))
+        app = self._build_app_entity(_optional_mapping(data.get("app")))
         privilege = self._build_privilege_entity(
             _optional_mapping(data.get("privilege"))
         )
-        audit_action = _optional_string(data.get("audit_action"))
-        source_family = _optional_string(data.get("source_family"))
-        if source_family != "github_audit":
-            return None
-
-        has_github_context = any(
-            value is not None
-            for value in (
-                actor,
-                target,
-                organization,
-                repository,
-                privilege,
-                audit_action,
-                source_family,
-            )
+        authentication = self._build_authentication_entity(
+            _optional_mapping(data.get("authentication"))
         )
-        if not has_github_context:
-            return None
+        audit_action = _optional_string(data.get("audit_action"))
 
         profile: dict[str, object] = {
             "source": {
                 "source_system": self.substrate_key,
-                "source_family": source_family or "github_audit",
+                "source_family": source_family,
                 "accountable_source_identity": _require_non_empty_string(
                     source_provenance.get("accountable_source_identity"),
                     "source_provenance.accountable_source_identity",
                 ),
                 "delivery_path": _optional_string(native_alert.get("location"))
                 or _optional_string(source_provenance.get("location"))
-                or "github_audit",
+                or source_family,
             },
             "provenance": {
                 "rule_id": _require_non_empty_string(
@@ -299,6 +305,18 @@ class WazuhAlertAdapter:
         request_id = _optional_string(data.get("request_id"))
         if request_id is not None:
             provenance["request_id"] = request_id
+        workload = _optional_string(data.get("workload"))
+        if workload is not None:
+            provenance["workload"] = workload
+        operation = _optional_string(data.get("operation"))
+        if operation is not None:
+            provenance["operation"] = operation
+        record_type = _optional_string(data.get("record_type"))
+        if record_type is not None:
+            provenance["record_type"] = record_type
+        correlation_id = _optional_string(data.get("correlation_id"))
+        if correlation_id is not None:
+            provenance["correlation_id"] = correlation_id
         if actor is not None or target is not None:
             identity_profile: dict[str, object] = {}
             if actor is not None:
@@ -313,6 +331,15 @@ class WazuhAlertAdapter:
             if repository is not None:
                 asset_profile["repository"] = repository
             profile["asset"] = asset_profile
+        elif tenant is not None or app is not None:
+            asset_profile = {}
+            if tenant is not None:
+                asset_profile["tenant"] = tenant
+            if app is not None:
+                asset_profile["app"] = app
+            profile["asset"] = asset_profile
+        if authentication is not None:
+            profile["authentication"] = authentication
         if privilege is not None:
             profile["privilege"] = privilege
         return profile
@@ -372,6 +399,58 @@ class WazuhAlertAdapter:
         repository_full_name = _optional_string(entity.get("full_name"))
         if repository_full_name is not None:
             profile["repository_full_name"] = repository_full_name
+        if not profile:
+            return None
+        return profile
+
+    @staticmethod
+    def _build_tenant_entity(
+        entity: Mapping[str, object] | None,
+    ) -> dict[str, object] | None:
+        if entity is None:
+            return None
+        profile: dict[str, object] = {}
+        tenant_id = _optional_string(entity.get("id"))
+        if tenant_id is not None:
+            profile["tenant_id"] = tenant_id
+        tenant_name = _optional_string(entity.get("name"))
+        if tenant_name is not None:
+            profile["tenant_name"] = tenant_name
+        if not profile:
+            return None
+        return profile
+
+    @staticmethod
+    def _build_app_entity(
+        entity: Mapping[str, object] | None,
+    ) -> dict[str, object] | None:
+        if entity is None:
+            return None
+        profile: dict[str, object] = {}
+        app_id = _optional_string(entity.get("id"))
+        if app_id is not None:
+            profile["app_id"] = app_id
+        app_name = _optional_string(entity.get("name"))
+        if app_name is not None:
+            profile["app_name"] = app_name
+        app_type = _optional_string(entity.get("type"))
+        if app_type is not None:
+            profile["app_type"] = app_type
+        if not profile:
+            return None
+        return profile
+
+    @staticmethod
+    def _build_authentication_entity(
+        entity: Mapping[str, object] | None,
+    ) -> dict[str, object] | None:
+        if entity is None:
+            return None
+        profile: dict[str, object] = {}
+        for field_name in ("method", "protocol", "client_app", "result"):
+            value = _optional_string(entity.get(field_name))
+            if value is not None:
+                profile[field_name] = value
         if not profile:
             return None
         return profile

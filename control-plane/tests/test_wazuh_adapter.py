@@ -263,6 +263,149 @@ class WazuhAlertAdapterTests(unittest.TestCase):
             record.metadata["reviewed_correlation_context"],
         )
 
+    def test_adapter_builds_reviewed_source_profile_for_microsoft_365_audit_fixture(
+        self,
+    ) -> None:
+        adapter = WazuhAlertAdapter()
+
+        record = adapter.build_native_detection_record(
+            _load_fixture("microsoft-365-audit-alert.json")
+        )
+
+        expected_profile = {
+            "source": {
+                "source_system": "wazuh",
+                "source_family": "microsoft_365_audit",
+                "accountable_source_identity": "manager:wazuh-manager-m365-1",
+                "delivery_path": "microsoft365/contoso/exchange",
+            },
+            "identity": {
+                "actor": {
+                    "identity_type": "user",
+                    "identity_id": "alex@contoso.com",
+                    "display_name": "Alex Rivera",
+                },
+                "target": {
+                    "identity_type": "mailbox",
+                    "identity_id": "shared-mailbox-finance",
+                    "display_name": "shared-mailbox-finance",
+                },
+            },
+            "asset": {
+                "tenant": {
+                    "tenant_id": "tenant-001",
+                    "tenant_name": "Contoso",
+                },
+                "app": {
+                    "app_id": "app-365-exchange",
+                    "app_name": "Exchange Online",
+                    "app_type": "workload",
+                },
+            },
+            "authentication": {
+                "method": "oauth2",
+                "client_app": "Outlook",
+                "result": "success",
+            },
+            "privilege": {
+                "change_type": "permission_grant",
+                "scope": "mailbox",
+                "permission": "full_access",
+            },
+            "provenance": {
+                "audit_action": "Add-MailboxPermission",
+                "request_id": "M365-REQ-0001",
+                "workload": "exchange",
+                "operation": "Add-MailboxPermission",
+                "record_type": "Microsoft 365 audit",
+                "rule_id": "microsoft-365-audit-privilege-change",
+                "rule_level": 7,
+                "rule_description": "Microsoft 365 audit mailbox permission change",
+                "decoder_name": "microsoft_365_audit",
+                "location": "microsoft365/contoso/exchange",
+            },
+        }
+
+        self.assertEqual(
+            record.metadata["reviewed_source_profile"],
+            expected_profile,
+        )
+        self.assertEqual(
+            adapter.build_analytic_signal_admission(record).reviewed_context,
+            expected_profile,
+        )
+
+    def test_adapter_builds_reviewed_source_profile_for_entra_id_fixture(self) -> None:
+        adapter = WazuhAlertAdapter()
+
+        record = adapter.build_native_detection_record(
+            _load_fixture("entra-id-alert.json")
+        )
+
+        expected_profile = {
+            "source": {
+                "source_system": "wazuh",
+                "source_family": "entra_id",
+                "accountable_source_identity": "manager:wazuh-manager-entra-1",
+                "delivery_path": "entra/contoso/directory",
+            },
+            "identity": {
+                "actor": {
+                    "identity_type": "service_principal",
+                    "identity_id": "spn-operations",
+                    "display_name": "Operations Automation",
+                },
+                "target": {
+                    "identity_type": "role",
+                    "identity_id": "role-global-admin",
+                    "display_name": "Global Administrator",
+                },
+            },
+            "asset": {
+                "tenant": {
+                    "tenant_id": "tenant-001",
+                    "tenant_name": "Contoso",
+                },
+                "app": {
+                    "app_id": "app-entra-admin",
+                    "app_name": "Azure Portal",
+                    "app_type": "service",
+                },
+            },
+            "authentication": {
+                "method": "mfa",
+                "client_app": "Azure Portal",
+                "result": "success",
+            },
+            "privilege": {
+                "change_type": "role_assignment",
+                "scope": "directory_role",
+                "permission": "Global Administrator",
+                "role": "Privileged Role Administrator",
+            },
+            "provenance": {
+                "audit_action": "Add member to role",
+                "request_id": "ENTRA-REQ-0001",
+                "correlation_id": "entra-corr-0001",
+                "operation": "Add member to role",
+                "record_type": "Entra ID audit",
+                "rule_id": "entra-id-role-assignment",
+                "rule_level": 8,
+                "rule_description": "Entra ID privileged role assignment",
+                "decoder_name": "entra_id",
+                "location": "entra/contoso/directory",
+            },
+        }
+
+        self.assertEqual(
+            record.metadata["reviewed_source_profile"],
+            expected_profile,
+        )
+        self.assertEqual(
+            adapter.build_analytic_signal_admission(record).reviewed_context,
+            expected_profile,
+        )
+
     def test_adapter_uses_login_fields_when_reviewed_identity_names_are_absent(
         self,
     ) -> None:
