@@ -1318,6 +1318,38 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         )
         self.assertEqual(len(queue_view.records[0]["evidence_ids"]), 1)
 
+    def test_service_exposes_reviewed_context_in_analyst_queue_for_identity_rich_alerts(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+
+        admitted = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(
+                _load_wazuh_fixture("microsoft-365-audit-alert.json")
+            ),
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+
+        queue_view = service.inspect_analyst_queue()
+
+        self.assertEqual(queue_view.total_records, 1)
+        self.assertEqual(queue_view.records[0]["alert_id"], admitted.alert.alert_id)
+        self.assertEqual(queue_view.records[0]["case_id"], promoted_case.case_id)
+        self.assertEqual(
+            queue_view.records[0]["reviewed_context"],
+            admitted.alert.reviewed_context,
+        )
+        self.assertEqual(
+            queue_view.records[0]["reviewed_context"]["source"]["source_family"],
+            "microsoft_365_audit",
+        )
+
     def test_service_analyst_queue_prefers_explicit_wazuh_source_for_multi_source_linkage(
         self,
     ) -> None:
