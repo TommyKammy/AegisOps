@@ -618,6 +618,106 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             ("wazuh:1731595888.5000001",),
         )
 
+    def test_service_admits_github_audit_fixture_through_wazuh_source_profile(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+        native_record = adapter.build_native_detection_record(
+            _load_wazuh_fixture("github-audit-alert.json")
+        )
+
+        admitted = service.ingest_native_detection_record(adapter, native_record)
+
+        expected_profile = {
+            "source": {
+                "source_system": "wazuh",
+                "source_family": "github_audit",
+                "accountable_source_identity": "manager:wazuh-manager-github-1",
+                "delivery_path": "github/orgs/TommyKammy/repos/AegisOps/audit",
+            },
+            "identity": {
+                "actor": {
+                    "identity_type": "user",
+                    "identity_id": "octocat",
+                    "display_name": "octocat",
+                },
+                "target": {
+                    "identity_type": "team",
+                    "identity_id": "security-reviews",
+                    "display_name": "security-reviews",
+                },
+            },
+            "asset": {
+                "organization": {
+                    "organization_id": "org-001",
+                    "organization_name": "TommyKammy",
+                },
+                "repository": {
+                    "repository_id": "repo-001",
+                    "repository_name": "AegisOps",
+                    "repository_full_name": "TommyKammy/AegisOps",
+                },
+            },
+            "privilege": {
+                "change_type": "membership_change",
+                "scope": "repository_admin",
+                "permission": "admin",
+                "role": "maintainer",
+            },
+            "provenance": {
+                "audit_action": "member.added",
+                "request_id": "GH-REQ-0001",
+                "rule_id": "github-audit-privilege-change",
+                "rule_level": 8,
+                "rule_description": "GitHub audit repository privilege change",
+                "decoder_name": "github_audit",
+                "location": "github/orgs/TommyKammy/repos/AegisOps/audit",
+            },
+        }
+
+        self.assertEqual(admitted.disposition, "created")
+        self.assertEqual(admitted.alert.reviewed_context, expected_profile)
+        self.assertEqual(
+            service.get_record(AnalyticSignalRecord, admitted.alert.analytic_signal_id).reviewed_context,
+            expected_profile,
+        )
+        self.assertEqual(
+            service.get_record(AlertRecord, admitted.alert.alert_id).reviewed_context,
+            expected_profile,
+        )
+        reconciliation = service.get_record(
+            ReconciliationRecord,
+            admitted.reconciliation.reconciliation_id,
+        )
+        self.assertEqual(
+            reconciliation.subject_linkage["accountable_source_identities"],
+            ("manager:wazuh-manager-github-1",),
+        )
+        self.assertEqual(
+            reconciliation.subject_linkage["reviewed_source_profile"],
+            expected_profile,
+        )
+        self.assertEqual(
+            reconciliation.subject_linkage["reviewed_correlation_context"],
+            {
+                "location": "github/orgs/TommyKammy/repos/AegisOps/audit",
+                "data.audit_action": "member.added",
+                "data.actor.id": "octocat",
+                "data.actor.name": "octocat",
+                "data.target.id": "security-reviews",
+                "data.target.name": "security-reviews",
+                "data.organization.name": "TommyKammy",
+                "data.repository.full_name": "TommyKammy/AegisOps",
+                "data.privilege.change_type": "membership_change",
+                "data.privilege.scope": "repository_admin",
+            },
+        )
+
     def test_service_admits_native_detection_records_via_substrate_adapter_boundary(self) -> None:
         @dataclass(frozen=True)
         class TestNativeRecordAdapter(NativeDetectionRecordAdapter):

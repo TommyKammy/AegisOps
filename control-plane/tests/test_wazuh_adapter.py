@@ -122,6 +122,83 @@ class WazuhAlertAdapterTests(unittest.TestCase):
 
         self.assertNotEqual(first_record.correlation_key, second_record.correlation_key)
 
+    def test_adapter_builds_reviewed_source_profile_for_github_audit_fixture(self) -> None:
+        adapter = WazuhAlertAdapter()
+
+        record = adapter.build_native_detection_record(
+            _load_fixture("github-audit-alert.json")
+        )
+
+        expected_profile = {
+            "source": {
+                "source_system": "wazuh",
+                "source_family": "github_audit",
+                "accountable_source_identity": "manager:wazuh-manager-github-1",
+                "delivery_path": "github/orgs/TommyKammy/repos/AegisOps/audit",
+            },
+            "identity": {
+                "actor": {
+                    "identity_type": "user",
+                    "identity_id": "octocat",
+                    "display_name": "octocat",
+                },
+                "target": {
+                    "identity_type": "team",
+                    "identity_id": "security-reviews",
+                    "display_name": "security-reviews",
+                },
+            },
+            "asset": {
+                "organization": {
+                    "organization_id": "org-001",
+                    "organization_name": "TommyKammy",
+                },
+                "repository": {
+                    "repository_id": "repo-001",
+                    "repository_name": "AegisOps",
+                    "repository_full_name": "TommyKammy/AegisOps",
+                },
+            },
+            "privilege": {
+                "change_type": "membership_change",
+                "scope": "repository_admin",
+                "permission": "admin",
+                "role": "maintainer",
+            },
+            "provenance": {
+                "audit_action": "member.added",
+                "request_id": "GH-REQ-0001",
+                "rule_id": "github-audit-privilege-change",
+                "rule_level": 8,
+                "rule_description": "GitHub audit repository privilege change",
+                "decoder_name": "github_audit",
+                "location": "github/orgs/TommyKammy/repos/AegisOps/audit",
+            },
+        }
+
+        self.assertEqual(record.correlation_key, (
+            "wazuh:rule:github-audit-privilege-change:source:manager:wazuh-manager-github-1"
+            ":location=github%2Forgs%2FTommyKammy%2Frepos%2FAegisOps%2Faudit"
+            ":data.audit_action=member.added"
+            ":data.actor.id=octocat"
+            ":data.actor.name=octocat"
+            ":data.target.id=security-reviews"
+            ":data.target.name=security-reviews"
+            ":data.organization.name=TommyKammy"
+            ":data.repository.full_name=TommyKammy%2FAegisOps"
+            ":data.privilege.change_type=membership_change"
+            ":data.privilege.scope=repository_admin"
+        ))
+        self.assertEqual(
+            record.metadata["source_provenance"]["accountable_source_identity"],
+            "manager:wazuh-manager-github-1",
+        )
+        self.assertEqual(record.metadata["reviewed_source_profile"], expected_profile)
+        self.assertEqual(
+            adapter.build_analytic_signal_admission(record).reviewed_context,
+            expected_profile,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
