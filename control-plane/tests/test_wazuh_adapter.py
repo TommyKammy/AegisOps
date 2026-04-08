@@ -199,6 +199,39 @@ class WazuhAlertAdapterTests(unittest.TestCase):
             expected_profile,
         )
 
+    def test_adapter_builds_reviewed_source_profile_when_only_source_family_is_present(
+        self,
+    ) -> None:
+        adapter = WazuhAlertAdapter()
+        sparse_alert = _load_fixture("github-audit-alert.json")
+        sparse_alert["data"] = {"source_family": "github_audit"}
+
+        record = adapter.build_native_detection_record(sparse_alert)
+
+        expected_profile = {
+            "source": {
+                "source_system": "wazuh",
+                "source_family": "github_audit",
+                "accountable_source_identity": "manager:wazuh-manager-github-1",
+                "delivery_path": "github/orgs/TommyKammy/repos/AegisOps/audit",
+            },
+            "provenance": {
+                "audit_action": None,
+                "request_id": None,
+                "rule_id": "github-audit-privilege-change",
+                "rule_level": 8,
+                "rule_description": "GitHub audit repository privilege change",
+                "decoder_name": "github_audit",
+                "location": "github/orgs/TommyKammy/repos/AegisOps/audit",
+            },
+        }
+
+        self.assertEqual(record.metadata["reviewed_source_profile"], expected_profile)
+        self.assertEqual(
+            adapter.build_analytic_signal_admission(record).reviewed_context,
+            expected_profile,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -243,7 +243,15 @@ class WazuhAlertAdapter:
 
         has_github_context = any(
             value is not None
-            for value in (actor, target, organization, repository, privilege, audit_action)
+            for value in (
+                actor,
+                target,
+                organization,
+                repository,
+                privilege,
+                audit_action,
+                source_family,
+            )
         )
         if not has_github_context:
             return None
