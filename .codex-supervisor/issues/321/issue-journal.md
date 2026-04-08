@@ -15,6 +15,7 @@
 
 ## Latest Codex Summary
 - Added a read-only analyst-assistant context surface that joins reviewed control-plane records, reviewed context, and linked evidence through `inspect-assistant-context` on the service and CLI.
+- Draft PR: https://github.com/TommyKammy/AegisOps/pull/327
 
 ## Active Failure Context
 - None recorded.
@@ -24,7 +25,7 @@
 - Hypothesis: Phase 15 needed a citation-oriented assistant context query surface because generic record listing did not explicitly join reviewed context with linked evidence.
 - What changed: Added `AnalystAssistantContextSnapshot`, `AegisOpsControlPlaneService.inspect_assistant_context()`, and the `inspect-assistant-context` CLI command; added focused service and CLI tests; documented the new command in `control-plane/README.md`.
 - Current blocker: None.
-- Next exact step: Commit the branch-local changes and keep the branch on `codex/issue-321`.
+- Next exact step: Monitor draft PR `#327` and address any review or CI feedback if it appears.
 - Verification gap: None for the issue-specified control-plane persistence and CLI inspection suite; full suite not rerun beyond the scoped command.
 - Files touched: `control-plane/aegisops_control_plane/service.py`, `control-plane/main.py`, `control-plane/aegisops_control_plane/__init__.py`, `control-plane/tests/test_service_persistence.py`, `control-plane/tests/test_cli_inspection.py`, `control-plane/README.md`.
 - Rollback concern: The new assistant-context surface is additive and read-only; reverting the new CLI command and service method restores the prior inspection-only surface.
