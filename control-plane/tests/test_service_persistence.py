@@ -618,6 +618,90 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             ("wazuh:1731595888.5000001",),
         )
 
+    def test_service_keeps_github_audit_repository_identity_separate_when_stable_ids_differ(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+
+        first_payload = _load_wazuh_fixture("github-audit-alert.json")
+        second_payload = _load_wazuh_fixture("github-audit-alert.json")
+        second_payload["data"]["organization"]["id"] = "org-999"
+        second_payload["data"]["repository"]["id"] = "repo-999"
+
+        created = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(first_payload),
+        )
+        distinct = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(second_payload),
+        )
+
+        self.assertEqual(created.disposition, "created")
+        self.assertEqual(distinct.disposition, "created")
+        self.assertNotEqual(distinct.alert.alert_id, created.alert.alert_id)
+        self.assertNotEqual(
+            created.reconciliation.correlation_key,
+            distinct.reconciliation.correlation_key,
+        )
+
+        alerts = store.list(AlertRecord)
+        self.assertEqual(len(alerts), 2)
+
+        first_reconciliation = service.get_record(
+            ReconciliationRecord,
+            created.reconciliation.reconciliation_id,
+        )
+        second_reconciliation = service.get_record(
+            ReconciliationRecord,
+            distinct.reconciliation.reconciliation_id,
+        )
+        self.assertEqual(
+            first_reconciliation.subject_linkage["reviewed_correlation_context"],
+            {
+                "location": "github/orgs/TommyKammy/repos/AegisOps/audit",
+                "data.source_family": "github_audit",
+                "data.audit_action": "member.added",
+                "data.actor.id": "octocat",
+                "data.actor.name": "octocat",
+                "data.target.id": "security-reviews",
+                "data.target.name": "security-reviews",
+                "data.organization.id": "org-001",
+                "data.organization.name": "TommyKammy",
+                "data.repository.id": "repo-001",
+                "data.repository.full_name": "TommyKammy/AegisOps",
+                "data.privilege.change_type": "membership_change",
+                "data.privilege.scope": "repository_admin",
+                "data.privilege.permission": "admin",
+                "data.privilege.role": "maintainer",
+            },
+        )
+        self.assertEqual(
+            second_reconciliation.subject_linkage["reviewed_correlation_context"],
+            {
+                "location": "github/orgs/TommyKammy/repos/AegisOps/audit",
+                "data.source_family": "github_audit",
+                "data.audit_action": "member.added",
+                "data.actor.id": "octocat",
+                "data.actor.name": "octocat",
+                "data.target.id": "security-reviews",
+                "data.target.name": "security-reviews",
+                "data.organization.id": "org-999",
+                "data.organization.name": "TommyKammy",
+                "data.repository.id": "repo-999",
+                "data.repository.full_name": "TommyKammy/AegisOps",
+                "data.privilege.change_type": "membership_change",
+                "data.privilege.scope": "repository_admin",
+                "data.privilege.permission": "admin",
+                "data.privilege.role": "maintainer",
+            },
+        )
+
     def test_service_admits_github_audit_fixture_through_wazuh_source_profile(
         self,
     ) -> None:
@@ -712,7 +796,9 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 "data.actor.name": "octocat",
                 "data.target.id": "security-reviews",
                 "data.target.name": "security-reviews",
+                "data.organization.id": "org-001",
                 "data.organization.name": "TommyKammy",
+                "data.repository.id": "repo-001",
                 "data.repository.full_name": "TommyKammy/AegisOps",
                 "data.privilege.change_type": "membership_change",
                 "data.privilege.scope": "repository_admin",

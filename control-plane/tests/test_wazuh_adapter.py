@@ -185,7 +185,9 @@ class WazuhAlertAdapterTests(unittest.TestCase):
             ":data.actor.name=octocat"
             ":data.target.id=security-reviews"
             ":data.target.name=security-reviews"
+            ":data.organization.id=org-001"
             ":data.organization.name=TommyKammy"
+            ":data.repository.id=repo-001"
             ":data.repository.full_name=TommyKammy%2FAegisOps"
             ":data.privilege.change_type=membership_change"
             ":data.privilege.scope=repository_admin"
@@ -201,6 +203,20 @@ class WazuhAlertAdapterTests(unittest.TestCase):
             adapter.build_analytic_signal_admission(record).reviewed_context,
             expected_profile,
         )
+
+    def test_adapter_distinguishes_github_repository_identity_when_alias_fields_match(
+        self,
+    ) -> None:
+        adapter = WazuhAlertAdapter()
+        first_alert = _load_fixture("github-audit-alert.json")
+        second_alert = _load_fixture("github-audit-alert.json")
+        second_alert["data"]["organization"]["id"] = "org-999"
+        second_alert["data"]["repository"]["id"] = "repo-999"
+
+        first_record = adapter.build_native_detection_record(first_alert)
+        second_record = adapter.build_native_detection_record(second_alert)
+
+        self.assertNotEqual(first_record.correlation_key, second_record.correlation_key)
 
     def test_adapter_builds_reviewed_source_profile_when_only_source_family_is_present(
         self,
