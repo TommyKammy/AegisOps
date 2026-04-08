@@ -27,6 +27,7 @@ from aegisops_control_plane.models import (
     EvidenceRecord,
     NativeDetectionRecord,
     ReconciliationRecord,
+    RecommendationRecord,
 )
 from aegisops_control_plane.adapters.wazuh import WazuhAlertAdapter
 from aegisops_control_plane.service import (
@@ -161,6 +162,88 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 "data.srcip": "198.51.100.24",
                 "data.srcuser": "invalid-user",
             },
+        )
+
+    def test_service_preserves_reviewed_context_across_identity_centric_records(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        reviewed_context = {
+            "asset": {
+                "asset_id": "asset-repo-001",
+                "asset_type": "repository",
+                "ownership": "platform-security",
+                "criticality": "high",
+            },
+            "identity": {
+                "identity_id": "principal-001",
+                "identity_type": "service_account",
+                "aliases": ("svc-001",),
+                "owner": "identity-operations",
+            },
+            "privilege": {
+                "privilege_scope": "repository_admin",
+                "delegated_authority": "reviewed",
+            },
+        }
+
+        admitted = service.ingest_finding_alert(
+            finding_id="finding-identity-001",
+            analytic_signal_id="signal-identity-001",
+            substrate_detection_record_id="substrate-detection-identity-001",
+            correlation_key="claim:asset-repo-001:privilege-review",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            reviewed_context=reviewed_context,
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-identity-001",
+                source_record_id="substrate-detection-identity-001",
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=first_seen_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-identity-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=admitted.alert.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id=None,
+                review_owner="reviewer-001",
+                intended_outcome="approve reviewed identity-sensitive follow-up",
+                lifecycle_state="under_review",
+                reviewed_context=reviewed_context,
+            )
+        )
+
+        self.assertEqual(admitted.alert.reviewed_context, reviewed_context)
+        self.assertEqual(
+            service.get_record(AnalyticSignalRecord, admitted.alert.analytic_signal_id).reviewed_context,
+            reviewed_context,
+        )
+        self.assertEqual(
+            service.get_record(AlertRecord, admitted.alert.alert_id).reviewed_context,
+            reviewed_context,
+        )
+        self.assertEqual(
+            service.get_record(CaseRecord, promoted_case.case_id).reviewed_context,
+            reviewed_context,
+        )
+        self.assertEqual(
+            service.get_record(RecommendationRecord, recommendation.recommendation_id).reviewed_context,
+            reviewed_context,
         )
 
     def test_service_extends_promoted_wazuh_alert_with_existing_case_linkage(

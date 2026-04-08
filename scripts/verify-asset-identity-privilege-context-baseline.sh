@@ -42,6 +42,9 @@ required_phrases=(
   "Live CMDB integration is out of scope."
   "IdP integration for live identity or group synchronization is out of scope."
   "Production privilege sync, entitlement reconciliation, and automatic authorization changes are out of scope."
+  "Identity-centric analytic signals, alerts, cases, and recommendations may also carry reviewed asset, identity, and privilege context when later reviewed source families provide it."
+  "That control-plane context must remain vendor-neutral. It may describe the reviewed asset, principal, group, role, ownership, criticality, or privilege scope that matters for triage or approval, but it must not leak source-local field names into control-plane semantics."
+  "GitHub audit, Microsoft 365 audit, and Entra ID are expected to populate this reviewed context through approved source-family mappings without turning the control plane into a source-authoritative inventory or directory."
 )
 
 if [[ ! -f "${doc_path}" ]]; then

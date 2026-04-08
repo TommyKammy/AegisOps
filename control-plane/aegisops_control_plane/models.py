@@ -45,6 +45,10 @@ class AlertRecord(ControlPlaneRecord):
     analytic_signal_id: str | None
     case_id: str | None
     lifecycle_state: str
+    reviewed_context: Mapping[str, object] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "reviewed_context", _freeze_mapping(self.reviewed_context))
 
 
 @dataclass(frozen=True)
@@ -61,6 +65,10 @@ class AnalyticSignalRecord(ControlPlaneRecord):
     first_seen_at: datetime | None
     last_seen_at: datetime | None
     lifecycle_state: str
+    reviewed_context: Mapping[str, object] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "reviewed_context", _freeze_mapping(self.reviewed_context))
 
 
 @dataclass(frozen=True)
@@ -86,6 +94,7 @@ class AnalyticSignalAdmission:
     first_seen_at: datetime
     last_seen_at: datetime
     materially_new_work: bool = False
+    reviewed_context: Mapping[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -98,6 +107,10 @@ class CaseRecord(ControlPlaneRecord):
     finding_id: str | None
     evidence_ids: tuple[str, ...]
     lifecycle_state: str
+    reviewed_context: Mapping[str, object] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "reviewed_context", _freeze_mapping(self.reviewed_context))
 
 
 @dataclass(frozen=True)
@@ -163,6 +176,10 @@ class RecommendationRecord(ControlPlaneRecord):
     review_owner: str
     intended_outcome: str
     lifecycle_state: str
+    reviewed_context: Mapping[str, object] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "reviewed_context", _freeze_mapping(self.reviewed_context))
 
 
 @dataclass(frozen=True)
