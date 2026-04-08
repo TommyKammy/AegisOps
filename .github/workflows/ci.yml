@@ -107,6 +107,9 @@ jobs:
           bash scripts/verify-phase-13-guarded-automation-ci-validation.sh
           python3 -m unittest control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_records_execution_correlation_mismatch_states_separately control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_evaluates_action_policy_into_approval_and_isolated_executor control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_evaluates_action_policy_into_shuffle_without_human_approval control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_delegates_approved_low_risk_action_through_shuffle_adapter control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_rejects_shuffle_delegation_for_non_shuffle_execution_policy control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_delegates_approved_high_risk_action_through_isolated_executor control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_reconciles_shuffle_run_back_into_authoritative_action_execution control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_reconciles_isolated_executor_run_back_into_authoritative_action_execution
 
+      - name: Run Phase 14 identity-rich source family validation
+        run: bash scripts/verify-phase-14-identity-rich-source-family-design.sh
+
       - name: Run control-plane runtime unit tests
         run: python3 -m unittest discover -s control-plane/tests -p 'test_*.py'
 
@@ -146,6 +149,7 @@ jobs:
           bash scripts/test-verify-phase-11-control-plane-ci-validation.sh
           bash scripts/test-verify-phase-12-wazuh-ci-validation.sh
           bash scripts/test-verify-phase-13-guarded-automation-ci-validation.sh
+          bash scripts/test-verify-phase-14-identity-rich-source-family-design.sh
           bash scripts/test-verify-phase-6-initial-telemetry-slice-doc.sh
           bash scripts/test-verify-phase-6-opensearch-detector-artifacts.sh
           bash scripts/test-verify-phase-6-replay-to-notify-validation.sh
