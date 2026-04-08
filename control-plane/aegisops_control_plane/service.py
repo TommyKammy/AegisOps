@@ -1172,7 +1172,14 @@ class AegisOpsControlPlaneService:
                     existing_case.evidence_ids,
                     evidence.evidence_id,
                 )
-                if merged_case_evidence_ids != existing_case.evidence_ids:
+                merged_case_reviewed_context = _merge_reviewed_context(
+                    existing_case.reviewed_context,
+                    ingest_result.alert.reviewed_context,
+                )
+                if (
+                    merged_case_evidence_ids != existing_case.evidence_ids
+                    or merged_case_reviewed_context != existing_case.reviewed_context
+                ):
                     self.persist_record(
                         CaseRecord(
                             case_id=existing_case.case_id,
@@ -1180,10 +1187,7 @@ class AegisOpsControlPlaneService:
                             finding_id=existing_case.finding_id,
                             evidence_ids=merged_case_evidence_ids,
                             lifecycle_state=existing_case.lifecycle_state,
-                            reviewed_context=_merge_reviewed_context(
-                                existing_case.reviewed_context,
-                                ingest_result.alert.reviewed_context,
-                            ),
+                            reviewed_context=merged_case_reviewed_context,
                         )
                     )
 

@@ -379,6 +379,11 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 "owner": "identity-operations",
             },
         }
+        reviewed_context_followup = {
+            "privilege": {
+                "delegated_authority": "reviewed",
+            },
+        }
         merged_reviewed_context = {
             "asset": {
                 "asset_id": "asset-repo-001",
@@ -391,6 +396,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             },
             "privilege": {
                 "privilege_scope": "repository_admin",
+                "delegated_authority": "reviewed",
             },
         }
 
@@ -426,6 +432,15 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             last_seen_at=first_seen_at,
             reviewed_context=reviewed_context_update,
         )
+        followup_result = service.ingest_finding_alert(
+            finding_id="finding-native-link-001",
+            analytic_signal_id="signal-native-link-001",
+            substrate_detection_record_id="substrate-detection-native-link-001",
+            correlation_key="claim:asset-repo-001:native-link",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            reviewed_context=reviewed_context_followup,
+        )
         native_record = NativeDetectionRecord(
             substrate_key="wazuh",
             native_record_id="native-detection-001",
@@ -441,8 +456,14 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             ingest_result=updated_result,
             substrate_detection_record_id="substrate-detection-native-link-001",
         )
+        relinked = service._attach_native_detection_context(
+            record=native_record,
+            ingest_result=followup_result,
+            substrate_detection_record_id="substrate-detection-native-link-001",
+        )
 
         self.assertEqual(linked.alert.case_id, promoted_case.case_id)
+        self.assertEqual(relinked.alert.case_id, promoted_case.case_id)
         self.assertEqual(
             service.get_record(CaseRecord, promoted_case.case_id).reviewed_context,
             merged_reviewed_context,
