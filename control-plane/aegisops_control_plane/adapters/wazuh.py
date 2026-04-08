@@ -242,7 +242,8 @@ class WazuhAlertAdapter:
         )
         audit_action = _optional_string(data.get("audit_action"))
         source_family = _optional_string(data.get("source_family"))
-        is_github_family = source_family is None or source_family == "github_audit"
+        if source_family is not None and source_family != "github_audit":
+            return None
 
         has_github_context = any(
             value is not None
@@ -256,7 +257,7 @@ class WazuhAlertAdapter:
                 source_family,
             )
         )
-        if not is_github_family or not has_github_context:
+        if not has_github_context:
             return None
 
         profile: dict[str, object] = {
