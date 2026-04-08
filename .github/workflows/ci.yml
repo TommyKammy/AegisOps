@@ -110,6 +110,14 @@ jobs:
       - name: Run Phase 14 identity-rich source family validation
         run: bash scripts/verify-phase-14-identity-rich-source-family-design.sh
 
+      - name: Run Phase 14 identity-rich source expansion validation
+        run: |
+          bash scripts/verify-phase-14-identity-rich-source-expansion-ci-validation.sh
+          python3 -m unittest control-plane.tests.test_phase14_identity_rich_source_profile_docs control-plane.tests.test_wazuh_adapter control-plane.tests.test_service_persistence control-plane.tests.test_cli_inspection
+
+      - name: Run Phase 14 workflow coverage guard
+        run: bash scripts/test-verify-ci-phase-14-workflow-coverage.sh
+
       - name: Run control-plane runtime unit tests
         run: python3 -m unittest discover -s control-plane/tests -p 'test_*.py'
 
@@ -150,6 +158,8 @@ jobs:
           bash scripts/test-verify-phase-12-wazuh-ci-validation.sh
           bash scripts/test-verify-phase-13-guarded-automation-ci-validation.sh
           bash scripts/test-verify-phase-14-identity-rich-source-family-design.sh
+          bash scripts/test-verify-phase-14-identity-rich-source-expansion-ci-validation.sh
+          bash scripts/test-verify-ci-phase-14-workflow-coverage.sh
           bash scripts/test-verify-phase-6-initial-telemetry-slice-doc.sh
           bash scripts/test-verify-phase-6-opensearch-detector-artifacts.sh
           bash scripts/test-verify-phase-6-replay-to-notify-validation.sh

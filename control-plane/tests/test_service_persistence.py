@@ -834,6 +834,121 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             },
         )
 
+    def test_service_admits_entra_id_fixture_through_wazuh_source_profile(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+        native_record = adapter.build_native_detection_record(
+            _load_wazuh_fixture("entra-id-alert.json")
+        )
+
+        admitted = service.ingest_native_detection_record(adapter, native_record)
+
+        expected_profile = {
+            "source": {
+                "source_system": "wazuh",
+                "source_family": "entra_id",
+                "accountable_source_identity": "manager:wazuh-manager-entra-1",
+                "delivery_path": "entra/contoso/directory",
+            },
+            "identity": {
+                "actor": {
+                    "identity_type": "service_principal",
+                    "identity_id": "spn-operations",
+                    "display_name": "Operations Automation",
+                },
+                "target": {
+                    "identity_type": "role",
+                    "identity_id": "role-global-admin",
+                    "display_name": "Global Administrator",
+                },
+            },
+            "asset": {
+                "tenant": {
+                    "tenant_id": "tenant-001",
+                    "tenant_name": "Contoso",
+                },
+                "app": {
+                    "app_id": "app-entra-admin",
+                    "app_name": "Azure Portal",
+                    "app_type": "service",
+                },
+            },
+            "authentication": {
+                "method": "mfa",
+                "client_app": "Azure Portal",
+                "result": "success",
+            },
+            "privilege": {
+                "change_type": "role_assignment",
+                "scope": "directory_role",
+                "permission": "Global Administrator",
+                "role": "Privileged Role Administrator",
+            },
+            "provenance": {
+                "audit_action": "Add member to role",
+                "request_id": "ENTRA-REQ-0001",
+                "correlation_id": "entra-corr-0001",
+                "operation": "Add member to role",
+                "record_type": "Entra ID audit",
+                "rule_id": "entra-id-role-assignment",
+                "rule_level": 8,
+                "rule_description": "Entra ID privileged role assignment",
+                "decoder_name": "entra_id",
+                "location": "entra/contoso/directory",
+            },
+        }
+
+        self.assertEqual(admitted.disposition, "created")
+        self.assertEqual(admitted.alert.reviewed_context, expected_profile)
+        self.assertEqual(
+            service.get_record(AnalyticSignalRecord, admitted.alert.analytic_signal_id).reviewed_context,
+            expected_profile,
+        )
+        self.assertEqual(
+            service.get_record(AlertRecord, admitted.alert.alert_id).reviewed_context,
+            expected_profile,
+        )
+        reconciliation = service.get_record(
+            ReconciliationRecord,
+            admitted.reconciliation.reconciliation_id,
+        )
+        self.assertEqual(
+            reconciliation.subject_linkage["reviewed_source_profile"],
+            expected_profile,
+        )
+        self.assertEqual(
+            reconciliation.subject_linkage["reviewed_correlation_context"],
+            {
+                "location": "entra/contoso/directory",
+                "data.source_family": "entra_id",
+                "data.audit_action": "Add member to role",
+                "data.actor.id": "spn-operations",
+                "data.actor.name": "Operations Automation",
+                "data.target.id": "role-global-admin",
+                "data.target.name": "Global Administrator",
+                "data.tenant.id": "tenant-001",
+                "data.tenant.name": "Contoso",
+                "data.app.id": "app-entra-admin",
+                "data.app.name": "Azure Portal",
+                "data.authentication.method": "mfa",
+                "data.authentication.client_app": "Azure Portal",
+                "data.authentication.result": "success",
+                "data.correlation_id": "entra-corr-0001",
+                "data.operation": "Add member to role",
+                "data.privilege.change_type": "role_assignment",
+                "data.privilege.scope": "directory_role",
+                "data.privilege.permission": "Global Administrator",
+                "data.privilege.role": "Privileged Role Administrator",
+                "data.record_type": "Entra ID audit",
+            },
+        )
+
     def test_service_admits_native_detection_records_via_substrate_adapter_boundary(self) -> None:
         @dataclass(frozen=True)
         class TestNativeRecordAdapter(NativeDetectionRecordAdapter):
