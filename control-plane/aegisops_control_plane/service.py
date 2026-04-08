@@ -1180,7 +1180,10 @@ class AegisOpsControlPlaneService:
                             finding_id=existing_case.finding_id,
                             evidence_ids=merged_case_evidence_ids,
                             lifecycle_state=existing_case.lifecycle_state,
-                            reviewed_context=existing_case.reviewed_context,
+                            reviewed_context=_merge_reviewed_context(
+                                existing_case.reviewed_context,
+                                ingest_result.alert.reviewed_context,
+                            ),
                         )
                     )
 

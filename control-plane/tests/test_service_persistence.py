@@ -363,6 +363,28 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 "privilege_scope": "repository_admin",
             },
         }
+        reviewed_context_update = {
+            "asset": {
+                "criticality": "high",
+            },
+            "identity": {
+                "owner": "identity-operations",
+            },
+        }
+        merged_reviewed_context = {
+            "asset": {
+                "asset_id": "asset-repo-001",
+                "ownership": "platform-security",
+                "criticality": "high",
+            },
+            "identity": {
+                "identity_id": "principal-001",
+                "owner": "identity-operations",
+            },
+            "privilege": {
+                "privilege_scope": "repository_admin",
+            },
+        }
 
         admitted = service.ingest_finding_alert(
             finding_id="finding-native-link-001",
@@ -387,9 +409,14 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             )
         )
         promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
-        refreshed_result = replace(
-            admitted,
-            alert=service.get_record(AlertRecord, admitted.alert.alert_id),
+        updated_result = service.ingest_finding_alert(
+            finding_id="finding-native-link-001",
+            analytic_signal_id="signal-native-link-001",
+            substrate_detection_record_id="substrate-detection-native-link-001",
+            correlation_key="claim:asset-repo-001:native-link",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            reviewed_context=reviewed_context_update,
         )
         native_record = NativeDetectionRecord(
             substrate_key="wazuh",
@@ -403,14 +430,18 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         linked = service._attach_native_detection_context(
             record=native_record,
-            ingest_result=refreshed_result,
+            ingest_result=updated_result,
             substrate_detection_record_id="substrate-detection-native-link-001",
         )
 
         self.assertEqual(linked.alert.case_id, promoted_case.case_id)
         self.assertEqual(
             service.get_record(CaseRecord, promoted_case.case_id).reviewed_context,
+            merged_reviewed_context,
+        )
+        self.assertEqual(
             service.get_record(AlertRecord, admitted.alert.alert_id).reviewed_context,
+            merged_reviewed_context,
         )
 
     def test_service_extends_promoted_wazuh_alert_with_existing_case_linkage(
