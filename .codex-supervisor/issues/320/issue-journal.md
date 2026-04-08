@@ -24,7 +24,7 @@
 - Hypothesis: Phase 15 needed a reviewed, advisory-only assistant boundary doc set plus local verification that fails closed on missing identity-grounding and alias-ambiguity rules.
 - What changed: Added Phase 15 boundary design and validation docs, a unittest guard for the docs, focused shell verifiers, and CI workflow hooks for the new validation and workflow-coverage steps.
 - Current blocker: None.
-- Next exact step: Review the diff for any wording or policy drift, then commit the Phase 15 boundary package.
+- Next exact step: Review PR #326 for any wording or policy drift, then address follow-up feedback if any.
 - Verification gap: None for the focused scope; the new unit test, verifier, shell harness, and workflow coverage guard all passed.
 - Files touched: `docs/phase-15-identity-grounded-analyst-assistant-boundary.md`, `docs/phase-15-identity-grounded-analyst-assistant-boundary-validation.md`, `control-plane/tests/test_phase15_identity_grounded_analyst_assistant_boundary_docs.py`, `scripts/verify-phase-15-identity-grounded-analyst-assistant-boundary.sh`, `scripts/test-verify-phase-15-identity-grounded-analyst-assistant-boundary.sh`, `scripts/test-verify-ci-phase-15-workflow-coverage.sh`, `.github/workflows/ci.yml`
 - Rollback concern: Low; the change is isolated to Phase 15 boundary docs, verification wrappers, and CI wiring.
