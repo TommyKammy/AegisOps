@@ -206,12 +206,47 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             ["agent:007"],
         )
         self.assertEqual(
+            payload["records"][0]["reviewed_context"]["location"],
+            "/var/log/auth.log",
+        )
+        self.assertEqual(
             payload["records"][0]["native_rule"]["description"],
             "SSH brute force attempt",
         )
         self.assertEqual(
             payload["records"][0]["substrate_detection_record_ids"],
             ["wazuh:1731594986.4931506"],
+        )
+
+    def test_cli_renders_identity_rich_analyst_queue_view_with_reviewed_context(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+        admitted = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(
+                _load_wazuh_fixture("microsoft-365-audit-alert.json")
+            ),
+        )
+        service.promote_alert_to_case(admitted.alert.alert_id)
+
+        stdout = io.StringIO()
+        main.main(["inspect-analyst-queue"], stdout=stdout, service=service)
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["total_records"], 1)
+        self.assertEqual(
+            payload["records"][0]["reviewed_context"]["source"]["source_family"],
+            "microsoft_365_audit",
+        )
+        self.assertEqual(
+            payload["records"][0]["reviewed_context"]["identity"]["actor"]["identity_id"],
+            "alex@contoso.com",
         )
 
     def test_cli_rejects_unknown_record_family_as_usage_error(self) -> None:

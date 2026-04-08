@@ -612,6 +612,7 @@ class AegisOpsControlPlaneService:
                         ),
                         None,
                     ),
+                    "reviewed_context": dict(alert.reviewed_context),
                     "native_rule": reconciliation.subject_linkage.get(
                         "latest_native_rule"
                     ),
