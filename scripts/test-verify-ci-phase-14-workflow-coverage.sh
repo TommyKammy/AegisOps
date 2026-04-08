@@ -65,6 +65,41 @@ collect_active_run_commands() {
   ' "${workflow_path}"
 }
 
+extract_self_guard_step_run_command() {
+  awk -v step_name="${self_guard_step_name}" '
+    function line_indent(line) {
+      return match(line, /[^ ]/) - 1
+    }
+
+    BEGIN {
+      in_step = 0
+      step_indent = -1
+    }
+
+    {
+      if (in_step) {
+        if ($0 ~ /^[[:space:]]*-[[:space:]]name:[[:space:]]+/ && line_indent($0) <= step_indent) {
+          exit 0
+        }
+
+        if ($0 ~ /^[[:space:]]*run:[[:space:]]*/) {
+          line = $0
+          sub(/^[[:space:]]*run:[[:space:]]*/, "", line)
+          print line
+          exit 0
+        }
+      }
+
+      line = $0
+      sub(/^[[:space:]]+/, "", line)
+      if (line == "- name: " step_name) {
+        in_step = 1
+        step_indent = line_indent($0)
+      }
+    }
+  ' "${workflow_path}"
+}
+
 active_run_commands="$(collect_active_run_commands)"
 
 for command in "${required_verifiers[@]}"; do
@@ -88,8 +123,15 @@ for command in "${required_runtime_commands[@]}"; do
   fi
 done
 
-if ! grep -Eq "^[[:space:]]*- name: ${self_guard_step_name}\$" "${workflow_path}"; then
+self_guard_step_run_command="$(extract_self_guard_step_run_command)"
+if [[ -z "${self_guard_step_run_command}" ]]; then
   echo "Missing dedicated Phase 14 workflow coverage guard step in CI workflow: ${self_guard_step_name}" >&2
+  exit 1
+fi
+
+if [[ "${self_guard_step_run_command}" != "${self_guard_command}" ]]; then
+  echo "Dedicated Phase 14 workflow coverage guard step must run exactly: ${self_guard_command}" >&2
+  echo "Found: ${self_guard_step_run_command}" >&2
   exit 1
 fi
 

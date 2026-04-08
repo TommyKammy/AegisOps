@@ -42,10 +42,48 @@ require_fixed_string() {
 require_test_name() {
   local file_path="$1"
   local test_name="$2"
-  local pattern="^[[:space:]]*def[[:space:]]+${test_name}[[:space:]]*\\("
 
-  if ! grep -Eq -- "${pattern}" "${file_path}" >/dev/null; then
-    echo "Missing required Phase 14 test in ${file_path}: ${test_name}" >&2
+  if ! python3 - "$file_path" "$test_name" <<'PY'
+from __future__ import annotations
+
+import ast
+import sys
+from pathlib import Path
+
+
+def is_unittest_testcase(base: ast.expr) -> bool:
+    if isinstance(base, ast.Attribute):
+        return (
+            base.attr == "TestCase"
+            and isinstance(base.value, ast.Name)
+            and base.value.id == "unittest"
+        )
+
+    if isinstance(base, ast.Name):
+        return base.id == "TestCase"
+
+    return False
+
+
+file_path = Path(sys.argv[1])
+test_name = sys.argv[2]
+tree = ast.parse(file_path.read_text(encoding="utf-8"), filename=str(file_path))
+
+for node in tree.body:
+    if not isinstance(node, ast.ClassDef):
+        continue
+
+    if not any(is_unittest_testcase(base) for base in node.bases):
+        continue
+
+    for stmt in node.body:
+        if isinstance(stmt, ast.FunctionDef) and stmt.name == test_name:
+            raise SystemExit(0)
+
+print(f"Missing required Phase 14 unittest-discoverable test in {file_path}: {test_name}", file=sys.stderr)
+raise SystemExit(1)
+PY
+  then
     exit 1
   fi
 }

@@ -128,28 +128,37 @@ class Phase14IdentityRichSourceProfileDocsTests(unittest.TestCase):
             "false-positive expectations",
             "read-oriented evidence",
         )
-        family_specific_terms = {
-            github_text: (
-                "GitHub audit",
-                "repository or organization context",
-                "accountable source identity",
-                "Direct GitHub API actioning",
+        family_specific_terms = (
+            (
+                github_text,
+                (
+                    "GitHub audit",
+                    "repository or organization context",
+                    "accountable source identity",
+                    "Direct GitHub API actioning",
+                ),
             ),
-            microsoft_text: (
-                "Microsoft 365 audit",
-                "tenant context",
-                "authentication context",
-                "Direct Microsoft 365 actioning",
+            (
+                microsoft_text,
+                (
+                    "Microsoft 365 audit",
+                    "tenant context",
+                    "authentication context",
+                    "Direct Microsoft 365 actioning",
+                ),
             ),
-            entra_text: (
-                "Entra ID",
-                "directory boundary",
-                "authentication context",
-                "Direct Entra ID actioning",
+            (
+                entra_text,
+                (
+                    "Entra ID",
+                    "directory boundary",
+                    "authentication context",
+                    "Direct Entra ID actioning",
+                ),
             ),
-        }
+        )
 
-        for text, terms in family_specific_terms.items():
+        for text, terms in family_specific_terms:
             for term in shared_terms + terms:
                 self.assertIn(term, text)
 
