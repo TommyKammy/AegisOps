@@ -341,6 +341,194 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             snapshot.linked_reconciliation_ids,
         )
 
+    def test_service_exposes_assistant_context_for_action_approvals_and_executions(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        reviewed_context = {
+            "asset": {
+                "asset_id": "asset-repo-approval-001",
+                "ownership": "platform-security",
+                "criticality": "high",
+            },
+            "identity": {
+                "identity_id": "principal-approval-001",
+                "owner": "identity-operations",
+            },
+        }
+
+        admitted = service.ingest_finding_alert(
+            finding_id="finding-assistant-approval-001",
+            analytic_signal_id="signal-assistant-approval-001",
+            substrate_detection_record_id="substrate-detection-assistant-approval-001",
+            correlation_key="claim:asset-repo-approval-001:assistant-approval-review",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            reviewed_context=reviewed_context,
+        )
+        evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-assistant-approval-001",
+                source_record_id="substrate-detection-assistant-approval-001",
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=first_seen_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-assistant-approval-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=admitted.alert.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id=None,
+                review_owner="reviewer-001",
+                intended_outcome="follow reviewed evidence",
+                lifecycle_state="under_review",
+                reviewed_context=reviewed_context,
+            )
+        )
+        approval_target_scope = {"asset_id": "asset-repo-approval-001"}
+        approved_payload = {
+            "action_type": "notify_identity_owner",
+            "asset_id": "asset-repo-approval-001",
+        }
+        payload_hash = _approved_binding_hash(
+            target_scope=approval_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
+        approval_decision = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-assistant-approval-001",
+                action_request_id="action-request-assistant-approval-001",
+                approver_identities=("approver-001",),
+                target_snapshot=approval_target_scope,
+                payload_hash=payload_hash,
+                decided_at=first_seen_at,
+                lifecycle_state="approved",
+            )
+        )
+        action_request = service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-assistant-approval-001",
+                approval_decision_id=approval_decision.approval_decision_id,
+                case_id=promoted_case.case_id,
+                alert_id=admitted.alert.alert_id,
+                finding_id=admitted.alert.finding_id,
+                idempotency_key="idempotency-assistant-approval-001",
+                target_scope=approval_target_scope,
+                payload_hash=payload_hash,
+                requested_at=first_seen_at,
+                expires_at=None,
+                lifecycle_state="approved",
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "shuffle",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id=action_request.action_request_id,
+            approved_payload=approved_payload,
+            delegated_at=delegated_at,
+            delegation_issuer="control-plane-service",
+            evidence_ids=("evidence-assistant-approval-001",),
+        )
+
+        approval_snapshot = service.inspect_assistant_context(
+            "approval_decision",
+            approval_decision.approval_decision_id,
+        )
+        execution_snapshot = service.inspect_assistant_context(
+            "action_execution",
+            execution.action_execution_id,
+        )
+
+        for snapshot in (approval_snapshot, execution_snapshot):
+            self.assertTrue(snapshot.read_only)
+            self.assertEqual(snapshot.linked_alert_ids, (admitted.alert.alert_id,))
+            self.assertEqual(snapshot.linked_case_ids, (promoted_case.case_id,))
+            self.assertEqual(snapshot.linked_evidence_ids, (evidence.evidence_id,))
+            self.assertEqual(
+                snapshot.linked_evidence_records[0]["evidence_id"],
+                evidence.evidence_id,
+            )
+            self.assertIn(
+                recommendation.recommendation_id,
+                snapshot.linked_recommendation_ids,
+            )
+            self.assertIn(
+                admitted.reconciliation.reconciliation_id,
+                snapshot.linked_reconciliation_ids,
+            )
+
+    def test_service_preserves_declared_missing_evidence_ids_in_assistant_context(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        compared_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        case = service.persist_record(
+            CaseRecord(
+                case_id="case-assistant-missing-evidence-001",
+                alert_id=None,
+                finding_id="finding-assistant-missing-evidence-001",
+                evidence_ids=(
+                    "evidence-assistant-missing-001",
+                    "evidence-assistant-present-001",
+                ),
+                lifecycle_state="open",
+            )
+        )
+        evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-assistant-present-001",
+                source_record_id="substrate-detection-assistant-missing-001",
+                alert_id=None,
+                case_id=case.case_id,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=compared_at,
+                derivation_relationship="observed_artifact",
+                lifecycle_state="collected",
+            )
+        )
+
+        snapshot = service.inspect_assistant_context("case", case.case_id)
+
+        self.assertEqual(
+            snapshot.linked_evidence_ids,
+            (
+                "evidence-assistant-missing-001",
+                evidence.evidence_id,
+            ),
+        )
+        self.assertEqual(len(snapshot.linked_evidence_records), 1)
+        self.assertEqual(
+            snapshot.linked_evidence_records[0]["evidence_id"],
+            evidence.evidence_id,
+        )
+
     def test_service_merges_reviewed_context_for_existing_alert_updates(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(

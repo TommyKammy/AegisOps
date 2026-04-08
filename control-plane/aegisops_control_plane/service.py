@@ -702,7 +702,33 @@ class AegisOpsControlPlaneService:
             getattr(record, "alert_id", None)
         )
         linked_case_ids = self._assistant_ids_from_value(getattr(record, "case_id", None))
+        linked_finding_ids = self._assistant_ids_from_value(
+            getattr(record, "finding_id", None)
+        )
         linked_evidence_ids = self._assistant_linked_evidence_ids(record)
+
+        if isinstance(record, (ApprovalDecisionRecord, ActionExecutionRecord)):
+            action_request_id = self._require_non_empty_string(
+                getattr(record, "action_request_id", None),
+                "action_request_id",
+            )
+            action_request = self._store.get(ActionRequestRecord, action_request_id)
+            if action_request is None:
+                raise LookupError(
+                    f"Missing action request {action_request_id!r} for assistant context"
+                )
+            linked_alert_ids = self._assistant_merge_ids(
+                linked_alert_ids,
+                action_request.alert_id,
+            )
+            linked_case_ids = self._assistant_merge_ids(
+                linked_case_ids,
+                action_request.case_id,
+            )
+            linked_finding_ids = self._assistant_merge_ids(
+                linked_finding_ids,
+                action_request.finding_id,
+            )
 
         if isinstance(record, AnalyticSignalRecord):
             linked_alert_ids = self._assistant_merge_ids(
@@ -737,6 +763,10 @@ class AegisOpsControlPlaneService:
                 linked_case_ids,
                 self._assistant_ids_from_mapping(record.subject_linkage, "case_ids"),
             )
+            linked_finding_ids = self._assistant_merge_ids(
+                linked_finding_ids,
+                self._assistant_ids_from_mapping(record.subject_linkage, "finding_ids"),
+            )
             linked_evidence_ids = self._assistant_merge_ids(
                 linked_evidence_ids,
                 self._assistant_ids_from_mapping(
@@ -758,8 +788,9 @@ class AegisOpsControlPlaneService:
                 record.evidence_id if isinstance(record, EvidenceRecord) else None
             ),
         )
-        linked_evidence_ids = tuple(
-            evidence.evidence_id for evidence in linked_evidence_records
+        linked_evidence_ids = self._assistant_merge_ids(
+            linked_evidence_ids,
+            tuple(evidence.evidence_id for evidence in linked_evidence_records),
         )
 
         linked_recommendation_records = self._assistant_recommendation_records_for_context(
@@ -778,6 +809,7 @@ class AegisOpsControlPlaneService:
                 record=record,
                 alert_ids=linked_alert_ids,
                 case_ids=linked_case_ids,
+                finding_ids=linked_finding_ids,
                 evidence_ids=linked_evidence_ids,
                 exclude_reconciliation_id=record.record_id,
             )
@@ -970,12 +1002,14 @@ class AegisOpsControlPlaneService:
         record: ControlPlaneRecord,
         alert_ids: tuple[str, ...],
         case_ids: tuple[str, ...],
+        finding_ids: tuple[str, ...],
         evidence_ids: tuple[str, ...],
         exclude_reconciliation_id: str | None,
     ) -> tuple[ReconciliationRecord, ...]:
         records: list[ReconciliationRecord] = []
         analytic_signal_id = getattr(record, "analytic_signal_id", None)
         finding_id = getattr(record, "finding_id", None)
+        linked_finding_ids = set(finding_ids)
         for reconciliation in self._store.list(ReconciliationRecord):
             if (
                 exclude_reconciliation_id is not None
@@ -989,6 +1023,12 @@ class AegisOpsControlPlaneService:
                 records.append(reconciliation)
                 continue
             if finding_id is not None and reconciliation.finding_id == finding_id:
+                records.append(reconciliation)
+                continue
+            if (
+                reconciliation.finding_id is not None
+                and reconciliation.finding_id in linked_finding_ids
+            ):
                 records.append(reconciliation)
                 continue
             subject_case_ids = self._assistant_ids_from_mapping(
