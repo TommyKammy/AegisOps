@@ -62,7 +62,7 @@ require_table_contains_line() {
     in_table && index($0, needle) > 0 { found = 1 }
     END { exit found ? 0 : 1 }
   ' "${file_path}"; then
-    echo "Missing required line in ${file_path} within ${table_name}_records: ${needle}" >&2
+    echo "Missing required line in ${file_path} within ${table_name}: ${needle}" >&2
     exit 1
   fi
 }
