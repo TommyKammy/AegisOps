@@ -107,6 +107,12 @@ The current reviewed Wazuh correlation boundary uses the following native fields
 - `data.srcuser`
 - `data.integration`
 - `data.event_type`
+- `data.source_family`
+- `data.audit_action`
+- `data.privilege.change_type`
+- `data.privilege.scope`
+- `data.privilege.permission`
+- `data.privilege.role`
 
 Those fields may separate distinct incidents during deduplication or restatement decisions, but they still remain reviewed correlation inputs rather than lifecycle identifiers.
 

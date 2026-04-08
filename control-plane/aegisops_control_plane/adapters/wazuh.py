@@ -43,6 +43,7 @@ class WazuhAlertAdapter:
         "data.srcuser",
         "data.integration",
         "data.event_type",
+        "data.source_family",
         "data.audit_action",
         "data.actor.id",
         "data.actor.name",
@@ -54,6 +55,8 @@ class WazuhAlertAdapter:
         "data.repository.full_name",
         "data.privilege.change_type",
         "data.privilege.scope",
+        "data.privilege.permission",
+        "data.privilege.role",
     )
 
     def build_native_detection_record(
@@ -282,12 +285,20 @@ class WazuhAlertAdapter:
                     native_rule.get("description"),
                     "native_rule.description",
                 ),
-                "decoder_name": _optional_string(source_provenance.get("decoder_name")),
-                "location": _optional_string(source_provenance.get("location")),
-                "audit_action": audit_action,
-                "request_id": _optional_string(data.get("request_id")),
             },
         }
+        provenance = profile["provenance"]
+        decoder_name = _optional_string(source_provenance.get("decoder_name"))
+        if decoder_name is not None:
+            provenance["decoder_name"] = decoder_name
+        location = _optional_string(source_provenance.get("location"))
+        if location is not None:
+            provenance["location"] = location
+        if audit_action is not None:
+            provenance["audit_action"] = audit_action
+        request_id = _optional_string(data.get("request_id"))
+        if request_id is not None:
+            provenance["request_id"] = request_id
         if actor is not None or target is not None:
             identity_profile: dict[str, object] = {}
             if actor is not None:

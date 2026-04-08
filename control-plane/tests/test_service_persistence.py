@@ -706,6 +706,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             reconciliation.subject_linkage["reviewed_correlation_context"],
             {
                 "location": "github/orgs/TommyKammy/repos/AegisOps/audit",
+                "data.source_family": "github_audit",
                 "data.audit_action": "member.added",
                 "data.actor.id": "octocat",
                 "data.actor.name": "octocat",
@@ -715,6 +716,8 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 "data.repository.full_name": "TommyKammy/AegisOps",
                 "data.privilege.change_type": "membership_change",
                 "data.privilege.scope": "repository_admin",
+                "data.privilege.permission": "admin",
+                "data.privilege.role": "maintainer",
             },
         )
 

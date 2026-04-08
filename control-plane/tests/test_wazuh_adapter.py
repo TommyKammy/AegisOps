@@ -179,6 +179,7 @@ class WazuhAlertAdapterTests(unittest.TestCase):
         self.assertEqual(record.correlation_key, (
             "wazuh:rule:github-audit-privilege-change:source:manager:wazuh-manager-github-1"
             ":location=github%2Forgs%2FTommyKammy%2Frepos%2FAegisOps%2Faudit"
+            ":data.source_family=github_audit"
             ":data.audit_action=member.added"
             ":data.actor.id=octocat"
             ":data.actor.name=octocat"
@@ -188,6 +189,8 @@ class WazuhAlertAdapterTests(unittest.TestCase):
             ":data.repository.full_name=TommyKammy%2FAegisOps"
             ":data.privilege.change_type=membership_change"
             ":data.privilege.scope=repository_admin"
+            ":data.privilege.permission=admin"
+            ":data.privilege.role=maintainer"
         ))
         self.assertEqual(
             record.metadata["source_provenance"]["accountable_source_identity"],
@@ -216,8 +219,6 @@ class WazuhAlertAdapterTests(unittest.TestCase):
                 "delivery_path": "github/orgs/TommyKammy/repos/AegisOps/audit",
             },
             "provenance": {
-                "audit_action": None,
-                "request_id": None,
                 "rule_id": "github-audit-privilege-change",
                 "rule_level": 8,
                 "rule_description": "GitHub audit repository privilege change",
@@ -289,6 +290,7 @@ class WazuhAlertAdapterTests(unittest.TestCase):
             (
                 "wazuh:rule:github-audit-privilege-change:source:manager:wazuh-manager-github-1"
                 ":location=github%2Forgs%2FTommyKammy%2Frepos%2FAegisOps%2Faudit"
+                ":data.source_family=github_audit"
                 ":data.audit_action=member.added"
                 ":data.actor.id=octocat"
                 ":data.actor.login=octocat"
@@ -300,6 +302,7 @@ class WazuhAlertAdapterTests(unittest.TestCase):
             record.metadata["reviewed_correlation_context"],
             {
                 "location": "github/orgs/TommyKammy/repos/AegisOps/audit",
+                "data.source_family": "github_audit",
                 "data.audit_action": "member.added",
                 "data.actor.id": "octocat",
                 "data.actor.login": "octocat",
@@ -307,6 +310,20 @@ class WazuhAlertAdapterTests(unittest.TestCase):
                 "data.target.login": "security-reviews",
             },
         )
+
+    def test_adapter_distinguishes_github_audit_privilege_metadata_in_correlation_key(
+        self,
+    ) -> None:
+        adapter = WazuhAlertAdapter()
+        first_alert = _load_fixture("github-audit-alert.json")
+        second_alert = _load_fixture("github-audit-alert.json")
+        second_alert["data"]["privilege"]["permission"] = "read"
+        second_alert["data"]["privilege"]["role"] = "observer"
+
+        first_record = adapter.build_native_detection_record(first_alert)
+        second_record = adapter.build_native_detection_record(second_alert)
+
+        self.assertNotEqual(first_record.correlation_key, second_record.correlation_key)
 
 
 if __name__ == "__main__":
