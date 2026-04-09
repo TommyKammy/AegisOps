@@ -18,6 +18,10 @@ Any future operational detail added here must remain consistent with the approve
 
 Detailed startup steps are intentionally deferred until implementation artifacts and validation procedures exist.
 
+Until implementation-specific commands are approved, operators must treat first boot as limited to the AegisOps control-plane service, PostgreSQL, the approved reverse proxy boundary, and reviewed Wazuh-facing analytic-signal intake expectations.
+
+Operators must not treat optional OpenSearch, n8n, the full analyst-assistant surface, or the high-risk executor path as first-boot prerequisites.
+
 Future startup guidance should describe:
 
 - approved prerequisites and dependencies,

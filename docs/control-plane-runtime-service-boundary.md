@@ -99,4 +99,8 @@ The approved service boundary therefore fails closed if future implementation at
 
 `docs/repository-structure-baseline.md` remains the normative source for approved top-level repository placement, including the dedicated `control-plane/` runtime home and the separate `postgres/control-plane/` persistence contract home.
 
+Within the approved Phase 16 release-state, the first-boot runtime target for this boundary is limited to the control-plane service, the reviewed PostgreSQL persistence dependency, the approved reverse proxy ingress boundary, and reviewed Wazuh-facing analytic-signal intake expectations.
+
+That first-boot target does not make OpenSearch, n8n, the full analyst-assistant surface, or the high-risk executor path mandatory startup blockers.
+
 Later implementation may choose a concrete language, framework, and internal package layout, but it must preserve the service boundary and repository placement approved here.
