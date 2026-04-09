@@ -598,6 +598,20 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             )
         )
         promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-assistant-reconciliation-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=admitted.alert.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id=None,
+                review_owner="reviewer-001",
+                intended_outcome="follow reviewed evidence",
+                lifecycle_state="under_review",
+                reviewed_context=reviewed_context,
+            )
+        )
         approval_target_scope = {"asset_id": "asset-repo-reconciliation-001"}
         approved_payload = {
             "action_type": "notify_identity_owner",
@@ -801,6 +815,47 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             subject_analytic_signal_reconciliation.reconciliation_id,
             alert_snapshot.linked_reconciliation_ids,
         )
+
+        subject_alert_snapshot = service.inspect_assistant_context(
+            "reconciliation",
+            subject_alert_reconciliation.reconciliation_id,
+        )
+        subject_signal_snapshot = service.inspect_assistant_context(
+            "reconciliation",
+            subject_analytic_signal_reconciliation.reconciliation_id,
+        )
+
+        self.assertEqual(
+            subject_alert_snapshot.linked_alert_ids,
+            (admitted.alert.alert_id,),
+        )
+        self.assertIn(
+            recommendation.recommendation_id,
+            subject_alert_snapshot.linked_recommendation_ids,
+        )
+        self.assertIn(
+            admitted.reconciliation.reconciliation_id,
+            subject_alert_snapshot.linked_reconciliation_ids,
+        )
+        self.assertEqual(subject_alert_snapshot.reviewed_context, reviewed_context)
+
+        self.assertEqual(
+            subject_signal_snapshot.linked_alert_ids,
+            (admitted.alert.alert_id,),
+        )
+        self.assertEqual(
+            subject_signal_snapshot.linked_case_ids,
+            (promoted_case.case_id,),
+        )
+        self.assertIn(
+            recommendation.recommendation_id,
+            subject_signal_snapshot.linked_recommendation_ids,
+        )
+        self.assertIn(
+            admitted.reconciliation.reconciliation_id,
+            subject_signal_snapshot.linked_reconciliation_ids,
+        )
+        self.assertEqual(subject_signal_snapshot.reviewed_context, reviewed_context)
 
     def test_service_preserves_declared_missing_evidence_ids_in_assistant_context(
         self,
