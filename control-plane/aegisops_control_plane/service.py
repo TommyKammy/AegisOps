@@ -471,14 +471,28 @@ def _reviewed_identity_is_alias_only(reviewed_context: Mapping[str, object]) -> 
     return any(identity.get(key) for key in alias_like_keys)
 
 
-def _recommendation_draft_review_summary(record_id: str, lifecycle_state: object) -> str:
+def _recommendation_draft_review_summary(
+    record_family: str,
+    record_id: str,
+    lifecycle_state: object,
+) -> str:
     state = lifecycle_state if isinstance(lifecycle_state, str) else ""
-    if state in {"accepted", "accepted_for_reference"}:
+    if record_family == "recommendation" and state == "accepted":
+        return (
+            f"Recommendation draft {record_id} has been accepted and is anchored "
+            "to cited evidence and reviewed lineage."
+        )
+    if record_family == "recommendation" and state == "rejected":
+        return (
+            f"Recommendation draft {record_id} has been rejected and is anchored "
+            "to cited evidence and reviewed lineage."
+        )
+    if state == "accepted_for_reference":
         return (
             f"Recommendation draft {record_id} has been accepted for reference and is "
             "anchored to cited evidence and reviewed lineage."
         )
-    if state in {"rejected", "rejected_for_reference"}:
+    if state == "rejected_for_reference":
         return (
             f"Recommendation draft {record_id} has been rejected for reference and is "
             "anchored to cited evidence and reviewed lineage."
@@ -669,10 +683,11 @@ def _build_assistant_advisory_output(
             }
         )
 
-    status = "unresolved" if fail_closed else "ready"
+        status = "unresolved" if fail_closed else "ready"
     if status == "ready":
         if output_kind == "recommendation_draft":
             summary_text = _recommendation_draft_review_summary(
+                record_family,
                 record_id,
                 record.get("lifecycle_state"),
             )

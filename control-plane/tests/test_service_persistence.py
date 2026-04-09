@@ -937,7 +937,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         )
 
         self.assertIn(
-            "has been accepted for reference",
+            "has been accepted and is anchored",
             accepted_recommendation_draft.recommendation_draft["cited_summary"]["text"],
         )
         self.assertEqual(

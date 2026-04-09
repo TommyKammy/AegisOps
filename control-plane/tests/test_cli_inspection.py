@@ -572,7 +572,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             "accepted",
         )
         self.assertIn(
-            "has been accepted for reference",
+            "has been accepted and is anchored",
             payload["recommendation_draft"]["cited_summary"]["text"],
         )
         self.assertNotIn(
