@@ -783,6 +783,63 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             "assistant-advisory-draft:ai_trace:ai-trace-advisory-review-001",
         )
 
+    def test_service_preserves_prior_assistant_advisory_draft_revisions_on_repeat_attachment(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-advisory-history-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id="alert-advisory-history-001",
+                case_id="case-advisory-history-001",
+                ai_trace_id=None,
+                review_owner="reviewer-001",
+                intended_outcome="review the draft history",
+                lifecycle_state="under_review",
+            )
+        )
+
+        initial_attachment = service.attach_assistant_advisory_draft(
+            "recommendation",
+            recommendation.recommendation_id,
+        )
+        initial_snapshot = dict(initial_attachment.assistant_advisory_draft)
+
+        evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-advisory-history-001",
+                source_record_id="artifact-advisory-history-001",
+                alert_id=recommendation.alert_id,
+                case_id=recommendation.case_id,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=first_seen_at,
+                derivation_relationship="original",
+                lifecycle_state="collected",
+            )
+        )
+
+        updated_attachment = service.attach_assistant_advisory_draft(
+            "recommendation",
+            recommendation.recommendation_id,
+        )
+
+        self.assertIn(
+            evidence.evidence_id,
+            updated_attachment.assistant_advisory_draft["citations"],
+        )
+        self.assertEqual(
+            updated_attachment.assistant_advisory_draft["revision_history"][0],
+            initial_snapshot,
+        )
+
     def test_service_renders_recommendation_draft_with_current_review_outcome(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(

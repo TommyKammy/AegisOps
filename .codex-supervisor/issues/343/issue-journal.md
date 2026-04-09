@@ -21,7 +21,7 @@ I patched that Phase 9 shell fixture to create and track `.gitignore`, then rera
 Summary: Reproduced the live `verify` failure in the Phase 9 runtime-boundary shell fixture, fixed the missing `.gitignore` in the temp-repo baseline, updated the issue journal, and verified the full focused shell test block locally.
 State hint: repairing_ci
 Blocked reason: none
-Tests: `python3 /Users/jp.infra/.codex/plugins/cache/openai-curated/github/b4940fd0a222022ecd7852e20a4c89ed36b9e9de/skills/gh-fix-ci/scripts/inspect_pr_checks.py --repo . --pr 345`; `bash scripts/test-verify-phase-9-control-plane-runtime-boundary-validation.sh`; `python3 -m unittest control-plane.tests.test_service_persistence`; `python3 -m unittest control-plane.tests.test_cli_inspection`; full local replay of the `.github/workflows/ci.yml` `Run focused shell tests` command block
+Tests: `python3 <redacted-local-path> --repo . --pr 345`; `bash scripts/test-verify-phase-9-control-plane-runtime-boundary-validation.sh`; `python3 -m unittest control-plane.tests.test_service_persistence`; `python3 -m unittest control-plane.tests.test_cli_inspection`; full local replay of the `.github/workflows/ci.yml` `Run focused shell tests` command block
 Next action: Commit and push the Phase 9 fixture repair to `codex/issue-343`, then watch PR #345 for a fresh `verify` run.
 Failure signature: verify:phase9-fixture-missing-gitignore
 
