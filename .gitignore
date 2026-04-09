@@ -1,0 +1,44 @@
+# Secrets and local environment files
+.env
+.env.*
+!.env.sample
+!.env.*.sample
+control-plane/config/local.env
+control-plane/config/*.env
+!control-plane/config/*.env.sample
+
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# Python cache and test artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Local logs and temporary runtime output
+*.log
+*.out
+*.pid
+*.pid.lock
+tmp/
+temp/
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Local override files
+docker-compose.override.yml
