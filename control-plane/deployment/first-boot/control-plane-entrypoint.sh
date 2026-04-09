@@ -18,7 +18,18 @@ require_non_empty() {
   fi
 }
 
+require_non_empty "AEGISOPS_CONTROL_PLANE_HOST" "${AEGISOPS_CONTROL_PLANE_HOST:-}"
 require_non_empty "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN" "${AEGISOPS_CONTROL_PLANE_POSTGRES_DSN:-}"
+
+dsn_value="${AEGISOPS_CONTROL_PLANE_POSTGRES_DSN:-}"
+case "${dsn_value}" in
+  postgresql://*|postgres://*)
+    ;;
+  *)
+    echo "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN must be a PostgreSQL DSN for the first-boot skeleton." >&2
+    exit 1
+    ;;
+esac
 
 port_value="${AEGISOPS_CONTROL_PLANE_PORT:-8080}"
 case "${port_value}" in

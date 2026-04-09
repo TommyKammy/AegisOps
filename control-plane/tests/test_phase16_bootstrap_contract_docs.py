@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pathlib
+import subprocess
 import unittest
 
 
@@ -56,6 +57,7 @@ class Phase16BootstrapContractDocsTests(unittest.TestCase):
             "Optional and deferred components below must remain non-blocking for first boot.",
             "AEGISOPS_CONTROL_PLANE_OPENSEARCH_URL=",
             "AEGISOPS_CONTROL_PLANE_N8N_BASE_URL=",
+            "AEGISOPS_CONTROL_PLANE_SHUFFLE_BASE_URL=",
             "AEGISOPS_CONTROL_PLANE_ISOLATED_EXECUTOR_BASE_URL=",
         ):
             self.assertIn(term, bootstrap_text)
@@ -82,6 +84,60 @@ class Phase16BootstrapContractDocsTests(unittest.TestCase):
             "exec \"$@\"",
         ):
             self.assertIn(term, entrypoint_text)
+
+    def test_first_boot_entrypoint_requires_control_plane_host(self) -> None:
+        result = self._run_entrypoint(
+            {
+                "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN": "postgresql://user:pass@postgres:5432/aegisops",
+            }
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Missing required first-boot setting: AEGISOPS_CONTROL_PLANE_HOST", result.stderr)
+
+    def test_first_boot_entrypoint_rejects_non_postgres_dsn(self) -> None:
+        result = self._run_entrypoint(
+            {
+                "AEGISOPS_CONTROL_PLANE_HOST": "127.0.0.1",
+                "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN": "mysql://user:pass@postgres:3306/aegisops",
+            }
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN must be a PostgreSQL DSN for the first-boot skeleton.",
+            result.stderr,
+        )
+
+    def test_first_boot_entrypoint_executes_command_when_contract_is_valid(self) -> None:
+        result = self._run_entrypoint(
+            {
+                "AEGISOPS_CONTROL_PLANE_HOST": "127.0.0.1",
+                "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN": "postgresql://user:pass@postgres:5432/aegisops",
+            }
+        )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "ok")
+        self.assertEqual(result.stderr, "")
+
+    @staticmethod
+    def _run_entrypoint(env_overrides: dict[str, str]) -> subprocess.CompletedProcess[str]:
+        entrypoint = (
+            REPO_ROOT / "control-plane" / "deployment" / "first-boot" / "control-plane-entrypoint.sh"
+        )
+        env = {
+            "PATH": "/usr/bin:/bin",
+            **env_overrides,
+        }
+
+        return subprocess.run(
+            ["sh", str(entrypoint), "printf", "ok"],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
 
 
 if __name__ == "__main__":
