@@ -159,6 +159,8 @@ class AnalystAssistantContextSnapshot:
     linked_evidence_ids: tuple[str, ...]
     linked_recommendation_ids: tuple[str, ...]
     linked_reconciliation_ids: tuple[str, ...]
+    linked_alert_records: tuple[dict[str, object], ...]
+    linked_case_records: tuple[dict[str, object], ...]
     linked_evidence_records: tuple[dict[str, object], ...]
     linked_recommendation_records: tuple[dict[str, object], ...]
     linked_reconciliation_records: tuple[dict[str, object], ...]
@@ -176,6 +178,8 @@ class AnalystAssistantContextSnapshot:
                 "linked_evidence_ids": self.linked_evidence_ids,
                 "linked_recommendation_ids": self.linked_recommendation_ids,
                 "linked_reconciliation_ids": self.linked_reconciliation_ids,
+                "linked_alert_records": self.linked_alert_records,
+                "linked_case_records": self.linked_case_records,
                 "linked_evidence_records": self.linked_evidence_records,
                 "linked_recommendation_records": self.linked_recommendation_records,
                 "linked_reconciliation_records": self.linked_reconciliation_records,
@@ -907,19 +911,6 @@ class AegisOpsControlPlaneService:
                 self._assistant_ids_from_mapping(record.output_linkage, "evidence_ids"),
             )
 
-        linked_evidence_records = self._assistant_evidence_records_for_context(
-            alert_ids=linked_alert_ids,
-            case_ids=linked_case_ids,
-            evidence_ids=linked_evidence_ids,
-            exclude_evidence_id=(
-                record.evidence_id if isinstance(record, EvidenceRecord) else None
-            ),
-        )
-        linked_evidence_ids = self._assistant_merge_ids(
-            linked_evidence_ids,
-            tuple(evidence.evidence_id for evidence in linked_evidence_records),
-        )
-
         linked_recommendation_records = self._assistant_recommendation_records_for_context(
             record=record,
             alert_ids=linked_alert_ids,
@@ -931,6 +922,39 @@ class AegisOpsControlPlaneService:
         linked_recommendation_ids = tuple(
             recommendation.recommendation_id
             for recommendation in linked_recommendation_records
+        )
+        for recommendation in linked_recommendation_records:
+            linked_alert_ids = self._assistant_merge_ids(
+                linked_alert_ids,
+                recommendation.alert_id,
+            )
+            linked_case_ids = self._assistant_merge_ids(
+                linked_case_ids,
+                recommendation.case_id,
+            )
+
+        linked_alert_records = tuple(
+            _record_to_dict(self._store.get(AlertRecord, alert_id))
+            for alert_id in linked_alert_ids
+            if self._store.get(AlertRecord, alert_id) is not None
+        )
+        linked_case_records = tuple(
+            _record_to_dict(self._store.get(CaseRecord, case_id))
+            for case_id in linked_case_ids
+            if self._store.get(CaseRecord, case_id) is not None
+        )
+
+        linked_evidence_records = self._assistant_evidence_records_for_context(
+            alert_ids=linked_alert_ids,
+            case_ids=linked_case_ids,
+            evidence_ids=linked_evidence_ids,
+            exclude_evidence_id=(
+                record.evidence_id if isinstance(record, EvidenceRecord) else None
+            ),
+        )
+        linked_evidence_ids = self._assistant_merge_ids(
+            linked_evidence_ids,
+            tuple(evidence.evidence_id for evidence in linked_evidence_records),
         )
 
         linked_reconciliation_records = (
@@ -954,30 +978,26 @@ class AegisOpsControlPlaneService:
         raw_reviewed_context = getattr(record, "reviewed_context", None)
         if isinstance(raw_reviewed_context, Mapping):
             reviewed_context = dict(raw_reviewed_context)
-        elif isinstance(
+        if isinstance(
             record,
             (
                 ApprovalDecisionRecord,
                 ActionRequestRecord,
                 ActionExecutionRecord,
                 ReconciliationRecord,
+                RecommendationRecord,
+                AITraceRecord,
             ),
         ):
-            for alert_id in linked_alert_ids:
-                alert = self._store.get(AlertRecord, alert_id)
-                if alert is None or not isinstance(alert.reviewed_context, Mapping):
-                    continue
+            for alert in linked_alert_records:
                 reviewed_context = _merge_reviewed_context(
                     reviewed_context,
-                    alert.reviewed_context,
+                    alert.get("reviewed_context"),
                 )
-            for case_id in linked_case_ids:
-                case = self._store.get(CaseRecord, case_id)
-                if case is None or not isinstance(case.reviewed_context, Mapping):
-                    continue
+            for case in linked_case_records:
                 reviewed_context = _merge_reviewed_context(
                     reviewed_context,
-                    case.reviewed_context,
+                    case.get("reviewed_context"),
                 )
 
         return AnalystAssistantContextSnapshot(
@@ -991,6 +1011,8 @@ class AegisOpsControlPlaneService:
             linked_evidence_ids=linked_evidence_ids,
             linked_recommendation_ids=linked_recommendation_ids,
             linked_reconciliation_ids=linked_reconciliation_ids,
+            linked_alert_records=linked_alert_records,
+            linked_case_records=linked_case_records,
             linked_evidence_records=tuple(
                 _record_to_dict(evidence) for evidence in linked_evidence_records
             ),

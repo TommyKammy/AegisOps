@@ -17,6 +17,7 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 from aegisops_control_plane.config import RuntimeConfig
 from aegisops_control_plane.models import (
+    AITraceRecord,
     ActionExecutionRecord,
     ActionRequestRecord,
     AnalyticSignalAdmission,
@@ -382,6 +383,120 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             colliding_reconciliation.reconciliation_id,
             snapshot.linked_reconciliation_ids,
         )
+
+    def test_service_exposes_citation_ready_context_for_recommendation_and_ai_trace(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        reviewed_context = {
+            "asset": {
+                "asset_id": "asset-repo-citation-001",
+                "ownership": "platform-security",
+                "criticality": "high",
+            },
+            "identity": {
+                "identity_id": "principal-citation-001",
+                "owner": "identity-operations",
+            },
+        }
+
+        admitted = service.ingest_finding_alert(
+            finding_id="finding-citation-001",
+            analytic_signal_id="signal-citation-001",
+            substrate_detection_record_id="substrate-detection-citation-001",
+            correlation_key="claim:asset-repo-citation-001:assistant-citation-review",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            reviewed_context=reviewed_context,
+        )
+        evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-citation-001",
+                source_record_id="substrate-detection-citation-001",
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=first_seen_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-citation-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=admitted.alert.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id="ai-trace-citation-001",
+                review_owner="reviewer-001",
+                intended_outcome="draft advisory triage summary",
+                lifecycle_state="under_review",
+            )
+        )
+        ai_trace = service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-citation-001",
+                subject_linkage={"recommendation_ids": (recommendation.recommendation_id,)},
+                model_identity="gpt-5.4",
+                prompt_version="prompt-v1",
+                generated_at=first_seen_at,
+                material_input_refs=(evidence.evidence_id, recommendation.recommendation_id),
+                reviewer_identity="reviewer-001",
+                lifecycle_state="accepted_for_reference",
+            )
+        )
+
+        recommendation_snapshot = service.inspect_assistant_context(
+            "recommendation",
+            recommendation.recommendation_id,
+        )
+        ai_trace_snapshot = service.inspect_assistant_context("ai_trace", ai_trace.ai_trace_id)
+
+        self.assertEqual(recommendation_snapshot.reviewed_context, reviewed_context)
+        self.assertEqual(
+            recommendation_snapshot.linked_evidence_ids,
+            (evidence.evidence_id,),
+        )
+        self.assertEqual(
+            recommendation_snapshot.linked_evidence_records[0]["evidence_id"],
+            evidence.evidence_id,
+        )
+        self.assertIn(admitted.alert.alert_id, recommendation_snapshot.linked_alert_ids)
+        self.assertIn(promoted_case.case_id, recommendation_snapshot.linked_case_ids)
+        self.assertEqual(
+            recommendation_snapshot.linked_alert_records[0]["alert_id"],
+            admitted.alert.alert_id,
+        )
+        self.assertEqual(
+            recommendation_snapshot.linked_case_records[0]["case_id"],
+            promoted_case.case_id,
+        )
+
+        self.assertEqual(ai_trace_snapshot.reviewed_context, reviewed_context)
+        self.assertIn(
+            recommendation.recommendation_id,
+            ai_trace_snapshot.linked_recommendation_ids,
+        )
+        self.assertIn(admitted.alert.alert_id, ai_trace_snapshot.linked_alert_ids)
+        self.assertIn(promoted_case.case_id, ai_trace_snapshot.linked_case_ids)
+        self.assertEqual(
+            ai_trace_snapshot.linked_alert_records[0]["alert_id"],
+            admitted.alert.alert_id,
+        )
+        self.assertEqual(
+            ai_trace_snapshot.linked_case_records[0]["case_id"],
+            promoted_case.case_id,
+        )
+        self.assertIn(evidence.evidence_id, ai_trace_snapshot.linked_evidence_ids)
+        self.assertGreaterEqual(len(ai_trace_snapshot.linked_evidence_records), 1)
 
     def test_service_exposes_assistant_context_for_action_approvals_and_executions(
         self,
