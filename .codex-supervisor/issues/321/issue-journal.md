@@ -6,12 +6,12 @@
 - Workspace: .
 - Journal: .codex-supervisor/issues/321/issue-journal.md
 - Current phase: addressing_review
-- Attempt count: 8 (implementation=1, repair=4)
-- Last head SHA: 046204522b1422766e9f788e0127c7c0015fd06b
+- Attempt count: 9 (implementation=1, repair=4)
+- Last head SHA: b9cadbb
 - Blocked reason: none
 - Last failure signature: PRRT_kwDOR2iDUc55t6sY
 - Repeated failure signature count: 1
-- Updated at: 2026-04-09T00:52:51.217Z
+- Updated at: 2026-04-09T00:58:20Z
 
 ## Latest Codex Summary
 Resolved reconciliation assistant snapshots so action-lineage subject linkage now flows through alert, case, finding, and delegation-backed reconciliation matching before reviewed-context aggregation and downstream matching. The regression now covers the isolated-executor reconciliation path that actually carries delegation linkage.
