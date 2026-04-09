@@ -190,6 +190,80 @@ class AnalystAssistantContextSnapshot:
         )
 
 
+@dataclass(frozen=True)
+class AdvisoryInspectionSnapshot:
+    read_only: bool
+    record_family: str
+    record_id: str
+    output_kind: str
+    status: str
+    cited_summary: dict[str, object]
+    key_observations: tuple[dict[str, object], ...]
+    unresolved_questions: tuple[dict[str, object], ...]
+    candidate_recommendations: tuple[dict[str, object], ...]
+    citations: tuple[str, ...]
+    uncertainty_flags: tuple[str, ...]
+    reviewed_context: dict[str, object]
+    linked_alert_ids: tuple[str, ...]
+    linked_case_ids: tuple[str, ...]
+    linked_evidence_ids: tuple[str, ...]
+    linked_recommendation_ids: tuple[str, ...]
+    linked_reconciliation_ids: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return _json_ready(
+            {
+                "read_only": self.read_only,
+                "record_family": self.record_family,
+                "record_id": self.record_id,
+                "output_kind": self.output_kind,
+                "status": self.status,
+                "cited_summary": self.cited_summary,
+                "key_observations": self.key_observations,
+                "unresolved_questions": self.unresolved_questions,
+                "candidate_recommendations": self.candidate_recommendations,
+                "citations": self.citations,
+                "uncertainty_flags": self.uncertainty_flags,
+                "reviewed_context": self.reviewed_context,
+                "linked_alert_ids": self.linked_alert_ids,
+                "linked_case_ids": self.linked_case_ids,
+                "linked_evidence_ids": self.linked_evidence_ids,
+                "linked_recommendation_ids": self.linked_recommendation_ids,
+                "linked_reconciliation_ids": self.linked_reconciliation_ids,
+            }
+        )
+
+
+@dataclass(frozen=True)
+class RecommendationDraftSnapshot:
+    read_only: bool
+    record_family: str
+    record_id: str
+    recommendation_draft: dict[str, object]
+    reviewed_context: dict[str, object]
+    linked_alert_ids: tuple[str, ...]
+    linked_case_ids: tuple[str, ...]
+    linked_evidence_ids: tuple[str, ...]
+    linked_recommendation_ids: tuple[str, ...]
+    linked_reconciliation_ids: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return _json_ready(
+            {
+                "read_only": self.read_only,
+                "record_family": self.record_family,
+                "record_id": self.record_id,
+                "recommendation_draft": self.recommendation_draft,
+                "reviewed_context": self.reviewed_context,
+                "linked_alert_ids": self.linked_alert_ids,
+                "linked_case_ids": self.linked_case_ids,
+                "linked_evidence_ids": self.linked_evidence_ids,
+                "linked_recommendation_ids": self.linked_recommendation_ids,
+                "linked_reconciliation_ids": self.linked_reconciliation_ids,
+            }
+        )
+
+
 RECORD_TYPES_BY_FAMILY: dict[str, Type[ControlPlaneRecord]] = {
     record_type.record_family: record_type
     for record_type in (
@@ -636,6 +710,57 @@ def _build_assistant_advisory_output(
         "citations": citations,
         "uncertainty_flags": _dedupe_strings(tuple(uncertainty_flags)),
     }
+
+
+def _advisory_inspection_snapshot_from_context(
+    snapshot: AnalystAssistantContextSnapshot,
+) -> AdvisoryInspectionSnapshot:
+    advisory_output = snapshot.advisory_output
+    return AdvisoryInspectionSnapshot(
+        read_only=True,
+        record_family=snapshot.record_family,
+        record_id=snapshot.record_id,
+        output_kind=str(advisory_output["output_kind"]),
+        status=str(advisory_output["status"]),
+        cited_summary=dict(advisory_output["cited_summary"]),
+        key_observations=tuple(advisory_output["key_observations"]),
+        unresolved_questions=tuple(advisory_output["unresolved_questions"]),
+        candidate_recommendations=tuple(advisory_output["candidate_recommendations"]),
+        citations=tuple(advisory_output["citations"]),
+        uncertainty_flags=tuple(advisory_output["uncertainty_flags"]),
+        reviewed_context=dict(snapshot.reviewed_context),
+        linked_alert_ids=snapshot.linked_alert_ids,
+        linked_case_ids=snapshot.linked_case_ids,
+        linked_evidence_ids=snapshot.linked_evidence_ids,
+        linked_recommendation_ids=snapshot.linked_recommendation_ids,
+        linked_reconciliation_ids=snapshot.linked_reconciliation_ids,
+    )
+
+
+def _recommendation_draft_snapshot_from_context(
+    snapshot: AnalystAssistantContextSnapshot,
+) -> RecommendationDraftSnapshot:
+    advisory_output = snapshot.advisory_output
+    return RecommendationDraftSnapshot(
+        read_only=True,
+        record_family=snapshot.record_family,
+        record_id=snapshot.record_id,
+        recommendation_draft={
+            "source_output_kind": advisory_output["output_kind"],
+            "status": advisory_output["status"],
+            "cited_summary": advisory_output["cited_summary"],
+            "candidate_recommendations": advisory_output["candidate_recommendations"],
+            "unresolved_questions": advisory_output["unresolved_questions"],
+            "citations": advisory_output["citations"],
+            "uncertainty_flags": advisory_output["uncertainty_flags"],
+        },
+        reviewed_context=dict(snapshot.reviewed_context),
+        linked_alert_ids=snapshot.linked_alert_ids,
+        linked_case_ids=snapshot.linked_case_ids,
+        linked_evidence_ids=snapshot.linked_evidence_ids,
+        linked_recommendation_ids=snapshot.linked_recommendation_ids,
+        linked_reconciliation_ids=snapshot.linked_reconciliation_ids,
+    )
 
 
 class AegisOpsControlPlaneService:
@@ -1408,6 +1533,22 @@ class AegisOpsControlPlaneService:
                 for reconciliation in linked_reconciliation_records
             ),
         )
+
+    def inspect_advisory_output(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> AdvisoryInspectionSnapshot:
+        context_snapshot = self.inspect_assistant_context(record_family, record_id)
+        return _advisory_inspection_snapshot_from_context(context_snapshot)
+
+    def render_recommendation_draft(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> RecommendationDraftSnapshot:
+        context_snapshot = self.inspect_assistant_context(record_family, record_id)
+        return _recommendation_draft_snapshot_from_context(context_snapshot)
 
     def _reconciliation_has_detection_lineage(
         self, record: ReconciliationRecord
