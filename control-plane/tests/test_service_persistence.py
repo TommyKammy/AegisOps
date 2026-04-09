@@ -513,6 +513,9 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             store=store,
         )
         first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        reviewed_context = {
+            "asset": {"asset_id": "asset-ai-trace-evidence-001"},
+        }
 
         admitted = service.ingest_finding_alert(
             finding_id="finding-ai-trace-evidence-001",
@@ -521,7 +524,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             correlation_key="claim:ai-trace:evidence:001",
             first_seen_at=first_seen_at,
             last_seen_at=first_seen_at,
-            reviewed_context={"asset": {"asset_id": "asset-ai-trace-evidence-001"}},
+            reviewed_context=reviewed_context,
         )
         evidence = service.persist_record(
             EvidenceRecord(
@@ -568,8 +571,17 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         snapshot = service.inspect_assistant_context("ai_trace", ai_trace.ai_trace_id)
 
         self.assertIn(recommendation.recommendation_id, snapshot.linked_recommendation_ids)
+        self.assertEqual(snapshot.reviewed_context, reviewed_context)
         self.assertIn(admitted.alert.alert_id, snapshot.linked_alert_ids)
         self.assertIn(promoted_case.case_id, snapshot.linked_case_ids)
+        self.assertEqual(
+            snapshot.linked_alert_records[0]["alert_id"],
+            admitted.alert.alert_id,
+        )
+        self.assertEqual(
+            snapshot.linked_case_records[0]["case_id"],
+            promoted_case.case_id,
+        )
         self.assertEqual(
             {record["evidence_id"] for record in snapshot.linked_evidence_records},
             {evidence.evidence_id},
