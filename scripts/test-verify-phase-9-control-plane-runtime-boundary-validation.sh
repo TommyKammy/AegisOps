@@ -57,10 +57,11 @@ create_repo() {
     "${target}/scripts/.gitkeep" \
     "${target}/sigma/.gitkeep"
   printf '# fixture\n' > "${target}/.env.sample"
+  printf '# fixture ignore\n' > "${target}/.gitignore"
   printf 'fixture license\n' > "${target}/LICENSE.txt"
   git -C "${target}" add .codex-supervisor/.gitkeep .github/workflows/.gitkeep \
     config/.gitkeep ingest/.gitkeep n8n/.gitkeep opensearch/.gitkeep \
-    proxy/.gitkeep scripts/.gitkeep sigma/.gitkeep .env.sample LICENSE.txt
+    proxy/.gitkeep scripts/.gitkeep sigma/.gitkeep .env.sample .gitignore LICENSE.txt
 }
 
 write_required_artifacts() {
