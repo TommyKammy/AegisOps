@@ -460,6 +460,14 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             "action_execution",
             execution.action_execution_id,
         )
+        action_request_snapshot = service.inspect_assistant_context(
+            "action_request",
+            action_request.action_request_id,
+        )
+        reconciliation_snapshot = service.inspect_assistant_context(
+            "reconciliation",
+            admitted.reconciliation.reconciliation_id,
+        )
 
         self.assertTrue(approval_snapshot.read_only)
         self.assertEqual(approval_snapshot.linked_alert_ids, (admitted.alert.alert_id,))
@@ -477,8 +485,11 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             admitted.reconciliation.reconciliation_id,
             approval_snapshot.linked_reconciliation_ids,
         )
+        self.assertEqual(approval_snapshot.reviewed_context, reviewed_context)
+        self.assertEqual(action_request_snapshot.reviewed_context, reviewed_context)
 
         self.assertTrue(execution_snapshot.read_only)
+        self.assertEqual(execution_snapshot.reviewed_context, reviewed_context)
         self.assertEqual(execution_snapshot.linked_alert_ids, (admitted.alert.alert_id,))
         self.assertEqual(execution_snapshot.linked_case_ids, (promoted_case.case_id,))
         self.assertEqual(
@@ -499,6 +510,204 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         )
         self.assertIn(
             admitted.reconciliation.reconciliation_id,
+            execution_snapshot.linked_reconciliation_ids,
+        )
+        self.assertEqual(reconciliation_snapshot.reviewed_context, reviewed_context)
+
+    def test_service_matches_reconciliations_via_direct_action_linkage(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        reviewed_context = {
+            "asset": {
+                "asset_id": "asset-repo-reconciliation-001",
+                "ownership": "platform-security",
+            },
+            "identity": {
+                "identity_id": "principal-reconciliation-001",
+                "owner": "identity-operations",
+            },
+        }
+
+        admitted = service.ingest_finding_alert(
+            finding_id="finding-assistant-reconciliation-001",
+            analytic_signal_id="signal-assistant-reconciliation-001",
+            substrate_detection_record_id="substrate-detection-assistant-reconciliation-001",
+            correlation_key="claim:asset-repo-reconciliation-001:assistant-reconciliation-review",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            reviewed_context=reviewed_context,
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-assistant-reconciliation-001",
+                source_record_id="substrate-detection-assistant-reconciliation-001",
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=first_seen_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        approval_target_scope = {"asset_id": "asset-repo-reconciliation-001"}
+        approved_payload = {
+            "action_type": "notify_identity_owner",
+            "asset_id": "asset-repo-reconciliation-001",
+        }
+        payload_hash = _approved_binding_hash(
+            target_scope=approval_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
+        approval_decision = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-assistant-reconciliation-001",
+                action_request_id="action-request-assistant-reconciliation-001",
+                approver_identities=("approver-001",),
+                target_snapshot=approval_target_scope,
+                payload_hash=payload_hash,
+                decided_at=first_seen_at,
+                lifecycle_state="approved",
+            )
+        )
+        action_request = service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-assistant-reconciliation-001",
+                approval_decision_id=approval_decision.approval_decision_id,
+                case_id=promoted_case.case_id,
+                alert_id=admitted.alert.alert_id,
+                finding_id=admitted.alert.finding_id,
+                idempotency_key="idempotency-assistant-reconciliation-001",
+                target_scope=approval_target_scope,
+                payload_hash=payload_hash,
+                requested_at=first_seen_at,
+                expires_at=None,
+                lifecycle_state="approved",
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "shuffle",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id=action_request.action_request_id,
+            approved_payload=approved_payload,
+            delegated_at=delegated_at,
+            delegation_issuer="control-plane-service",
+            evidence_ids=("evidence-assistant-reconciliation-missing-001",),
+        )
+
+        action_request_reconciliation = service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-assistant-action-request-001",
+                subject_linkage={
+                    "action_request_ids": (action_request.action_request_id,),
+                },
+                alert_id=None,
+                finding_id=None,
+                analytic_signal_id=None,
+                execution_run_id="execution-run-action-request-001",
+                linked_execution_run_ids=(),
+                correlation_key="reconciliation:action-request",
+                first_seen_at=first_seen_at,
+                last_seen_at=delegated_at,
+                ingest_disposition="matched",
+                mismatch_summary="direct action request linkage",
+                compared_at=delegated_at,
+                lifecycle_state="matched",
+            )
+        )
+        approval_decision_reconciliation = service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-assistant-approval-decision-001",
+                subject_linkage={
+                    "approval_decision_ids": (approval_decision.approval_decision_id,),
+                },
+                alert_id=None,
+                finding_id=None,
+                analytic_signal_id=None,
+                execution_run_id="execution-run-approval-decision-001",
+                linked_execution_run_ids=(),
+                correlation_key="reconciliation:approval-decision",
+                first_seen_at=first_seen_at,
+                last_seen_at=delegated_at,
+                ingest_disposition="matched",
+                mismatch_summary="direct approval decision linkage",
+                compared_at=delegated_at,
+                lifecycle_state="matched",
+            )
+        )
+        action_execution_reconciliation = service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-assistant-action-execution-001",
+                subject_linkage={
+                    "action_execution_ids": (execution.action_execution_id,),
+                },
+                alert_id=None,
+                finding_id=None,
+                analytic_signal_id=None,
+                execution_run_id="execution-run-action-execution-001",
+                linked_execution_run_ids=(),
+                correlation_key="reconciliation:action-execution",
+                first_seen_at=first_seen_at,
+                last_seen_at=delegated_at,
+                ingest_disposition="matched",
+                mismatch_summary="direct action execution linkage",
+                compared_at=delegated_at,
+                lifecycle_state="matched",
+            )
+        )
+        delegation_reconciliation = service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-assistant-delegation-001",
+                subject_linkage={
+                    "delegation_ids": (execution.delegation_id,),
+                },
+                alert_id=None,
+                finding_id=None,
+                analytic_signal_id=None,
+                execution_run_id="execution-run-delegation-001",
+                linked_execution_run_ids=(),
+                correlation_key="reconciliation:delegation",
+                first_seen_at=first_seen_at,
+                last_seen_at=delegated_at,
+                ingest_disposition="matched",
+                mismatch_summary="direct delegation linkage",
+                compared_at=delegated_at,
+                lifecycle_state="matched",
+            )
+        )
+
+        execution_snapshot = service.inspect_assistant_context(
+            "action_execution",
+            execution.action_execution_id,
+        )
+
+        self.assertIn(
+            action_request_reconciliation.reconciliation_id,
+            execution_snapshot.linked_reconciliation_ids,
+        )
+        self.assertIn(
+            approval_decision_reconciliation.reconciliation_id,
+            execution_snapshot.linked_reconciliation_ids,
+        )
+        self.assertIn(
+            action_execution_reconciliation.reconciliation_id,
+            execution_snapshot.linked_reconciliation_ids,
+        )
+        self.assertIn(
+            delegation_reconciliation.reconciliation_id,
             execution_snapshot.linked_reconciliation_ids,
         )
 

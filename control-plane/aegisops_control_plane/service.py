@@ -823,6 +823,31 @@ class AegisOpsControlPlaneService:
         raw_reviewed_context = getattr(record, "reviewed_context", None)
         if isinstance(raw_reviewed_context, Mapping):
             reviewed_context = dict(raw_reviewed_context)
+        elif isinstance(
+            record,
+            (
+                ApprovalDecisionRecord,
+                ActionRequestRecord,
+                ActionExecutionRecord,
+                ReconciliationRecord,
+            ),
+        ):
+            for alert_id in linked_alert_ids:
+                alert = self._store.get(AlertRecord, alert_id)
+                if alert is None or not isinstance(alert.reviewed_context, Mapping):
+                    continue
+                reviewed_context = _merge_reviewed_context(
+                    reviewed_context,
+                    alert.reviewed_context,
+                )
+            for case_id in linked_case_ids:
+                case = self._store.get(CaseRecord, case_id)
+                if case is None or not isinstance(case.reviewed_context, Mapping):
+                    continue
+                reviewed_context = _merge_reviewed_context(
+                    reviewed_context,
+                    case.reviewed_context,
+                )
 
         return AnalystAssistantContextSnapshot(
             read_only=True,
@@ -1014,12 +1039,56 @@ class AegisOpsControlPlaneService:
         records: list[ReconciliationRecord] = []
         analytic_signal_id = getattr(record, "analytic_signal_id", None)
         finding_id = getattr(record, "finding_id", None)
+        action_request_id = getattr(record, "action_request_id", None)
+        approval_decision_id = getattr(record, "approval_decision_id", None)
+        action_execution_id = getattr(record, "action_execution_id", None)
+        delegation_id = getattr(record, "delegation_id", None)
         linked_finding_ids = set(finding_ids)
         for reconciliation in self._store.list(ReconciliationRecord):
             if (
                 exclude_reconciliation_id is not None
                 and reconciliation.reconciliation_id == exclude_reconciliation_id
             ):
+                continue
+            if (
+                action_request_id is not None
+                and action_request_id
+                in self._assistant_ids_from_mapping(
+                    reconciliation.subject_linkage,
+                    "action_request_ids",
+                )
+            ):
+                records.append(reconciliation)
+                continue
+            if (
+                approval_decision_id is not None
+                and approval_decision_id
+                in self._assistant_ids_from_mapping(
+                    reconciliation.subject_linkage,
+                    "approval_decision_ids",
+                )
+            ):
+                records.append(reconciliation)
+                continue
+            if (
+                action_execution_id is not None
+                and action_execution_id
+                in self._assistant_ids_from_mapping(
+                    reconciliation.subject_linkage,
+                    "action_execution_ids",
+                )
+            ):
+                records.append(reconciliation)
+                continue
+            if (
+                delegation_id is not None
+                and delegation_id
+                in self._assistant_ids_from_mapping(
+                    reconciliation.subject_linkage,
+                    "delegation_ids",
+                )
+            ):
+                records.append(reconciliation)
                 continue
             if reconciliation.alert_id is not None and reconciliation.alert_id in alert_ids:
                 records.append(reconciliation)
