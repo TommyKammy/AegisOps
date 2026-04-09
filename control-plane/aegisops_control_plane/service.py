@@ -926,6 +926,28 @@ class AegisOpsControlPlaneService:
                 self._assistant_ai_trace_evidence_ids(ai_trace_record),
             )
 
+        linked_evidence_records = self._assistant_evidence_records_for_context(
+            alert_ids=linked_alert_ids,
+            case_ids=linked_case_ids,
+            evidence_ids=linked_evidence_ids,
+            exclude_evidence_id=(
+                record.evidence_id if isinstance(record, EvidenceRecord) else None
+            ),
+        )
+        linked_evidence_ids = self._assistant_merge_ids(
+            linked_evidence_ids,
+            tuple(evidence.evidence_id for evidence in linked_evidence_records),
+        )
+        for evidence in linked_evidence_records:
+            linked_alert_ids = self._assistant_merge_ids(
+                linked_alert_ids,
+                evidence.alert_id,
+            )
+            linked_case_ids = self._assistant_merge_ids(
+                linked_case_ids,
+                evidence.case_id,
+            )
+
         linked_recommendation_records = self._assistant_recommendation_records_for_context(
             record=record,
             alert_ids=linked_alert_ids,
@@ -952,28 +974,6 @@ class AegisOpsControlPlaneService:
                     linked_case_ids,
                     recommendation.case_id,
                 )
-
-        linked_evidence_records = self._assistant_evidence_records_for_context(
-            alert_ids=linked_alert_ids,
-            case_ids=linked_case_ids,
-            evidence_ids=linked_evidence_ids,
-            exclude_evidence_id=(
-                record.evidence_id if isinstance(record, EvidenceRecord) else None
-            ),
-        )
-        linked_evidence_ids = self._assistant_merge_ids(
-            linked_evidence_ids,
-            tuple(evidence.evidence_id for evidence in linked_evidence_records),
-        )
-        for evidence in linked_evidence_records:
-            linked_alert_ids = self._assistant_merge_ids(
-                linked_alert_ids,
-                evidence.alert_id,
-            )
-            linked_case_ids = self._assistant_merge_ids(
-                linked_case_ids,
-                evidence.case_id,
-            )
 
         linked_alert_records_list: list[dict[str, object]] = []
         for alert_id in linked_alert_ids:
