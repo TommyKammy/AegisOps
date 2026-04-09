@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass, fields
 from datetime import datetime, timezone
 import hashlib
 import json
+import re
 import uuid
 from typing import Mapping, Protocol, Type, TypeVar
 
@@ -403,6 +404,10 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
     lowered = text.lower()
     flags: list[str] = []
 
+    def contains_term(term: str) -> bool:
+        pattern = rf"(?<!\w){re.escape(term)}(?!\w)"
+        return re.search(pattern, lowered) is not None
+
     authority_terms = (
         "approval granted",
         "approved",
@@ -413,7 +418,7 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
         "resolved",
         "closed",
     )
-    if any(term in lowered for term in authority_terms):
+    if any(contains_term(term) for term in authority_terms):
         flags.append("authority_overreach")
 
     scope_terms = (
@@ -424,7 +429,7 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
         "fleet-wide",
         "global",
     )
-    if any(term in lowered for term in scope_terms):
+    if any(contains_term(term) for term in scope_terms):
         flags.append("scope_expansion_attempt")
 
     return _dedupe_strings(tuple(flags))
