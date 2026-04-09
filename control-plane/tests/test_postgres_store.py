@@ -383,6 +383,85 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         self.assertIsNone(store.get(ActionRequestRecord, "approval-001"))
         self.assertIsNone(store.get(ReconciliationRecord, "n8n-exec-001"))
 
+    def test_store_round_trips_assistant_advisory_draft_revision_history(self) -> None:
+        store, _ = make_store()
+        timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        recommendation = RecommendationRecord(
+            recommendation_id="recommendation-history-001",
+            lead_id="lead-001",
+            hunt_run_id=None,
+            alert_id="alert-001",
+            case_id="case-001",
+            ai_trace_id=None,
+            review_owner="reviewer-001",
+            intended_outcome="preserve prior draft snapshots",
+            lifecycle_state="under_review",
+            assistant_advisory_draft={
+                "draft_id": "assistant-advisory-draft:recommendation:recommendation-history-001",
+                "source_record_family": "recommendation",
+                "source_record_id": "recommendation-history-001",
+                "review_lifecycle_state": "under_review",
+                "status": "ready",
+                "citations": ("recommendation-history-001", "evidence-002"),
+                "revision_history": (
+                    {
+                        "draft_id": "assistant-advisory-draft:recommendation:recommendation-history-001",
+                        "source_record_family": "recommendation",
+                        "source_record_id": "recommendation-history-001",
+                        "review_lifecycle_state": "under_review",
+                        "status": "insufficient_evidence",
+                        "citations": ("recommendation-history-001",),
+                    },
+                ),
+            },
+        )
+        ai_trace = AITraceRecord(
+            ai_trace_id="ai-trace-history-001",
+            subject_linkage={"recommendation_ids": ["recommendation-history-001"]},
+            model_identity="gpt-5.4",
+            prompt_version="prompt-v1",
+            generated_at=timestamp,
+            material_input_refs=("evidence-002",),
+            reviewer_identity="reviewer-001",
+            lifecycle_state="under_review",
+            assistant_advisory_draft={
+                "draft_id": "assistant-advisory-draft:ai_trace:ai-trace-history-001",
+                "source_record_family": "ai_trace",
+                "source_record_id": "ai-trace-history-001",
+                "review_lifecycle_state": "under_review",
+                "status": "ready",
+                "citations": ("ai-trace-history-001", "recommendation-history-001"),
+                "revision_history": (
+                    {
+                        "draft_id": "assistant-advisory-draft:ai_trace:ai-trace-history-001",
+                        "source_record_family": "ai_trace",
+                        "source_record_id": "ai-trace-history-001",
+                        "review_lifecycle_state": "under_review",
+                        "status": "ready",
+                        "citations": ("ai-trace-history-001",),
+                    },
+                ),
+            },
+        )
+
+        store.save(recommendation)
+        store.save(ai_trace)
+
+        self.assertEqual(
+            store.get(
+                RecommendationRecord,
+                recommendation.recommendation_id,
+            ).assistant_advisory_draft,
+            recommendation.assistant_advisory_draft,
+        )
+        self.assertEqual(
+            store.get(
+                AITraceRecord,
+                ai_trace.ai_trace_id,
+            ).assistant_advisory_draft,
+            ai_trace.assistant_advisory_draft,
+        )
+
     def test_store_copies_mapping_fields_before_persistence(self) -> None:
         timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
         target_scope = {"asset_id": "asset-001"}

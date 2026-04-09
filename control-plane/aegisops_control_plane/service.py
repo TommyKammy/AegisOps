@@ -782,6 +782,31 @@ def _recommendation_draft_snapshot_from_context(
     )
 
 
+def _assistant_advisory_draft_without_revision_history(
+    draft: Mapping[str, object],
+) -> dict[str, object]:
+    return {
+        str(key): value
+        for key, value in draft.items()
+        if str(key) != "revision_history"
+    }
+
+
+def _assistant_advisory_draft_revision_history(
+    draft: Mapping[str, object],
+) -> tuple[dict[str, object], ...]:
+    raw_history = draft.get("revision_history", ())
+    if not isinstance(raw_history, (list, tuple)):
+        return ()
+    revision_history: list[dict[str, object]] = []
+    for entry in raw_history:
+        if isinstance(entry, Mapping):
+            revision_history.append(
+                _assistant_advisory_draft_without_revision_history(entry)
+            )
+    return tuple(revision_history)
+
+
 class AegisOpsControlPlaneService:
     """Minimal local runtime skeleton for the first control-plane service."""
 
@@ -1607,8 +1632,19 @@ class AegisOpsControlPlaneService:
             "linked_recommendation_ids": draft_snapshot.linked_recommendation_ids,
             "linked_reconciliation_ids": draft_snapshot.linked_reconciliation_ids,
         }
-        if record.assistant_advisory_draft == attached_draft:
+        current_attached_draft = _assistant_advisory_draft_without_revision_history(
+            record.assistant_advisory_draft
+        )
+        if current_attached_draft == attached_draft:
             return record
+        revision_history = _assistant_advisory_draft_revision_history(
+            record.assistant_advisory_draft
+        )
+        if current_attached_draft:
+            attached_draft["revision_history"] = (
+                *revision_history,
+                current_attached_draft,
+            )
         return self.persist_record(
             replace(record, assistant_advisory_draft=attached_draft)
         )
