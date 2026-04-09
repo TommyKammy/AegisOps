@@ -912,6 +912,11 @@ class AegisOpsControlPlaneService:
             linked_evidence_ids,
             getattr(record, "supporting_evidence_ids", ()),
         )
+        if isinstance(record, ActionExecutionRecord):
+            linked_evidence_ids = self._assistant_merge_ids(
+                linked_evidence_ids,
+                self._assistant_ids_from_mapping(record.provenance, "evidence_ids"),
+            )
         if isinstance(record, ReconciliationRecord):
             linked_evidence_ids = self._assistant_merge_ids(
                 linked_evidence_ids,

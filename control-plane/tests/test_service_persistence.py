@@ -449,7 +449,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             approved_payload=approved_payload,
             delegated_at=delegated_at,
             delegation_issuer="control-plane-service",
-            evidence_ids=("evidence-assistant-approval-001",),
+            evidence_ids=("evidence-assistant-approval-missing-001",),
         )
 
         approval_snapshot = service.inspect_assistant_context(
@@ -461,23 +461,46 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             execution.action_execution_id,
         )
 
-        for snapshot in (approval_snapshot, execution_snapshot):
-            self.assertTrue(snapshot.read_only)
-            self.assertEqual(snapshot.linked_alert_ids, (admitted.alert.alert_id,))
-            self.assertEqual(snapshot.linked_case_ids, (promoted_case.case_id,))
-            self.assertEqual(snapshot.linked_evidence_ids, (evidence.evidence_id,))
-            self.assertEqual(
-                snapshot.linked_evidence_records[0]["evidence_id"],
+        self.assertTrue(approval_snapshot.read_only)
+        self.assertEqual(approval_snapshot.linked_alert_ids, (admitted.alert.alert_id,))
+        self.assertEqual(approval_snapshot.linked_case_ids, (promoted_case.case_id,))
+        self.assertEqual(approval_snapshot.linked_evidence_ids, (evidence.evidence_id,))
+        self.assertEqual(
+            approval_snapshot.linked_evidence_records[0]["evidence_id"],
+            evidence.evidence_id,
+        )
+        self.assertIn(
+            recommendation.recommendation_id,
+            approval_snapshot.linked_recommendation_ids,
+        )
+        self.assertIn(
+            admitted.reconciliation.reconciliation_id,
+            approval_snapshot.linked_reconciliation_ids,
+        )
+
+        self.assertTrue(execution_snapshot.read_only)
+        self.assertEqual(execution_snapshot.linked_alert_ids, (admitted.alert.alert_id,))
+        self.assertEqual(execution_snapshot.linked_case_ids, (promoted_case.case_id,))
+        self.assertEqual(
+            execution_snapshot.linked_evidence_ids,
+            (
+                "evidence-assistant-approval-missing-001",
                 evidence.evidence_id,
-            )
-            self.assertIn(
-                recommendation.recommendation_id,
-                snapshot.linked_recommendation_ids,
-            )
-            self.assertIn(
-                admitted.reconciliation.reconciliation_id,
-                snapshot.linked_reconciliation_ids,
-            )
+            ),
+        )
+        self.assertEqual(len(execution_snapshot.linked_evidence_records), 1)
+        self.assertEqual(
+            execution_snapshot.linked_evidence_records[0]["evidence_id"],
+            evidence.evidence_id,
+        )
+        self.assertIn(
+            recommendation.recommendation_id,
+            execution_snapshot.linked_recommendation_ids,
+        )
+        self.assertIn(
+            admitted.reconciliation.reconciliation_id,
+            execution_snapshot.linked_reconciliation_ids,
+        )
 
     def test_service_preserves_declared_missing_evidence_ids_in_assistant_context(
         self,
