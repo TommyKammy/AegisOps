@@ -76,7 +76,42 @@ This safe fallback preserves reviewed grounding instead of promoting OpenSearch-
 
 This keeps the boundary narrow enough to support optional enrichment without reviving an analytics-first product thesis.
 
-## 5. Identity Ambiguity and Alias Handling
+## 5. Cited Advisory-Output Contract
+
+The reviewed output layer for Phase 15.1 must render from assistant-context snapshots rather than from free-form assistant text.
+
+The contract is a narrow structured advisory-output contract for a cited triage summary, case summary, or next-step recommendation draft.
+
+Each rendered advisory output must expose the following fields:
+
+| Contract field | Minimum contract rule |
+| ---- | ---- |
+| `cited summary` | A concise advisory summary that cites the reviewed records, linked evidence, or reviewed context identifiers supporting each material claim. |
+| `key observations` | A bounded list of materially relevant observations tied to reviewed records, linked evidence, or reviewed context identifiers. |
+| `unresolved questions` | A bounded list of open gaps, conflicts, or missing evidence that keep the output advisory and incomplete. |
+| `candidate recommendations` | Draft next steps only, explicitly framed as proposals rather than approvals, execution instructions, or reconciliation truth. |
+| `citations` | The explicit record ids, evidence ids, reviewed context identifiers, or reviewed linkage references that anchor every material claim. |
+| `uncertainty flags` | Explicit markers for missing citations, conflicting reviewed context, unresolved identity ambiguity, stale enrichment, or other reasons the output must remain tentative. |
+
+Every material claim in the contract must anchor to reviewed control-plane records, linked evidence, or reviewed context identifiers.
+
+The contract must preserve the cited linkage between the assistant-context snapshots and the rendered output so a reviewer can trace each claim back to reviewed inputs.
+
+The contract keeps the assistant advisory-only and does not allow the output layer to imply approval, execution, or reconciliation authority.
+
+## 6. Fail-Closed Rendering Rules
+
+The cited advisory-output contract must fail-closed.
+
+If citations are missing, the contract must not render a supported claim and must remain unresolved.
+
+If reviewed context is conflicting, the contract must surface the conflict in unresolved questions and uncertainty flags rather than silently choosing a side.
+
+If identity ambiguity cannot be resolved from stable identifiers and reviewed linkage, the contract must not render the entities as the same actor, asset, or accountable subject and must remain unresolved.
+
+If optional enrichment is stale, incomplete, or contradictory, the contract must cite the reviewed control-plane state first and preserve the discrepancy as uncertainty rather than normalizing the enrichment into truth.
+
+## 7. Identity Ambiguity and Alias Handling
 
 The assistant must fail closed when only alias-style source metadata or otherwise non-stable metadata is available.
 
@@ -92,7 +127,7 @@ The assistant must not invent transitive identity stitching across systems, and 
 
 If identity ambiguity remains, the assistant must report that ambiguity directly instead of collapsing the records into a single entity.
 
-## 6. Advisory-Only Boundary
+## 8. Advisory-Only Boundary
 
 The assistant is advisory-only.
 
@@ -106,7 +141,7 @@ It must not become the authority for approval, execution, or reconciliation stat
 
 If the assistant is asked for a decision, the answer must point back to the reviewed control-plane records and their explicit review state rather than pretending to produce new authority.
 
-## 7. Safe Query, Citation, and Prompt-Pressure Constraints
+## 9. Safe Query, Citation, and Prompt-Pressure Constraints
 
 The assistant must use the Safe Query Gateway policy for any read-oriented internal lookup that would otherwise rely on free-form search, query expansion, or tool selection outside reviewed control-plane paths.
 
@@ -122,7 +157,7 @@ Optional extension inputs, including OpenSearch analytics, do not override revie
 
 Alias-style fields may suggest a match, but when stable identifiers differ the assistant must keep the records distinct and report the ambiguity instead of normalizing them into one actor or asset.
 
-## 8. Explicit Non-Goals
+## 10. Explicit Non-Goals
 
 This document does not approve live assistant orchestration, prompt execution, or tool wiring.
 
@@ -132,7 +167,9 @@ This document does not redefine the Phase 13 approval and execution boundary or 
 
 This document does not authorize the assistant to synthesize new identity truth from source-local labels, cache rows, or summary artifacts.
 
-## 9. Baseline Alignment Notes
+This document does not approve live provider orchestration, free-form backend query expansion, or optional OpenSearch runtime enrichment as a requirement for the output contract.
+
+## 11. Baseline Alignment Notes
 
 This boundary remains aligned with `docs/control-plane-state-model.md` by treating alerts, cases, evidence, recommendations, reconciliations, approval decisions, action requests, and action executions as authoritative control-plane records.
 
