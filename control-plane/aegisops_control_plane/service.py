@@ -783,6 +783,18 @@ class AegisOpsControlPlaneService:
                     linked_finding_ids,
                     signal.finding_id,
                 )
+            for alert_id in linked_alert_ids:
+                alert = self._store.get(AlertRecord, alert_id)
+                if alert is None:
+                    continue
+                linked_case_ids = self._assistant_merge_ids(
+                    linked_case_ids,
+                    alert.case_id,
+                )
+                linked_finding_ids = self._assistant_merge_ids(
+                    linked_finding_ids,
+                    alert.finding_id,
+                )
             linked_case_ids = self._assistant_merge_ids(
                 linked_case_ids,
                 self._assistant_ids_from_mapping(record.subject_linkage, "case_ids"),

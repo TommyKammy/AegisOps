@@ -837,6 +837,10 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             admitted.reconciliation.reconciliation_id,
             subject_alert_snapshot.linked_reconciliation_ids,
         )
+        self.assertEqual(
+            subject_alert_snapshot.linked_case_ids,
+            (promoted_case.case_id,),
+        )
         self.assertEqual(subject_alert_snapshot.reviewed_context, reviewed_context)
 
         self.assertEqual(
