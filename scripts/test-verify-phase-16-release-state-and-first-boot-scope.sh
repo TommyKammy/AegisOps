@@ -10,6 +10,7 @@ canonical_runtime_boundary_doc="${repo_root}/docs/control-plane-runtime-service-
 canonical_architecture_doc="${repo_root}/docs/architecture.md"
 canonical_network_doc="${repo_root}/docs/network-exposure-and-access-path-policy.md"
 canonical_storage_doc="${repo_root}/docs/storage-layout-and-mount-policy.md"
+canonical_compose_overview_doc="${repo_root}/docs/compose-skeleton-overview.md"
 canonical_readme="${repo_root}/README.md"
 
 workdir="$(mktemp -d)"
@@ -38,6 +39,7 @@ write_canonical_artifacts() {
   cp "${canonical_architecture_doc}" "${target}/docs/architecture.md"
   cp "${canonical_network_doc}" "${target}/docs/network-exposure-and-access-path-policy.md"
   cp "${canonical_storage_doc}" "${target}/docs/storage-layout-and-mount-policy.md"
+  cp "${canonical_compose_overview_doc}" "${target}/docs/compose-skeleton-overview.md"
   cp "${canonical_readme}" "${target}/README.md"
   cp "${verifier}" "${target}/scripts/verify-phase-16-release-state-and-first-boot-scope.sh"
   cp "${repo_root}/scripts/test-verify-phase-16-release-state-and-first-boot-scope.sh" "${target}/scripts/test-verify-phase-16-release-state-and-first-boot-scope.sh"
@@ -113,12 +115,33 @@ remove_text_from_doc "${missing_optional_boundary_repo}" "${missing_optional_bou
 commit_fixture "${missing_optional_boundary_repo}"
 assert_fails_with "${missing_optional_boundary_repo}" "- n8n as a required first-boot dependency or orchestration prerequisite;"
 
+missing_bootstrap_contract_repo="${workdir}/missing-bootstrap-contract"
+create_repo "${missing_bootstrap_contract_repo}"
+write_canonical_artifacts "${missing_bootstrap_contract_repo}"
+remove_text_from_doc "${missing_bootstrap_contract_repo}" "${missing_bootstrap_contract_repo}/docs/phase-16-release-state-and-first-boot-scope.md" '`AEGISOPS_CONTROL_PLANE_POSTGRES_DSN` is required bootstrap state for first boot.'
+commit_fixture "${missing_bootstrap_contract_repo}"
+assert_fails_with "${missing_bootstrap_contract_repo}" '`AEGISOPS_CONTROL_PLANE_POSTGRES_DSN` is required bootstrap state for first boot.'
+
+missing_migration_contract_repo="${workdir}/missing-migration-contract"
+create_repo "${missing_migration_contract_repo}"
+write_canonical_artifacts "${missing_migration_contract_repo}"
+remove_text_from_doc "${missing_migration_contract_repo}" "${missing_migration_contract_repo}/docs/phase-16-release-state-and-first-boot-scope.md" "If migration bootstrap cannot prove the expected reviewed schema state, the deployment entrypoint must fail closed and refuse normal runtime startup."
+commit_fixture "${missing_migration_contract_repo}"
+assert_fails_with "${missing_migration_contract_repo}" "If migration bootstrap cannot prove the expected reviewed schema state, the deployment entrypoint must fail closed and refuse normal runtime startup."
+
 missing_validation_note_repo="${workdir}/missing-validation-note"
 create_repo "${missing_validation_note_repo}"
 write_canonical_artifacts "${missing_validation_note_repo}"
 remove_text_from_doc "${missing_validation_note_repo}" "${missing_validation_note_repo}/docs/phase-16-release-state-and-first-boot-validation.md" "Confirmed the Phase 16 definition of done gives Phase 17 a clear bootability target without approving concrete containerization or live substrate wiring in this phase."
 commit_fixture "${missing_validation_note_repo}"
 assert_fails_with "${missing_validation_note_repo}" "Confirmed the Phase 16 definition of done gives Phase 17 a clear bootability target without approving concrete containerization or live substrate wiring in this phase."
+
+missing_compose_alignment_repo="${workdir}/missing-compose-alignment"
+create_repo "${missing_compose_alignment_repo}"
+write_canonical_artifacts "${missing_compose_alignment_repo}"
+remove_text_from_doc "${missing_compose_alignment_repo}" "${missing_compose_alignment_repo}/docs/phase-16-release-state-and-first-boot-validation.md" '`docs/compose-skeleton-overview.md` must continue to treat repository-tracked compose assets as placeholder-safe boot surfaces rather than as self-authorizing deployment truth.'
+commit_fixture "${missing_compose_alignment_repo}"
+assert_fails_with "${missing_compose_alignment_repo}" '`docs/compose-skeleton-overview.md` must continue to treat repository-tracked compose assets as placeholder-safe boot surfaces rather than as self-authorizing deployment truth.'
 
 missing_deviation_repo="${workdir}/missing-deviation"
 create_repo "${missing_deviation_repo}"

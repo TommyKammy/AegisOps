@@ -1,8 +1,8 @@
 # Phase 16 Release-State and First-Boot Scope Validation
 
 - Validation date: 2026-04-09
-- Validation scope: Phase 16 review of the approved first-boot runtime boundary, required first-boot components, explicit non-blocking optional components, Wazuh-facing runtime expectations, and the definition of done that gates Phase 17 runtime bring-up
-- Baseline references: `docs/phase-16-release-state-and-first-boot-scope.md`, `docs/control-plane-runtime-service-boundary.md`, `docs/architecture.md`, `docs/network-exposure-and-access-path-policy.md`, `docs/storage-layout-and-mount-policy.md`, `README.md`
+- Validation scope: Phase 16 review of the approved first-boot runtime boundary, required first-boot components, explicit non-blocking optional components, bootstrap-environment and migration-bootstrap requirements, healthcheck and readiness rules, deployment-entrypoint expectations, Wazuh-facing runtime expectations, and the definition of done that gates Phase 17 runtime bring-up
+- Baseline references: `docs/phase-16-release-state-and-first-boot-scope.md`, `docs/control-plane-runtime-service-boundary.md`, `docs/architecture.md`, `docs/network-exposure-and-access-path-policy.md`, `docs/storage-layout-and-mount-policy.md`, `docs/compose-skeleton-overview.md`, `README.md`
 - Verification commands: `bash scripts/verify-phase-16-release-state-and-first-boot-scope.sh`, `bash scripts/test-verify-phase-16-release-state-and-first-boot-scope.sh`
 - Validation status: PASS
 
@@ -14,6 +14,7 @@
 - `docs/architecture.md`
 - `docs/network-exposure-and-access-path-policy.md`
 - `docs/storage-layout-and-mount-policy.md`
+- `docs/compose-skeleton-overview.md`
 - `README.md`
 - `scripts/verify-phase-16-release-state-and-first-boot-scope.sh`
 - `scripts/test-verify-phase-16-release-state-and-first-boot-scope.sh`
@@ -29,6 +30,14 @@ Confirmed OpenSearch remains an optional extension rather than a mandatory first
 Confirmed n8n remains optional or deferred and does not block the first bootable runtime target.
 
 Confirmed the full interactive analyst-assistant surface, the high-risk executor path, and broad source coverage remain outside the first-boot definition.
+
+Confirmed the bootstrap environment contract now makes `AEGISOPS_CONTROL_PLANE_POSTGRES_DSN` required first-boot state while keeping optional OpenSearch, n8n, Shuffle, and isolated-executor variables non-blocking for first boot.
+
+Confirmed the migration bootstrap contract requires the reviewed `postgres/control-plane/migrations/` asset set to succeed before authoritative runtime readiness is claimed and refuses destructive fallback or schema recreation shortcuts.
+
+Confirmed the healthcheck and readiness contract distinguishes process liveness from readiness and fails closed when required bootstrap state, PostgreSQL reachability, or reviewed migration completion cannot be proven.
+
+Confirmed the deployment-entrypoint contract keeps Compose or other repository-local boot surfaces limited to approved first-boot wiring and does not let optional substrates or direct backend exposure redefine success.
 
 Confirmed the Phase 16 definition of done gives Phase 17 a clear bootability target without approving concrete containerization or live substrate wiring in this phase.
 
@@ -47,6 +56,8 @@ The issue requested review against `Phase 16-21 Epic Roadmap.md`, but that roadm
 `docs/network-exposure-and-access-path-policy.md` must continue to keep the reverse proxy as the approved ingress boundary for first boot.
 
 `docs/storage-layout-and-mount-policy.md` must continue to keep PostgreSQL-owned persistence distinct from optional substrate-local storage areas.
+
+`docs/compose-skeleton-overview.md` must continue to treat repository-tracked compose assets as placeholder-safe boot surfaces rather than as self-authorizing deployment truth.
 
 `README.md` must continue to describe OpenSearch and n8n as optional or transitional rather than as first-boot product-core dependencies.
 
