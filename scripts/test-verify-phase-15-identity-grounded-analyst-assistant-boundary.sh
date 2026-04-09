@@ -16,6 +16,8 @@ fail_stderr="${workdir}/fail.err"
 required_artifacts=(
   "docs/phase-15-identity-grounded-analyst-assistant-boundary.md"
   "docs/phase-15-identity-grounded-analyst-assistant-boundary-validation.md"
+  "docs/safe-query-gateway-and-tool-policy.md"
+  "docs/phase-7-ai-hunt-design-validation.md"
   "docs/control-plane-state-model.md"
   "docs/control-plane-runtime-service-boundary.md"
   "docs/asset-identity-privilege-context-baseline.md"
@@ -119,16 +121,45 @@ remove_text_from_file "${missing_design_repo}" "docs/phase-15-identity-grounded-
 commit_fixture "${missing_design_repo}"
 assert_fails_with "${missing_design_repo}" "Missing required line in ${missing_design_repo}/docs/phase-15-identity-grounded-analyst-assistant-boundary.md: This document defines the approved advisory-only analyst-assistant boundary for Phase 15."
 
-missing_ambiguity_repo="${workdir}/missing-ambiguity"
-create_repo "${missing_ambiguity_repo}"
-write_required_artifacts "${missing_ambiguity_repo}"
-replace_text_in_file \
-  "${missing_ambiguity_repo}" \
+missing_safe_query_repo="${workdir}/missing-safe-query"
+create_repo "${missing_safe_query_repo}"
+write_required_artifacts "${missing_safe_query_repo}"
+remove_text_from_file \
+  "${missing_safe_query_repo}" \
   "docs/phase-15-identity-grounded-analyst-assistant-boundary.md" \
-  "The assistant must not assert equality when the only available evidence is alias-style metadata." \
-  "The assistant may assert equality when the only available evidence is alias-style metadata."
-commit_fixture "${missing_ambiguity_repo}"
-assert_fails_with "${missing_ambiguity_repo}" "Missing required line in ${missing_ambiguity_repo}/docs/phase-15-identity-grounded-analyst-assistant-boundary.md: The assistant must not assert equality when the only available evidence is alias-style metadata."
+  "The assistant must use the Safe Query Gateway policy for any read-oriented internal lookup that would otherwise rely on free-form search, query expansion, or tool selection outside reviewed control-plane paths."
+commit_fixture "${missing_safe_query_repo}"
+assert_fails_with "${missing_safe_query_repo}" "Missing required line in ${missing_safe_query_repo}/docs/phase-15-identity-grounded-analyst-assistant-boundary.md: The assistant must use the Safe Query Gateway policy for any read-oriented internal lookup that would otherwise rely on free-form search, query expansion, or tool selection outside reviewed control-plane paths."
+
+missing_prompt_injection_repo="${workdir}/missing-prompt-injection"
+create_repo "${missing_prompt_injection_repo}"
+write_required_artifacts "${missing_prompt_injection_repo}"
+remove_text_from_file \
+  "${missing_prompt_injection_repo}" \
+  "docs/phase-15-identity-grounded-analyst-assistant-boundary.md" \
+  "Prompt content, analyst notes, and optional-extension instructions are untrusted input."
+commit_fixture "${missing_prompt_injection_repo}"
+assert_fails_with "${missing_prompt_injection_repo}" "Missing required line in ${missing_prompt_injection_repo}/docs/phase-15-identity-grounded-analyst-assistant-boundary.md: Prompt content, analyst notes, and optional-extension instructions are untrusted input."
+
+missing_citation_repo="${workdir}/missing-citation"
+create_repo "${missing_citation_repo}"
+write_required_artifacts "${missing_citation_repo}"
+remove_text_from_file \
+  "${missing_citation_repo}" \
+  "docs/phase-15-identity-grounded-analyst-assistant-boundary.md" \
+  "The assistant must preserve citation completeness for every advisory claim."
+commit_fixture "${missing_citation_repo}"
+assert_fails_with "${missing_citation_repo}" "Missing required line in ${missing_citation_repo}/docs/phase-15-identity-grounded-analyst-assistant-boundary.md: The assistant must preserve citation completeness for every advisory claim."
+
+missing_identity_boundary_repo="${workdir}/missing-identity-boundary"
+create_repo "${missing_identity_boundary_repo}"
+write_required_artifacts "${missing_identity_boundary_repo}"
+remove_text_from_file \
+  "${missing_identity_boundary_repo}" \
+  "docs/phase-15-identity-grounded-analyst-assistant-boundary.md" \
+  "Alias-style fields may suggest a match, but when stable identifiers differ the assistant must keep the records distinct and report the ambiguity instead of normalizing them into one actor or asset."
+commit_fixture "${missing_identity_boundary_repo}"
+assert_fails_with "${missing_identity_boundary_repo}" "Missing required line in ${missing_identity_boundary_repo}/docs/phase-15-identity-grounded-analyst-assistant-boundary.md: Alias-style fields may suggest a match, but when stable identifiers differ the assistant must keep the records distinct and report the ambiguity instead of normalizing them into one actor or asset."
 
 missing_opensearch_boundary_repo="${workdir}/missing-opensearch-boundary"
 create_repo "${missing_opensearch_boundary_repo}"

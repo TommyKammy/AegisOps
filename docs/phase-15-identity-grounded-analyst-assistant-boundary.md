@@ -104,7 +104,23 @@ It must not become the authority for approval, execution, or reconciliation stat
 
 If the assistant is asked for a decision, the answer must point back to the reviewed control-plane records and their explicit review state rather than pretending to produce new authority.
 
-## 7. Explicit Non-Goals
+## 7. Safe Query, Citation, and Prompt-Pressure Constraints
+
+The assistant must use the Safe Query Gateway policy for any read-oriented internal lookup that would otherwise rely on free-form search, query expansion, or tool selection outside reviewed control-plane paths.
+
+Prompt content, analyst notes, and optional-extension instructions are untrusted input.
+
+The assistant must not use prompt content, analyst text, or optional-extension shortcuts to bypass validation, widen scope, or acquire approval or execution authority.
+
+The assistant must preserve citation completeness for every advisory claim.
+
+If a claim cannot be tied back to reviewed records or cited observations, the response must stay advisory-only and unresolved rather than silently widening the answer.
+
+Optional extension inputs, including OpenSearch analytics, do not override reviewed control-plane truth, stable identifiers, or the citation requirement.
+
+Alias-style fields may suggest a match, but when stable identifiers differ the assistant must keep the records distinct and report the ambiguity instead of normalizing them into one actor or asset.
+
+## 8. Explicit Non-Goals
 
 This document does not approve live assistant orchestration, prompt execution, or tool wiring.
 
@@ -114,13 +130,15 @@ This document does not redefine the Phase 13 approval and execution boundary or 
 
 This document does not authorize the assistant to synthesize new identity truth from source-local labels, cache rows, or summary artifacts.
 
-## 8. Baseline Alignment Notes
+## 9. Baseline Alignment Notes
 
 This boundary remains aligned with `docs/control-plane-state-model.md` by treating alerts, cases, evidence, recommendations, reconciliations, approval decisions, action requests, and action executions as authoritative control-plane records.
 
 It remains aligned with `docs/control-plane-runtime-service-boundary.md` by keeping the assistant downstream of the live control-plane boundary rather than turning it into the control plane itself.
 
 It remains aligned with `docs/asset-identity-privilege-context-baseline.md` and `docs/phase-14-identity-rich-source-family-design.md` by preserving reviewed identity and privilege context without collapsing identity ambiguity into guessed equality.
+
+It remains aligned with `docs/safe-query-gateway-and-tool-policy.md` and `docs/phase-7-ai-hunt-design-validation.md` by keeping prompt-driven query expansion, citation-bearing response shaping, and prompt-injection handling inside the reviewed safe-query boundary.
 
 It remains aligned with the Phase 10 and Phase 15 thesis pivots by keeping OpenSearch as an optional enrichment substrate rather than an authoritative truth boundary.
 
