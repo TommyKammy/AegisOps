@@ -147,6 +147,42 @@ class AnalystQueueSnapshot:
         )
 
 
+@dataclass(frozen=True)
+class AnalystAssistantContextSnapshot:
+    read_only: bool
+    record_family: str
+    record_id: str
+    record: dict[str, object]
+    reviewed_context: dict[str, object]
+    linked_alert_ids: tuple[str, ...]
+    linked_case_ids: tuple[str, ...]
+    linked_evidence_ids: tuple[str, ...]
+    linked_recommendation_ids: tuple[str, ...]
+    linked_reconciliation_ids: tuple[str, ...]
+    linked_evidence_records: tuple[dict[str, object], ...]
+    linked_recommendation_records: tuple[dict[str, object], ...]
+    linked_reconciliation_records: tuple[dict[str, object], ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return _json_ready(
+            {
+                "read_only": self.read_only,
+                "record_family": self.record_family,
+                "record_id": self.record_id,
+                "record": self.record,
+                "reviewed_context": self.reviewed_context,
+                "linked_alert_ids": self.linked_alert_ids,
+                "linked_case_ids": self.linked_case_ids,
+                "linked_evidence_ids": self.linked_evidence_ids,
+                "linked_recommendation_ids": self.linked_recommendation_ids,
+                "linked_reconciliation_ids": self.linked_reconciliation_ids,
+                "linked_evidence_records": self.linked_evidence_records,
+                "linked_recommendation_records": self.linked_recommendation_records,
+                "linked_reconciliation_records": self.linked_reconciliation_records,
+            }
+        )
+
+
 RECORD_TYPES_BY_FAMILY: dict[str, Type[ControlPlaneRecord]] = {
     record_type.record_family: record_type
     for record_type in (
@@ -641,6 +677,333 @@ class AegisOpsControlPlaneService:
             records=tuple(queue_records),
         )
 
+    def inspect_assistant_context(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> AnalystAssistantContextSnapshot:
+        record_family = self._require_non_empty_string(record_family, "record_family")
+        record_id = self._require_non_empty_string(record_id, "record_id")
+        record_type = RECORD_TYPES_BY_FAMILY.get(record_family)
+        if record_type is None:
+            known_families = ", ".join(sorted(RECORD_TYPES_BY_FAMILY))
+            raise ValueError(
+                f"Unsupported control-plane record family {record_family!r}; "
+                f"expected one of: {known_families}"
+            )
+
+        record = self._store.get(record_type, record_id)
+        if record is None:
+            raise LookupError(
+                f"Missing {record_family} record {record_id!r} for assistant context"
+            )
+
+        linked_alert_ids = self._assistant_ids_from_value(
+            getattr(record, "alert_id", None)
+        )
+        linked_case_ids = self._assistant_ids_from_value(getattr(record, "case_id", None))
+        linked_finding_ids = self._assistant_ids_from_value(
+            getattr(record, "finding_id", None)
+        )
+        linked_evidence_ids = self._assistant_linked_evidence_ids(record)
+
+        if isinstance(record, (ApprovalDecisionRecord, ActionExecutionRecord)):
+            action_request_id = self._require_non_empty_string(
+                getattr(record, "action_request_id", None),
+                "action_request_id",
+            )
+            action_request = self._store.get(ActionRequestRecord, action_request_id)
+            if action_request is None:
+                raise LookupError(
+                    f"Missing action request {action_request_id!r} for assistant context"
+                )
+            linked_alert_ids = self._assistant_merge_ids(
+                linked_alert_ids,
+                action_request.alert_id,
+            )
+            linked_case_ids = self._assistant_merge_ids(
+                linked_case_ids,
+                action_request.case_id,
+            )
+            linked_finding_ids = self._assistant_merge_ids(
+                linked_finding_ids,
+                action_request.finding_id,
+            )
+
+        if isinstance(record, AnalyticSignalRecord):
+            linked_alert_ids = self._assistant_merge_ids(
+                linked_alert_ids,
+                record.alert_ids,
+            )
+            linked_case_ids = self._assistant_merge_ids(
+                linked_case_ids,
+                record.case_ids,
+            )
+        elif isinstance(record, CaseRecord):
+            linked_evidence_ids = self._assistant_merge_ids(
+                linked_evidence_ids,
+                record.evidence_ids,
+            )
+        elif isinstance(record, EvidenceRecord):
+            linked_evidence_ids = self._assistant_merge_ids(
+                linked_evidence_ids,
+                self._assistant_evidence_siblings(record),
+            )
+        elif isinstance(record, ObservationRecord):
+            linked_evidence_ids = self._assistant_merge_ids(
+                linked_evidence_ids,
+                record.supporting_evidence_ids,
+            )
+        elif isinstance(record, ReconciliationRecord):
+            linked_alert_ids = self._merge_linked_ids(
+                linked_alert_ids,
+                record.alert_id,
+            )
+            linked_alert_ids = self._assistant_merge_ids(
+                linked_alert_ids,
+                self._assistant_ids_from_mapping(record.subject_linkage, "alert_ids"),
+            )
+            (
+                action_request_ids,
+                approval_decision_ids,
+                action_execution_ids,
+                delegation_ids,
+            ) = self._assistant_action_lineage_ids(record)
+            for action_request_id in action_request_ids:
+                action_request = self._store.get(ActionRequestRecord, action_request_id)
+                if action_request is None:
+                    continue
+                (
+                    linked_alert_ids,
+                    linked_case_ids,
+                    linked_finding_ids,
+                ) = self._assistant_merge_action_request_linkage(
+                    linked_alert_ids=linked_alert_ids,
+                    linked_case_ids=linked_case_ids,
+                    linked_finding_ids=linked_finding_ids,
+                    action_request=action_request,
+                )
+            for approval_decision_id in approval_decision_ids:
+                approval_decision = self._store.get(
+                    ApprovalDecisionRecord,
+                    approval_decision_id,
+                )
+                if approval_decision is None:
+                    continue
+                action_request = self._store.get(
+                    ActionRequestRecord,
+                    approval_decision.action_request_id,
+                )
+                if action_request is None:
+                    continue
+                (
+                    linked_alert_ids,
+                    linked_case_ids,
+                    linked_finding_ids,
+                ) = self._assistant_merge_action_request_linkage(
+                    linked_alert_ids=linked_alert_ids,
+                    linked_case_ids=linked_case_ids,
+                    linked_finding_ids=linked_finding_ids,
+                    action_request=action_request,
+                )
+            for action_execution_id in action_execution_ids:
+                action_execution = self._store.get(ActionExecutionRecord, action_execution_id)
+                if action_execution is None:
+                    continue
+                action_request = self._store.get(
+                    ActionRequestRecord,
+                    action_execution.action_request_id,
+                )
+                if action_request is not None:
+                    (
+                        linked_alert_ids,
+                        linked_case_ids,
+                        linked_finding_ids,
+                    ) = self._assistant_merge_action_request_linkage(
+                        linked_alert_ids=linked_alert_ids,
+                        linked_case_ids=linked_case_ids,
+                        linked_finding_ids=linked_finding_ids,
+                        action_request=action_request,
+                    )
+                linked_evidence_ids = self._assistant_merge_ids(
+                    linked_evidence_ids,
+                    self._assistant_linked_evidence_ids(action_execution),
+                )
+            for delegation_id in delegation_ids:
+                action_execution = self._assistant_action_execution_for_delegation_id(
+                    delegation_id
+                )
+                if action_execution is None:
+                    continue
+                action_request = self._store.get(
+                    ActionRequestRecord,
+                    action_execution.action_request_id,
+                )
+                if action_request is not None:
+                    (
+                        linked_alert_ids,
+                        linked_case_ids,
+                        linked_finding_ids,
+                    ) = self._assistant_merge_action_request_linkage(
+                        linked_alert_ids=linked_alert_ids,
+                        linked_case_ids=linked_case_ids,
+                        linked_finding_ids=linked_finding_ids,
+                        action_request=action_request,
+                    )
+                linked_evidence_ids = self._assistant_merge_ids(
+                    linked_evidence_ids,
+                    self._assistant_linked_evidence_ids(action_execution),
+                )
+            subject_analytic_signal_ids = self._assistant_ids_from_mapping(
+                record.subject_linkage,
+                "analytic_signal_ids",
+            )
+            for analytic_signal_id in subject_analytic_signal_ids:
+                signal = self._store.get(AnalyticSignalRecord, analytic_signal_id)
+                if signal is None:
+                    continue
+                linked_alert_ids = self._assistant_merge_ids(
+                    linked_alert_ids,
+                    signal.alert_ids,
+                )
+                linked_case_ids = self._assistant_merge_ids(
+                    linked_case_ids,
+                    signal.case_ids,
+                )
+                linked_finding_ids = self._assistant_merge_ids(
+                    linked_finding_ids,
+                    signal.finding_id,
+                )
+            for alert_id in linked_alert_ids:
+                alert = self._store.get(AlertRecord, alert_id)
+                if alert is None:
+                    continue
+                linked_case_ids = self._assistant_merge_ids(
+                    linked_case_ids,
+                    alert.case_id,
+                )
+                linked_finding_ids = self._assistant_merge_ids(
+                    linked_finding_ids,
+                    alert.finding_id,
+                )
+            linked_case_ids = self._assistant_merge_ids(
+                linked_case_ids,
+                self._assistant_ids_from_mapping(record.subject_linkage, "case_ids"),
+            )
+            linked_finding_ids = self._assistant_merge_ids(
+                linked_finding_ids,
+                self._assistant_ids_from_mapping(record.subject_linkage, "finding_ids"),
+            )
+            linked_evidence_ids = self._assistant_merge_ids(
+                linked_evidence_ids,
+                self._assistant_ids_from_mapping(
+                    record.subject_linkage,
+                    "evidence_ids",
+                ),
+            )
+        elif isinstance(record, HuntRunRecord):
+            linked_evidence_ids = self._assistant_merge_ids(
+                linked_evidence_ids,
+                self._assistant_ids_from_mapping(record.output_linkage, "evidence_ids"),
+            )
+
+        linked_evidence_records = self._assistant_evidence_records_for_context(
+            alert_ids=linked_alert_ids,
+            case_ids=linked_case_ids,
+            evidence_ids=linked_evidence_ids,
+            exclude_evidence_id=(
+                record.evidence_id if isinstance(record, EvidenceRecord) else None
+            ),
+        )
+        linked_evidence_ids = self._assistant_merge_ids(
+            linked_evidence_ids,
+            tuple(evidence.evidence_id for evidence in linked_evidence_records),
+        )
+
+        linked_recommendation_records = self._assistant_recommendation_records_for_context(
+            record=record,
+            alert_ids=linked_alert_ids,
+            case_ids=linked_case_ids,
+            exclude_recommendation_id=(
+                record.record_id if isinstance(record, RecommendationRecord) else None
+            ),
+        )
+        linked_recommendation_ids = tuple(
+            recommendation.recommendation_id
+            for recommendation in linked_recommendation_records
+        )
+
+        linked_reconciliation_records = (
+            self._assistant_reconciliation_records_for_context(
+                record=record,
+                alert_ids=linked_alert_ids,
+                case_ids=linked_case_ids,
+                finding_ids=linked_finding_ids,
+                evidence_ids=linked_evidence_ids,
+                exclude_reconciliation_id=(
+                    record.record_id if isinstance(record, ReconciliationRecord) else None
+                ),
+            )
+        )
+        linked_reconciliation_ids = tuple(
+            reconciliation.reconciliation_id
+            for reconciliation in linked_reconciliation_records
+        )
+
+        reviewed_context = {}
+        raw_reviewed_context = getattr(record, "reviewed_context", None)
+        if isinstance(raw_reviewed_context, Mapping):
+            reviewed_context = dict(raw_reviewed_context)
+        elif isinstance(
+            record,
+            (
+                ApprovalDecisionRecord,
+                ActionRequestRecord,
+                ActionExecutionRecord,
+                ReconciliationRecord,
+            ),
+        ):
+            for alert_id in linked_alert_ids:
+                alert = self._store.get(AlertRecord, alert_id)
+                if alert is None or not isinstance(alert.reviewed_context, Mapping):
+                    continue
+                reviewed_context = _merge_reviewed_context(
+                    reviewed_context,
+                    alert.reviewed_context,
+                )
+            for case_id in linked_case_ids:
+                case = self._store.get(CaseRecord, case_id)
+                if case is None or not isinstance(case.reviewed_context, Mapping):
+                    continue
+                reviewed_context = _merge_reviewed_context(
+                    reviewed_context,
+                    case.reviewed_context,
+                )
+
+        return AnalystAssistantContextSnapshot(
+            read_only=True,
+            record_family=record_family,
+            record_id=record_id,
+            record=_record_to_dict(record),
+            reviewed_context=reviewed_context,
+            linked_alert_ids=linked_alert_ids,
+            linked_case_ids=linked_case_ids,
+            linked_evidence_ids=linked_evidence_ids,
+            linked_recommendation_ids=linked_recommendation_ids,
+            linked_reconciliation_ids=linked_reconciliation_ids,
+            linked_evidence_records=tuple(
+                _record_to_dict(evidence) for evidence in linked_evidence_records
+            ),
+            linked_recommendation_records=tuple(
+                _record_to_dict(recommendation)
+                for recommendation in linked_recommendation_records
+            ),
+            linked_reconciliation_records=tuple(
+                _record_to_dict(reconciliation)
+                for reconciliation in linked_reconciliation_records
+            ),
+        )
+
     def _reconciliation_has_detection_lineage(
         self, record: ReconciliationRecord
     ) -> bool:
@@ -667,6 +1030,329 @@ class AegisOpsControlPlaneService:
                 ),
             )
         )
+
+    @staticmethod
+    def _assistant_ids_from_value(value: object) -> tuple[str, ...]:
+        if isinstance(value, str):
+            return (value,)
+        if isinstance(value, (list, tuple)):
+            return tuple(item for item in value if isinstance(item, str))
+        return ()
+
+    @staticmethod
+    def _assistant_ids_from_mapping(
+        mapping: Mapping[str, object],
+        key: str,
+    ) -> tuple[str, ...]:
+        return AegisOpsControlPlaneService._assistant_ids_from_value(mapping.get(key))
+
+    @staticmethod
+    def _assistant_merge_ids(
+        existing_values: object,
+        incoming_values: object,
+    ) -> tuple[str, ...]:
+        merged = AegisOpsControlPlaneService._merge_linked_ids(existing_values, None)
+        if isinstance(incoming_values, (list, tuple)):
+            for value in incoming_values:
+                merged = AegisOpsControlPlaneService._merge_linked_ids(merged, value)
+        else:
+            merged = AegisOpsControlPlaneService._merge_linked_ids(
+                merged,
+                incoming_values if isinstance(incoming_values, str) else None,
+            )
+        return merged
+
+    def _assistant_action_lineage_ids(
+        self,
+        record: ControlPlaneRecord,
+    ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+        action_request_ids = self._assistant_ids_from_value(
+            getattr(record, "action_request_id", None)
+        )
+        approval_decision_ids = self._assistant_ids_from_value(
+            getattr(record, "approval_decision_id", None)
+        )
+        action_execution_ids = self._assistant_ids_from_value(
+            getattr(record, "action_execution_id", None)
+        )
+        delegation_ids = self._assistant_ids_from_value(getattr(record, "delegation_id", None))
+        if isinstance(record, ReconciliationRecord):
+            action_request_ids = self._assistant_merge_ids(
+                action_request_ids,
+                self._assistant_ids_from_mapping(
+                    record.subject_linkage,
+                    "action_request_ids",
+                ),
+            )
+            approval_decision_ids = self._assistant_merge_ids(
+                approval_decision_ids,
+                self._assistant_ids_from_mapping(
+                    record.subject_linkage,
+                    "approval_decision_ids",
+                ),
+            )
+            action_execution_ids = self._assistant_merge_ids(
+                action_execution_ids,
+                self._assistant_ids_from_mapping(
+                    record.subject_linkage,
+                    "action_execution_ids",
+                ),
+            )
+            delegation_ids = self._assistant_merge_ids(
+                delegation_ids,
+                self._assistant_ids_from_mapping(
+                    record.subject_linkage,
+                    "delegation_ids",
+                ),
+            )
+        return (
+            action_request_ids,
+            approval_decision_ids,
+            action_execution_ids,
+            delegation_ids,
+        )
+
+    def _assistant_merge_action_request_linkage(
+        self,
+        *,
+        linked_alert_ids: tuple[str, ...],
+        linked_case_ids: tuple[str, ...],
+        linked_finding_ids: tuple[str, ...],
+        action_request: ActionRequestRecord,
+    ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+        return (
+            self._assistant_merge_ids(linked_alert_ids, action_request.alert_id),
+            self._assistant_merge_ids(linked_case_ids, action_request.case_id),
+            self._assistant_merge_ids(linked_finding_ids, action_request.finding_id),
+        )
+
+    def _assistant_action_execution_for_delegation_id(
+        self,
+        delegation_id: str,
+    ) -> ActionExecutionRecord | None:
+        for execution in self._store.list(ActionExecutionRecord):
+            if execution.delegation_id == delegation_id:
+                return execution
+        return None
+
+    def _assistant_linked_evidence_ids(self, record: ControlPlaneRecord) -> tuple[str, ...]:
+        linked_evidence_ids = self._assistant_ids_from_value(getattr(record, "evidence_ids", ()))
+        linked_evidence_ids = self._assistant_merge_ids(
+            linked_evidence_ids,
+            getattr(record, "supporting_evidence_ids", ()),
+        )
+        if isinstance(record, ActionExecutionRecord):
+            linked_evidence_ids = self._assistant_merge_ids(
+                linked_evidence_ids,
+                self._assistant_ids_from_mapping(record.provenance, "evidence_ids"),
+            )
+        if isinstance(record, ReconciliationRecord):
+            linked_evidence_ids = self._assistant_merge_ids(
+                linked_evidence_ids,
+                self._assistant_ids_from_mapping(record.subject_linkage, "evidence_ids"),
+            )
+        return linked_evidence_ids
+
+    def _assistant_evidence_siblings(self, record: EvidenceRecord) -> tuple[str, ...]:
+        evidence_records = self._assistant_evidence_records_for_context(
+            alert_ids=self._assistant_ids_from_value(record.alert_id),
+            case_ids=self._assistant_ids_from_value(record.case_id),
+            evidence_ids=(),
+            exclude_evidence_id=record.evidence_id,
+        )
+        return tuple(evidence.evidence_id for evidence in evidence_records)
+
+    def _assistant_evidence_records_for_context(
+        self,
+        *,
+        alert_ids: tuple[str, ...],
+        case_ids: tuple[str, ...],
+        evidence_ids: tuple[str, ...],
+        exclude_evidence_id: str | None,
+    ) -> tuple[EvidenceRecord, ...]:
+        records: list[EvidenceRecord] = []
+        seen_ids: set[str] = set()
+        for evidence_id in evidence_ids:
+            evidence = self._store.get(EvidenceRecord, evidence_id)
+            if evidence is None:
+                continue
+            if exclude_evidence_id is not None and evidence.evidence_id == exclude_evidence_id:
+                continue
+            if evidence.evidence_id in seen_ids:
+                continue
+            seen_ids.add(evidence.evidence_id)
+            records.append(evidence)
+        for evidence in self._store.list(EvidenceRecord):
+            if exclude_evidence_id is not None and evidence.evidence_id == exclude_evidence_id:
+                continue
+            if evidence.evidence_id in seen_ids:
+                continue
+            if evidence.alert_id in alert_ids or (
+                evidence.case_id is not None and evidence.case_id in case_ids
+            ):
+                seen_ids.add(evidence.evidence_id)
+                records.append(evidence)
+        records.sort(key=lambda evidence: evidence.evidence_id)
+        return tuple(records)
+
+    def _assistant_recommendation_records_for_context(
+        self,
+        *,
+        record: ControlPlaneRecord,
+        alert_ids: tuple[str, ...],
+        case_ids: tuple[str, ...],
+        exclude_recommendation_id: str | None,
+    ) -> tuple[RecommendationRecord, ...]:
+        records: list[RecommendationRecord] = []
+        lead_id = getattr(record, "lead_id", None)
+        hunt_run_id = getattr(record, "hunt_run_id", None)
+        ai_trace_id = getattr(record, "ai_trace_id", None)
+        for recommendation in self._store.list(RecommendationRecord):
+            if (
+                exclude_recommendation_id is not None
+                and recommendation.recommendation_id == exclude_recommendation_id
+            ):
+                continue
+            if recommendation.alert_id in alert_ids:
+                records.append(recommendation)
+                continue
+            if recommendation.case_id is not None and recommendation.case_id in case_ids:
+                records.append(recommendation)
+                continue
+            if lead_id is not None and recommendation.lead_id == lead_id:
+                records.append(recommendation)
+                continue
+            if hunt_run_id is not None and recommendation.hunt_run_id == hunt_run_id:
+                records.append(recommendation)
+                continue
+            if ai_trace_id is not None and recommendation.ai_trace_id == ai_trace_id:
+                records.append(recommendation)
+        records.sort(key=lambda recommendation: recommendation.recommendation_id)
+        return tuple(records)
+
+    def _assistant_reconciliation_records_for_context(
+        self,
+        *,
+        record: ControlPlaneRecord,
+        alert_ids: tuple[str, ...],
+        case_ids: tuple[str, ...],
+        finding_ids: tuple[str, ...],
+        evidence_ids: tuple[str, ...],
+        exclude_reconciliation_id: str | None,
+    ) -> tuple[ReconciliationRecord, ...]:
+        records: list[ReconciliationRecord] = []
+        analytic_signal_id = getattr(record, "analytic_signal_id", None)
+        finding_id = getattr(record, "finding_id", None)
+        (
+            action_request_ids,
+            approval_decision_ids,
+            action_execution_ids,
+            delegation_ids,
+        ) = self._assistant_action_lineage_ids(record)
+        linked_finding_ids = set(finding_ids)
+        for reconciliation in self._store.list(ReconciliationRecord):
+            if (
+                exclude_reconciliation_id is not None
+                and reconciliation.reconciliation_id == exclude_reconciliation_id
+            ):
+                continue
+            subject_action_request_ids = self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "action_request_ids",
+            )
+            if any(
+                action_request_id in subject_action_request_ids
+                for action_request_id in action_request_ids
+            ):
+                records.append(reconciliation)
+                continue
+            subject_approval_decision_ids = self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "approval_decision_ids",
+            )
+            if any(
+                approval_decision_id in subject_approval_decision_ids
+                for approval_decision_id in approval_decision_ids
+            ):
+                records.append(reconciliation)
+                continue
+            subject_action_execution_ids = self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "action_execution_ids",
+            )
+            if any(
+                action_execution_id in subject_action_execution_ids
+                for action_execution_id in action_execution_ids
+            ):
+                records.append(reconciliation)
+                continue
+            subject_delegation_ids = self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "delegation_ids",
+            )
+            if any(
+                delegation_id in subject_delegation_ids
+                for delegation_id in delegation_ids
+            ):
+                records.append(reconciliation)
+                continue
+            if reconciliation.alert_id is not None and reconciliation.alert_id in alert_ids:
+                records.append(reconciliation)
+                continue
+            if (
+                analytic_signal_id is not None
+                and reconciliation.analytic_signal_id == analytic_signal_id
+            ):
+                records.append(reconciliation)
+                continue
+            subject_alert_ids = self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "alert_ids",
+            )
+            if any(alert_id in subject_alert_ids for alert_id in alert_ids):
+                records.append(reconciliation)
+                continue
+            subject_analytic_signal_ids = self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "analytic_signal_ids",
+            )
+            if (
+                analytic_signal_id is not None
+                and analytic_signal_id in subject_analytic_signal_ids
+            ):
+                records.append(reconciliation)
+                continue
+            if finding_id is not None and reconciliation.finding_id == finding_id:
+                records.append(reconciliation)
+                continue
+            if (
+                reconciliation.finding_id is not None
+                and reconciliation.finding_id in linked_finding_ids
+            ):
+                records.append(reconciliation)
+                continue
+            subject_finding_ids = self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "finding_ids",
+            )
+            if any(finding_id in subject_finding_ids for finding_id in linked_finding_ids):
+                records.append(reconciliation)
+                continue
+            subject_case_ids = self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "case_ids",
+            )
+            if any(case_id in subject_case_ids for case_id in case_ids):
+                records.append(reconciliation)
+                continue
+            subject_evidence_ids = self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "evidence_ids",
+            )
+            if any(evidence_id in subject_evidence_ids for evidence_id in evidence_ids):
+                records.append(reconciliation)
+        records.sort(key=lambda reconciliation: reconciliation.reconciliation_id)
+        return tuple(records)
 
     @staticmethod
     def _require_aware_datetime(value: object, field_name: str) -> datetime:

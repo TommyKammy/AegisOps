@@ -42,6 +42,20 @@ def _build_parser() -> argparse.ArgumentParser:
         "inspect-analyst-queue",
         help="Render the business-hours analyst review queue view.",
     )
+    inspect_assistant_context = subparsers.add_parser(
+        "inspect-assistant-context",
+        help="Render a read-only analyst-assistant context view for one record.",
+    )
+    inspect_assistant_context.add_argument(
+        "--family",
+        required=True,
+        help="Control-plane record family to inspect for assistant context.",
+    )
+    inspect_assistant_context.add_argument(
+        "--record-id",
+        required=True,
+        help="Control-plane record identifier to inspect for assistant context.",
+    )
     return parser
 
 
@@ -65,6 +79,14 @@ def main(
             try:
                 payload = service.inspect_records(parsed.family).to_dict()
             except ValueError as exc:
+                parser.error(str(exc))
+        elif command == "inspect-assistant-context":
+            try:
+                payload = service.inspect_assistant_context(
+                    parsed.family,
+                    parsed.record_id,
+                ).to_dict()
+            except (LookupError, ValueError) as exc:
                 parser.error(str(exc))
         elif command == "inspect-reconciliation-status":
             payload = service.inspect_reconciliation_status().to_dict()
