@@ -19,6 +19,7 @@ Current scaffold:
 - `aegisops_control_plane/` contains the initial service module, boundary-aware adapters, and environment-backed runtime config.
 - `tests/` contains focused service-root tests for the local runtime skeleton.
 - `config/local.env.sample` defines non-secret local placeholders for PostgreSQL, OpenSearch, and n8n integration boundaries.
+- `deployment/first-boot/` contains reviewed Phase 16 bootstrap and entrypoint skeletons for the narrow first-boot control-plane, PostgreSQL, and reverse-proxy contract.
 
 Current persistence status:
 
