@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import AbstractContextManager
 from collections import Counter
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, fields, replace
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -1549,6 +1549,50 @@ class AegisOpsControlPlaneService:
     ) -> RecommendationDraftSnapshot:
         context_snapshot = self.inspect_assistant_context(record_family, record_id)
         return _recommendation_draft_snapshot_from_context(context_snapshot)
+
+    def attach_assistant_advisory_draft(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> RecommendationRecord | AITraceRecord:
+        record_family = self._require_non_empty_string(record_family, "record_family")
+        record_id = self._require_non_empty_string(record_id, "record_id")
+        if record_family not in {"recommendation", "ai_trace"}:
+            raise ValueError(
+                "assistant advisory drafts may only be attached to "
+                "'recommendation' or 'ai_trace' records"
+            )
+
+        record_type = RECORD_TYPES_BY_FAMILY[record_family]
+        record = self._store.get(record_type, record_id)
+        if record is None:
+            raise LookupError(
+                f"Missing {record_family} record {record_id!r} for advisory draft attachment"
+            )
+        if not isinstance(record, (RecommendationRecord, AITraceRecord)):
+            raise TypeError(
+                "assistant advisory drafts may only be attached to recommendation "
+                "or ai_trace records"
+            )
+
+        draft_snapshot = self.render_recommendation_draft(record_family, record_id)
+        attached_draft = {
+            "draft_id": f"assistant-advisory-draft:{record_family}:{record_id}",
+            "source_record_family": record_family,
+            "source_record_id": record_id,
+            "review_lifecycle_state": record.lifecycle_state,
+            **draft_snapshot.recommendation_draft,
+            "linked_alert_ids": draft_snapshot.linked_alert_ids,
+            "linked_case_ids": draft_snapshot.linked_case_ids,
+            "linked_evidence_ids": draft_snapshot.linked_evidence_ids,
+            "linked_recommendation_ids": draft_snapshot.linked_recommendation_ids,
+            "linked_reconciliation_ids": draft_snapshot.linked_reconciliation_ids,
+        }
+        if record.assistant_advisory_draft == attached_draft:
+            return record
+        return self.persist_record(
+            replace(record, assistant_advisory_draft=attached_draft)
+        )
 
     def _reconciliation_has_detection_lineage(
         self, record: ReconciliationRecord
