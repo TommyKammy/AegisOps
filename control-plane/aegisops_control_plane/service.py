@@ -797,7 +797,9 @@ class AegisOpsControlPlaneService:
             record=record,
             alert_ids=linked_alert_ids,
             case_ids=linked_case_ids,
-            exclude_recommendation_id=record.record_id,
+            exclude_recommendation_id=(
+                record.record_id if isinstance(record, RecommendationRecord) else None
+            ),
         )
         linked_recommendation_ids = tuple(
             recommendation.recommendation_id
@@ -811,7 +813,9 @@ class AegisOpsControlPlaneService:
                 case_ids=linked_case_ids,
                 finding_ids=linked_finding_ids,
                 evidence_ids=linked_evidence_ids,
-                exclude_reconciliation_id=record.record_id,
+                exclude_reconciliation_id=(
+                    record.record_id if isinstance(record, ReconciliationRecord) else None
+                ),
             )
         )
         linked_reconciliation_ids = tuple(
@@ -1093,7 +1097,27 @@ class AegisOpsControlPlaneService:
             if reconciliation.alert_id is not None and reconciliation.alert_id in alert_ids:
                 records.append(reconciliation)
                 continue
-            if analytic_signal_id is not None and reconciliation.analytic_signal_id == analytic_signal_id:
+            if (
+                analytic_signal_id is not None
+                and reconciliation.analytic_signal_id == analytic_signal_id
+            ):
+                records.append(reconciliation)
+                continue
+            subject_alert_ids = self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "alert_ids",
+            )
+            if any(alert_id in subject_alert_ids for alert_id in alert_ids):
+                records.append(reconciliation)
+                continue
+            subject_analytic_signal_ids = self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "analytic_signal_ids",
+            )
+            if (
+                analytic_signal_id is not None
+                and analytic_signal_id in subject_analytic_signal_ids
+            ):
                 records.append(reconciliation)
                 continue
             if finding_id is not None and reconciliation.finding_id == finding_id:

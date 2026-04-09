@@ -314,6 +314,40 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 reviewed_context=reviewed_context,
             )
         )
+        colliding_recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id=promoted_case.case_id,
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=admitted.alert.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id=None,
+                review_owner="reviewer-002",
+                intended_outcome="keep reviewed evidence visible",
+                lifecycle_state="under_review",
+                reviewed_context=reviewed_context,
+            )
+        )
+        colliding_reconciliation = service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id=promoted_case.case_id,
+                subject_linkage={
+                    "alert_ids": (admitted.alert.alert_id,),
+                },
+                alert_id=None,
+                finding_id=None,
+                analytic_signal_id=None,
+                execution_run_id="execution-run-collision-001",
+                linked_execution_run_ids=(),
+                correlation_key="reconciliation:case-collision",
+                first_seen_at=first_seen_at,
+                last_seen_at=first_seen_at,
+                ingest_disposition="matched",
+                mismatch_summary="case-id collision across record families",
+                compared_at=first_seen_at,
+                lifecycle_state="matched",
+            )
+        )
 
         snapshot = service.inspect_assistant_context("case", promoted_case.case_id)
 
@@ -337,7 +371,15 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             snapshot.linked_recommendation_ids,
         )
         self.assertIn(
+            colliding_recommendation.recommendation_id,
+            snapshot.linked_recommendation_ids,
+        )
+        self.assertIn(
             admitted.reconciliation.reconciliation_id,
+            snapshot.linked_reconciliation_ids,
+        )
+        self.assertIn(
+            colliding_reconciliation.reconciliation_id,
             snapshot.linked_reconciliation_ids,
         )
 
@@ -688,11 +730,52 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 lifecycle_state="matched",
             )
         )
+        subject_alert_reconciliation = service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-assistant-subject-alert-001",
+                subject_linkage={
+                    "alert_ids": (admitted.alert.alert_id,),
+                },
+                alert_id=None,
+                finding_id=None,
+                analytic_signal_id=None,
+                execution_run_id="execution-run-subject-alert-001",
+                linked_execution_run_ids=(),
+                correlation_key="reconciliation:subject-alert",
+                first_seen_at=first_seen_at,
+                last_seen_at=delegated_at,
+                ingest_disposition="matched",
+                mismatch_summary="subject-linkage alert association",
+                compared_at=delegated_at,
+                lifecycle_state="matched",
+            )
+        )
+        subject_analytic_signal_reconciliation = service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-assistant-subject-signal-001",
+                subject_linkage={
+                    "analytic_signal_ids": (admitted.alert.analytic_signal_id,),
+                },
+                alert_id=None,
+                finding_id=None,
+                analytic_signal_id=None,
+                execution_run_id="execution-run-subject-signal-001",
+                linked_execution_run_ids=(),
+                correlation_key="reconciliation:subject-signal",
+                first_seen_at=first_seen_at,
+                last_seen_at=delegated_at,
+                ingest_disposition="matched",
+                mismatch_summary="subject-linkage analytic signal association",
+                compared_at=delegated_at,
+                lifecycle_state="matched",
+            )
+        )
 
         execution_snapshot = service.inspect_assistant_context(
             "action_execution",
             execution.action_execution_id,
         )
+        alert_snapshot = service.inspect_assistant_context("alert", admitted.alert.alert_id)
 
         self.assertIn(
             action_request_reconciliation.reconciliation_id,
@@ -709,6 +792,14 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertIn(
             delegation_reconciliation.reconciliation_id,
             execution_snapshot.linked_reconciliation_ids,
+        )
+        self.assertIn(
+            subject_alert_reconciliation.reconciliation_id,
+            alert_snapshot.linked_reconciliation_ids,
+        )
+        self.assertIn(
+            subject_analytic_signal_reconciliation.reconciliation_id,
+            alert_snapshot.linked_reconciliation_ids,
         )
 
     def test_service_preserves_declared_missing_evidence_ids_in_assistant_context(
