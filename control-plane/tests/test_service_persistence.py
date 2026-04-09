@@ -503,6 +503,32 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             {record["evidence_id"] for record in ai_trace_snapshot.linked_evidence_records},
             {evidence.evidence_id},
         )
+        self.assertEqual(
+            recommendation_snapshot.advisory_output["output_kind"],
+            "recommendation_draft",
+        )
+        self.assertEqual(
+            recommendation_snapshot.advisory_output["status"],
+            "ready",
+        )
+        self.assertIn(
+            recommendation.recommendation_id,
+            recommendation_snapshot.advisory_output["citations"],
+        )
+        self.assertIn(
+            evidence.evidence_id,
+            recommendation_snapshot.advisory_output["citations"],
+        )
+        self.assertTrue(
+            recommendation_snapshot.advisory_output["cited_summary"]["text"]
+        )
+        self.assertTrue(
+            recommendation_snapshot.advisory_output["candidate_recommendations"]
+        )
+        self.assertIn(
+            "advisory_only",
+            recommendation_snapshot.advisory_output["uncertainty_flags"],
+        )
 
     def test_service_includes_evidence_derived_recommendations_in_ai_trace_context(
         self,
@@ -585,6 +611,74 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(
             {record["evidence_id"] for record in snapshot.linked_evidence_records},
             {evidence.evidence_id},
+        )
+
+    def test_service_fails_closed_when_reviewed_context_is_internally_inconsistent(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+
+        admitted = service.ingest_finding_alert(
+            finding_id="finding-conflict-001",
+            analytic_signal_id="signal-conflict-001",
+            substrate_detection_record_id="substrate-detection-conflict-001",
+            correlation_key="claim:conflict:001",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            reviewed_context={
+                "asset": {"asset_id": "asset-reviewed-001"},
+            },
+        )
+        evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-conflict-001",
+                source_record_id="substrate-detection-conflict-001",
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=first_seen_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-conflict-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=admitted.alert.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id=None,
+                review_owner="reviewer-001",
+                intended_outcome="review the conflicting identifiers",
+                lifecycle_state="under_review",
+                reviewed_context={
+                    "asset": {"asset_id": "asset-reviewed-999"},
+                },
+            )
+        )
+
+        snapshot = service.inspect_assistant_context(
+            "recommendation",
+            recommendation.recommendation_id,
+        )
+
+        self.assertEqual(snapshot.linked_evidence_ids, (evidence.evidence_id,))
+        self.assertEqual(snapshot.advisory_output["status"], "unresolved")
+        self.assertIn(
+            "conflicting_reviewed_context",
+            snapshot.advisory_output["uncertainty_flags"],
+        )
+        self.assertIn(
+            "asset.asset_id",
+            snapshot.advisory_output["unresolved_questions"][0]["text"],
         )
 
     def test_service_keeps_anchored_recommendation_context_from_absorbing_sibling_anchors(
