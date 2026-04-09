@@ -498,6 +498,182 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertIn(evidence.evidence_id, ai_trace_snapshot.linked_evidence_ids)
         self.assertGreaterEqual(len(ai_trace_snapshot.linked_evidence_records), 1)
 
+    def test_service_keeps_anchored_recommendation_context_from_absorbing_sibling_anchors(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+
+        first_admitted = service.ingest_finding_alert(
+            finding_id="finding-anchored-001",
+            analytic_signal_id="signal-anchored-001",
+            substrate_detection_record_id="substrate-detection-anchored-001",
+            correlation_key="claim:anchored:001",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            reviewed_context={"asset": {"asset_id": "asset-anchored-001"}},
+        )
+        first_evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-anchored-001",
+                source_record_id="substrate-detection-anchored-001",
+                alert_id=first_admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=first_seen_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        first_case = service.promote_alert_to_case(first_admitted.alert.alert_id)
+        anchored_recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-anchored-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=first_admitted.alert.alert_id,
+                case_id=first_case.case_id,
+                ai_trace_id="ai-trace-shared-001",
+                review_owner="reviewer-001",
+                intended_outcome="keep the anchored context narrow",
+                lifecycle_state="under_review",
+            )
+        )
+
+        second_admitted = service.ingest_finding_alert(
+            finding_id="finding-anchored-002",
+            analytic_signal_id="signal-anchored-002",
+            substrate_detection_record_id="substrate-detection-anchored-002",
+            correlation_key="claim:anchored:002",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            reviewed_context={"asset": {"asset_id": "asset-anchored-002"}},
+        )
+        second_evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-anchored-002",
+                source_record_id="substrate-detection-anchored-002",
+                alert_id=second_admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=first_seen_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        second_case = service.promote_alert_to_case(second_admitted.alert.alert_id)
+        sibling_recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-anchored-002",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=second_admitted.alert.alert_id,
+                case_id=second_case.case_id,
+                ai_trace_id="ai-trace-shared-001",
+                review_owner="reviewer-002",
+                intended_outcome="different anchored lineage",
+                lifecycle_state="under_review",
+            )
+        )
+
+        snapshot = service.inspect_assistant_context(
+            "recommendation",
+            anchored_recommendation.recommendation_id,
+        )
+
+        self.assertIn(first_admitted.alert.alert_id, snapshot.linked_alert_ids)
+        self.assertIn(first_case.case_id, snapshot.linked_case_ids)
+        self.assertEqual(
+            snapshot.linked_evidence_ids,
+            (first_evidence.evidence_id,),
+        )
+        self.assertIn(
+            sibling_recommendation.recommendation_id,
+            snapshot.linked_recommendation_ids,
+        )
+        self.assertNotIn(second_admitted.alert.alert_id, snapshot.linked_alert_ids)
+        self.assertNotIn(second_case.case_id, snapshot.linked_case_ids)
+        self.assertNotIn(second_evidence.evidence_id, snapshot.linked_evidence_ids)
+
+    def test_service_uses_ai_trace_subject_linkage_and_material_inputs_for_citation_context(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+
+        admitted = service.ingest_finding_alert(
+            finding_id="finding-ai-trace-001",
+            analytic_signal_id="signal-ai-trace-001",
+            substrate_detection_record_id="substrate-detection-ai-trace-001",
+            correlation_key="claim:ai-trace:001",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            reviewed_context={"asset": {"asset_id": "asset-ai-trace-001"}},
+        )
+        detached_evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-ai-trace-001",
+                source_record_id="substrate-detection-ai-trace-001",
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=first_seen_at,
+                derivation_relationship="detached_review_input",
+                lifecycle_state="collected",
+            )
+        )
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-ai-trace-001",
+                lead_id="lead-ai-trace-001",
+                hunt_run_id=None,
+                alert_id=None,
+                case_id=None,
+                ai_trace_id=None,
+                review_owner="reviewer-001",
+                intended_outcome="use detached evidence in advisory context",
+                lifecycle_state="under_review",
+            )
+        )
+        ai_trace = service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-001",
+                subject_linkage={
+                    "recommendation_ids": (recommendation.recommendation_id,),
+                    "evidence_ids": (detached_evidence.evidence_id,),
+                },
+                model_identity="gpt-5.4",
+                prompt_version="prompt-v1",
+                generated_at=first_seen_at,
+                material_input_refs=(detached_evidence.evidence_id,),
+                reviewer_identity="reviewer-001",
+                lifecycle_state="accepted_for_reference",
+            )
+        )
+
+        snapshot = service.inspect_assistant_context("ai_trace", ai_trace.ai_trace_id)
+
+        self.assertIn(recommendation.recommendation_id, snapshot.linked_recommendation_ids)
+        self.assertEqual(
+            snapshot.linked_evidence_ids,
+            (detached_evidence.evidence_id,),
+        )
+        self.assertEqual(
+            snapshot.linked_evidence_records[0]["evidence_id"],
+            detached_evidence.evidence_id,
+        )
+
     def test_service_exposes_assistant_context_for_action_approvals_and_executions(
         self,
     ) -> None:

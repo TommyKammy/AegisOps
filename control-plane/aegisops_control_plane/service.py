@@ -911,10 +911,26 @@ class AegisOpsControlPlaneService:
                 self._assistant_ids_from_mapping(record.output_linkage, "evidence_ids"),
             )
 
+        linked_ai_trace_records = self._assistant_ai_trace_records_for_context(record)
+        for ai_trace_record in linked_ai_trace_records:
+            linked_alert_ids = self._assistant_merge_ids(
+                linked_alert_ids,
+                self._assistant_ids_from_mapping(ai_trace_record.subject_linkage, "alert_ids"),
+            )
+            linked_case_ids = self._assistant_merge_ids(
+                linked_case_ids,
+                self._assistant_ids_from_mapping(ai_trace_record.subject_linkage, "case_ids"),
+            )
+            linked_evidence_ids = self._assistant_merge_ids(
+                linked_evidence_ids,
+                self._assistant_ai_trace_evidence_ids(ai_trace_record),
+            )
+
         linked_recommendation_records = self._assistant_recommendation_records_for_context(
             record=record,
             alert_ids=linked_alert_ids,
             case_ids=linked_case_ids,
+            ai_trace_records=linked_ai_trace_records,
             exclude_recommendation_id=(
                 record.record_id if isinstance(record, RecommendationRecord) else None
             ),
@@ -923,15 +939,19 @@ class AegisOpsControlPlaneService:
             recommendation.recommendation_id
             for recommendation in linked_recommendation_records
         )
-        for recommendation in linked_recommendation_records:
-            linked_alert_ids = self._assistant_merge_ids(
-                linked_alert_ids,
-                recommendation.alert_id,
-            )
-            linked_case_ids = self._assistant_merge_ids(
-                linked_case_ids,
-                recommendation.case_id,
-            )
+        has_direct_recommendation_lineage = isinstance(record, RecommendationRecord) and (
+            record.alert_id is not None or record.case_id is not None
+        )
+        if not has_direct_recommendation_lineage:
+            for recommendation in linked_recommendation_records:
+                linked_alert_ids = self._assistant_merge_ids(
+                    linked_alert_ids,
+                    recommendation.alert_id,
+                )
+                linked_case_ids = self._assistant_merge_ids(
+                    linked_case_ids,
+                    recommendation.case_id,
+                )
 
         linked_alert_records = tuple(
             _record_to_dict(self._store.get(AlertRecord, alert_id))
@@ -1157,6 +1177,56 @@ class AegisOpsControlPlaneService:
                 return execution
         return None
 
+    def _assistant_ai_trace_records_for_context(
+        self,
+        record: ControlPlaneRecord,
+    ) -> tuple[AITraceRecord, ...]:
+        records: list[AITraceRecord] = []
+        seen_trace_ids: set[str] = set()
+
+        def add_trace(trace: AITraceRecord | None) -> None:
+            if trace is None or trace.ai_trace_id in seen_trace_ids:
+                return
+            seen_trace_ids.add(trace.ai_trace_id)
+            records.append(trace)
+
+        ai_trace_id = getattr(record, "ai_trace_id", None)
+        if ai_trace_id is not None:
+            add_trace(self._store.get(AITraceRecord, ai_trace_id))
+        if isinstance(record, AITraceRecord):
+            add_trace(record)
+
+        record_recommendation_id = getattr(record, "recommendation_id", None)
+        if record_recommendation_id is not None:
+            for trace in self._store.list(AITraceRecord):
+                if trace.ai_trace_id in seen_trace_ids:
+                    continue
+                if record_recommendation_id in self._assistant_ids_from_mapping(
+                    trace.subject_linkage,
+                    "recommendation_ids",
+                ):
+                    add_trace(trace)
+
+        return tuple(records)
+
+    def _assistant_ai_trace_evidence_ids(
+        self,
+        ai_trace_record: AITraceRecord,
+    ) -> tuple[str, ...]:
+        linked_evidence_ids = self._assistant_ids_from_mapping(
+            ai_trace_record.subject_linkage,
+            "evidence_ids",
+        )
+        linked_evidence_ids = self._assistant_merge_ids(
+            linked_evidence_ids,
+            ai_trace_record.material_input_refs,
+        )
+        return tuple(
+            evidence_id
+            for evidence_id in linked_evidence_ids
+            if self._store.get(EvidenceRecord, evidence_id) is not None
+        )
+
     def _assistant_linked_evidence_ids(self, record: ControlPlaneRecord) -> tuple[str, ...]:
         linked_evidence_ids = self._assistant_ids_from_value(getattr(record, "evidence_ids", ()))
         linked_evidence_ids = self._assistant_merge_ids(
@@ -1172,6 +1242,11 @@ class AegisOpsControlPlaneService:
             linked_evidence_ids = self._assistant_merge_ids(
                 linked_evidence_ids,
                 self._assistant_ids_from_mapping(record.subject_linkage, "evidence_ids"),
+            )
+        for ai_trace_record in self._assistant_ai_trace_records_for_context(record):
+            linked_evidence_ids = self._assistant_merge_ids(
+                linked_evidence_ids,
+                self._assistant_ai_trace_evidence_ids(ai_trace_record),
             )
         return linked_evidence_ids
 
@@ -1223,12 +1298,21 @@ class AegisOpsControlPlaneService:
         record: ControlPlaneRecord,
         alert_ids: tuple[str, ...],
         case_ids: tuple[str, ...],
+        ai_trace_records: tuple[AITraceRecord, ...],
         exclude_recommendation_id: str | None,
     ) -> tuple[RecommendationRecord, ...]:
         records: list[RecommendationRecord] = []
         lead_id = getattr(record, "lead_id", None)
         hunt_run_id = getattr(record, "hunt_run_id", None)
         ai_trace_id = getattr(record, "ai_trace_id", None)
+        ai_trace_recommendation_ids: set[str] = set()
+        for ai_trace_record in ai_trace_records:
+            ai_trace_recommendation_ids.update(
+                self._assistant_ids_from_mapping(
+                    ai_trace_record.subject_linkage,
+                    "recommendation_ids",
+                )
+            )
         for recommendation in self._store.list(RecommendationRecord):
             if (
                 exclude_recommendation_id is not None
@@ -1248,6 +1332,9 @@ class AegisOpsControlPlaneService:
                 records.append(recommendation)
                 continue
             if ai_trace_id is not None and recommendation.ai_trace_id == ai_trace_id:
+                records.append(recommendation)
+                continue
+            if recommendation.recommendation_id in ai_trace_recommendation_ids:
                 records.append(recommendation)
         records.sort(key=lambda recommendation: recommendation.recommendation_id)
         return tuple(records)
