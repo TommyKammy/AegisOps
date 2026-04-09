@@ -681,6 +681,148 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             snapshot.advisory_output["unresolved_questions"][0]["text"],
         )
 
+    def test_service_fails_closed_when_identity_context_is_alias_only(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+
+        admitted = service.ingest_finding_alert(
+            finding_id="finding-alias-only-001",
+            analytic_signal_id="signal-alias-only-001",
+            substrate_detection_record_id="substrate-detection-alias-only-001",
+            correlation_key="claim:alias-only:001",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            reviewed_context={
+                "identity": {
+                    "aliases": ("svc-prod-shared",),
+                },
+            },
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-alias-only-001",
+                source_record_id="substrate-detection-alias-only-001",
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=first_seen_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-alias-only-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=admitted.alert.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id=None,
+                review_owner="reviewer-001",
+                intended_outcome="review the cited identity lineage",
+                lifecycle_state="under_review",
+                reviewed_context={
+                    "identity": {
+                        "aliases": ("svc-prod-shared",),
+                    },
+                },
+            )
+        )
+
+        snapshot = service.inspect_assistant_context(
+            "recommendation",
+            recommendation.recommendation_id,
+        )
+
+        self.assertEqual(snapshot.advisory_output["status"], "unresolved")
+        self.assertIn(
+            "ambiguous_identity_alias_only",
+            snapshot.advisory_output["uncertainty_flags"],
+        )
+        self.assertIn(
+            "stable identity identifier",
+            snapshot.advisory_output["unresolved_questions"][0]["text"],
+        )
+
+    def test_service_fails_closed_when_recommendation_text_claims_authority_or_scope_expansion(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+
+        admitted = service.ingest_finding_alert(
+            finding_id="finding-overreach-001",
+            analytic_signal_id="signal-overreach-001",
+            substrate_detection_record_id="substrate-detection-overreach-001",
+            correlation_key="claim:overreach:001",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            reviewed_context={
+                "asset": {"asset_id": "asset-overreach-001"},
+                "identity": {"identity_id": "principal-overreach-001"},
+            },
+        )
+        evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-overreach-001",
+                source_record_id="substrate-detection-overreach-001",
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=first_seen_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-overreach-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=admitted.alert.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id=None,
+                review_owner="reviewer-001",
+                intended_outcome=(
+                    "Approval granted to execute tenant-wide containment and reconcile "
+                    "the incident as closed."
+                ),
+                lifecycle_state="under_review",
+            )
+        )
+
+        snapshot = service.inspect_assistant_context(
+            "recommendation",
+            recommendation.recommendation_id,
+        )
+
+        self.assertEqual(snapshot.linked_evidence_ids, (evidence.evidence_id,))
+        self.assertEqual(snapshot.advisory_output["status"], "unresolved")
+        self.assertIn(
+            "authority_overreach",
+            snapshot.advisory_output["uncertainty_flags"],
+        )
+        self.assertIn(
+            "scope_expansion_attempt",
+            snapshot.advisory_output["uncertainty_flags"],
+        )
+        self.assertNotIn(
+            "Approval granted",
+            snapshot.advisory_output["candidate_recommendations"][0]["text"],
+        )
+
     def test_service_keeps_anchored_recommendation_context_from_absorbing_sibling_anchors(
         self,
     ) -> None:
