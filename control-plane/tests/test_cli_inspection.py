@@ -294,6 +294,9 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(payload["record_family"], "case")
         self.assertEqual(payload["record_id"], promoted_case.case_id)
         self.assertEqual(payload["record"]["case_id"], promoted_case.case_id)
+        self.assertEqual(payload["advisory_output"]["output_kind"], "case_summary")
+        self.assertEqual(payload["advisory_output"]["status"], "ready")
+        self.assertIn(evidence.evidence_id, payload["advisory_output"]["citations"])
         self.assertEqual(payload["reviewed_context"], reviewed_context)
         self.assertEqual(payload["linked_evidence_ids"], [evidence.evidence_id])
         self.assertEqual(

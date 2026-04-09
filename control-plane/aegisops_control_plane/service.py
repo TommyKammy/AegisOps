@@ -153,6 +153,7 @@ class AnalystAssistantContextSnapshot:
     record_family: str
     record_id: str
     record: dict[str, object]
+    advisory_output: dict[str, object]
     reviewed_context: dict[str, object]
     linked_alert_ids: tuple[str, ...]
     linked_case_ids: tuple[str, ...]
@@ -172,6 +173,7 @@ class AnalystAssistantContextSnapshot:
                 "record_family": self.record_family,
                 "record_id": self.record_id,
                 "record": self.record,
+                "advisory_output": self.advisory_output,
                 "reviewed_context": self.reviewed_context,
                 "linked_alert_ids": self.linked_alert_ids,
                 "linked_case_ids": self.linked_case_ids,
@@ -301,6 +303,252 @@ def _merge_reviewed_context(
         else:
             merged[normalized_key] = value
     return merged
+
+
+def _dedupe_strings(values: object) -> tuple[str, ...]:
+    deduped: list[str] = []
+    if not isinstance(values, (list, tuple)):
+        return ()
+    for value in values:
+        if isinstance(value, str) and value not in deduped:
+            deduped.append(value)
+    return tuple(deduped)
+
+
+def _collect_reviewed_context_scalar_paths(
+    value: object,
+    *,
+    prefix: str = "",
+) -> dict[str, set[str]]:
+    collected: dict[str, set[str]] = {}
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            child_prefix = f"{prefix}.{key}" if prefix else str(key)
+            for path, seen_values in _collect_reviewed_context_scalar_paths(
+                item,
+                prefix=child_prefix,
+            ).items():
+                collected.setdefault(path, set()).update(seen_values)
+        return collected
+    if isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            child_prefix = f"{prefix}[{index}]"
+            for path, seen_values in _collect_reviewed_context_scalar_paths(
+                item,
+                prefix=child_prefix,
+            ).items():
+                collected.setdefault(path, set()).update(seen_values)
+        return collected
+    if prefix:
+        collected[prefix] = {repr(value)}
+    return collected
+
+
+def _reviewed_context_identifier_citations(
+    reviewed_context: Mapping[str, object],
+) -> tuple[str, ...]:
+    citations: list[str] = []
+    for path, values in _collect_reviewed_context_scalar_paths(reviewed_context).items():
+        leaf_name = path.rsplit(".", 1)[-1]
+        if "[" in leaf_name:
+            leaf_name = leaf_name.split("[", 1)[0]
+        if not leaf_name.endswith("_id"):
+            continue
+        for value in sorted(values):
+            normalized_value = value[1:-1] if value.startswith("'") and value.endswith("'") else value
+            citation = f"reviewed_context.{path}={normalized_value}"
+            if citation not in citations:
+                citations.append(citation)
+    return tuple(citations)
+
+
+def _reviewed_context_conflict_paths(
+    contexts: tuple[Mapping[str, object], ...],
+) -> tuple[str, ...]:
+    by_path: dict[str, set[str]] = {}
+    for context in contexts:
+        for path, values in _collect_reviewed_context_scalar_paths(context).items():
+            by_path.setdefault(path, set()).update(values)
+    return tuple(sorted(path for path, values in by_path.items() if len(values) > 1))
+
+
+def _assistant_advisory_output_kind(record_family: str) -> str:
+    if record_family in {"recommendation", "ai_trace"}:
+        return "recommendation_draft"
+    if record_family in {"case", "reconciliation"}:
+        return "case_summary"
+    return "triage_summary"
+
+
+def _build_assistant_advisory_output(
+    *,
+    record_family: str,
+    record_id: str,
+    record: dict[str, object],
+    reviewed_context: Mapping[str, object],
+    linked_alert_ids: tuple[str, ...],
+    linked_case_ids: tuple[str, ...],
+    linked_evidence_ids: tuple[str, ...],
+    linked_recommendation_ids: tuple[str, ...],
+    linked_alert_records: tuple[dict[str, object], ...],
+    linked_case_records: tuple[dict[str, object], ...],
+    linked_recommendation_records: tuple[dict[str, object], ...],
+) -> dict[str, object]:
+    output_kind = _assistant_advisory_output_kind(record_family)
+    reviewed_context_citations = _reviewed_context_identifier_citations(reviewed_context)
+    citations = _dedupe_strings(
+        (
+            record_id,
+            *linked_alert_ids,
+            *linked_case_ids,
+            *linked_evidence_ids,
+            *linked_recommendation_ids,
+            *reviewed_context_citations,
+        )
+    )
+    supporting_citations = _dedupe_strings(
+        (
+            *linked_alert_ids,
+            *linked_case_ids,
+            *linked_evidence_ids,
+            *reviewed_context_citations,
+        )
+    )
+    context_conflicts = _reviewed_context_conflict_paths(
+        tuple(
+            context
+            for context in (
+                record.get("reviewed_context"),
+                *(linked_alert.get("reviewed_context") for linked_alert in linked_alert_records),
+                *(linked_case.get("reviewed_context") for linked_case in linked_case_records),
+                *(
+                    linked_recommendation.get("reviewed_context")
+                    for linked_recommendation in linked_recommendation_records
+                ),
+            )
+            if isinstance(context, Mapping)
+        )
+    )
+
+    uncertainty_flags = ["advisory_only"]
+    unresolved_questions: list[dict[str, object]] = []
+    fail_closed = False
+
+    if not supporting_citations:
+        fail_closed = True
+        uncertainty_flags.append("missing_supporting_citations")
+        unresolved_questions.append(
+            {
+                "text": "Which reviewed records, linked evidence, or stable reviewed-context identifiers support this advisory output?",
+                "citations": (record_id,),
+            }
+        )
+    if output_kind == "recommendation_draft" and not linked_evidence_ids:
+        fail_closed = True
+        uncertainty_flags.append("missing_evidence_citation")
+        unresolved_questions.append(
+            {
+                "text": "Which linked evidence anchor supports this recommendation draft?",
+                "citations": (record_id,),
+            }
+        )
+    if context_conflicts:
+        fail_closed = True
+        uncertainty_flags.append("conflicting_reviewed_context")
+        unresolved_questions.append(
+            {
+                "text": (
+                    "Which reviewed-context values are authoritative for: "
+                    + ", ".join(context_conflicts)
+                    + "?"
+                ),
+                "citations": citations,
+            }
+        )
+
+    key_observations: list[dict[str, object]] = []
+    if linked_evidence_ids:
+        key_observations.append(
+            {
+                "text": (
+                    "Linked evidence anchors this advisory output through "
+                    + ", ".join(linked_evidence_ids)
+                    + "."
+                ),
+                "citations": _dedupe_strings((record_id, *linked_evidence_ids)),
+            }
+        )
+    if reviewed_context_citations:
+        key_observations.append(
+            {
+                "text": "Reviewed context exposes stable identifiers for the cited advisory output.",
+                "citations": reviewed_context_citations,
+            }
+        )
+    if linked_alert_ids or linked_case_ids:
+        key_observations.append(
+            {
+                "text": "Record linkage preserves the reviewed alert and case lineage for this advisory output.",
+                "citations": _dedupe_strings((record_id, *linked_alert_ids, *linked_case_ids)),
+            }
+        )
+
+    status = "unresolved" if fail_closed else "ready"
+    if status == "ready":
+        if output_kind == "recommendation_draft":
+            summary_text = (
+                f"Recommendation draft {record_id} remains under review and is anchored "
+                f"to cited evidence and reviewed lineage."
+            )
+        elif output_kind == "case_summary":
+            summary_text = (
+                f"Case summary {record_id} is grounded in reviewed record linkage, "
+                f"linked evidence, and stable reviewed-context identifiers."
+            )
+        else:
+            summary_text = (
+                f"Triage summary {record_id} is grounded in reviewed record linkage, "
+                f"linked evidence, and stable reviewed-context identifiers."
+            )
+    else:
+        summary_text = (
+            f"{output_kind.replace('_', ' ').capitalize()} {record_id} remains unresolved "
+            "because citation completeness or reviewed-context consistency is incomplete."
+        )
+
+    candidate_recommendations: list[dict[str, object]] = []
+    intended_outcome = record.get("intended_outcome")
+    if isinstance(intended_outcome, str) and intended_outcome:
+        candidate_recommendations.append(
+            {
+                "text": f"Proposal only: {intended_outcome}.",
+                "citations": _dedupe_strings((record_id, *supporting_citations)),
+            }
+        )
+    elif supporting_citations:
+        candidate_recommendations.append(
+            {
+                "text": (
+                    "Proposal only: review the cited evidence and unresolved conditions "
+                    "before any approval, execution, or reconciliation decision."
+                ),
+                "citations": supporting_citations,
+            }
+        )
+
+    return {
+        "output_kind": output_kind,
+        "status": status,
+        "cited_summary": {
+            "text": summary_text,
+            "citations": _dedupe_strings((record_id, *supporting_citations)),
+        },
+        "key_observations": tuple(key_observations),
+        "unresolved_questions": tuple(unresolved_questions),
+        "candidate_recommendations": tuple(candidate_recommendations),
+        "citations": citations,
+        "uncertainty_flags": _dedupe_strings(tuple(uncertainty_flags)),
+    }
 
 
 class AegisOpsControlPlaneService:
@@ -1032,11 +1280,30 @@ class AegisOpsControlPlaneService:
                     case.get("reviewed_context"),
                 )
 
+        record_payload = _record_to_dict(record)
+        linked_recommendation_payloads = tuple(
+            _record_to_dict(recommendation)
+            for recommendation in linked_recommendation_records
+        )
+
         return AnalystAssistantContextSnapshot(
             read_only=True,
             record_family=record_family,
             record_id=record_id,
-            record=_record_to_dict(record),
+            record=record_payload,
+            advisory_output=_build_assistant_advisory_output(
+                record_family=record_family,
+                record_id=record_id,
+                record=record_payload,
+                reviewed_context=reviewed_context,
+                linked_alert_ids=linked_alert_ids,
+                linked_case_ids=linked_case_ids,
+                linked_evidence_ids=linked_evidence_ids,
+                linked_recommendation_ids=linked_recommendation_ids,
+                linked_alert_records=linked_alert_records,
+                linked_case_records=linked_case_records,
+                linked_recommendation_records=linked_recommendation_payloads,
+            ),
             reviewed_context=reviewed_context,
             linked_alert_ids=linked_alert_ids,
             linked_case_ids=linked_case_ids,
@@ -1048,10 +1315,7 @@ class AegisOpsControlPlaneService:
             linked_evidence_records=tuple(
                 _record_to_dict(evidence) for evidence in linked_evidence_records
             ),
-            linked_recommendation_records=tuple(
-                _record_to_dict(recommendation)
-                for recommendation in linked_recommendation_records
-            ),
+            linked_recommendation_records=linked_recommendation_payloads,
             linked_reconciliation_records=tuple(
                 _record_to_dict(reconciliation)
                 for reconciliation in linked_reconciliation_records
