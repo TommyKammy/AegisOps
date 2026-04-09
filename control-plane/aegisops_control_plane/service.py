@@ -763,6 +763,97 @@ class AegisOpsControlPlaneService:
                 linked_alert_ids,
                 self._assistant_ids_from_mapping(record.subject_linkage, "alert_ids"),
             )
+            (
+                action_request_ids,
+                approval_decision_ids,
+                action_execution_ids,
+                delegation_ids,
+            ) = self._assistant_action_lineage_ids(record)
+            for action_request_id in action_request_ids:
+                action_request = self._store.get(ActionRequestRecord, action_request_id)
+                if action_request is None:
+                    continue
+                (
+                    linked_alert_ids,
+                    linked_case_ids,
+                    linked_finding_ids,
+                ) = self._assistant_merge_action_request_linkage(
+                    linked_alert_ids=linked_alert_ids,
+                    linked_case_ids=linked_case_ids,
+                    linked_finding_ids=linked_finding_ids,
+                    action_request=action_request,
+                )
+            for approval_decision_id in approval_decision_ids:
+                approval_decision = self._store.get(
+                    ApprovalDecisionRecord,
+                    approval_decision_id,
+                )
+                if approval_decision is None:
+                    continue
+                action_request = self._store.get(
+                    ActionRequestRecord,
+                    approval_decision.action_request_id,
+                )
+                if action_request is None:
+                    continue
+                (
+                    linked_alert_ids,
+                    linked_case_ids,
+                    linked_finding_ids,
+                ) = self._assistant_merge_action_request_linkage(
+                    linked_alert_ids=linked_alert_ids,
+                    linked_case_ids=linked_case_ids,
+                    linked_finding_ids=linked_finding_ids,
+                    action_request=action_request,
+                )
+            for action_execution_id in action_execution_ids:
+                action_execution = self._store.get(ActionExecutionRecord, action_execution_id)
+                if action_execution is None:
+                    continue
+                action_request = self._store.get(
+                    ActionRequestRecord,
+                    action_execution.action_request_id,
+                )
+                if action_request is not None:
+                    (
+                        linked_alert_ids,
+                        linked_case_ids,
+                        linked_finding_ids,
+                    ) = self._assistant_merge_action_request_linkage(
+                        linked_alert_ids=linked_alert_ids,
+                        linked_case_ids=linked_case_ids,
+                        linked_finding_ids=linked_finding_ids,
+                        action_request=action_request,
+                    )
+                linked_evidence_ids = self._assistant_merge_ids(
+                    linked_evidence_ids,
+                    self._assistant_linked_evidence_ids(action_execution),
+                )
+            for delegation_id in delegation_ids:
+                action_execution = self._assistant_action_execution_for_delegation_id(
+                    delegation_id
+                )
+                if action_execution is None:
+                    continue
+                action_request = self._store.get(
+                    ActionRequestRecord,
+                    action_execution.action_request_id,
+                )
+                if action_request is not None:
+                    (
+                        linked_alert_ids,
+                        linked_case_ids,
+                        linked_finding_ids,
+                    ) = self._assistant_merge_action_request_linkage(
+                        linked_alert_ids=linked_alert_ids,
+                        linked_case_ids=linked_case_ids,
+                        linked_finding_ids=linked_finding_ids,
+                        action_request=action_request,
+                    )
+                linked_evidence_ids = self._assistant_merge_ids(
+                    linked_evidence_ids,
+                    self._assistant_linked_evidence_ids(action_execution),
+                )
             subject_analytic_signal_ids = self._assistant_ids_from_mapping(
                 record.subject_linkage,
                 "analytic_signal_ids",
@@ -971,6 +1062,79 @@ class AegisOpsControlPlaneService:
             )
         return merged
 
+    def _assistant_action_lineage_ids(
+        self,
+        record: ControlPlaneRecord,
+    ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+        action_request_ids = self._assistant_ids_from_value(
+            getattr(record, "action_request_id", None)
+        )
+        approval_decision_ids = self._assistant_ids_from_value(
+            getattr(record, "approval_decision_id", None)
+        )
+        action_execution_ids = self._assistant_ids_from_value(
+            getattr(record, "action_execution_id", None)
+        )
+        delegation_ids = self._assistant_ids_from_value(getattr(record, "delegation_id", None))
+        if isinstance(record, ReconciliationRecord):
+            action_request_ids = self._assistant_merge_ids(
+                action_request_ids,
+                self._assistant_ids_from_mapping(
+                    record.subject_linkage,
+                    "action_request_ids",
+                ),
+            )
+            approval_decision_ids = self._assistant_merge_ids(
+                approval_decision_ids,
+                self._assistant_ids_from_mapping(
+                    record.subject_linkage,
+                    "approval_decision_ids",
+                ),
+            )
+            action_execution_ids = self._assistant_merge_ids(
+                action_execution_ids,
+                self._assistant_ids_from_mapping(
+                    record.subject_linkage,
+                    "action_execution_ids",
+                ),
+            )
+            delegation_ids = self._assistant_merge_ids(
+                delegation_ids,
+                self._assistant_ids_from_mapping(
+                    record.subject_linkage,
+                    "delegation_ids",
+                ),
+            )
+        return (
+            action_request_ids,
+            approval_decision_ids,
+            action_execution_ids,
+            delegation_ids,
+        )
+
+    def _assistant_merge_action_request_linkage(
+        self,
+        *,
+        linked_alert_ids: tuple[str, ...],
+        linked_case_ids: tuple[str, ...],
+        linked_finding_ids: tuple[str, ...],
+        action_request: ActionRequestRecord,
+    ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+        return (
+            self._assistant_merge_ids(linked_alert_ids, action_request.alert_id),
+            self._assistant_merge_ids(linked_case_ids, action_request.case_id),
+            self._assistant_merge_ids(linked_finding_ids, action_request.finding_id),
+        )
+
+    def _assistant_action_execution_for_delegation_id(
+        self,
+        delegation_id: str,
+    ) -> ActionExecutionRecord | None:
+        for execution in self._store.list(ActionExecutionRecord):
+            if execution.delegation_id == delegation_id:
+                return execution
+        return None
+
     def _assistant_linked_evidence_ids(self, record: ControlPlaneRecord) -> tuple[str, ...]:
         linked_evidence_ids = self._assistant_ids_from_value(getattr(record, "evidence_ids", ()))
         linked_evidence_ids = self._assistant_merge_ids(
@@ -1079,10 +1243,12 @@ class AegisOpsControlPlaneService:
         records: list[ReconciliationRecord] = []
         analytic_signal_id = getattr(record, "analytic_signal_id", None)
         finding_id = getattr(record, "finding_id", None)
-        action_request_id = getattr(record, "action_request_id", None)
-        approval_decision_id = getattr(record, "approval_decision_id", None)
-        action_execution_id = getattr(record, "action_execution_id", None)
-        delegation_id = getattr(record, "delegation_id", None)
+        (
+            action_request_ids,
+            approval_decision_ids,
+            action_execution_ids,
+            delegation_ids,
+        ) = self._assistant_action_lineage_ids(record)
         linked_finding_ids = set(finding_ids)
         for reconciliation in self._store.list(ReconciliationRecord):
             if (
@@ -1090,43 +1256,43 @@ class AegisOpsControlPlaneService:
                 and reconciliation.reconciliation_id == exclude_reconciliation_id
             ):
                 continue
-            if (
-                action_request_id is not None
-                and action_request_id
-                in self._assistant_ids_from_mapping(
-                    reconciliation.subject_linkage,
-                    "action_request_ids",
-                )
+            subject_action_request_ids = self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "action_request_ids",
+            )
+            if any(
+                action_request_id in subject_action_request_ids
+                for action_request_id in action_request_ids
             ):
                 records.append(reconciliation)
                 continue
-            if (
-                approval_decision_id is not None
-                and approval_decision_id
-                in self._assistant_ids_from_mapping(
-                    reconciliation.subject_linkage,
-                    "approval_decision_ids",
-                )
+            subject_approval_decision_ids = self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "approval_decision_ids",
+            )
+            if any(
+                approval_decision_id in subject_approval_decision_ids
+                for approval_decision_id in approval_decision_ids
             ):
                 records.append(reconciliation)
                 continue
-            if (
-                action_execution_id is not None
-                and action_execution_id
-                in self._assistant_ids_from_mapping(
-                    reconciliation.subject_linkage,
-                    "action_execution_ids",
-                )
+            subject_action_execution_ids = self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "action_execution_ids",
+            )
+            if any(
+                action_execution_id in subject_action_execution_ids
+                for action_execution_id in action_execution_ids
             ):
                 records.append(reconciliation)
                 continue
-            if (
-                delegation_id is not None
-                and delegation_id
-                in self._assistant_ids_from_mapping(
-                    reconciliation.subject_linkage,
-                    "delegation_ids",
-                )
+            subject_delegation_ids = self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "delegation_ids",
+            )
+            if any(
+                delegation_id in subject_delegation_ids
+                for delegation_id in delegation_ids
             ):
                 records.append(reconciliation)
                 continue
