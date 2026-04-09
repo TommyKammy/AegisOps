@@ -94,7 +94,7 @@ scope_required_lines=(
   'Migration bootstrap is part of the first-boot contract because the control-plane runtime is not allowed to treat an unverified PostgreSQL schema as implicitly ready.'
   'The reviewed migration asset home remains `postgres/control-plane/migrations/`.'
   'First boot must run the reviewed forward migration set needed for the approved control-plane schema before the runtime is treated as ready to serve authoritative control-plane state.'
-  'Migration bootstrap success means the required reviewed migration set completes without error and leaves the control-plane schema at the expected first-boot revision.'
+  'Migration bootstrap success means the required, reviewed migration set completes without error and leaves the control-plane schema at the expected first-boot revision.'
   'Migration bootstrap failure includes missing migration assets, a PostgreSQL connection failure, an unapplied required migration, a partially applied migration set, or any schema mismatch that would make authoritative control-plane writes ambiguous.'
   'If migration bootstrap cannot prove the expected reviewed schema state, the deployment entrypoint must fail closed and refuse normal runtime startup.'
   'Phase 16 does not approve automatic destructive repair, downgrade behavior, or ad hoc schema recreation as a first-boot fallback.'

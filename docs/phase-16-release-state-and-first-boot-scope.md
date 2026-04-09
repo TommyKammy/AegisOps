@@ -86,7 +86,7 @@ The reviewed migration asset home remains `postgres/control-plane/migrations/`.
 
 First boot must run the reviewed forward migration set needed for the approved control-plane schema before the runtime is treated as ready to serve authoritative control-plane state.
 
-Migration bootstrap success means the required reviewed migration set completes without error and leaves the control-plane schema at the expected first-boot revision.
+Migration bootstrap success means the required, reviewed migration set completes without error and leaves the control-plane schema at the expected first-boot revision.
 
 Migration bootstrap failure includes missing migration assets, a PostgreSQL connection failure, an unapplied required migration, a partially applied migration set, or any schema mismatch that would make authoritative control-plane writes ambiguous.
 
