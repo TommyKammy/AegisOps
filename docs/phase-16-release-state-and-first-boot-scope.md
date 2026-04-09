@@ -63,7 +63,7 @@ Phase 16 therefore ends with an approved bootability target, not with a claim th
 
 The first-boot bootstrap environment contract exists to keep Phase 17 runtime bring-up narrow, reviewable, and fail-closed.
 
-The required first-boot environment variables are:
+The required first-boot bootstrap inputs are:
 
 - `AEGISOPS_CONTROL_PLANE_HOST` for the control-plane bind host;
 - `AEGISOPS_CONTROL_PLANE_PORT` for the control-plane listen port;

@@ -82,6 +82,7 @@ scope_required_lines=(
   '- OpenSearch, n8n, the full analyst-assistant surface, the high-risk executor, and broad source expansion remain optional, deferred, or non-blocking for first boot; and'
   '- later phases can use this document as the bootability target for Phase 17 runtime bring-up without reopening what counts as the minimum first-boot runtime.'
   'The first-boot bootstrap environment contract exists to keep Phase 17 runtime bring-up narrow, reviewable, and fail-closed.'
+  'The required first-boot bootstrap inputs are:'
   '- `AEGISOPS_CONTROL_PLANE_HOST` for the control-plane bind host;'
   '- `AEGISOPS_CONTROL_PLANE_PORT` for the control-plane listen port;'
   '- `AEGISOPS_CONTROL_PLANE_POSTGRES_DSN` for the authoritative PostgreSQL connection string used by the control-plane runtime; and'
