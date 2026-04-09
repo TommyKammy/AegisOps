@@ -953,17 +953,6 @@ class AegisOpsControlPlaneService:
                     recommendation.case_id,
                 )
 
-        linked_alert_records = tuple(
-            _record_to_dict(self._store.get(AlertRecord, alert_id))
-            for alert_id in linked_alert_ids
-            if self._store.get(AlertRecord, alert_id) is not None
-        )
-        linked_case_records = tuple(
-            _record_to_dict(self._store.get(CaseRecord, case_id))
-            for case_id in linked_case_ids
-            if self._store.get(CaseRecord, case_id) is not None
-        )
-
         linked_evidence_records = self._assistant_evidence_records_for_context(
             alert_ids=linked_alert_ids,
             case_ids=linked_case_ids,
@@ -976,6 +965,29 @@ class AegisOpsControlPlaneService:
             linked_evidence_ids,
             tuple(evidence.evidence_id for evidence in linked_evidence_records),
         )
+        for evidence in linked_evidence_records:
+            linked_alert_ids = self._assistant_merge_ids(
+                linked_alert_ids,
+                evidence.alert_id,
+            )
+            linked_case_ids = self._assistant_merge_ids(
+                linked_case_ids,
+                evidence.case_id,
+            )
+
+        linked_alert_records_list: list[dict[str, object]] = []
+        for alert_id in linked_alert_ids:
+            alert = self._store.get(AlertRecord, alert_id)
+            if alert is not None:
+                linked_alert_records_list.append(_record_to_dict(alert))
+        linked_alert_records = tuple(linked_alert_records_list)
+
+        linked_case_records_list: list[dict[str, object]] = []
+        for case_id in linked_case_ids:
+            case = self._store.get(CaseRecord, case_id)
+            if case is not None:
+                linked_case_records_list.append(_record_to_dict(case))
+        linked_case_records = tuple(linked_case_records_list)
 
         linked_reconciliation_records = (
             self._assistant_reconciliation_records_for_context(

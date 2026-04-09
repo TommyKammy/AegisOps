@@ -495,8 +495,14 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             ai_trace_snapshot.linked_case_records[0]["case_id"],
             promoted_case.case_id,
         )
-        self.assertIn(evidence.evidence_id, ai_trace_snapshot.linked_evidence_ids)
-        self.assertGreaterEqual(len(ai_trace_snapshot.linked_evidence_records), 1)
+        self.assertEqual(
+            set(ai_trace_snapshot.linked_evidence_ids),
+            {evidence.evidence_id},
+        )
+        self.assertEqual(
+            {record["evidence_id"] for record in ai_trace_snapshot.linked_evidence_records},
+            {evidence.evidence_id},
+        )
 
     def test_service_keeps_anchored_recommendation_context_from_absorbing_sibling_anchors(
         self,
