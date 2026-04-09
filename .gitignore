@@ -28,8 +28,13 @@ htmlcov/
 *.out
 *.pid
 *.pid.lock
+*.sqlite
+*.sqlite3
+*.db
 tmp/
 temp/
+build/
+dist/
 
 # Editor and OS noise
 .DS_Store
@@ -42,3 +47,4 @@ Thumbs.db
 
 # Local override files
 docker-compose.override.yml
+docker-compose.local.yml
