@@ -12,6 +12,7 @@ The approved top-level repository baseline allows these tracked entries:
 - `.codex-supervisor/`
 - `.env.sample`
 - `.github/`
+- `.gitignore`
 - `LICENSE.txt`
 - `README.md`
 - `config/`
@@ -32,6 +33,7 @@ The repository currently tracks these top-level entries in the verified pull req
 - `.codex-supervisor/`
 - `.env.sample`
 - `.github/`
+- `.gitignore`
 - `LICENSE.txt`
 - `README.md`
 - `config/`
@@ -52,6 +54,7 @@ The current repository skeleton matches the approved baseline, including the ded
 Disposition decisions:
 
 - `.codex-supervisor/` is an approved tracked top-level directory for reviewable supervisor metadata such as issue journals; transient execution state under that path must remain untracked.
+- `.gitignore` is an approved tracked top-level metadata file because the repository baseline depends on committed ignore rules for transient local and supervisor artifacts.
 - `LICENSE.txt` and `README.md` are approved tracked top-level files and are part of the documented baseline.
 
 No approved baseline top-level entries are missing.

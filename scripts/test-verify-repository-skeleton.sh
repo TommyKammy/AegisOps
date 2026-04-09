@@ -69,6 +69,7 @@ create_repo \
   ".codex-supervisor/issues/94/issue-journal.md" \
   ".env.sample" \
   ".github/workflows/ci.yml" \
+  ".gitignore" \
   "LICENSE.txt" \
   "README.md" \
   "config/" \
@@ -90,6 +91,7 @@ create_repo \
   ".codex-supervisor/issues/94/issue-journal.md" \
   ".env.sample" \
   ".github/workflows/ci.yml" \
+  ".gitignore" \
   "LICENSE.txt" \
   "README.md" \
   "config/" \

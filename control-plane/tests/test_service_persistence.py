@@ -783,6 +783,127 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             "assistant-advisory-draft:ai_trace:ai-trace-advisory-review-001",
         )
 
+    def test_service_renders_recommendation_draft_with_current_review_outcome(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        reviewed_context = {
+            "asset": {"asset_id": "asset-advisory-render-001"},
+            "identity": {"identity_id": "principal-advisory-render-001"},
+        }
+
+        admitted = service.ingest_finding_alert(
+            finding_id="finding-advisory-render-001",
+            analytic_signal_id="signal-advisory-render-001",
+            substrate_detection_record_id="substrate-detection-advisory-render-001",
+            correlation_key="claim:assistant:advisory-render:001",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            reviewed_context=reviewed_context,
+        )
+        evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-advisory-render-001",
+                source_record_id="substrate-detection-advisory-render-001",
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=first_seen_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-advisory-render-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=admitted.alert.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id="ai-trace-advisory-render-001",
+                review_owner="reviewer-001",
+                intended_outcome="review the cited evidence before escalation",
+                lifecycle_state="under_review",
+                reviewed_context=reviewed_context,
+            )
+        )
+        ai_trace = service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-advisory-render-001",
+                subject_linkage={"recommendation_ids": (recommendation.recommendation_id,)},
+                model_identity="gpt-5.4",
+                prompt_version="prompt-v1",
+                generated_at=first_seen_at,
+                material_input_refs=(evidence.evidence_id,),
+                reviewer_identity="reviewer-001",
+                lifecycle_state="under_review",
+            )
+        )
+
+        recommendation_under_review = service.render_recommendation_draft(
+            "recommendation",
+            recommendation.recommendation_id,
+        )
+        ai_trace_under_review = service.render_recommendation_draft(
+            "ai_trace",
+            ai_trace.ai_trace_id,
+        )
+
+        self.assertIn(
+            "remains under review",
+            recommendation_under_review.recommendation_draft["cited_summary"]["text"],
+        )
+        self.assertIn(
+            "remains under review",
+            ai_trace_under_review.recommendation_draft["cited_summary"]["text"],
+        )
+
+        accepted_recommendation = service.persist_record(
+            replace(recommendation, lifecycle_state="accepted")
+        )
+        rejected_ai_trace = service.persist_record(
+            replace(ai_trace, lifecycle_state="rejected_for_reference")
+        )
+
+        accepted_recommendation_draft = service.render_recommendation_draft(
+            "recommendation",
+            accepted_recommendation.recommendation_id,
+        )
+        rejected_ai_trace_draft = service.render_recommendation_draft(
+            "ai_trace",
+            rejected_ai_trace.ai_trace_id,
+        )
+
+        self.assertIn(
+            "has been accepted for reference",
+            accepted_recommendation_draft.recommendation_draft["cited_summary"]["text"],
+        )
+        self.assertEqual(
+            accepted_recommendation_draft.recommendation_draft["review_lifecycle_state"],
+            "accepted",
+        )
+        self.assertNotIn(
+            "remains under review",
+            accepted_recommendation_draft.recommendation_draft["cited_summary"]["text"],
+        )
+        self.assertIn(
+            "has been rejected for reference",
+            rejected_ai_trace_draft.recommendation_draft["cited_summary"]["text"],
+        )
+        self.assertEqual(
+            rejected_ai_trace_draft.recommendation_draft["review_lifecycle_state"],
+            "rejected_for_reference",
+        )
+        self.assertNotIn(
+            "remains under review",
+            rejected_ai_trace_draft.recommendation_draft["cited_summary"]["text"],
+        )
+
     def test_service_includes_evidence_derived_recommendations_in_ai_trace_context(
         self,
     ) -> None:
