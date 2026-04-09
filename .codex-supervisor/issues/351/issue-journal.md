@@ -21,7 +21,7 @@ Focused verification passed across the touched surfaces, including the entrypoin
 Summary: Pushed commit `a98f39c` to `codex/issue-351` with the two PR `#356` review fixes and focused validation coverage
 State hint: addressing_review
 Blocked reason: none
-Tests: `gh auth status`; `python3 /Users/jp.infra/.codex/plugins/cache/openai-curated/github/b4940fd0a222022ecd7852e20a4c89ed36b9e9de/skills/gh-address-comments/scripts/fetch_comments.py --repo TommyKammy/AegisOps --pr 356`; `python3 -m unittest control-plane/tests/test_phase16_bootstrap_contract_docs.py`; `python3 -m unittest control-plane/tests/test_runtime_skeleton.py`; `bash scripts/verify-phase-16-release-state-and-first-boot-scope.sh`; `bash scripts/test-verify-phase-16-release-state-and-first-boot-scope.sh`; `bash scripts/verify-control-plane-runtime-skeleton.sh`
+Tests: `gh auth status`; `python3 <redacted-local-path> --repo TommyKammy/AegisOps --pr 356`; `python3 -m unittest control-plane/tests/test_phase16_bootstrap_contract_docs.py`; `python3 -m unittest control-plane/tests/test_runtime_skeleton.py`; `bash scripts/verify-phase-16-release-state-and-first-boot-scope.sh`; `bash scripts/test-verify-phase-16-release-state-and-first-boot-scope.sh`; `bash scripts/verify-control-plane-runtime-skeleton.sh`
 Next action: Re-check PR `#356` after review automation refreshes and address any remaining actionable feedback without widening Phase 16 scope
 Failure signature: none
 
