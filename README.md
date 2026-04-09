@@ -117,6 +117,7 @@ Key documents that serve as the source of truth for implementation decisions:
 - `docs/response-action-safety-model.md`
 - `docs/control-plane-state-model.md`
 - `docs/control-plane-runtime-service-boundary.md`
+- `docs/phase-15-identity-grounded-analyst-assistant-operating-guidance.md`
 - `docs/retention-evidence-and-replay-readiness-baseline.md`
 - `docs/runbook.md`
 - `docs/source-families/`

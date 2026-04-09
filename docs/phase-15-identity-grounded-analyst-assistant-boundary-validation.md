@@ -1,14 +1,15 @@
 # Phase 15 Identity-Grounded Analyst-Assistant Boundary Validation
 
 - Validation date: 2026-04-09
-- Validation scope: Phase 15 review of the approved analyst-assistant boundary, safe-query policy, citation completeness, prompt-injection resistance, identity ambiguity handling, optional OpenSearch extension boundaries, advisory-only ceiling, and CI wiring for the reviewed assistant boundary
-- Baseline references: `docs/phase-15-identity-grounded-analyst-assistant-boundary.md`, `docs/safe-query-gateway-and-tool-policy.md`, `docs/phase-7-ai-hunt-design-validation.md`, `docs/control-plane-state-model.md`, `docs/control-plane-runtime-service-boundary.md`, `docs/asset-identity-privilege-context-baseline.md`, `docs/phase-14-identity-rich-source-family-design.md`, `docs/phase-13-guarded-automation-ci-validation.md`, `docs/response-action-safety-model.md`, `docs/adr/0002-wazuh-shuffle-control-plane-thesis.md`, `control-plane/tests/test_phase15_identity_grounded_analyst_assistant_boundary_docs.py`, `.github/workflows/ci.yml`
+- Validation scope: Phase 15 review of the approved analyst-assistant boundary, operator-facing operating guidance, safe-query policy, citation completeness, prompt-injection resistance, identity ambiguity handling, optional OpenSearch extension boundaries, advisory-only ceiling, and CI wiring for the reviewed assistant boundary
+- Baseline references: `docs/phase-15-identity-grounded-analyst-assistant-boundary.md`, `docs/phase-15-identity-grounded-analyst-assistant-operating-guidance.md`, `docs/safe-query-gateway-and-tool-policy.md`, `docs/phase-7-ai-hunt-design-validation.md`, `docs/control-plane-state-model.md`, `docs/control-plane-runtime-service-boundary.md`, `docs/asset-identity-privilege-context-baseline.md`, `docs/phase-14-identity-rich-source-family-design.md`, `docs/phase-13-guarded-automation-ci-validation.md`, `docs/response-action-safety-model.md`, `docs/adr/0002-wazuh-shuffle-control-plane-thesis.md`, `control-plane/tests/test_phase15_identity_grounded_analyst_assistant_boundary_docs.py`, `.github/workflows/ci.yml`
 - Verification commands: `bash scripts/verify-safe-query-gateway-doc.sh`, `bash scripts/verify-phase-7-ai-hunt-design-validation.sh`, `bash scripts/verify-phase-15-identity-grounded-analyst-assistant-boundary.sh`, `python3 -m unittest control-plane.tests.test_phase15_identity_grounded_analyst_assistant_boundary_docs`, `bash scripts/test-verify-phase-15-identity-grounded-analyst-assistant-boundary.sh`, `bash scripts/test-verify-ci-phase-15-workflow-coverage.sh`
 - Validation status: PASS
 
 ## Required Boundary Artifacts
 
 - `docs/phase-15-identity-grounded-analyst-assistant-boundary.md`
+- `docs/phase-15-identity-grounded-analyst-assistant-operating-guidance.md`
 - `docs/phase-15-identity-grounded-analyst-assistant-boundary-validation.md`
 - `docs/safe-query-gateway-and-tool-policy.md`
 - `docs/phase-7-ai-hunt-design-validation.md`
@@ -29,6 +30,8 @@
 
 Confirmed the assistant grounds first on reviewed control-plane records and linked evidence rather than substrate-local summaries or analytics caches.
 
+Confirmed the operator-facing operating guidance keeps the assistant grounded on reviewed control-plane records, preserves uncertainty when identity evidence is ambiguous, and directs analysts back to reviewed evidence rather than to substrate-local summaries.
+
 Confirmed the Safe Query Gateway remains the reviewed path for prompt-shaped internal reads and that free-form prompt pressure cannot widen scope, bypass citations, or grant tool authority.
 
 Confirmed OpenSearch is only a secondary analyst-assistant extension for optional enrichment and falls back to control-plane-only grounding when absent, stale, incomplete, or conflicting.
@@ -46,6 +49,8 @@ Confirmed CI now has a dedicated Phase 15 validation step and workflow coverage 
 ## Cross-Link Review
 
 `docs/phase-15-identity-grounded-analyst-assistant-boundary.md` must continue to define the first-class grounding inputs, the optional OpenSearch analytics extension boundary, identity-ambiguity rules, and advisory-only ceiling.
+
+`docs/phase-15-identity-grounded-analyst-assistant-operating-guidance.md` must continue to keep the operator-facing usage guidance aligned with the reviewed grounding inputs, uncertainty handling, advisory-only ceiling, and secondary OpenSearch enrichment boundary.
 
 `docs/control-plane-state-model.md` must continue to keep alerts, cases, evidence, recommendations, reconciliations, and execution records authoritative inside the control plane.
 

@@ -15,6 +15,7 @@ fail_stderr="${workdir}/fail.err"
 
 required_artifacts=(
   "docs/phase-15-identity-grounded-analyst-assistant-boundary.md"
+  "docs/phase-15-identity-grounded-analyst-assistant-operating-guidance.md"
   "docs/phase-15-identity-grounded-analyst-assistant-boundary-validation.md"
   "docs/safe-query-gateway-and-tool-policy.md"
   "docs/phase-7-ai-hunt-design-validation.md"
@@ -120,6 +121,24 @@ write_required_artifacts "${missing_design_repo}"
 remove_text_from_file "${missing_design_repo}" "docs/phase-15-identity-grounded-analyst-assistant-boundary.md" "This document defines the approved advisory-only analyst-assistant boundary for Phase 15."
 commit_fixture "${missing_design_repo}"
 assert_fails_with "${missing_design_repo}" "Missing required line in ${missing_design_repo}/docs/phase-15-identity-grounded-analyst-assistant-boundary.md: This document defines the approved advisory-only analyst-assistant boundary for Phase 15."
+
+missing_guidance_repo="${workdir}/missing-guidance"
+create_repo "${missing_guidance_repo}"
+write_required_artifacts "${missing_guidance_repo}"
+rm "${missing_guidance_repo}/docs/phase-15-identity-grounded-analyst-assistant-operating-guidance.md"
+git -C "${missing_guidance_repo}" add -u docs/phase-15-identity-grounded-analyst-assistant-operating-guidance.md
+commit_fixture "${missing_guidance_repo}"
+assert_fails_with "${missing_guidance_repo}" "Missing Phase 15 analyst-assistant operating guidance document:"
+
+missing_guidance_statement_repo="${workdir}/missing-guidance-statement"
+create_repo "${missing_guidance_statement_repo}"
+write_required_artifacts "${missing_guidance_statement_repo}"
+remove_text_from_file \
+  "${missing_guidance_statement_repo}" \
+  "docs/phase-15-identity-grounded-analyst-assistant-operating-guidance.md" \
+  "Operators must preserve uncertainty whenever the assistant only has alias-style metadata, heuristic name matches, or other non-stable source labels."
+commit_fixture "${missing_guidance_statement_repo}"
+assert_fails_with "${missing_guidance_statement_repo}" "Missing required line in ${missing_guidance_statement_repo}/docs/phase-15-identity-grounded-analyst-assistant-operating-guidance.md: Operators must preserve uncertainty whenever the assistant only has alias-style metadata, heuristic name matches, or other non-stable source labels."
 
 missing_safe_query_repo="${workdir}/missing-safe-query"
 create_repo "${missing_safe_query_repo}"
