@@ -77,6 +77,28 @@ class Phase15IdentityGroundedAnalystAssistantBoundaryDocsTests(unittest.TestCase
         ):
             self.assertIn(term, text)
 
+    def test_phase15_boundary_design_doc_defines_safe_query_citation_and_prompt_injection_guardrails(
+        self,
+    ) -> None:
+        text = (
+            REPO_ROOT
+            / "docs"
+            / "phase-15-identity-grounded-analyst-assistant-boundary.md"
+        ).read_text(encoding="utf-8")
+
+        for term in (
+            "Safe Query Gateway policy",
+            "free-form search",
+            "query expansion",
+            "Prompt content, analyst notes, and optional-extension instructions are untrusted input.",
+            "acquire approval or execution authority",
+            "citation completeness",
+            "stay advisory-only and unresolved",
+            "stable identifiers",
+            "Optional extension inputs, including OpenSearch analytics",
+        ):
+            self.assertIn(term, text)
+
     def test_phase15_validation_doc_cross_links_the_boundary_set(self) -> None:
         text = (
             REPO_ROOT
@@ -92,7 +114,12 @@ class Phase15IdentityGroundedAnalystAssistantBoundaryDocsTests(unittest.TestCase
             "docs/asset-identity-privilege-context-baseline.md",
             "docs/phase-14-identity-rich-source-family-design.md",
             "docs/phase-13-guarded-automation-ci-validation.md",
+            "docs/safe-query-gateway-and-tool-policy.md",
+            "docs/phase-7-ai-hunt-design-validation.md",
             "advisory-only",
+            "prompt-injection resistance",
+            "citation completeness",
+            "identity ambiguity handling",
         ):
             self.assertIn(term, text)
 

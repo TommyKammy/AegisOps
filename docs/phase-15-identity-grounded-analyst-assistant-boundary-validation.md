@@ -1,15 +1,17 @@
 # Phase 15 Identity-Grounded Analyst-Assistant Boundary Validation
 
 - Validation date: 2026-04-09
-- Validation scope: Phase 15 review of the approved analyst-assistant boundary, first-class grounding inputs, the optional OpenSearch analytics extension boundary, identity ambiguity handling, advisory-only ceiling, and CI wiring for the reviewed assistant boundary
-- Baseline references: `docs/phase-15-identity-grounded-analyst-assistant-boundary.md`, `docs/control-plane-state-model.md`, `docs/control-plane-runtime-service-boundary.md`, `docs/asset-identity-privilege-context-baseline.md`, `docs/phase-14-identity-rich-source-family-design.md`, `docs/phase-13-guarded-automation-ci-validation.md`, `docs/response-action-safety-model.md`, `docs/adr/0002-wazuh-shuffle-control-plane-thesis.md`, `control-plane/tests/test_phase15_identity_grounded_analyst_assistant_boundary_docs.py`, `.github/workflows/ci.yml`
-- Verification commands: `bash scripts/verify-phase-15-identity-grounded-analyst-assistant-boundary.sh`, `python3 -m unittest control-plane.tests.test_phase15_identity_grounded_analyst_assistant_boundary_docs`, `bash scripts/test-verify-phase-15-identity-grounded-analyst-assistant-boundary.sh`, `bash scripts/test-verify-ci-phase-15-workflow-coverage.sh`
+- Validation scope: Phase 15 review of the approved analyst-assistant boundary, safe-query policy, citation completeness, prompt-injection resistance, identity ambiguity handling, optional OpenSearch extension boundaries, advisory-only ceiling, and CI wiring for the reviewed assistant boundary
+- Baseline references: `docs/phase-15-identity-grounded-analyst-assistant-boundary.md`, `docs/safe-query-gateway-and-tool-policy.md`, `docs/phase-7-ai-hunt-design-validation.md`, `docs/control-plane-state-model.md`, `docs/control-plane-runtime-service-boundary.md`, `docs/asset-identity-privilege-context-baseline.md`, `docs/phase-14-identity-rich-source-family-design.md`, `docs/phase-13-guarded-automation-ci-validation.md`, `docs/response-action-safety-model.md`, `docs/adr/0002-wazuh-shuffle-control-plane-thesis.md`, `control-plane/tests/test_phase15_identity_grounded_analyst_assistant_boundary_docs.py`, `.github/workflows/ci.yml`
+- Verification commands: `bash scripts/verify-safe-query-gateway-doc.sh`, `bash scripts/verify-phase-7-ai-hunt-design-validation.sh`, `bash scripts/verify-phase-15-identity-grounded-analyst-assistant-boundary.sh`, `python3 -m unittest control-plane.tests.test_phase15_identity_grounded_analyst_assistant_boundary_docs`, `bash scripts/test-verify-phase-15-identity-grounded-analyst-assistant-boundary.sh`, `bash scripts/test-verify-ci-phase-15-workflow-coverage.sh`
 - Validation status: PASS
 
 ## Required Boundary Artifacts
 
 - `docs/phase-15-identity-grounded-analyst-assistant-boundary.md`
 - `docs/phase-15-identity-grounded-analyst-assistant-boundary-validation.md`
+- `docs/safe-query-gateway-and-tool-policy.md`
+- `docs/phase-7-ai-hunt-design-validation.md`
 - `docs/control-plane-state-model.md`
 - `docs/control-plane-runtime-service-boundary.md`
 - `docs/asset-identity-privilege-context-baseline.md`
@@ -27,13 +29,17 @@
 
 Confirmed the assistant grounds first on reviewed control-plane records and linked evidence rather than substrate-local summaries or analytics caches.
 
+Confirmed the Safe Query Gateway remains the reviewed path for prompt-shaped internal reads and that free-form prompt pressure cannot widen scope, bypass citations, or grant tool authority.
+
 Confirmed OpenSearch is only a secondary analyst-assistant extension for optional enrichment and falls back to control-plane-only grounding when absent, stale, incomplete, or conflicting.
 
-Confirmed identity ambiguity fails closed when only alias-style or otherwise non-stable metadata is available.
+Confirmed prompt-injection text remains untrusted data, not authority, and citation completeness remains required for every assistant claim.
 
-Confirmed the assistant remains advisory-only and does not become authority for approval, execution, or reconciliation truth.
+Confirmed identity ambiguity fails closed when only alias-style or otherwise non-stable metadata is available and stable identifiers differ.
 
-Confirmed the reviewed boundary stays aligned with the Phase 13 approval and execution ceiling and the Phase 14 reviewed-context expansion boundary.
+Confirmed the assistant remains advisory-only and does not become authority for approval, execution, or reconciliation truth even when optional extension inputs exist.
+
+Confirmed the reviewed boundary stays aligned with the Phase 13 approval and execution ceiling, the Phase 14 reviewed-context expansion boundary, and the Phase 7 safe-query and prompt-injection guardrails.
 
 Confirmed CI now has a dedicated Phase 15 validation step and workflow coverage guard so boundary drift fails repository-local review.
 
