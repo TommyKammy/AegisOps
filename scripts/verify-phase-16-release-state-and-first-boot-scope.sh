@@ -99,7 +99,7 @@ validation_required_lines=(
   'Confirmed the full interactive analyst-assistant surface, the high-risk executor path, and broad source coverage remain outside the first-boot definition.'
   'Confirmed the Phase 16 definition of done gives Phase 17 a clear bootability target without approving concrete containerization or live substrate wiring in this phase.'
   "The issue requested review against \`Phase 16-21 Epic Roadmap.md\`, but that roadmap file was not present in the local worktree and could not be located via repository search during this turn."
-  'No deviations found.'
+  "- Requested comparison target \`Phase 16-21 Epic Roadmap.md\` was unavailable in the local worktree during this validation snapshot."
 )
 
 for line in "${validation_required_lines[@]}"; do

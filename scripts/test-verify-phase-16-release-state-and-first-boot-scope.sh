@@ -120,4 +120,11 @@ remove_text_from_doc "${missing_validation_note_repo}" "${missing_validation_not
 commit_fixture "${missing_validation_note_repo}"
 assert_fails_with "${missing_validation_note_repo}" "Confirmed the Phase 16 definition of done gives Phase 17 a clear bootability target without approving concrete containerization or live substrate wiring in this phase."
 
+missing_deviation_repo="${workdir}/missing-deviation"
+create_repo "${missing_deviation_repo}"
+write_canonical_artifacts "${missing_deviation_repo}"
+remove_text_from_doc "${missing_deviation_repo}" "${missing_deviation_repo}/docs/phase-16-release-state-and-first-boot-validation.md" "- Requested comparison target \`Phase 16-21 Epic Roadmap.md\` was unavailable in the local worktree during this validation snapshot."
+commit_fixture "${missing_deviation_repo}"
+assert_fails_with "${missing_deviation_repo}" "- Requested comparison target \`Phase 16-21 Epic Roadmap.md\` was unavailable in the local worktree during this validation snapshot."
+
 echo "Phase 16 release-state verifier enforces required first-boot scope and validation statements."

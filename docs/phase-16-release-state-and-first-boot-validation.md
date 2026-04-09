@@ -52,4 +52,4 @@ The issue requested review against `Phase 16-21 Epic Roadmap.md`, but that roadm
 
 ## Deviations
 
-No deviations found.
+- Requested comparison target `Phase 16-21 Epic Roadmap.md` was unavailable in the local worktree during this validation snapshot.
