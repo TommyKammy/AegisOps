@@ -59,7 +59,68 @@ Phase 16 is done when the repository baseline unambiguously states that:
 
 Phase 16 therefore ends with an approved bootability target, not with a claim that the full platform is feature-complete.
 
-## 6. Boundary and Alignment Notes
+## 6. Bootstrap Environment Contract
+
+The first-boot bootstrap environment contract exists to keep Phase 17 runtime bring-up narrow, reviewable, and fail-closed.
+
+The required first-boot environment variables are:
+
+- `AEGISOPS_CONTROL_PLANE_HOST` for the control-plane bind host;
+- `AEGISOPS_CONTROL_PLANE_PORT` for the control-plane listen port;
+- `AEGISOPS_CONTROL_PLANE_POSTGRES_DSN` for the authoritative PostgreSQL connection string used by the control-plane runtime; and
+- repository-local runtime wiring needed to keep the reverse proxy on the approved ingress path instead of exposing backend services directly.
+
+`AEGISOPS_CONTROL_PLANE_POSTGRES_DSN` is required bootstrap state for first boot.
+
+`AEGISOPS_CONTROL_PLANE_HOST` and `AEGISOPS_CONTROL_PLANE_PORT` may use reviewed local defaults only when those defaults preserve the approved reverse-proxy-first access model.
+
+Optional environment variables such as `AEGISOPS_CONTROL_PLANE_OPENSEARCH_URL`, `AEGISOPS_CONTROL_PLANE_N8N_BASE_URL`, `AEGISOPS_CONTROL_PLANE_SHUFFLE_BASE_URL`, and `AEGISOPS_CONTROL_PLANE_ISOLATED_EXECUTOR_BASE_URL` must not become first-boot prerequisites.
+
+If required bootstrap state is absent, malformed, contradictory, or would bypass the approved reverse proxy boundary, the runtime must fail closed and refuse first-boot startup rather than inferring a broader or less safe environment.
+
+## 7. Migration Bootstrap Contract
+
+Migration bootstrap is part of the first-boot contract because the control-plane runtime is not allowed to treat an unverified PostgreSQL schema as implicitly ready.
+
+The reviewed migration asset home remains `postgres/control-plane/migrations/`.
+
+First boot must run the reviewed forward migration set needed for the approved control-plane schema before the runtime is treated as ready to serve authoritative control-plane state.
+
+Migration bootstrap success means the required reviewed migration set completes without error and leaves the control-plane schema at the expected first-boot revision.
+
+Migration bootstrap failure includes missing migration assets, a PostgreSQL connection failure, an unapplied required migration, a partially applied migration set, or any schema mismatch that would make authoritative control-plane writes ambiguous.
+
+If migration bootstrap cannot prove the expected reviewed schema state, the deployment entrypoint must fail closed and refuse normal runtime startup.
+
+Phase 16 does not approve automatic destructive repair, downgrade behavior, or ad hoc schema recreation as a first-boot fallback.
+
+## 8. Healthcheck and Readiness Contract
+
+The first-boot runtime contract requires a narrow distinction between process liveness and readiness for authoritative control-plane work.
+
+Healthcheck success means the control-plane process is running and can answer a minimal self-health probe without asserting that dependencies are ready.
+
+Readiness success means the control-plane runtime has loaded valid required bootstrap environment, can reach PostgreSQL through `AEGISOPS_CONTROL_PLANE_POSTGRES_DSN`, and has confirmed migration bootstrap success for the approved first-boot schema state.
+
+Readiness must not depend on optional OpenSearch, n8n, Shuffle, or isolated-executor connectivity during the first-boot scope.
+
+If the runtime cannot prove required bootstrap state, PostgreSQL reachability, or reviewed migration completion, readiness must fail closed.
+
+The reverse proxy and any repository-local deployment surface must treat readiness failure as a refusal to admit normal traffic to the control-plane runtime.
+
+## 9. Deployment-Entrypoint Contract
+
+Any repository-local deployment entrypoint for first boot, including future Compose-backed bring-up, must preserve the approved control-plane, PostgreSQL, and reverse-proxy boundary instead of introducing a broader runtime dependency set.
+
+The deployment entrypoint must supply the reviewed required bootstrap environment, execute migration bootstrap before declaring readiness, and stop startup if the migration contract or readiness contract is not satisfied.
+
+The deployment entrypoint must not treat direct backend port publication, optional substrate availability, or placeholder repository defaults as acceptable substitutes for the approved first-boot contract.
+
+Compose or other repository-local boot surfaces may orchestrate startup order, but they must not redefine first-boot success to require OpenSearch, n8n, the analyst-assistant surface, or executor availability.
+
+Phase 16 therefore approves deployment-entrypoint expectations, not concrete image build details, health endpoint implementation, or live deployment automation.
+
+## 10. Boundary and Alignment Notes
 
 `docs/control-plane-runtime-service-boundary.md` remains the normative source for the live control-plane ownership split and repository placement.
 
@@ -68,5 +129,7 @@ Phase 16 therefore ends with an approved bootability target, not with a claim th
 `docs/network-exposure-and-access-path-policy.md` remains the normative source for the reverse proxy and internal exposure rules that first boot must preserve.
 
 `docs/storage-layout-and-mount-policy.md` remains the normative source for persistent storage separation, including the distinction between PostgreSQL-owned state and optional substrate-local data.
+
+`docs/compose-skeleton-overview.md` remains the normative source for the placeholder-safe status of repository-tracked compose assets before runtime implementation details are approved.
 
 `README.md` remains aligned with this Phase 16 release-state by keeping OpenSearch and n8n optional and by keeping the control-plane runtime as the product authority boundary.
