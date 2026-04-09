@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass, fields
 from datetime import datetime, timezone
 import hashlib
 import json
+import re
 import uuid
 from typing import Mapping, Protocol, Type, TypeVar
 
@@ -380,6 +381,60 @@ def _assistant_advisory_output_kind(record_family: str) -> str:
     return "triage_summary"
 
 
+def _reviewed_identity_is_alias_only(reviewed_context: Mapping[str, object]) -> bool:
+    identity = reviewed_context.get("identity")
+    if not isinstance(identity, Mapping):
+        return False
+
+    stable_identifier_keys = ("identity_id", "principal_id", "subject_id")
+    if any(
+        isinstance(identity.get(key), str) and identity.get(key)
+        for key in stable_identifier_keys
+    ):
+        return False
+
+    alias_like_keys = ("alias", "aliases", "display_name", "name", "username")
+    return any(identity.get(key) for key in alias_like_keys)
+
+
+def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[str, ...]:
+    if not isinstance(text, str):
+        return ()
+
+    lowered = text.lower()
+    flags: list[str] = []
+
+    def contains_term(term: str) -> bool:
+        pattern = rf"(?<!\w){re.escape(term)}(?!\w)"
+        return re.search(pattern, lowered) is not None
+
+    authority_terms = (
+        "approval granted",
+        "approved",
+        "execute",
+        "execution",
+        "reconcile",
+        "reconciliation",
+        "resolved",
+        "closed",
+    )
+    if any(contains_term(term) for term in authority_terms):
+        flags.append("authority_overreach")
+
+    scope_terms = (
+        "all tenants",
+        "tenant-wide",
+        "organization-wide",
+        "entire organization",
+        "fleet-wide",
+        "global",
+    )
+    if any(contains_term(term) for term in scope_terms):
+        flags.append("scope_expansion_attempt")
+
+    return _dedupe_strings(tuple(flags))
+
+
 def _build_assistant_advisory_output(
     *,
     record_family: str,
@@ -433,6 +488,10 @@ def _build_assistant_advisory_output(
     uncertainty_flags = ["advisory_only"]
     unresolved_questions: list[dict[str, object]] = []
     fail_closed = False
+    intended_outcome = record.get("intended_outcome")
+    unsafe_intended_outcome_flags = _advisory_text_claims_authority_or_scope_expansion(
+        intended_outcome
+    )
 
     if not supporting_citations:
         fail_closed = True
@@ -461,6 +520,31 @@ def _build_assistant_advisory_output(
                     "Which reviewed-context values are authoritative for: "
                     + ", ".join(context_conflicts)
                     + "?"
+                ),
+                "citations": citations,
+            }
+        )
+    if _reviewed_identity_is_alias_only(reviewed_context):
+        fail_closed = True
+        uncertainty_flags.append("ambiguous_identity_alias_only")
+        unresolved_questions.append(
+            {
+                "text": (
+                    "Which stable identity identifier or reviewed linkage resolves the "
+                    "alias-style identity metadata for this advisory output?"
+                ),
+                "citations": citations,
+            }
+        )
+    if unsafe_intended_outcome_flags:
+        fail_closed = True
+        uncertainty_flags.extend(unsafe_intended_outcome_flags)
+        unresolved_questions.append(
+            {
+                "text": (
+                    "Which reviewed records constrain the recommendation scope and keep "
+                    "approval, execution, and reconciliation authority outside the "
+                    "assistant output?"
                 ),
                 "citations": citations,
             }
@@ -517,8 +601,11 @@ def _build_assistant_advisory_output(
         )
 
     candidate_recommendations: list[dict[str, object]] = []
-    intended_outcome = record.get("intended_outcome")
-    if isinstance(intended_outcome, str) and intended_outcome:
+    if (
+        isinstance(intended_outcome, str)
+        and intended_outcome
+        and not unsafe_intended_outcome_flags
+    ):
         candidate_recommendations.append(
             {
                 "text": f"Proposal only: {intended_outcome}.",

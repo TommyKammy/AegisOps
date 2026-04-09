@@ -121,7 +121,7 @@ jobs:
       - name: Run Phase 15 identity-grounded analyst-assistant boundary validation
         run: |
           bash scripts/verify-phase-15-identity-grounded-analyst-assistant-boundary.sh
-          python3 -m unittest control-plane.tests.test_phase15_identity_grounded_analyst_assistant_boundary_docs
+          python3 -m unittest control-plane.tests.test_phase15_identity_grounded_analyst_assistant_boundary_docs control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_fails_closed_when_identity_context_is_alias_only control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_fails_closed_when_recommendation_text_claims_authority_or_scope_expansion
 
       - name: Run Phase 15 workflow coverage guard
         run: bash scripts/test-verify-ci-phase-15-workflow-coverage.sh
