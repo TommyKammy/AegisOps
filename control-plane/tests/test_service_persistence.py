@@ -530,6 +530,112 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             recommendation_snapshot.advisory_output["uncertainty_flags"],
         )
 
+    def test_service_projects_assistant_context_into_advisory_and_draft_views(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        reviewed_context = {
+            "asset": {"asset_id": "asset-projection-001"},
+            "identity": {"identity_id": "principal-projection-001"},
+        }
+        admitted = service.ingest_finding_alert(
+            finding_id="finding-projection-001",
+            analytic_signal_id="signal-projection-001",
+            substrate_detection_record_id="substrate-detection-projection-001",
+            correlation_key="claim:asset-projection-001:assistant-projection",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            reviewed_context=reviewed_context,
+        )
+        evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-projection-001",
+                source_record_id="substrate-detection-projection-001",
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=first_seen_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-projection-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=admitted.alert.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id=None,
+                review_owner="reviewer-001",
+                intended_outcome="review the cited evidence before escalation",
+                lifecycle_state="under_review",
+                reviewed_context=reviewed_context,
+            )
+        )
+
+        advisory_snapshot = service.inspect_advisory_output("case", promoted_case.case_id)
+        recommendation_draft = service.render_recommendation_draft(
+            "case",
+            promoted_case.case_id,
+        )
+
+        self.assertTrue(advisory_snapshot.read_only)
+        self.assertEqual(advisory_snapshot.record_family, "case")
+        self.assertEqual(advisory_snapshot.record_id, promoted_case.case_id)
+        self.assertEqual(advisory_snapshot.output_kind, "case_summary")
+        self.assertEqual(advisory_snapshot.status, "ready")
+        self.assertEqual(advisory_snapshot.reviewed_context, reviewed_context)
+        self.assertIn(evidence.evidence_id, advisory_snapshot.citations)
+        self.assertIn("advisory_only", advisory_snapshot.uncertainty_flags)
+        self.assertIn(admitted.alert.alert_id, advisory_snapshot.linked_alert_ids)
+        self.assertEqual(advisory_snapshot.linked_evidence_ids, (evidence.evidence_id,))
+        self.assertIn(
+            recommendation.recommendation_id,
+            advisory_snapshot.linked_recommendation_ids,
+        )
+        self.assertIn(
+            admitted.reconciliation.reconciliation_id,
+            advisory_snapshot.linked_reconciliation_ids,
+        )
+
+        self.assertTrue(recommendation_draft.read_only)
+        self.assertEqual(
+            recommendation_draft.recommendation_draft["source_output_kind"],
+            "case_summary",
+        )
+        self.assertEqual(
+            recommendation_draft.recommendation_draft["status"],
+            "ready",
+        )
+        self.assertTrue(
+            recommendation_draft.recommendation_draft["candidate_recommendations"]
+        )
+        self.assertIn(
+            evidence.evidence_id,
+            recommendation_draft.recommendation_draft["citations"],
+        )
+        self.assertIn(
+            "advisory_only",
+            recommendation_draft.recommendation_draft["uncertainty_flags"],
+        )
+        self.assertEqual(recommendation_draft.reviewed_context, reviewed_context)
+        self.assertEqual(
+            recommendation_draft.linked_evidence_ids,
+            (evidence.evidence_id,),
+        )
+        self.assertIn(
+            recommendation.recommendation_id,
+            recommendation_draft.linked_recommendation_ids,
+        )
+
     def test_service_includes_evidence_derived_recommendations_in_ai_trace_context(
         self,
     ) -> None:

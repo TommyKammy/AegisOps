@@ -56,6 +56,34 @@ def _build_parser() -> argparse.ArgumentParser:
         required=True,
         help="Control-plane record identifier to inspect for assistant context.",
     )
+    inspect_advisory_output = subparsers.add_parser(
+        "inspect-advisory-output",
+        help="Render the cited advisory-output contract for one reviewed record.",
+    )
+    inspect_advisory_output.add_argument(
+        "--family",
+        required=True,
+        help="Control-plane record family to inspect for advisory output.",
+    )
+    inspect_advisory_output.add_argument(
+        "--record-id",
+        required=True,
+        help="Control-plane record identifier to inspect for advisory output.",
+    )
+    render_recommendation_draft = subparsers.add_parser(
+        "render-recommendation-draft",
+        help="Render cited recommendation-draft output for one reviewed record.",
+    )
+    render_recommendation_draft.add_argument(
+        "--family",
+        required=True,
+        help="Control-plane record family to render for recommendation drafting.",
+    )
+    render_recommendation_draft.add_argument(
+        "--record-id",
+        required=True,
+        help="Control-plane record identifier to render for recommendation drafting.",
+    )
     return parser
 
 
@@ -83,6 +111,22 @@ def main(
         elif command == "inspect-assistant-context":
             try:
                 payload = service.inspect_assistant_context(
+                    parsed.family,
+                    parsed.record_id,
+                ).to_dict()
+            except (LookupError, ValueError) as exc:
+                parser.error(str(exc))
+        elif command == "inspect-advisory-output":
+            try:
+                payload = service.inspect_advisory_output(
+                    parsed.family,
+                    parsed.record_id,
+                ).to_dict()
+            except (LookupError, ValueError) as exc:
+                parser.error(str(exc))
+        elif command == "render-recommendation-draft":
+            try:
+                payload = service.render_recommendation_draft(
                     parsed.family,
                     parsed.record_id,
                 ).to_dict()
