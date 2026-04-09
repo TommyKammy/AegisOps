@@ -784,6 +784,26 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 lifecycle_state="matched",
             )
         )
+        subject_finding_reconciliation = service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-assistant-subject-finding-001",
+                subject_linkage={
+                    "finding_ids": (admitted.alert.finding_id,),
+                },
+                alert_id=None,
+                finding_id=None,
+                analytic_signal_id=None,
+                execution_run_id="execution-run-subject-finding-001",
+                linked_execution_run_ids=(),
+                correlation_key="reconciliation:subject-finding",
+                first_seen_at=first_seen_at,
+                last_seen_at=delegated_at,
+                ingest_disposition="matched",
+                mismatch_summary="subject-linkage finding association",
+                compared_at=delegated_at,
+                lifecycle_state="matched",
+            )
+        )
 
         execution_snapshot = service.inspect_assistant_context(
             "action_execution",
@@ -840,6 +860,10 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(
             subject_alert_snapshot.linked_case_ids,
             (promoted_case.case_id,),
+        )
+        self.assertIn(
+            subject_finding_reconciliation.reconciliation_id,
+            subject_alert_snapshot.linked_reconciliation_ids,
         )
         self.assertEqual(subject_alert_snapshot.reviewed_context, reviewed_context)
 

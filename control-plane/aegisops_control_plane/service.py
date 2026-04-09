@@ -1331,6 +1331,13 @@ class AegisOpsControlPlaneService:
             ):
                 records.append(reconciliation)
                 continue
+            subject_finding_ids = self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "finding_ids",
+            )
+            if any(finding_id in subject_finding_ids for finding_id in linked_finding_ids):
+                records.append(reconciliation)
+                continue
             subject_case_ids = self._assistant_ids_from_mapping(
                 reconciliation.subject_linkage,
                 "case_ids",
