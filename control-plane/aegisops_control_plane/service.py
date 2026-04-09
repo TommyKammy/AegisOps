@@ -471,6 +471,24 @@ def _reviewed_identity_is_alias_only(reviewed_context: Mapping[str, object]) -> 
     return any(identity.get(key) for key in alias_like_keys)
 
 
+def _recommendation_draft_review_summary(record_id: str, lifecycle_state: object) -> str:
+    state = lifecycle_state if isinstance(lifecycle_state, str) else ""
+    if state in {"accepted", "accepted_for_reference"}:
+        return (
+            f"Recommendation draft {record_id} has been accepted for reference and is "
+            "anchored to cited evidence and reviewed lineage."
+        )
+    if state in {"rejected", "rejected_for_reference"}:
+        return (
+            f"Recommendation draft {record_id} has been rejected for reference and is "
+            "anchored to cited evidence and reviewed lineage."
+        )
+    return (
+        f"Recommendation draft {record_id} remains under review and is anchored "
+        "to cited evidence and reviewed lineage."
+    )
+
+
 def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[str, ...]:
     if not isinstance(text, str):
         return ()
@@ -654,9 +672,9 @@ def _build_assistant_advisory_output(
     status = "unresolved" if fail_closed else "ready"
     if status == "ready":
         if output_kind == "recommendation_draft":
-            summary_text = (
-                f"Recommendation draft {record_id} remains under review and is anchored "
-                f"to cited evidence and reviewed lineage."
+            summary_text = _recommendation_draft_review_summary(
+                record_id,
+                record.get("lifecycle_state"),
             )
         elif output_kind == "case_summary":
             summary_text = (
@@ -748,6 +766,7 @@ def _recommendation_draft_snapshot_from_context(
         recommendation_draft={
             "source_output_kind": advisory_output["output_kind"],
             "status": advisory_output["status"],
+            "review_lifecycle_state": snapshot.record.get("lifecycle_state"),
             "cited_summary": advisory_output["cited_summary"],
             "candidate_recommendations": advisory_output["candidate_recommendations"],
             "unresolved_questions": advisory_output["unresolved_questions"],

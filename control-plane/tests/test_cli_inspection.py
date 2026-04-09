@@ -491,6 +491,99 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             payload["linked_reconciliation_ids"],
         )
 
+    def test_cli_renders_recommendation_draft_with_source_review_outcome(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        compared_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        reviewed_context = {
+            "asset": {
+                "asset_id": "asset-repo-draft-cli-outcome-001",
+                "criticality": "high",
+            },
+            "identity": {
+                "identity_id": "principal-repo-draft-cli-outcome-001",
+                "criticality": "elevated",
+            },
+        }
+
+        admitted = service.ingest_finding_alert(
+            finding_id="finding-draft-cli-outcome-001",
+            analytic_signal_id="signal-draft-cli-outcome-001",
+            substrate_detection_record_id="substrate-detection-draft-cli-outcome-001",
+            correlation_key="claim:asset-repo-draft-cli-outcome-001:assistant-draft-cli",
+            first_seen_at=compared_at,
+            last_seen_at=compared_at,
+            reviewed_context=reviewed_context,
+        )
+        evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-draft-cli-outcome-001",
+                source_record_id="substrate-detection-draft-cli-outcome-001",
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=compared_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-draft-cli-outcome-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=admitted.alert.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id=None,
+                review_owner="reviewer-001",
+                intended_outcome="review the cited evidence before escalation",
+                lifecycle_state="accepted",
+                reviewed_context=reviewed_context,
+            )
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            [
+                "render-recommendation-draft",
+                "--family",
+                "recommendation",
+                "--record-id",
+                recommendation.recommendation_id,
+            ],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["record_family"], "recommendation")
+        self.assertEqual(payload["record_id"], recommendation.recommendation_id)
+        self.assertEqual(
+            payload["recommendation_draft"]["source_output_kind"],
+            "recommendation_draft",
+        )
+        self.assertEqual(
+            payload["recommendation_draft"]["review_lifecycle_state"],
+            "accepted",
+        )
+        self.assertIn(
+            "has been accepted for reference",
+            payload["recommendation_draft"]["cited_summary"]["text"],
+        )
+        self.assertNotIn(
+            "remains under review",
+            payload["recommendation_draft"]["cited_summary"]["text"],
+        )
+        self.assertIn(
+            evidence.evidence_id,
+            payload["recommendation_draft"]["citations"],
+        )
+
     def test_cli_renders_identity_rich_analyst_queue_view_with_reviewed_context(
         self,
     ) -> None:
