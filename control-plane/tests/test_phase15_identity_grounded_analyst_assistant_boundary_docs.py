@@ -133,6 +133,52 @@ class Phase15IdentityGroundedAnalystAssistantBoundaryDocsTests(unittest.TestCase
         ):
             self.assertIn(term, text)
 
+    def test_phase15_boundary_design_doc_defines_cited_advisory_output_contract(self) -> None:
+        text = (
+            REPO_ROOT
+            / "docs"
+            / "phase-15-identity-grounded-analyst-assistant-boundary.md"
+        ).read_text(encoding="utf-8")
+
+        for term in (
+            "assistant-context snapshots",
+            "structured advisory-output contract",
+            "cited triage summary",
+            "case summary",
+            "next-step recommendation draft",
+            "cited summary",
+            "key observations",
+            "unresolved questions",
+            "candidate recommendations",
+            "citations",
+            "uncertainty flags",
+            "every material claim",
+            "reviewed control-plane records",
+            "linked evidence",
+            "reviewed context identifiers",
+            "does not allow the output layer to imply approval, execution, or reconciliation authority",
+        ):
+            self.assertIn(term, text)
+
+    def test_phase15_boundary_design_doc_defines_fail_closed_contract_conditions(self) -> None:
+        text = (
+            REPO_ROOT
+            / "docs"
+            / "phase-15-identity-grounded-analyst-assistant-boundary.md"
+        ).read_text(encoding="utf-8")
+
+        for term in (
+            "fail-closed",
+            "citations are missing",
+            "reviewed context is conflicting",
+            "identity ambiguity cannot be resolved",
+            "stable identifiers",
+            "reviewed linkage",
+            "must not render",
+            "must remain unresolved",
+        ):
+            self.assertIn(term, text)
+
     def test_phase15_validation_doc_cross_links_the_boundary_set(self) -> None:
         text = (
             REPO_ROOT

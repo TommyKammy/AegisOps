@@ -65,7 +65,21 @@ Operators should expect citations to point back to the record family, stable ide
 
 If citations are missing, stale, or internally inconsistent, the assistant output should be reviewed as an unresolved draft rather than promoted to operational truth.
 
-## 6. Optional OpenSearch Enrichment
+## 6. Advisory Output Review Contract
+
+Operators should expect the reviewed output layer to render from assistant-context snapshots rather than from free-form assistant text.
+
+The reviewed advisory output should stay inside a narrow structured advisory-output contract for a cited triage summary, case summary, or next-step recommendation draft.
+
+Each rendered output should include a cited summary, key observations, unresolved questions, candidate recommendations, citations, and uncertainty flags.
+
+Every material claim should anchor to reviewed control-plane records, linked evidence, or reviewed context identifiers so the operator can trace it back to the reviewed snapshot.
+
+If citations are missing, reviewed context is conflicting, or identity ambiguity cannot be resolved from stable identifiers and reviewed linkage, the output should fail-closed and remain unresolved.
+
+This output contract must stay advisory-only and must not allow the output layer to imply approval, execution, or reconciliation authority.
+
+## 7. Optional OpenSearch Enrichment
 
 OpenSearch may be used as a secondary OpenSearch enrichment source after the reviewed control-plane path already exists.
 
@@ -77,7 +91,7 @@ If OpenSearch is absent, stale, incomplete, or conflicting, the assistant should
 
 Operators should treat any OpenSearch-derived result as secondary enrichment that needs reviewed confirmation before it is relied on.
 
-## 7. Advisory-Only Boundary
+## 8. Advisory-Only Boundary
 
 The assistant is advisory-only.
 
@@ -87,7 +101,7 @@ It must not approve actions, execute actions, mutate authoritative records, or p
 
 If an operator asks the assistant for a decision, the answer should point back to the reviewed control-plane records and their explicit review state instead of pretending to create new authority.
 
-## 8. Safe Lookup Practice
+## 9. Safe Lookup Practice
 
 When a read-oriented internal lookup is needed, operators should expect the assistant to use the Safe Query Gateway policy rather than free-form search or prompt-shaped ad hoc expansion.
 
@@ -95,7 +109,7 @@ Prompt text, analyst notes, and optional-extension hints are untrusted input. Th
 
 The operating rule is simple: query reviewed paths first, preserve citations, and do not let prompt pressure rewrite the trust boundary.
 
-## 9. Operator Checklist
+## 10. Operator Checklist
 
 Use this checklist when reviewing assistant output:
 
@@ -104,8 +118,9 @@ Use this checklist when reviewing assistant output:
 3. Confirm any OpenSearch enrichment is treated as corroboration only.
 4. Confirm the answer does not claim approval, execution, or reconciliation authority.
 5. Confirm missing evidence is called out as unresolved instead of being guessed.
+6. Confirm cited triage summaries, case summaries, and recommendation drafts render from assistant-context snapshots using the reviewed contract fields.
 
-## 10. Non-Goals
+## 11. Non-Goals
 
 This guidance does not define live rollout procedure, marketing language, or environment-specific commands.
 
@@ -113,7 +128,9 @@ It does not replace the Phase 15 boundary document, the Safe Query Gateway polic
 
 It does not authorize direct substrate changes or any bypass around reviewed control-plane records.
 
-## 11. Baseline Alignment
+It does not authorize live provider orchestration, free-form backend query expansion, or optional OpenSearch runtime enrichment as part of the output contract.
+
+## 12. Baseline Alignment
 
 This guidance remains aligned with `docs/phase-15-identity-grounded-analyst-assistant-boundary.md` by keeping the assistant advisory-only and grounded in reviewed control-plane records and linked evidence.
 
