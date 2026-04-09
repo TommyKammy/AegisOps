@@ -9,7 +9,7 @@
 - **Version**: 0.4.0
 - **Status**: Draft
 - **Owner**: IT Operations, Information Systems Department
-- **Last Updated**: 7 April 2026
+- **Last Updated**: 9 April 2026
 
 This document defines the **non-negotiable implementation baseline** for **AegisOps** as a **governed control plane above commodity detection and automation substrates**.
 
@@ -110,6 +110,10 @@ The following items are explicitly out of scope for the initial phases:
 Initial phases assume a **business-hours-oriented security operations model**, not a 24/7 fully staffed SOC.
 
 Escalation, notification, and approval design MUST reflect this assumption.
+
+The approved Phase 16 first-boot target is limited to the AegisOps control-plane service, PostgreSQL for AegisOps-owned state, the approved reverse proxy boundary, and reviewed Wazuh-facing analytic-signal intake expectations.
+
+OpenSearch, n8n, the full analyst-assistant surface, the high-risk executor path, and broad source expansion remain optional, deferred, or non-blocking for first boot unless a later ADR approves a broader runtime floor.
 
 ---
 

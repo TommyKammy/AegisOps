@@ -17,6 +17,12 @@ OpenSearch, Sigma, and n8n remain repository-tracked assets, but they are subord
 
 > The control-plane thesis is approved, but the AegisOps-owned control-plane runtime is **not yet live**.
 
+The repository is no longer design-only: Phase 16 defines the approved first-boot runtime target for Phase 17 bring-up.
+
+That first-boot target is limited to the AegisOps control-plane service, PostgreSQL for control-plane state, the approved reverse proxy boundary, and reviewed Wazuh-facing analytic-signal intake expectations.
+
+OpenSearch, n8n, the full analyst-assistant surface, and the high-risk executor path remain optional, deferred, or non-blocking for first boot.
+
 Current scope:
 
 - Platform baseline definition
@@ -25,7 +31,7 @@ Current scope:
 - Parameter catalog structure
 - Implementation guardrails for AI-assisted development
 
-Within that scope, Wazuh is the initial standard detection substrate, Shuffle is the initial standard routine automation substrate, and the AegisOps-owned control-plane runtime remains not yet live.
+Within that scope, Wazuh is the initial standard detection substrate, Shuffle is the initial standard routine automation substrate, and the repository baseline now prepares a real first-boot runtime path even though the AegisOps-owned control-plane runtime is not yet live.
 
 ---
 
