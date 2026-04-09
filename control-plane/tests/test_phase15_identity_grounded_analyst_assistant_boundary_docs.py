@@ -46,6 +46,21 @@ class Phase15IdentityGroundedAnalystAssistantBoundaryDocsTests(unittest.TestCase
         ):
             self.assertIn(term, text)
 
+    def test_phase15_boundary_design_doc_defines_the_optional_opensearch_extension_boundary(self) -> None:
+        text = (
+            REPO_ROOT
+            / "docs"
+            / "phase-15-identity-grounded-analyst-assistant-boundary.md"
+        ).read_text(encoding="utf-8")
+
+        for term in (
+            "OpenSearch may contribute optional analytics or evidence lookups",
+            "secondary analyst-assistant extension",
+            "safe fallback",
+            "does not own alert, case, recommendation, approval, action, or reconciliation truth",
+        ):
+            self.assertIn(term, text)
+
     def test_phase15_boundary_design_doc_fails_closed_on_ambiguous_identity_metadata(self) -> None:
         text = (
             REPO_ROOT

@@ -58,7 +58,23 @@ Substrate-local raw paths, cache keys, and non-reviewed summaries may be consult
 
 They are not authoritative grounding inputs on their own.
 
-## 4. Identity Ambiguity and Alias Handling
+## 4. Optional OpenSearch Analytics Extension
+
+OpenSearch may contribute optional analytics or evidence lookups to the assistant path after the reviewed control-plane grounding path exists.
+
+It is a secondary analyst-assistant extension only: it may enrich reviewed assistance with corroborating analytics, but it must not become a prerequisite for assistance or a replacement for reviewed control-plane grounding.
+
+OpenSearch does not own alert, case, recommendation, approval, action, or reconciliation truth.
+
+Any OpenSearch-derived enrichment must stay secondary to reviewed control-plane records and linked evidence, and it must not overwrite or outrank reviewed control-plane truth.
+
+If OpenSearch is absent, stale, incomplete, or conflicting, the assistant must fall back to control-plane-only grounding and preserve the discrepancy for review rather than treating the OpenSearch result as authoritative.
+
+This safe fallback preserves reviewed grounding instead of promoting OpenSearch-derived analytics into authority.
+
+This keeps the boundary narrow enough to support optional enrichment without reviving an analytics-first product thesis.
+
+## 5. Identity Ambiguity and Alias Handling
 
 The assistant must fail closed when only alias-style source metadata or otherwise non-stable metadata is available.
 
@@ -74,7 +90,7 @@ The assistant must not invent transitive identity stitching across systems, and 
 
 If identity ambiguity remains, the assistant must report that ambiguity directly instead of collapsing the records into a single entity.
 
-## 5. Advisory-Only Boundary
+## 6. Advisory-Only Boundary
 
 The assistant is advisory-only.
 
@@ -88,7 +104,7 @@ It must not become the authority for approval, execution, or reconciliation stat
 
 If the assistant is asked for a decision, the answer must point back to the reviewed control-plane records and their explicit review state rather than pretending to produce new authority.
 
-## 6. Explicit Non-Goals
+## 7. Explicit Non-Goals
 
 This document does not approve live assistant orchestration, prompt execution, or tool wiring.
 
@@ -98,12 +114,14 @@ This document does not redefine the Phase 13 approval and execution boundary or 
 
 This document does not authorize the assistant to synthesize new identity truth from source-local labels, cache rows, or summary artifacts.
 
-## 7. Baseline Alignment Notes
+## 8. Baseline Alignment Notes
 
 This boundary remains aligned with `docs/control-plane-state-model.md` by treating alerts, cases, evidence, recommendations, reconciliations, approval decisions, action requests, and action executions as authoritative control-plane records.
 
 It remains aligned with `docs/control-plane-runtime-service-boundary.md` by keeping the assistant downstream of the live control-plane boundary rather than turning it into the control plane itself.
 
 It remains aligned with `docs/asset-identity-privilege-context-baseline.md` and `docs/phase-14-identity-rich-source-family-design.md` by preserving reviewed identity and privilege context without collapsing identity ambiguity into guessed equality.
+
+It remains aligned with the Phase 10 and Phase 15 thesis pivots by keeping OpenSearch as an optional enrichment substrate rather than an authoritative truth boundary.
 
 It remains aligned with `docs/phase-13-guarded-automation-ci-validation.md`, `docs/response-action-safety-model.md`, and `docs/adr/0002-wazuh-shuffle-control-plane-thesis.md` by keeping AI advisory-only and separating reviewed decision support from approval and execution authority.

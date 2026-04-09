@@ -130,6 +130,13 @@ replace_text_in_file \
 commit_fixture "${missing_ambiguity_repo}"
 assert_fails_with "${missing_ambiguity_repo}" "Missing required line in ${missing_ambiguity_repo}/docs/phase-15-identity-grounded-analyst-assistant-boundary.md: The assistant must not assert equality when the only available evidence is alias-style metadata."
 
+missing_opensearch_boundary_repo="${workdir}/missing-opensearch-boundary"
+create_repo "${missing_opensearch_boundary_repo}"
+write_required_artifacts "${missing_opensearch_boundary_repo}"
+remove_text_from_file "${missing_opensearch_boundary_repo}" "docs/phase-15-identity-grounded-analyst-assistant-boundary.md" "OpenSearch may contribute optional analytics or evidence lookups to the assistant path after the reviewed control-plane grounding path exists."
+commit_fixture "${missing_opensearch_boundary_repo}"
+assert_fails_with "${missing_opensearch_boundary_repo}" "Missing required line in ${missing_opensearch_boundary_repo}/docs/phase-15-identity-grounded-analyst-assistant-boundary.md: OpenSearch may contribute optional analytics or evidence lookups to the assistant path after the reviewed control-plane grounding path exists."
+
 missing_test_repo="${workdir}/missing-test"
 create_repo "${missing_test_repo}"
 write_required_artifacts "${missing_test_repo}"
