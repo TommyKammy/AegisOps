@@ -6,6 +6,8 @@ This document defines the approved advisory-only analyst-assistant boundary for 
 
 It supplements `docs/control-plane-state-model.md`, `docs/control-plane-runtime-service-boundary.md`, `docs/asset-identity-privilege-context-baseline.md`, `docs/phase-14-identity-rich-source-family-design.md`, `docs/phase-13-guarded-automation-ci-validation.md`, `docs/response-action-safety-model.md`, and `docs/adr/0002-wazuh-shuffle-control-plane-thesis.md` by defining how the assistant may ground reasoning in reviewed control-plane records, reviewed context, and linked evidence.
 
+The operator-facing companion guidance lives in `docs/phase-15-identity-grounded-analyst-assistant-operating-guidance.md`.
+
 This document defines review scope only. It does not approve live assistant execution, approval automation, reconciliation authority, UI work, or substrate-side implementation.
 
 ## 2. First-Class Grounding Inputs

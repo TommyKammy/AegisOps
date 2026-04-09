@@ -13,6 +13,39 @@ class Phase15IdentityGroundedAnalystAssistantBoundaryDocsTests(unittest.TestCase
 
         self.assertTrue(design_doc.exists(), f"expected Phase 15 design doc at {design_doc}")
 
+    def test_phase15_operating_guidance_doc_exists(self) -> None:
+        guidance_doc = (
+            REPO_ROOT
+            / "docs"
+            / "phase-15-identity-grounded-analyst-assistant-operating-guidance.md"
+        )
+
+        self.assertTrue(
+            guidance_doc.exists(),
+            f"expected Phase 15 operating guidance doc at {guidance_doc}",
+        )
+
+    def test_phase15_operating_guidance_doc_defines_operator_grounding_and_uncertainty_rules(
+        self,
+    ) -> None:
+        text = (
+            REPO_ROOT
+            / "docs"
+            / "phase-15-identity-grounded-analyst-assistant-operating-guidance.md"
+        ).read_text(encoding="utf-8")
+
+        for term in (
+            "AegisOps Phase 15 Identity-Grounded Analyst-Assistant Operating Guidance",
+            "reviewed control-plane records",
+            "linked evidence",
+            "Safe Query Gateway policy",
+            "preserve uncertainty",
+            "alias-style",
+            "secondary OpenSearch enrichment",
+            "advisory-only",
+        ):
+            self.assertIn(term, text)
+
     def test_phase15_validation_doc_exists(self) -> None:
         validation_doc = (
             REPO_ROOT
@@ -43,6 +76,7 @@ class Phase15IdentityGroundedAnalystAssistantBoundaryDocsTests(unittest.TestCase
             "Reconciliation",
             "linked evidence",
             "reviewed context",
+            "operator-facing companion guidance",
         ):
             self.assertIn(term, text)
 
@@ -108,6 +142,7 @@ class Phase15IdentityGroundedAnalystAssistantBoundaryDocsTests(unittest.TestCase
 
         for term in (
             "Phase 15 Identity-Grounded Analyst-Assistant Boundary Validation",
+            "phase-15-identity-grounded-analyst-assistant-operating-guidance.md",
             "docs/phase-15-identity-grounded-analyst-assistant-boundary.md",
             "docs/control-plane-state-model.md",
             "docs/control-plane-runtime-service-boundary.md",
