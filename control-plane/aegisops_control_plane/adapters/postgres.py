@@ -220,7 +220,7 @@ _TABLES_BY_RECORD_TYPE: dict[Type[ControlPlaneRecord], TableConfig] = {
     RecommendationRecord: TableConfig(
         RecommendationRecord,
         "recommendation_records",
-        json_fields=frozenset({"reviewed_context"}),
+        json_fields=frozenset({"reviewed_context", "assistant_advisory_draft"}),
     ),
     ApprovalDecisionRecord: TableConfig(
         ApprovalDecisionRecord,
@@ -247,7 +247,7 @@ _TABLES_BY_RECORD_TYPE: dict[Type[ControlPlaneRecord], TableConfig] = {
     AITraceRecord: TableConfig(
         AITraceRecord,
         "ai_trace_records",
-        json_fields=frozenset({"subject_linkage"}),
+        json_fields=frozenset({"subject_linkage", "assistant_advisory_draft"}),
         array_fields=frozenset({"material_input_refs"}),
     ),
     ReconciliationRecord: TableConfig(

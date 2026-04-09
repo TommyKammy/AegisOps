@@ -177,9 +177,15 @@ class RecommendationRecord(ControlPlaneRecord):
     intended_outcome: str
     lifecycle_state: str
     reviewed_context: Mapping[str, object] = field(default_factory=dict)
+    assistant_advisory_draft: Mapping[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "reviewed_context", _freeze_mapping(self.reviewed_context))
+        object.__setattr__(
+            self,
+            "assistant_advisory_draft",
+            _freeze_mapping(self.assistant_advisory_draft),
+        )
 
 
 @dataclass(frozen=True)
@@ -308,9 +314,15 @@ class AITraceRecord(ControlPlaneRecord):
     material_input_refs: tuple[str, ...]
     reviewer_identity: str
     lifecycle_state: str
+    assistant_advisory_draft: Mapping[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "subject_linkage", _freeze_mapping(self.subject_linkage))
+        object.__setattr__(
+            self,
+            "assistant_advisory_draft",
+            _freeze_mapping(self.assistant_advisory_draft),
+        )
 
 
 @dataclass(frozen=True)

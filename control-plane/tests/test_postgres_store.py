@@ -85,6 +85,37 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
                 migration_sql.lower(),
             )
 
+    def test_phase15_assistant_advisory_draft_forward_migration_asset_exists(self) -> None:
+        migration_path = (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0003_phase_15_assistant_advisory_draft_columns.sql"
+        )
+
+        self.assertTrue(
+            migration_path.exists(),
+            f"Missing Phase 15 forward migration asset: {migration_path}",
+        )
+
+        migration_sql = migration_path.read_text(encoding="utf-8").lower()
+
+        self.assertIn("begin;", migration_sql)
+        self.assertIn("commit;", migration_sql)
+        self.assertIn(
+            "alter table if exists aegisops_control.recommendation_records",
+            migration_sql,
+        )
+        self.assertIn(
+            "alter table if exists aegisops_control.ai_trace_records",
+            migration_sql,
+        )
+        self.assertIn(
+            "add column if not exists assistant_advisory_draft jsonb not null default '{}'::jsonb;",
+            migration_sql,
+        )
+
     def test_store_round_trips_reviewed_record_families_by_aegisops_ids(self) -> None:
         store, _ = make_store()
         timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
@@ -175,6 +206,14 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
                     "review": {"status": "approved"},
                     "priority": "high",
                 },
+                assistant_advisory_draft={
+                    "draft_id": "assistant-advisory-draft:recommendation:recommendation-001",
+                    "source_record_family": "recommendation",
+                    "source_record_id": "recommendation-001",
+                    "review_lifecycle_state": "under_review",
+                    "status": "ready",
+                    "citations": ("recommendation-001", "evidence-001"),
+                },
             ),
             ApprovalDecisionRecord(
                 approval_decision_id="approval-001",
@@ -261,6 +300,14 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
                 material_input_refs=("evidence-001",),
                 reviewer_identity="reviewer-001",
                 lifecycle_state="accepted_for_reference",
+                assistant_advisory_draft={
+                    "draft_id": "assistant-advisory-draft:ai_trace:ai-trace-001",
+                    "source_record_family": "ai_trace",
+                    "source_record_id": "ai-trace-001",
+                    "review_lifecycle_state": "under_review",
+                    "status": "ready",
+                    "citations": ("ai-trace-001", "evidence-001", "recommendation-001"),
+                },
             ),
             ReconciliationRecord(
                 reconciliation_id="reconciliation-001",
@@ -319,6 +366,17 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         self.assertEqual(
             store.get(RecommendationRecord, "recommendation-001").reviewed_context,
             records[6].reviewed_context,
+        )
+        self.assertEqual(
+            store.get(
+                RecommendationRecord,
+                "recommendation-001",
+            ).assistant_advisory_draft,
+            records[6].assistant_advisory_draft,
+        )
+        self.assertEqual(
+            store.get(AITraceRecord, "ai-trace-001").assistant_advisory_draft,
+            records[12].assistant_advisory_draft,
         )
 
         self.assertIsNone(store.get(AlertRecord, "finding-001"))
