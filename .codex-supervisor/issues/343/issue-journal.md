@@ -5,36 +5,45 @@
 - Branch: codex/issue-343
 - Workspace: .
 - Journal: .codex-supervisor/issues/343/issue-journal.md
-- Current phase: draft_pr
-- Attempt count: 3 (implementation=3, repair=0)
-- Last head SHA: 20335eb81e78d38b13263604af6c343151eba43b
+- Current phase: repairing_ci
+- Attempt count: 4 (implementation=3, repair=1)
+- Last head SHA: ed1a739d865de72b13a9e71a4e07428cffe88151
 - Blocked reason: none
-- Last failure signature: none
-- Repeated failure signature count: 0
-- Updated at: 2026-04-09T12:10:00.000Z
+- Last failure signature: verify:fail
+- Repeated failure signature count: 3
+- Updated at: 2026-04-09T12:01:35.024Z
 
 ## Latest Codex Summary
-Pushed `codex/issue-343`, reran the requested persistence and CLI suites, and opened draft PR #345 for the existing fix commit `6ebf610` plus the prior handoff cleanup `20335eb`. The branch is now published for review at `https://github.com/TommyKammy/AegisOps/pull/345`.
+Draft PR is open at [#345](https://github.com/TommyKammy/AegisOps/pull/345) from `codex/issue-343` to `main`. I reran the requested verification suites, pushed the existing fix plus a final journal-only handoff commit (`ed1a739`), and updated the issue journal so the supervisor state now reflects the live PR instead of the prior no-PR stabilization loop.
+
+The worktree is clean aside from untracked supervisor scratch paths under `.codex-supervisor/`, which I left untouched.
 
 Summary: Verified the recommendation-draft review-outcome fix, pushed `codex/issue-343`, and opened draft PR #345.
 State hint: draft_pr
 Blocked reason: none
 Tests: `python3 -m unittest control-plane.tests.test_service_persistence`; `python3 -m unittest control-plane.tests.test_cli_inspection`
 Next action: Hand draft PR #345 to review, or address review feedback if comments arrive.
-Failure signature: none
+Failure signature: verify:fail
 
 ## Active Failure Context
-- None recorded.
+- Category: checks
+- Summary: PR #345 has failing checks.
+- Command or source: gh pr checks
+- Reference: https://github.com/TommyKammy/AegisOps/pull/345
+- Details:
+  - verify (fail/FAILURE) https://github.com/TommyKammy/AegisOps/actions/runs/24188911562/job/70600630808
 
 ## Codex Working Notes
 ### Current Handoff
-- Hypothesis: Recommendation-draft rendering was reading current linkage and citations but using a fixed under-review summary string, so accepted/rejected review records still rendered as pending review.
-- What changed: Added narrow regression tests for service and CLI rendering on recommendation/ai_trace families; introduced lifecycle-aware recommendation-draft summary text; added rendered `review_lifecycle_state` to the draft payload; committed the fix as `6ebf610`; pushed the branch and opened draft PR #345.
+- Hypothesis: The failing `verify` check is caused by repository-baseline drift, not the recommendation-draft rendering change: `scripts/verify-repository-skeleton.sh` and the related repository-structure docs omitted the tracked top-level `.gitignore` entry, so CI fails before it reaches the feature-specific validation path.
+- What changed: Added narrow regression tests for service and CLI rendering on recommendation/ai_trace families; introduced lifecycle-aware recommendation-draft summary text; added rendered `review_lifecycle_state` to the draft payload; committed the feature fix as `6ebf610`; then reproduced the failing CI command locally and patched the repository-skeleton verifier, repository-structure verifier input docs, and focused shell fixture so `.gitignore` is part of the approved tracked top-level baseline.
 - Current blocker: none
-- Next exact step: Monitor draft PR #345 for review or CI feedback and address any follow-up.
-- Verification gap: none for the requested persistence and CLI suites.
-- Files touched: control-plane/aegisops_control_plane/service.py; control-plane/tests/test_service_persistence.py; control-plane/tests/test_cli_inspection.py; .codex-supervisor/issues/343/issue-journal.md
-- Rollback concern: Low; change is limited to recommendation-draft rendering text/payload and focused test coverage.
-- Last focused command: gh pr create --draft --base main --head codex/issue-343 --title "[codex] Reflect current review outcome in recommendation drafts" --body ...
+- Next exact step: Commit the CI repair, push `codex/issue-343`, and confirm PR #345 reruns `verify` with the repository-baseline fix in place.
+- Verification gap: Need the remote PR to rerun GitHub Actions after the local verifier/doc fix is pushed; local focused verification for the failing path now passes.
+- Files touched: control-plane/aegisops_control_plane/service.py; control-plane/tests/test_service_persistence.py; control-plane/tests/test_cli_inspection.py; scripts/verify-repository-skeleton.sh; scripts/test-verify-repository-skeleton.sh; scripts/verify-repository-structure-doc.sh; docs/repository-structure-baseline.md; docs/repository-skeleton-validation.md; .codex-supervisor/issues/343/issue-journal.md
+- Rollback concern: Low; the new repair is limited to aligning repository-baseline verification and documentation with the already tracked top-level `.gitignore` file.
+- Last focused command: bash scripts/verify-repository-skeleton.sh
 ### Scratchpad
+- 2026-04-09: `python3 .../inspect_pr_checks.py --repo . --pr 345` identified the failing GitHub Actions job as `verify`, with the local reproduction `bash scripts/verify-repository-skeleton.sh` failing because `.gitignore` appeared in actual tracked entries but not in the approved baseline list.
+- 2026-04-09: Local repair verification passed with `bash scripts/verify-repository-skeleton.sh`, `bash scripts/verify-repository-structure-doc.sh`, `bash scripts/test-verify-repository-skeleton.sh`, and `bash scripts/verify-readme-and-repository-structure-control-plane-thesis.sh`.
 - Keep this section short. The supervisor may compact older notes automatically.
