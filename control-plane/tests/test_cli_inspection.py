@@ -77,6 +77,49 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(payload["postgres_dsn"], "postgresql://control-plane.local/aegisops")
         self.assertEqual(payload["persistence_mode"], "postgresql")
 
+    def test_serve_command_uses_long_running_runtime_surface(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+
+        with mock.patch.object(
+            main,
+            "build_runtime_service",
+            return_value=service,
+        ) as build_runtime_service, mock.patch.object(
+            main,
+            "run_control_plane_service",
+            return_value=0,
+        ) as run_control_plane_service:
+            exit_code = main.main(["serve"])
+
+        self.assertEqual(exit_code, 0)
+        build_runtime_service.assert_called_once_with()
+        run_control_plane_service.assert_called_once_with(service, stderr=mock.ANY)
+
+    def test_long_running_runtime_surface_starts_http_server(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=8089,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+            ),
+            store=store,
+        )
+
+        with mock.patch.object(main, "ThreadingHTTPServer") as server_cls:
+            server = server_cls.return_value
+
+            exit_code = main.run_control_plane_service(service)
+
+        self.assertEqual(exit_code, 0)
+        server_cls.assert_called_once_with(("127.0.0.1", 8089), mock.ANY)
+        server.serve_forever.assert_called_once_with()
+        server.server_close.assert_called_once_with()
+
     def test_cli_renders_read_only_record_and_reconciliation_views(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(

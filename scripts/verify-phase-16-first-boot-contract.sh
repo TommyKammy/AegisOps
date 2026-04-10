@@ -139,6 +139,7 @@ compose_lines=(
   '  control-plane:'
   '  postgres:'
   '  proxy:'
+  '      - serve'
   '      AEGISOPS_CONTROL_PLANE_POSTGRES_DSN: ${AEGISOPS_CONTROL_PLANE_POSTGRES_DSN:?set-in-untracked-runtime-env}'
   '      AEGISOPS_CONTROL_PLANE_OPENSEARCH_URL: ${AEGISOPS_CONTROL_PLANE_OPENSEARCH_URL:-}'
   '      AEGISOPS_CONTROL_PLANE_N8N_BASE_URL: ${AEGISOPS_CONTROL_PLANE_N8N_BASE_URL:-}'
@@ -160,6 +161,8 @@ require_absent_string "${compose_file}" '  analyst-assistant:' \
   'First-boot compose must not define first-boot service: analyst-assistant'
 require_absent_string "${compose_file}" '  executor:' \
   'First-boot compose must not define first-boot service: executor'
+require_absent_string "${compose_file}" '      - runtime' \
+  'First-boot compose must not launch the one-shot runtime snapshot renderer.'
 
 entrypoint_lines=(
   '# Phase 16 first-boot skeleton only.'
