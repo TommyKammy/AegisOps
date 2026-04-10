@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 from datetime import datetime, timezone
+import http.client
 import io
 import json
 import pathlib
@@ -596,23 +597,25 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                     thread.join(0.01)
                 self.assertTrue(servers, "expected test HTTP server to start")
 
-                oversized_payload = b"x" * (main.MAX_WAZUH_INGEST_BODY_BYTES + 1)
-                ingest_request = request.Request(
-                    f"http://127.0.0.1:{servers[0].server_port}/intake/wazuh",
-                    data=oversized_payload,
-                    method="POST",
-                    headers={
-                        "Authorization": "Bearer reviewed-shared-secret",
-                        "Content-Type": "application/json",
-                        "X-Forwarded-Proto": "https",
-                    },
+                connection = http.client.HTTPConnection(
+                    "127.0.0.1",
+                    servers[0].server_port,
+                    timeout=2,
                 )
+                connection.putrequest("POST", "/intake/wazuh")
+                connection.putheader("Authorization", "Bearer reviewed-shared-secret")
+                connection.putheader("Content-Type", "application/json")
+                connection.putheader("X-Forwarded-Proto", "https")
+                connection.putheader(
+                    "Content-Length",
+                    str(main.MAX_WAZUH_INGEST_BODY_BYTES + 1),
+                )
+                connection.endheaders()
 
-                with self.assertRaises(error.HTTPError) as exc_info:
-                    request.urlopen(ingest_request, timeout=2)
-
-                self.assertEqual(exc_info.exception.code, 413)
-                response_body = json.loads(exc_info.exception.read().decode("utf-8"))
+                response = connection.getresponse()
+                self.assertEqual(response.status, 413)
+                response_body = json.loads(response.read().decode("utf-8"))
+                connection.close()
                 self.assertEqual(response_body["error"], "request_too_large")
                 self.assertEqual(store.list(AlertRecord), ())
                 self.assertEqual(store.list(AnalyticSignalRecord), ())
