@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -47,44 +48,106 @@ class Phase17BootPathValidationTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            services_result = self._run_docker_compose(
+            self._validate_first_boot_compose_boot_path(
                 docker_bin,
                 compose_path,
                 env_path,
-                "config",
-                "--services",
-            )
-            self.assertEqual(
-                services_result.returncode,
-                0,
-                f"expected compose services render to pass\nstdout:\n{services_result.stdout}\nstderr:\n{services_result.stderr}",
-            )
-            self.assertCountEqual(
-                services_result.stdout.splitlines(),
-                ["control-plane", "postgres", "proxy"],
             )
 
-            dry_run_result = self._run_docker_compose(
-                docker_bin,
-                compose_path,
-                env_path,
-                "up",
-                "--dry-run",
-            )
-            self.assertEqual(
-                dry_run_result.returncode,
-                0,
-                f"expected compose dry-run bring-up to pass\nstdout:\n{dry_run_result.stdout}\nstderr:\n{dry_run_result.stderr}",
-            )
+    def test_first_boot_compose_uses_hermetic_contract_checks_when_daemon_is_unavailable(
+        self,
+    ) -> None:
+        compose_path = (
+            REPO_ROOT / "control-plane" / "deployment" / "first-boot" / "docker-compose.yml"
+        )
+        self.assertTrue(compose_path.exists(), f"expected first-boot compose at {compose_path}")
 
-            output = "\n".join((dry_run_result.stdout, dry_run_result.stderr))
-            for term in (
-                "Network aegisops-first-boot_default",
-                "Container aegisops-first-boot-postgres-1",
-                "Container aegisops-first-boot-control-plane-1",
-                "Container aegisops-first-boot-proxy-1",
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env_path = pathlib.Path(tmpdir) / ".env"
+            env_path.write_text(
+                "\n".join(
+                    (
+                        (
+                            "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN="
+                            "postgresql://aegisops_control_plane:secret@postgres:5432/"
+                            "aegisops_control_plane"
+                        ),
+                        "AEGISOPS_CONTROL_PLANE_POSTGRES_PASSWORD=secret",
+                        "",
+                    )
+                ),
+                encoding="utf-8",
+            )
+            with mock.patch.object(
+                self,
+                "_run_docker_compose",
+                side_effect=(
+                    self._completed_process(stdout="postgres\ncontrol-plane\nproxy\n"),
+                    self._completed_process(
+                        stdout="\n".join(
+                            (
+                                "name: aegisops-first-boot",
+                                "services:",
+                                "  control-plane:",
+                                "    image: aegisops-control-plane:first-boot",
+                                "    depends_on:",
+                                "      postgres:",
+                                "        condition: service_started",
+                                "    environment:",
+                                "      AEGISOPS_CONTROL_PLANE_BOOT_MODE: first-boot",
+                                "  postgres:",
+                                "    image: postgres:16.4",
+                                "  proxy:",
+                                '    image: nginx:1.27.0',
+                                "    ports:",
+                                '      - mode: ingress',
+                                '        published: "8080"',
+                                "networks:",
+                                "  default:",
+                                "    name: aegisops-first-boot_default",
+                                "",
+                            )
+                        )
+                    ),
+                ),
+            ) as run_compose, mock.patch.object(
+                self,
+                "_docker_daemon_is_available",
+                return_value=False,
             ):
-                self.assertIn(term, output)
+                self._validate_first_boot_compose_boot_path(
+                    "/usr/bin/docker",
+                    compose_path,
+                    env_path,
+                )
+
+        self.assertEqual(run_compose.call_count, 2)
+
+    def test_first_boot_compose_hermetic_contract_checks_fail_on_compose_drift(self) -> None:
+        with self.assertRaisesRegex(
+            AssertionError,
+            r"expected rendered compose contract to include '  proxy:'",
+        ):
+            self._assert_compose_render_contract(
+                "\n".join(
+                    (
+                        "name: aegisops-first-boot",
+                        "services:",
+                        "  control-plane:",
+                        "    image: aegisops-control-plane:first-boot",
+                        "    depends_on:",
+                        "      postgres:",
+                        "    environment:",
+                        "      AEGISOPS_CONTROL_PLANE_BOOT_MODE: first-boot",
+                        "  postgres:",
+                        "    image: postgres:16.4",
+                        "networks:",
+                        "  default:",
+                        "    name: aegisops-first-boot_default",
+                        "",
+                    )
+                )
+            )
 
     def test_postgresql_runtime_persists_records_across_service_restart(self) -> None:
         backend = FakePostgresBackend()
@@ -147,6 +210,132 @@ class Phase17BootPathValidationTests(unittest.TestCase):
         return AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
             store=store,
+        )
+
+    def _validate_first_boot_compose_boot_path(
+        self,
+        docker_bin: str,
+        compose_path: pathlib.Path,
+        env_path: pathlib.Path,
+    ) -> None:
+        services_result = self._run_docker_compose(
+            docker_bin,
+            compose_path,
+            env_path,
+            "config",
+            "--services",
+        )
+        self.assertEqual(
+            services_result.returncode,
+            0,
+            f"expected compose services render to pass\nstdout:\n{services_result.stdout}\nstderr:\n{services_result.stderr}",
+        )
+        self._assert_compose_services_contract(services_result.stdout)
+
+        rendered_config_result = self._run_docker_compose(
+            docker_bin,
+            compose_path,
+            env_path,
+            "config",
+        )
+        self.assertEqual(
+            rendered_config_result.returncode,
+            0,
+            f"expected compose config render to pass\nstdout:\n{rendered_config_result.stdout}\nstderr:\n{rendered_config_result.stderr}",
+        )
+        self._assert_compose_render_contract(rendered_config_result.stdout)
+
+        if not self._docker_daemon_is_available(docker_bin):
+            return
+
+        dry_run_result = self._run_docker_compose(
+            docker_bin,
+            compose_path,
+            env_path,
+            "up",
+            "--dry-run",
+        )
+        self.assertEqual(
+            dry_run_result.returncode,
+            0,
+            f"expected compose dry-run bring-up to pass\nstdout:\n{dry_run_result.stdout}\nstderr:\n{dry_run_result.stderr}",
+        )
+        self._assert_compose_dry_run_contract(
+            "\n".join((dry_run_result.stdout, dry_run_result.stderr))
+        )
+
+    def _assert_compose_services_contract(self, services_output: str) -> None:
+        self.assertCountEqual(
+            services_output.splitlines(),
+            ["control-plane", "postgres", "proxy"],
+        )
+
+    def _assert_compose_render_contract(self, rendered_config: str) -> None:
+        for term in (
+            "name: aegisops-first-boot",
+            "services:",
+            "  control-plane:",
+            "    image: aegisops-control-plane:first-boot",
+            "    depends_on:",
+            "      postgres:",
+            "      AEGISOPS_CONTROL_PLANE_BOOT_MODE: first-boot",
+            "  postgres:",
+            "    image: postgres:16.4",
+            "  proxy:",
+            "    image: nginx:1.27.0",
+            "    ports:",
+            '      - mode: ingress',
+            '        published: "8080"',
+            "networks:",
+            "  default:",
+            "    name: aegisops-first-boot_default",
+        ):
+            self.assertIn(
+                term,
+                rendered_config,
+                f"expected rendered compose contract to include {term!r}",
+            )
+
+    def _assert_compose_dry_run_contract(self, dry_run_output: str) -> None:
+        for term in (
+            "Network aegisops-first-boot_default",
+            "Container aegisops-first-boot-postgres-1",
+            "Container aegisops-first-boot-control-plane-1",
+            "Container aegisops-first-boot-proxy-1",
+        ):
+            self.assertIn(term, dry_run_output)
+
+    def _docker_daemon_is_available(self, docker_bin: str) -> bool:
+        try:
+            result = subprocess.run(
+                [
+                    docker_bin,
+                    "info",
+                    "--format",
+                    "{{.ServerVersion}}",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                cwd=REPO_ROOT,
+                timeout=10,
+            )
+        except subprocess.TimeoutExpired:
+            return False
+        return result.returncode == 0
+
+    @staticmethod
+    def _completed_process(
+        *,
+        stdout: str = "",
+        stderr: str = "",
+        returncode: int = 0,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            args=["docker", "compose"],
+            returncode=returncode,
+            stdout=stdout,
+            stderr=stderr,
         )
 
     def _run_docker_compose(
