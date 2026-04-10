@@ -8,6 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import sys
 from typing import Sequence, TextIO
+from urllib.parse import parse_qs, urlsplit
 
 from aegisops_control_plane.service import (
     AegisOpsControlPlaneService,
@@ -105,7 +106,10 @@ def run_control_plane_service(
         server_version = "AegisOpsControlPlane/1.0"
 
         def do_GET(self) -> None:  # noqa: N802
-            if self.path == "/healthz":
+            request_target = urlsplit(self.path)
+            request_path = request_target.path
+
+            if request_path == "/healthz":
                 self._write_json(
                     HTTPStatus.OK,
                     {
@@ -115,7 +119,7 @@ def run_control_plane_service(
                 )
                 return
 
-            if self.path == "/readyz":
+            if request_path == "/readyz":
                 self._write_json(
                     HTTPStatus.OK,
                     {
@@ -126,15 +130,48 @@ def run_control_plane_service(
                 )
                 return
 
-            if self.path == "/runtime":
-                self._write_json(HTTPStatus.OK, runtime_snapshot)
+            if request_path == "/runtime":
+                self._write_json(HTTPStatus.OK, service.describe_runtime().to_dict())
+                return
+
+            if request_path == "/inspect-records":
+                family = parse_qs(request_target.query).get("family", [""])[0]
+                if not family:
+                    self._write_json(
+                        HTTPStatus.BAD_REQUEST,
+                        {
+                            "error": "invalid_request",
+                            "message": "family query parameter is required",
+                        },
+                    )
+                    return
+
+                try:
+                    payload = service.inspect_records(family).to_dict()
+                except ValueError as exc:
+                    self._write_json(
+                        HTTPStatus.BAD_REQUEST,
+                        {
+                            "error": "invalid_request",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                self._write_json(HTTPStatus.OK, payload)
+                return
+
+            if request_path == "/inspect-reconciliation-status":
+                self._write_json(
+                    HTTPStatus.OK,
+                    service.inspect_reconciliation_status().to_dict(),
+                )
                 return
 
             self._write_json(
                 HTTPStatus.NOT_FOUND,
                 {
                     "error": "not_found",
-                    "path": self.path,
+                    "path": request_path,
                 },
             )
 

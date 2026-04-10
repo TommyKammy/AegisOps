@@ -59,6 +59,7 @@ class Phase16BootstrapContractDocsTests(unittest.TestCase):
             "AEGISOPS_CONTROL_PLANE_PORT=",
             "AEGISOPS_CONTROL_PLANE_BOOT_MODE=first-boot",
             "AEGISOPS_CONTROL_PLANE_LOG_LEVEL=INFO",
+            "AEGISOPS_FIRST_BOOT_PROXY_PORT=8080",
             "Optional and deferred components below must remain non-blocking for first boot.",
             "AEGISOPS_CONTROL_PLANE_OPENSEARCH_URL=",
             "AEGISOPS_CONTROL_PLANE_N8N_BASE_URL=",
@@ -118,8 +119,8 @@ class Phase16BootstrapContractDocsTests(unittest.TestCase):
             result.stderr,
         )
 
-    def test_first_boot_entrypoint_rejects_direct_backend_publication_host(self) -> None:
-        for host_value in ("0.0.0.0", "::", "*"):
+    def test_first_boot_entrypoint_rejects_unsupported_wildcard_host_values(self) -> None:
+        for host_value in ("::", "*"):
             with self.subTest(host_value=host_value):
                 result = self._run_entrypoint(
                     {
@@ -132,9 +133,38 @@ class Phase16BootstrapContractDocsTests(unittest.TestCase):
 
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(
-                    "AEGISOPS_CONTROL_PLANE_HOST must not publish the control-plane backend directly.",
+                    "AEGISOPS_CONTROL_PLANE_HOST must remain an explicit IPv4 or DNS bind target for the reviewed first-boot path.",
                     result.stderr,
                 )
+
+    def test_first_boot_entrypoint_rejects_malformed_host_values(self) -> None:
+        for host_value in ("999.0.0.1", "host name", "host..internal", "proxy:8080", "-edge"):
+            with self.subTest(host_value=host_value):
+                result = self._run_entrypoint(
+                    {
+                        "AEGISOPS_CONTROL_PLANE_HOST": host_value,
+                        "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN": (
+                            "postgresql://user:pass@postgres:5432/aegisops"
+                        ),
+                    }
+                )
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(
+                    "AEGISOPS_CONTROL_PLANE_HOST must remain an explicit IPv4 or DNS bind target for the reviewed first-boot path.",
+                    result.stderr,
+                )
+
+    def test_first_boot_entrypoint_allows_internal_compose_bind_host(self) -> None:
+        result = self._run_entrypoint(
+            {
+                "AEGISOPS_CONTROL_PLANE_HOST": "0.0.0.0",
+                "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN": "postgresql://user:pass@postgres:5432/aegisops",
+            }
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("migration bootstrap", result.stderr)
 
     def test_first_boot_entrypoint_rejects_invalid_boot_mode(self) -> None:
         result = self._run_entrypoint(

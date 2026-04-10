@@ -55,6 +55,7 @@ If any required key is absent, empty, malformed, contradictory, or would violate
 
 The following reviewed local defaults are allowed only where they preserve the approved first-boot boundary:
 
+- `AEGISOPS_CONTROL_PLANE_HOST=0.0.0.0` for Compose-backed first boot where the backend port remains unpublished and reachable only through the internal network path behind the approved reverse proxy
 - `AEGISOPS_CONTROL_PLANE_HOST=127.0.0.1`
 - `AEGISOPS_CONTROL_PLANE_PORT=8080`
 - `AEGISOPS_CONTROL_PLANE_BOOT_MODE=first-boot`
@@ -62,7 +63,9 @@ The following reviewed local defaults are allowed only where they preserve the a
 
 `AEGISOPS_CONTROL_PLANE_POSTGRES_DSN` has no approved repository default and must come from an untracked runtime secret source or operator-provided runtime env file.
 
-`AEGISOPS_CONTROL_PLANE_HOST` must fail closed if set to a wildcard or convenience value that would bypass the approved proxy boundary, including `0.0.0.0` for direct user-network publication in the first-boot path.
+`AEGISOPS_CONTROL_PLANE_HOST` must fail closed if set to an ambiguous or exposure-bypassing wildcard that cannot preserve the approved reverse-proxy-first boundary, including `::` or `*`.
+
+`AEGISOPS_CONTROL_PLANE_HOST=0.0.0.0` is approved only for internal repository-local boot surfaces where the control-plane backend port remains unpublished and the approved reverse proxy remains the sole user-facing ingress path.
 
 `AEGISOPS_CONTROL_PLANE_PORT` must fail closed if it is non-numeric, empty, or outside the reviewed application listen-port expectation.
 

@@ -62,14 +62,67 @@ class Phase17FirstBootRuntimeArtifactTests(unittest.TestCase):
         self.assertNotIn("volumes:", control_plane_block)
         self.assertNotIn("working_dir:", control_plane_block)
 
+    def test_first_boot_compose_keeps_proxy_as_only_published_ingress(self) -> None:
+        compose_path = (
+            REPO_ROOT / "control-plane" / "deployment" / "first-boot" / "docker-compose.yml"
+        )
+        self.assertTrue(compose_path.exists(), f"expected first-boot compose at {compose_path}")
+
+        text = compose_path.read_text(encoding="utf-8")
+        control_plane_block = self._control_plane_service_block(text)
+        proxy_block = self._service_block(text, "proxy")
+
+        self.assertIn(
+            "AEGISOPS_CONTROL_PLANE_HOST: ${AEGISOPS_CONTROL_PLANE_HOST:-0.0.0.0}",
+            control_plane_block,
+        )
+        self.assertNotIn("ports:", control_plane_block)
+        self.assertIn("ports:", proxy_block)
+        self.assertIn('- "${AEGISOPS_FIRST_BOOT_PROXY_PORT:-8080}:8080"', proxy_block)
+
+    def test_first_boot_proxy_routes_reviewed_runtime_surfaces_to_control_plane(self) -> None:
+        proxy_config = REPO_ROOT / "proxy" / "nginx" / "conf.d-first-boot" / "control-plane.conf"
+        self.assertTrue(proxy_config.exists(), f"expected first-boot proxy config at {proxy_config}")
+
+        text = proxy_config.read_text(encoding="utf-8")
+        for term in (
+            "upstream aegisops_control_plane {",
+            "server control-plane:8080;",
+            "location = /healthz {",
+            "proxy_pass http://aegisops_control_plane/healthz;",
+            "location = /readyz {",
+            "proxy_pass http://aegisops_control_plane/readyz;",
+            "location = /runtime {",
+            "proxy_pass http://aegisops_control_plane/runtime;",
+            "location = /inspect-records {",
+            "proxy_pass http://aegisops_control_plane/inspect-records$is_args$args;",
+            "location = /inspect-reconciliation-status {",
+            "proxy_pass http://aegisops_control_plane/inspect-reconciliation-status;",
+        ):
+            self.assertIn(term, text)
+
+        for forbidden in (
+            "inspect-assistant-context",
+            "inspect-advisory-output",
+            "render-recommendation-draft",
+        ):
+            self.assertNotIn(forbidden, text)
+
     @staticmethod
     def _control_plane_service_block(compose_text: str) -> str:
+        return Phase17FirstBootRuntimeArtifactTests._service_block(
+            compose_text,
+            "control-plane",
+        )
+
+    @staticmethod
+    def _service_block(compose_text: str, service_name: str) -> str:
         match = re.search(
-            r"(?ms)^  control-plane:\n(.*?)(?=^  [a-z0-9-]+:\n|\Z)",
+            rf"(?ms)^  {re.escape(service_name)}:\n(.*?)(?=^  [a-z0-9-]+:\n|\Z)",
             compose_text,
         )
         if match is None:
-            raise AssertionError("expected control-plane service block in first-boot compose file")
+            raise AssertionError(f"expected {service_name} service block in first-boot compose file")
         return match.group(0)
 
 

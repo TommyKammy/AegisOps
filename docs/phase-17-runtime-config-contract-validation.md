@@ -24,7 +24,7 @@ Confirmed the Phase 17 contract makes the approved first-boot runtime environmen
 
 Confirmed `AEGISOPS_CONTROL_PLANE_HOST`, `AEGISOPS_CONTROL_PLANE_PORT`, `AEGISOPS_CONTROL_PLANE_POSTGRES_DSN`, `AEGISOPS_CONTROL_PLANE_BOOT_MODE`, and `AEGISOPS_CONTROL_PLANE_LOG_LEVEL` are the approved required first-boot runtime keys and that startup must fail closed when they are absent, empty, malformed, contradictory, or exposure-bypassing.
 
-Confirmed the reviewed local defaults stay narrow by allowing `127.0.0.1`, `8080`, `first-boot`, and `INFO` while keeping `AEGISOPS_CONTROL_PLANE_POSTGRES_DSN` without a repository default.
+Confirmed the reviewed local defaults stay narrow by allowing internal-only `0.0.0.0` for Compose-backed first boot plus `127.0.0.1`, `8080`, `first-boot`, and `INFO` while keeping `AEGISOPS_CONTROL_PLANE_POSTGRES_DSN` without a repository default.
 
 Confirmed the Phase 17 contract keeps `AEGISOPS_CONTROL_PLANE_OPENSEARCH_URL`, `AEGISOPS_CONTROL_PLANE_N8N_BASE_URL`, `AEGISOPS_CONTROL_PLANE_SHUFFLE_BASE_URL`, and `AEGISOPS_CONTROL_PLANE_ISOLATED_EXECUTOR_BASE_URL` explicitly optional and non-blocking for the first-boot path.
 

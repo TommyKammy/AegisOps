@@ -121,11 +121,12 @@ for line in "${scope_lines[@]}"; do
 done
 
 bootstrap_lines=(
-  'AEGISOPS_CONTROL_PLANE_HOST=127.0.0.1'
+  'AEGISOPS_CONTROL_PLANE_HOST=0.0.0.0'
   'AEGISOPS_CONTROL_PLANE_PORT=8080'
   'AEGISOPS_CONTROL_PLANE_POSTGRES_DSN=postgresql://<user>:<password>@postgres:5432/aegisops_control_plane'
   'AEGISOPS_CONTROL_PLANE_BOOT_MODE=first-boot'
   'AEGISOPS_CONTROL_PLANE_LOG_LEVEL=INFO'
+  'AEGISOPS_FIRST_BOOT_PROXY_PORT=8080'
   '# Optional and deferred components below must remain non-blocking for first boot.'
   'AEGISOPS_CONTROL_PLANE_OPENSEARCH_URL='
   'AEGISOPS_CONTROL_PLANE_N8N_BASE_URL='
@@ -147,13 +148,17 @@ compose_lines=(
   '      AEGISOPS_CONTROL_PLANE_POSTGRES_DSN: ${AEGISOPS_CONTROL_PLANE_POSTGRES_DSN:?set-in-untracked-runtime-env}'
   '      AEGISOPS_CONTROL_PLANE_BOOT_MODE: ${AEGISOPS_CONTROL_PLANE_BOOT_MODE:-first-boot}'
   '      AEGISOPS_CONTROL_PLANE_LOG_LEVEL: ${AEGISOPS_CONTROL_PLANE_LOG_LEVEL:-INFO}'
+  '      AEGISOPS_CONTROL_PLANE_HOST: ${AEGISOPS_CONTROL_PLANE_HOST:-0.0.0.0}'
   '      AEGISOPS_CONTROL_PLANE_OPENSEARCH_URL: ${AEGISOPS_CONTROL_PLANE_OPENSEARCH_URL:-}'
   '      AEGISOPS_CONTROL_PLANE_N8N_BASE_URL: ${AEGISOPS_CONTROL_PLANE_N8N_BASE_URL:-}'
   '      AEGISOPS_CONTROL_PLANE_SHUFFLE_BASE_URL: ${AEGISOPS_CONTROL_PLANE_SHUFFLE_BASE_URL:-}'
   '      AEGISOPS_CONTROL_PLANE_ISOLATED_EXECUTOR_BASE_URL: ${AEGISOPS_CONTROL_PLANE_ISOLATED_EXECUTOR_BASE_URL:-}'
+  '    ports:'
+  '      - "${AEGISOPS_FIRST_BOOT_PROXY_PORT:-8080}:8080"'
   '    # reviewed image-backed first-boot control-plane runtime only'
   '    # optional extensions remain out of scope for this first-boot path'
   '    # do not add OpenSearch, n8n, analyst-assistant UI, or executor services here'
+  '    # reviewed user-facing route implementation is limited to health, readiness, and runtime inspection'
 )
 for line in "${compose_lines[@]}"; do
   require_fixed_string "${compose_file}" "${line}"
@@ -180,6 +185,12 @@ entrypoint_lines=(
   '# Reviewed first-boot control-plane entrypoint.'
   'require_non_empty "AEGISOPS_CONTROL_PLANE_HOST" "${AEGISOPS_CONTROL_PLANE_HOST:-}"'
   'require_non_empty "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN" "${AEGISOPS_CONTROL_PLANE_POSTGRES_DSN:-}"'
+  'reject_invalid_host_value() {'
+  'is_valid_ipv4_host() {'
+  'is_valid_dns_host() {'
+  '  echo "AEGISOPS_CONTROL_PLANE_HOST must remain an explicit IPv4 or DNS bind target for the reviewed first-boot path." >&2'
+  '  "::"|"*")'
+  'if ! is_valid_ipv4_host "${host_value}" && ! is_valid_dns_host "${host_value}"; then'
   'boot_mode_value="${AEGISOPS_CONTROL_PLANE_BOOT_MODE:-first-boot}"'
   'log_level_value="${AEGISOPS_CONTROL_PLANE_LOG_LEVEL:-INFO}"'
   '    echo "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN must be a PostgreSQL DSN for the first-boot runtime." >&2'
