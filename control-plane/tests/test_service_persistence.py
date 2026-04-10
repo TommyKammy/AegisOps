@@ -2472,7 +2472,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         restated_signal = service.get_record(
             AnalyticSignalRecord,
-            restated.alert.analytic_signal_id,
+            restated.reconciliation.analytic_signal_id,
         )
         reconciliation = service.get_record(
             ReconciliationRecord,
@@ -2824,6 +2824,172 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 "admission_channel": "live_wazuh_webhook",
                 "admission_kind": "live",
             },
+        )
+
+    def test_service_restates_and_deduplicates_live_wazuh_github_audit_ingest_with_case_linkage(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+            ),
+            store=store,
+        )
+        payload = _load_wazuh_fixture("github-audit-alert.json")
+
+        created = service.ingest_wazuh_alert(
+            raw_alert=payload,
+            authorization_header="Bearer reviewed-shared-secret",
+            forwarded_proto="https",
+            peer_addr="127.0.0.1",
+        )
+        promoted_case = service.promote_alert_to_case(created.alert.alert_id)
+
+        restated_payload = _load_wazuh_fixture("github-audit-alert.json")
+        restated_payload["id"] = "1731595300.7654321"
+        restated_payload["timestamp"] = "2026-04-05T12:25:00+00:00"
+        restated = service.ingest_wazuh_alert(
+            raw_alert=restated_payload,
+            authorization_header="Bearer reviewed-shared-secret",
+            forwarded_proto="https",
+            peer_addr="127.0.0.1",
+        )
+        deduplicated = service.ingest_wazuh_alert(
+            raw_alert=restated_payload,
+            authorization_header="Bearer reviewed-shared-secret",
+            forwarded_proto="https",
+            peer_addr="127.0.0.1",
+        )
+
+        created_signal = service.get_record(
+            AnalyticSignalRecord,
+            created.alert.analytic_signal_id,
+        )
+        restated_signal = service.get_record(
+            AnalyticSignalRecord,
+            restated.reconciliation.analytic_signal_id,
+        )
+        restated_reconciliation = service.get_record(
+            ReconciliationRecord,
+            restated.reconciliation.reconciliation_id,
+        )
+        deduplicated_reconciliation = service.get_record(
+            ReconciliationRecord,
+            deduplicated.reconciliation.reconciliation_id,
+        )
+
+        self.assertEqual(created.disposition, "created")
+        self.assertEqual(restated.disposition, "restated")
+        self.assertEqual(deduplicated.disposition, "deduplicated")
+        self.assertEqual(restated.alert.alert_id, created.alert.alert_id)
+        self.assertEqual(deduplicated.alert.alert_id, created.alert.alert_id)
+        self.assertEqual(restated.alert.case_id, promoted_case.case_id)
+        self.assertEqual(deduplicated.alert.case_id, promoted_case.case_id)
+        self.assertEqual(restated.alert.lifecycle_state, "escalated_to_case")
+        self.assertEqual(deduplicated.alert.lifecycle_state, "escalated_to_case")
+        self.assertEqual(
+            restated.alert.reviewed_context["provenance"]["admission_channel"],
+            "live_wazuh_webhook",
+        )
+        self.assertEqual(
+            deduplicated.alert.reviewed_context["provenance"]["admission_channel"],
+            "live_wazuh_webhook",
+        )
+
+        self.assertIsNotNone(created_signal)
+        self.assertEqual(created_signal.case_ids, (promoted_case.case_id,))
+        self.assertEqual(
+            created_signal.substrate_detection_record_id,
+            "wazuh:1731595300.1234567",
+        )
+        self.assertEqual(
+            created_signal.last_seen_at,
+            datetime(2026, 4, 5, 12, 20, tzinfo=timezone.utc),
+        )
+
+        self.assertIsNotNone(restated_signal)
+        self.assertEqual(restated_signal.case_ids, (promoted_case.case_id,))
+        self.assertEqual(
+            restated_signal.substrate_detection_record_id,
+            "wazuh:1731595300.7654321",
+        )
+        self.assertEqual(
+            restated_signal.last_seen_at,
+            datetime(2026, 4, 5, 12, 25, tzinfo=timezone.utc),
+        )
+
+        self.assertIsNotNone(restated_reconciliation)
+        self.assertEqual(restated_reconciliation.ingest_disposition, "restated")
+        self.assertEqual(
+            restated_reconciliation.subject_linkage["case_ids"],
+            (promoted_case.case_id,),
+        )
+        self.assertEqual(
+            restated_reconciliation.subject_linkage["substrate_detection_record_ids"],
+            ("wazuh:1731595300.1234567", "wazuh:1731595300.7654321"),
+        )
+        self.assertEqual(
+            restated_reconciliation.subject_linkage["analytic_signal_ids"],
+            (created.alert.analytic_signal_id, restated.reconciliation.analytic_signal_id),
+        )
+        self.assertEqual(
+            restated_reconciliation.subject_linkage["admission_provenance"],
+            {
+                "admission_channel": "live_wazuh_webhook",
+                "admission_kind": "live",
+            },
+        )
+        self.assertEqual(
+            restated_reconciliation.last_seen_at,
+            datetime(2026, 4, 5, 12, 25, tzinfo=timezone.utc),
+        )
+
+        self.assertIsNotNone(deduplicated_reconciliation)
+        self.assertEqual(
+            deduplicated_reconciliation.ingest_disposition,
+            "deduplicated",
+        )
+        self.assertEqual(
+            deduplicated_reconciliation.subject_linkage["case_ids"],
+            (promoted_case.case_id,),
+        )
+        self.assertEqual(
+            deduplicated_reconciliation.subject_linkage[
+                "substrate_detection_record_ids"
+            ],
+            ("wazuh:1731595300.1234567", "wazuh:1731595300.7654321"),
+        )
+        self.assertEqual(
+            deduplicated_reconciliation.subject_linkage["admission_provenance"],
+            {
+                "admission_channel": "live_wazuh_webhook",
+                "admission_kind": "live",
+            },
+        )
+
+        persisted_case = service.get_record(CaseRecord, promoted_case.case_id)
+        self.assertIsNotNone(persisted_case)
+        self.assertEqual(persisted_case.alert_id, created.alert.alert_id)
+        self.assertEqual(persisted_case.finding_id, created.alert.finding_id)
+        self.assertEqual(persisted_case.lifecycle_state, "open")
+        self.assertEqual(
+            persisted_case.reviewed_context["provenance"]["admission_channel"],
+            "live_wazuh_webhook",
+        )
+        evidence_records = sorted(
+            (
+                evidence
+                for evidence in store.list(EvidenceRecord)
+                if evidence.alert_id == created.alert.alert_id
+            ),
+            key=lambda evidence: evidence.evidence_id,
+        )
+        self.assertEqual(len(evidence_records), 2)
+        self.assertEqual(
+            tuple(evidence.case_id for evidence in evidence_records),
+            (promoted_case.case_id, promoted_case.case_id),
         )
 
     def test_service_admits_microsoft_365_audit_fixture_through_wazuh_source_profile(
