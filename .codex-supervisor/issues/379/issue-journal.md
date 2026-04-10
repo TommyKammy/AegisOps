@@ -5,48 +5,46 @@
 - Branch: codex/issue-379
 - Workspace: .
 - Journal: .codex-supervisor/issues/379/issue-journal.md
-- Current phase: repairing_ci
-- Attempt count: 5 (implementation=2, repair=3)
-- Last head SHA: 0990d2885ca200047512cd50672da024da905641
+- Current phase: addressing_review
+- Attempt count: 6 (implementation=2, repair=4)
+- Last head SHA: 3ea5483441e59ce71666e0e0cf7314cc45c4bb7f
 - Blocked reason: none
-- Last failure signature: verify:fail
+- Last failure signature: PRRT_kwDOR2iDUc56Kfcs
 - Repeated failure signature count: 3
-- Updated at: 2026-04-10T15:08:02.496Z
+- Updated at: 2026-04-10T15:20:15Z
 
 ## Latest Codex Summary
-Committed and pushed `4f7444d` (`Fix Wazuh render helper XML escaping`) to `codex/issue-379`.
+Reviewed the one still-unresolved CodeRabbit thread on PR `#384` with the thread-aware `fetch_comments.py` workflow and verified the mount-path portion had already been fixed on `codex/issue-379`. The remaining valid gap was that [render-ossec-integration.sh](ingest/wazuh/single-node-lab/render-ossec-integration.sh) still rendered hardcoded XML while [ossec.integration.sample.xml](ingest/wazuh/single-node-lab/ossec.integration.sample.xml) documented a placeholder contract that depended on `AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET`.
 
-After reproducing the failing `verify` job with `gh run view 24249517759 --log`, I confirmed the new regression was not a topology mismatch but a Bash-version portability bug in [render-ossec-integration.sh](ingest/wazuh/single-node-lab/render-ossec-integration.sh): GitHub Actions Bash 5 rendered `<api_key>reviewed<lt;&amp;>gt;secret</api_key>` while local Bash 3.2 did not. Replacing the helper's parameter-expansion XML escaping with a `sed`-based escaper makes the rendered `<hook_url>` and `<api_key>` deterministic across shells while preserving the reviewed `github_audit` contract.
+I changed the helper to render from the checked-in XML template, load `AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET` from `AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE`, and substitute both reviewed placeholders into the rendered output. I also updated the asset README, Phase 18 asset doc, verifier, and unit test expectations, reran the focused and full verification stack locally, and committed the review fix as `28a0dc4` on `codex/issue-379`. A journal follow-up commit and push are still pending.
 
-Focused verification passed locally with the exact failing test, the Phase 18 topology verifier, the full `python3 -m unittest discover -s control-plane/tests -p 'test_*.py'` command used by CI, and `git diff --check`. After the push, PR `#384` advanced to head `4f7444d01de5c895f16ffec68f8bd0f98e69df1e` and `gh pr checks 384` shows a fresh `verify` run queued at https://github.com/TommyKammy/AegisOps/actions/runs/24249833612/job/70805863727.
-
-Summary: Pushed `4f7444d` to fix the PR #384 `verify` failure by making the Wazuh render helper's XML escaping Bash-version-stable, and confirmed GitHub queued a fresh `verify` run on the new head.
-State hint: repairing_ci
+Summary: Addressed the remaining PR `#384` review-thread contract mismatch by aligning the Wazuh render helper with the reviewed XML template and secret-file bootstrap contract, then reran the focused and full local verification stack.
+State hint: addressing_review
 Blocked reason: none
-Tests: `gh pr view 384 --json number,url,title,headRefName,baseRefName,headRefOid,statusCheckRollup`; `python3 [REDACTED]/skills/gh-fix-ci/scripts/inspect_pr_checks.py --repo . --pr 384 --json`; `gh run view 24249517759 --json name,workflowName,conclusion,status,url,event,headBranch,headSha,jobs`; `gh run view 24249517759 --log`; `python3 -m unittest control-plane.tests.test_phase18_wazuh_single_node_lab_assets.Phase18WazuhSingleNodeLabAssetsTests.test_render_helper_materializes_literal_integration_values`; `bash scripts/verify-phase-18-wazuh-lab-topology.sh`; `python3 -m unittest discover -s control-plane/tests -p 'test_*.py'`; `git diff --check`; `git push origin codex/issue-379`; `gh pr checks 384`
-Next action: Monitor the queued `verify` run for PR `#384` on head `4f7444d`, and only re-enter repair work if that rerun reports a new concrete failure.
-Failure signature: verify:fail
+Tests: `gh pr view 384 --json number,url,title,reviewDecision,headRefName,headRefOid,statusCheckRollup`; `python3 [REDACTED]/skills/gh-address-comments/scripts/fetch_comments.py TommyKammy/AegisOps 384`; `python3 -m unittest control-plane.tests.test_phase18_wazuh_single_node_lab_assets`; `bash scripts/verify-phase-18-wazuh-lab-topology.sh`; `python3 -m unittest discover -s control-plane/tests -p 'test_*.py'`; `git diff --check`
+Next action: Commit the journal update, push `codex/issue-379`, and let PR `#384` refresh against the new head before deciding whether any manual review-thread response is still needed.
+Failure signature: PRRT_kwDOR2iDUc56Kfcs
 
 ## Active Failure Context
-- Category: checks
-- Summary: PR #384 has failing checks.
-- Command or source: gh pr checks
-- Reference: https://github.com/TommyKammy/AegisOps/pull/384
+- Category: review
+- Summary: 1 unresolved automated review thread(s) remain.
+- Reference: https://github.com/TommyKammy/AegisOps/pull/384#discussion_r3065033656
 - Details:
-  - verify (fail/FAILURE) https://github.com/TommyKammy/AegisOps/actions/runs/24249517759/job/70804732783
+  - ingest/wazuh/single-node-lab/docker-compose.yml:18 summary=_⚠️ Potential issue_ | _🟠 Major_ **The shared-secret bootstrap contract is internally inconsistent.** Line 13 forwards `AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE` into the man... url=https://github.com/TommyKammy/AegisOps/pull/384#discussion_r3065033656
 
 ## Codex Working Notes
 ### Current Handoff
-- Hypothesis: The current `verify` failure is a Bash-version portability bug inside `ingest/wazuh/single-node-lab/render-ossec-integration.sh`: the helper's parameter-expansion XML escaping passes under local Bash 3.2 but mis-escapes `<` and `>` under GitHub Actions Bash 5, breaking the Phase 18 render-helper unit test.
-- What changed: Replaced the helper's Bash parameter-expansion XML escaping with a `sed`-based escaper in `ingest/wazuh/single-node-lab/render-ossec-integration.sh` so the rendered `<api_key>` value stays XML-safe across Bash versions and continues to preserve the reviewed `github_audit` scope.
+- Hypothesis: The remaining unresolved CodeRabbit thread is valid because the reviewed assets still documented `AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET` in the XML template while the helper consumed only `AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE` and bypassed the template entirely.
+- What changed: Updated `ingest/wazuh/single-node-lab/render-ossec-integration.sh` to read `ossec.integration.sample.xml`, load `AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET` from `AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE`, XML-escape both reviewed values, and substitute them into the rendered output. Updated the surrounding asset docs, verifier, and unit tests to assert the same contract.
 - Current blocker: none
-- Next exact step: wait for the queued GitHub `verify` rerun on head `4f7444d`, and only resume debugging if that rerun exposes a different concrete failure.
-- Verification gap: No GitHub-side rerun has completed yet against `4f7444d`, and no live Wazuh manager bring-up was attempted; verification remained at the focused helper/test/verifier and full runtime-unit-test layer.
-- Files touched: `.codex-supervisor/issues/379/issue-journal.md`, `ingest/wazuh/single-node-lab/render-ossec-integration.sh`
-- Rollback concern: Low; reverting this patch would reintroduce the Bash 5 XML-escape regression that currently fails PR `#384` in GitHub Actions.
-- Last focused command: `python3 -m unittest discover -s control-plane/tests -p 'test_*.py'`
-- Last focused commands: `gh pr view 384 --json number,url,title,headRefName,baseRefName,headRefOid,statusCheckRollup`; `python3 [REDACTED]/skills/gh-fix-ci/scripts/inspect_pr_checks.py --repo . --pr 384 --json`; `gh run view 24249517759 --json name,workflowName,conclusion,status,url,event,headBranch,headSha,jobs`; `gh run view 24249517759 --log`; `python3 -m unittest control-plane.tests.test_phase18_wazuh_single_node_lab_assets.Phase18WazuhSingleNodeLabAssetsTests.test_render_helper_materializes_literal_integration_values`; `bash scripts/verify-phase-18-wazuh-lab-topology.sh`; `python3 -m unittest discover -s control-plane/tests -p 'test_*.py'`; `git diff --check`
+- Next exact step: commit the journal update, push both review-fix commits to `codex/issue-379`, and then let PR `#384` refresh before deciding whether the thread needs a manual reply or resolution.
+- Verification gap: GitHub-side re-review and CI have not yet rerun on the new local review-fix commit, and no live Wazuh manager bring-up was attempted; verification remains at the focused asset/verifier/unit-test layer.
+- Files touched: `.codex-supervisor/issues/379/issue-journal.md`, `control-plane/tests/test_phase18_wazuh_single_node_lab_assets.py`, `docs/phase-18-wazuh-single-node-lab-assets.md`, `ingest/wazuh/single-node-lab/README.md`, `ingest/wazuh/single-node-lab/ossec.integration.sample.xml`, `ingest/wazuh/single-node-lab/render-ossec-integration.sh`, `scripts/verify-phase-18-wazuh-lab-topology.sh`
+- Rollback concern: Low; reverting this patch would restore the unresolved mismatch between the reviewed template, the `_FILE` bootstrap input, and the render-helper behavior.
+- Last focused command: `git commit -m "Align Wazuh lab secret render contract"`
+- Last focused commands: `gh pr view 384 --json number,url,title,reviewDecision,headRefName,headRefOid,statusCheckRollup`; `python3 [REDACTED]/skills/gh-address-comments/scripts/fetch_comments.py TommyKammy/AegisOps 384`; `python3 -m unittest control-plane.tests.test_phase18_wazuh_single_node_lab_assets`; `bash scripts/verify-phase-18-wazuh-lab-topology.sh`; `python3 -m unittest discover -s control-plane/tests -p 'test_*.py'`; `git diff --check`; `git commit -m "Align Wazuh lab secret render contract"`
 ### Scratchpad
-- CI reproduction result: `gh run view 24249517759 --log` shows `python3 -m unittest discover -s control-plane/tests -p 'test_*.py'` failing only `test_render_helper_materializes_literal_integration_values` because Actions rendered `<api_key>reviewed<lt;&amp;>gt;secret</api_key>` instead of `<api_key>reviewed&lt;&amp;&gt;secret</api_key>`.
-- Focused verification result: the exact failing Phase 18 render-helper test, `bash scripts/verify-phase-18-wazuh-lab-topology.sh`, full runtime-unit discovery, and `git diff --check` all pass locally after the `sed`-based escaping fix.
-- Pending PR action: wait for the queued PR `#384` `verify` rerun on head `4f7444d`.
+- PR state check: `gh pr view 384 --json ...` showed `verify=SUCCESS` and `CodeRabbit=SUCCESS` on head `3ea5483` before this follow-up review fix.
+- Thread inspection result: `fetch_comments.py` showed exactly one unresolved thread, `PRRT_kwDOR2iDUc56Kfcs`, covering the remaining shared-secret/template contract mismatch.
+- Focused verification result: `python3 -m unittest control-plane.tests.test_phase18_wazuh_single_node_lab_assets`, `bash scripts/verify-phase-18-wazuh-lab-topology.sh`, full runtime-unit discovery, and `git diff --check` all pass locally after the template-alignment patch.
+- Pending PR action: commit the journal update and push the new review-fix head so PR `#384` can refresh.
