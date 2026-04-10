@@ -118,18 +118,22 @@ class Phase16BootstrapContractDocsTests(unittest.TestCase):
         )
 
     def test_first_boot_entrypoint_rejects_direct_backend_publication_host(self) -> None:
-        result = self._run_entrypoint(
-            {
-                "AEGISOPS_CONTROL_PLANE_HOST": "0.0.0.0",
-                "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN": "postgresql://user:pass@postgres:5432/aegisops",
-            }
-        )
+        for host_value in ("0.0.0.0", "::", "*"):
+            with self.subTest(host_value=host_value):
+                result = self._run_entrypoint(
+                    {
+                        "AEGISOPS_CONTROL_PLANE_HOST": host_value,
+                        "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN": (
+                            "postgresql://user:pass@postgres:5432/aegisops"
+                        ),
+                    }
+                )
 
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn(
-            "AEGISOPS_CONTROL_PLANE_HOST must not publish the control-plane backend directly.",
-            result.stderr,
-        )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(
+                    "AEGISOPS_CONTROL_PLANE_HOST must not publish the control-plane backend directly.",
+                    result.stderr,
+                )
 
     def test_first_boot_entrypoint_rejects_invalid_boot_mode(self) -> None:
         result = self._run_entrypoint(
