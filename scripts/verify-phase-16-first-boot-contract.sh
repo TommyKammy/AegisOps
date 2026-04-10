@@ -71,7 +71,7 @@ require_file "${runtime_boundary_doc}" "Missing control-plane runtime boundary d
 require_file "${runbook_doc}" "Missing runbook doc"
 require_file "${readme_doc}" "Missing repository README"
 require_file "${bootstrap_env_sample}" "Missing first-boot bootstrap env sample"
-require_file "${compose_file}" "Missing first-boot compose skeleton"
+require_file "${compose_file}" "Missing first-boot compose path"
 require_file "${entrypoint_file}" "Missing first-boot entrypoint"
 require_dir "${migration_home}" "Missing control-plane migration home"
 require_file "${postgres_readme}" "Missing control-plane postgres README"
@@ -124,6 +124,8 @@ bootstrap_lines=(
   'AEGISOPS_CONTROL_PLANE_HOST=127.0.0.1'
   'AEGISOPS_CONTROL_PLANE_PORT=8080'
   'AEGISOPS_CONTROL_PLANE_POSTGRES_DSN=postgresql://<user>:<password>@postgres:5432/aegisops_control_plane'
+  'AEGISOPS_CONTROL_PLANE_BOOT_MODE=first-boot'
+  'AEGISOPS_CONTROL_PLANE_LOG_LEVEL=INFO'
   '# Optional and deferred components below must remain non-blocking for first boot.'
   'AEGISOPS_CONTROL_PLANE_OPENSEARCH_URL='
   'AEGISOPS_CONTROL_PLANE_N8N_BASE_URL='
@@ -139,14 +141,18 @@ compose_lines=(
   '  control-plane:'
   '  postgres:'
   '  proxy:'
-  '      - serve'
+  '    build:'
+  '      dockerfile: control-plane/deployment/first-boot/Dockerfile'
+  '    image: aegisops-control-plane:first-boot'
   '      AEGISOPS_CONTROL_PLANE_POSTGRES_DSN: ${AEGISOPS_CONTROL_PLANE_POSTGRES_DSN:?set-in-untracked-runtime-env}'
+  '      AEGISOPS_CONTROL_PLANE_BOOT_MODE: ${AEGISOPS_CONTROL_PLANE_BOOT_MODE:-first-boot}'
+  '      AEGISOPS_CONTROL_PLANE_LOG_LEVEL: ${AEGISOPS_CONTROL_PLANE_LOG_LEVEL:-INFO}'
   '      AEGISOPS_CONTROL_PLANE_OPENSEARCH_URL: ${AEGISOPS_CONTROL_PLANE_OPENSEARCH_URL:-}'
   '      AEGISOPS_CONTROL_PLANE_N8N_BASE_URL: ${AEGISOPS_CONTROL_PLANE_N8N_BASE_URL:-}'
   '      AEGISOPS_CONTROL_PLANE_SHUFFLE_BASE_URL: ${AEGISOPS_CONTROL_PLANE_SHUFFLE_BASE_URL:-}'
   '      AEGISOPS_CONTROL_PLANE_ISOLATED_EXECUTOR_BASE_URL: ${AEGISOPS_CONTROL_PLANE_ISOLATED_EXECUTOR_BASE_URL:-}'
-  '      - ../../../postgres/control-plane/migrations:/opt/aegisops/postgres-migrations:ro'
-  '    # optional extensions remain out of scope for this first-boot skeleton'
+  '    # reviewed image-backed first-boot control-plane runtime only'
+  '    # optional extensions remain out of scope for this first-boot path'
   '    # do not add OpenSearch, n8n, analyst-assistant UI, or executor services here'
 )
 for line in "${compose_lines[@]}"; do
@@ -161,15 +167,23 @@ require_absent_string "${compose_file}" '  analyst-assistant:' \
   'First-boot compose must not define first-boot service: analyst-assistant'
 require_absent_string "${compose_file}" '  executor:' \
   'First-boot compose must not define first-boot service: executor'
-require_absent_string "${compose_file}" '      - runtime' \
-  'First-boot compose must not launch the one-shot runtime snapshot renderer.'
+require_absent_string "${compose_file}" '../../../:/workspace:ro' \
+  'First-boot compose must not depend on repository-local runtime bind mounts.'
+require_absent_string "${compose_file}" './control-plane-entrypoint.sh:/opt/aegisops/bin/first-boot-entrypoint.sh:ro' \
+  'First-boot compose must not depend on a bind-mounted entrypoint script.'
+require_absent_string "${compose_file}" '../../../postgres/control-plane/migrations:/opt/aegisops/postgres-migrations:ro' \
+  'First-boot compose must not depend on bind-mounted migration assets.'
+require_absent_string "${compose_file}" 'image: alpine:3.22.1' \
+  'First-boot compose must not use the placeholder Alpine control-plane image.'
 
 entrypoint_lines=(
-  '# Phase 16 first-boot skeleton only.'
+  '# Reviewed first-boot control-plane entrypoint.'
   'require_non_empty "AEGISOPS_CONTROL_PLANE_HOST" "${AEGISOPS_CONTROL_PLANE_HOST:-}"'
   'require_non_empty "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN" "${AEGISOPS_CONTROL_PLANE_POSTGRES_DSN:-}"'
-  '    echo "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN must be a PostgreSQL DSN for the first-boot skeleton." >&2'
-  '    echo "AEGISOPS_CONTROL_PLANE_PORT must be an integer for the first-boot skeleton." >&2'
+  'boot_mode_value="${AEGISOPS_CONTROL_PLANE_BOOT_MODE:-first-boot}"'
+  'log_level_value="${AEGISOPS_CONTROL_PLANE_LOG_LEVEL:-INFO}"'
+  '    echo "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN must be a PostgreSQL DSN for the first-boot runtime." >&2'
+  '    echo "AEGISOPS_CONTROL_PLANE_PORT must be an integer for the first-boot runtime." >&2'
   'MIGRATIONS_DIR="${AEGISOPS_FIRST_BOOT_MIGRATIONS_DIR:-/opt/aegisops/postgres-migrations}"'
   'PSQL_BIN="${AEGISOPS_FIRST_BOOT_PSQL_BIN:-psql}"'
   '        fail_closed "First-boot migration bootstrap requires psql to prove PostgreSQL reachability and readiness."'

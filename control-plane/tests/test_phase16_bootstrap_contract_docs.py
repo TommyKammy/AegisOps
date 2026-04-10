@@ -56,6 +56,8 @@ class Phase16BootstrapContractDocsTests(unittest.TestCase):
             "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN=",
             "AEGISOPS_CONTROL_PLANE_HOST=",
             "AEGISOPS_CONTROL_PLANE_PORT=",
+            "AEGISOPS_CONTROL_PLANE_BOOT_MODE=first-boot",
+            "AEGISOPS_CONTROL_PLANE_LOG_LEVEL=INFO",
             "Optional and deferred components below must remain non-blocking for first boot.",
             "AEGISOPS_CONTROL_PLANE_OPENSEARCH_URL=",
             "AEGISOPS_CONTROL_PLANE_N8N_BASE_URL=",
@@ -70,15 +72,19 @@ class Phase16BootstrapContractDocsTests(unittest.TestCase):
             "control-plane:",
             "postgres:",
             "proxy:",
-            "control-plane-entrypoint.sh:/opt/aegisops/bin/first-boot-entrypoint.sh:ro",
-            "optional extensions remain out of scope for this first-boot skeleton",
+            "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN: ${AEGISOPS_CONTROL_PLANE_POSTGRES_DSN:?set-in-untracked-runtime-env}",
+            "AEGISOPS_CONTROL_PLANE_OPENSEARCH_URL: ${AEGISOPS_CONTROL_PLANE_OPENSEARCH_URL:-}",
+            "AEGISOPS_CONTROL_PLANE_N8N_BASE_URL: ${AEGISOPS_CONTROL_PLANE_N8N_BASE_URL:-}",
+            "AEGISOPS_CONTROL_PLANE_SHUFFLE_BASE_URL: ${AEGISOPS_CONTROL_PLANE_SHUFFLE_BASE_URL:-}",
+            "AEGISOPS_CONTROL_PLANE_ISOLATED_EXECUTOR_BASE_URL: ${AEGISOPS_CONTROL_PLANE_ISOLATED_EXECUTOR_BASE_URL:-}",
             "do not add OpenSearch, n8n, analyst-assistant UI, or executor services here",
         ):
             self.assertIn(term, compose_text)
 
         entrypoint_text = entrypoint_skeleton.read_text(encoding="utf-8")
         for term in (
-            "Phase 16 first-boot skeleton only",
+            "AEGISOPS_CONTROL_PLANE_BOOT_MODE",
+            "AEGISOPS_CONTROL_PLANE_LOG_LEVEL",
             "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN",
             "migration bootstrap",
             "readiness",
@@ -107,7 +113,51 @@ class Phase16BootstrapContractDocsTests(unittest.TestCase):
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(
-            "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN must be a PostgreSQL DSN for the first-boot skeleton.",
+            "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN must be a PostgreSQL DSN for the first-boot runtime.",
+            result.stderr,
+        )
+
+    def test_first_boot_entrypoint_rejects_direct_backend_publication_host(self) -> None:
+        result = self._run_entrypoint(
+            {
+                "AEGISOPS_CONTROL_PLANE_HOST": "0.0.0.0",
+                "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN": "postgresql://user:pass@postgres:5432/aegisops",
+            }
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "AEGISOPS_CONTROL_PLANE_HOST must not publish the control-plane backend directly.",
+            result.stderr,
+        )
+
+    def test_first_boot_entrypoint_rejects_invalid_boot_mode(self) -> None:
+        result = self._run_entrypoint(
+            {
+                "AEGISOPS_CONTROL_PLANE_HOST": "127.0.0.1",
+                "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN": "postgresql://user:pass@postgres:5432/aegisops",
+                "AEGISOPS_CONTROL_PLANE_BOOT_MODE": "serve-now",
+            }
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "AEGISOPS_CONTROL_PLANE_BOOT_MODE must remain first-boot for the reviewed startup path.",
+            result.stderr,
+        )
+
+    def test_first_boot_entrypoint_rejects_invalid_log_level(self) -> None:
+        result = self._run_entrypoint(
+            {
+                "AEGISOPS_CONTROL_PLANE_HOST": "127.0.0.1",
+                "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN": "postgresql://user:pass@postgres:5432/aegisops",
+                "AEGISOPS_CONTROL_PLANE_LOG_LEVEL": "TRACE",
+            }
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "AEGISOPS_CONTROL_PLANE_LOG_LEVEL must be one of DEBUG, INFO, WARNING, ERROR, or CRITICAL.",
             result.stderr,
         )
 
@@ -183,6 +233,8 @@ exit 1
                 {
                     "AEGISOPS_CONTROL_PLANE_HOST": "127.0.0.1",
                     "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN": "postgresql://user:pass@postgres:5432/aegisops",
+                    "AEGISOPS_CONTROL_PLANE_BOOT_MODE": "first-boot",
+                    "AEGISOPS_CONTROL_PLANE_LOG_LEVEL": "INFO",
                     "AEGISOPS_FIRST_BOOT_MIGRATIONS_DIR": str(migrations_dir),
                     "AEGISOPS_FIRST_BOOT_PSQL_BIN": str(psql_path),
                     "AEGISOPS_TEST_PSQL_LOG": str(psql_log),
