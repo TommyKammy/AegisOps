@@ -1,0 +1,44 @@
+name: aegisops-wazuh-single-node-lab
+
+services:
+  wazuh-manager:
+    image: wazuh/wazuh-manager:${AEGISOPS_WAZUH_VERSION:-4.8.0}
+    hostname: ${AEGISOPS_WAZUH_HOSTNAME:-wazuh-lab-manager-01}
+    expose:
+      - "1514/udp"
+      - "1515"
+      - "55000"
+    environment:
+      AEGISOPS_WAZUH_AEGISOPS_INGEST_URL: ${AEGISOPS_WAZUH_AEGISOPS_INGEST_URL:?set-in-untracked-runtime-env}
+      AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE: ${AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE:?set-in-untracked-runtime-env}
+      AEGISOPS_WAZUH_GITHUB_AUDIT_ENROLLMENT_STATUS: ${AEGISOPS_WAZUH_GITHUB_AUDIT_ENROLLMENT_STATUS:-reviewed-first-live-family-only}
+    volumes:
+      - /srv/aegisops/wazuh-lab/manager-config-placeholder:/wazuh-config-placeholder
+      - /srv/aegisops/wazuh-lab/manager-secret-placeholder:/run/aegisops-secrets:ro
+      - ./ossec.integration.sample.xml:/wazuh-config-placeholder/ossec.integration.sample.xml:ro
+      - ./render-ossec-integration.sh:/wazuh-config-placeholder/render-ossec-integration.sh:ro
+    depends_on:
+      - wazuh-indexer
+    # GitHub audit remains the only approved first live source family.
+    # render-ossec-integration.sh consumes the mounted secret file before operators copy literal values into active Wazuh config
+    # This single-node lab bundle exists for reviewed substrate bring-up only.
+    # manager interfaces stay internal to the lab compose network until a reviewed lab access path exists
+    # do not add Shuffle, n8n, or a direct control-plane backend publication path here
+
+  wazuh-indexer:
+    image: wazuh/wazuh-indexer:${AEGISOPS_WAZUH_VERSION:-4.8.0}
+    hostname: ${AEGISOPS_WAZUH_INDEXER_HOSTNAME:-wazuh-lab-indexer-01}
+    volumes:
+      - /srv/aegisops/wazuh-lab/indexer-data-placeholder:/var/lib/wazuh-indexer
+    # keep indexer internal to the lab compose network for this reviewed slice
+
+  wazuh-dashboard:
+    image: wazuh/wazuh-dashboard:${AEGISOPS_WAZUH_VERSION:-4.8.0}
+    hostname: ${AEGISOPS_WAZUH_DASHBOARD_HOSTNAME:-wazuh-lab-dashboard-01}
+    depends_on:
+      - wazuh-indexer
+    expose:
+      - "5601"
+    volumes:
+      - /srv/aegisops/wazuh-lab/dashboard-certs-placeholder:/usr/share/wazuh-dashboard/certs:ro
+    # dashboard access must stay on an internal-only or separately reviewed lab access path
