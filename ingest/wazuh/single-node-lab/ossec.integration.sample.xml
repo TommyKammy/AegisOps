@@ -1,0 +1,9 @@
+<!-- Reviewed Phase 18 sample only. GitHub audit only. -->
+<integration>
+  <name>aegisops-github-audit</name>
+  <hook_url>${AEGISOPS_WAZUH_AEGISOPS_INGEST_URL}</hook_url>
+  <api_key>${AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET}</api_key>
+  <alert_format>json</alert_format>
+  <level>3</level>
+  <group>github_audit</group>
+</integration>

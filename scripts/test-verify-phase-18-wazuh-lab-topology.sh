@@ -6,12 +6,17 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 verifier="${repo_root}/scripts/verify-phase-18-wazuh-lab-topology.sh"
 canonical_design_doc="${repo_root}/docs/phase-18-wazuh-lab-topology-and-live-ingest-contract.md"
 canonical_validation_doc="${repo_root}/docs/phase-18-wazuh-lab-topology-validation.md"
+canonical_asset_doc="${repo_root}/docs/phase-18-wazuh-single-node-lab-assets.md"
 canonical_phase17_doc="${repo_root}/docs/phase-17-runtime-config-contract-and-boot-command-expectations.md"
 canonical_phase16_doc="${repo_root}/docs/phase-16-release-state-and-first-boot-scope.md"
 canonical_wazuh_contract_doc="${repo_root}/docs/wazuh-alert-ingest-contract.md"
 canonical_source_contract_doc="${repo_root}/docs/source-onboarding-contract.md"
 canonical_github_audit_doc="${repo_root}/docs/source-families/github-audit/onboarding-package.md"
 canonical_architecture_doc="${repo_root}/docs/architecture.md"
+canonical_asset_readme="${repo_root}/ingest/wazuh/single-node-lab/README.md"
+canonical_asset_bootstrap="${repo_root}/ingest/wazuh/single-node-lab/bootstrap.env.sample"
+canonical_asset_compose="${repo_root}/ingest/wazuh/single-node-lab/docker-compose.yml"
+canonical_asset_integration="${repo_root}/ingest/wazuh/single-node-lab/ossec.integration.sample.xml"
 
 workdir="$(mktemp -d)"
 trap 'rm -rf "${workdir}"' EXIT
@@ -24,7 +29,7 @@ fail_stderr="${workdir}/fail.err"
 create_repo() {
   local target="$1"
 
-  mkdir -p "${target}/docs/source-families/github-audit" "${target}/scripts"
+  mkdir -p "${target}/docs/source-families/github-audit" "${target}/scripts" "${target}/ingest/wazuh/single-node-lab"
   git -C "${target}" init -q
   git -C "${target}" config user.name "Codex Test"
   git -C "${target}" config user.email "codex@example.com"
@@ -35,12 +40,17 @@ write_canonical_artifacts() {
 
   cp "${canonical_design_doc}" "${target}/docs/phase-18-wazuh-lab-topology-and-live-ingest-contract.md"
   cp "${canonical_validation_doc}" "${target}/docs/phase-18-wazuh-lab-topology-validation.md"
+  cp "${canonical_asset_doc}" "${target}/docs/phase-18-wazuh-single-node-lab-assets.md"
   cp "${canonical_phase17_doc}" "${target}/docs/phase-17-runtime-config-contract-and-boot-command-expectations.md"
   cp "${canonical_phase16_doc}" "${target}/docs/phase-16-release-state-and-first-boot-scope.md"
   cp "${canonical_wazuh_contract_doc}" "${target}/docs/wazuh-alert-ingest-contract.md"
   cp "${canonical_source_contract_doc}" "${target}/docs/source-onboarding-contract.md"
   cp "${canonical_github_audit_doc}" "${target}/docs/source-families/github-audit/onboarding-package.md"
   cp "${canonical_architecture_doc}" "${target}/docs/architecture.md"
+  cp "${canonical_asset_readme}" "${target}/ingest/wazuh/single-node-lab/README.md"
+  cp "${canonical_asset_bootstrap}" "${target}/ingest/wazuh/single-node-lab/bootstrap.env.sample"
+  cp "${canonical_asset_compose}" "${target}/ingest/wazuh/single-node-lab/docker-compose.yml"
+  cp "${canonical_asset_integration}" "${target}/ingest/wazuh/single-node-lab/ossec.integration.sample.xml"
   cp "${verifier}" "${target}/scripts/verify-phase-18-wazuh-lab-topology.sh"
   cp "${repo_root}/scripts/test-verify-phase-18-wazuh-lab-topology.sh" "${target}/scripts/test-verify-phase-18-wazuh-lab-topology.sh"
   git -C "${target}" add .
@@ -128,6 +138,21 @@ write_canonical_artifacts "${missing_validation_note_repo}"
 remove_text_from_doc "${missing_validation_note_repo}" "${missing_validation_note_repo}/docs/phase-18-wazuh-lab-topology-validation.md" 'Confirmed the live ingest path remains fail-closed by rejecting non-HTTPS requests, non-POST requests, missing or invalid bearer credentials, direct backend bypass attempts, invalid JSON payloads, Wazuh payloads that violate required field expectations, and payloads outside the approved first live family.'
 commit_fixture "${missing_validation_note_repo}"
 assert_fails_with "${missing_validation_note_repo}" 'Confirmed the live ingest path remains fail-closed by rejecting non-HTTPS requests, non-POST requests, missing or invalid bearer credentials, direct backend bypass attempts, invalid JSON payloads, Wazuh payloads that violate required field expectations, and payloads outside the approved first live family.'
+
+missing_asset_doc_repo="${workdir}/missing-asset-doc"
+create_repo "${missing_asset_doc_repo}"
+write_canonical_artifacts "${missing_asset_doc_repo}"
+rm "${missing_asset_doc_repo}/docs/phase-18-wazuh-single-node-lab-assets.md"
+git -C "${missing_asset_doc_repo}" add -u
+commit_fixture "${missing_asset_doc_repo}"
+assert_fails_with "${missing_asset_doc_repo}" "Missing Phase 18 Wazuh lab asset doc:"
+
+missing_asset_compose_repo="${workdir}/missing-asset-compose"
+create_repo "${missing_asset_compose_repo}"
+write_canonical_artifacts "${missing_asset_compose_repo}"
+remove_text_from_doc "${missing_asset_compose_repo}" "${missing_asset_compose_repo}/ingest/wazuh/single-node-lab/docker-compose.yml" '    # GitHub audit remains the only approved first live source family.'
+commit_fixture "${missing_asset_compose_repo}"
+assert_fails_with "${missing_asset_compose_repo}" '    # GitHub audit remains the only approved first live source family.'
 
 missing_deviation_repo="${workdir}/missing-deviation"
 create_repo "${missing_deviation_repo}"

@@ -8,6 +8,8 @@ It supplements `docs/phase-17-runtime-config-contract-and-boot-command-expectati
 
 This document defines reviewed topology and ingest-contract scope only. It does not approve broader source-family rollout, OpenSearch runtime enrichment, a thin operator UI, guarded automation live wiring, or production-scale Wazuh deployment topologies.
 
+The reviewed repository-local asset bundle for this topology lives under `ingest/wazuh/single-node-lab/` and remains placeholder-safe lab scaffolding rather than production deployment truth.
+
 ## 2. Approved Phase 18 Lab Topology
 
 The approved Phase 18 lab topology is one single-node Wazuh lab target connected to one bootable AegisOps control-plane runtime boundary.
@@ -122,5 +124,7 @@ Phase 18 is aligned to the reviewed Phase 16 and Phase 17 baseline by keeping th
 `docs/wazuh-alert-ingest-contract.md` remains the normative source for the Wazuh payload contract.
 
 `docs/source-onboarding-contract.md` and `docs/source-families/github-audit/onboarding-package.md` remain the normative source-family review references for why GitHub audit is the first live family.
+
+`docs/phase-18-wazuh-single-node-lab-assets.md` and `ingest/wazuh/single-node-lab/` remain the normative reviewed asset references for the first live lab substrate target.
 
 Any implementation that adds alternate live routing, broader source admission, direct backend publication, or optional-surface startup blockers is out of contract for Phase 18.
