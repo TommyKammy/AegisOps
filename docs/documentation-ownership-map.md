@@ -42,6 +42,8 @@ If a document inside one of these areas has its own `Owner` or `Owners` field, t
 | `docs/phase-16-release-state-and-first-boot-validation.md` | Review record for the approved Phase 16 first-boot scope and bootability target | IT Operations, Information Systems Department |
 | `docs/phase-17-runtime-config-contract-and-boot-command-expectations.md` | Concrete Phase 17 first-boot runtime config contract and boot command expectations | IT Operations, Information Systems Department |
 | `docs/phase-17-runtime-config-contract-validation.md` | Review record for the Phase 17 runtime config contract and boot command expectations | IT Operations, Information Systems Department |
+| `docs/phase-18-wazuh-lab-topology-and-live-ingest-contract.md` | Approved Phase 18 single-node Wazuh lab topology, first live source family, and reviewed live ingest contract | IT Operations, Information Systems Department |
+| `docs/phase-18-wazuh-lab-topology-validation.md` | Review record for the Phase 18 Wazuh lab topology and live ingest contract | IT Operations, Information Systems Department |
 | `docs/retention-evidence-and-replay-readiness-baseline.md` | Retention, evidence lifecycle, and replay readiness baseline | IT Operations, Information Systems Department |
 | `docs/phase-7-ai-hunt-evaluation-baseline.md` | Phase 7 AI hunt evaluation baseline | IT Operations, Information Systems Department |
 | `docs/source-families/` | Approved source-family onboarding and analyst triage runbooks | IT Operations, Information Systems Department |
