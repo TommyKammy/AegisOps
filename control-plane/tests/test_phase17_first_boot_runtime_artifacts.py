@@ -1,0 +1,77 @@
+from __future__ import annotations
+
+import pathlib
+import re
+import unittest
+
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+APPROVED_FIRST_BOOT_BASE_IMAGE = "python:3.12-slim-bookworm"
+
+
+class Phase17FirstBootRuntimeArtifactTests(unittest.TestCase):
+    def test_reviewed_runtime_image_artifact_exists(self) -> None:
+        dockerfile = (
+            REPO_ROOT / "control-plane" / "deployment" / "first-boot" / "Dockerfile"
+        )
+
+        self.assertTrue(dockerfile.exists(), f"expected first-boot runtime image at {dockerfile}")
+
+        text = dockerfile.read_text(encoding="utf-8")
+        for term in (
+            f"FROM {APPROVED_FIRST_BOOT_BASE_IMAGE}",
+            "postgresql-client",
+            "psycopg[binary]",
+            "COPY --chown=aegisops:aegisops control-plane /opt/aegisops/control-plane",
+            "COPY --chown=aegisops:aegisops postgres/control-plane/migrations /opt/aegisops/postgres-migrations",
+            "COPY --chown=aegisops:aegisops control-plane/deployment/first-boot/control-plane-entrypoint.sh /opt/aegisops/bin/first-boot-entrypoint.sh",
+            "USER aegisops:aegisops",
+            'ENTRYPOINT ["/opt/aegisops/bin/first-boot-entrypoint.sh"]',
+            'CMD ["python3", "main.py", "serve"]',
+        ):
+            self.assertIn(term, text)
+
+    def test_first_boot_compose_uses_reviewed_image_path_instead_of_repo_local_runtime_mounts(
+        self,
+    ) -> None:
+        compose_path = (
+            REPO_ROOT / "control-plane" / "deployment" / "first-boot" / "docker-compose.yml"
+        )
+        self.assertTrue(compose_path.exists(), f"expected first-boot compose at {compose_path}")
+
+        text = compose_path.read_text(encoding="utf-8")
+        control_plane_block = self._control_plane_service_block(text)
+        for term in (
+            "build:",
+            "dockerfile: control-plane/deployment/first-boot/Dockerfile",
+            "image: aegisops-control-plane:first-boot",
+            "AEGISOPS_CONTROL_PLANE_BOOT_MODE: ${AEGISOPS_CONTROL_PLANE_BOOT_MODE:-first-boot}",
+            "AEGISOPS_CONTROL_PLANE_LOG_LEVEL: ${AEGISOPS_CONTROL_PLANE_LOG_LEVEL:-INFO}",
+        ):
+            self.assertIn(term, control_plane_block)
+
+        for forbidden in (
+            "image: alpine:3.22.1",
+            "working_dir: /workspace/control-plane",
+            "../../../:/workspace:ro",
+            "./control-plane-entrypoint.sh:/opt/aegisops/bin/first-boot-entrypoint.sh:ro",
+            "../../../postgres/control-plane/migrations:/opt/aegisops/postgres-migrations:ro",
+        ):
+            self.assertNotIn(forbidden, control_plane_block)
+
+        self.assertNotIn("volumes:", control_plane_block)
+        self.assertNotIn("working_dir:", control_plane_block)
+
+    @staticmethod
+    def _control_plane_service_block(compose_text: str) -> str:
+        match = re.search(
+            r"(?ms)^  control-plane:\n(.*?)(?=^  [a-z0-9-]+:\n|\Z)",
+            compose_text,
+        )
+        if match is None:
+            raise AssertionError("expected control-plane service block in first-boot compose file")
+        return match.group(0)
+
+
+if __name__ == "__main__":
+    unittest.main()

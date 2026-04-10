@@ -46,15 +46,11 @@ class Phase16FirstBootVerifierTests(unittest.TestCase):
             compose_path = (
                 fixture_root / "control-plane" / "deployment" / "first-boot" / "docker-compose.yml"
             )
-            self._insert_text_after(
-                compose_path,
-                "      - serve\n",
-                "      - runtime\n",
-            )
+            self._insert_text_after(compose_path, "    image: aegisops-control-plane:first-boot\n", "    volumes:\n      - ../../../:/workspace:ro\n")
             self._assert_verifier_fails_with(
                 verifier,
                 fixture_root,
-                "First-boot compose must not launch the one-shot runtime snapshot renderer.",
+                "First-boot compose must not depend on repository-local runtime bind mounts.",
             )
 
             self._create_repo_fixture(fixture_root)

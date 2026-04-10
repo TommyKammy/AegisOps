@@ -2,11 +2,10 @@
 
 set -eu
 
-# Phase 16 first-boot skeleton only.
-# This entrypoint validates the reviewed required bootstrap contract,
-# reserves a hook point for migration bootstrap, and then hands off to
-# the runtime command. Live health endpoints and production image
-# implementation remain out of scope for this repository skeleton.
+# Reviewed first-boot control-plane entrypoint.
+# This entrypoint validates the approved runtime contract, proves
+# migration bootstrap success, and then hands off to the runtime
+# service process as the final foreground command.
 
 require_non_empty() {
   var_name="$1"
@@ -21,12 +20,22 @@ require_non_empty() {
 require_non_empty "AEGISOPS_CONTROL_PLANE_HOST" "${AEGISOPS_CONTROL_PLANE_HOST:-}"
 require_non_empty "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN" "${AEGISOPS_CONTROL_PLANE_POSTGRES_DSN:-}"
 
+host_value="${AEGISOPS_CONTROL_PLANE_HOST:-}"
+case "${host_value}" in
+  0.0.0.0|::|*)
+    if [ "${host_value}" = "0.0.0.0" ] || [ "${host_value}" = "::" ] || [ "${host_value}" = "*" ]; then
+      echo "AEGISOPS_CONTROL_PLANE_HOST must not publish the control-plane backend directly." >&2
+      exit 1
+    fi
+    ;;
+esac
+
 dsn_value="${AEGISOPS_CONTROL_PLANE_POSTGRES_DSN:-}"
 case "${dsn_value}" in
   postgresql://*|postgres://*)
     ;;
   *)
-    echo "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN must be a PostgreSQL DSN for the first-boot skeleton." >&2
+    echo "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN must be a PostgreSQL DSN for the first-boot runtime." >&2
     exit 1
     ;;
 esac
@@ -34,7 +43,32 @@ esac
 port_value="${AEGISOPS_CONTROL_PLANE_PORT:-8080}"
 case "${port_value}" in
   ''|*[!0-9]*)
-    echo "AEGISOPS_CONTROL_PLANE_PORT must be an integer for the first-boot skeleton." >&2
+    echo "AEGISOPS_CONTROL_PLANE_PORT must be an integer for the first-boot runtime." >&2
+    exit 1
+    ;;
+esac
+
+if [ "${port_value}" -lt 1 ] || [ "${port_value}" -gt 65535 ]; then
+  echo "AEGISOPS_CONTROL_PLANE_PORT must stay within the reviewed listen-port range." >&2
+  exit 1
+fi
+
+boot_mode_value="${AEGISOPS_CONTROL_PLANE_BOOT_MODE:-first-boot}"
+case "${boot_mode_value}" in
+  first-boot)
+    ;;
+  *)
+    echo "AEGISOPS_CONTROL_PLANE_BOOT_MODE must remain first-boot for the reviewed startup path." >&2
+    exit 1
+    ;;
+esac
+
+log_level_value="${AEGISOPS_CONTROL_PLANE_LOG_LEVEL:-INFO}"
+case "${log_level_value}" in
+  DEBUG|INFO|WARNING|ERROR|CRITICAL)
+    ;;
+  *)
+    echo "AEGISOPS_CONTROL_PLANE_LOG_LEVEL must be one of DEBUG, INFO, WARNING, ERROR, or CRITICAL." >&2
     exit 1
     ;;
 esac
