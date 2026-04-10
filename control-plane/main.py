@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import fields, is_dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import sys
-from typing import Sequence, TextIO
+from typing import Mapping, Sequence, TextIO
 from urllib.parse import parse_qs, urlsplit
 
 from aegisops_control_plane.service import (
@@ -99,6 +100,7 @@ def run_control_plane_service(
     *,
     stderr: TextIO | None = None,
 ) -> int:
+    service.validate_wazuh_ingest_runtime()
     runtime_snapshot = service.describe_runtime().to_dict()
     stderr = stderr or sys.stderr
 
@@ -175,6 +177,100 @@ def run_control_plane_service(
                 },
             )
 
+        def do_POST(self) -> None:  # noqa: N802
+            request_target = urlsplit(self.path)
+            request_path = request_target.path
+
+            if request_path != "/intake/wazuh":
+                self._write_json(
+                    HTTPStatus.NOT_FOUND,
+                    {
+                        "error": "not_found",
+                        "path": request_path,
+                    },
+                )
+                return
+
+            try:
+                content_length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                self._write_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {
+                        "error": "invalid_request",
+                        "message": "Content-Length must be an integer",
+                    },
+                )
+                return
+            if content_length <= 0:
+                self._write_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {
+                        "error": "invalid_request",
+                        "message": "request body is required",
+                    },
+                )
+                return
+
+            try:
+                raw_payload = self.rfile.read(content_length).decode("utf-8")
+            except UnicodeDecodeError:
+                self._write_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {
+                        "error": "invalid_request",
+                        "message": "request body must be valid UTF-8 JSON",
+                    },
+                )
+                return
+
+            try:
+                alert = json.loads(raw_payload)
+            except json.JSONDecodeError as exc:
+                self._write_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {
+                        "error": "invalid_request",
+                        "message": f"request body must be valid JSON: {exc.msg}",
+                    },
+                )
+                return
+
+            try:
+                ingest_result = service.ingest_wazuh_alert(
+                    raw_alert=alert,
+                    authorization_header=self.headers.get("Authorization"),
+                    forwarded_proto=self.headers.get("X-Forwarded-Proto"),
+                )
+            except PermissionError as exc:
+                self._write_json(
+                    HTTPStatus.FORBIDDEN,
+                    {
+                        "error": "forbidden",
+                        "message": str(exc),
+                    },
+                )
+                return
+            except ValueError as exc:
+                self._write_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {
+                        "error": "invalid_request",
+                        "message": str(exc),
+                    },
+                )
+                return
+
+            self._write_json(
+                HTTPStatus.ACCEPTED,
+                {
+                    "disposition": ingest_result.disposition,
+                    "finding_id": ingest_result.alert.finding_id,
+                    "alert": _json_ready(ingest_result.alert),
+                    "reconciliation": _json_ready(ingest_result.reconciliation),
+                },
+            )
+
         def log_message(self, format: str, *args: object) -> None:
             print(
                 "%s - - [%s] %s"
@@ -206,6 +302,32 @@ def run_control_plane_service(
         return 0
     finally:
         server.server_close()
+
+
+def _json_ready(value: object) -> object:
+    if is_dataclass(value):
+        raw = {
+            field.name: getattr(value, field.name)
+            for field in fields(value)
+        }
+    else:
+        raw = value
+    if isinstance(raw, Mapping):
+        return {str(key): _json_ready(item) for key, item in raw.items()}
+    if isinstance(raw, dict):
+        return {key: _json_ready(item) for key, item in raw.items()}
+    if isinstance(raw, tuple):
+        return [_json_ready(item) for item in raw]
+    if isinstance(raw, list):
+        return [_json_ready(item) for item in raw]
+    if hasattr(raw, "isoformat"):
+        try:
+            return raw.isoformat()
+        except TypeError:
+            return raw
+    if hasattr(value, "to_dict") and callable(value.to_dict):
+        return value.to_dict()
+    return raw
 
 
 def main(

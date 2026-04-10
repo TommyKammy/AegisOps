@@ -8,7 +8,7 @@ import pathlib
 import sys
 import threading
 import unittest
-from urllib import request
+from urllib import error, request
 from unittest import mock
 
 
@@ -108,6 +108,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 host="127.0.0.1",
                 port=8089,
                 postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
             ),
             store=store,
         )
@@ -129,6 +130,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 host="127.0.0.1",
                 port=0,
                 postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
             ),
             store=store,
         )
@@ -203,6 +205,294 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 self.assertEqual(records_payload["record_family"], "alert")
                 self.assertEqual(records_payload["records"][0]["alert_id"], "alert-http-001")
                 self.assertEqual(status_payload["by_ingest_disposition"], {"created": 1})
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(timeout=2)
+
+    def test_long_running_runtime_surface_admits_authenticated_wazuh_ingest(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+            ),
+            store=store,
+        )
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+
+                alert = _load_wazuh_fixture("github-audit-alert.json")
+                request_body = json.dumps(alert).encode("utf-8")
+                ingest_request = request.Request(
+                    f"http://127.0.0.1:{servers[0].server_port}/intake/wazuh",
+                    data=request_body,
+                    method="POST",
+                    headers={
+                        "Authorization": "Bearer reviewed-shared-secret",
+                        "Content-Type": "application/json",
+                        "X-Forwarded-Proto": "https",
+                    },
+                )
+
+                with request.urlopen(ingest_request, timeout=2) as response:
+                    response_body = json.loads(response.read().decode("utf-8"))
+
+                self.assertEqual(response.status, 202)
+                self.assertEqual(response_body["disposition"], "created")
+                self.assertEqual(response_body["finding_id"], response_body["alert"]["finding_id"])
+                self.assertEqual(store.list(AlertRecord)[0].finding_id, response_body["finding_id"])
+                self.assertEqual(
+                    store.list(AnalyticSignalRecord)[0].substrate_detection_record_id,
+                    "wazuh:1731595300.1234567",
+                )
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(timeout=2)
+
+    def test_long_running_runtime_surface_rejects_missing_wazuh_shared_secret(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=8089,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+            ),
+            store=store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET must be set",
+        ):
+            main.run_control_plane_service(service)
+
+    def test_long_running_runtime_surface_rejects_wazuh_ingest_without_bearer_auth(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+            ),
+            store=store,
+        )
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+
+                ingest_request = request.Request(
+                    f"http://127.0.0.1:{servers[0].server_port}/intake/wazuh",
+                    data=json.dumps(_load_wazuh_fixture("github-audit-alert.json")).encode("utf-8"),
+                    method="POST",
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-Forwarded-Proto": "https",
+                    },
+                )
+
+                with self.assertRaisesRegex(error.HTTPError, "403"):
+                    request.urlopen(ingest_request, timeout=2)
+
+                self.assertEqual(store.list(AlertRecord), ())
+                self.assertEqual(store.list(AnalyticSignalRecord), ())
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(timeout=2)
+
+    def test_long_running_runtime_surface_rejects_wazuh_ingest_with_wrong_bearer_secret(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+            ),
+            store=store,
+        )
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+
+                ingest_request = request.Request(
+                    f"http://127.0.0.1:{servers[0].server_port}/intake/wazuh",
+                    data=json.dumps(_load_wazuh_fixture("github-audit-alert.json")).encode("utf-8"),
+                    method="POST",
+                    headers={
+                        "Authorization": "Bearer wrong-secret",
+                        "Content-Type": "application/json",
+                        "X-Forwarded-Proto": "https",
+                    },
+                )
+
+                with self.assertRaisesRegex(error.HTTPError, "403"):
+                    request.urlopen(ingest_request, timeout=2)
+
+                self.assertEqual(store.list(AlertRecord), ())
+                self.assertEqual(store.list(AnalyticSignalRecord), ())
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(timeout=2)
+
+    def test_long_running_runtime_surface_rejects_wazuh_ingest_without_https_forwarding(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+            ),
+            store=store,
+        )
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+
+                ingest_request = request.Request(
+                    f"http://127.0.0.1:{servers[0].server_port}/intake/wazuh",
+                    data=json.dumps(_load_wazuh_fixture("github-audit-alert.json")).encode("utf-8"),
+                    method="POST",
+                    headers={
+                        "Authorization": "Bearer reviewed-shared-secret",
+                        "Content-Type": "application/json",
+                    },
+                )
+
+                with self.assertRaisesRegex(error.HTTPError, "403"):
+                    request.urlopen(ingest_request, timeout=2)
+
+                self.assertEqual(store.list(AlertRecord), ())
+                self.assertEqual(store.list(AnalyticSignalRecord), ())
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(timeout=2)
+
+    def test_long_running_runtime_surface_rejects_non_github_wazuh_family(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+            ),
+            store=store,
+        )
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+
+                ingest_request = request.Request(
+                    f"http://127.0.0.1:{servers[0].server_port}/intake/wazuh",
+                    data=json.dumps(_load_wazuh_fixture("microsoft-365-audit-alert.json")).encode("utf-8"),
+                    method="POST",
+                    headers={
+                        "Authorization": "Bearer reviewed-shared-secret",
+                        "Content-Type": "application/json",
+                        "X-Forwarded-Proto": "https",
+                    },
+                )
+
+                with self.assertRaisesRegex(error.HTTPError, "400"):
+                    request.urlopen(ingest_request, timeout=2)
+
+                self.assertEqual(store.list(AlertRecord), ())
+                self.assertEqual(store.list(AnalyticSignalRecord), ())
             finally:
                 if servers:
                     servers[0].shutdown()

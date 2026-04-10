@@ -5,6 +5,7 @@ from collections import Counter
 from dataclasses import asdict, dataclass, fields, replace
 from datetime import datetime, timezone
 import hashlib
+import hmac
 import json
 import re
 import uuid
@@ -14,6 +15,7 @@ from .adapters.executor import IsolatedExecutorAdapter
 from .adapters.n8n import N8NReconciliationAdapter
 from .adapters.postgres import PostgresControlPlaneStore
 from .adapters.shuffle import ShuffleActionAdapter
+from .adapters.wazuh import WazuhAlertAdapter
 from .config import RuntimeConfig
 from .models import (
     AITraceRecord,
@@ -864,6 +866,59 @@ class AegisOpsControlPlaneService:
 
     def get_record(self, record_type: Type[RecordT], record_id: str) -> RecordT | None:
         return self._store.get(record_type, record_id)
+
+    def validate_wazuh_ingest_runtime(self) -> None:
+        if self._config.wazuh_ingest_shared_secret.strip() == "":
+            raise ValueError(
+                "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET must be set "
+                "before starting the live Wazuh ingest runtime"
+            )
+
+    def ingest_wazuh_alert(
+        self,
+        *,
+        raw_alert: Mapping[str, object],
+        authorization_header: str | None,
+        forwarded_proto: str | None,
+    ) -> FindingAlertIngestResult:
+        self.validate_wazuh_ingest_runtime()
+
+        if (forwarded_proto or "").strip().lower() != "https":
+            raise PermissionError(
+                "live Wazuh ingest requires the reviewed reverse proxy HTTPS boundary"
+            )
+
+        scheme, separator, supplied_secret = (authorization_header or "").partition(" ")
+        if separator == "" or scheme != "Bearer" or supplied_secret.strip() == "":
+            raise PermissionError(
+                "live Wazuh ingest requires Authorization: Bearer <shared secret>"
+            )
+        if not hmac.compare_digest(
+            supplied_secret.strip(),
+            self._config.wazuh_ingest_shared_secret,
+        ):
+            raise PermissionError(
+                "live Wazuh ingest bearer credential did not match the reviewed shared secret"
+            )
+
+        native_alert = self._require_mapping(raw_alert, "alert")
+        source_family = self._normalize_optional_string(
+            (
+                self._require_mapping(
+                    native_alert.get("data"),
+                    "data",
+                )
+            ).get("source_family"),
+            "data.source_family",
+        )
+        if source_family != "github_audit":
+            raise ValueError(
+                "live Wazuh ingest only admits the reviewed github_audit first live source family"
+            )
+
+        adapter = WazuhAlertAdapter()
+        native_record = adapter.build_native_detection_record(native_alert)
+        return self.ingest_native_detection_record(adapter, native_record)
 
     def delegate_approved_action_to_shuffle(
         self,

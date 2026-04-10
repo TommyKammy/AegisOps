@@ -14,6 +14,7 @@ class RuntimeConfig:
     n8n_base_url: str = "<set-me>"
     shuffle_base_url: str = "<set-me>"
     isolated_executor_base_url: str = "<set-me>"
+    wazuh_ingest_shared_secret: str = ""
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> "RuntimeConfig":
@@ -46,5 +47,9 @@ class RuntimeConfig:
             isolated_executor_base_url=source.get(
                 "AEGISOPS_CONTROL_PLANE_ISOLATED_EXECUTOR_BASE_URL",
                 cls.isolated_executor_base_url,
+            ),
+            wazuh_ingest_shared_secret=source.get(
+                "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET",
+                cls.wazuh_ingest_shared_secret,
             ),
         )
