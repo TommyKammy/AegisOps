@@ -38,10 +38,11 @@ Failure signature: none
 - Hypothesis: The Phase 17 contract doc is present and tested, but the checkpoint still benefits from a repo-level verifier and validation snapshot so reviewers can confirm the runtime contract without relying only on a single Python doc test.
 - What changed: Added `docs/phase-17-runtime-config-contract-validation.md`, `scripts/verify-phase-17-runtime-config-contract.sh`, and `scripts/test-verify-phase-17-runtime-config-contract.sh`, then linked the validation doc from `README.md` and `docs/documentation-ownership-map.md`.
 - Current blocker: none
-- Next exact step: Commit the Phase 17 verifier/validation checkpoint on `codex/issue-364`, push the branch, and open a draft PR from that checkpoint.
+- Next exact step: Monitor draft PR `#369` for review feedback and keep the Phase 17 verifier aligned with any wording changes to the contract docs.
 - Verification gap: The requested `Phase 16-21 Epic Roadmap.md` comparison target is still unavailable in the local worktree, so the validation snapshot records that deviation instead of claiming roadmap review was completed.
 - Files touched: `docs/phase-17-runtime-config-contract-validation.md`, `scripts/verify-phase-17-runtime-config-contract.sh`, `scripts/test-verify-phase-17-runtime-config-contract.sh`, `README.md`, `docs/documentation-ownership-map.md`, `.codex-supervisor/issues/364/issue-journal.md`
 - Rollback concern: Low; changes remain documentation and verification only, but the new verifier now treats direct backend publication, widened startup prerequisites, and missing fail-closed contract language as review failures.
-- Last focused command: `bash scripts/verify-phase-17-runtime-config-contract.sh && bash scripts/test-verify-phase-17-runtime-config-contract.sh && python3 -m unittest control-plane.tests.test_phase17_runtime_config_contract_docs control-plane.tests.test_phase16_bootstrap_contract_docs control-plane.tests.test_phase16_first_boot_verifier && bash scripts/verify-phase-16-first-boot-contract.sh`
+- Last focused command: `gh pr create --draft --base main --head codex/issue-364 --title "[codex] Define Phase 17 runtime config contract" --body-file <tempfile>`
 ### Scratchpad
+- Draft PR opened: `https://github.com/TommyKammy/AegisOps/pull/369`
 - Keep this section short. The supervisor may compact older notes automatically.
