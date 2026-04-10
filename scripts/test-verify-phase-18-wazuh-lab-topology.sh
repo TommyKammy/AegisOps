@@ -17,6 +17,7 @@ canonical_asset_readme="${repo_root}/ingest/wazuh/single-node-lab/README.md"
 canonical_asset_bootstrap="${repo_root}/ingest/wazuh/single-node-lab/bootstrap.env.sample"
 canonical_asset_compose="${repo_root}/ingest/wazuh/single-node-lab/docker-compose.yml"
 canonical_asset_integration="${repo_root}/ingest/wazuh/single-node-lab/ossec.integration.sample.xml"
+canonical_asset_render_helper="${repo_root}/ingest/wazuh/single-node-lab/render-ossec-integration.sh"
 
 workdir="$(mktemp -d)"
 trap 'rm -rf "${workdir}"' EXIT
@@ -51,6 +52,7 @@ write_canonical_artifacts() {
   cp "${canonical_asset_bootstrap}" "${target}/ingest/wazuh/single-node-lab/bootstrap.env.sample"
   cp "${canonical_asset_compose}" "${target}/ingest/wazuh/single-node-lab/docker-compose.yml"
   cp "${canonical_asset_integration}" "${target}/ingest/wazuh/single-node-lab/ossec.integration.sample.xml"
+  cp "${canonical_asset_render_helper}" "${target}/ingest/wazuh/single-node-lab/render-ossec-integration.sh"
   cp "${verifier}" "${target}/scripts/verify-phase-18-wazuh-lab-topology.sh"
   cp "${repo_root}/scripts/test-verify-phase-18-wazuh-lab-topology.sh" "${target}/scripts/test-verify-phase-18-wazuh-lab-topology.sh"
   git -C "${target}" add .
@@ -161,6 +163,13 @@ perl -0pi -e 's/    expose:\n      - "1514\/udp"\n      - "1515"\n      - "55000
 git -C "${published_ports_repo}" add ingest/wazuh/single-node-lab/docker-compose.yml
 commit_fixture "${published_ports_repo}"
 assert_fails_with "${published_ports_repo}" 'Phase 18 Wazuh lab compose asset must not publish host ports directly.'
+
+missing_group_repo="${workdir}/missing-group"
+create_repo "${missing_group_repo}"
+write_canonical_artifacts "${missing_group_repo}"
+remove_text_from_doc "${missing_group_repo}" "${missing_group_repo}/ingest/wazuh/single-node-lab/ossec.integration.sample.xml" '  <group>github_audit</group>'
+commit_fixture "${missing_group_repo}"
+assert_fails_with "${missing_group_repo}" '  <group>github_audit</group>'
 
 missing_deviation_repo="${workdir}/missing-deviation"
 create_repo "${missing_deviation_repo}"

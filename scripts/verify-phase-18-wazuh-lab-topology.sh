@@ -19,6 +19,7 @@ asset_readme="${asset_dir}/README.md"
 asset_bootstrap="${asset_dir}/bootstrap.env.sample"
 asset_compose="${asset_dir}/docker-compose.yml"
 asset_integration="${asset_dir}/ossec.integration.sample.xml"
+asset_render_helper="${asset_dir}/render-ossec-integration.sh"
 
 require_file() {
   local path="$1"
@@ -53,6 +54,7 @@ require_file "${asset_readme}" "Missing Phase 18 Wazuh lab README"
 require_file "${asset_bootstrap}" "Missing Phase 18 Wazuh lab bootstrap sample"
 require_file "${asset_compose}" "Missing Phase 18 Wazuh lab compose asset"
 require_file "${asset_integration}" "Missing Phase 18 Wazuh lab integration sample"
+require_file "${asset_render_helper}" "Missing Phase 18 Wazuh lab integration render helper"
 
 design_required_lines=(
   '# AegisOps Phase 18 Wazuh Lab Topology and Live Ingest Contract'
@@ -107,10 +109,13 @@ asset_doc_required_lines=(
   '- `docker-compose.yml` for the placeholder-safe single-node Wazuh manager, indexer, and dashboard lab stack with internal-only service exposure and no direct host port publication;'
   '- `bootstrap.env.sample` for reviewed non-secret bootstrap inputs;'
   '- `ossec.integration.sample.xml` for the reviewed custom integration shape that preserves `Wazuh -> AegisOps` as the only approved first live routing path;'
+  '- `render-ossec-integration.sh` for rendering the reviewed sample into literal Wazuh integration values before operator use; and'
   'The reviewed custom integration shape uses `Authorization: Bearer <shared secret>` at runtime.'
   'The shared secret must remain untracked and must come from an operator-provided runtime secret file or another reviewed untracked secret source.'
+  'Wazuh does not expand the sample `${...}` placeholders inside the integration block. Operators must render literal `<hook_url>` and `<api_key>` values with `render-ossec-integration.sh` before loading the reviewed integration into active Wazuh configuration.'
   'Operators must keep GitHub audit as the only approved first live source family for this slice.'
   'Operators must keep the Wazuh manager, indexer, and dashboard interfaces internal to the lab compose network or another separately reviewed lab access path rather than publishing host ports from this bundle.'
+  'Operators must run `render-ossec-integration.sh` in the manager container or another shell where `AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE` resolves to the mounted secret path before copying the reviewed integration block into active Wazuh configuration.'
   '- multi-node or production-scale Wazuh;'
   '- the optional OpenSearch runtime extension;'
 )
@@ -128,6 +133,7 @@ validation_required_lines=(
   '## Cross-Link Review'
   '## Deviations'
   'Confirmed the reviewed repository-local asset bundle under `ingest/wazuh/single-node-lab/` makes the first live substrate target explicit with placeholder-safe compose, bootstrap, and integration artifacts while keeping secrets untracked and production hardening out of scope.'
+  'Confirmed the reviewed lab bundle documents a render step for turning the sample integration into literal Wazuh values instead of implying unsupported environment-variable expansion inside the live Wazuh configuration.'
   'Confirmed the approved topology is limited to one single-node Wazuh lab target feeding one bootable AegisOps control-plane runtime boundary through the reviewed reverse proxy and into PostgreSQL-backed control-plane state.'
   'Confirmed the Phase 18 live path keeps Wazuh -> AegisOps as the mainline live path and does not broaden the first live slice into `Wazuh -> Shuffle`, n8n relay routing, or OpenSearch-first runtime dependence.'
   'Confirmed GitHub audit is the approved first live source family because it preserves the narrowest identity-rich source context already prioritized by the reviewed Phase 14 family order and GitHub audit onboarding package.'
@@ -157,6 +163,7 @@ required_artifacts=(
   "ingest/wazuh/single-node-lab/bootstrap.env.sample"
   "ingest/wazuh/single-node-lab/docker-compose.yml"
   "ingest/wazuh/single-node-lab/ossec.integration.sample.xml"
+  "ingest/wazuh/single-node-lab/render-ossec-integration.sh"
   "scripts/verify-phase-18-wazuh-lab-topology.sh"
   "scripts/test-verify-phase-18-wazuh-lab-topology.sh"
 )
@@ -182,7 +189,9 @@ asset_compose_required_lines=(
   '      - "5601"'
   '      AEGISOPS_WAZUH_AEGISOPS_INGEST_URL: ${AEGISOPS_WAZUH_AEGISOPS_INGEST_URL:?set-in-untracked-runtime-env}'
   '      AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE: ${AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE:?set-in-untracked-runtime-env}'
+  '      - ./render-ossec-integration.sh:/wazuh-config-placeholder/render-ossec-integration.sh:ro'
   '    # GitHub audit remains the only approved first live source family.'
+  '    # render-ossec-integration.sh consumes the mounted secret file before operators copy literal values into active Wazuh config'
   '    # manager interfaces stay internal to the lab compose network until a reviewed lab access path exists'
   '    # dashboard access must stay on an internal-only or separately reviewed lab access path'
   '    # do not add Shuffle, n8n, or a direct control-plane backend publication path here'
@@ -202,7 +211,7 @@ asset_bootstrap_required_lines=(
   'AEGISOPS_WAZUH_INDEXER_HOSTNAME=wazuh-lab-indexer-01'
   'AEGISOPS_WAZUH_DASHBOARD_HOSTNAME=wazuh-lab-dashboard-01'
   'AEGISOPS_WAZUH_AEGISOPS_INGEST_URL=https://aegisops-lab.example.internal/intake/wazuh'
-  'AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE=./secrets/aegisops-wazuh-shared-secret.txt'
+  'AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE=/run/aegisops-secrets/aegisops-wazuh-shared-secret.txt'
   'AEGISOPS_WAZUH_GITHUB_AUDIT_ENROLLMENT_STATUS=reviewed-first-live-family-only'
   '# Do not commit live secrets.'
 )
@@ -212,14 +221,27 @@ for line in "${asset_bootstrap_required_lines[@]}"; do
 done
 
 asset_integration_required_lines=(
+  '<!-- Render this sample with render-ossec-integration.sh before use. -->'
   '  <name>aegisops-github-audit</name>'
   '  <hook_url>${AEGISOPS_WAZUH_AEGISOPS_INGEST_URL}</hook_url>'
   '  <api_key>${AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET}</api_key>'
   '  <alert_format>json</alert_format>'
+  '  <group>github_audit</group>'
 )
 
 for line in "${asset_integration_required_lines[@]}"; do
   require_fixed_string "${asset_integration}" "${line}"
+done
+
+render_helper_required_lines=(
+  'require_env "AEGISOPS_WAZUH_AEGISOPS_INGEST_URL"'
+  'require_env "AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE"'
+  '  <name>aegisops-github-audit</name>'
+  '  <group>github_audit</group>'
+)
+
+for line in "${render_helper_required_lines[@]}"; do
+  require_fixed_string "${asset_render_helper}" "${line}"
 done
 
 echo "Phase 18 Wazuh lab topology and live ingest contract remain explicit and reviewable."

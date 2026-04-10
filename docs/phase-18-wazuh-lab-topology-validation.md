@@ -21,6 +21,7 @@
 - `ingest/wazuh/single-node-lab/bootstrap.env.sample`
 - `ingest/wazuh/single-node-lab/docker-compose.yml`
 - `ingest/wazuh/single-node-lab/ossec.integration.sample.xml`
+- `ingest/wazuh/single-node-lab/render-ossec-integration.sh`
 - `scripts/verify-phase-18-wazuh-lab-topology.sh`
 - `scripts/test-verify-phase-18-wazuh-lab-topology.sh`
 
@@ -37,6 +38,8 @@ Confirmed the reviewed Wazuh custom integration contract requires HTTPS POST to 
 Confirmed the Phase 18 contract applies the existing Wazuh payload-admission rules rather than redefining them, and limits first live admission to GitHub audit carried inside the reviewed Wazuh alert envelope.
 
 Confirmed the reviewed repository-local asset bundle under `ingest/wazuh/single-node-lab/` makes the first live substrate target explicit with placeholder-safe compose, bootstrap, and integration artifacts while keeping secrets untracked and production hardening out of scope.
+
+Confirmed the reviewed lab bundle documents a render step for turning the sample integration into literal Wazuh values instead of implying unsupported environment-variable expansion inside the live Wazuh configuration.
 
 Confirmed the live ingest path remains fail-closed by rejecting non-HTTPS requests, non-POST requests, missing or invalid bearer credentials, direct backend bypass attempts, invalid JSON payloads, Wazuh payloads that violate required field expectations, and payloads outside the approved first live family.
 

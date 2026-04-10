@@ -16,9 +16,11 @@ services:
       - /srv/aegisops/wazuh-lab/manager-config-placeholder:/wazuh-config-placeholder
       - /srv/aegisops/wazuh-lab/manager-secret-placeholder:/run/aegisops-secrets:ro
       - ./ossec.integration.sample.xml:/wazuh-config-placeholder/ossec.integration.sample.xml:ro
+      - ./render-ossec-integration.sh:/wazuh-config-placeholder/render-ossec-integration.sh:ro
     depends_on:
       - wazuh-indexer
     # GitHub audit remains the only approved first live source family.
+    # render-ossec-integration.sh consumes the mounted secret file before operators copy literal values into active Wazuh config
     # This single-node lab bundle exists for reviewed substrate bring-up only.
     # manager interfaces stay internal to the lab compose network until a reviewed lab access path exists
     # do not add Shuffle, n8n, or a direct control-plane backend publication path here
