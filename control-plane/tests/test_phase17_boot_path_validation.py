@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pathlib
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -20,6 +21,10 @@ from postgres_test_support import FakePostgresBackend, make_store
 
 class Phase17BootPathValidationTests(unittest.TestCase):
     def test_first_boot_compose_dry_run_covers_reviewed_bring_up_path(self) -> None:
+        docker_bin = shutil.which("docker")
+        if docker_bin is None:
+            self.skipTest("docker CLI is not available in PATH")
+
         compose_path = (
             REPO_ROOT / "control-plane" / "deployment" / "first-boot" / "docker-compose.yml"
         )
@@ -42,21 +47,12 @@ class Phase17BootPathValidationTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            services_result = subprocess.run(
-                [
-                    "docker",
-                    "compose",
-                    "-f",
-                    str(compose_path),
-                    "--env-file",
-                    str(env_path),
-                    "config",
-                    "--services",
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-                cwd=REPO_ROOT,
+            services_result = self._run_docker_compose(
+                docker_bin,
+                compose_path,
+                env_path,
+                "config",
+                "--services",
             )
             self.assertEqual(
                 services_result.returncode,
@@ -68,21 +64,12 @@ class Phase17BootPathValidationTests(unittest.TestCase):
                 ["control-plane", "postgres", "proxy"],
             )
 
-            dry_run_result = subprocess.run(
-                [
-                    "docker",
-                    "compose",
-                    "-f",
-                    str(compose_path),
-                    "--env-file",
-                    str(env_path),
-                    "up",
-                    "--dry-run",
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-                cwd=REPO_ROOT,
+            dry_run_result = self._run_docker_compose(
+                docker_bin,
+                compose_path,
+                env_path,
+                "up",
+                "--dry-run",
             )
             self.assertEqual(
                 dry_run_result.returncode,
@@ -161,6 +148,36 @@ class Phase17BootPathValidationTests(unittest.TestCase):
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
             store=store,
         )
+
+    def _run_docker_compose(
+        self,
+        docker_bin: str,
+        compose_path: pathlib.Path,
+        env_path: pathlib.Path,
+        *compose_args: str,
+    ) -> subprocess.CompletedProcess[str]:
+        try:
+            return subprocess.run(
+                [
+                    docker_bin,
+                    "compose",
+                    "-f",
+                    str(compose_path),
+                    "--env-file",
+                    str(env_path),
+                    *compose_args,
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                cwd=REPO_ROOT,
+                timeout=30,
+            )
+        except subprocess.TimeoutExpired as exc:
+            self.fail(
+                "docker compose command timed out after 30 seconds:"
+                f" {' '.join(exc.cmd)}"
+            )
 
 
 if __name__ == "__main__":
