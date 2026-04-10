@@ -4,10 +4,10 @@ services:
   wazuh-manager:
     image: wazuh/wazuh-manager:${AEGISOPS_WAZUH_VERSION:-4.8.0}
     hostname: ${AEGISOPS_WAZUH_HOSTNAME:-wazuh-lab-manager-01}
-    ports:
-      - "1514:1514/udp"
-      - "1515:1515"
-      - "55000:55000"
+    expose:
+      - "1514/udp"
+      - "1515"
+      - "55000"
     environment:
       AEGISOPS_WAZUH_AEGISOPS_INGEST_URL: ${AEGISOPS_WAZUH_AEGISOPS_INGEST_URL:?set-in-untracked-runtime-env}
       AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE: ${AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE:?set-in-untracked-runtime-env}
@@ -20,6 +20,7 @@ services:
       - wazuh-indexer
     # GitHub audit remains the only approved first live source family.
     # This single-node lab bundle exists for reviewed substrate bring-up only.
+    # manager interfaces stay internal to the lab compose network until a reviewed lab access path exists
     # do not add Shuffle, n8n, or a direct control-plane backend publication path here
 
   wazuh-indexer:
@@ -34,8 +35,8 @@ services:
     hostname: ${AEGISOPS_WAZUH_DASHBOARD_HOSTNAME:-wazuh-lab-dashboard-01}
     depends_on:
       - wazuh-indexer
-    ports:
-      - "5601:5601"
+    expose:
+      - "5601"
     volumes:
       - /srv/aegisops/wazuh-lab/dashboard-certs-placeholder:/usr/share/wazuh-dashboard/certs:ro
-    # dashboard publication is limited to reviewed lab access only
+    # dashboard access must stay on an internal-only or separately reviewed lab access path

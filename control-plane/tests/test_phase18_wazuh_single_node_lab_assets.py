@@ -56,16 +56,19 @@ class Phase18WazuhSingleNodeLabAssetsTests(unittest.TestCase):
             "wazuh-manager:",
             "wazuh-indexer:",
             "wazuh-dashboard:",
-            "5601:5601",
-            "1514:1514/udp",
-            "1515:1515",
-            "55000:55000",
+            '      - "1514/udp"',
+            '      - "1515"',
+            '      - "55000"',
+            '      - "5601"',
             "AEGISOPS_WAZUH_AEGISOPS_INGEST_URL",
             "AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE",
             "GitHub audit remains the only approved first live source family",
+            "manager interfaces stay internal to the lab compose network until a reviewed lab access path exists",
+            "dashboard access must stay on an internal-only or separately reviewed lab access path",
             "do not add Shuffle, n8n, or a direct control-plane backend publication path here",
         ):
             self.assertIn(term, compose_text)
+        self.assertNotIn("ports:", compose_text)
 
         bootstrap_text = bootstrap_path.read_text(encoding="utf-8")
         for term in (
@@ -97,6 +100,7 @@ class Phase18WazuhSingleNodeLabAssetsTests(unittest.TestCase):
             "PostgreSQL-backed control-plane state",
             "GitHub audit",
             "not an approved production deployment",
+            "service interfaces internal-only",
             "must not publish the control-plane backend port directly",
         ):
             self.assertIn(term, readme_text)

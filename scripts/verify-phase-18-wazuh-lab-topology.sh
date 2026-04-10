@@ -104,12 +104,13 @@ asset_doc_required_lines=(
   '## 5. Deferred Scope'
   '## 6. Reviewable Usage Boundary'
   'The reviewed asset bundle for the single-node Wazuh lab target lives under `ingest/wazuh/single-node-lab/`.'
-  '- `docker-compose.yml` for the placeholder-safe single-node Wazuh manager, indexer, and dashboard lab stack;'
+  '- `docker-compose.yml` for the placeholder-safe single-node Wazuh manager, indexer, and dashboard lab stack with internal-only service exposure and no direct host port publication;'
   '- `bootstrap.env.sample` for reviewed non-secret bootstrap inputs;'
   '- `ossec.integration.sample.xml` for the reviewed custom integration shape that preserves `Wazuh -> AegisOps` as the only approved first live routing path;'
   'The reviewed custom integration shape uses `Authorization: Bearer <shared secret>` at runtime.'
   'The shared secret must remain untracked and must come from an operator-provided runtime secret file or another reviewed untracked secret source.'
   'Operators must keep GitHub audit as the only approved first live source family for this slice.'
+  'Operators must keep the Wazuh manager, indexer, and dashboard interfaces internal to the lab compose network or another separately reviewed lab access path rather than publishing host ports from this bundle.'
   '- multi-node or production-scale Wazuh;'
   '- the optional OpenSearch runtime extension;'
 )
@@ -174,15 +175,27 @@ asset_compose_required_lines=(
   '  wazuh-manager:'
   '  wazuh-indexer:'
   '  wazuh-dashboard:'
+  '    expose:'
+  '      - "1514/udp"'
+  '      - "1515"'
+  '      - "55000"'
+  '      - "5601"'
   '      AEGISOPS_WAZUH_AEGISOPS_INGEST_URL: ${AEGISOPS_WAZUH_AEGISOPS_INGEST_URL:?set-in-untracked-runtime-env}'
   '      AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE: ${AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE:?set-in-untracked-runtime-env}'
   '    # GitHub audit remains the only approved first live source family.'
+  '    # manager interfaces stay internal to the lab compose network until a reviewed lab access path exists'
+  '    # dashboard access must stay on an internal-only or separately reviewed lab access path'
   '    # do not add Shuffle, n8n, or a direct control-plane backend publication path here'
 )
 
 for line in "${asset_compose_required_lines[@]}"; do
   require_fixed_string "${asset_compose}" "${line}"
 done
+
+if grep -En '^[[:space:]]*ports:[[:space:]]*(#.*)?$' "${asset_compose}" >/dev/null; then
+  echo "Phase 18 Wazuh lab compose asset must not publish host ports directly." >&2
+  exit 1
+fi
 
 asset_bootstrap_required_lines=(
   'AEGISOPS_WAZUH_HOSTNAME=wazuh-lab-manager-01'

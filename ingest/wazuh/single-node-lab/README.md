@@ -12,7 +12,7 @@ This bundle is not an approved production deployment.
 
 Use the files here as reviewed scaffolding only:
 
-- `docker-compose.yml` keeps the Wazuh manager, indexer, and dashboard topology explicit for lab review.
+- `docker-compose.yml` keeps the Wazuh manager, indexer, and dashboard topology explicit for lab review while leaving service interfaces internal-only.
 - `bootstrap.env.sample` lists the reviewed non-secret inputs that operators must supply in an untracked env file.
 - `ossec.integration.sample.xml` shows the reviewed custom integration shape for `Wazuh -> AegisOps`.
 
@@ -21,6 +21,7 @@ Operator expectations:
 - Keep the AegisOps ingress target on the reviewed reverse proxy HTTPS path.
 - Keep the shared bearer secret in an untracked secret file.
 - Keep GitHub audit as the only approved first live family.
+- Keep service interfaces internal-only unless a separate reviewed lab access path is supplied.
 - Keep the bundle narrow and reviewable.
 
 This bundle must not publish the control-plane backend port directly, must not route first live traffic through Shuffle or n8n, and must not be treated as approval for multi-node or production-scale Wazuh.

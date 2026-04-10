@@ -154,6 +154,14 @@ remove_text_from_doc "${missing_asset_compose_repo}" "${missing_asset_compose_re
 commit_fixture "${missing_asset_compose_repo}"
 assert_fails_with "${missing_asset_compose_repo}" '    # GitHub audit remains the only approved first live source family.'
 
+published_ports_repo="${workdir}/published-ports"
+create_repo "${published_ports_repo}"
+write_canonical_artifacts "${published_ports_repo}"
+perl -0pi -e 's/    expose:\n      - "1514\/udp"\n      - "1515"\n      - "55000"/    expose:\n      - "1514\/udp"\n      - "1515"\n      - "55000"\n    ports:\n      - "1514:1514\/udp"\n      - "1515:1515"\n      - "55000:55000"/' "${published_ports_repo}/ingest/wazuh/single-node-lab/docker-compose.yml"
+git -C "${published_ports_repo}" add ingest/wazuh/single-node-lab/docker-compose.yml
+commit_fixture "${published_ports_repo}"
+assert_fails_with "${published_ports_repo}" 'Phase 18 Wazuh lab compose asset must not publish host ports directly.'
+
 missing_deviation_repo="${workdir}/missing-deviation"
 create_repo "${missing_deviation_repo}"
 write_canonical_artifacts "${missing_deviation_repo}"

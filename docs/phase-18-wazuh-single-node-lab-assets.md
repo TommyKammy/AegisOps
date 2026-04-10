@@ -14,7 +14,7 @@ The reviewed asset bundle for the single-node Wazuh lab target lives under `inge
 
 The reviewed bundle contains:
 
-- `docker-compose.yml` for the placeholder-safe single-node Wazuh manager, indexer, and dashboard lab stack;
+- `docker-compose.yml` for the placeholder-safe single-node Wazuh manager, indexer, and dashboard lab stack with internal-only service exposure and no direct host port publication;
 - `bootstrap.env.sample` for reviewed non-secret bootstrap inputs;
 - `ossec.integration.sample.xml` for the reviewed custom integration shape that preserves `Wazuh -> AegisOps` as the only approved first live routing path;
 - `README.md` for operator expectations, deferred-scope reminders, and path-local usage notes.
@@ -45,6 +45,8 @@ Operators must treat this package as the reviewed starting point for one single-
 The approved live path remains `Wazuh -> AegisOps` through the reviewed reverse proxy.
 
 Operators must keep GitHub audit as the only approved first live source family for this slice.
+
+Operators must keep the Wazuh manager, indexer, and dashboard interfaces internal to the lab compose network or another separately reviewed lab access path rather than publishing host ports from this bundle.
 
 Operators must not use these assets to publish the control-plane backend port directly, to insert Shuffle or n8n into the first live path, or to imply that OpenSearch runtime extension work is required for first live success.
 
