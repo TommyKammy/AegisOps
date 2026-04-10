@@ -22,9 +22,9 @@ require_non_empty "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN" "${AEGISOPS_CONTROL_PLAN
 
 host_value="${AEGISOPS_CONTROL_PLANE_HOST:-}"
 case "${host_value}" in
-  0.0.0.0|::|*)
-    if [ "${host_value}" = "0.0.0.0" ] || [ "${host_value}" = "::" ] || [ "${host_value}" = "*" ]; then
-      echo "AEGISOPS_CONTROL_PLANE_HOST must not publish the control-plane backend directly." >&2
+  ::|*)
+    if [ "${host_value}" = "::" ] || [ "${host_value}" = "*" ]; then
+      echo "AEGISOPS_CONTROL_PLANE_HOST must remain an explicit IPv4 or DNS bind target for the reviewed first-boot path." >&2
       exit 1
     fi
     ;;

@@ -6,7 +6,9 @@ import io
 import json
 import pathlib
 import sys
+import threading
 import unittest
+from urllib import request
 from unittest import mock
 
 
@@ -119,6 +121,92 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         server_cls.assert_called_once_with(("127.0.0.1", 8089), mock.ANY)
         server.serve_forever.assert_called_once_with()
         server.server_close.assert_called_once_with()
+
+    def test_long_running_runtime_surface_exposes_runtime_and_inspection_http_views(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+            ),
+            store=store,
+        )
+        compared_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        service.persist_record(
+            AlertRecord(
+                alert_id="alert-http-001",
+                finding_id="finding-http-001",
+                analytic_signal_id="signal-http-001",
+                case_id=None,
+                lifecycle_state="new",
+            )
+        )
+        service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-http-001",
+                subject_linkage={"alert_ids": ("alert-http-001",)},
+                alert_id="alert-http-001",
+                finding_id="finding-http-001",
+                analytic_signal_id="signal-http-001",
+                execution_run_id=None,
+                linked_execution_run_ids=(),
+                correlation_key="claim:host-001:http-runtime",
+                first_seen_at=compared_at,
+                last_seen_at=compared_at,
+                ingest_disposition="created",
+                mismatch_summary="created during HTTP inspection test",
+                compared_at=compared_at,
+                lifecycle_state="matched",
+            )
+        )
+
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+
+                base_url = f"http://127.0.0.1:{servers[0].server_port}"
+                runtime_payload = json.loads(
+                    request.urlopen(f"{base_url}/runtime", timeout=2).read().decode("utf-8")
+                )
+                records_payload = json.loads(
+                    request.urlopen(
+                        f"{base_url}/inspect-records?family=alert",
+                        timeout=2,
+                    ).read().decode("utf-8")
+                )
+                status_payload = json.loads(
+                    request.urlopen(
+                        f"{base_url}/inspect-reconciliation-status",
+                        timeout=2,
+                    ).read().decode("utf-8")
+                )
+
+                self.assertEqual(runtime_payload["persistence_mode"], "postgresql")
+                self.assertEqual(records_payload["record_family"], "alert")
+                self.assertEqual(records_payload["records"][0]["alert_id"], "alert-http-001")
+                self.assertEqual(status_payload["by_ingest_disposition"], {"created": 1})
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(timeout=2)
 
     def test_cli_renders_read_only_record_and_reconciliation_views(self) -> None:
         store, _ = make_store()
