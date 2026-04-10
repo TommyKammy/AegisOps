@@ -2813,8 +2813,16 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             "fixture_replay",
         )
         self.assertEqual(
+            replay_result.alert.reviewed_context["provenance"]["admission_kind"],
+            "replay",
+        )
+        self.assertEqual(
             live_result.alert.reviewed_context["provenance"]["admission_channel"],
             "live_wazuh_webhook",
+        )
+        self.assertEqual(
+            live_result.alert.reviewed_context["provenance"]["admission_kind"],
+            "live",
         )
         self.assertEqual(
             replay_service.get_record(
@@ -2905,8 +2913,16 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             "live_wazuh_webhook",
         )
         self.assertEqual(
+            restated.alert.reviewed_context["provenance"]["admission_kind"],
+            "live",
+        )
+        self.assertEqual(
             deduplicated.alert.reviewed_context["provenance"]["admission_channel"],
             "live_wazuh_webhook",
+        )
+        self.assertEqual(
+            deduplicated.alert.reviewed_context["provenance"]["admission_kind"],
+            "live",
         )
 
         self.assertIsNotNone(created_signal)
@@ -2988,6 +3004,10 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(
             persisted_case.reviewed_context["provenance"]["admission_channel"],
             "live_wazuh_webhook",
+        )
+        self.assertEqual(
+            persisted_case.reviewed_context["provenance"]["admission_kind"],
+            "live",
         )
         evidence_records = sorted(
             (
@@ -3291,6 +3311,67 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(
             signals[0].substrate_detection_record_id,
             "test-substrate:native-001",
+        )
+
+    def test_service_trims_native_admission_provenance_before_persisting_reviewed_context(
+        self,
+    ) -> None:
+        @dataclass(frozen=True)
+        class TestNativeRecordAdapter(NativeDetectionRecordAdapter):
+            substrate_key: str = "test-substrate"
+
+            def build_analytic_signal_admission(
+                self, record: NativeDetectionRecord
+            ) -> AnalyticSignalAdmission:
+                return AnalyticSignalAdmission(
+                    finding_id=f"finding::{record.native_record_id}",
+                    analytic_signal_id=f"signal::{record.native_record_id}",
+                    substrate_detection_record_id=record.native_record_id,
+                    correlation_key=record.correlation_key,
+                    first_seen_at=record.first_seen_at,
+                    last_seen_at=record.last_seen_at,
+                )
+
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+
+        admitted = service.ingest_native_detection_record(
+            TestNativeRecordAdapter(),
+            NativeDetectionRecord(
+                substrate_key="test-substrate",
+                native_record_id="native-001",
+                record_kind="alert",
+                correlation_key="claim:host-001:privilege-escalation",
+                first_seen_at=datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc),
+                last_seen_at=datetime(2026, 4, 5, 12, 15, tzinfo=timezone.utc),
+                metadata={
+                    "admission_provenance": {
+                        "admission_kind": " replay ",
+                        "admission_channel": " fixture_replay ",
+                    }
+                },
+            ),
+        )
+
+        self.assertEqual(
+            admitted.alert.reviewed_context["provenance"],
+            {
+                "admission_kind": "replay",
+                "admission_channel": "fixture_replay",
+            },
+        )
+        self.assertEqual(
+            service.get_record(
+                ReconciliationRecord,
+                admitted.reconciliation.reconciliation_id,
+            ).subject_linkage["admission_provenance"],
+            {
+                "admission_kind": "replay",
+                "admission_channel": "fixture_replay",
+            },
         )
 
     def test_service_rolls_back_native_ingest_when_evidence_timestamp_is_naive(

@@ -482,8 +482,10 @@ def _normalize_admission_provenance(
     normalized: dict[str, str] = {}
     for field_name in ("admission_kind", "admission_channel"):
         field_value = value.get(field_name)
-        if isinstance(field_value, str) and field_value.strip():
-            normalized[field_name] = field_value
+        if isinstance(field_value, str):
+            normalized_value = field_value.strip()
+            if normalized_value:
+                normalized[field_name] = normalized_value
     if len(normalized) != 2:
         return None
     return normalized
