@@ -10,6 +10,7 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
 from aegisops_control_plane import AlertRecord, ControlPlaneRecord
+from aegisops_control_plane.config import RuntimeConfig
 from aegisops_control_plane.service import build_runtime_snapshot
 
 
@@ -78,6 +79,28 @@ class RuntimeSkeletonTests(unittest.TestCase):
             r"AEGISOPS_CONTROL_PLANE_PORT must be between 1 and 65535, got: 70000",
         ):
             build_runtime_snapshot({"AEGISOPS_CONTROL_PLANE_PORT": "70000"})
+
+    def test_runtime_config_repr_hides_wazuh_shared_secret(self) -> None:
+        config = RuntimeConfig(
+            postgres_dsn="postgresql://control-plane.local/aegisops",
+            wazuh_ingest_shared_secret="reviewed-shared-secret",
+        )
+
+        self.assertNotIn("reviewed-shared-secret", repr(config))
+
+    def test_runtime_config_parses_trusted_proxy_cidrs_from_env(self) -> None:
+        config = RuntimeConfig.from_env(
+            {
+                "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_TRUSTED_PROXY_CIDRS": (
+                    "10.10.0.5/32, 10.10.0.0/24 ,,2001:db8::/32"
+                ),
+            }
+        )
+
+        self.assertEqual(
+            config.wazuh_ingest_trusted_proxy_cidrs,
+            ("10.10.0.5/32", "10.10.0.0/24", "2001:db8::/32"),
+        )
 
 
 if __name__ == "__main__":

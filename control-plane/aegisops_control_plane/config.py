@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import os
 from typing import Mapping
 
@@ -14,6 +14,8 @@ class RuntimeConfig:
     n8n_base_url: str = "<set-me>"
     shuffle_base_url: str = "<set-me>"
     isolated_executor_base_url: str = "<set-me>"
+    wazuh_ingest_shared_secret: str = field(default="", repr=False)
+    wazuh_ingest_trusted_proxy_cidrs: tuple[str, ...] = ()
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> "RuntimeConfig":
@@ -33,6 +35,15 @@ class RuntimeConfig:
                     f"AEGISOPS_CONTROL_PLANE_PORT must be between 1 and 65535, got: {port}"
                 )
 
+        trusted_proxy_cidrs = tuple(
+            item.strip()
+            for item in source.get(
+                "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_TRUSTED_PROXY_CIDRS",
+                "",
+            ).split(",")
+            if item.strip()
+        )
+
         return cls(
             host=source.get("AEGISOPS_CONTROL_PLANE_HOST", cls.host),
             port=port,
@@ -47,4 +58,9 @@ class RuntimeConfig:
                 "AEGISOPS_CONTROL_PLANE_ISOLATED_EXECUTOR_BASE_URL",
                 cls.isolated_executor_base_url,
             ),
+            wazuh_ingest_shared_secret=source.get(
+                "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET",
+                cls.wazuh_ingest_shared_secret,
+            ),
+            wazuh_ingest_trusted_proxy_cidrs=trusted_proxy_cidrs,
         )
