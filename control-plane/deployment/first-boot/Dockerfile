@@ -9,7 +9,7 @@ RUN apt-get update \
 
 RUN pip install --no-cache-dir "psycopg[binary]>=3.2,<3.3"
 RUN groupadd --system aegisops \
-    && useradd --system --create-home --gid aegisops --home-dir /home/aegisops --shell /usr/sbin/nologin aegisops \
+    && useradd --system --create-home --gid aegisops --home-dir /var/lib/aegisops --shell /usr/sbin/nologin aegisops \
     && mkdir -p /opt/aegisops/bin /opt/aegisops/control-plane /opt/aegisops/postgres-migrations \
     && chown -R aegisops:aegisops /opt/aegisops
 
