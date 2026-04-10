@@ -165,11 +165,22 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             },
         )
         self.assertEqual(
+            reconciliation.subject_linkage["admission_provenance"],
+            {
+                "admission_channel": "fixture_replay",
+                "admission_kind": "replay",
+            },
+        )
+        self.assertEqual(
             admitted.alert.reviewed_context,
             {
                 "location": "/var/log/auth.log",
                 "data.srcip": "198.51.100.24",
                 "data.srcuser": "invalid-user",
+                "provenance": {
+                    "admission_kind": "replay",
+                    "admission_channel": "fixture_replay",
+                },
             },
         )
 
