@@ -16,12 +16,12 @@ require_env() {
 xml_escape() {
   local value="$1"
 
-  value="${value//&/&amp;}"
-  value="${value//</&lt;}"
-  value="${value//>/&gt;}"
-  value="${value//\"/&quot;}"
-  value="${value//\'/&apos;}"
-  printf '%s' "${value}"
+  printf '%s' "${value}" | sed \
+    -e 's/&/\&amp;/g' \
+    -e 's/</\&lt;/g' \
+    -e 's/>/\&gt;/g' \
+    -e 's/"/\&quot;/g' \
+    -e "s/'/\&apos;/g"
 }
 
 require_env "AEGISOPS_WAZUH_AEGISOPS_INGEST_URL"
