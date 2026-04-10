@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import sys
 from typing import Sequence, TextIO
@@ -16,12 +18,16 @@ from aegisops_control_plane.service import (
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Render read-only control-plane runtime, record, and reconciliation "
-            "inspection views."
+            "Run the reviewed control-plane runtime service or render read-only "
+            "runtime, record, and reconciliation inspection views."
         )
     )
     subparsers = parser.add_subparsers(dest="command")
 
+    subparsers.add_parser(
+        "serve",
+        help="Run the reviewed long-running control-plane runtime service.",
+    )
     subparsers.add_parser("runtime", help="Render the current runtime snapshot.")
 
     inspect_records = subparsers.add_parser(
@@ -87,19 +93,101 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def run_control_plane_service(
+    service: AegisOpsControlPlaneService,
+    *,
+    stderr: TextIO | None = None,
+) -> int:
+    runtime_snapshot = service.describe_runtime().to_dict()
+    stderr = stderr or sys.stderr
+
+    class _RequestHandler(BaseHTTPRequestHandler):
+        server_version = "AegisOpsControlPlane/1.0"
+
+        def do_GET(self) -> None:  # noqa: N802
+            if self.path == "/healthz":
+                self._write_json(
+                    HTTPStatus.OK,
+                    {
+                        "service_name": runtime_snapshot["service_name"],
+                        "status": "ok",
+                    },
+                )
+                return
+
+            if self.path == "/readyz":
+                self._write_json(
+                    HTTPStatus.OK,
+                    {
+                        "service_name": runtime_snapshot["service_name"],
+                        "status": "ready",
+                        "persistence_mode": runtime_snapshot["persistence_mode"],
+                    },
+                )
+                return
+
+            if self.path == "/runtime":
+                self._write_json(HTTPStatus.OK, runtime_snapshot)
+                return
+
+            self._write_json(
+                HTTPStatus.NOT_FOUND,
+                {
+                    "error": "not_found",
+                    "path": self.path,
+                },
+            )
+
+        def log_message(self, format: str, *args: object) -> None:
+            print(
+                "%s - - [%s] %s"
+                % (
+                    self.address_string(),
+                    self.log_date_time_string(),
+                    format % args,
+                ),
+                file=stderr,
+            )
+
+        def _write_json(self, status: HTTPStatus, payload: dict[str, object]) -> None:
+            body = json.dumps(payload, indent=2, sort_keys=True).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    server = ThreadingHTTPServer(
+        (str(runtime_snapshot["bind_host"]), int(runtime_snapshot["bind_port"])),
+        _RequestHandler,
+    )
+
+    try:
+        server.serve_forever()
+        return 0
+    except KeyboardInterrupt:
+        return 0
+    finally:
+        server.server_close()
+
+
 def main(
     argv: Sequence[str] | None = None,
     *,
     stdout: TextIO | None = None,
+    stderr: TextIO | None = None,
     service: AegisOpsControlPlaneService | None = None,
 ) -> int:
     parser = _build_parser()
     parsed = parser.parse_args(list(argv) if argv is not None else None)
     command = parsed.command or "runtime"
     stdout = stdout or sys.stdout
+    stderr = stderr or sys.stderr
 
     service = service or build_runtime_service()
 
+    if command == "serve":
+        return run_control_plane_service(service, stderr=stderr)
     if command == "runtime":
         payload = service.describe_runtime().to_dict()
     else:

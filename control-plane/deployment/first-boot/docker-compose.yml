@@ -9,7 +9,7 @@ services:
     command:
       - python3
       - main.py
-      - runtime
+      - serve
     environment:
       AEGISOPS_CONTROL_PLANE_HOST: ${AEGISOPS_CONTROL_PLANE_HOST:-127.0.0.1}
       AEGISOPS_CONTROL_PLANE_PORT: ${AEGISOPS_CONTROL_PLANE_PORT:-8080}

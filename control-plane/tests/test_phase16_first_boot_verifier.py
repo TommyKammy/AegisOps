@@ -46,6 +46,21 @@ class Phase16FirstBootVerifierTests(unittest.TestCase):
             compose_path = (
                 fixture_root / "control-plane" / "deployment" / "first-boot" / "docker-compose.yml"
             )
+            self._insert_text_after(
+                compose_path,
+                "      - serve\n",
+                "      - runtime\n",
+            )
+            self._assert_verifier_fails_with(
+                verifier,
+                fixture_root,
+                "First-boot compose must not launch the one-shot runtime snapshot renderer.",
+            )
+
+            self._create_repo_fixture(fixture_root)
+            compose_path = (
+                fixture_root / "control-plane" / "deployment" / "first-boot" / "docker-compose.yml"
+            )
             compose_path.write_text(
                 compose_path.read_text(encoding="utf-8")
                 + "\n  opensearch:\n    image: opensearchproject/opensearch:2\n",
@@ -105,6 +120,13 @@ class Phase16FirstBootVerifierTests(unittest.TestCase):
         if text not in content:
             raise AssertionError(f"expected to remove text from {path}: {text!r}")
         path.write_text(content.replace(text, "", 1), encoding="utf-8")
+
+    @staticmethod
+    def _insert_text_after(path: pathlib.Path, anchor: str, inserted: str) -> None:
+        content = path.read_text(encoding="utf-8")
+        if anchor not in content:
+            raise AssertionError(f"expected to insert text in {path} after: {anchor!r}")
+        path.write_text(content.replace(anchor, anchor + inserted, 1), encoding="utf-8")
 
     @staticmethod
     def _assert_verifier_passes(verifier: pathlib.Path, repo_root: pathlib.Path) -> None:
