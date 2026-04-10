@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import pathlib
 import shutil
 import subprocess
@@ -425,6 +426,151 @@ if __name__ == "__main__":
                     "readiness",
                     "readiness",
                     "readiness",
+                    "readiness",
+                    "readiness",
+                    "readiness",
+                ],
+            )
+
+    def test_first_boot_entrypoint_fails_closed_when_recorded_migration_cannot_be_reproved(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_root = pathlib.Path(tmpdir)
+            migrations_dir = temp_root / "migrations"
+            migrations_dir.mkdir()
+
+            migration_checksums: dict[str, str] = {}
+            for migration_name in (
+                "0001_control_plane_schema_skeleton.sql",
+                "0002_phase_14_reviewed_context_columns.sql",
+                "0003_phase_15_assistant_advisory_draft_columns.sql",
+            ):
+                source_path = REPO_ROOT / "postgres" / "control-plane" / "migrations" / migration_name
+                destination_path = migrations_dir / migration_name
+                shutil.copy2(source_path, destination_path)
+                checksum_parts = (
+                    subprocess.check_output(
+                        ["sh", "-c", f"cksum < '{destination_path}'"],
+                        text=True,
+                    )
+                    .strip()
+                    .split()[0:2]
+                )
+                migration_checksums[migration_name] = ":".join(checksum_parts)
+
+            psql_path = temp_root / "fake-psql.sh"
+            psql_log = temp_root / "fake-psql.log"
+            psql_state = temp_root / "fake-psql.state"
+            psql_state.write_text(
+                json.dumps(
+                    {
+                        "recorded": migration_checksums,
+                        "ready": ["0001_control_plane_schema_skeleton.sql"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            psql_path.write_text(
+                """#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import os
+import pathlib
+import re
+import sys
+
+
+def classify_readiness_query(query_text: str) -> str:
+    if "assistant_advisory_draft" in query_text:
+        return "0003_phase_15_assistant_advisory_draft_columns.sql"
+    if "analytic_signal_records" in query_text:
+        return "0002_phase_14_reviewed_context_columns.sql"
+    return "0001_control_plane_schema_skeleton.sql"
+
+
+def main() -> int:
+    args = sys.argv[1:]
+    file_path = ""
+    query_text = ""
+
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        if arg == "-f":
+            index += 1
+            file_path = args[index]
+        elif arg == "-c":
+            index += 1
+            query_text = args[index]
+        index += 1
+
+    log_path = pathlib.Path(os.environ["AEGISOPS_TEST_PSQL_LOG"])
+    state_path = pathlib.Path(os.environ["AEGISOPS_TEST_PSQL_STATE"])
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+
+    if file_path:
+        print("unexpected migration replay", file=sys.stderr)
+        return 1
+
+    if query_text:
+        if "schema_migration_bootstrap" in query_text:
+            if "SELECT migration_checksum" in query_text:
+                match = re.search(r"migration_name = '([^']+)'", query_text)
+                if match is None:
+                    print("missing migration name lookup", file=sys.stderr)
+                    return 1
+                sys.stdout.write(state["recorded"].get(match.group(1), ""))
+                return 0
+
+            if "INSERT INTO aegisops_control.schema_migration_bootstrap" in query_text:
+                print("unexpected migration metadata write", file=sys.stderr)
+                return 1
+
+            return 0
+
+        migration_name = classify_readiness_query(query_text)
+        with log_path.open("a", encoding="utf-8") as handle:
+            handle.write(f"readiness:{migration_name}\\n")
+        ready = migration_name in state.get("ready", [])
+        sys.stdout.write("ready" if ready else "not-ready")
+        return 0
+
+    print("unexpected psql invocation", file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+""",
+                encoding="utf-8",
+            )
+            psql_path.chmod(0o755)
+
+            result = self._run_entrypoint(
+                {
+                    "AEGISOPS_CONTROL_PLANE_HOST": "127.0.0.1",
+                    "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN": "postgresql://user:pass@postgres:5432/aegisops",
+                    "AEGISOPS_CONTROL_PLANE_BOOT_MODE": "first-boot",
+                    "AEGISOPS_CONTROL_PLANE_LOG_LEVEL": "INFO",
+                    "AEGISOPS_FIRST_BOOT_MIGRATIONS_DIR": str(migrations_dir),
+                    "AEGISOPS_FIRST_BOOT_PSQL_BIN": str(psql_path),
+                    "AEGISOPS_TEST_PSQL_LOG": str(psql_log),
+                    "AEGISOPS_TEST_PSQL_STATE": str(psql_state),
+                }
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(
+                "First-boot migration bootstrap could not prove reviewed schema state for recorded migration 0002_phase_14_reviewed_context_columns.sql.",
+                result.stderr,
+            )
+            self.assertEqual(
+                psql_log.read_text(encoding="utf-8").splitlines(),
+                [
+                    "readiness:0001_control_plane_schema_skeleton.sql",
+                    "readiness:0002_phase_14_reviewed_context_columns.sql",
                 ],
             )
 

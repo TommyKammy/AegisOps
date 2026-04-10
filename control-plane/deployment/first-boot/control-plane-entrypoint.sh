@@ -267,6 +267,9 @@ apply_migration_bootstrap() {
       if [ "${recorded_checksum}" != "${migration_checksum_value}" ]; then
         fail_closed "First-boot migration bootstrap detected reviewed migration checksum drift for ${migration_name}."
       fi
+      if ! prove_migration_state "${migration_name}"; then
+        fail_closed "First-boot migration bootstrap could not prove reviewed schema state for recorded migration ${migration_name}."
+      fi
       continue
     fi
 
