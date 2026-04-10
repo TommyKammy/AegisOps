@@ -20,15 +20,40 @@ require_non_empty() {
 require_non_empty "AEGISOPS_CONTROL_PLANE_HOST" "${AEGISOPS_CONTROL_PLANE_HOST:-}"
 require_non_empty "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN" "${AEGISOPS_CONTROL_PLANE_POSTGRES_DSN:-}"
 
+reject_invalid_host_value() {
+  echo "AEGISOPS_CONTROL_PLANE_HOST must remain an explicit IPv4 or DNS bind target for the reviewed first-boot path." >&2
+  exit 1
+}
+
+is_valid_ipv4_host() {
+  printf '%s\n' "$1" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$' || return 1
+  printf '%s\n' "$1" | awk -F'[.]' '
+    NF != 4 { exit 1 }
+    {
+      for (i = 1; i <= 4; i++) {
+        if ($i < 0 || $i > 255) {
+          exit 1
+        }
+      }
+    }
+  '
+}
+
+is_valid_dns_host() {
+  printf '%s\n' "$1" | grep -Eq '[A-Za-z]' || return 1
+  printf '%s\n' "$1" | grep -Eq '^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$'
+}
+
 host_value="${AEGISOPS_CONTROL_PLANE_HOST:-}"
 case "${host_value}" in
-  ::|*)
-    if [ "${host_value}" = "::" ] || [ "${host_value}" = "*" ]; then
-      echo "AEGISOPS_CONTROL_PLANE_HOST must remain an explicit IPv4 or DNS bind target for the reviewed first-boot path." >&2
-      exit 1
-    fi
+  "::"|"*")
+    reject_invalid_host_value
     ;;
 esac
+
+if ! is_valid_ipv4_host "${host_value}" && ! is_valid_dns_host "${host_value}"; then
+  reject_invalid_host_value
+fi
 
 dsn_value="${AEGISOPS_CONTROL_PLANE_POSTGRES_DSN:-}"
 case "${dsn_value}" in

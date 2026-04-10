@@ -137,6 +137,24 @@ class Phase16BootstrapContractDocsTests(unittest.TestCase):
                     result.stderr,
                 )
 
+    def test_first_boot_entrypoint_rejects_malformed_host_values(self) -> None:
+        for host_value in ("999.0.0.1", "host name", "host..internal", "proxy:8080", "-edge"):
+            with self.subTest(host_value=host_value):
+                result = self._run_entrypoint(
+                    {
+                        "AEGISOPS_CONTROL_PLANE_HOST": host_value,
+                        "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN": (
+                            "postgresql://user:pass@postgres:5432/aegisops"
+                        ),
+                    }
+                )
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(
+                    "AEGISOPS_CONTROL_PLANE_HOST must remain an explicit IPv4 or DNS bind target for the reviewed first-boot path.",
+                    result.stderr,
+                )
+
     def test_first_boot_entrypoint_allows_internal_compose_bind_host(self) -> None:
         result = self._run_entrypoint(
             {
