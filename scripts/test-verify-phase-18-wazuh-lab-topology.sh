@@ -13,6 +13,7 @@ canonical_wazuh_contract_doc="${repo_root}/docs/wazuh-alert-ingest-contract.md"
 canonical_source_contract_doc="${repo_root}/docs/source-onboarding-contract.md"
 canonical_github_audit_doc="${repo_root}/docs/source-families/github-audit/onboarding-package.md"
 canonical_architecture_doc="${repo_root}/docs/architecture.md"
+canonical_phase18_live_queue_test="${repo_root}/control-plane/tests/test_phase18_live_wazuh_queue_validation.py"
 canonical_asset_readme="${repo_root}/ingest/wazuh/single-node-lab/README.md"
 canonical_asset_bootstrap="${repo_root}/ingest/wazuh/single-node-lab/bootstrap.env.sample"
 canonical_asset_compose="${repo_root}/ingest/wazuh/single-node-lab/docker-compose.yml"
@@ -30,7 +31,7 @@ fail_stderr="${workdir}/fail.err"
 create_repo() {
   local target="$1"
 
-  mkdir -p "${target}/docs/source-families/github-audit" "${target}/scripts" "${target}/ingest/wazuh/single-node-lab"
+  mkdir -p "${target}/docs/source-families/github-audit" "${target}/scripts" "${target}/ingest/wazuh/single-node-lab" "${target}/control-plane/tests"
   git -C "${target}" init -q
   git -C "${target}" config user.name "Codex Test"
   git -C "${target}" config user.email "codex@example.com"
@@ -48,6 +49,7 @@ write_canonical_artifacts() {
   cp "${canonical_source_contract_doc}" "${target}/docs/source-onboarding-contract.md"
   cp "${canonical_github_audit_doc}" "${target}/docs/source-families/github-audit/onboarding-package.md"
   cp "${canonical_architecture_doc}" "${target}/docs/architecture.md"
+  cp "${canonical_phase18_live_queue_test}" "${target}/control-plane/tests/test_phase18_live_wazuh_queue_validation.py"
   cp "${canonical_asset_readme}" "${target}/ingest/wazuh/single-node-lab/README.md"
   cp "${canonical_asset_bootstrap}" "${target}/ingest/wazuh/single-node-lab/bootstrap.env.sample"
   cp "${canonical_asset_compose}" "${target}/ingest/wazuh/single-node-lab/docker-compose.yml"
@@ -177,5 +179,13 @@ write_canonical_artifacts "${missing_deviation_repo}"
 remove_text_from_doc "${missing_deviation_repo}" "${missing_deviation_repo}/docs/phase-18-wazuh-lab-topology-validation.md" '- Requested comparison target `Phase 16-21 Epic Roadmap.md` was unavailable in the local worktree during this validation snapshot.'
 commit_fixture "${missing_deviation_repo}"
 assert_fails_with "${missing_deviation_repo}" '- Requested comparison target `Phase 16-21 Epic Roadmap.md` was unavailable in the local worktree during this validation snapshot.'
+
+missing_live_queue_test_repo="${workdir}/missing-live-queue-test"
+create_repo "${missing_live_queue_test_repo}"
+write_canonical_artifacts "${missing_live_queue_test_repo}"
+rm "${missing_live_queue_test_repo}/control-plane/tests/test_phase18_live_wazuh_queue_validation.py"
+git -C "${missing_live_queue_test_repo}" add -u
+commit_fixture "${missing_live_queue_test_repo}"
+assert_fails_with "${missing_live_queue_test_repo}" 'Missing Phase 18 live Wazuh queue validation test:'
 
 echo "Phase 18 Wazuh lab topology verifier enforces the reviewed live-path contract and deferred-scope boundaries."

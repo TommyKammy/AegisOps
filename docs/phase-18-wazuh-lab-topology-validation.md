@@ -3,7 +3,7 @@
 - Validation date: 2026-04-10
 - Validation scope: Phase 18 review of the approved single-node Wazuh lab target, the bootable AegisOps control-plane runtime boundary it connects to, the reviewed repository-local Wazuh lab deployment assets, GitHub audit as the approved first live source family, Wazuh -> AegisOps as the mainline live path, fail-closed expectations for transport, authentication, and payload admission, and confirmation that OpenSearch runtime enrichment, thin operator UI, and guarded automation live wiring remain deferred
 - Baseline references: `docs/phase-18-wazuh-lab-topology-and-live-ingest-contract.md`, `docs/phase-18-wazuh-single-node-lab-assets.md`, `docs/phase-17-runtime-config-contract-and-boot-command-expectations.md`, `docs/phase-16-release-state-and-first-boot-scope.md`, `docs/wazuh-alert-ingest-contract.md`, `docs/source-onboarding-contract.md`, `docs/source-families/github-audit/onboarding-package.md`, `docs/architecture.md`
-- Verification commands: `python3 -m unittest control-plane.tests.test_phase18_wazuh_lab_topology_docs`, `python3 -m unittest control-plane.tests.test_phase18_wazuh_single_node_lab_assets`, `bash scripts/verify-phase-18-wazuh-lab-topology.sh`, `bash scripts/test-verify-phase-18-wazuh-lab-topology.sh`
+- Verification commands: `python3 -m unittest control-plane.tests.test_phase18_wazuh_lab_topology_docs`, `python3 -m unittest control-plane.tests.test_phase18_wazuh_single_node_lab_assets`, `python3 -m unittest control-plane.tests.test_phase18_live_wazuh_queue_validation`, `bash scripts/verify-phase-18-wazuh-lab-topology.sh`, `bash scripts/test-verify-phase-18-wazuh-lab-topology.sh`
 - Validation status: PASS
 
 ## Required Boundary Artifacts
@@ -17,6 +17,7 @@
 - `docs/source-onboarding-contract.md`
 - `docs/source-families/github-audit/onboarding-package.md`
 - `docs/architecture.md`
+- `control-plane/tests/test_phase18_live_wazuh_queue_validation.py`
 - `ingest/wazuh/single-node-lab/README.md`
 - `ingest/wazuh/single-node-lab/bootstrap.env.sample`
 - `ingest/wazuh/single-node-lab/docker-compose.yml`
@@ -36,6 +37,8 @@ Confirmed GitHub audit is the approved first live source family because it prese
 Confirmed the reviewed Wazuh custom integration contract requires HTTPS POST to the approved reverse-proxy ingress boundary plus `Authorization: Bearer <shared secret>` authentication sourced from an untracked runtime secret.
 
 Confirmed the Phase 18 contract applies the existing Wazuh payload-admission rules rather than redefining them, and limits first live admission to GitHub audit carried inside the reviewed Wazuh alert envelope.
+
+Confirmed the repository-local Phase 18 live-ingest validator now exercises authenticated `ingest_wazuh_alert` runtime admission, repeat live GitHub audit delivery, and analyst-queue appearance so restatement, dedupe, and case-linkage drift fail closed before later operator-surface phases build on the slice.
 
 Confirmed the reviewed repository-local asset bundle under `ingest/wazuh/single-node-lab/` makes the first live substrate target explicit with placeholder-safe compose, bootstrap, and integration artifacts while keeping secrets untracked and production hardening out of scope.
 

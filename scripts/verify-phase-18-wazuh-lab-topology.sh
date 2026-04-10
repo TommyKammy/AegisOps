@@ -14,6 +14,7 @@ wazuh_contract_doc="${repo_root}/docs/wazuh-alert-ingest-contract.md"
 source_contract_doc="${repo_root}/docs/source-onboarding-contract.md"
 github_audit_doc="${repo_root}/docs/source-families/github-audit/onboarding-package.md"
 architecture_doc="${repo_root}/docs/architecture.md"
+phase18_live_queue_test="${repo_root}/control-plane/tests/test_phase18_live_wazuh_queue_validation.py"
 asset_dir="${repo_root}/ingest/wazuh/single-node-lab"
 asset_readme="${asset_dir}/README.md"
 asset_bootstrap="${asset_dir}/bootstrap.env.sample"
@@ -50,6 +51,7 @@ require_file "${wazuh_contract_doc}" "Missing Wazuh alert ingest contract doc"
 require_file "${source_contract_doc}" "Missing source onboarding contract doc"
 require_file "${github_audit_doc}" "Missing GitHub audit onboarding package doc"
 require_file "${architecture_doc}" "Missing architecture overview doc"
+require_file "${phase18_live_queue_test}" "Missing Phase 18 live Wazuh queue validation test"
 require_file "${asset_readme}" "Missing Phase 18 Wazuh lab README"
 require_file "${asset_bootstrap}" "Missing Phase 18 Wazuh lab bootstrap sample"
 require_file "${asset_compose}" "Missing Phase 18 Wazuh lab compose asset"
@@ -139,6 +141,7 @@ validation_required_lines=(
   'Confirmed GitHub audit is the approved first live source family because it preserves the narrowest identity-rich source context already prioritized by the reviewed Phase 14 family order and GitHub audit onboarding package.'
   'Confirmed the reviewed Wazuh custom integration contract requires HTTPS POST to the approved reverse-proxy ingress boundary plus `Authorization: Bearer <shared secret>` authentication sourced from an untracked runtime secret.'
   'Confirmed the Phase 18 contract applies the existing Wazuh payload-admission rules rather than redefining them, and limits first live admission to GitHub audit carried inside the reviewed Wazuh alert envelope.'
+  'Confirmed the repository-local Phase 18 live-ingest validator now exercises authenticated `ingest_wazuh_alert` runtime admission, repeat live GitHub audit delivery, and analyst-queue appearance so restatement, dedupe, and case-linkage drift fail closed before later operator-surface phases build on the slice.'
   'Confirmed the live ingest path remains fail-closed by rejecting non-HTTPS requests, non-POST requests, missing or invalid bearer credentials, direct backend bypass attempts, invalid JSON payloads, Wazuh payloads that violate required field expectations, and payloads outside the approved first live family.'
   'Confirmed OpenSearch runtime enrichment, thin operator UI, guarded automation live wiring, broader source-family rollout, direct GitHub API actioning, and production-scale Wazuh topologies remain deferred and out of scope for this slice.'
   "The issue requested review against \`Phase 16-21 Epic Roadmap.md\`, but that roadmap file was not present in the local worktree and could not be located via repository search during this turn."
@@ -159,6 +162,7 @@ required_artifacts=(
   "docs/source-onboarding-contract.md"
   "docs/source-families/github-audit/onboarding-package.md"
   "docs/architecture.md"
+  "control-plane/tests/test_phase18_live_wazuh_queue_validation.py"
   "ingest/wazuh/single-node-lab/README.md"
   "ingest/wazuh/single-node-lab/bootstrap.env.sample"
   "ingest/wazuh/single-node-lab/docker-compose.yml"
@@ -176,6 +180,15 @@ for artifact in "${required_artifacts[@]}"; do
     exit 1
   fi
 done
+
+require_fixed_string "${validation_doc}" '- Verification commands: `python3 -m unittest control-plane.tests.test_phase18_wazuh_lab_topology_docs`, `python3 -m unittest control-plane.tests.test_phase18_wazuh_single_node_lab_assets`, `python3 -m unittest control-plane.tests.test_phase18_live_wazuh_queue_validation`, `bash scripts/verify-phase-18-wazuh-lab-topology.sh`, `bash scripts/test-verify-phase-18-wazuh-lab-topology.sh`'
+require_fixed_string "${phase18_live_queue_test}" 'class Phase18LiveWazuhQueueValidationTests(unittest.TestCase):'
+require_fixed_string "${phase18_live_queue_test}" '    def test_live_github_audit_ingest_restates_and_deduplicates_into_case_linked_queue_record('
+require_fixed_string "${phase18_live_queue_test}" '        self.assertEqual(created.disposition, "created")'
+require_fixed_string "${phase18_live_queue_test}" '        self.assertEqual(restated.disposition, "restated")'
+require_fixed_string "${phase18_live_queue_test}" '        self.assertEqual(deduplicated.disposition, "deduplicated")'
+require_fixed_string "${phase18_live_queue_test}" '        self.assertEqual(queue_view.records[0]["queue_selection"], "business_hours_triage")'
+require_fixed_string "${phase18_live_queue_test}" '            "github_audit",'
 
 asset_compose_required_lines=(
   'name: aegisops-wazuh-single-node-lab'
