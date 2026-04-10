@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import pathlib
+import shutil
 import subprocess
+import tempfile
 import unittest
 
 
@@ -109,7 +111,7 @@ class Phase16BootstrapContractDocsTests(unittest.TestCase):
             result.stderr,
         )
 
-    def test_first_boot_entrypoint_executes_command_when_contract_is_valid(self) -> None:
+    def test_first_boot_entrypoint_fails_closed_without_migration_bootstrap_proof(self) -> None:
         result = self._run_entrypoint(
             {
                 "AEGISOPS_CONTROL_PLANE_HOST": "127.0.0.1",
@@ -117,9 +119,93 @@ class Phase16BootstrapContractDocsTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(result.returncode, 0)
-        self.assertEqual(result.stdout, "ok")
-        self.assertEqual(result.stderr, "")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("migration bootstrap", result.stderr)
+
+    def test_first_boot_entrypoint_executes_command_after_migration_bootstrap_and_readiness_proof(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_root = pathlib.Path(tmpdir)
+            migrations_dir = temp_root / "migrations"
+            migrations_dir.mkdir()
+            for migration_name in (
+                "0001_control_plane_schema_skeleton.sql",
+                "0002_phase_14_reviewed_context_columns.sql",
+                "0003_phase_15_assistant_advisory_draft_columns.sql",
+            ):
+                shutil.copy2(
+                    REPO_ROOT / "postgres" / "control-plane" / "migrations" / migration_name,
+                    migrations_dir / migration_name,
+                )
+
+            psql_path = temp_root / "fake-psql.sh"
+            psql_log = temp_root / "fake-psql.log"
+            psql_path.write_text(
+                """#!/bin/sh
+set -eu
+file_path=""
+query_text=""
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -f)
+      shift
+      file_path="$1"
+      ;;
+    -c)
+      shift
+      query_text="$1"
+      ;;
+  esac
+  shift
+done
+
+if [ -n "$file_path" ]; then
+  printf 'migration:%s\\n' "$file_path" >> "$AEGISOPS_TEST_PSQL_LOG"
+  exit 0
+fi
+
+if [ -n "$query_text" ]; then
+  printf 'readiness:%s\\n' "$query_text" >> "$AEGISOPS_TEST_PSQL_LOG"
+  printf 'ready'
+  exit 0
+fi
+
+echo "unexpected psql invocation" >&2
+exit 1
+""",
+                encoding="utf-8",
+            )
+            psql_path.chmod(0o755)
+
+            result = self._run_entrypoint(
+                {
+                    "AEGISOPS_CONTROL_PLANE_HOST": "127.0.0.1",
+                    "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN": "postgresql://user:pass@postgres:5432/aegisops",
+                    "AEGISOPS_FIRST_BOOT_MIGRATIONS_DIR": str(migrations_dir),
+                    "AEGISOPS_FIRST_BOOT_PSQL_BIN": str(psql_path),
+                    "AEGISOPS_TEST_PSQL_LOG": str(psql_log),
+                }
+            )
+
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, "ok")
+            self.assertEqual(result.stderr, "")
+            psql_log_text = psql_log.read_text(encoding="utf-8")
+            self.assertIn(
+                f"migration:{migrations_dir / '0001_control_plane_schema_skeleton.sql'}",
+                psql_log_text,
+            )
+            self.assertIn(
+                f"migration:{migrations_dir / '0002_phase_14_reviewed_context_columns.sql'}",
+                psql_log_text,
+            )
+            self.assertIn(
+                f"migration:{migrations_dir / '0003_phase_15_assistant_advisory_draft_columns.sql'}",
+                psql_log_text,
+            )
+            self.assertIn("readiness:SELECT CASE", psql_log_text)
 
     @staticmethod
     def _run_entrypoint(env_overrides: dict[str, str]) -> subprocess.CompletedProcess[str]:
