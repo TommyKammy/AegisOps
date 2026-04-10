@@ -165,11 +165,22 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             },
         )
         self.assertEqual(
+            reconciliation.subject_linkage["admission_provenance"],
+            {
+                "admission_channel": "fixture_replay",
+                "admission_kind": "replay",
+            },
+        )
+        self.assertEqual(
             admitted.alert.reviewed_context,
             {
                 "location": "/var/log/auth.log",
                 "data.srcip": "198.51.100.24",
                 "data.srcuser": "invalid-user",
+                "provenance": {
+                    "admission_kind": "replay",
+                    "admission_channel": "fixture_replay",
+                },
             },
         )
 
@@ -2472,7 +2483,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         restated_signal = service.get_record(
             AnalyticSignalRecord,
-            restated.alert.analytic_signal_id,
+            restated.reconciliation.analytic_signal_id,
         )
         reconciliation = service.get_record(
             ReconciliationRecord,
@@ -2715,16 +2726,24 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 "location": "github/orgs/TommyKammy/repos/AegisOps/audit",
             },
         }
+        expected_reviewed_context = {
+            **expected_profile,
+            "provenance": {
+                **expected_profile["provenance"],
+                "admission_kind": "replay",
+                "admission_channel": "fixture_replay",
+            },
+        }
 
         self.assertEqual(admitted.disposition, "created")
-        self.assertEqual(admitted.alert.reviewed_context, expected_profile)
+        self.assertEqual(admitted.alert.reviewed_context, expected_reviewed_context)
         self.assertEqual(
             service.get_record(AnalyticSignalRecord, admitted.alert.analytic_signal_id).reviewed_context,
-            expected_profile,
+            expected_reviewed_context,
         )
         self.assertEqual(
             service.get_record(AlertRecord, admitted.alert.alert_id).reviewed_context,
-            expected_profile,
+            expected_reviewed_context,
         )
         reconciliation = service.get_record(
             ReconciliationRecord,
@@ -2757,6 +2776,251 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 "data.privilege.permission": "admin",
                 "data.privilege.role": "maintainer",
             },
+        )
+
+    def test_service_distinguishes_live_wazuh_github_audit_ingest_from_replay_provenance(
+        self,
+    ) -> None:
+        replay_store, _ = make_store()
+        replay_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=replay_store,
+        )
+        live_store, _ = make_store()
+        live_service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+            ),
+            store=live_store,
+        )
+        adapter = WazuhAlertAdapter()
+        payload = _load_wazuh_fixture("github-audit-alert.json")
+
+        replay_result = replay_service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(payload),
+        )
+        live_result = live_service.ingest_wazuh_alert(
+            raw_alert=payload,
+            authorization_header="Bearer reviewed-shared-secret",
+            forwarded_proto="https",
+            peer_addr="127.0.0.1",
+        )
+
+        self.assertEqual(
+            replay_result.alert.reviewed_context["provenance"]["admission_channel"],
+            "fixture_replay",
+        )
+        self.assertEqual(
+            replay_result.alert.reviewed_context["provenance"]["admission_kind"],
+            "replay",
+        )
+        self.assertEqual(
+            live_result.alert.reviewed_context["provenance"]["admission_channel"],
+            "live_wazuh_webhook",
+        )
+        self.assertEqual(
+            live_result.alert.reviewed_context["provenance"]["admission_kind"],
+            "live",
+        )
+        self.assertEqual(
+            replay_service.get_record(
+                ReconciliationRecord,
+                replay_result.reconciliation.reconciliation_id,
+            ).subject_linkage["admission_provenance"],
+            {
+                "admission_channel": "fixture_replay",
+                "admission_kind": "replay",
+            },
+        )
+        self.assertEqual(
+            live_service.get_record(
+                ReconciliationRecord,
+                live_result.reconciliation.reconciliation_id,
+            ).subject_linkage["admission_provenance"],
+            {
+                "admission_channel": "live_wazuh_webhook",
+                "admission_kind": "live",
+            },
+        )
+
+    def test_service_restates_and_deduplicates_live_wazuh_github_audit_ingest_with_case_linkage(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+            ),
+            store=store,
+        )
+        payload = _load_wazuh_fixture("github-audit-alert.json")
+
+        created = service.ingest_wazuh_alert(
+            raw_alert=payload,
+            authorization_header="Bearer reviewed-shared-secret",
+            forwarded_proto="https",
+            peer_addr="127.0.0.1",
+        )
+        promoted_case = service.promote_alert_to_case(created.alert.alert_id)
+
+        restated_payload = _load_wazuh_fixture("github-audit-alert.json")
+        restated_payload["id"] = "1731595300.7654321"
+        restated_payload["timestamp"] = "2026-04-05T12:25:00+00:00"
+        restated = service.ingest_wazuh_alert(
+            raw_alert=restated_payload,
+            authorization_header="Bearer reviewed-shared-secret",
+            forwarded_proto="https",
+            peer_addr="127.0.0.1",
+        )
+        deduplicated = service.ingest_wazuh_alert(
+            raw_alert=restated_payload,
+            authorization_header="Bearer reviewed-shared-secret",
+            forwarded_proto="https",
+            peer_addr="127.0.0.1",
+        )
+
+        created_signal = service.get_record(
+            AnalyticSignalRecord,
+            created.alert.analytic_signal_id,
+        )
+        restated_signal = service.get_record(
+            AnalyticSignalRecord,
+            restated.reconciliation.analytic_signal_id,
+        )
+        restated_reconciliation = service.get_record(
+            ReconciliationRecord,
+            restated.reconciliation.reconciliation_id,
+        )
+        deduplicated_reconciliation = service.get_record(
+            ReconciliationRecord,
+            deduplicated.reconciliation.reconciliation_id,
+        )
+
+        self.assertEqual(created.disposition, "created")
+        self.assertEqual(restated.disposition, "restated")
+        self.assertEqual(deduplicated.disposition, "deduplicated")
+        self.assertEqual(restated.alert.alert_id, created.alert.alert_id)
+        self.assertEqual(deduplicated.alert.alert_id, created.alert.alert_id)
+        self.assertEqual(restated.alert.case_id, promoted_case.case_id)
+        self.assertEqual(deduplicated.alert.case_id, promoted_case.case_id)
+        self.assertEqual(restated.alert.lifecycle_state, "escalated_to_case")
+        self.assertEqual(deduplicated.alert.lifecycle_state, "escalated_to_case")
+        self.assertEqual(
+            restated.alert.reviewed_context["provenance"]["admission_channel"],
+            "live_wazuh_webhook",
+        )
+        self.assertEqual(
+            restated.alert.reviewed_context["provenance"]["admission_kind"],
+            "live",
+        )
+        self.assertEqual(
+            deduplicated.alert.reviewed_context["provenance"]["admission_channel"],
+            "live_wazuh_webhook",
+        )
+        self.assertEqual(
+            deduplicated.alert.reviewed_context["provenance"]["admission_kind"],
+            "live",
+        )
+
+        self.assertIsNotNone(created_signal)
+        self.assertEqual(created_signal.case_ids, (promoted_case.case_id,))
+        self.assertEqual(
+            created_signal.substrate_detection_record_id,
+            "wazuh:1731595300.1234567",
+        )
+        self.assertEqual(
+            created_signal.last_seen_at,
+            datetime(2026, 4, 5, 12, 20, tzinfo=timezone.utc),
+        )
+
+        self.assertIsNotNone(restated_signal)
+        self.assertEqual(restated_signal.case_ids, (promoted_case.case_id,))
+        self.assertEqual(
+            restated_signal.substrate_detection_record_id,
+            "wazuh:1731595300.7654321",
+        )
+        self.assertEqual(
+            restated_signal.last_seen_at,
+            datetime(2026, 4, 5, 12, 25, tzinfo=timezone.utc),
+        )
+
+        self.assertIsNotNone(restated_reconciliation)
+        self.assertEqual(restated_reconciliation.ingest_disposition, "restated")
+        self.assertEqual(
+            restated_reconciliation.subject_linkage["case_ids"],
+            (promoted_case.case_id,),
+        )
+        self.assertEqual(
+            restated_reconciliation.subject_linkage["substrate_detection_record_ids"],
+            ("wazuh:1731595300.1234567", "wazuh:1731595300.7654321"),
+        )
+        self.assertEqual(
+            restated_reconciliation.subject_linkage["analytic_signal_ids"],
+            (created.alert.analytic_signal_id, restated.reconciliation.analytic_signal_id),
+        )
+        self.assertEqual(
+            restated_reconciliation.subject_linkage["admission_provenance"],
+            {
+                "admission_channel": "live_wazuh_webhook",
+                "admission_kind": "live",
+            },
+        )
+        self.assertEqual(
+            restated_reconciliation.last_seen_at,
+            datetime(2026, 4, 5, 12, 25, tzinfo=timezone.utc),
+        )
+
+        self.assertIsNotNone(deduplicated_reconciliation)
+        self.assertEqual(
+            deduplicated_reconciliation.ingest_disposition,
+            "deduplicated",
+        )
+        self.assertEqual(
+            deduplicated_reconciliation.subject_linkage["case_ids"],
+            (promoted_case.case_id,),
+        )
+        self.assertEqual(
+            deduplicated_reconciliation.subject_linkage[
+                "substrate_detection_record_ids"
+            ],
+            ("wazuh:1731595300.1234567", "wazuh:1731595300.7654321"),
+        )
+        self.assertEqual(
+            deduplicated_reconciliation.subject_linkage["admission_provenance"],
+            {
+                "admission_channel": "live_wazuh_webhook",
+                "admission_kind": "live",
+            },
+        )
+
+        persisted_case = service.get_record(CaseRecord, promoted_case.case_id)
+        self.assertIsNotNone(persisted_case)
+        self.assertEqual(persisted_case.alert_id, created.alert.alert_id)
+        self.assertEqual(persisted_case.finding_id, created.alert.finding_id)
+        self.assertEqual(persisted_case.lifecycle_state, "open")
+        self.assertEqual(
+            persisted_case.reviewed_context["provenance"]["admission_channel"],
+            "live_wazuh_webhook",
+        )
+        self.assertEqual(
+            persisted_case.reviewed_context["provenance"]["admission_kind"],
+            "live",
+        )
+        evidence_records = sorted(
+            (
+                evidence
+                for evidence in store.list(EvidenceRecord)
+                if evidence.alert_id == created.alert.alert_id
+            ),
+            key=lambda evidence: evidence.evidence_id,
+        )
+        self.assertEqual(len(evidence_records), 2)
+        self.assertEqual(
+            tuple(evidence.case_id for evidence in evidence_records),
+            (promoted_case.case_id, promoted_case.case_id),
         )
 
     def test_service_admits_microsoft_365_audit_fixture_through_wazuh_source_profile(
@@ -2827,16 +3091,24 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 "location": "microsoft365/contoso/exchange",
             },
         }
+        expected_reviewed_context = {
+            **expected_profile,
+            "provenance": {
+                **expected_profile["provenance"],
+                "admission_kind": "replay",
+                "admission_channel": "fixture_replay",
+            },
+        }
 
         self.assertEqual(admitted.disposition, "created")
-        self.assertEqual(admitted.alert.reviewed_context, expected_profile)
+        self.assertEqual(admitted.alert.reviewed_context, expected_reviewed_context)
         self.assertEqual(
             service.get_record(AnalyticSignalRecord, admitted.alert.analytic_signal_id).reviewed_context,
-            expected_profile,
+            expected_reviewed_context,
         )
         self.assertEqual(
             service.get_record(AlertRecord, admitted.alert.alert_id).reviewed_context,
-            expected_profile,
+            expected_reviewed_context,
         )
         reconciliation = service.get_record(
             ReconciliationRecord,
@@ -2941,16 +3213,24 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 "location": "entra/contoso/directory",
             },
         }
+        expected_reviewed_context = {
+            **expected_profile,
+            "provenance": {
+                **expected_profile["provenance"],
+                "admission_kind": "replay",
+                "admission_channel": "fixture_replay",
+            },
+        }
 
         self.assertEqual(admitted.disposition, "created")
-        self.assertEqual(admitted.alert.reviewed_context, expected_profile)
+        self.assertEqual(admitted.alert.reviewed_context, expected_reviewed_context)
         self.assertEqual(
             service.get_record(AnalyticSignalRecord, admitted.alert.analytic_signal_id).reviewed_context,
-            expected_profile,
+            expected_reviewed_context,
         )
         self.assertEqual(
             service.get_record(AlertRecord, admitted.alert.alert_id).reviewed_context,
-            expected_profile,
+            expected_reviewed_context,
         )
         reconciliation = service.get_record(
             ReconciliationRecord,
@@ -3031,6 +3311,67 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(
             signals[0].substrate_detection_record_id,
             "test-substrate:native-001",
+        )
+
+    def test_service_trims_native_admission_provenance_before_persisting_reviewed_context(
+        self,
+    ) -> None:
+        @dataclass(frozen=True)
+        class TestNativeRecordAdapter(NativeDetectionRecordAdapter):
+            substrate_key: str = "test-substrate"
+
+            def build_analytic_signal_admission(
+                self, record: NativeDetectionRecord
+            ) -> AnalyticSignalAdmission:
+                return AnalyticSignalAdmission(
+                    finding_id=f"finding::{record.native_record_id}",
+                    analytic_signal_id=f"signal::{record.native_record_id}",
+                    substrate_detection_record_id=record.native_record_id,
+                    correlation_key=record.correlation_key,
+                    first_seen_at=record.first_seen_at,
+                    last_seen_at=record.last_seen_at,
+                )
+
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+
+        admitted = service.ingest_native_detection_record(
+            TestNativeRecordAdapter(),
+            NativeDetectionRecord(
+                substrate_key="test-substrate",
+                native_record_id="native-001",
+                record_kind="alert",
+                correlation_key="claim:host-001:privilege-escalation",
+                first_seen_at=datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc),
+                last_seen_at=datetime(2026, 4, 5, 12, 15, tzinfo=timezone.utc),
+                metadata={
+                    "admission_provenance": {
+                        "admission_kind": " replay ",
+                        "admission_channel": " fixture_replay ",
+                    }
+                },
+            ),
+        )
+
+        self.assertEqual(
+            admitted.alert.reviewed_context["provenance"],
+            {
+                "admission_kind": "replay",
+                "admission_channel": "fixture_replay",
+            },
+        )
+        self.assertEqual(
+            service.get_record(
+                ReconciliationRecord,
+                admitted.reconciliation.reconciliation_id,
+            ).subject_linkage["admission_provenance"],
+            {
+                "admission_kind": "replay",
+                "admission_channel": "fixture_replay",
+            },
         )
 
     def test_service_rolls_back_native_ingest_when_evidence_timestamp_is_naive(

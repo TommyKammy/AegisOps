@@ -474,6 +474,23 @@ def _reviewed_identity_is_alias_only(reviewed_context: Mapping[str, object]) -> 
     return any(identity.get(key) for key in alias_like_keys)
 
 
+def _normalize_admission_provenance(
+    value: object,
+) -> dict[str, str] | None:
+    if not isinstance(value, Mapping):
+        return None
+    normalized: dict[str, str] = {}
+    for field_name in ("admission_kind", "admission_channel"):
+        field_value = value.get(field_name)
+        if isinstance(field_value, str):
+            normalized_value = field_value.strip()
+            if normalized_value:
+                normalized[field_name] = normalized_value
+    if len(normalized) != 2:
+        return None
+    return normalized
+
+
 def _recommendation_draft_review_summary(
     record_family: str,
     record_id: str,
@@ -940,7 +957,11 @@ class AegisOpsControlPlaneService:
             )
 
         adapter = WazuhAlertAdapter()
-        native_record = adapter.build_native_detection_record(native_alert)
+        native_record = self._with_native_detection_admission_provenance(
+            adapter.build_native_detection_record(native_alert),
+            admission_kind="live",
+            admission_channel="live_wazuh_webhook",
+        )
         return self.ingest_native_detection_record(adapter, native_record)
 
     def _wazuh_ingest_listener_is_loopback(self) -> bool:
@@ -2373,6 +2394,11 @@ class AegisOpsControlPlaneService:
         adapter: NativeDetectionRecordAdapter,
         record: NativeDetectionRecord,
     ) -> FindingAlertIngestResult:
+        record = self._with_native_detection_admission_provenance(
+            record,
+            admission_kind="replay",
+            admission_channel="fixture_replay",
+        )
         adapter_substrate_key = self._require_non_empty_string(
             adapter.substrate_key,
             "adapter.substrate_key",
@@ -2387,6 +2413,23 @@ class AegisOpsControlPlaneService:
                 f"({record_substrate_key!r} != {adapter_substrate_key!r})"
             )
         admission = adapter.build_analytic_signal_admission(record)
+        admission_provenance = _normalize_admission_provenance(
+            record.metadata.get("admission_provenance")
+        )
+        if admission_provenance is not None:
+            admission = AnalyticSignalAdmission(
+                finding_id=admission.finding_id,
+                analytic_signal_id=admission.analytic_signal_id,
+                substrate_detection_record_id=admission.substrate_detection_record_id,
+                correlation_key=admission.correlation_key,
+                first_seen_at=admission.first_seen_at,
+                last_seen_at=admission.last_seen_at,
+                materially_new_work=admission.materially_new_work,
+                reviewed_context=_merge_reviewed_context(
+                    admission.reviewed_context,
+                    {"provenance": admission_provenance},
+                ),
+            )
         raw_substrate_detection_record_id = self._require_non_empty_string(
             admission.substrate_detection_record_id or record.native_record_id,
             "substrate_detection_record_id/native_record_id",
@@ -2782,6 +2825,12 @@ class AegisOpsControlPlaneService:
         if isinstance(raw_alert, Mapping):
             subject_linkage["latest_native_payload"] = dict(raw_alert)
 
+        admission_provenance = _normalize_admission_provenance(
+            record.metadata.get("admission_provenance")
+        )
+        if admission_provenance is not None:
+            subject_linkage["admission_provenance"] = admission_provenance
+
         reconciliation = self.persist_record(
             ReconciliationRecord(
                 reconciliation_id=ingest_result.reconciliation.reconciliation_id,
@@ -2807,6 +2856,22 @@ class AegisOpsControlPlaneService:
             reconciliation=reconciliation,
             disposition=ingest_result.disposition,
         )
+
+    def _with_native_detection_admission_provenance(
+        self,
+        record: NativeDetectionRecord,
+        *,
+        admission_kind: str,
+        admission_channel: str,
+    ) -> NativeDetectionRecord:
+        if _normalize_admission_provenance(record.metadata.get("admission_provenance")) is not None:
+            return record
+        metadata = dict(record.metadata)
+        metadata["admission_provenance"] = {
+            "admission_kind": admission_kind,
+            "admission_channel": admission_channel,
+        }
+        return replace(record, metadata=metadata)
 
     def reconcile_action_execution(
         self,
