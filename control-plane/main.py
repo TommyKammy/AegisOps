@@ -16,6 +16,8 @@ from aegisops_control_plane.service import (
     build_runtime_service,
 )
 
+MAX_WAZUH_INGEST_BODY_BYTES = 1_048_576
+
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -211,6 +213,15 @@ def run_control_plane_service(
                     },
                 )
                 return
+            if content_length > MAX_WAZUH_INGEST_BODY_BYTES:
+                self._write_json(
+                    HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                    {
+                        "error": "request_too_large",
+                        "message": "request body exceeds the reviewed Wazuh ingest size limit",
+                    },
+                )
+                return
 
             try:
                 raw_payload = self.rfile.read(content_length).decode("utf-8")
@@ -241,6 +252,7 @@ def run_control_plane_service(
                     raw_alert=alert,
                     authorization_header=self.headers.get("Authorization"),
                     forwarded_proto=self.headers.get("X-Forwarded-Proto"),
+                    peer_addr=self.client_address[0] if self.client_address else None,
                 )
             except PermissionError as exc:
                 self._write_json(

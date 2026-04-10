@@ -288,6 +288,26 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         ):
             main.run_control_plane_service(service)
 
+    def test_long_running_runtime_surface_rejects_non_loopback_wazuh_ingest_without_trusted_proxies(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="0.0.0.0",
+                port=8089,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+            ),
+            store=store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_TRUSTED_PROXY_CIDRS must be set",
+        ):
+            main.run_control_plane_service(service)
+
     def test_long_running_runtime_surface_rejects_wazuh_ingest_without_bearer_auth(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
@@ -491,6 +511,109 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 with self.assertRaisesRegex(error.HTTPError, "400"):
                     request.urlopen(ingest_request, timeout=2)
 
+                self.assertEqual(store.list(AlertRecord), ())
+                self.assertEqual(store.list(AnalyticSignalRecord), ())
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(timeout=2)
+
+    def test_service_rejects_non_loopback_wazuh_ingest_from_untrusted_proxy_peer(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="0.0.0.0",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_trusted_proxy_cidrs=("10.10.0.5/32",),
+            ),
+            store=store,
+        )
+
+        with self.assertRaisesRegex(
+            PermissionError,
+            "reviewed reverse proxy peer boundary",
+        ):
+            service.ingest_wazuh_alert(
+                raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
+                authorization_header="Bearer reviewed-shared-secret",
+                forwarded_proto="https",
+                peer_addr="10.10.0.6",
+            )
+
+    def test_service_admits_non_loopback_wazuh_ingest_from_trusted_proxy_peer(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="0.0.0.0",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_trusted_proxy_cidrs=("10.10.0.5/32",),
+            ),
+            store=store,
+        )
+
+        ingest_result = service.ingest_wazuh_alert(
+            raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
+            authorization_header="Bearer reviewed-shared-secret",
+            forwarded_proto="https",
+            peer_addr="10.10.0.5",
+        )
+
+        self.assertEqual(ingest_result.disposition, "created")
+        self.assertEqual(len(store.list(AlertRecord)), 1)
+        self.assertEqual(len(store.list(AnalyticSignalRecord)), 1)
+
+    def test_long_running_runtime_surface_rejects_oversized_wazuh_ingest_body(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+            ),
+            store=store,
+        )
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+
+                oversized_payload = b"x" * (main.MAX_WAZUH_INGEST_BODY_BYTES + 1)
+                ingest_request = request.Request(
+                    f"http://127.0.0.1:{servers[0].server_port}/intake/wazuh",
+                    data=oversized_payload,
+                    method="POST",
+                    headers={
+                        "Authorization": "Bearer reviewed-shared-secret",
+                        "Content-Type": "application/json",
+                        "X-Forwarded-Proto": "https",
+                    },
+                )
+
+                with self.assertRaises(error.HTTPError) as exc_info:
+                    request.urlopen(ingest_request, timeout=2)
+
+                self.assertEqual(exc_info.exception.code, 413)
+                response_body = json.loads(exc_info.exception.read().decode("utf-8"))
+                self.assertEqual(response_body["error"], "request_too_large")
                 self.assertEqual(store.list(AlertRecord), ())
                 self.assertEqual(store.list(AnalyticSignalRecord), ())
             finally:

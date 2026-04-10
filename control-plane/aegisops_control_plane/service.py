@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass, fields, replace
 from datetime import datetime, timezone
 import hashlib
 import hmac
+import ipaddress
 import json
 import re
 import uuid
@@ -873,6 +874,22 @@ class AegisOpsControlPlaneService:
                 "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET must be set "
                 "before starting the live Wazuh ingest runtime"
             )
+        for cidr in self._config.wazuh_ingest_trusted_proxy_cidrs:
+            try:
+                ipaddress.ip_network(cidr, strict=False)
+            except ValueError as exc:
+                raise ValueError(
+                    "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_TRUSTED_PROXY_CIDRS must contain "
+                    f"only valid IP networks, got: {cidr!r}"
+                ) from exc
+        if (
+            not self._wazuh_ingest_listener_is_loopback()
+            and not self._config.wazuh_ingest_trusted_proxy_cidrs
+        ):
+            raise ValueError(
+                "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_TRUSTED_PROXY_CIDRS must be set "
+                "before starting the live Wazuh ingest runtime on a non-loopback interface"
+            )
 
     def ingest_wazuh_alert(
         self,
@@ -880,8 +897,14 @@ class AegisOpsControlPlaneService:
         raw_alert: Mapping[str, object],
         authorization_header: str | None,
         forwarded_proto: str | None,
+        peer_addr: str | None,
     ) -> FindingAlertIngestResult:
         self.validate_wazuh_ingest_runtime()
+
+        if not self._is_trusted_wazuh_ingest_peer(peer_addr):
+            raise PermissionError(
+                "live Wazuh ingest rejects requests that bypass the reviewed reverse proxy peer boundary"
+            )
 
         if (forwarded_proto or "").strip().lower() != "https":
             raise PermissionError(
@@ -919,6 +942,29 @@ class AegisOpsControlPlaneService:
         adapter = WazuhAlertAdapter()
         native_record = adapter.build_native_detection_record(native_alert)
         return self.ingest_native_detection_record(adapter, native_record)
+
+    def _wazuh_ingest_listener_is_loopback(self) -> bool:
+        host = self._config.host.strip()
+        if host.lower() == "localhost":
+            return True
+        try:
+            return ipaddress.ip_address(host).is_loopback
+        except ValueError:
+            return False
+
+    def _is_trusted_wazuh_ingest_peer(self, peer_addr: str | None) -> bool:
+        if self._wazuh_ingest_listener_is_loopback():
+            return True
+        if peer_addr is None or peer_addr.strip() == "":
+            return False
+        try:
+            peer_ip = ipaddress.ip_address(peer_addr)
+        except ValueError:
+            return False
+        for cidr in self._config.wazuh_ingest_trusted_proxy_cidrs:
+            if peer_ip in ipaddress.ip_network(cidr, strict=False):
+                return True
+        return False
 
     def delegate_approved_action_to_shuffle(
         self,
