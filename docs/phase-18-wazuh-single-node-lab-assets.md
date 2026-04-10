@@ -39,6 +39,8 @@ The shared secret must remain untracked and must come from an operator-provided 
 
 Wazuh does not expand the sample `${...}` placeholders inside the integration block. Operators must render literal `<hook_url>` and `<api_key>` values with `render-ossec-integration.sh` before loading the reviewed integration into active Wazuh configuration.
 
+The reviewed render helper reads `AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE`, materializes `AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET` from that mounted file, and then replaces both reviewed placeholders in `ossec.integration.sample.xml` before writing the rendered output.
+
 Do not commit live secrets, enrolled certificates, real IP addresses, or production host paths into this repository.
 
 ## 4. Operator Expectations

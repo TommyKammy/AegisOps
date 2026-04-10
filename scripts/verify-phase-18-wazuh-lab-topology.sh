@@ -222,6 +222,7 @@ done
 
 asset_integration_required_lines=(
   '<!-- Render this sample with render-ossec-integration.sh before use. -->'
+  '<!-- render-ossec-integration.sh reads AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE and fills AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET into this reviewed template before operator use. -->'
   '  <name>aegisops-github-audit</name>'
   '  <hook_url>${AEGISOPS_WAZUH_AEGISOPS_INGEST_URL}</hook_url>'
   '  <api_key>${AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET}</api_key>'
@@ -236,8 +237,12 @@ done
 render_helper_required_lines=(
   'require_env "AEGISOPS_WAZUH_AEGISOPS_INGEST_URL"'
   'require_env "AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE"'
-  '  <name>aegisops-github-audit</name>'
-  '  <group>github_audit</group>'
+  'template_path="${script_dir}/ossec.integration.sample.xml"'
+  'AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET="${shared_secret}"'
+  'escaped_ingest_url="$(xml_escape "${AEGISOPS_WAZUH_AEGISOPS_INGEST_URL}")"'
+  'escaped_shared_secret="$(xml_escape "${AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET}")"'
+  '  -e "s|\${AEGISOPS_WAZUH_AEGISOPS_INGEST_URL}|$(escape_sed_replacement "${escaped_ingest_url}")|g" \'
+  '  -e "s|\${AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET}|$(escape_sed_replacement "${escaped_shared_secret}")|g" \'
 )
 
 for line in "${render_helper_required_lines[@]}"; do
