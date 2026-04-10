@@ -127,6 +127,8 @@ Key documents that serve as the source of truth for implementation decisions:
 - `docs/phase-16-release-state-and-first-boot-validation.md`
 - `docs/phase-17-runtime-config-contract-and-boot-command-expectations.md`
 - `docs/phase-17-runtime-config-contract-validation.md`
+- `docs/phase-18-wazuh-lab-topology-and-live-ingest-contract.md`
+- `docs/phase-18-wazuh-lab-topology-validation.md`
 - `docs/phase-15-identity-grounded-analyst-assistant-operating-guidance.md`
 - `docs/retention-evidence-and-replay-readiness-baseline.md`
 - `docs/runbook.md`
