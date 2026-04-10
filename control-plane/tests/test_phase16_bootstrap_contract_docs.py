@@ -195,6 +195,8 @@ class Phase16BootstrapContractDocsTests(unittest.TestCase):
 
             psql_path = temp_root / "fake-psql.sh"
             psql_log = temp_root / "fake-psql.log"
+            psql_state_dir = temp_root / "fake-psql-state"
+            psql_state_dir.mkdir()
             psql_path.write_text(
                 """#!/bin/sh
 set -eu
@@ -216,13 +218,35 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ -n "$file_path" ]; then
+  migration_name="$(basename "$file_path")"
+  : > "$AEGISOPS_TEST_PSQL_STATE_DIR/$migration_name"
   printf 'migration:%s\\n' "$file_path" >> "$AEGISOPS_TEST_PSQL_LOG"
   exit 0
 fi
 
 if [ -n "$query_text" ]; then
+  case "$query_text" in
+    *"schema_migration_bootstrap"* )
+      printf 'metadata:%s\\n' "$query_text" >> "$AEGISOPS_TEST_PSQL_LOG"
+      case "$query_text" in
+        *"SELECT migration_checksum"* )
+          exit 0
+          ;;
+        *"INSERT INTO aegisops_control.schema_migration_bootstrap"* )
+          exit 0
+          ;;
+        *)
+          exit 0
+          ;;
+      esac
+      ;;
+  esac
   printf 'readiness:%s\\n' "$query_text" >> "$AEGISOPS_TEST_PSQL_LOG"
-  printf 'ready'
+  if [ -f "$AEGISOPS_TEST_PSQL_STATE_DIR/0001_control_plane_schema_skeleton.sql" ]; then
+    printf 'ready'
+  else
+    printf 'not-ready'
+  fi
   exit 0
 fi
 
@@ -242,6 +266,7 @@ exit 1
                     "AEGISOPS_FIRST_BOOT_MIGRATIONS_DIR": str(migrations_dir),
                     "AEGISOPS_FIRST_BOOT_PSQL_BIN": str(psql_path),
                     "AEGISOPS_TEST_PSQL_LOG": str(psql_log),
+                    "AEGISOPS_TEST_PSQL_STATE_DIR": str(psql_state_dir),
                 }
             )
 
@@ -262,6 +287,146 @@ exit 1
                 psql_log_text,
             )
             self.assertIn("readiness:SELECT CASE", psql_log_text)
+
+    def test_first_boot_entrypoint_is_restart_safe_and_does_not_replay_applied_migrations(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_root = pathlib.Path(tmpdir)
+            migrations_dir = temp_root / "migrations"
+            migrations_dir.mkdir()
+            for migration_name in (
+                "0001_control_plane_schema_skeleton.sql",
+                "0002_phase_14_reviewed_context_columns.sql",
+                "0003_phase_15_assistant_advisory_draft_columns.sql",
+            ):
+                shutil.copy2(
+                    REPO_ROOT / "postgres" / "control-plane" / "migrations" / migration_name,
+                    migrations_dir / migration_name,
+                )
+
+            psql_path = temp_root / "fake-psql.sh"
+            psql_log = temp_root / "fake-psql.log"
+            psql_state = temp_root / "fake-psql.state"
+            psql_path.write_text(
+                """#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import os
+import pathlib
+import re
+import sys
+
+
+def main() -> int:
+    args = sys.argv[1:]
+    file_path = ""
+    query_text = ""
+
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        if arg == "-f":
+            index += 1
+            file_path = args[index]
+        elif arg == "-c":
+            index += 1
+            query_text = args[index]
+        index += 1
+
+    log_path = pathlib.Path(os.environ["AEGISOPS_TEST_PSQL_LOG"])
+    state_path = pathlib.Path(os.environ["AEGISOPS_TEST_PSQL_STATE"])
+    if state_path.exists():
+      state = json.loads(state_path.read_text(encoding="utf-8"))
+    else:
+      state = {"applied": []}
+
+    if file_path:
+      migration_name = pathlib.Path(file_path).name
+      if migration_name in state["applied"]:
+        print(f"duplicate migration replay: {migration_name}", file=sys.stderr)
+        return 1
+      state["applied"].append(migration_name)
+      state_path.write_text(json.dumps(state), encoding="utf-8")
+      with log_path.open("a", encoding="utf-8") as handle:
+        handle.write(f"migration:{migration_name}\\n")
+      return 0
+
+    if query_text:
+      if "schema_migration_bootstrap" in query_text:
+        if "SELECT migration_checksum" in query_text:
+          match = re.search(r"migration_name = '([^']+)'", query_text)
+          if match is None:
+            print("missing migration name lookup", file=sys.stderr)
+            return 1
+          sys.stdout.write(state.get("recorded", {}).get(match.group(1), ""))
+          return 0
+
+        if "INSERT INTO aegisops_control.schema_migration_bootstrap" in query_text:
+          match = re.search(
+            r"VALUES \\('([^']+)', '([^']+)'\\)",
+            query_text,
+          )
+          if match is None:
+            print("missing migration metadata insert", file=sys.stderr)
+            return 1
+          recorded = state.setdefault("recorded", {})
+          recorded[match.group(1)] = match.group(2)
+          state_path.write_text(json.dumps(state), encoding="utf-8")
+          return 0
+
+        return 0
+
+      with log_path.open("a", encoding="utf-8") as handle:
+        handle.write("readiness\\n")
+      ready = "0001_control_plane_schema_skeleton.sql" in state["applied"]
+      sys.stdout.write("ready" if ready else "not-ready")
+      return 0
+
+    print("unexpected psql invocation", file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+""",
+                encoding="utf-8",
+            )
+            psql_path.chmod(0o755)
+
+            env = {
+                "AEGISOPS_CONTROL_PLANE_HOST": "127.0.0.1",
+                "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN": "postgresql://user:pass@postgres:5432/aegisops",
+                "AEGISOPS_CONTROL_PLANE_BOOT_MODE": "first-boot",
+                "AEGISOPS_CONTROL_PLANE_LOG_LEVEL": "INFO",
+                "AEGISOPS_FIRST_BOOT_MIGRATIONS_DIR": str(migrations_dir),
+                "AEGISOPS_FIRST_BOOT_PSQL_BIN": str(psql_path),
+                "AEGISOPS_TEST_PSQL_LOG": str(psql_log),
+                "AEGISOPS_TEST_PSQL_STATE": str(psql_state),
+            }
+
+            first_result = self._run_entrypoint(env)
+            self.assertEqual(first_result.returncode, 0, first_result.stderr)
+
+            second_result = self._run_entrypoint(env)
+            self.assertEqual(second_result.returncode, 0, second_result.stderr)
+
+            psql_log_lines = psql_log.read_text(encoding="utf-8").splitlines()
+            self.assertEqual(
+                psql_log_lines,
+                [
+                    "readiness",
+                    "migration:0001_control_plane_schema_skeleton.sql",
+                    "readiness",
+                    "migration:0002_phase_14_reviewed_context_columns.sql",
+                    "readiness",
+                    "migration:0003_phase_15_assistant_advisory_draft_columns.sql",
+                    "readiness",
+                    "readiness",
+                    "readiness",
+                ],
+            )
 
     @staticmethod
     def _run_entrypoint(env_overrides: dict[str, str]) -> subprocess.CompletedProcess[str]:
