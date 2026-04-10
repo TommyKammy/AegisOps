@@ -2715,16 +2715,24 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 "location": "github/orgs/TommyKammy/repos/AegisOps/audit",
             },
         }
+        expected_reviewed_context = {
+            **expected_profile,
+            "provenance": {
+                **expected_profile["provenance"],
+                "admission_kind": "replay",
+                "admission_channel": "fixture_replay",
+            },
+        }
 
         self.assertEqual(admitted.disposition, "created")
-        self.assertEqual(admitted.alert.reviewed_context, expected_profile)
+        self.assertEqual(admitted.alert.reviewed_context, expected_reviewed_context)
         self.assertEqual(
             service.get_record(AnalyticSignalRecord, admitted.alert.analytic_signal_id).reviewed_context,
-            expected_profile,
+            expected_reviewed_context,
         )
         self.assertEqual(
             service.get_record(AlertRecord, admitted.alert.alert_id).reviewed_context,
-            expected_profile,
+            expected_reviewed_context,
         )
         reconciliation = service.get_record(
             ReconciliationRecord,
@@ -2756,6 +2764,65 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 "data.privilege.scope": "repository_admin",
                 "data.privilege.permission": "admin",
                 "data.privilege.role": "maintainer",
+            },
+        )
+
+    def test_service_distinguishes_live_wazuh_github_audit_ingest_from_replay_provenance(
+        self,
+    ) -> None:
+        replay_store, _ = make_store()
+        replay_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=replay_store,
+        )
+        live_store, _ = make_store()
+        live_service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+            ),
+            store=live_store,
+        )
+        adapter = WazuhAlertAdapter()
+        payload = _load_wazuh_fixture("github-audit-alert.json")
+
+        replay_result = replay_service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(payload),
+        )
+        live_result = live_service.ingest_wazuh_alert(
+            raw_alert=payload,
+            authorization_header="Bearer reviewed-shared-secret",
+            forwarded_proto="https",
+            peer_addr="127.0.0.1",
+        )
+
+        self.assertEqual(
+            replay_result.alert.reviewed_context["provenance"]["admission_channel"],
+            "fixture_replay",
+        )
+        self.assertEqual(
+            live_result.alert.reviewed_context["provenance"]["admission_channel"],
+            "live_wazuh_webhook",
+        )
+        self.assertEqual(
+            replay_service.get_record(
+                ReconciliationRecord,
+                replay_result.reconciliation.reconciliation_id,
+            ).subject_linkage["admission_provenance"],
+            {
+                "admission_channel": "fixture_replay",
+                "admission_kind": "replay",
+            },
+        )
+        self.assertEqual(
+            live_service.get_record(
+                ReconciliationRecord,
+                live_result.reconciliation.reconciliation_id,
+            ).subject_linkage["admission_provenance"],
+            {
+                "admission_channel": "live_wazuh_webhook",
+                "admission_kind": "live",
             },
         )
 
@@ -2827,16 +2894,24 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 "location": "microsoft365/contoso/exchange",
             },
         }
+        expected_reviewed_context = {
+            **expected_profile,
+            "provenance": {
+                **expected_profile["provenance"],
+                "admission_kind": "replay",
+                "admission_channel": "fixture_replay",
+            },
+        }
 
         self.assertEqual(admitted.disposition, "created")
-        self.assertEqual(admitted.alert.reviewed_context, expected_profile)
+        self.assertEqual(admitted.alert.reviewed_context, expected_reviewed_context)
         self.assertEqual(
             service.get_record(AnalyticSignalRecord, admitted.alert.analytic_signal_id).reviewed_context,
-            expected_profile,
+            expected_reviewed_context,
         )
         self.assertEqual(
             service.get_record(AlertRecord, admitted.alert.alert_id).reviewed_context,
-            expected_profile,
+            expected_reviewed_context,
         )
         reconciliation = service.get_record(
             ReconciliationRecord,
@@ -2941,16 +3016,24 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 "location": "entra/contoso/directory",
             },
         }
+        expected_reviewed_context = {
+            **expected_profile,
+            "provenance": {
+                **expected_profile["provenance"],
+                "admission_kind": "replay",
+                "admission_channel": "fixture_replay",
+            },
+        }
 
         self.assertEqual(admitted.disposition, "created")
-        self.assertEqual(admitted.alert.reviewed_context, expected_profile)
+        self.assertEqual(admitted.alert.reviewed_context, expected_reviewed_context)
         self.assertEqual(
             service.get_record(AnalyticSignalRecord, admitted.alert.analytic_signal_id).reviewed_context,
-            expected_profile,
+            expected_reviewed_context,
         )
         self.assertEqual(
             service.get_record(AlertRecord, admitted.alert.alert_id).reviewed_context,
-            expected_profile,
+            expected_reviewed_context,
         )
         reconciliation = service.get_record(
             ReconciliationRecord,
