@@ -33,7 +33,7 @@ Failure signature: none
 - Hypothesis: The missing Phase 18 coverage was a dedicated repository-local validator for the reviewed live Wazuh webhook path into the analyst queue, not a broad service bug.
 - What changed: Added `control-plane/tests/test_phase18_live_wazuh_queue_validation.py`; updated `docs/phase-18-wazuh-lab-topology-validation.md`; extended `scripts/verify-phase-18-wazuh-lab-topology.sh` and `scripts/test-verify-phase-18-wazuh-lab-topology.sh` to require the new validator.
 - Current blocker: none
-- Next exact step: Push `codex/issue-382` and open a draft PR for the verified Phase 18 validation slice.
+- Next exact step: Monitor draft PR `#387` for review or CI feedback and address only focused validation regressions if they appear.
 - Verification gap: none for the requested repository-local validation slice; broader Phase 19 operator-surface coverage remains intentionally out of scope.
 - Files touched: `.codex-supervisor/issues/382/issue-journal.md`, `control-plane/tests/test_phase18_live_wazuh_queue_validation.py`, `docs/phase-18-wazuh-lab-topology-validation.md`, `scripts/verify-phase-18-wazuh-lab-topology.sh`, `scripts/test-verify-phase-18-wazuh-lab-topology.sh`
 - Rollback concern: Low; changes are additive validation/doc/verifier updates and do not alter runtime service logic.
@@ -42,3 +42,4 @@ Failure signature: none
 - Keep this section short. The supervisor may compact older notes automatically.
 - Focused reproducer note: the first draft of the new test intentionally changed `data.request_id`, which exercised `updated` reviewed-context behavior instead of `restated`; the final test now changes only native id/timestamp to isolate repeat live-delivery semantics.
 - Stabilization note: Re-ran the dedicated Phase 18 validator, both shell verifier paths, and the full `control-plane/tests` unittest discovery sweep on 2026-04-11; all passed without additional code changes.
+- Publish note: Pushed `codex/issue-382` and opened draft PR `#387` (`[codex] Add Phase 18 live Wazuh queue validation`) against `main`.
