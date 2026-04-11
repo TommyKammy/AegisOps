@@ -38,6 +38,8 @@ class Phase18WazuhSingleNodeLabAssetsTests(unittest.TestCase):
             "Wazuh -> AegisOps",
             "Authorization: Bearer <shared secret>",
             "must remain untracked",
+            "must not default to a tracked repository output path",
+            "safe output example is `${TMPDIR:-/tmp}/aegisops-wazuh/ossec.integration.rendered.xml`",
             "OpenSearch runtime extension",
             "multi-node or production-scale Wazuh",
         ):
@@ -105,6 +107,11 @@ class Phase18WazuhSingleNodeLabAssetsTests(unittest.TestCase):
 
         render_helper_text = render_helper_path.read_text(encoding="utf-8")
         for term in (
+            'safe_output_example="${TMPDIR:-/tmp}/aegisops-wazuh/ossec.integration.rendered.xml"',
+            'require_explicit_output_path() {',
+            'echo "Explicit output path required. Refusing to write rendered integration content to an implicit worktree path." >&2',
+            'echo "Suggested safe location: ${safe_output_example}" >&2',
+            'require_explicit_output_path "$@"',
             'require_env "AEGISOPS_WAZUH_AEGISOPS_INGEST_URL"',
             'require_env "AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE"',
             'template_path="${script_dir}/ossec.integration.sample.xml"',
@@ -128,8 +135,18 @@ class Phase18WazuhSingleNodeLabAssetsTests(unittest.TestCase):
             "must not publish the control-plane backend port directly",
             "render-ossec-integration.sh",
             "Wazuh config",
+            "requires an explicit output path",
+            "reviewed safe example is `${TMPDIR:-/tmp}/aegisops-wazuh/ossec.integration.rendered.xml`",
+            "repository ignore coverage for `ossec.integration.rendered.xml` artifacts",
         ):
             self.assertIn(term, readme_text)
+
+        gitignore_text = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
+        for term in (
+            "ossec.integration.rendered.xml",
+            "*.ossec.integration.rendered.xml",
+        ):
+            self.assertIn(term, gitignore_text)
 
     def test_render_helper_materializes_literal_integration_values(self) -> None:
         render_helper_path = self._asset_dir() / "render-ossec-integration.sh"
@@ -160,6 +177,46 @@ class Phase18WazuhSingleNodeLabAssetsTests(unittest.TestCase):
             self.assertIn("<hook_url>https://aegisops.example.internal/intake/wazuh?channel=github&amp;mode=lab</hook_url>", rendered_text)
             self.assertIn("<api_key>reviewed&lt;&amp;&gt;secret</api_key>", rendered_text)
             self.assertIn("<group>github_audit</group>", rendered_text)
+
+    def test_render_helper_requires_explicit_output_path_when_run_from_repo_root(self) -> None:
+        render_helper_path = self._asset_dir() / "render-ossec-integration.sh"
+        self.assertTrue(render_helper_path.exists(), f"expected Phase 18 render helper at {render_helper_path}")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = pathlib.Path(temp_dir)
+            secret_path = temp_path / "shared-secret.txt"
+            secret_path.write_text("reviewed-secret\n", encoding="utf-8")
+            repo_rendered_path = REPO_ROOT / "ossec.integration.rendered.xml"
+            existed_before = repo_rendered_path.exists()
+            mtime_before = repo_rendered_path.stat().st_mtime_ns if existed_before else None
+
+            env = {
+                **os.environ,
+                "TMPDIR": "/tmp",
+                "AEGISOPS_WAZUH_AEGISOPS_INGEST_URL": "https://aegisops.example.internal/intake/wazuh",
+                "AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE": str(secret_path),
+            }
+            completed = subprocess.run(
+                ["bash", str(render_helper_path)],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+
+            self.assertNotEqual(
+                completed.returncode,
+                0,
+                "expected render helper to reject the implicit repo-root output path",
+            )
+            self.assertIn("Explicit output path required", completed.stderr)
+            self.assertIn(
+                "Suggested safe location: /tmp/aegisops-wazuh/ossec.integration.rendered.xml",
+                completed.stderr,
+            )
+            self.assertEqual(repo_rendered_path.exists(), existed_before)
+            if existed_before:
+                self.assertEqual(repo_rendered_path.stat().st_mtime_ns, mtime_before)
 
 
 if __name__ == "__main__":

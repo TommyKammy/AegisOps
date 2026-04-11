@@ -15,13 +15,15 @@ Use the files here as reviewed scaffolding only:
 - `docker-compose.yml` keeps the Wazuh manager, indexer, and dashboard topology explicit for lab review while leaving service interfaces internal-only.
 - `bootstrap.env.sample` lists the reviewed non-secret inputs that operators must supply in an untracked env file.
 - `ossec.integration.sample.xml` keeps the reviewed custom integration template shape for `Wazuh -> AegisOps`.
-- `render-ossec-integration.sh` reads `AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE`, materializes `AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET`, and renders literal `<hook_url>` and `<api_key>` values before operators load the integration into Wazuh.
+- `render-ossec-integration.sh` reads `AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE`, materializes `AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET`, requires an explicit output path, and renders literal `<hook_url>` and `<api_key>` values before operators load the integration into Wazuh.
 
 Operator expectations:
 
 - Keep the AegisOps ingress target on the reviewed reverse proxy HTTPS path.
 - Keep the shared bearer secret in an untracked secret file.
 - Run `render-ossec-integration.sh` in the manager container or another shell where `AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE` resolves to the mounted secret path so the helper can populate the template’s `AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET` placeholder before copying the integration block into active Wazuh config.
+- Pass an explicit output path every time. The reviewed safe example is `${TMPDIR:-/tmp}/aegisops-wazuh/ossec.integration.rendered.xml`, not a tracked repository path.
+- If an operator still renders into a local worktree path for review, keep the output under the repository ignore coverage for `ossec.integration.rendered.xml` artifacts and do not stage it.
 - Keep GitHub audit as the only approved first live family.
 - Keep service interfaces internal-only unless a separate reviewed lab access path is supplied.
 - Keep the bundle narrow and reviewable.
