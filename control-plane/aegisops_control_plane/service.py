@@ -907,6 +907,11 @@ class AegisOpsControlPlaneService:
                 "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_TRUSTED_PROXY_CIDRS must be set "
                 "before starting the live Wazuh ingest runtime on a non-loopback interface"
             )
+        if self._config.wazuh_ingest_reverse_proxy_secret.strip() == "":
+            raise ValueError(
+                "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_REVERSE_PROXY_SECRET must be set "
+                "before starting the live Wazuh ingest runtime"
+            )
 
     def ingest_wazuh_alert(
         self,
@@ -914,6 +919,7 @@ class AegisOpsControlPlaneService:
         raw_alert: Mapping[str, object],
         authorization_header: str | None,
         forwarded_proto: str | None,
+        reverse_proxy_secret_header: str | None,
         peer_addr: str | None,
     ) -> FindingAlertIngestResult:
         self.validate_wazuh_ingest_runtime()
@@ -926,6 +932,13 @@ class AegisOpsControlPlaneService:
         if (forwarded_proto or "").strip().lower() != "https":
             raise PermissionError(
                 "live Wazuh ingest requires the reviewed reverse proxy HTTPS boundary"
+            )
+        if not hmac.compare_digest(
+            (reverse_proxy_secret_header or "").strip(),
+            self._config.wazuh_ingest_reverse_proxy_secret,
+        ):
+            raise PermissionError(
+                "live Wazuh ingest requires the reviewed reverse proxy boundary credential"
             )
 
         scheme, separator, supplied_secret = (authorization_header or "").partition(" ")
@@ -974,14 +987,14 @@ class AegisOpsControlPlaneService:
             return False
 
     def _is_trusted_wazuh_ingest_peer(self, peer_addr: str | None) -> bool:
-        if self._wazuh_ingest_listener_is_loopback():
-            return True
         if peer_addr is None or peer_addr.strip() == "":
             return False
         try:
             peer_ip = ipaddress.ip_address(peer_addr)
         except ValueError:
             return False
+        if self._wazuh_ingest_listener_is_loopback():
+            return peer_ip.is_loopback
         for cidr in self._config.wazuh_ingest_trusted_proxy_cidrs:
             if peer_ip in ipaddress.ip_network(cidr, strict=False):
                 return True

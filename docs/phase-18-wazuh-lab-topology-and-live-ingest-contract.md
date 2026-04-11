@@ -71,6 +71,10 @@ The shared secret is an AegisOps-owned runtime secret and must come from an untr
 
 Wazuh and the AegisOps reverse proxy must share the same reviewed bearer secret for this live path.
 
+The reviewed reverse proxy must also inject a separate AegisOps-owned boundary credential header before forwarding the request to the control-plane backend.
+
+Direct backend requests that do not cross the reviewed reverse proxy boundary must not be able to mint that backend-only credential.
+
 Alternate authentication schemes, query-string secrets, anonymous webhook access, or substrate-local trust-by-network-location are out of contract for the first live slice.
 
 ### 4.3 Payload Admission Boundary
@@ -92,6 +96,7 @@ Ingress must reject the request when any of the following conditions hold:
 - the request is not HTTPS at the approved ingress boundary;
 - the request does not use HTTPS POST;
 - the `Authorization: Bearer` header is missing, empty, malformed, or does not match the reviewed shared secret;
+- the reviewed reverse proxy boundary credential is missing, empty, malformed, or does not match the backend runtime secret injected by the reverse proxy;
 - the request attempts to bypass the approved reverse proxy and reach the control-plane backend directly;
 - the payload is not valid JSON;
 - the payload does not satisfy the reviewed Wazuh required fields including `id`, `timestamp`, `rule.id`, `rule.level`, `rule.description`, accountable source identity, and raw payload preservation expectations; or

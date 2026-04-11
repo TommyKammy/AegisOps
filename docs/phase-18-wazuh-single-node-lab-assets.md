@@ -37,6 +37,10 @@ The reviewed custom integration shape uses `Authorization: Bearer <shared secret
 
 The shared secret must remain untracked and must come from an operator-provided runtime secret file or another reviewed untracked secret source.
 
+The reviewed reverse proxy must inject a separate backend-only boundary credential when forwarding the request to the control-plane runtime.
+
+That boundary credential is an AegisOps runtime secret, not a Wazuh integration input, and operators must not hand it to Wazuh or use it as a substitute for the reviewed bearer secret.
+
 Wazuh does not expand the sample `${...}` placeholders inside the integration block. Operators must render literal `<hook_url>` and `<api_key>` values with `render-ossec-integration.sh` before loading the reviewed integration into active Wazuh configuration.
 
 The reviewed render helper reads `AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE`, materializes `AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET` from that mounted file, and then replaces both reviewed placeholders in `ossec.integration.sample.xml` before writing the rendered output.

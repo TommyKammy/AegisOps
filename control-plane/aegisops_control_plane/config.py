@@ -15,6 +15,7 @@ class RuntimeConfig:
     shuffle_base_url: str = "<set-me>"
     isolated_executor_base_url: str = "<set-me>"
     wazuh_ingest_shared_secret: str = field(default="", repr=False)
+    wazuh_ingest_reverse_proxy_secret: str = field(default="", repr=False)
     wazuh_ingest_trusted_proxy_cidrs: tuple[str, ...] = ()
 
     @classmethod
@@ -61,6 +62,10 @@ class RuntimeConfig:
             wazuh_ingest_shared_secret=source.get(
                 "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET",
                 cls.wazuh_ingest_shared_secret,
+            ),
+            wazuh_ingest_reverse_proxy_secret=source.get(
+                "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_REVERSE_PROXY_SECRET",
+                cls.wazuh_ingest_reverse_proxy_secret,
             ),
             wazuh_ingest_trusted_proxy_cidrs=trusted_proxy_cidrs,
         )

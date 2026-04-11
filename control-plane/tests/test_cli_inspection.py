@@ -110,6 +110,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 port=8089,
                 postgres_dsn="postgresql://control-plane.local/aegisops",
                 wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
             ),
             store=store,
         )
@@ -132,6 +133,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 port=0,
                 postgres_dsn="postgresql://control-plane.local/aegisops",
                 wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
             ),
             store=store,
         )
@@ -211,7 +213,9 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                     servers[0].shutdown()
                 thread.join(timeout=2)
 
-    def test_long_running_runtime_surface_admits_authenticated_wazuh_ingest(self) -> None:
+    def test_long_running_runtime_surface_rejects_direct_backend_wazuh_ingest_bypass(
+        self,
+    ) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(
@@ -219,6 +223,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 port=0,
                 postgres_dsn="postgresql://control-plane.local/aegisops",
                 wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
             ),
             store=store,
         )
@@ -256,17 +261,11 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                     },
                 )
 
-                with request.urlopen(ingest_request, timeout=2) as response:
-                    response_body = json.loads(response.read().decode("utf-8"))
+                with self.assertRaisesRegex(error.HTTPError, "403"):
+                    request.urlopen(ingest_request, timeout=2)
 
-                self.assertEqual(response.status, 202)
-                self.assertEqual(response_body["disposition"], "created")
-                self.assertEqual(response_body["finding_id"], response_body["alert"]["finding_id"])
-                self.assertEqual(store.list(AlertRecord)[0].finding_id, response_body["finding_id"])
-                self.assertEqual(
-                    store.list(AnalyticSignalRecord)[0].substrate_detection_record_id,
-                    "wazuh:1731595300.1234567",
-                )
+                self.assertEqual(store.list(AlertRecord), ())
+                self.assertEqual(store.list(AnalyticSignalRecord), ())
             finally:
                 if servers:
                     servers[0].shutdown()
@@ -289,6 +288,26 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         ):
             main.run_control_plane_service(service)
 
+    def test_long_running_runtime_surface_rejects_missing_wazuh_reverse_proxy_secret(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=8089,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+            ),
+            store=store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_REVERSE_PROXY_SECRET must be set",
+        ):
+            main.run_control_plane_service(service)
+
     def test_long_running_runtime_surface_rejects_non_loopback_wazuh_ingest_without_trusted_proxies(
         self,
     ) -> None:
@@ -299,6 +318,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 port=8089,
                 postgres_dsn="postgresql://control-plane.local/aegisops",
                 wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
             ),
             store=store,
         )
@@ -317,6 +337,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 port=0,
                 postgres_dsn="postgresql://control-plane.local/aegisops",
                 wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
             ),
             store=store,
         )
@@ -347,6 +368,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                     method="POST",
                     headers={
                         "Content-Type": "application/json",
+                        "X-AegisOps-Proxy-Secret": "reviewed-proxy-secret",
                         "X-Forwarded-Proto": "https",
                     },
                 )
@@ -369,6 +391,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 port=0,
                 postgres_dsn="postgresql://control-plane.local/aegisops",
                 wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
             ),
             store=store,
         )
@@ -400,6 +423,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                     headers={
                         "Authorization": "Bearer wrong-secret",
                         "Content-Type": "application/json",
+                        "X-AegisOps-Proxy-Secret": "reviewed-proxy-secret",
                         "X-Forwarded-Proto": "https",
                     },
                 )
@@ -422,6 +446,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 port=0,
                 postgres_dsn="postgresql://control-plane.local/aegisops",
                 wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
             ),
             store=store,
         )
@@ -453,6 +478,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                     headers={
                         "Authorization": "Bearer reviewed-shared-secret",
                         "Content-Type": "application/json",
+                        "X-AegisOps-Proxy-Secret": "reviewed-proxy-secret",
                     },
                 )
 
@@ -474,6 +500,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 port=0,
                 postgres_dsn="postgresql://control-plane.local/aegisops",
                 wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
             ),
             store=store,
         )
@@ -505,6 +532,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                     headers={
                         "Authorization": "Bearer reviewed-shared-secret",
                         "Content-Type": "application/json",
+                        "X-AegisOps-Proxy-Secret": "reviewed-proxy-secret",
                         "X-Forwarded-Proto": "https",
                     },
                 )
@@ -526,6 +554,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 host="0.0.0.0",
                 postgres_dsn="postgresql://control-plane.local/aegisops",
                 wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
                 wazuh_ingest_trusted_proxy_cidrs=("10.10.0.5/32",),
             ),
             store=store,
@@ -539,6 +568,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
                 authorization_header="Bearer reviewed-shared-secret",
                 forwarded_proto="https",
+                reverse_proxy_secret_header="reviewed-proxy-secret",
                 peer_addr="10.10.0.6",
             )
 
@@ -549,6 +579,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 host="0.0.0.0",
                 postgres_dsn="postgresql://control-plane.local/aegisops",
                 wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
                 wazuh_ingest_trusted_proxy_cidrs=("10.10.0.5/32",),
             ),
             store=store,
@@ -558,6 +589,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
             authorization_header="Bearer reviewed-shared-secret",
             forwarded_proto="https",
+            reverse_proxy_secret_header="reviewed-proxy-secret",
             peer_addr="10.10.0.5",
         )
 
@@ -573,6 +605,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 port=0,
                 postgres_dsn="postgresql://control-plane.local/aegisops",
                 wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
             ),
             store=store,
         )
@@ -605,6 +638,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 connection.putrequest("POST", "/intake/wazuh")
                 connection.putheader("Authorization", "Bearer reviewed-shared-secret")
                 connection.putheader("Content-Type", "application/json")
+                connection.putheader("X-AegisOps-Proxy-Secret", "reviewed-proxy-secret")
                 connection.putheader("X-Forwarded-Proto", "https")
                 connection.putheader(
                     "Content-Length",
