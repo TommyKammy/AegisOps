@@ -139,9 +139,9 @@ assert_fails_with "${missing_deferred_scope_repo}" '- guarded automation live wi
 missing_validation_note_repo="${workdir}/missing-validation-note"
 create_repo "${missing_validation_note_repo}"
 write_canonical_artifacts "${missing_validation_note_repo}"
-remove_text_from_doc "${missing_validation_note_repo}" "${missing_validation_note_repo}/docs/phase-18-wazuh-lab-topology-validation.md" 'Confirmed the live ingest path remains fail-closed by rejecting non-HTTPS requests, non-POST requests, missing or invalid bearer credentials, direct backend bypass attempts, invalid JSON payloads, Wazuh payloads that violate required field expectations, and payloads outside the approved first live family.'
+remove_text_from_doc "${missing_validation_note_repo}" "${missing_validation_note_repo}/docs/phase-18-wazuh-lab-topology-validation.md" 'Confirmed the live ingest path remains fail-closed by rejecting non-HTTPS requests, non-POST requests, missing or invalid bearer credentials, missing or invalid reverse-proxy boundary credentials, direct backend bypass attempts, invalid JSON payloads, Wazuh payloads that violate required field expectations, and payloads outside the approved first live family.'
 commit_fixture "${missing_validation_note_repo}"
-assert_fails_with "${missing_validation_note_repo}" 'Confirmed the live ingest path remains fail-closed by rejecting non-HTTPS requests, non-POST requests, missing or invalid bearer credentials, direct backend bypass attempts, invalid JSON payloads, Wazuh payloads that violate required field expectations, and payloads outside the approved first live family.'
+assert_fails_with "${missing_validation_note_repo}" 'Confirmed the live ingest path remains fail-closed by rejecting non-HTTPS requests, non-POST requests, missing or invalid bearer credentials, missing or invalid reverse-proxy boundary credentials, direct backend bypass attempts, invalid JSON payloads, Wazuh payloads that violate required field expectations, and payloads outside the approved first live family.'
 
 missing_asset_doc_repo="${workdir}/missing-asset-doc"
 create_repo "${missing_asset_doc_repo}"

@@ -34,6 +34,7 @@ class Phase18LiveWazuhQueueValidationTests(unittest.TestCase):
                 host="0.0.0.0",
                 postgres_dsn="postgresql://control-plane.local/aegisops",
                 wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
                 wazuh_ingest_trusted_proxy_cidrs=("10.10.0.5/32",),
             ),
             store=store,
@@ -49,6 +50,7 @@ class Phase18LiveWazuhQueueValidationTests(unittest.TestCase):
             raw_alert=created_alert,
             authorization_header="Bearer reviewed-shared-secret",
             forwarded_proto="https",
+            reverse_proxy_secret_header="reviewed-proxy-secret",
             peer_addr="10.10.0.5",
         )
         promoted_case = service.promote_alert_to_case(created.alert.alert_id)
@@ -56,12 +58,14 @@ class Phase18LiveWazuhQueueValidationTests(unittest.TestCase):
             raw_alert=restated_alert,
             authorization_header="Bearer reviewed-shared-secret",
             forwarded_proto="https",
+            reverse_proxy_secret_header="reviewed-proxy-secret",
             peer_addr="10.10.0.5",
         )
         deduplicated = service.ingest_wazuh_alert(
             raw_alert=deduplicated_alert,
             authorization_header="Bearer reviewed-shared-secret",
             forwarded_proto="https",
+            reverse_proxy_secret_header="reviewed-proxy-secret",
             peer_addr="10.10.0.5",
         )
 

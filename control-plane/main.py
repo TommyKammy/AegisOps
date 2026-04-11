@@ -252,6 +252,9 @@ def run_control_plane_service(
                     raw_alert=alert,
                     authorization_header=self.headers.get("Authorization"),
                     forwarded_proto=self.headers.get("X-Forwarded-Proto"),
+                    reverse_proxy_secret_header=self.headers.get(
+                        "X-AegisOps-Proxy-Secret"
+                    ),
                     peer_addr=self.client_address[0] if self.client_address else None,
                 )
             except PermissionError as exc:

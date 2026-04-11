@@ -2791,6 +2791,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             RuntimeConfig(
                 postgres_dsn="postgresql://control-plane.local/aegisops",
                 wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
             ),
             store=live_store,
         )
@@ -2805,6 +2806,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             raw_alert=payload,
             authorization_header="Bearer reviewed-shared-secret",
             forwarded_proto="https",
+            reverse_proxy_secret_header="reviewed-proxy-secret",
             peer_addr="127.0.0.1",
         )
 
@@ -2853,6 +2855,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             RuntimeConfig(
                 postgres_dsn="postgresql://control-plane.local/aegisops",
                 wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
             ),
             store=store,
         )
@@ -2862,6 +2865,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             raw_alert=payload,
             authorization_header="Bearer reviewed-shared-secret",
             forwarded_proto="https",
+            reverse_proxy_secret_header="reviewed-proxy-secret",
             peer_addr="127.0.0.1",
         )
         promoted_case = service.promote_alert_to_case(created.alert.alert_id)
@@ -2873,12 +2877,14 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             raw_alert=restated_payload,
             authorization_header="Bearer reviewed-shared-secret",
             forwarded_proto="https",
+            reverse_proxy_secret_header="reviewed-proxy-secret",
             peer_addr="127.0.0.1",
         )
         deduplicated = service.ingest_wazuh_alert(
             raw_alert=restated_payload,
             authorization_header="Bearer reviewed-shared-secret",
             forwarded_proto="https",
+            reverse_proxy_secret_header="reviewed-proxy-secret",
             peer_addr="127.0.0.1",
         )
 

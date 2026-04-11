@@ -84,9 +84,25 @@ class RuntimeSkeletonTests(unittest.TestCase):
         config = RuntimeConfig(
             postgres_dsn="postgresql://control-plane.local/aegisops",
             wazuh_ingest_shared_secret="reviewed-shared-secret",
+            wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
         )
 
         self.assertNotIn("reviewed-shared-secret", repr(config))
+        self.assertNotIn("reviewed-proxy-secret", repr(config))
+
+    def test_runtime_config_parses_reverse_proxy_secret_from_env(self) -> None:
+        config = RuntimeConfig.from_env(
+            {
+                "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_REVERSE_PROXY_SECRET": (
+                    "reviewed-proxy-secret"
+                ),
+            }
+        )
+
+        self.assertEqual(
+            config.wazuh_ingest_reverse_proxy_secret,
+            "reviewed-proxy-secret",
+        )
 
     def test_runtime_config_parses_trusted_proxy_cidrs_from_env(self) -> None:
         config = RuntimeConfig.from_env(
