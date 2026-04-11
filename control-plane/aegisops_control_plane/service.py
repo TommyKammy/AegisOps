@@ -152,6 +152,44 @@ class AnalystQueueSnapshot:
 
 
 @dataclass(frozen=True)
+class AlertDetailSnapshot:
+    read_only: bool
+    alert_id: str
+    alert: dict[str, object]
+    case_record: dict[str, object] | None
+    analytic_signal_record: dict[str, object] | None
+    latest_reconciliation: dict[str, object]
+    linked_evidence_records: tuple[dict[str, object], ...]
+    reviewed_context: dict[str, object]
+    review_state: str
+    escalation_boundary: str
+    source_system: str
+    native_rule: dict[str, object] | None
+    provenance: dict[str, str] | None
+    lineage: dict[str, object]
+
+    def to_dict(self) -> dict[str, object]:
+        return _json_ready(
+            {
+                "read_only": self.read_only,
+                "alert_id": self.alert_id,
+                "alert": self.alert,
+                "case_record": self.case_record,
+                "analytic_signal_record": self.analytic_signal_record,
+                "latest_reconciliation": self.latest_reconciliation,
+                "linked_evidence_records": self.linked_evidence_records,
+                "reviewed_context": self.reviewed_context,
+                "review_state": self.review_state,
+                "escalation_boundary": self.escalation_boundary,
+                "source_system": self.source_system,
+                "native_rule": self.native_rule,
+                "provenance": self.provenance,
+                "lineage": self.lineage,
+            }
+        )
+
+
+@dataclass(frozen=True)
 class AnalystAssistantContextSnapshot:
     read_only: bool
     record_family: str
@@ -1235,17 +1273,6 @@ class AegisOpsControlPlaneService:
         )
 
     def inspect_analyst_queue(self) -> AnalystQueueSnapshot:
-        latest_reconciliation_by_alert_id: dict[str, ReconciliationRecord] = {}
-        for record in self._store.list(ReconciliationRecord):
-            if (
-                record.alert_id is None
-                or not self._reconciliation_has_detection_lineage(record)
-            ):
-                continue
-            current = latest_reconciliation_by_alert_id.get(record.alert_id)
-            if current is None or record.compared_at > current.compared_at:
-                latest_reconciliation_by_alert_id[record.alert_id] = record
-
         active_alert_states = {
             "new",
             "triaged",
@@ -1257,8 +1284,11 @@ class AegisOpsControlPlaneService:
         for alert in self._store.list(AlertRecord):
             if alert.lifecycle_state not in active_alert_states:
                 continue
-            reconciliation = latest_reconciliation_by_alert_id.get(alert.alert_id)
+            reconciliation = self._latest_detection_reconciliation_for_alert(alert.alert_id)
             if reconciliation is None:
+                continue
+
+            if not self._reconciliation_is_wazuh_origin(reconciliation):
                 continue
 
             source_systems = self._merge_linked_ids(
@@ -1269,13 +1299,6 @@ class AegisOpsControlPlaneService:
                 reconciliation.subject_linkage.get("substrate_detection_record_ids"),
                 None,
             )
-            is_wazuh_origin = "wazuh" in source_systems or any(
-                detection_id.startswith("wazuh:")
-                for detection_id in substrate_detection_record_ids
-            )
-            if not is_wazuh_origin:
-                continue
-
             case_record = (
                 self._store.get(CaseRecord, alert.case_id)
                 if alert.case_id is not None
@@ -1296,7 +1319,7 @@ class AegisOpsControlPlaneService:
                     "escalation_boundary": self._alert_escalation_boundary(alert),
                     "source_system": (
                         "wazuh"
-                        if is_wazuh_origin
+                        if self._reconciliation_is_wazuh_origin(reconciliation)
                         else (source_systems[0] if source_systems else "wazuh")
                     ),
                     "substrate_detection_record_ids": substrate_detection_record_ids,
@@ -1333,6 +1356,93 @@ class AegisOpsControlPlaneService:
             queue_name="analyst_review",
             total_records=len(queue_records),
             records=tuple(queue_records),
+        )
+
+    def inspect_alert_detail(self, alert_id: str) -> AlertDetailSnapshot:
+        alert_id = self._require_non_empty_string(alert_id, "alert_id")
+        alert = self._store.get(AlertRecord, alert_id)
+        if alert is None:
+            raise LookupError(f"Missing alert record {alert_id!r} for detail inspection")
+
+        reconciliation = self._latest_detection_reconciliation_for_alert(alert.alert_id)
+        if reconciliation is None or not self._reconciliation_is_wazuh_origin(reconciliation):
+            raise LookupError(
+                f"Missing reviewed Wazuh-backed reconciliation for alert {alert_id!r}"
+            )
+
+        case_record = (
+            self._store.get(CaseRecord, alert.case_id)
+            if alert.case_id is not None
+            else None
+        )
+        analytic_signal_record = (
+            self._store.get(AnalyticSignalRecord, alert.analytic_signal_id)
+            if alert.analytic_signal_id is not None
+            else None
+        )
+        evidence_records = self._assistant_evidence_records_for_context(
+            alert_ids=(alert.alert_id,),
+            case_ids=self._assistant_ids_from_value(alert.case_id),
+            evidence_ids=self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "evidence_ids",
+            ),
+            exclude_evidence_id=None,
+        )
+        source_systems = self._merge_linked_ids(
+            reconciliation.subject_linkage.get("source_systems"),
+            None,
+        )
+        source_system = (
+            "wazuh" if "wazuh" in source_systems else (source_systems[0] if source_systems else "wazuh")
+        )
+        lineage = {
+            "finding_id": alert.finding_id,
+            "analytic_signal_id": alert.analytic_signal_id,
+            "case_id": alert.case_id,
+            "reconciliation_id": reconciliation.reconciliation_id,
+            "correlation_key": reconciliation.correlation_key,
+            "source_systems": source_systems,
+            "substrate_detection_record_ids": self._merge_linked_ids(
+                reconciliation.subject_linkage.get("substrate_detection_record_ids"),
+                None,
+            ),
+            "accountable_source_identities": self._merge_linked_ids(
+                reconciliation.subject_linkage.get("accountable_source_identities"),
+                None,
+            ),
+            "evidence_ids": tuple(evidence.evidence_id for evidence in evidence_records),
+            "first_seen_at": reconciliation.first_seen_at,
+            "last_seen_at": reconciliation.last_seen_at,
+        }
+
+        return AlertDetailSnapshot(
+            read_only=True,
+            alert_id=alert.alert_id,
+            alert=_record_to_dict(alert),
+            case_record=_record_to_dict(case_record) if case_record is not None else None,
+            analytic_signal_record=(
+                _record_to_dict(analytic_signal_record)
+                if analytic_signal_record is not None
+                else None
+            ),
+            latest_reconciliation=_record_to_dict(reconciliation),
+            linked_evidence_records=tuple(
+                _record_to_dict(evidence) for evidence in evidence_records
+            ),
+            reviewed_context=dict(alert.reviewed_context),
+            review_state=self._alert_review_state(alert),
+            escalation_boundary=self._alert_escalation_boundary(alert),
+            source_system=source_system,
+            native_rule=(
+                dict(reconciliation.subject_linkage.get("latest_native_rule"))
+                if isinstance(reconciliation.subject_linkage.get("latest_native_rule"), Mapping)
+                else None
+            ),
+            provenance=_normalize_admission_provenance(
+                reconciliation.subject_linkage.get("admission_provenance")
+            ),
+            lineage=lineage,
         )
 
     def inspect_assistant_context(
@@ -1824,6 +1934,32 @@ class AegisOpsControlPlaneService:
                     )
                 ),
             )
+        )
+
+    def _latest_detection_reconciliation_for_alert(
+        self,
+        alert_id: str,
+    ) -> ReconciliationRecord | None:
+        latest: ReconciliationRecord | None = None
+        for record in self._store.list(ReconciliationRecord):
+            if record.alert_id != alert_id or not self._reconciliation_has_detection_lineage(record):
+                continue
+            if latest is None or record.compared_at > latest.compared_at:
+                latest = record
+        return latest
+
+    def _reconciliation_is_wazuh_origin(self, record: ReconciliationRecord) -> bool:
+        source_systems = self._merge_linked_ids(
+            record.subject_linkage.get("source_systems"),
+            None,
+        )
+        substrate_detection_record_ids = self._merge_linked_ids(
+            record.subject_linkage.get("substrate_detection_record_ids"),
+            None,
+        )
+        return "wazuh" in source_systems or any(
+            detection_id.startswith("wazuh:")
+            for detection_id in substrate_detection_record_ids
         )
 
     @staticmethod

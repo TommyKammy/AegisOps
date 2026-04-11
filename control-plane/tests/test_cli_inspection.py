@@ -213,6 +213,108 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                     servers[0].shutdown()
                 thread.join(timeout=2)
 
+    def test_long_running_runtime_surface_exposes_analyst_queue_and_alert_detail_http_views(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+            ),
+            store=store,
+        )
+        alert = _load_wazuh_fixture("github-audit-alert.json")
+        admitted = service.ingest_wazuh_alert(
+            raw_alert=alert,
+            authorization_header="Bearer reviewed-shared-secret",
+            forwarded_proto="https",
+            reverse_proxy_secret_header="reviewed-proxy-secret",
+            peer_addr="127.0.0.1",
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+
+                base_url = f"http://127.0.0.1:{servers[0].server_port}"
+                queue_payload = json.loads(
+                    request.urlopen(
+                        f"{base_url}/inspect-analyst-queue",
+                        timeout=2,
+                    ).read().decode("utf-8")
+                )
+                detail_payload = json.loads(
+                    request.urlopen(
+                        (
+                            f"{base_url}/inspect-alert-detail"
+                            f"?alert_id={admitted.alert.alert_id}"
+                        ),
+                        timeout=2,
+                    ).read().decode("utf-8")
+                )
+
+                self.assertTrue(queue_payload["read_only"])
+                self.assertEqual(queue_payload["queue_name"], "analyst_review")
+                self.assertEqual(queue_payload["total_records"], 1)
+                self.assertEqual(
+                    queue_payload["records"][0]["alert_id"],
+                    admitted.alert.alert_id,
+                )
+
+                self.assertTrue(detail_payload["read_only"])
+                self.assertEqual(detail_payload["alert_id"], admitted.alert.alert_id)
+                self.assertEqual(detail_payload["alert"]["alert_id"], admitted.alert.alert_id)
+                self.assertEqual(detail_payload["case_record"]["case_id"], promoted_case.case_id)
+                self.assertEqual(
+                    detail_payload["latest_reconciliation"]["reconciliation_id"],
+                    admitted.reconciliation.reconciliation_id,
+                )
+                self.assertEqual(
+                    detail_payload["provenance"],
+                    {
+                        "admission_kind": "live",
+                        "admission_channel": "live_wazuh_webhook",
+                    },
+                )
+                self.assertEqual(
+                    detail_payload["lineage"]["substrate_detection_record_ids"],
+                    ["wazuh:1731595300.1234567"],
+                )
+                self.assertEqual(
+                    detail_payload["lineage"]["accountable_source_identities"],
+                    ["manager:wazuh-manager-github-1"],
+                )
+                self.assertEqual(
+                    detail_payload["reviewed_context"]["source"]["source_family"],
+                    "github_audit",
+                )
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(timeout=2)
+
     def test_long_running_runtime_surface_rejects_direct_backend_wazuh_ingest_bypass(
         self,
     ) -> None:
@@ -799,6 +901,61 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(
             payload["records"][0]["substrate_detection_record_ids"],
             ["wazuh:1731594986.4931506"],
+        )
+
+    def test_cli_renders_reviewed_wazuh_alert_detail_view(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+            ),
+            store=store,
+        )
+        admitted = service.ingest_wazuh_alert(
+            raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
+            authorization_header="Bearer reviewed-shared-secret",
+            forwarded_proto="https",
+            reverse_proxy_secret_header="reviewed-proxy-secret",
+            peer_addr="127.0.0.1",
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-alert-detail", "--alert-id", admitted.alert.alert_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertTrue(payload["read_only"])
+        self.assertEqual(payload["alert_id"], admitted.alert.alert_id)
+        self.assertEqual(payload["alert"]["alert_id"], admitted.alert.alert_id)
+        self.assertEqual(payload["case_record"]["case_id"], promoted_case.case_id)
+        self.assertEqual(
+            payload["latest_reconciliation"]["reconciliation_id"],
+            admitted.reconciliation.reconciliation_id,
+        )
+        self.assertEqual(
+            payload["provenance"],
+            {
+                "admission_channel": "live_wazuh_webhook",
+                "admission_kind": "live",
+            },
+        )
+        self.assertEqual(
+            payload["lineage"]["substrate_detection_record_ids"],
+            ["wazuh:1731595300.1234567"],
+        )
+        self.assertEqual(
+            payload["lineage"]["accountable_source_identities"],
+            ["manager:wazuh-manager-github-1"],
+        )
+        self.assertEqual(
+            payload["reviewed_context"]["source"]["source_family"],
+            "github_audit",
         )
 
     def test_cli_renders_analyst_assistant_context_view_for_a_case(self) -> None:
