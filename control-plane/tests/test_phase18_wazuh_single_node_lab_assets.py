@@ -186,6 +186,9 @@ class Phase18WazuhSingleNodeLabAssetsTests(unittest.TestCase):
             temp_path = pathlib.Path(temp_dir)
             secret_path = temp_path / "shared-secret.txt"
             secret_path.write_text("reviewed-secret\n", encoding="utf-8")
+            repo_rendered_path = REPO_ROOT / "ossec.integration.rendered.xml"
+            existed_before = repo_rendered_path.exists()
+            mtime_before = repo_rendered_path.stat().st_mtime_ns if existed_before else None
 
             env = {
                 **os.environ,
@@ -211,7 +214,9 @@ class Phase18WazuhSingleNodeLabAssetsTests(unittest.TestCase):
                 "Suggested safe location: /tmp/aegisops-wazuh/ossec.integration.rendered.xml",
                 completed.stderr,
             )
-            self.assertFalse((REPO_ROOT / "ossec.integration.rendered.xml").exists())
+            self.assertEqual(repo_rendered_path.exists(), existed_before)
+            if existed_before:
+                self.assertEqual(repo_rendered_path.stat().st_mtime_ns, mtime_before)
 
 
 if __name__ == "__main__":
