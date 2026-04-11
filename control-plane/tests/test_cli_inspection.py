@@ -213,7 +213,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                     servers[0].shutdown()
                 thread.join(timeout=2)
 
-    def test_long_running_runtime_surface_exposes_analyst_queue_and_alert_detail_http_views(
+    def test_long_running_runtime_surface_exposes_analyst_queue_alert_detail_and_case_detail_http_views(
         self,
     ) -> None:
         store, _ = make_store()
@@ -274,6 +274,15 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                         timeout=2,
                     ).read().decode("utf-8")
                 )
+                case_payload = json.loads(
+                    request.urlopen(  # noqa: S310 - local in-process test HTTP server
+                        (
+                            f"{base_url}/inspect-case-detail"
+                            f"?case_id={promoted_case.case_id}"
+                        ),
+                        timeout=2,
+                    ).read().decode("utf-8")
+                )
 
                 self.assertTrue(queue_payload["read_only"])
                 self.assertEqual(queue_payload["queue_name"], "analyst_review")
@@ -308,6 +317,28 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     detail_payload["reviewed_context"]["source"]["source_family"],
+                    "github_audit",
+                )
+                self.assertTrue(case_payload["read_only"])
+                self.assertEqual(case_payload["case_id"], promoted_case.case_id)
+                self.assertEqual(
+                    case_payload["case_record"]["case_id"],
+                    promoted_case.case_id,
+                )
+                self.assertEqual(
+                    case_payload["linked_evidence_ids"],
+                    [detail_payload["linked_evidence_records"][0]["evidence_id"]],
+                )
+                self.assertEqual(
+                    case_payload["advisory_output"]["output_kind"],
+                    "case_summary",
+                )
+                self.assertEqual(
+                    case_payload["advisory_output"]["status"],
+                    "ready",
+                )
+                self.assertEqual(
+                    case_payload["reviewed_context"]["source"]["source_family"],
                     "github_audit",
                 )
             finally:
@@ -1184,6 +1215,101 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(payload["linked_evidence_ids"], [evidence.evidence_id])
         self.assertIn(admitted.alert.alert_id, payload["linked_alert_ids"])
         self.assertIn(recommendation.recommendation_id, payload["linked_recommendation_ids"])
+        self.assertIn(
+            admitted.reconciliation.reconciliation_id,
+            payload["linked_reconciliation_ids"],
+        )
+
+    def test_cli_renders_case_detail_with_evidence_provenance_and_cited_advisory_output(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        compared_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        reviewed_context = {
+            "asset": {
+                "asset_id": "asset-repo-case-detail-cli-001",
+                "criticality": "high",
+            },
+            "identity": {
+                "identity_id": "principal-case-detail-cli-001",
+            },
+        }
+        admitted = service.ingest_finding_alert(
+            finding_id="finding-case-detail-cli-001",
+            analytic_signal_id="signal-case-detail-cli-001",
+            substrate_detection_record_id="substrate-detection-case-detail-cli-001",
+            correlation_key="claim:asset-repo-case-detail-cli-001:case-detail-cli",
+            first_seen_at=compared_at,
+            last_seen_at=compared_at,
+            reviewed_context=reviewed_context,
+        )
+        evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-case-detail-cli-001",
+                source_record_id="substrate-detection-case-detail-cli-001",
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="collector://wazuh/live",
+                acquired_at=compared_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-case-detail-cli-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=admitted.alert.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id=None,
+                review_owner="reviewer-001",
+                intended_outcome="review the cited evidence before any approval",
+                lifecycle_state="under_review",
+                reviewed_context=reviewed_context,
+            )
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            [
+                "inspect-case-detail",
+                "--case-id",
+                promoted_case.case_id,
+            ],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertTrue(payload["read_only"])
+        self.assertEqual(payload["case_id"], promoted_case.case_id)
+        self.assertEqual(payload["case_record"]["case_id"], promoted_case.case_id)
+        self.assertEqual(payload["reviewed_context"], reviewed_context)
+        self.assertEqual(
+            payload["advisory_output"]["output_kind"],
+            "case_summary",
+        )
+        self.assertEqual(payload["advisory_output"]["status"], "ready")
+        self.assertEqual(payload["linked_evidence_ids"], [evidence.evidence_id])
+        self.assertEqual(
+            payload["linked_evidence_records"][0]["collector_identity"],
+            "collector://wazuh/live",
+        )
+        self.assertEqual(
+            payload["linked_evidence_records"][0]["derivation_relationship"],
+            "admitted_analytic_signal",
+        )
+        self.assertIn(
+            recommendation.recommendation_id,
+            payload["linked_recommendation_ids"],
+        )
         self.assertIn(
             admitted.reconciliation.reconciliation_id,
             payload["linked_reconciliation_ids"],

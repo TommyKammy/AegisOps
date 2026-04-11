@@ -190,6 +190,42 @@ class AlertDetailSnapshot:
 
 
 @dataclass(frozen=True)
+class CaseDetailSnapshot:
+    read_only: bool
+    case_id: str
+    case_record: dict[str, object]
+    advisory_output: dict[str, object]
+    reviewed_context: dict[str, object]
+    linked_alert_ids: tuple[str, ...]
+    linked_evidence_ids: tuple[str, ...]
+    linked_recommendation_ids: tuple[str, ...]
+    linked_reconciliation_ids: tuple[str, ...]
+    linked_alert_records: tuple[dict[str, object], ...]
+    linked_evidence_records: tuple[dict[str, object], ...]
+    linked_recommendation_records: tuple[dict[str, object], ...]
+    linked_reconciliation_records: tuple[dict[str, object], ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return _json_ready(
+            {
+                "read_only": self.read_only,
+                "case_id": self.case_id,
+                "case_record": self.case_record,
+                "advisory_output": self.advisory_output,
+                "reviewed_context": self.reviewed_context,
+                "linked_alert_ids": self.linked_alert_ids,
+                "linked_evidence_ids": self.linked_evidence_ids,
+                "linked_recommendation_ids": self.linked_recommendation_ids,
+                "linked_reconciliation_ids": self.linked_reconciliation_ids,
+                "linked_alert_records": self.linked_alert_records,
+                "linked_evidence_records": self.linked_evidence_records,
+                "linked_recommendation_records": self.linked_recommendation_records,
+                "linked_reconciliation_records": self.linked_reconciliation_records,
+            }
+        )
+
+
+@dataclass(frozen=True)
 class AnalystAssistantContextSnapshot:
     read_only: bool
     record_family: str
@@ -1852,6 +1888,25 @@ class AegisOpsControlPlaneService:
                 _record_to_dict(reconciliation)
                 for reconciliation in linked_reconciliation_records
             ),
+        )
+
+    def inspect_case_detail(self, case_id: str) -> CaseDetailSnapshot:
+        case_id = self._require_non_empty_string(case_id, "case_id")
+        context_snapshot = self.inspect_assistant_context("case", case_id)
+        return CaseDetailSnapshot(
+            read_only=True,
+            case_id=case_id,
+            case_record=dict(context_snapshot.record),
+            advisory_output=dict(context_snapshot.advisory_output),
+            reviewed_context=dict(context_snapshot.reviewed_context),
+            linked_alert_ids=context_snapshot.linked_alert_ids,
+            linked_evidence_ids=context_snapshot.linked_evidence_ids,
+            linked_recommendation_ids=context_snapshot.linked_recommendation_ids,
+            linked_reconciliation_ids=context_snapshot.linked_reconciliation_ids,
+            linked_alert_records=context_snapshot.linked_alert_records,
+            linked_evidence_records=context_snapshot.linked_evidence_records,
+            linked_recommendation_records=context_snapshot.linked_recommendation_records,
+            linked_reconciliation_records=context_snapshot.linked_reconciliation_records,
         )
 
     def inspect_advisory_output(
