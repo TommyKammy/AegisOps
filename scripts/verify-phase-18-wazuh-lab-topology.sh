@@ -115,13 +115,18 @@ asset_doc_required_lines=(
   '- `docker-compose.yml` for the placeholder-safe single-node Wazuh manager, indexer, and dashboard lab stack with internal-only service exposure and no direct host port publication;'
   '- `bootstrap.env.sample` for reviewed non-secret bootstrap inputs;'
   '- `ossec.integration.sample.xml` for the reviewed custom integration shape that preserves `Wazuh -> AegisOps` as the only approved first live routing path;'
-  '- `render-ossec-integration.sh` for rendering the reviewed sample into literal Wazuh integration values before operator use; and'
+  '- `render-ossec-integration.sh` for rendering the reviewed sample into literal Wazuh integration values before operator use with an explicit output path requirement; and'
   'The reviewed custom integration shape uses `Authorization: Bearer <shared secret>` at runtime.'
   'The shared secret must remain untracked and must come from an operator-provided runtime secret file or another reviewed untracked secret source.'
   'Wazuh does not expand the sample `${...}` placeholders inside the integration block. Operators must render literal `<hook_url>` and `<api_key>` values with `render-ossec-integration.sh` before loading the reviewed integration into active Wazuh configuration.'
+  'The reviewed render helper must not default to a tracked repository output path. Operators must provide the destination path explicitly so the render step stays intentional when live bearer material is present.'
+  'The reviewed safe output example is `${TMPDIR:-/tmp}/aegisops-wazuh/ossec.integration.rendered.xml`.'
+  'If an operator intentionally writes a rendered integration file inside a local worktree for short-lived review, the file path must stay under repository ignore coverage for rendered `ossec.integration.rendered.xml` artifacts and must not be staged.'
   'Operators must keep GitHub audit as the only approved first live source family for this slice.'
   'Operators must keep the Wazuh manager, indexer, and dashboard interfaces internal to the lab compose network or another separately reviewed lab access path rather than publishing host ports from this bundle.'
   'Operators must run `render-ossec-integration.sh` in the manager container or another shell where `AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE` resolves to the mounted secret path before copying the reviewed integration block into active Wazuh configuration.'
+  'Operators must pass an explicit output path to `render-ossec-integration.sh` rather than relying on an implicit current-directory default.'
+  'Operators should prefer `${TMPDIR:-/tmp}/aegisops-wazuh/ossec.integration.rendered.xml` or another reviewed untracked location outside the repository when rendering the live integration block.'
   '- multi-node or production-scale Wazuh;'
   '- the optional OpenSearch runtime extension;'
 )
@@ -252,6 +257,11 @@ for line in "${asset_integration_required_lines[@]}"; do
 done
 
 render_helper_required_lines=(
+  'safe_output_example="${TMPDIR:-/tmp}/aegisops-wazuh/ossec.integration.rendered.xml"'
+  'require_explicit_output_path() {'
+  '    echo "Explicit output path required. Refusing to write rendered integration content to an implicit worktree path." >&2'
+  '    echo "Suggested safe location: ${safe_output_example}" >&2'
+  'require_explicit_output_path "$@"'
   'require_env "AEGISOPS_WAZUH_AEGISOPS_INGEST_URL"'
   'require_env "AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE"'
   'template_path="${script_dir}/ossec.integration.sample.xml"'

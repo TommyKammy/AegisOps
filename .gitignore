@@ -48,3 +48,7 @@ Thumbs.db
 # Local override files
 docker-compose.override.yml
 docker-compose.local.yml
+
+# Rendered Wazuh integration artifacts may contain live bearer material
+ossec.integration.rendered.xml
+*.ossec.integration.rendered.xml

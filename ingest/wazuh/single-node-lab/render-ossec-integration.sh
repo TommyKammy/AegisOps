@@ -4,7 +4,7 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 template_path="${script_dir}/ossec.integration.sample.xml"
-output_path="${1:-./ossec.integration.rendered.xml}"
+safe_output_example="${TMPDIR:-/tmp}/aegisops-wazuh/ossec.integration.rendered.xml"
 
 require_env() {
   local name="$1"
@@ -29,6 +29,17 @@ xml_escape() {
 escape_sed_replacement() {
   printf '%s' "${1}" | sed -e 's/[&|\\]/\\&/g'
 }
+
+require_explicit_output_path() {
+  if [[ $# -lt 1 || -z "${1}" ]]; then
+    echo "Explicit output path required. Refusing to write rendered integration content to an implicit worktree path." >&2
+    echo "Suggested safe location: ${safe_output_example}" >&2
+    exit 1
+  fi
+}
+
+require_explicit_output_path "$@"
+output_path="$1"
 
 require_env "AEGISOPS_WAZUH_AEGISOPS_INGEST_URL"
 require_env "AEGISOPS_WAZUH_AEGISOPS_SHARED_SECRET_FILE"
