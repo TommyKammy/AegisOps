@@ -19,6 +19,10 @@ from aegisops_control_plane.service import (
 MAX_WAZUH_INGEST_BODY_BYTES = 1_048_576
 
 
+def _normalize_alert_id(value: str) -> str:
+    return value.strip()
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
@@ -185,7 +189,9 @@ def run_control_plane_service(
                 return
 
             if request_path == "/inspect-alert-detail":
-                alert_id = parse_qs(request_target.query).get("alert_id", [""])[0]
+                alert_id = _normalize_alert_id(
+                    parse_qs(request_target.query).get("alert_id", [""])[0]
+                )
                 if not alert_id:
                     self._write_json(
                         HTTPStatus.BAD_REQUEST,
@@ -197,6 +203,15 @@ def run_control_plane_service(
                     return
                 try:
                     payload = service.inspect_alert_detail(alert_id).to_dict()
+                except ValueError as exc:
+                    self._write_json(
+                        HTTPStatus.BAD_REQUEST,
+                        {
+                            "error": "invalid_request",
+                            "message": str(exc),
+                        },
+                    )
+                    return
                 except LookupError as exc:
                     self._write_json(
                         HTTPStatus.NOT_FOUND,
@@ -437,9 +452,12 @@ def main(
         elif command == "inspect-analyst-queue":
             payload = service.inspect_analyst_queue().to_dict()
         elif command == "inspect-alert-detail":
+            alert_id = _normalize_alert_id(parsed.alert_id)
+            if not alert_id:
+                parser.error("alert_id must be a non-empty string")
             try:
-                payload = service.inspect_alert_detail(parsed.alert_id).to_dict()
-            except LookupError as exc:
+                payload = service.inspect_alert_detail(alert_id).to_dict()
+            except (LookupError, ValueError) as exc:
                 parser.error(str(exc))
         else:
             raise AssertionError(f"Unhandled command: {command}")

@@ -315,6 +315,60 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                     servers[0].shutdown()
                 thread.join(timeout=2)
 
+    def test_long_running_runtime_surface_rejects_blank_alert_detail_query(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+            ),
+            store=store,
+        )
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+
+                with self.assertRaises(error.HTTPError) as exc_info:
+                    request.urlopen(
+                        (
+                            "http://127.0.0.1:"
+                            f"{servers[0].server_port}/inspect-alert-detail?alert_id=%20%20"
+                        ),
+                        timeout=2,
+                    )
+
+                self.assertEqual(exc_info.exception.code, 400)
+                error_payload = json.loads(exc_info.exception.read().decode("utf-8"))
+                self.assertEqual(error_payload["error"], "invalid_request")
+                self.assertEqual(
+                    error_payload["message"],
+                    "alert_id query parameter is required",
+                )
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(timeout=2)
+
     def test_long_running_runtime_surface_rejects_direct_backend_wazuh_ingest_bypass(
         self,
     ) -> None:
@@ -1370,6 +1424,24 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
 
         self.assertEqual(exc_info.exception.code, 2)
         self.assertIn("Unsupported control-plane record family", stderr.getvalue())
+
+    def test_cli_rejects_blank_alert_detail_identifier_as_usage_error(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        stderr = io.StringIO()
+
+        with contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit) as exc_info:
+                main.main(
+                    ["inspect-alert-detail", "--alert-id", "   "],
+                    service=service,
+                )
+
+        self.assertEqual(exc_info.exception.code, 2)
+        self.assertIn("alert_id must be a non-empty string", stderr.getvalue())
 
     def test_cli_renders_inspection_views_against_empty_postgresql_store(self) -> None:
         store, _ = make_store()

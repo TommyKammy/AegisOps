@@ -94,6 +94,36 @@ class _TransactionMutationStore:
             yield
 
 
+@dataclass
+class _ListCountingStore:
+    inner: object
+    reconciliation_list_calls: int = 0
+
+    @property
+    def dsn(self) -> str:
+        return self.inner.dsn
+
+    @property
+    def persistence_mode(self) -> str:
+        return self.inner.persistence_mode
+
+    def save(self, record: object) -> object:
+        return self.inner.save(record)
+
+    def get(self, record_type: object, record_id: str) -> object | None:
+        return self.inner.get(record_type, record_id)
+
+    def list(self, record_type: object) -> tuple[object, ...]:
+        if record_type is ReconciliationRecord:
+            self.reconciliation_list_calls += 1
+        return self.inner.list(record_type)
+
+    @contextmanager
+    def transaction(self) -> Iterator[None]:
+        with self.inner.transaction():
+            yield
+
+
 class ControlPlaneServicePersistenceTests(unittest.TestCase):
     def test_service_admits_wazuh_fixture_through_substrate_adapter_boundary(self) -> None:
         store, _ = make_store()
@@ -3952,6 +3982,34 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             admitted.reconciliation.correlation_key,
         )
         self.assertEqual(queue_view.records[0]["source_system"], "wazuh")
+
+    def test_service_analyst_queue_scans_reconciliations_once_for_multiple_alerts(self) -> None:
+        inner_store, _ = make_store()
+        store = _ListCountingStore(inner=inner_store)
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+
+        service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(
+                _load_wazuh_fixture("agent-origin-alert.json")
+            ),
+        )
+        service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(
+                _load_wazuh_fixture("github-audit-alert.json")
+            ),
+        )
+
+        store.reconciliation_list_calls = 0
+        queue_view = service.inspect_analyst_queue()
+
+        self.assertEqual(queue_view.total_records, 2)
+        self.assertEqual(store.reconciliation_list_calls, 1)
 
     def test_service_analyst_queue_sorts_unknown_last_seen_after_real_timestamps(
         self,

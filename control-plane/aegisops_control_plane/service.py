@@ -1280,11 +1280,14 @@ class AegisOpsControlPlaneService:
             "escalated_to_case",
             "reopened",
         }
+        latest_reconciliation_by_alert_id = (
+            self._latest_detection_reconciliations_by_alert_id()
+        )
         queue_records: list[dict[str, object]] = []
         for alert in self._store.list(AlertRecord):
             if alert.lifecycle_state not in active_alert_states:
                 continue
-            reconciliation = self._latest_detection_reconciliation_for_alert(alert.alert_id)
+            reconciliation = latest_reconciliation_by_alert_id.get(alert.alert_id)
             if reconciliation is None:
                 continue
 
@@ -1942,11 +1945,29 @@ class AegisOpsControlPlaneService:
     ) -> ReconciliationRecord | None:
         latest: ReconciliationRecord | None = None
         for record in self._store.list(ReconciliationRecord):
-            if record.alert_id != alert_id or not self._reconciliation_has_detection_lineage(record):
+            if (
+                record.alert_id != alert_id
+                or not self._reconciliation_has_detection_lineage(record)
+            ):
                 continue
             if latest is None or record.compared_at > latest.compared_at:
                 latest = record
         return latest
+
+    def _latest_detection_reconciliations_by_alert_id(
+        self,
+    ) -> dict[str, ReconciliationRecord]:
+        latest_by_alert_id: dict[str, ReconciliationRecord] = {}
+        for record in self._store.list(ReconciliationRecord):
+            if (
+                record.alert_id is None
+                or not self._reconciliation_has_detection_lineage(record)
+            ):
+                continue
+            current = latest_by_alert_id.get(record.alert_id)
+            if current is None or record.compared_at > current.compared_at:
+                latest_by_alert_id[record.alert_id] = record
+        return latest_by_alert_id
 
     def _reconciliation_is_wazuh_origin(self, record: ReconciliationRecord) -> bool:
         source_systems = self._merge_linked_ids(
