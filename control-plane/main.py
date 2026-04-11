@@ -65,6 +65,15 @@ def _build_parser() -> argparse.ArgumentParser:
         required=True,
         help="Control-plane alert identifier to inspect.",
     )
+    inspect_case_detail = subparsers.add_parser(
+        "inspect-case-detail",
+        help="Render the approved case detail view for one case.",
+    )
+    inspect_case_detail.add_argument(
+        "--case-id",
+        required=True,
+        help="Control-plane case identifier to inspect.",
+    )
     inspect_assistant_context = subparsers.add_parser(
         "inspect-assistant-context",
         help="Render a read-only analyst-assistant context view for one record.",
@@ -203,6 +212,40 @@ def run_control_plane_service(
                     return
                 try:
                     payload = service.inspect_alert_detail(alert_id).to_dict()
+                except ValueError as exc:
+                    self._write_json(
+                        HTTPStatus.BAD_REQUEST,
+                        {
+                            "error": "invalid_request",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                except LookupError as exc:
+                    self._write_json(
+                        HTTPStatus.NOT_FOUND,
+                        {
+                            "error": "not_found",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                self._write_json(HTTPStatus.OK, payload)
+                return
+
+            if request_path == "/inspect-case-detail":
+                case_id = parse_qs(request_target.query).get("case_id", [""])[0].strip()
+                if not case_id:
+                    self._write_json(
+                        HTTPStatus.BAD_REQUEST,
+                        {
+                            "error": "invalid_request",
+                            "message": "case_id query parameter is required",
+                        },
+                    )
+                    return
+                try:
+                    payload = service.inspect_case_detail(case_id).to_dict()
                 except ValueError as exc:
                     self._write_json(
                         HTTPStatus.BAD_REQUEST,
@@ -429,6 +472,14 @@ def main(
                     parsed.family,
                     parsed.record_id,
                 ).to_dict()
+            except (LookupError, ValueError) as exc:
+                parser.error(str(exc))
+        elif command == "inspect-case-detail":
+            case_id = parsed.case_id.strip()
+            if not case_id:
+                parser.error("case_id must be a non-empty string")
+            try:
+                payload = service.inspect_case_detail(case_id).to_dict()
             except (LookupError, ValueError) as exc:
                 parser.error(str(exc))
         elif command == "inspect-advisory-output":
