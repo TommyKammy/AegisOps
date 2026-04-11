@@ -3881,8 +3881,10 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             "microsoft_365_audit",
         )
 
-    def test_service_analyst_queue_accepts_mixed_case_wazuh_source_for_multi_source_linkage(
+    def _assert_service_analyst_queue_prefers_wazuh_source_for_multi_source_linkage(
         self,
+        *,
+        wazuh_source_system: str,
     ) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
@@ -3904,7 +3906,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertIsNotNone(reconciliation)
 
         subject_linkage = dict(reconciliation.subject_linkage)
-        subject_linkage["source_systems"] = ("opensearch", "WaZuH")
+        subject_linkage["source_systems"] = ("opensearch", wazuh_source_system)
         service.persist_record(
             replace(reconciliation, subject_linkage=subject_linkage)
         )
@@ -3913,6 +3915,20 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         self.assertEqual(queue_view.total_records, 1)
         self.assertEqual(queue_view.records[0]["source_system"], "wazuh")
+
+    def test_service_analyst_queue_prefers_explicit_wazuh_source_for_multi_source_linkage(
+        self,
+    ) -> None:
+        self._assert_service_analyst_queue_prefers_wazuh_source_for_multi_source_linkage(
+            wazuh_source_system="wazuh"
+        )
+
+    def test_service_analyst_queue_accepts_mixed_case_wazuh_source_for_multi_source_linkage(
+        self,
+    ) -> None:
+        self._assert_service_analyst_queue_prefers_wazuh_source_for_multi_source_linkage(
+            wazuh_source_system="WaZuH"
+        )
 
     def test_service_alert_detail_prefers_higher_reconciliation_id_when_compared_at_ties(
         self,
