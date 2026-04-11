@@ -1961,6 +1961,7 @@ class AegisOpsControlPlaneService:
             if (
                 record.alert_id != alert_id
                 or not self._reconciliation_has_detection_lineage(record)
+                or not self._reconciliation_is_wazuh_origin(record)
             ):
                 continue
             if latest is None or (
@@ -1981,6 +1982,7 @@ class AegisOpsControlPlaneService:
             if (
                 record.alert_id is None
                 or not self._reconciliation_has_detection_lineage(record)
+                or not self._reconciliation_is_wazuh_origin(record)
             ):
                 continue
             current = latest_by_alert_id.get(record.alert_id)

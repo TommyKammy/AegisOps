@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import pathlib
@@ -3974,6 +3974,107 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(
             detail.lineage["reconciliation_id"],
             preferred_reconciliation.reconciliation_id,
+        )
+
+    def _persist_newer_non_wazuh_detection_reconciliation(
+        self,
+    ) -> tuple[
+        AegisOpsControlPlaneService,
+        object,
+        ReconciliationRecord,
+        ReconciliationRecord,
+    ]:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+
+        admitted = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(
+                _load_wazuh_fixture("agent-origin-alert.json")
+            ),
+        )
+        reconciliation = service.get_record(
+            ReconciliationRecord,
+            admitted.reconciliation.reconciliation_id,
+        )
+        self.assertIsNotNone(reconciliation)
+
+        subject_linkage = dict(reconciliation.subject_linkage)
+        subject_linkage["source_systems"] = ("opensearch",)
+        subject_linkage["substrate_detection_record_ids"] = (
+            "opensearch:1731594986.4931506",
+        )
+        newer_non_wazuh_reconciliation = replace(
+            reconciliation,
+            reconciliation_id=f"{reconciliation.reconciliation_id}-opensearch",
+            correlation_key=f"{reconciliation.correlation_key}:opensearch",
+            compared_at=reconciliation.compared_at + timedelta(minutes=5),
+            last_seen_at=(
+                reconciliation.last_seen_at + timedelta(minutes=5)
+                if reconciliation.last_seen_at is not None
+                else None
+            ),
+            subject_linkage=subject_linkage,
+        )
+        service.persist_record(newer_non_wazuh_reconciliation)
+
+        return (
+            service,
+            admitted,
+            reconciliation,
+            newer_non_wazuh_reconciliation,
+        )
+
+    def test_service_analyst_queue_keeps_latest_wazuh_detection_when_newer_non_wazuh_detection_exists(
+        self,
+    ) -> None:
+        (
+            service,
+            admitted,
+            reviewed_wazuh_reconciliation,
+            newer_non_wazuh_reconciliation,
+        ) = self._persist_newer_non_wazuh_detection_reconciliation()
+
+        queue_view = service.inspect_analyst_queue()
+
+        self.assertEqual(queue_view.total_records, 1)
+        self.assertEqual(queue_view.records[0]["alert_id"], admitted.alert.alert_id)
+        self.assertEqual(
+            queue_view.records[0]["correlation_key"],
+            reviewed_wazuh_reconciliation.correlation_key,
+        )
+        self.assertNotEqual(
+            queue_view.records[0]["correlation_key"],
+            newer_non_wazuh_reconciliation.correlation_key,
+        )
+
+    def test_service_alert_detail_keeps_latest_wazuh_detection_when_newer_non_wazuh_detection_exists(
+        self,
+    ) -> None:
+        (
+            service,
+            admitted,
+            reviewed_wazuh_reconciliation,
+            newer_non_wazuh_reconciliation,
+        ) = self._persist_newer_non_wazuh_detection_reconciliation()
+
+        detail = service.inspect_alert_detail(admitted.alert.alert_id)
+
+        self.assertEqual(
+            detail.latest_reconciliation["reconciliation_id"],
+            reviewed_wazuh_reconciliation.reconciliation_id,
+        )
+        self.assertEqual(
+            detail.lineage["reconciliation_id"],
+            reviewed_wazuh_reconciliation.reconciliation_id,
+        )
+        self.assertNotEqual(
+            detail.latest_reconciliation["reconciliation_id"],
+            newer_non_wazuh_reconciliation.reconciliation_id,
         )
 
     def test_service_alert_detail_reports_wazuh_when_origin_is_inferred_from_detection_ids(
