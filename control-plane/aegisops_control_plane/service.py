@@ -1385,7 +1385,7 @@ class AegisOpsControlPlaneService:
         )
         evidence_records = self._assistant_evidence_records_for_context(
             alert_ids=(alert.alert_id,),
-            case_ids=self._assistant_ids_from_value(alert.case_id),
+            case_ids=(),
             evidence_ids=self._assistant_ids_from_mapping(
                 reconciliation.subject_linkage,
                 "evidence_ids",

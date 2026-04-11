@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import pathlib
+import secrets
 import sys
 from typing import Callable, Iterator
 import unittest
@@ -3983,20 +3984,22 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self,
     ) -> None:
         store, _ = make_store()
+        shared_secret = secrets.token_urlsafe(24)
+        reverse_proxy_secret = secrets.token_urlsafe(24)
         service = AegisOpsControlPlaneService(
             RuntimeConfig(
                 postgres_dsn="postgresql://control-plane.local/aegisops",
-                wazuh_ingest_shared_secret="reviewed-shared-secret",
-                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+                wazuh_ingest_shared_secret=shared_secret,
+                wazuh_ingest_reverse_proxy_secret=reverse_proxy_secret,
             ),
             store=store,
         )
 
         admitted = service.ingest_wazuh_alert(
             raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
-            authorization_header="Bearer reviewed-shared-secret",
+            authorization_header=f"Bearer {shared_secret}",
             forwarded_proto="https",
-            reverse_proxy_secret_header="reviewed-proxy-secret",
+            reverse_proxy_secret_header=reverse_proxy_secret,
             peer_addr="127.0.0.1",
         )
         stored_reconciliation = service.get_record(
@@ -4016,6 +4019,51 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             {
                 "admission_channel": "live_wazuh_webhook",
                 "admission_kind": "live",
+            },
+        )
+
+    def test_service_alert_detail_excludes_case_only_sibling_evidence(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+
+        admitted = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(
+                _load_wazuh_fixture("agent-origin-alert.json")
+            ),
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        sibling_evidence = EvidenceRecord(
+            evidence_id="evidence-case-sibling-001",
+            source_record_id="case-sibling-source-001",
+            alert_id="alert-sibling-001",
+            case_id=promoted_case.case_id,
+            source_system="wazuh",
+            collector_identity="collector://wazuh/live",
+            acquired_at=datetime(2026, 4, 11, 14, 0, tzinfo=timezone.utc),
+            derivation_relationship="correlated_case_context",
+            lifecycle_state="linked",
+        )
+        service.persist_record(sibling_evidence)
+
+        detail = service.inspect_alert_detail(admitted.alert.alert_id)
+
+        linked_evidence_ids = {
+            record["evidence_id"] for record in detail.linked_evidence_records
+        }
+
+        self.assertNotIn(sibling_evidence.evidence_id, linked_evidence_ids)
+        self.assertNotIn(sibling_evidence.evidence_id, detail.lineage["evidence_ids"])
+        self.assertEqual(
+            linked_evidence_ids,
+            {
+                evidence.evidence_id
+                for evidence in store.list(EvidenceRecord)
+                if evidence.alert_id == admitted.alert.alert_id
             },
         )
 
