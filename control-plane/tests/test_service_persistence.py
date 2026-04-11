@@ -3928,6 +3928,97 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(queue_view.total_records, 1)
         self.assertEqual(queue_view.records[0]["source_system"], "wazuh")
 
+    def test_service_alert_detail_reports_wazuh_when_origin_is_inferred_from_detection_ids(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+
+        admitted = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(
+                _load_wazuh_fixture("agent-origin-alert.json")
+            ),
+        )
+        reconciliation = service.get_record(
+            ReconciliationRecord,
+            admitted.reconciliation.reconciliation_id,
+        )
+        self.assertIsNotNone(reconciliation)
+
+        subject_linkage = dict(reconciliation.subject_linkage)
+        subject_linkage["source_systems"] = ("opensearch",)
+        service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id=reconciliation.reconciliation_id,
+                subject_linkage=subject_linkage,
+                alert_id=reconciliation.alert_id,
+                finding_id=reconciliation.finding_id,
+                analytic_signal_id=reconciliation.analytic_signal_id,
+                execution_run_id=reconciliation.execution_run_id,
+                linked_execution_run_ids=reconciliation.linked_execution_run_ids,
+                correlation_key=reconciliation.correlation_key,
+                first_seen_at=reconciliation.first_seen_at,
+                last_seen_at=reconciliation.last_seen_at,
+                ingest_disposition=reconciliation.ingest_disposition,
+                mismatch_summary=reconciliation.mismatch_summary,
+                compared_at=reconciliation.compared_at,
+                lifecycle_state=reconciliation.lifecycle_state,
+            )
+        )
+
+        detail = service.inspect_alert_detail(admitted.alert.alert_id)
+
+        self.assertEqual(detail.source_system, "wazuh")
+        self.assertEqual(
+            detail.lineage["substrate_detection_record_ids"],
+            ("wazuh:1731594986.4931506",),
+        )
+
+    def test_service_alert_detail_redacts_raw_native_payload_from_latest_reconciliation(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+            ),
+            store=store,
+        )
+
+        admitted = service.ingest_wazuh_alert(
+            raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
+            authorization_header="Bearer reviewed-shared-secret",
+            forwarded_proto="https",
+            reverse_proxy_secret_header="reviewed-proxy-secret",
+            peer_addr="127.0.0.1",
+        )
+        stored_reconciliation = service.get_record(
+            ReconciliationRecord,
+            admitted.reconciliation.reconciliation_id,
+        )
+        self.assertIsNotNone(stored_reconciliation)
+        self.assertIn("latest_native_payload", stored_reconciliation.subject_linkage)
+
+        detail = service.inspect_alert_detail(admitted.alert.alert_id)
+        detail_subject_linkage = detail.latest_reconciliation["subject_linkage"]
+
+        self.assertIsInstance(detail_subject_linkage, dict)
+        self.assertNotIn("latest_native_payload", detail_subject_linkage)
+        self.assertEqual(
+            detail_subject_linkage["admission_provenance"],
+            {
+                "admission_channel": "live_wazuh_webhook",
+                "admission_kind": "live",
+            },
+        )
+
     def test_service_analyst_queue_ignores_newer_action_execution_reconciliation(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(

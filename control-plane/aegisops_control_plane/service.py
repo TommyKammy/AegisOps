@@ -1396,9 +1396,25 @@ class AegisOpsControlPlaneService:
             reconciliation.subject_linkage.get("source_systems"),
             None,
         )
-        source_system = (
-            "wazuh" if "wazuh" in source_systems else (source_systems[0] if source_systems else "wazuh")
+        substrate_detection_record_ids = self._merge_linked_ids(
+            reconciliation.subject_linkage.get("substrate_detection_record_ids"),
+            None,
         )
+        source_system = (
+            "wazuh"
+            if self._reconciliation_is_wazuh_origin(reconciliation)
+            else (
+                "wazuh"
+                if "wazuh" in source_systems
+                else (source_systems[0] if source_systems else "wazuh")
+            )
+        )
+        latest_reconciliation_payload = _record_to_dict(reconciliation)
+        subject_linkage_payload = latest_reconciliation_payload.get("subject_linkage")
+        if isinstance(subject_linkage_payload, Mapping):
+            redacted_subject_linkage = dict(subject_linkage_payload)
+            redacted_subject_linkage.pop("latest_native_payload", None)
+            latest_reconciliation_payload["subject_linkage"] = redacted_subject_linkage
         lineage = {
             "finding_id": alert.finding_id,
             "analytic_signal_id": alert.analytic_signal_id,
@@ -1406,10 +1422,7 @@ class AegisOpsControlPlaneService:
             "reconciliation_id": reconciliation.reconciliation_id,
             "correlation_key": reconciliation.correlation_key,
             "source_systems": source_systems,
-            "substrate_detection_record_ids": self._merge_linked_ids(
-                reconciliation.subject_linkage.get("substrate_detection_record_ids"),
-                None,
-            ),
+            "substrate_detection_record_ids": substrate_detection_record_ids,
             "accountable_source_identities": self._merge_linked_ids(
                 reconciliation.subject_linkage.get("accountable_source_identities"),
                 None,
@@ -1429,7 +1442,7 @@ class AegisOpsControlPlaneService:
                 if analytic_signal_record is not None
                 else None
             ),
-            latest_reconciliation=_record_to_dict(reconciliation),
+            latest_reconciliation=latest_reconciliation_payload,
             linked_evidence_records=tuple(
                 _record_to_dict(evidence) for evidence in evidence_records
             ),
