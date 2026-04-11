@@ -27,7 +27,9 @@ from aegisops_control_plane.models import (
     ApprovalDecisionRecord,
     CaseRecord,
     EvidenceRecord,
+    LeadRecord,
     NativeDetectionRecord,
+    ObservationRecord,
     ReconciliationRecord,
     RecommendationRecord,
 )
@@ -3879,6 +3881,113 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(
             queue_view.records[0]["reviewed_context"]["source"]["source_family"],
             "microsoft_365_audit",
+        )
+
+    def test_service_records_bounded_casework_actions_for_triage_disposition_and_handoff(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
+        handoff_at = datetime(2026, 4, 7, 17, 45, tzinfo=timezone.utc)
+        admitted = service.ingest_finding_alert(
+            finding_id="finding-phase19-casework-001",
+            analytic_signal_id="signal-phase19-casework-001",
+            substrate_detection_record_id="substrate-detection-phase19-casework-001",
+            correlation_key="claim:asset-phase19-casework-001:github-audit",
+            first_seen_at=reviewed_at,
+            last_seen_at=reviewed_at,
+            reviewed_context={
+                "asset": {"asset_id": "asset-phase19-casework-001"},
+                "identity": {"identity_id": "principal-phase19-casework-001"},
+            },
+        )
+        evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-phase19-casework-001",
+                source_record_id="substrate-detection-phase19-casework-001",
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="collector://wazuh/live",
+                acquired_at=reviewed_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Observed repository permission change requires tracked review.",
+            supporting_evidence_ids=(evidence.evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            observation_id=observation.observation_id,
+            triage_owner="analyst-001",
+            triage_rationale="Privilege-impacting change needs durable business-hours follow-up.",
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            lead_id=lead.lead_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before any approval-bound response.",
+        )
+        handed_off_case = service.record_case_handoff(
+            case_id=promoted_case.case_id,
+            handoff_at=handoff_at,
+            handoff_owner="analyst-001",
+            handoff_note="Recheck repository owner membership against approved change window at next business-hours review.",
+            follow_up_evidence_ids=(evidence.evidence_id,),
+        )
+        disposed_case = service.record_case_disposition(
+            case_id=handed_off_case.case_id,
+            disposition="business_hours_handoff",
+            rationale="No same-day response required; preserve next-shift context and keep case open.",
+            recorded_at=handoff_at,
+        )
+
+        detail = service.inspect_case_detail(promoted_case.case_id)
+
+        self.assertEqual(observation.case_id, promoted_case.case_id)
+        self.assertEqual(observation.lifecycle_state, "confirmed")
+        self.assertEqual(lead.case_id, promoted_case.case_id)
+        self.assertEqual(lead.lifecycle_state, "triaged")
+        self.assertEqual(recommendation.case_id, promoted_case.case_id)
+        self.assertEqual(recommendation.lifecycle_state, "under_review")
+        self.assertEqual(disposed_case.lifecycle_state, "pending_action")
+        self.assertEqual(
+            detail.case_record["reviewed_context"]["triage"]["disposition"],
+            "business_hours_handoff",
+        )
+        self.assertEqual(
+            detail.case_record["reviewed_context"]["triage"]["closure_rationale"],
+            "No same-day response required; preserve next-shift context and keep case open.",
+        )
+        self.assertEqual(
+            detail.case_record["reviewed_context"]["handoff"]["note"],
+            "Recheck repository owner membership against approved change window at next business-hours review.",
+        )
+        self.assertEqual(
+            detail.case_record["reviewed_context"]["handoff"]["handoff_owner"],
+            "analyst-001",
+        )
+        self.assertEqual(detail.linked_observation_ids, (observation.observation_id,))
+        self.assertEqual(detail.linked_lead_ids, (lead.lead_id,))
+        self.assertIn(recommendation.recommendation_id, detail.linked_recommendation_ids)
+        self.assertEqual(
+            detail.linked_observation_records[0]["supporting_evidence_ids"],
+            (evidence.evidence_id,),
+        )
+        self.assertEqual(
+            detail.linked_lead_records[0]["triage_rationale"],
+            "Privilege-impacting change needs durable business-hours follow-up.",
         )
 
     def _assert_service_analyst_queue_prefers_wazuh_source_for_multi_source_linkage(

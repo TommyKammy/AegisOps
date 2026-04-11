@@ -1261,10 +1261,23 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             )
         )
         promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=compared_at,
+            scope_statement="Observed permission change remains within reviewed GitHub audit scope.",
+            supporting_evidence_ids=(evidence.evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            observation_id=observation.observation_id,
+            triage_owner="analyst-001",
+            triage_rationale="Preserve durable case context for next business-hours analyst.",
+        )
         recommendation = service.persist_record(
             RecommendationRecord(
                 recommendation_id="recommendation-case-detail-cli-001",
-                lead_id=None,
+                lead_id=lead.lead_id,
                 hunt_run_id=None,
                 alert_id=admitted.alert.alert_id,
                 case_id=promoted_case.case_id,
@@ -1274,6 +1287,19 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 lifecycle_state="under_review",
                 reviewed_context=reviewed_context,
             )
+        )
+        service.record_case_handoff(
+            case_id=promoted_case.case_id,
+            handoff_at=compared_at,
+            handoff_owner="analyst-001",
+            handoff_note="Resume owner-membership review during the next business-hours cycle.",
+            follow_up_evidence_ids=(evidence.evidence_id,),
+        )
+        service.record_case_disposition(
+            case_id=promoted_case.case_id,
+            disposition="business_hours_handoff",
+            rationale="Tracked case remains open for the next analyst review window.",
+            recorded_at=compared_at,
         )
 
         stdout = io.StringIO()
@@ -1291,7 +1317,11 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertTrue(payload["read_only"])
         self.assertEqual(payload["case_id"], promoted_case.case_id)
         self.assertEqual(payload["case_record"]["case_id"], promoted_case.case_id)
-        self.assertEqual(payload["reviewed_context"], reviewed_context)
+        self.assertEqual(payload["reviewed_context"]["asset"], reviewed_context["asset"])
+        self.assertEqual(
+            payload["reviewed_context"]["identity"],
+            reviewed_context["identity"],
+        )
         self.assertEqual(
             payload["advisory_output"]["output_kind"],
             "case_summary",
@@ -1305,6 +1335,16 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(
             payload["linked_evidence_records"][0]["derivation_relationship"],
             "admitted_analytic_signal",
+        )
+        self.assertEqual(payload["linked_observation_ids"], [observation.observation_id])
+        self.assertEqual(payload["linked_lead_ids"], [lead.lead_id])
+        self.assertEqual(
+            payload["case_record"]["reviewed_context"]["triage"]["disposition"],
+            "business_hours_handoff",
+        )
+        self.assertEqual(
+            payload["case_record"]["reviewed_context"]["handoff"]["handoff_owner"],
+            "analyst-001",
         )
         self.assertIn(
             recommendation.recommendation_id,
