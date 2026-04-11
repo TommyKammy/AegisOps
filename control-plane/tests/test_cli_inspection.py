@@ -275,7 +275,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                     ).read().decode("utf-8")
                 )
                 case_payload = json.loads(
-                    request.urlopen(
+                    request.urlopen(  # noqa: S310 - local in-process test HTTP server
                         (
                             f"{base_url}/inspect-case-detail"
                             f"?case_id={promoted_case.case_id}"
