@@ -3881,7 +3881,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             "microsoft_365_audit",
         )
 
-    def test_service_analyst_queue_prefers_explicit_wazuh_source_for_multi_source_linkage(
+    def test_service_analyst_queue_accepts_mixed_case_wazuh_source_for_multi_source_linkage(
         self,
     ) -> None:
         store, _ = make_store()
@@ -3904,30 +3904,61 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertIsNotNone(reconciliation)
 
         subject_linkage = dict(reconciliation.subject_linkage)
-        subject_linkage["source_systems"] = ("opensearch", "wazuh")
+        subject_linkage["source_systems"] = ("opensearch", "WaZuH")
         service.persist_record(
-            ReconciliationRecord(
-                reconciliation_id=reconciliation.reconciliation_id,
-                subject_linkage=subject_linkage,
-                alert_id=reconciliation.alert_id,
-                finding_id=reconciliation.finding_id,
-                analytic_signal_id=reconciliation.analytic_signal_id,
-                execution_run_id=reconciliation.execution_run_id,
-                linked_execution_run_ids=reconciliation.linked_execution_run_ids,
-                correlation_key=reconciliation.correlation_key,
-                first_seen_at=reconciliation.first_seen_at,
-                last_seen_at=reconciliation.last_seen_at,
-                ingest_disposition=reconciliation.ingest_disposition,
-                mismatch_summary=reconciliation.mismatch_summary,
-                compared_at=reconciliation.compared_at,
-                lifecycle_state=reconciliation.lifecycle_state,
-            )
+            replace(reconciliation, subject_linkage=subject_linkage)
         )
 
         queue_view = service.inspect_analyst_queue()
 
         self.assertEqual(queue_view.total_records, 1)
         self.assertEqual(queue_view.records[0]["source_system"], "wazuh")
+
+    def test_service_alert_detail_prefers_higher_reconciliation_id_when_compared_at_ties(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+
+        admitted = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(
+                _load_wazuh_fixture("agent-origin-alert.json")
+            ),
+        )
+        reconciliation = service.get_record(
+            ReconciliationRecord,
+            admitted.reconciliation.reconciliation_id,
+        )
+        self.assertIsNotNone(reconciliation)
+
+        preferred_reconciliation = replace(
+            reconciliation,
+            reconciliation_id=f"{reconciliation.reconciliation_id}-z",
+            correlation_key=f"{reconciliation.correlation_key}:z",
+        )
+        service.persist_record(preferred_reconciliation)
+
+        queue_view = service.inspect_analyst_queue()
+        detail = service.inspect_alert_detail(admitted.alert.alert_id)
+
+        self.assertEqual(queue_view.total_records, 1)
+        self.assertEqual(
+            queue_view.records[0]["correlation_key"],
+            preferred_reconciliation.correlation_key,
+        )
+        self.assertEqual(
+            detail.latest_reconciliation["reconciliation_id"],
+            preferred_reconciliation.reconciliation_id,
+        )
+        self.assertEqual(
+            detail.lineage["reconciliation_id"],
+            preferred_reconciliation.reconciliation_id,
+        )
 
     def test_service_alert_detail_reports_wazuh_when_origin_is_inferred_from_detection_ids(
         self,
@@ -3953,23 +3984,11 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         subject_linkage = dict(reconciliation.subject_linkage)
         subject_linkage["source_systems"] = ("opensearch",)
+        subject_linkage["substrate_detection_record_ids"] = (
+            "WaZuH:1731594986.4931506",
+        )
         service.persist_record(
-            ReconciliationRecord(
-                reconciliation_id=reconciliation.reconciliation_id,
-                subject_linkage=subject_linkage,
-                alert_id=reconciliation.alert_id,
-                finding_id=reconciliation.finding_id,
-                analytic_signal_id=reconciliation.analytic_signal_id,
-                execution_run_id=reconciliation.execution_run_id,
-                linked_execution_run_ids=reconciliation.linked_execution_run_ids,
-                correlation_key=reconciliation.correlation_key,
-                first_seen_at=reconciliation.first_seen_at,
-                last_seen_at=reconciliation.last_seen_at,
-                ingest_disposition=reconciliation.ingest_disposition,
-                mismatch_summary=reconciliation.mismatch_summary,
-                compared_at=reconciliation.compared_at,
-                lifecycle_state=reconciliation.lifecycle_state,
-            )
+            replace(reconciliation, subject_linkage=subject_linkage)
         )
 
         detail = service.inspect_alert_detail(admitted.alert.alert_id)
@@ -3977,7 +3996,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(detail.source_system, "wazuh")
         self.assertEqual(
             detail.lineage["substrate_detection_record_ids"],
-            ("wazuh:1731594986.4931506",),
+            ("WaZuH:1731594986.4931506",),
         )
 
     def test_service_alert_detail_redacts_raw_native_payload_from_latest_reconciliation(

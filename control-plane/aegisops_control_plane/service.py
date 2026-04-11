@@ -1963,7 +1963,13 @@ class AegisOpsControlPlaneService:
                 or not self._reconciliation_has_detection_lineage(record)
             ):
                 continue
-            if latest is None or record.compared_at > latest.compared_at:
+            if latest is None or (
+                record.compared_at,
+                record.reconciliation_id,
+            ) > (
+                latest.compared_at,
+                latest.reconciliation_id,
+            ):
                 latest = record
         return latest
 
@@ -1978,7 +1984,13 @@ class AegisOpsControlPlaneService:
             ):
                 continue
             current = latest_by_alert_id.get(record.alert_id)
-            if current is None or record.compared_at > current.compared_at:
+            if current is None or (
+                record.compared_at,
+                record.reconciliation_id,
+            ) > (
+                current.compared_at,
+                current.reconciliation_id,
+            ):
                 latest_by_alert_id[record.alert_id] = record
         return latest_by_alert_id
 
@@ -1991,9 +2003,16 @@ class AegisOpsControlPlaneService:
             record.subject_linkage.get("substrate_detection_record_ids"),
             None,
         )
-        return "wazuh" in source_systems or any(
-            detection_id.startswith("wazuh:")
+        normalized_source_systems = tuple(
+            source_system.strip().lower() for source_system in source_systems
+        )
+        normalized_substrate_detection_record_ids = tuple(
+            detection_id.strip().lower()
             for detection_id in substrate_detection_record_ids
+        )
+        return "wazuh" in normalized_source_systems or any(
+            detection_id.startswith("wazuh:")
+            for detection_id in normalized_substrate_detection_record_ids
         )
 
     @staticmethod
