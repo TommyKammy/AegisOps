@@ -126,6 +126,14 @@ jobs:
       - name: Run Phase 15 workflow coverage guard
         run: bash scripts/test-verify-ci-phase-15-workflow-coverage.sh
 
+      - name: Run Phase 19 thin operator surface validation
+        run: |
+          bash scripts/verify-phase-19-thin-operator-surface.sh
+          python3 -m unittest control-plane.tests.test_phase19_operator_surface_docs
+
+      - name: Run Phase 19 workflow coverage guard
+        run: bash scripts/test-verify-ci-phase-19-workflow-coverage.sh
+
       - name: Run control-plane runtime unit tests
         run: python3 -m unittest discover -s control-plane/tests -p 'test_*.py'
 
@@ -168,8 +176,10 @@ jobs:
           bash scripts/test-verify-phase-14-identity-rich-source-family-design.sh
           bash scripts/test-verify-phase-14-identity-rich-source-expansion-ci-validation.sh
           bash scripts/test-verify-phase-15-identity-grounded-analyst-assistant-boundary.sh
+          bash scripts/test-verify-phase-19-thin-operator-surface.sh
           bash scripts/test-verify-ci-phase-14-workflow-coverage.sh
           bash scripts/test-verify-ci-phase-15-workflow-coverage.sh
+          bash scripts/test-verify-ci-phase-19-workflow-coverage.sh
           bash scripts/test-verify-phase-6-initial-telemetry-slice-doc.sh
           bash scripts/test-verify-phase-6-opensearch-detector-artifacts.sh
           bash scripts/test-verify-phase-6-replay-to-notify-validation.sh
