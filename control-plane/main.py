@@ -19,6 +19,10 @@ from aegisops_control_plane.service import (
 MAX_WAZUH_INGEST_BODY_BYTES = 1_048_576
 
 
+def _normalize_alert_id(value: str) -> str:
+    return value.strip()
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
@@ -51,6 +55,15 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser(
         "inspect-analyst-queue",
         help="Render the business-hours analyst review queue view.",
+    )
+    inspect_alert_detail = subparsers.add_parser(
+        "inspect-alert-detail",
+        help="Render the reviewed Wazuh-backed alert detail view for one alert.",
+    )
+    inspect_alert_detail.add_argument(
+        "--alert-id",
+        required=True,
+        help="Control-plane alert identifier to inspect.",
     )
     inspect_assistant_context = subparsers.add_parser(
         "inspect-assistant-context",
@@ -169,6 +182,46 @@ def run_control_plane_service(
                     HTTPStatus.OK,
                     service.inspect_reconciliation_status().to_dict(),
                 )
+                return
+
+            if request_path == "/inspect-analyst-queue":
+                self._write_json(HTTPStatus.OK, service.inspect_analyst_queue().to_dict())
+                return
+
+            if request_path == "/inspect-alert-detail":
+                alert_id = _normalize_alert_id(
+                    parse_qs(request_target.query).get("alert_id", [""])[0]
+                )
+                if not alert_id:
+                    self._write_json(
+                        HTTPStatus.BAD_REQUEST,
+                        {
+                            "error": "invalid_request",
+                            "message": "alert_id query parameter is required",
+                        },
+                    )
+                    return
+                try:
+                    payload = service.inspect_alert_detail(alert_id).to_dict()
+                except ValueError as exc:
+                    self._write_json(
+                        HTTPStatus.BAD_REQUEST,
+                        {
+                            "error": "invalid_request",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                except LookupError as exc:
+                    self._write_json(
+                        HTTPStatus.NOT_FOUND,
+                        {
+                            "error": "not_found",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                self._write_json(HTTPStatus.OK, payload)
                 return
 
             self._write_json(
@@ -398,6 +451,14 @@ def main(
             payload = service.inspect_reconciliation_status().to_dict()
         elif command == "inspect-analyst-queue":
             payload = service.inspect_analyst_queue().to_dict()
+        elif command == "inspect-alert-detail":
+            alert_id = _normalize_alert_id(parsed.alert_id)
+            if not alert_id:
+                parser.error("alert_id must be a non-empty string")
+            try:
+                payload = service.inspect_alert_detail(alert_id).to_dict()
+            except (LookupError, ValueError) as exc:
+                parser.error(str(exc))
         else:
             raise AssertionError(f"Unhandled command: {command}")
 
