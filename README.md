@@ -129,6 +129,8 @@ Key documents that serve as the source of truth for implementation decisions:
 - `docs/phase-17-runtime-config-contract-validation.md`
 - `docs/phase-18-wazuh-lab-topology-and-live-ingest-contract.md`
 - `docs/phase-18-wazuh-lab-topology-validation.md`
+- `docs/phase-19-thin-operator-surface-and-daily-analyst-workflow.md`
+- `docs/phase-19-thin-operator-surface-and-daily-analyst-workflow-validation.md`
 - `docs/phase-15-identity-grounded-analyst-assistant-operating-guidance.md`
 - `docs/retention-evidence-and-replay-readiness-baseline.md`
 - `docs/runbook.md`
