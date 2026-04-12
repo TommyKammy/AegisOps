@@ -3,7 +3,7 @@
 - Validation date: 2026-04-11
 - Validation scope: Phase 19 review of the approved thin operator surface for the first Wazuh-backed live slice, the minimum queue review through alert inspection, casework entry, evidence review, and cited advisory review path, confirmation that AegisOps remains the primary daily work surface, and confirmation that deferred surfaces and actions remain visibly out of scope
 - Baseline references: `docs/phase-19-thin-operator-surface-and-daily-analyst-workflow.md`, `docs/phase-18-wazuh-lab-topology-and-live-ingest-contract.md`, `docs/phase-18-wazuh-lab-topology-validation.md`, `docs/phase-17-runtime-config-contract-and-boot-command-expectations.md`, `docs/phase-16-release-state-and-first-boot-scope.md`, `docs/phase-15-identity-grounded-analyst-assistant-operating-guidance.md`, `docs/architecture.md`
-- Verification commands: `python3 -m unittest control-plane.tests.test_phase19_operator_surface_docs control-plane.tests.test_phase19_operator_workflow_validation`, `bash scripts/verify-phase-19-thin-operator-surface.sh`, `bash scripts/test-verify-phase-19-thin-operator-surface.sh`, `bash scripts/test-verify-ci-phase-19-workflow-coverage.sh`
+- Verification commands: `python3 -m unittest control-plane.tests.test_phase19_operator_surface_docs control-plane.tests.test_phase19_operator_workflow_validation`, `python3 -m unittest discover -s control-plane/tests -p 'test_*.py'`, `bash scripts/verify-phase-19-thin-operator-surface.sh`, `bash scripts/test-verify-phase-19-thin-operator-surface.sh`, `bash scripts/test-verify-ci-phase-19-workflow-coverage.sh`
 - Validation status: PASS
 
 ## Required Boundary Artifacts

@@ -130,7 +130,7 @@ for artifact in "${required_artifacts[@]}"; do
   require_fixed_line "${validation_doc}" "- \`${artifact}\`"
 done
 
-require_fixed_line "${validation_doc}" '- Verification commands: `python3 -m unittest control-plane.tests.test_phase19_operator_surface_docs control-plane.tests.test_phase19_operator_workflow_validation`, `bash scripts/verify-phase-19-thin-operator-surface.sh`, `bash scripts/test-verify-phase-19-thin-operator-surface.sh`, `bash scripts/test-verify-ci-phase-19-workflow-coverage.sh`'
+require_fixed_line "${validation_doc}" '- Verification commands: `python3 -m unittest control-plane.tests.test_phase19_operator_surface_docs control-plane.tests.test_phase19_operator_workflow_validation`, `python3 -m unittest discover -s control-plane/tests -p '\''test_*.py'\''`, `bash scripts/verify-phase-19-thin-operator-surface.sh`, `bash scripts/test-verify-phase-19-thin-operator-surface.sh`, `bash scripts/test-verify-ci-phase-19-workflow-coverage.sh`'
 require_fixed_line "${test_doc}" 'class Phase19OperatorSurfaceDocsTests(unittest.TestCase):'
 require_fixed_line "${test_doc}" '    def test_phase19_design_doc_exists(self) -> None:'
 require_fixed_line "${test_doc}" '    def test_phase19_design_doc_defines_operator_surface_workflow_and_deferred_scope(self) -> None:'

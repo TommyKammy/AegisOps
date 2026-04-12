@@ -269,6 +269,58 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                 self.assertIn(evidence_id, case_detail["advisory_output"]["citations"])
                 self.assertIn(created.alert.alert_id, case_detail["advisory_output"]["citations"])
                 self.assertIn(case_id, case_detail["advisory_output"]["citations"])
+
+                closed_case = post_json(
+                    "/operator/record-case-disposition",
+                    {
+                        "case_id": case_id,
+                        "disposition": "closed_resolved",
+                        "rationale": "Repository owner membership review completed and documented for this alert.",
+                        "recorded_at": "2026-04-08T09:15:00+00:00",
+                    },
+                )
+                self.assertEqual(closed_case["lifecycle_state"], "closed")
+
+                closed_case_detail = get_json(f"/inspect-case-detail?case_id={case_id}")
+                self.assertTrue(closed_case_detail["read_only"])
+                self.assertEqual(closed_case_detail["case_record"]["case_id"], case_id)
+                self.assertEqual(closed_case_detail["case_record"]["lifecycle_state"], "closed")
+                self.assertEqual(
+                    closed_case_detail["case_record"]["reviewed_context"]["triage"]["disposition"],
+                    "closed_resolved",
+                )
+                self.assertEqual(
+                    closed_case_detail["case_record"]["reviewed_context"]["triage"]["closure_rationale"],
+                    "Repository owner membership review completed and documented for this alert.",
+                )
+                self.assertEqual(
+                    closed_case_detail["linked_alert_ids"],
+                    [created.alert.alert_id],
+                )
+                self.assertEqual(
+                    closed_case_detail["linked_observation_ids"],
+                    [observation["observation_id"]],
+                )
+                self.assertEqual(closed_case_detail["linked_lead_ids"], [lead["lead_id"]])
+                self.assertIn(evidence_id, closed_case_detail["linked_evidence_ids"])
+                self.assertIn(
+                    recommendation["recommendation_id"],
+                    closed_case_detail["linked_recommendation_ids"],
+                )
+                self.assertEqual(
+                    closed_case_detail["advisory_output"]["output_kind"],
+                    "case_summary",
+                )
+                self.assertEqual(closed_case_detail["advisory_output"]["status"], "ready")
+                self.assertIn(
+                    evidence_id,
+                    closed_case_detail["advisory_output"]["citations"],
+                )
+                self.assertIn(
+                    created.alert.alert_id,
+                    closed_case_detail["advisory_output"]["citations"],
+                )
+                self.assertIn(case_id, closed_case_detail["advisory_output"]["citations"])
             finally:
                 if servers:
                     servers[0].shutdown()
