@@ -197,10 +197,14 @@ class CaseDetailSnapshot:
     advisory_output: dict[str, object]
     reviewed_context: dict[str, object]
     linked_alert_ids: tuple[str, ...]
+    linked_observation_ids: tuple[str, ...]
+    linked_lead_ids: tuple[str, ...]
     linked_evidence_ids: tuple[str, ...]
     linked_recommendation_ids: tuple[str, ...]
     linked_reconciliation_ids: tuple[str, ...]
     linked_alert_records: tuple[dict[str, object], ...]
+    linked_observation_records: tuple[dict[str, object], ...]
+    linked_lead_records: tuple[dict[str, object], ...]
     linked_evidence_records: tuple[dict[str, object], ...]
     linked_recommendation_records: tuple[dict[str, object], ...]
     linked_reconciliation_records: tuple[dict[str, object], ...]
@@ -214,10 +218,14 @@ class CaseDetailSnapshot:
                 "advisory_output": self.advisory_output,
                 "reviewed_context": self.reviewed_context,
                 "linked_alert_ids": self.linked_alert_ids,
+                "linked_observation_ids": self.linked_observation_ids,
+                "linked_lead_ids": self.linked_lead_ids,
                 "linked_evidence_ids": self.linked_evidence_ids,
                 "linked_recommendation_ids": self.linked_recommendation_ids,
                 "linked_reconciliation_ids": self.linked_reconciliation_ids,
                 "linked_alert_records": self.linked_alert_records,
+                "linked_observation_records": self.linked_observation_records,
+                "linked_lead_records": self.linked_lead_records,
                 "linked_evidence_records": self.linked_evidence_records,
                 "linked_recommendation_records": self.linked_recommendation_records,
                 "linked_reconciliation_records": self.linked_reconciliation_records,
@@ -1893,6 +1901,14 @@ class AegisOpsControlPlaneService:
     def inspect_case_detail(self, case_id: str) -> CaseDetailSnapshot:
         case_id = self._require_non_empty_string(case_id, "case_id")
         context_snapshot = self.inspect_assistant_context("case", case_id)
+        observation_records = tuple(
+            _record_to_dict(record)
+            for record in self._observations_for_case(case_id)
+        )
+        lead_records = tuple(
+            _record_to_dict(record)
+            for record in self._leads_for_case(case_id)
+        )
         return CaseDetailSnapshot(
             read_only=True,
             case_id=case_id,
@@ -1900,14 +1916,285 @@ class AegisOpsControlPlaneService:
             advisory_output=dict(context_snapshot.advisory_output),
             reviewed_context=dict(context_snapshot.reviewed_context),
             linked_alert_ids=context_snapshot.linked_alert_ids,
+            linked_observation_ids=tuple(
+                record["observation_id"] for record in observation_records
+            ),
+            linked_lead_ids=tuple(record["lead_id"] for record in lead_records),
             linked_evidence_ids=context_snapshot.linked_evidence_ids,
             linked_recommendation_ids=context_snapshot.linked_recommendation_ids,
             linked_reconciliation_ids=context_snapshot.linked_reconciliation_ids,
             linked_alert_records=context_snapshot.linked_alert_records,
+            linked_observation_records=observation_records,
+            linked_lead_records=lead_records,
             linked_evidence_records=context_snapshot.linked_evidence_records,
             linked_recommendation_records=context_snapshot.linked_recommendation_records,
             linked_reconciliation_records=context_snapshot.linked_reconciliation_records,
         )
+
+    def record_case_observation(
+        self,
+        *,
+        case_id: str,
+        author_identity: str,
+        observed_at: datetime,
+        scope_statement: str,
+        supporting_evidence_ids: tuple[str, ...] = (),
+        observation_id: str | None = None,
+        lifecycle_state: str = "confirmed",
+    ) -> ObservationRecord:
+        case = self._require_case_record(case_id)
+        author_identity = self._require_non_empty_string(
+            author_identity,
+            "author_identity",
+        )
+        observed_at = self._require_aware_datetime(observed_at, "observed_at")
+        scope_statement = self._require_non_empty_string(
+            scope_statement,
+            "scope_statement",
+        )
+        lifecycle_state = self._require_non_empty_string(
+            lifecycle_state,
+            "lifecycle_state",
+        )
+        normalized_evidence_ids = self._normalize_linked_record_ids(
+            supporting_evidence_ids,
+            "supporting_evidence_ids",
+        )
+        with self._store.transaction():
+            case = self._require_case_record(case_id)
+            self._validate_case_evidence_linkage(
+                case=case,
+                evidence_ids=normalized_evidence_ids,
+                field_name="supporting_evidence_ids",
+            )
+            resolved_observation_id = self._resolve_new_record_identifier(
+                ObservationRecord,
+                observation_id,
+                "observation_id",
+                "observation",
+            )
+            return self.persist_record(
+                ObservationRecord(
+                    observation_id=resolved_observation_id,
+                    hunt_id=None,
+                    hunt_run_id=None,
+                    alert_id=case.alert_id,
+                    case_id=case.case_id,
+                    supporting_evidence_ids=normalized_evidence_ids,
+                    author_identity=author_identity,
+                    observed_at=observed_at,
+                    scope_statement=scope_statement,
+                    lifecycle_state=lifecycle_state,
+                )
+            )
+
+    def record_case_lead(
+        self,
+        *,
+        case_id: str,
+        triage_owner: str,
+        triage_rationale: str,
+        observation_id: str | None = None,
+        lead_id: str | None = None,
+        lifecycle_state: str = "triaged",
+    ) -> LeadRecord:
+        triage_owner = self._require_non_empty_string(triage_owner, "triage_owner")
+        triage_rationale = self._require_non_empty_string(
+            triage_rationale,
+            "triage_rationale",
+        )
+        lifecycle_state = self._require_non_empty_string(
+            lifecycle_state,
+            "lifecycle_state",
+        )
+        resolved_observation_id = self._normalize_optional_string(
+            observation_id,
+            "observation_id",
+        )
+        with self._store.transaction():
+            case = self._require_case_record(case_id)
+            if resolved_observation_id is not None:
+                observation = self._store.get(ObservationRecord, resolved_observation_id)
+                if observation is None:
+                    raise LookupError(f"Missing observation {resolved_observation_id!r}")
+                if observation.case_id != case.case_id:
+                    raise ValueError(
+                        f"Observation {resolved_observation_id!r} is not linked to case "
+                        f"{case.case_id!r}"
+                    )
+
+            resolved_lead_id = self._resolve_new_record_identifier(
+                LeadRecord,
+                lead_id,
+                "lead_id",
+                "lead",
+            )
+            return self.persist_record(
+                LeadRecord(
+                    lead_id=resolved_lead_id,
+                    observation_id=resolved_observation_id,
+                    finding_id=case.finding_id,
+                    hunt_run_id=None,
+                    alert_id=case.alert_id,
+                    case_id=case.case_id,
+                    triage_owner=triage_owner,
+                    triage_rationale=triage_rationale,
+                    lifecycle_state=lifecycle_state,
+                )
+            )
+
+    def record_case_recommendation(
+        self,
+        *,
+        case_id: str,
+        review_owner: str,
+        intended_outcome: str,
+        lead_id: str | None = None,
+        recommendation_id: str | None = None,
+        lifecycle_state: str = "under_review",
+    ) -> RecommendationRecord:
+        review_owner = self._require_non_empty_string(review_owner, "review_owner")
+        intended_outcome = self._require_non_empty_string(
+            intended_outcome,
+            "intended_outcome",
+        )
+        lifecycle_state = self._require_non_empty_string(
+            lifecycle_state,
+            "lifecycle_state",
+        )
+        resolved_lead_id = self._normalize_optional_string(lead_id, "lead_id")
+        with self._store.transaction():
+            case = self._require_case_record(case_id)
+            if resolved_lead_id is not None:
+                lead = self._store.get(LeadRecord, resolved_lead_id)
+                if lead is None:
+                    raise LookupError(f"Missing lead {resolved_lead_id!r}")
+                if lead.case_id != case.case_id:
+                    raise ValueError(
+                        f"Lead {resolved_lead_id!r} is not linked to case {case.case_id!r}"
+                    )
+
+            resolved_recommendation_id = self._resolve_new_record_identifier(
+                RecommendationRecord,
+                recommendation_id,
+                "recommendation_id",
+                "recommendation",
+            )
+            return self.persist_record(
+                RecommendationRecord(
+                    recommendation_id=resolved_recommendation_id,
+                    lead_id=resolved_lead_id,
+                    hunt_run_id=None,
+                    alert_id=case.alert_id,
+                    case_id=case.case_id,
+                    ai_trace_id=None,
+                    review_owner=review_owner,
+                    intended_outcome=intended_outcome,
+                    lifecycle_state=lifecycle_state,
+                    reviewed_context=case.reviewed_context,
+                )
+            )
+
+    def record_case_handoff(
+        self,
+        *,
+        case_id: str,
+        handoff_at: datetime,
+        handoff_owner: str,
+        handoff_note: str,
+        follow_up_evidence_ids: tuple[str, ...] = (),
+    ) -> CaseRecord:
+        case = self._require_case_record(case_id)
+        handoff_at = self._require_aware_datetime(handoff_at, "handoff_at")
+        handoff_owner = self._require_non_empty_string(
+            handoff_owner,
+            "handoff_owner",
+        )
+        handoff_note = self._require_non_empty_string(handoff_note, "handoff_note")
+        normalized_evidence_ids = self._normalize_linked_record_ids(
+            follow_up_evidence_ids,
+            "follow_up_evidence_ids",
+        )
+        with self._store.transaction():
+            case = self._require_case_record(case_id)
+            self._validate_case_evidence_linkage(
+                case=case,
+                evidence_ids=normalized_evidence_ids,
+                field_name="follow_up_evidence_ids",
+            )
+            updated_reviewed_context = _merge_reviewed_context(
+                case.reviewed_context,
+                {
+                    "handoff": {
+                        "handoff_at": handoff_at.isoformat(),
+                        "handoff_owner": handoff_owner,
+                        "note": handoff_note,
+                        "follow_up_evidence_ids": normalized_evidence_ids,
+                    }
+                },
+            )
+            return self.persist_record(
+                CaseRecord(
+                    case_id=case.case_id,
+                    alert_id=case.alert_id,
+                    finding_id=case.finding_id,
+                    evidence_ids=case.evidence_ids,
+                    lifecycle_state=case.lifecycle_state,
+                    reviewed_context=updated_reviewed_context,
+                )
+            )
+
+    def record_case_disposition(
+        self,
+        *,
+        case_id: str,
+        disposition: str,
+        rationale: str,
+        recorded_at: datetime,
+    ) -> CaseRecord:
+        disposition = self._require_non_empty_string(disposition, "disposition")
+        rationale = self._require_non_empty_string(rationale, "rationale")
+        recorded_at = self._require_aware_datetime(recorded_at, "recorded_at")
+        lifecycle_state = self._case_lifecycle_for_disposition(disposition)
+        with self._store.transaction():
+            case = self._require_case_record(case_id)
+            updated_reviewed_context = _merge_reviewed_context(
+                case.reviewed_context,
+                {
+                    "triage": {
+                        "disposition": disposition,
+                        "closure_rationale": rationale,
+                        "recorded_at": recorded_at.isoformat(),
+                    }
+                },
+            )
+            updated_case = self.persist_record(
+                CaseRecord(
+                    case_id=case.case_id,
+                    alert_id=case.alert_id,
+                    finding_id=case.finding_id,
+                    evidence_ids=case.evidence_ids,
+                    lifecycle_state=lifecycle_state,
+                    reviewed_context=updated_reviewed_context,
+                )
+            )
+            if case.alert_id is not None and lifecycle_state == "closed":
+                alert = self._store.get(AlertRecord, case.alert_id)
+                if alert is not None:
+                    self.persist_record(
+                        AlertRecord(
+                            alert_id=alert.alert_id,
+                            finding_id=alert.finding_id,
+                            analytic_signal_id=alert.analytic_signal_id,
+                            case_id=alert.case_id,
+                            lifecycle_state="closed",
+                            reviewed_context=_merge_reviewed_context(
+                                alert.reviewed_context,
+                                {"triage": updated_reviewed_context.get("triage", {})},
+                            ),
+                        )
+                    )
+        return updated_case
 
     def inspect_advisory_output(
         self,
@@ -2477,10 +2764,7 @@ class AegisOpsControlPlaneService:
         return value
 
     @staticmethod
-    def _normalize_optional_string(
-        value: object,
-        field_name: str,
-    ) -> str | None:
+    def _normalize_optional_string(value: object, field_name: str) -> str | None:
         if value is None:
             return None
         if not isinstance(value, str):
@@ -2488,6 +2772,23 @@ class AegisOpsControlPlaneService:
         if not value.strip():
             return None
         return value
+
+    def _resolve_new_record_identifier(
+        self,
+        record_type: Type[RecordT],
+        requested_id: object,
+        field_name: str,
+        prefix: str,
+    ) -> str:
+        normalized_id = self._normalize_optional_string(requested_id, field_name)
+        if normalized_id is None:
+            generated_id = self._next_identifier(prefix)
+            if self._store.get(record_type, generated_id) is not None:
+                raise ValueError(f"{field_name} {generated_id!r} already exists")
+            return generated_id
+        if self._store.get(record_type, normalized_id) is not None:
+            raise ValueError(f"{field_name} {normalized_id!r} already exists")
+        return normalized_id
 
     def ingest_finding_alert(
         self,
@@ -3592,6 +3893,90 @@ class AegisOpsControlPlaneService:
             )
         )
         return f"analytic-signal-{uuid.uuid5(uuid.NAMESPACE_URL, mint_material)}"
+
+    def _require_case_record(self, case_id: str) -> CaseRecord:
+        case_id = self._require_non_empty_string(case_id, "case_id")
+        case = self._store.get(CaseRecord, case_id)
+        if case is None:
+            raise LookupError(f"Missing case {case_id!r}")
+        return case
+
+    def _normalize_linked_record_ids(
+        self,
+        record_ids: tuple[str, ...],
+        field_name: str,
+    ) -> tuple[str, ...]:
+        normalized_ids: tuple[str, ...] = ()
+        for record_id in record_ids:
+            normalized_id = self._require_non_empty_string(record_id, field_name)
+            normalized_ids = self._merge_linked_ids(normalized_ids, normalized_id)
+        return normalized_ids
+
+    def _validate_case_evidence_linkage(
+        self,
+        *,
+        case: CaseRecord,
+        evidence_ids: tuple[str, ...],
+        field_name: str,
+    ) -> None:
+        for evidence_id in evidence_ids:
+            evidence = self._store.get(EvidenceRecord, evidence_id)
+            if evidence is None:
+                raise LookupError(f"Missing evidence {evidence_id!r}")
+            if evidence.case_id not in {None, case.case_id}:
+                raise ValueError(
+                    f"{field_name} contains evidence {evidence_id!r} linked to "
+                    f"different case {evidence.case_id!r}"
+                )
+            if evidence.case_id is None and evidence.alert_id != case.alert_id:
+                raise ValueError(
+                    f"{field_name} contains evidence {evidence_id!r} that is not "
+                    f"linked to case {case.case_id!r} or its source alert"
+                )
+
+    def _observations_for_case(self, case_id: str) -> tuple[ObservationRecord, ...]:
+        return tuple(
+            sorted(
+                (
+                    record
+                    for record in self._store.list(ObservationRecord)
+                    if record.case_id == case_id
+                ),
+                key=lambda record: (record.observed_at, record.observation_id),
+            )
+        )
+
+    def _leads_for_case(self, case_id: str) -> tuple[LeadRecord, ...]:
+        return tuple(
+            sorted(
+                (
+                    record
+                    for record in self._store.list(LeadRecord)
+                    if record.case_id == case_id
+                ),
+                key=lambda record: record.lead_id,
+            )
+        )
+
+    @staticmethod
+    def _case_lifecycle_for_disposition(disposition: str) -> str:
+        if disposition in {
+            "closed_benign",
+            "closed_duplicate",
+            "closed_resolved",
+            "closed_accepted_risk",
+        }:
+            return "closed"
+        if disposition in {
+            "business_hours_handoff",
+            "awaiting_business_hours_review",
+            "pending_external_validation",
+            "pending_approval",
+        }:
+            return "pending_action"
+        if disposition == "investigating":
+            return "investigating"
+        raise ValueError(f"Unsupported case disposition {disposition!r}")
 
     @staticmethod
     def _normalize_substrate_detection_record_id(

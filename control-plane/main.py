@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import fields, is_dataclass
+from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import ipaddress
 import json
 import sys
 from typing import Mapping, Sequence, TextIO
@@ -19,8 +21,109 @@ from aegisops_control_plane.service import (
 MAX_WAZUH_INGEST_BODY_BYTES = 1_048_576
 
 
+class RequestTooLargeError(ValueError):
+    """Raised when a reviewed request body exceeds the allowed size limit."""
+
+
 def _normalize_alert_id(value: str) -> str:
     return value.strip()
+
+
+def _normalize_case_id(value: str) -> str:
+    return value.strip()
+
+
+def _normalize_optional_string(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("optional string fields must be JSON strings when provided")
+    normalized = value.strip()
+    return normalized or None
+
+
+def _require_json_string(payload: Mapping[str, object], field_name: str) -> str:
+    value = payload.get(field_name)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field_name} must be a non-empty string")
+    return value.strip()
+
+
+def _require_json_string_sequence(
+    payload: Mapping[str, object],
+    field_name: str,
+) -> tuple[str, ...]:
+    value = payload.get(field_name, ())
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise ValueError(f"{field_name} must be a JSON array of non-empty strings")
+    normalized_values: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError(f"{field_name} must be a JSON array of non-empty strings")
+        normalized_values.append(item.strip())
+    return tuple(normalized_values)
+
+
+def _parse_datetime_arg(value: str, field_name: str) -> datetime:
+    normalized_value = value.strip()
+    if not normalized_value:
+        raise ValueError(f"{field_name} must be a non-empty ISO 8601 datetime")
+    try:
+        parsed = datetime.fromisoformat(normalized_value)
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be a valid ISO 8601 datetime") from exc
+    if parsed.tzinfo is None:
+        raise ValueError(f"{field_name} must include a timezone offset")
+    return parsed
+
+
+def _require_json_datetime(payload: Mapping[str, object], field_name: str) -> datetime:
+    value = payload.get(field_name)
+    if not isinstance(value, str):
+        raise ValueError(f"{field_name} must be a non-empty ISO 8601 datetime")
+    return _parse_datetime_arg(value, field_name)
+
+
+def _read_json_request_body(handler: BaseHTTPRequestHandler) -> dict[str, object]:
+    try:
+        content_length = int(handler.headers.get("Content-Length", "0"))
+    except ValueError as exc:
+        raise ValueError("Content-Length must be an integer") from exc
+    if content_length <= 0:
+        raise ValueError("request body is required")
+    if content_length > MAX_WAZUH_INGEST_BODY_BYTES:
+        raise RequestTooLargeError("request body exceeds the reviewed size limit")
+    try:
+        raw_payload = handler.rfile.read(content_length).decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("request body must be valid UTF-8 JSON") from exc
+    try:
+        payload = json.loads(raw_payload)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"request body must be valid JSON: {exc.msg}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("request body must be a JSON object")
+    return payload
+
+
+def _peer_addr_is_loopback(peer_addr: str | None) -> bool:
+    if peer_addr is None or peer_addr.strip() == "":
+        return False
+    try:
+        return ipaddress.ip_address(peer_addr.strip()).is_loopback
+    except ValueError:
+        return False
+
+
+def _require_loopback_operator_request(handler: BaseHTTPRequestHandler) -> None:
+    peer_addr = handler.client_address[0] if handler.client_address else None
+    if _peer_addr_is_loopback(peer_addr):
+        return
+    raise PermissionError(
+        "operator write surface only accepts loopback callers until a reviewed operator auth boundary exists"
+    )
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -74,6 +177,82 @@ def _build_parser() -> argparse.ArgumentParser:
         required=True,
         help="Control-plane case identifier to inspect.",
     )
+    promote_alert_to_case = subparsers.add_parser(
+        "promote-alert-to-case",
+        help="Promote one reviewed alert into durable bounded casework.",
+    )
+    promote_alert_to_case.add_argument(
+        "--alert-id",
+        required=True,
+        help="Control-plane alert identifier to promote.",
+    )
+    promote_alert_to_case.add_argument(
+        "--case-id",
+        help="Optional case identifier to reuse when linking the alert.",
+    )
+    promote_alert_to_case.add_argument(
+        "--case-lifecycle-state",
+        default="open",
+        help="Lifecycle state to apply when the case is first created.",
+    )
+    record_case_observation = subparsers.add_parser(
+        "record-case-observation",
+        help="Record a bounded reviewed case observation.",
+    )
+    record_case_observation.add_argument("--case-id", required=True)
+    record_case_observation.add_argument("--author-identity", required=True)
+    record_case_observation.add_argument("--observed-at", required=True)
+    record_case_observation.add_argument("--scope-statement", required=True)
+    record_case_observation.add_argument(
+        "--supporting-evidence-id",
+        action="append",
+        default=[],
+        help="Supporting evidence identifier to link; may be repeated.",
+    )
+    record_case_lead = subparsers.add_parser(
+        "record-case-lead",
+        help="Record a bounded reviewed triage lead for a case.",
+    )
+    record_case_lead.add_argument("--case-id", required=True)
+    record_case_lead.add_argument("--triage-owner", required=True)
+    record_case_lead.add_argument("--triage-rationale", required=True)
+    record_case_lead.add_argument(
+        "--observation-id",
+        help="Optional observation identifier to anchor the lead.",
+    )
+    record_case_recommendation = subparsers.add_parser(
+        "record-case-recommendation",
+        help="Record a bounded reviewed recommendation for a case.",
+    )
+    record_case_recommendation.add_argument("--case-id", required=True)
+    record_case_recommendation.add_argument("--review-owner", required=True)
+    record_case_recommendation.add_argument("--intended-outcome", required=True)
+    record_case_recommendation.add_argument(
+        "--lead-id",
+        help="Optional lead identifier to anchor the recommendation.",
+    )
+    record_case_handoff = subparsers.add_parser(
+        "record-case-handoff",
+        help="Record a bounded business-hours handoff note for a case.",
+    )
+    record_case_handoff.add_argument("--case-id", required=True)
+    record_case_handoff.add_argument("--handoff-at", required=True)
+    record_case_handoff.add_argument("--handoff-owner", required=True)
+    record_case_handoff.add_argument("--handoff-note", required=True)
+    record_case_handoff.add_argument(
+        "--follow-up-evidence-id",
+        action="append",
+        default=[],
+        help="Follow-up evidence identifier to link; may be repeated.",
+    )
+    record_case_disposition = subparsers.add_parser(
+        "record-case-disposition",
+        help="Record a bounded reviewed case disposition or closure state.",
+    )
+    record_case_disposition.add_argument("--case-id", required=True)
+    record_case_disposition.add_argument("--disposition", required=True)
+    record_case_disposition.add_argument("--rationale", required=True)
+    record_case_disposition.add_argument("--recorded-at", required=True)
     inspect_assistant_context = subparsers.add_parser(
         "inspect-assistant-context",
         help="Render a read-only analyst-assistant context view for one record.",
@@ -234,7 +413,9 @@ def run_control_plane_service(
                 return
 
             if request_path == "/inspect-case-detail":
-                case_id = parse_qs(request_target.query).get("case_id", [""])[0].strip()
+                case_id = _normalize_case_id(
+                    parse_qs(request_target.query).get("case_id", [""])[0]
+                )
                 if not case_id:
                     self._write_json(
                         HTTPStatus.BAD_REQUEST,
@@ -278,6 +459,255 @@ def run_control_plane_service(
         def do_POST(self) -> None:  # noqa: N802
             request_target = urlsplit(self.path)
             request_path = request_target.path
+
+            if request_path.startswith("/operator/"):
+                try:
+                    _require_loopback_operator_request(self)
+                except PermissionError as exc:
+                    self._write_json(
+                        HTTPStatus.FORBIDDEN,
+                        {
+                            "error": "forbidden",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+
+            if request_path == "/operator/promote-alert-to-case":
+                try:
+                    payload = _read_json_request_body(self)
+                    promoted_case = service.promote_alert_to_case(
+                        _normalize_alert_id(_require_json_string(payload, "alert_id")),
+                        case_id=_normalize_optional_string(payload.get("case_id")),
+                        case_lifecycle_state=_require_json_string(
+                            payload,
+                            "case_lifecycle_state",
+                        )
+                        if "case_lifecycle_state" in payload
+                        else "open",
+                    )
+                except RequestTooLargeError as exc:
+                    self._write_json(
+                        HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                        {
+                            "error": "request_too_large",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                except (LookupError, ValueError) as exc:
+                    status = (
+                        HTTPStatus.NOT_FOUND
+                        if isinstance(exc, LookupError)
+                        else HTTPStatus.BAD_REQUEST
+                    )
+                    self._write_json(
+                        status,
+                        {
+                            "error": "not_found"
+                            if status == HTTPStatus.NOT_FOUND
+                            else "invalid_request",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                self._write_json(HTTPStatus.OK, _json_ready(promoted_case))
+                return
+
+            if request_path == "/operator/record-case-observation":
+                try:
+                    payload = _read_json_request_body(self)
+                    observation = service.record_case_observation(
+                        case_id=_normalize_case_id(_require_json_string(payload, "case_id")),
+                        author_identity=_require_json_string(payload, "author_identity"),
+                        observed_at=_require_json_datetime(payload, "observed_at"),
+                        scope_statement=_require_json_string(payload, "scope_statement"),
+                        supporting_evidence_ids=_require_json_string_sequence(
+                            payload,
+                            "supporting_evidence_ids",
+                        ),
+                    )
+                except RequestTooLargeError as exc:
+                    self._write_json(
+                        HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                        {
+                            "error": "request_too_large",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                except (LookupError, ValueError) as exc:
+                    status = (
+                        HTTPStatus.NOT_FOUND
+                        if isinstance(exc, LookupError)
+                        else HTTPStatus.BAD_REQUEST
+                    )
+                    self._write_json(
+                        status,
+                        {
+                            "error": "not_found"
+                            if status == HTTPStatus.NOT_FOUND
+                            else "invalid_request",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                self._write_json(HTTPStatus.OK, _json_ready(observation))
+                return
+
+            if request_path == "/operator/record-case-lead":
+                try:
+                    payload = _read_json_request_body(self)
+                    lead = service.record_case_lead(
+                        case_id=_normalize_case_id(_require_json_string(payload, "case_id")),
+                        triage_owner=_require_json_string(payload, "triage_owner"),
+                        triage_rationale=_require_json_string(payload, "triage_rationale"),
+                        observation_id=_normalize_optional_string(
+                            payload.get("observation_id")
+                        ),
+                    )
+                except RequestTooLargeError as exc:
+                    self._write_json(
+                        HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                        {
+                            "error": "request_too_large",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                except (LookupError, ValueError) as exc:
+                    status = (
+                        HTTPStatus.NOT_FOUND
+                        if isinstance(exc, LookupError)
+                        else HTTPStatus.BAD_REQUEST
+                    )
+                    self._write_json(
+                        status,
+                        {
+                            "error": "not_found"
+                            if status == HTTPStatus.NOT_FOUND
+                            else "invalid_request",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                self._write_json(HTTPStatus.OK, _json_ready(lead))
+                return
+
+            if request_path == "/operator/record-case-recommendation":
+                try:
+                    payload = _read_json_request_body(self)
+                    recommendation = service.record_case_recommendation(
+                        case_id=_normalize_case_id(_require_json_string(payload, "case_id")),
+                        review_owner=_require_json_string(payload, "review_owner"),
+                        intended_outcome=_require_json_string(payload, "intended_outcome"),
+                        lead_id=_normalize_optional_string(payload.get("lead_id")),
+                    )
+                except RequestTooLargeError as exc:
+                    self._write_json(
+                        HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                        {
+                            "error": "request_too_large",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                except (LookupError, ValueError) as exc:
+                    status = (
+                        HTTPStatus.NOT_FOUND
+                        if isinstance(exc, LookupError)
+                        else HTTPStatus.BAD_REQUEST
+                    )
+                    self._write_json(
+                        status,
+                        {
+                            "error": "not_found"
+                            if status == HTTPStatus.NOT_FOUND
+                            else "invalid_request",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                self._write_json(HTTPStatus.OK, _json_ready(recommendation))
+                return
+
+            if request_path == "/operator/record-case-handoff":
+                try:
+                    payload = _read_json_request_body(self)
+                    case_record = service.record_case_handoff(
+                        case_id=_normalize_case_id(_require_json_string(payload, "case_id")),
+                        handoff_at=_require_json_datetime(payload, "handoff_at"),
+                        handoff_owner=_require_json_string(payload, "handoff_owner"),
+                        handoff_note=_require_json_string(payload, "handoff_note"),
+                        follow_up_evidence_ids=_require_json_string_sequence(
+                            payload,
+                            "follow_up_evidence_ids",
+                        ),
+                    )
+                except RequestTooLargeError as exc:
+                    self._write_json(
+                        HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                        {
+                            "error": "request_too_large",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                except (LookupError, ValueError) as exc:
+                    status = (
+                        HTTPStatus.NOT_FOUND
+                        if isinstance(exc, LookupError)
+                        else HTTPStatus.BAD_REQUEST
+                    )
+                    self._write_json(
+                        status,
+                        {
+                            "error": "not_found"
+                            if status == HTTPStatus.NOT_FOUND
+                            else "invalid_request",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                self._write_json(HTTPStatus.OK, _json_ready(case_record))
+                return
+
+            if request_path == "/operator/record-case-disposition":
+                try:
+                    payload = _read_json_request_body(self)
+                    case_record = service.record_case_disposition(
+                        case_id=_normalize_case_id(_require_json_string(payload, "case_id")),
+                        disposition=_require_json_string(payload, "disposition"),
+                        rationale=_require_json_string(payload, "rationale"),
+                        recorded_at=_require_json_datetime(payload, "recorded_at"),
+                    )
+                except RequestTooLargeError as exc:
+                    self._write_json(
+                        HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                        {
+                            "error": "request_too_large",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                except (LookupError, ValueError) as exc:
+                    status = (
+                        HTTPStatus.NOT_FOUND
+                        if isinstance(exc, LookupError)
+                        else HTTPStatus.BAD_REQUEST
+                    )
+                    self._write_json(
+                        status,
+                        {
+                            "error": "not_found"
+                            if status == HTTPStatus.NOT_FOUND
+                            else "invalid_request",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                self._write_json(HTTPStatus.OK, _json_ready(case_record))
+                return
 
             if request_path != "/intake/wazuh":
                 self._write_json(
@@ -480,6 +910,112 @@ def main(
                 parser.error("case_id must be a non-empty string")
             try:
                 payload = service.inspect_case_detail(case_id).to_dict()
+            except (LookupError, ValueError) as exc:
+                parser.error(str(exc))
+        elif command == "promote-alert-to-case":
+            alert_id = _normalize_alert_id(parsed.alert_id)
+            if not alert_id:
+                parser.error("alert_id must be a non-empty string")
+            try:
+                payload = _json_ready(
+                    service.promote_alert_to_case(
+                        alert_id,
+                        case_id=_normalize_optional_string(parsed.case_id),
+                        case_lifecycle_state=parsed.case_lifecycle_state.strip(),
+                    )
+                )
+            except (LookupError, ValueError) as exc:
+                parser.error(str(exc))
+        elif command == "record-case-observation":
+            case_id = _normalize_case_id(parsed.case_id)
+            if not case_id:
+                parser.error("case_id must be a non-empty string")
+            try:
+                payload = _json_ready(
+                    service.record_case_observation(
+                        case_id=case_id,
+                        author_identity=parsed.author_identity.strip(),
+                        observed_at=_parse_datetime_arg(
+                            parsed.observed_at,
+                            "observed_at",
+                        ),
+                        scope_statement=parsed.scope_statement.strip(),
+                        supporting_evidence_ids=tuple(
+                            evidence_id.strip()
+                            for evidence_id in parsed.supporting_evidence_id
+                        ),
+                    )
+                )
+            except (LookupError, ValueError) as exc:
+                parser.error(str(exc))
+        elif command == "record-case-lead":
+            case_id = _normalize_case_id(parsed.case_id)
+            if not case_id:
+                parser.error("case_id must be a non-empty string")
+            try:
+                payload = _json_ready(
+                    service.record_case_lead(
+                        case_id=case_id,
+                        triage_owner=parsed.triage_owner.strip(),
+                        triage_rationale=parsed.triage_rationale.strip(),
+                        observation_id=_normalize_optional_string(parsed.observation_id),
+                    )
+                )
+            except (LookupError, ValueError) as exc:
+                parser.error(str(exc))
+        elif command == "record-case-recommendation":
+            case_id = _normalize_case_id(parsed.case_id)
+            if not case_id:
+                parser.error("case_id must be a non-empty string")
+            try:
+                payload = _json_ready(
+                    service.record_case_recommendation(
+                        case_id=case_id,
+                        review_owner=parsed.review_owner.strip(),
+                        intended_outcome=parsed.intended_outcome.strip(),
+                        lead_id=_normalize_optional_string(parsed.lead_id),
+                    )
+                )
+            except (LookupError, ValueError) as exc:
+                parser.error(str(exc))
+        elif command == "record-case-handoff":
+            case_id = _normalize_case_id(parsed.case_id)
+            if not case_id:
+                parser.error("case_id must be a non-empty string")
+            try:
+                payload = _json_ready(
+                    service.record_case_handoff(
+                        case_id=case_id,
+                        handoff_at=_parse_datetime_arg(
+                            parsed.handoff_at,
+                            "handoff_at",
+                        ),
+                        handoff_owner=parsed.handoff_owner.strip(),
+                        handoff_note=parsed.handoff_note.strip(),
+                        follow_up_evidence_ids=tuple(
+                            evidence_id.strip()
+                            for evidence_id in parsed.follow_up_evidence_id
+                        ),
+                    )
+                )
+            except (LookupError, ValueError) as exc:
+                parser.error(str(exc))
+        elif command == "record-case-disposition":
+            case_id = _normalize_case_id(parsed.case_id)
+            if not case_id:
+                parser.error("case_id must be a non-empty string")
+            try:
+                payload = _json_ready(
+                    service.record_case_disposition(
+                        case_id=case_id,
+                        disposition=parsed.disposition.strip(),
+                        rationale=parsed.rationale.strip(),
+                        recorded_at=_parse_datetime_arg(
+                            parsed.recorded_at,
+                            "recorded_at",
+                        ),
+                    )
+                )
             except (LookupError, ValueError) as exc:
                 parser.error(str(exc))
         elif command == "inspect-advisory-output":
