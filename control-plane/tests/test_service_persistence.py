@@ -1038,6 +1038,87 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             rejected_ai_trace_draft.recommendation_draft["cited_summary"]["text"],
         )
 
+    def test_service_renders_lead_only_recommendation_draft_as_unresolved(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+
+        admitted = service.ingest_finding_alert(
+            finding_id="finding-lead-only-advisory-001",
+            analytic_signal_id="signal-lead-only-advisory-001",
+            substrate_detection_record_id="substrate-detection-lead-only-advisory-001",
+            correlation_key="claim:lead-only:advisory:001",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            reviewed_context={
+                "asset": {"asset_id": "asset-lead-only-advisory-001"},
+            },
+        )
+        evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-lead-only-advisory-001",
+                source_record_id="substrate-detection-lead-only-advisory-001",
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=first_seen_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=first_seen_at,
+            scope_statement="Lead-only recommendation should fail closed without direct lineage.",
+            supporting_evidence_ids=(evidence.evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            observation_id=observation.observation_id,
+            triage_owner="analyst-001",
+            triage_rationale="Preserve reviewed lead linkage for bounded advisory rendering.",
+        )
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-lead-only-advisory-001",
+                lead_id=lead.lead_id,
+                hunt_run_id=None,
+                alert_id=None,
+                case_id=None,
+                ai_trace_id=None,
+                review_owner="analyst-001",
+                intended_outcome="Review the lead linkage before any broader response.",
+                lifecycle_state="under_review",
+                reviewed_context={
+                    "asset": {"asset_id": "asset-lead-only-advisory-001"},
+                },
+            )
+        )
+
+        draft = service.render_recommendation_draft(
+            "recommendation",
+            recommendation.recommendation_id,
+        )
+
+        self.assertEqual(draft.linked_alert_ids, ())
+        self.assertEqual(draft.linked_case_ids, ())
+        self.assertEqual(draft.linked_evidence_ids, ())
+        self.assertEqual(draft.recommendation_draft["status"], "unresolved")
+        self.assertIn(
+            "missing_evidence_citation",
+            draft.recommendation_draft["uncertainty_flags"],
+        )
+        self.assertIn(
+            "remains unresolved",
+            draft.recommendation_draft["cited_summary"]["text"],
+        )
+
     def test_service_includes_evidence_derived_recommendations_in_ai_trace_context(
         self,
     ) -> None:
