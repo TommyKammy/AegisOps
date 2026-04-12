@@ -37,8 +37,8 @@ class ShuffleActionAdapter:
         del approval_decision_id
         del payload_hash
         del idempotency_key
-        del approved_payload
         del delegated_at
+        self._require_reviewed_phase20_notify_payload(approved_payload)
         return ShuffleDelegationReceipt(
             execution_surface_type=self.execution_surface_type,
             execution_surface_id=self.execution_surface_id,
@@ -46,3 +46,24 @@ class ShuffleActionAdapter:
             adapter="shuffle",
             base_url=self.base_url,
         )
+
+    @staticmethod
+    def _require_reviewed_phase20_notify_payload(
+        approved_payload: Mapping[str, object],
+    ) -> None:
+        action_type = approved_payload.get("action_type")
+        if action_type != "notify_identity_owner":
+            raise ValueError(
+                "approved action is outside the reviewed Phase 20 Shuffle delegation scope"
+            )
+
+        for field_name in (
+            "recipient_identity",
+            "message_intent",
+            "escalation_reason",
+        ):
+            value = approved_payload.get(field_name)
+            if not isinstance(value, str) or value.strip() == "":
+                raise ValueError(
+                    "approved action is outside the reviewed Phase 20 Shuffle delegation scope"
+                )
