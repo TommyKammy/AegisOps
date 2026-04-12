@@ -3990,6 +3990,151 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             "Privilege-impacting change needs durable business-hours follow-up.",
         )
 
+    def test_service_rejects_duplicate_casework_identifiers(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
+        admitted = service.ingest_finding_alert(
+            finding_id="finding-phase19-duplicate-ids-001",
+            analytic_signal_id="signal-phase19-duplicate-ids-001",
+            substrate_detection_record_id="substrate-detection-phase19-duplicate-ids-001",
+            correlation_key="claim:asset-phase19-duplicate-ids-001:github-audit",
+            first_seen_at=reviewed_at,
+            last_seen_at=reviewed_at,
+            reviewed_context={
+                "asset": {"asset_id": "asset-phase19-duplicate-ids-001"},
+                "identity": {"identity_id": "principal-phase19-duplicate-ids-001"},
+            },
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-phase19-duplicate-ids-001",
+                source_record_id="substrate-detection-phase19-duplicate-ids-001",
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="collector://wazuh/live",
+                acquired_at=reviewed_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            observation_id="observation-phase19-duplicate-ids-001",
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Initial observation for duplicate-id guard coverage.",
+            supporting_evidence_ids=("evidence-phase19-duplicate-ids-001",),
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "observation_id 'observation-phase19-duplicate-ids-001' already exists",
+        ):
+            service.record_case_observation(
+                case_id=promoted_case.case_id,
+                observation_id=observation.observation_id,
+                author_identity="analyst-002",
+                observed_at=reviewed_at,
+                scope_statement="Collision should be rejected before persist_record updates in place.",
+                supporting_evidence_ids=("evidence-phase19-duplicate-ids-001",),
+            )
+
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            observation_id=observation.observation_id,
+            lead_id="lead-phase19-duplicate-ids-001",
+            triage_owner="analyst-001",
+            triage_rationale="Create a concrete lead before checking duplicate lead IDs.",
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "lead_id 'lead-phase19-duplicate-ids-001' already exists",
+        ):
+            service.record_case_lead(
+                case_id=promoted_case.case_id,
+                observation_id=observation.observation_id,
+                lead_id=lead.lead_id,
+                triage_owner="analyst-002",
+                triage_rationale="Collision should be rejected before persist_record updates in place.",
+            )
+
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            lead_id=lead.lead_id,
+            recommendation_id="recommendation-phase19-duplicate-ids-001",
+            review_owner="analyst-001",
+            intended_outcome="Establish a recommendation before checking duplicate recommendation IDs.",
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "recommendation_id 'recommendation-phase19-duplicate-ids-001' already exists",
+        ):
+            service.record_case_recommendation(
+                case_id=promoted_case.case_id,
+                lead_id=lead.lead_id,
+                recommendation_id=recommendation.recommendation_id,
+                review_owner="analyst-002",
+                intended_outcome="Collision should be rejected before persist_record updates in place.",
+            )
+
+    def test_service_rejects_unknown_case_disposition(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
+        admitted = service.ingest_finding_alert(
+            finding_id="finding-phase19-unsupported-disposition-001",
+            analytic_signal_id="signal-phase19-unsupported-disposition-001",
+            substrate_detection_record_id=(
+                "substrate-detection-phase19-unsupported-disposition-001"
+            ),
+            correlation_key=(
+                "claim:asset-phase19-unsupported-disposition-001:github-audit"
+            ),
+            first_seen_at=reviewed_at,
+            last_seen_at=reviewed_at,
+            reviewed_context={
+                "asset": {"asset_id": "asset-phase19-unsupported-disposition-001"},
+                "identity": {
+                    "identity_id": "principal-phase19-unsupported-disposition-001"
+                },
+            },
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-phase19-unsupported-disposition-001",
+                source_record_id=(
+                    "substrate-detection-phase19-unsupported-disposition-001"
+                ),
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="collector://wazuh/live",
+                acquired_at=reviewed_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "Unsupported case disposition 'typo_pending_review'",
+        ):
+            service.record_case_disposition(
+                case_id=promoted_case.case_id,
+                disposition="typo_pending_review",
+                rationale="Typos should be rejected instead of changing lifecycle state.",
+                recorded_at=reviewed_at,
+            )
+
     def _assert_service_analyst_queue_prefers_wazuh_source_for_multi_source_linkage(
         self,
         *,

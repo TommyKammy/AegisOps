@@ -1965,9 +1965,11 @@ class AegisOpsControlPlaneService:
             evidence_ids=normalized_evidence_ids,
             field_name="supporting_evidence_ids",
         )
-        resolved_observation_id = (
-            self._normalize_optional_string(observation_id, "observation_id")
-            or self._next_identifier("observation")
+        resolved_observation_id = self._resolve_new_record_identifier(
+            ObservationRecord,
+            observation_id,
+            "observation_id",
+            "observation",
         )
         return self.persist_record(
             ObservationRecord(
@@ -2018,9 +2020,11 @@ class AegisOpsControlPlaneService:
                     f"{case.case_id!r}"
                 )
 
-        resolved_lead_id = (
-            self._normalize_optional_string(lead_id, "lead_id")
-            or self._next_identifier("lead")
+        resolved_lead_id = self._resolve_new_record_identifier(
+            LeadRecord,
+            lead_id,
+            "lead_id",
+            "lead",
         )
         return self.persist_record(
             LeadRecord(
@@ -2066,9 +2070,11 @@ class AegisOpsControlPlaneService:
                     f"Lead {resolved_lead_id!r} is not linked to case {case.case_id!r}"
                 )
 
-        resolved_recommendation_id = (
-            self._normalize_optional_string(recommendation_id, "recommendation_id")
-            or self._next_identifier("recommendation")
+        resolved_recommendation_id = self._resolve_new_record_identifier(
+            RecommendationRecord,
+            recommendation_id,
+            "recommendation_id",
+            "recommendation",
         )
         return self.persist_record(
             RecommendationRecord(
@@ -2752,10 +2758,7 @@ class AegisOpsControlPlaneService:
         return value
 
     @staticmethod
-    def _normalize_optional_string(
-        value: object,
-        field_name: str,
-    ) -> str | None:
+    def _normalize_optional_string(value: object, field_name: str) -> str | None:
         if value is None:
             return None
         if not isinstance(value, str):
@@ -2763,6 +2766,20 @@ class AegisOpsControlPlaneService:
         if not value.strip():
             return None
         return value
+
+    def _resolve_new_record_identifier(
+        self,
+        record_type: Type[RecordT],
+        requested_id: object,
+        field_name: str,
+        prefix: str,
+    ) -> str:
+        normalized_id = self._normalize_optional_string(requested_id, field_name)
+        if normalized_id is None:
+            return self._next_identifier(prefix)
+        if self._store.get(record_type, normalized_id) is not None:
+            raise ValueError(f"{field_name} {normalized_id!r} already exists")
+        return normalized_id
 
     def ingest_finding_alert(
         self,
@@ -3948,7 +3965,9 @@ class AegisOpsControlPlaneService:
             "pending_approval",
         }:
             return "pending_action"
-        return "investigating"
+        if disposition == "investigating":
+            return "investigating"
+        raise ValueError(f"Unsupported case disposition {disposition!r}")
 
     @staticmethod
     def _normalize_substrate_detection_record_id(
