@@ -3677,6 +3677,11 @@ class AegisOpsControlPlaneService:
             last_seen_at = latest_execution["observed_at"]
             observed_execution_surface_id = latest_execution["execution_surface_id"]
             observed_idempotency_key = latest_execution["idempotency_key"]
+            expected_execution_run_id = (
+                None
+                if authoritative_execution is None
+                else authoritative_execution.execution_run_id
+            )
             if last_seen_at < stale_after and compared_at >= stale_after:
                 ingest_disposition = "stale"
                 lifecycle_state = "stale"
@@ -3695,6 +3700,16 @@ class AegisOpsControlPlaneService:
                 lifecycle_state = "mismatched"
                 mismatch_summary = (
                     "execution surface/idempotency mismatch between approved request and observed execution"
+                )
+            elif (
+                expected_execution_run_id is not None
+                and execution_run_id != expected_execution_run_id
+            ):
+                ingest_disposition = "mismatch"
+                lifecycle_state = "mismatched"
+                mismatch_summary = (
+                    "execution run identity mismatch between authoritative action execution "
+                    "and observed downstream execution"
                 )
             else:
                 ingest_disposition = "matched"
