@@ -1696,6 +1696,194 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                     servers[0].shutdown()
                 thread.join(timeout=2)
 
+    def test_long_running_runtime_surface_exposes_cited_advisory_review_routes(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+            ),
+            store=store,
+        )
+        compared_at = datetime(2026, 4, 8, 12, 0, tzinfo=timezone.utc)
+        reviewed_context = {
+            "asset": {
+                "asset_id": "asset-phase19-http-advisory-001",
+                "criticality": "high",
+            },
+            "identity": {
+                "identity_id": "principal-phase19-http-advisory-001",
+            },
+        }
+        admitted = service.ingest_finding_alert(
+            finding_id="finding-phase19-http-advisory-001",
+            analytic_signal_id="signal-phase19-http-advisory-001",
+            substrate_detection_record_id="substrate-detection-phase19-http-advisory-001",
+            correlation_key="claim:asset-phase19-http-advisory-001:github-audit",
+            first_seen_at=compared_at,
+            last_seen_at=compared_at,
+            reviewed_context=reviewed_context,
+        )
+        evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-phase19-http-advisory-001",
+                source_record_id="substrate-detection-phase19-http-advisory-001",
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=compared_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-phase19-http-advisory-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=admitted.alert.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id=None,
+                review_owner="reviewer-001",
+                intended_outcome="review the cited evidence before escalation",
+                lifecycle_state="under_review",
+                reviewed_context=reviewed_context,
+            )
+        )
+
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+
+                base_url = f"http://127.0.0.1:{servers[0].server_port}"
+
+                assistant_context = json.loads(
+                    request.urlopen(
+                        (
+                            f"{base_url}/inspect-assistant-context"
+                            f"?family=case&record_id={promoted_case.case_id}"
+                        ),
+                        timeout=2,
+                    ).read().decode("utf-8")
+                )
+                advisory_output = json.loads(
+                    request.urlopen(
+                        (
+                            f"{base_url}/inspect-advisory-output"
+                            f"?family=case&record_id={promoted_case.case_id}"
+                        ),
+                        timeout=2,
+                    ).read().decode("utf-8")
+                )
+                recommendation_draft = json.loads(
+                    request.urlopen(
+                        (
+                            f"{base_url}/render-recommendation-draft"
+                            f"?family=case&record_id={promoted_case.case_id}"
+                        ),
+                        timeout=2,
+                    ).read().decode("utf-8")
+                )
+
+                self.assertTrue(assistant_context["read_only"])
+                self.assertEqual(assistant_context["record_family"], "case")
+                self.assertEqual(assistant_context["record_id"], promoted_case.case_id)
+                self.assertEqual(
+                    assistant_context["advisory_output"]["output_kind"],
+                    "case_summary",
+                )
+                self.assertEqual(assistant_context["reviewed_context"], reviewed_context)
+                self.assertEqual(assistant_context["linked_evidence_ids"], [evidence.evidence_id])
+
+                self.assertTrue(advisory_output["read_only"])
+                self.assertEqual(advisory_output["record_family"], "case")
+                self.assertEqual(advisory_output["record_id"], promoted_case.case_id)
+                self.assertEqual(advisory_output["output_kind"], "case_summary")
+                self.assertEqual(advisory_output["status"], "ready")
+                self.assertIn(evidence.evidence_id, advisory_output["citations"])
+
+                self.assertTrue(recommendation_draft["read_only"])
+                self.assertEqual(recommendation_draft["record_family"], "case")
+                self.assertEqual(recommendation_draft["record_id"], promoted_case.case_id)
+                self.assertEqual(
+                    recommendation_draft["recommendation_draft"]["source_output_kind"],
+                    "case_summary",
+                )
+                self.assertEqual(
+                    recommendation_draft["recommendation_draft"]["status"],
+                    "ready",
+                )
+                self.assertIn(
+                    recommendation.recommendation_id,
+                    recommendation_draft["linked_recommendation_ids"],
+                )
+
+                with self.assertRaises(error.HTTPError) as invalid_family_exc:
+                    request.urlopen(
+                        (
+                            f"{base_url}/inspect-advisory-output"
+                            "?family=not-a-family"
+                            f"&record_id={promoted_case.case_id}"
+                        ),
+                        timeout=2,
+                    )
+
+                self.assertEqual(invalid_family_exc.exception.code, 400)
+                invalid_family_payload = json.loads(
+                    invalid_family_exc.exception.read().decode("utf-8")
+                )
+                self.assertEqual(invalid_family_payload["error"], "invalid_request")
+                self.assertIn(
+                    "Unsupported control-plane record family",
+                    invalid_family_payload["message"],
+                )
+
+                with self.assertRaises(error.HTTPError) as missing_record_exc:
+                    request.urlopen(
+                        (
+                            f"{base_url}/render-recommendation-draft"
+                            "?family=case"
+                            "&record_id=case-missing-phase19-http-advisory-001"
+                        ),
+                        timeout=2,
+                    )
+
+                self.assertEqual(missing_record_exc.exception.code, 404)
+                missing_record_payload = json.loads(
+                    missing_record_exc.exception.read().decode("utf-8")
+                )
+                self.assertEqual(missing_record_payload["error"], "not_found")
+                self.assertIn(
+                    "Missing case record",
+                    missing_record_payload["message"],
+                )
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(timeout=2)
+
     def test_long_running_runtime_surface_rejects_oversized_operator_request_body(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
