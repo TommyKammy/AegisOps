@@ -14,7 +14,7 @@ required_tests=(
 )
 
 required_runtime_commands=(
-  "python3 -m unittest control-plane.tests.test_phase19_operator_surface_docs"
+  "python3 -m unittest control-plane.tests.test_phase19_operator_surface_docs control-plane.tests.test_phase19_operator_workflow_validation"
 )
 
 self_guard_step_name="Run Phase 19 workflow coverage guard"

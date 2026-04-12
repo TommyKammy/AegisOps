@@ -3,7 +3,7 @@
 - Validation date: 2026-04-11
 - Validation scope: Phase 19 review of the approved thin operator surface for the first Wazuh-backed live slice, the minimum queue review through alert inspection, casework entry, evidence review, and cited advisory review path, confirmation that AegisOps remains the primary daily work surface, and confirmation that deferred surfaces and actions remain visibly out of scope
 - Baseline references: `docs/phase-19-thin-operator-surface-and-daily-analyst-workflow.md`, `docs/phase-18-wazuh-lab-topology-and-live-ingest-contract.md`, `docs/phase-18-wazuh-lab-topology-validation.md`, `docs/phase-17-runtime-config-contract-and-boot-command-expectations.md`, `docs/phase-16-release-state-and-first-boot-scope.md`, `docs/phase-15-identity-grounded-analyst-assistant-operating-guidance.md`, `docs/architecture.md`
-- Verification commands: `python3 -m unittest control-plane.tests.test_phase19_operator_surface_docs`, `bash scripts/verify-phase-19-thin-operator-surface.sh`, `bash scripts/test-verify-phase-19-thin-operator-surface.sh`, `bash scripts/test-verify-ci-phase-19-workflow-coverage.sh`
+- Verification commands: `python3 -m unittest control-plane.tests.test_phase19_operator_surface_docs control-plane.tests.test_phase19_operator_workflow_validation`, `bash scripts/verify-phase-19-thin-operator-surface.sh`, `bash scripts/test-verify-phase-19-thin-operator-surface.sh`, `bash scripts/test-verify-ci-phase-19-workflow-coverage.sh`
 - Validation status: PASS
 
 ## Required Boundary Artifacts
@@ -17,6 +17,7 @@
 - `docs/phase-15-identity-grounded-analyst-assistant-operating-guidance.md`
 - `docs/architecture.md`
 - `control-plane/tests/test_phase19_operator_surface_docs.py`
+- `control-plane/tests/test_phase19_operator_workflow_validation.py`
 - `scripts/verify-phase-19-thin-operator-surface.sh`
 - `scripts/test-verify-phase-19-thin-operator-surface.sh`
 - `scripts/test-verify-ci-phase-19-workflow-coverage.sh`
@@ -28,6 +29,8 @@ Confirmed the approved Phase 19 thin operator surface is explicitly limited to a
 Confirmed AegisOps as the primary daily work surface for the first live slice by keeping the approved operator reads inside the AegisOps analyst queue, linked alert and case detail, linked reconciliation context, read-only evidence access, and cited advisory review.
 
 Confirmed the approved first daily workflow is queue review through alert inspection, casework entry, evidence review, and cited advisory review.
+
+Confirmed repository-local validation now exercises the reviewed runtime path end to end, including queue review, alert detail, case promotion, bounded casework entry, evidence provenance visibility, business-hours handoff tracking, and cited advisory visibility for the approved Wazuh-backed operator slice.
 
 Confirmed the approved bounded analyst actions are limited to selecting a queue item, inspecting linked records, promoting an alert to a case when review requires tracked casework, entering cited AegisOps-owned casework entries, and requesting cited advisory review from the approved read-only assistant-context path.
 

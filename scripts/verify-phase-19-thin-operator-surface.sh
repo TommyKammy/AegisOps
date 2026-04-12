@@ -12,6 +12,7 @@ phase16_doc="${repo_root}/docs/phase-16-release-state-and-first-boot-scope.md"
 phase15_guidance_doc="${repo_root}/docs/phase-15-identity-grounded-analyst-assistant-operating-guidance.md"
 architecture_doc="${repo_root}/docs/architecture.md"
 test_doc="${repo_root}/control-plane/tests/test_phase19_operator_surface_docs.py"
+workflow_test_doc="${repo_root}/control-plane/tests/test_phase19_operator_workflow_validation.py"
 workflow_path="${repo_root}/.github/workflows/ci.yml"
 
 require_file() {
@@ -43,6 +44,7 @@ require_file "${phase16_doc}" "Missing Phase 16 first-boot scope doc"
 require_file "${phase15_guidance_doc}" "Missing Phase 15 analyst-assistant operating guidance doc"
 require_file "${architecture_doc}" "Missing architecture overview doc"
 require_file "${test_doc}" "Missing Phase 19 operator surface unittest"
+require_file "${workflow_test_doc}" "Missing Phase 19 operator workflow validation unittest"
 require_file "${workflow_path}" "Missing CI workflow"
 
 design_required_lines=(
@@ -117,6 +119,7 @@ required_artifacts=(
   "docs/phase-15-identity-grounded-analyst-assistant-operating-guidance.md"
   "docs/architecture.md"
   "control-plane/tests/test_phase19_operator_surface_docs.py"
+  "control-plane/tests/test_phase19_operator_workflow_validation.py"
   "scripts/verify-phase-19-thin-operator-surface.sh"
   "scripts/test-verify-phase-19-thin-operator-surface.sh"
   "scripts/test-verify-ci-phase-19-workflow-coverage.sh"
@@ -127,14 +130,16 @@ for artifact in "${required_artifacts[@]}"; do
   require_fixed_line "${validation_doc}" "- \`${artifact}\`"
 done
 
-require_fixed_line "${validation_doc}" '- Verification commands: `python3 -m unittest control-plane.tests.test_phase19_operator_surface_docs`, `bash scripts/verify-phase-19-thin-operator-surface.sh`, `bash scripts/test-verify-phase-19-thin-operator-surface.sh`, `bash scripts/test-verify-ci-phase-19-workflow-coverage.sh`'
+require_fixed_line "${validation_doc}" '- Verification commands: `python3 -m unittest control-plane.tests.test_phase19_operator_surface_docs control-plane.tests.test_phase19_operator_workflow_validation`, `bash scripts/verify-phase-19-thin-operator-surface.sh`, `bash scripts/test-verify-phase-19-thin-operator-surface.sh`, `bash scripts/test-verify-ci-phase-19-workflow-coverage.sh`'
 require_fixed_line "${test_doc}" 'class Phase19OperatorSurfaceDocsTests(unittest.TestCase):'
 require_fixed_line "${test_doc}" '    def test_phase19_design_doc_exists(self) -> None:'
 require_fixed_line "${test_doc}" '    def test_phase19_design_doc_defines_operator_surface_workflow_and_deferred_scope(self) -> None:'
 require_fixed_line "${test_doc}" '    def test_phase19_validation_doc_exists_and_records_alignment_caveat(self) -> None:'
+require_fixed_line "${workflow_test_doc}" 'class Phase19OperatorWorkflowValidationTests(unittest.TestCase):'
+require_fixed_line "${workflow_test_doc}" '    def test_reviewed_runtime_path_covers_approved_operator_workflow(self) -> None:'
 require_fixed_line "${workflow_path}" '      - name: Run Phase 19 thin operator surface validation'
 require_fixed_line "${workflow_path}" '          bash scripts/verify-phase-19-thin-operator-surface.sh'
-require_fixed_line "${workflow_path}" '          python3 -m unittest control-plane.tests.test_phase19_operator_surface_docs'
+require_fixed_line "${workflow_path}" '          python3 -m unittest control-plane.tests.test_phase19_operator_surface_docs control-plane.tests.test_phase19_operator_workflow_validation'
 require_fixed_line "${workflow_path}" '      - name: Run Phase 19 workflow coverage guard'
 require_fixed_line "${workflow_path}" '        run: bash scripts/test-verify-ci-phase-19-workflow-coverage.sh'
 require_fixed_line "${workflow_path}" '          bash scripts/test-verify-phase-19-thin-operator-surface.sh'
