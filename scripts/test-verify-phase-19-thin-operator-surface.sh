@@ -23,6 +23,7 @@ required_artifacts=(
   "docs/phase-15-identity-grounded-analyst-assistant-operating-guidance.md"
   "docs/architecture.md"
   "control-plane/tests/test_phase19_operator_surface_docs.py"
+  "control-plane/tests/test_phase19_operator_workflow_validation.py"
   "scripts/verify-phase-19-thin-operator-surface.sh"
   "scripts/test-verify-phase-19-thin-operator-surface.sh"
   "scripts/test-verify-ci-phase-19-workflow-coverage.sh"
@@ -143,6 +144,16 @@ remove_text_from_file \
   "    def test_phase19_design_doc_defines_operator_surface_workflow_and_deferred_scope(self) -> None:"
 commit_fixture "${missing_test_repo}"
 assert_fails_with "${missing_test_repo}" "Missing required line in ${missing_test_repo}/control-plane/tests/test_phase19_operator_surface_docs.py:     def test_phase19_design_doc_defines_operator_surface_workflow_and_deferred_scope(self) -> None:"
+
+missing_runtime_validation_test_repo="${workdir}/missing-runtime-validation-test"
+create_repo "${missing_runtime_validation_test_repo}"
+write_required_artifacts "${missing_runtime_validation_test_repo}"
+remove_text_from_file \
+  "${missing_runtime_validation_test_repo}" \
+  "control-plane/tests/test_phase19_operator_workflow_validation.py" \
+  "    def test_reviewed_runtime_path_covers_approved_operator_workflow(self) -> None:"
+commit_fixture "${missing_runtime_validation_test_repo}"
+assert_fails_with "${missing_runtime_validation_test_repo}" "Missing required line in ${missing_runtime_validation_test_repo}/control-plane/tests/test_phase19_operator_workflow_validation.py:     def test_reviewed_runtime_path_covers_approved_operator_workflow(self) -> None:"
 
 missing_ci_repo="${workdir}/missing-ci"
 create_repo "${missing_ci_repo}"
