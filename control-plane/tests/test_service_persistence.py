@@ -7551,7 +7551,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
     def test_service_executes_phase20_first_live_action_end_to_end_from_reviewed_recommendation(
         self,
     ) -> None:
-        store, service, promoted_case, evidence_id, reviewed_at = (
+        _store, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
         )
         observation = service.record_case_observation(
@@ -7672,7 +7672,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
     def test_service_phase20_first_live_action_fail_closes_on_downstream_execution_surface_mismatch(
         self,
     ) -> None:
-        store, service, promoted_case, evidence_id, reviewed_at = (
+        _store, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
         )
         observation = service.record_case_observation(
