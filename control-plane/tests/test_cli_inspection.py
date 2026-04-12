@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import contextlib
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import http.client
 import io
 import json
@@ -2170,6 +2170,72 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertIn(promoted_case.alert_id, payload["linked_alert_ids"])
         self.assertIn(recommendation.recommendation_id, payload["linked_recommendation_ids"])
         self.assertTrue(payload["linked_reconciliation_ids"])
+
+    def test_cli_creates_reviewed_action_request_from_recommendation_context(self) -> None:
+        _, service, promoted_case, _, _ = self._build_phase19_in_scope_case()
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-cli-action-request-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id=None,
+                review_owner="reviewer-001",
+                intended_outcome="review the cited evidence before escalation",
+                lifecycle_state="under_review",
+                reviewed_context=promoted_case.reviewed_context,
+            )
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            [
+                "create-reviewed-action-request",
+                "--family",
+                "recommendation",
+                "--record-id",
+                recommendation.recommendation_id,
+                "--requester-identity",
+                "analyst-001",
+                "--recipient-identity",
+                "repo-owner-001",
+                "--message-intent",
+                "Notify the accountable repository owner about the reviewed permission change.",
+                "--escalation-reason",
+                "Reviewed GitHub audit evidence requires bounded owner notification.",
+                "--expires-at",
+                (datetime.now(timezone.utc) + timedelta(hours=4)).isoformat(),
+                "--action-request-id",
+                "action-request-cli-reviewed-001",
+            ],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["action_request_id"], "action-request-cli-reviewed-001")
+        self.assertEqual(payload["case_id"], promoted_case.case_id)
+        self.assertEqual(payload["alert_id"], promoted_case.alert_id)
+        self.assertEqual(payload["requester_identity"], "analyst-001")
+        self.assertEqual(payload["lifecycle_state"], "pending_approval")
+        self.assertEqual(
+            payload["policy_evaluation"],
+            {
+                "approval_requirement": "human_required",
+                "routing_target": "approval",
+                "execution_surface_type": "automation_substrate",
+                "execution_surface_id": "shuffle",
+            },
+        )
+        self.assertEqual(
+            payload["requested_payload"]["action_type"],
+            "notify_identity_owner",
+        )
+        self.assertEqual(
+            payload["requested_payload"]["recommendation_id"],
+            recommendation.recommendation_id,
+        )
 
     def test_cli_rejects_case_scoped_out_of_scope_advisory_reads_as_usage_errors(
         self,

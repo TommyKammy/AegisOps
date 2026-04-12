@@ -1273,6 +1273,8 @@ class AegisOpsControlPlaneService:
             requested_at=action_request.requested_at,
             expires_at=action_request.expires_at,
             lifecycle_state=action_request.lifecycle_state,
+            requester_identity=action_request.requester_identity,
+            requested_payload=action_request.requested_payload,
             policy_basis=normalized_policy_basis,
             policy_evaluation=policy_evaluation,
         )
@@ -2216,6 +2218,138 @@ class AegisOpsControlPlaneService:
         context_snapshot = self.inspect_assistant_context(record_family, record_id)
         self._require_phase19_case_scoped_advisory_read(context_snapshot)
         return _recommendation_draft_snapshot_from_context(context_snapshot)
+
+    def create_reviewed_action_request_from_advisory(
+        self,
+        *,
+        record_family: str,
+        record_id: str,
+        requester_identity: str,
+        recipient_identity: str,
+        message_intent: str,
+        escalation_reason: str,
+        expires_at: datetime,
+        action_request_id: str | None = None,
+    ) -> ActionRequestRecord:
+        requester_identity = self._require_non_empty_string(
+            requester_identity,
+            "requester_identity",
+        )
+        recipient_identity = self._require_non_empty_string(
+            recipient_identity,
+            "recipient_identity",
+        )
+        message_intent = self._require_non_empty_string(
+            message_intent,
+            "message_intent",
+        )
+        escalation_reason = self._require_non_empty_string(
+            escalation_reason,
+            "escalation_reason",
+        )
+        expires_at = self._require_aware_datetime(expires_at, "expires_at")
+
+        context_snapshot = self.inspect_assistant_context(record_family, record_id)
+        self._require_phase19_case_scoped_advisory_read(context_snapshot)
+        recommendation_draft = self.render_recommendation_draft(record_family, record_id)
+        if recommendation_draft.recommendation_draft.get("status") != "ready":
+            raise ValueError(
+                "reviewed advisory context is not ready for approval-bound action requests"
+            )
+
+        recommendation_id = self._require_single_recommendation_binding(
+            record_family=record_family,
+            record_id=record_id,
+            linked_recommendation_ids=recommendation_draft.linked_recommendation_ids,
+        )
+        case_id = self._require_single_linked_case_id(recommendation_draft.linked_case_ids)
+        case = self._require_phase19_operator_case(case_id)
+        if expires_at <= datetime.now(timezone.utc):
+            raise ValueError("expires_at must be in the future")
+
+        requested_payload = {
+            "action_type": "notify_identity_owner",
+            "recipient_identity": recipient_identity,
+            "message_intent": message_intent,
+            "escalation_reason": escalation_reason,
+            "source_record_family": record_family,
+            "source_record_id": record_id,
+            "recommendation_id": recommendation_id,
+            "case_id": case.case_id,
+            "alert_id": case.alert_id,
+            "finding_id": case.finding_id,
+            "linked_evidence_ids": recommendation_draft.linked_evidence_ids,
+        }
+        target_scope = {
+            "record_family": record_family,
+            "record_id": record_id,
+            "case_id": case.case_id,
+            "alert_id": case.alert_id,
+            "finding_id": case.finding_id,
+            "recipient_identity": recipient_identity,
+        }
+        payload_hash = _approved_payload_binding_hash(
+            target_scope=target_scope,
+            approved_payload=requested_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
+        requested_at = datetime.now(timezone.utc)
+        if expires_at <= requested_at:
+            raise ValueError("expires_at must be after requested_at")
+
+        normalized_action_request_id = self._resolve_new_record_identifier(
+            ActionRequestRecord,
+            action_request_id,
+            "action_request_id",
+            "action-request",
+        )
+        idempotency_material = json.dumps(
+            {
+                "payload_hash": payload_hash,
+                "record_family": record_family,
+                "record_id": record_id,
+                "expires_at": expires_at.isoformat(),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        idempotency_key = (
+            "notify-identity-owner:"
+            + hashlib.sha256(idempotency_material.encode("utf-8")).hexdigest()
+        )
+        return self.persist_record(
+            ActionRequestRecord(
+                action_request_id=normalized_action_request_id,
+                approval_decision_id=None,
+                case_id=case.case_id,
+                alert_id=case.alert_id,
+                finding_id=case.finding_id,
+                idempotency_key=idempotency_key,
+                target_scope=target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=expires_at,
+                lifecycle_state="pending_approval",
+                requester_identity=requester_identity,
+                requested_payload=requested_payload,
+                policy_basis={
+                    "severity": "low",
+                    "target_scope": "single_identity",
+                    "action_reversibility": "reversible",
+                    "asset_criticality": "standard",
+                    "identity_criticality": "standard",
+                    "blast_radius": "single_target",
+                    "execution_constraint": "routine_allowed",
+                },
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "approval",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
 
     def attach_assistant_advisory_draft(
         self,
@@ -3909,6 +4043,30 @@ class AegisOpsControlPlaneService:
     def _require_phase19_operator_case(self, case_id: str) -> CaseRecord:
         case = self._require_case_record(case_id)
         return self._require_phase19_operator_case_record(case)
+
+    @staticmethod
+    def _require_single_linked_case_id(linked_case_ids: tuple[str, ...]) -> str:
+        if len(linked_case_ids) != 1:
+            raise ValueError(
+                "reviewed advisory context must bind exactly one case before creating an action request"
+            )
+        return linked_case_ids[0]
+
+    @staticmethod
+    def _require_single_recommendation_binding(
+        *,
+        record_family: str,
+        record_id: str,
+        linked_recommendation_ids: tuple[str, ...],
+    ) -> str:
+        recommendation_ids = linked_recommendation_ids
+        if record_family == "recommendation":
+            recommendation_ids = (record_id,)
+        if len(recommendation_ids) != 1:
+            raise ValueError(
+                "reviewed advisory context must bind exactly one recommendation before creating an action request"
+            )
+        return recommendation_ids[0]
 
     def _require_phase19_case_scoped_advisory_read(
         self,

@@ -261,6 +261,21 @@ def _build_parser() -> argparse.ArgumentParser:
     record_case_disposition.add_argument("--disposition", required=True)
     record_case_disposition.add_argument("--rationale", required=True)
     record_case_disposition.add_argument("--recorded-at", required=True)
+    create_reviewed_action_request = subparsers.add_parser(
+        "create-reviewed-action-request",
+        help="Create an approval-bound reviewed action request from cited advisory context.",
+    )
+    create_reviewed_action_request.add_argument("--family", required=True)
+    create_reviewed_action_request.add_argument("--record-id", required=True)
+    create_reviewed_action_request.add_argument("--requester-identity", required=True)
+    create_reviewed_action_request.add_argument("--recipient-identity", required=True)
+    create_reviewed_action_request.add_argument("--message-intent", required=True)
+    create_reviewed_action_request.add_argument("--escalation-reason", required=True)
+    create_reviewed_action_request.add_argument("--expires-at", required=True)
+    create_reviewed_action_request.add_argument(
+        "--action-request-id",
+        help="Optional action request identifier to use instead of an auto-generated value.",
+    )
     inspect_assistant_context = subparsers.add_parser(
         "inspect-assistant-context",
         help="Render a read-only analyst-assistant context view for one record.",
@@ -783,6 +798,58 @@ def run_control_plane_service(
                 self._write_json(HTTPStatus.OK, _json_ready(case_record))
                 return
 
+            if request_path == "/operator/create-reviewed-action-request":
+                try:
+                    payload = _read_json_request_body(self)
+                    action_request = service.create_reviewed_action_request_from_advisory(
+                        record_family=_require_json_string(payload, "family"),
+                        record_id=_require_json_string(payload, "record_id"),
+                        requester_identity=_require_json_string(
+                            payload,
+                            "requester_identity",
+                        ),
+                        recipient_identity=_require_json_string(
+                            payload,
+                            "recipient_identity",
+                        ),
+                        message_intent=_require_json_string(payload, "message_intent"),
+                        escalation_reason=_require_json_string(
+                            payload,
+                            "escalation_reason",
+                        ),
+                        expires_at=_require_json_datetime(payload, "expires_at"),
+                        action_request_id=_normalize_optional_string(
+                            payload.get("action_request_id")
+                        ),
+                    )
+                except RequestTooLargeError as exc:
+                    self._write_json(
+                        HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                        {
+                            "error": "request_too_large",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                except (LookupError, ValueError) as exc:
+                    status = (
+                        HTTPStatus.NOT_FOUND
+                        if isinstance(exc, LookupError)
+                        else HTTPStatus.BAD_REQUEST
+                    )
+                    self._write_json(
+                        status,
+                        {
+                            "error": "not_found"
+                            if status == HTTPStatus.NOT_FOUND
+                            else "invalid_request",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                self._write_json(HTTPStatus.OK, _json_ready(action_request))
+                return
+
             if request_path != "/intake/wazuh":
                 self._write_json(
                     HTTPStatus.NOT_FOUND,
@@ -1087,6 +1154,27 @@ def main(
                         recorded_at=_parse_datetime_arg(
                             parsed.recorded_at,
                             "recorded_at",
+                        ),
+                    )
+                )
+            except (LookupError, ValueError) as exc:
+                parser.error(str(exc))
+        elif command == "create-reviewed-action-request":
+            try:
+                payload = _json_ready(
+                    service.create_reviewed_action_request_from_advisory(
+                        record_family=parsed.family.strip(),
+                        record_id=parsed.record_id.strip(),
+                        requester_identity=parsed.requester_identity.strip(),
+                        recipient_identity=parsed.recipient_identity.strip(),
+                        message_intent=parsed.message_intent.strip(),
+                        escalation_reason=parsed.escalation_reason.strip(),
+                        expires_at=_parse_datetime_arg(
+                            parsed.expires_at,
+                            "expires_at",
+                        ),
+                        action_request_id=_normalize_optional_string(
+                            parsed.action_request_id
                         ),
                     )
                 )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import datetime, timedelta, timezone
 import json
 import pathlib
 import sys
@@ -318,6 +319,42 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                 self.assertIn(
                     recommendation["recommendation_id"],
                     recommendation_draft["linked_recommendation_ids"],
+                )
+
+                action_request = post_json(
+                    "/operator/create-reviewed-action-request",
+                    {
+                        "family": "recommendation",
+                        "record_id": recommendation["recommendation_id"],
+                        "requester_identity": "analyst-001",
+                        "recipient_identity": "repo-owner-001",
+                        "message_intent": "Notify the accountable repository owner about the reviewed permission change.",
+                        "escalation_reason": "Reviewed GitHub audit evidence requires bounded owner notification.",
+                        "expires_at": (
+                            datetime.now(timezone.utc) + timedelta(hours=4)
+                        ).isoformat(),
+                    },
+                )
+                self.assertEqual(action_request["case_id"], case_id)
+                self.assertEqual(action_request["alert_id"], created.alert.alert_id)
+                self.assertEqual(action_request["requester_identity"], "analyst-001")
+                self.assertEqual(action_request["lifecycle_state"], "pending_approval")
+                self.assertEqual(
+                    action_request["policy_evaluation"],
+                    {
+                        "approval_requirement": "human_required",
+                        "routing_target": "approval",
+                        "execution_surface_type": "automation_substrate",
+                        "execution_surface_id": "shuffle",
+                    },
+                )
+                self.assertEqual(
+                    action_request["requested_payload"]["action_type"],
+                    "notify_identity_owner",
+                )
+                self.assertEqual(
+                    action_request["requested_payload"]["recommendation_id"],
+                    recommendation["recommendation_id"],
                 )
 
                 closed_case = post_json(
