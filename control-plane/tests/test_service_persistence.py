@@ -4079,6 +4079,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         )
 
         for record_family, record_id in (
+            ("case", promoted_case.case_id),
             ("recommendation", recommendation.recommendation_id),
             ("ai_trace", ai_trace.ai_trace_id),
         ):
