@@ -4135,6 +4135,164 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 recorded_at=reviewed_at,
             )
 
+    def test_service_merges_concurrent_reviewed_context_into_case_handoff(self) -> None:
+        store, _ = make_store()
+        base_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
+        admitted = base_service.ingest_finding_alert(
+            finding_id="finding-phase19-handoff-merge-001",
+            analytic_signal_id="signal-phase19-handoff-merge-001",
+            substrate_detection_record_id="substrate-detection-phase19-handoff-merge-001",
+            correlation_key="claim:asset-phase19-handoff-merge-001:github-audit",
+            first_seen_at=reviewed_at,
+            last_seen_at=reviewed_at,
+            reviewed_context={
+                "asset": {"asset_id": "asset-phase19-handoff-merge-001"},
+                "identity": {"identity_id": "principal-phase19-handoff-merge-001"},
+            },
+        )
+        evidence = base_service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-phase19-handoff-merge-001",
+                source_record_id="substrate-detection-phase19-handoff-merge-001",
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="collector://wazuh/live",
+                acquired_at=reviewed_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = base_service.promote_alert_to_case(admitted.alert.alert_id)
+        store = _TransactionMutationStore(
+            inner=store,
+            mutate_once=lambda transactional_store: transactional_store.save(
+                replace(
+                    transactional_store.get(CaseRecord, promoted_case.case_id),
+                    reviewed_context={
+                        **dict(
+                            transactional_store.get(
+                                CaseRecord,
+                                promoted_case.case_id,
+                            ).reviewed_context
+                        ),
+                        "triage": {
+                            "disposition": "pending_approval",
+                            "closure_rationale": "Concurrent triage update",
+                            "recorded_at": reviewed_at.isoformat(),
+                        },
+                    },
+                )
+            ),
+        )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+
+        updated_case = service.record_case_handoff(
+            case_id=promoted_case.case_id,
+            handoff_at=reviewed_at,
+            handoff_owner="analyst-001",
+            handoff_note="Carry forward the next-step evidence review.",
+            follow_up_evidence_ids=(evidence.evidence_id,),
+        )
+
+        self.assertEqual(
+            updated_case.reviewed_context["triage"]["disposition"],
+            "pending_approval",
+        )
+        self.assertEqual(
+            updated_case.reviewed_context["handoff"]["follow_up_evidence_ids"],
+            (evidence.evidence_id,),
+        )
+
+    def test_service_merges_concurrent_reviewed_context_into_case_disposition(self) -> None:
+        store, _ = make_store()
+        base_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
+        admitted = base_service.ingest_finding_alert(
+            finding_id="finding-phase19-disposition-merge-001",
+            analytic_signal_id="signal-phase19-disposition-merge-001",
+            substrate_detection_record_id=(
+                "substrate-detection-phase19-disposition-merge-001"
+            ),
+            correlation_key="claim:asset-phase19-disposition-merge-001:github-audit",
+            first_seen_at=reviewed_at,
+            last_seen_at=reviewed_at,
+            reviewed_context={
+                "asset": {"asset_id": "asset-phase19-disposition-merge-001"},
+                "identity": {
+                    "identity_id": "principal-phase19-disposition-merge-001"
+                },
+            },
+        )
+        base_service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-phase19-disposition-merge-001",
+                source_record_id=(
+                    "substrate-detection-phase19-disposition-merge-001"
+                ),
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="collector://wazuh/live",
+                acquired_at=reviewed_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = base_service.promote_alert_to_case(admitted.alert.alert_id)
+        store = _TransactionMutationStore(
+            inner=store,
+            mutate_once=lambda transactional_store: transactional_store.save(
+                replace(
+                    transactional_store.get(CaseRecord, promoted_case.case_id),
+                    reviewed_context={
+                        **dict(
+                            transactional_store.get(
+                                CaseRecord,
+                                promoted_case.case_id,
+                            ).reviewed_context
+                        ),
+                        "handoff": {
+                            "handoff_at": reviewed_at.isoformat(),
+                            "handoff_owner": "analyst-002",
+                            "note": "Concurrent handoff note",
+                            "follow_up_evidence_ids": (),
+                        },
+                    },
+                )
+            ),
+        )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+
+        updated_case = service.record_case_disposition(
+            case_id=promoted_case.case_id,
+            disposition="pending_approval",
+            rationale="Disposition update should preserve concurrent handoff context.",
+            recorded_at=reviewed_at,
+        )
+
+        self.assertEqual(
+            updated_case.reviewed_context["handoff"]["handoff_owner"],
+            "analyst-002",
+        )
+        self.assertEqual(
+            updated_case.reviewed_context["triage"]["disposition"],
+            "pending_approval",
+        )
+
     def _assert_service_analyst_queue_prefers_wazuh_source_for_multi_source_linkage(
         self,
         *,

@@ -2111,32 +2111,34 @@ class AegisOpsControlPlaneService:
             follow_up_evidence_ids,
             "follow_up_evidence_ids",
         )
-        self._validate_case_evidence_linkage(
-            case=case,
-            evidence_ids=normalized_evidence_ids,
-            field_name="follow_up_evidence_ids",
-        )
-        updated_reviewed_context = _merge_reviewed_context(
-            case.reviewed_context,
-            {
-                "handoff": {
-                    "handoff_at": handoff_at.isoformat(),
-                    "handoff_owner": handoff_owner,
-                    "note": handoff_note,
-                    "follow_up_evidence_ids": normalized_evidence_ids,
-                }
-            },
-        )
-        return self.persist_record(
-            CaseRecord(
-                case_id=case.case_id,
-                alert_id=case.alert_id,
-                finding_id=case.finding_id,
-                evidence_ids=case.evidence_ids,
-                lifecycle_state=case.lifecycle_state,
-                reviewed_context=updated_reviewed_context,
+        with self._store.transaction():
+            case = self._require_case_record(case_id)
+            self._validate_case_evidence_linkage(
+                case=case,
+                evidence_ids=normalized_evidence_ids,
+                field_name="follow_up_evidence_ids",
             )
-        )
+            updated_reviewed_context = _merge_reviewed_context(
+                case.reviewed_context,
+                {
+                    "handoff": {
+                        "handoff_at": handoff_at.isoformat(),
+                        "handoff_owner": handoff_owner,
+                        "note": handoff_note,
+                        "follow_up_evidence_ids": normalized_evidence_ids,
+                    }
+                },
+            )
+            return self.persist_record(
+                CaseRecord(
+                    case_id=case.case_id,
+                    alert_id=case.alert_id,
+                    finding_id=case.finding_id,
+                    evidence_ids=case.evidence_ids,
+                    lifecycle_state=case.lifecycle_state,
+                    reviewed_context=updated_reviewed_context,
+                )
+            )
 
     def record_case_disposition(
         self,
@@ -2146,22 +2148,22 @@ class AegisOpsControlPlaneService:
         rationale: str,
         recorded_at: datetime,
     ) -> CaseRecord:
-        case = self._require_case_record(case_id)
         disposition = self._require_non_empty_string(disposition, "disposition")
         rationale = self._require_non_empty_string(rationale, "rationale")
         recorded_at = self._require_aware_datetime(recorded_at, "recorded_at")
         lifecycle_state = self._case_lifecycle_for_disposition(disposition)
-        updated_reviewed_context = _merge_reviewed_context(
-            case.reviewed_context,
-            {
-                "triage": {
-                    "disposition": disposition,
-                    "closure_rationale": rationale,
-                    "recorded_at": recorded_at.isoformat(),
-                }
-            },
-        )
         with self._store.transaction():
+            case = self._require_case_record(case_id)
+            updated_reviewed_context = _merge_reviewed_context(
+                case.reviewed_context,
+                {
+                    "triage": {
+                        "disposition": disposition,
+                        "closure_rationale": rationale,
+                        "recorded_at": recorded_at.isoformat(),
+                    }
+                },
+            )
             updated_case = self.persist_record(
                 CaseRecord(
                     case_id=case.case_id,
