@@ -222,11 +222,18 @@ class ActionRequestRecord(ControlPlaneRecord):
     requested_at: datetime
     expires_at: datetime | None
     lifecycle_state: str
+    requester_identity: str | None = None
+    requested_payload: Mapping[str, object] = field(default_factory=dict)
     policy_basis: Mapping[str, object] = field(default_factory=dict)
     policy_evaluation: Mapping[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "target_scope", _freeze_mapping(self.target_scope))
+        object.__setattr__(
+            self,
+            "requested_payload",
+            _freeze_mapping(self.requested_payload),
+        )
         object.__setattr__(self, "policy_basis", _freeze_mapping(self.policy_basis))
         object.__setattr__(
             self,

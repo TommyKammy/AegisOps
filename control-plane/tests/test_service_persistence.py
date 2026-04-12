@@ -7240,6 +7240,274 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         self.assertEqual(store.list(ActionExecutionRecord), ())
 
+    def test_service_creates_approval_bound_action_request_from_reviewed_recommendation(
+        self,
+    ) -> None:
+        store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Observed repository permission change requires tracked review.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            triage_owner="analyst-001",
+            triage_rationale="Privilege-impacting change needs durable business-hours follow-up.",
+            observation_id=observation.observation_id,
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before any approval-bound response.",
+            lead_id=lead.lead_id,
+        )
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=4)
+
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
+            expires_at=expires_at,
+        )
+
+        self.assertIsNone(action_request.approval_decision_id)
+        self.assertEqual(action_request.case_id, promoted_case.case_id)
+        self.assertEqual(action_request.alert_id, promoted_case.alert_id)
+        self.assertEqual(action_request.finding_id, promoted_case.finding_id)
+        self.assertEqual(action_request.requester_identity, "analyst-001")
+        self.assertEqual(
+            action_request.target_scope,
+            {
+                "record_family": "recommendation",
+                "record_id": recommendation.recommendation_id,
+                "case_id": promoted_case.case_id,
+                "alert_id": promoted_case.alert_id,
+                "finding_id": promoted_case.finding_id,
+                "recipient_identity": "repo-owner-001",
+            },
+        )
+        self.assertEqual(
+            action_request.requested_payload,
+            {
+                "action_type": "notify_identity_owner",
+                "recipient_identity": "repo-owner-001",
+                "message_intent": "Notify the accountable repository owner about the reviewed permission change.",
+                "escalation_reason": "Reviewed GitHub audit evidence requires bounded owner notification.",
+                "source_record_family": "recommendation",
+                "source_record_id": recommendation.recommendation_id,
+                "recommendation_id": recommendation.recommendation_id,
+                "case_id": promoted_case.case_id,
+                "alert_id": promoted_case.alert_id,
+                "finding_id": promoted_case.finding_id,
+                "linked_evidence_ids": (evidence_id,),
+            },
+        )
+        self.assertEqual(
+            action_request.payload_hash,
+            _approved_binding_hash(
+                target_scope=dict(action_request.target_scope),
+                approved_payload=dict(action_request.requested_payload),
+                execution_surface_type="automation_substrate",
+                execution_surface_id="shuffle",
+            ),
+        )
+        self.assertEqual(action_request.expires_at, expires_at)
+        self.assertEqual(action_request.lifecycle_state, "pending_approval")
+        self.assertEqual(
+            action_request.policy_evaluation,
+            {
+                "approval_requirement": "human_required",
+                "routing_target": "approval",
+                "execution_surface_type": "automation_substrate",
+                "execution_surface_id": "shuffle",
+            },
+        )
+        self.assertEqual(
+            service.get_record(ActionRequestRecord, action_request.action_request_id),
+            action_request,
+        )
+        self.assertEqual(store.list(ActionExecutionRecord), ())
+
+    def test_service_rejects_reviewed_action_request_creation_when_malformed_or_out_of_scope(
+        self,
+    ) -> None:
+        _, service, promoted_case, _, _ = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before any approval-bound response.",
+        )
+        future_expiry = datetime.now(timezone.utc) + timedelta(hours=4)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "recipient_identity must be a non-empty string",
+        ):
+            service.create_reviewed_action_request_from_advisory(
+                record_family="recommendation",
+                record_id=recommendation.recommendation_id,
+                requester_identity="analyst-001",
+                recipient_identity="",
+                message_intent="Notify the accountable repository owner about the reviewed permission change.",
+                escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
+                expires_at=future_expiry,
+            )
+
+        replay_service, replay_case, _, _ = self._build_phase19_out_of_scope_case(
+            fixture_name="github-audit-alert.json"
+        )
+        replay_recommendation = replay_service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-phase20-out-of-scope-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=replay_case.alert_id,
+                case_id=replay_case.case_id,
+                ai_trace_id=None,
+                review_owner="analyst-001",
+                intended_outcome="Synthetic advisory reads must fail closed.",
+                lifecycle_state="under_review",
+                reviewed_context=replay_case.reviewed_context,
+            )
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+        ):
+            replay_service.create_reviewed_action_request_from_advisory(
+                record_family="recommendation",
+                record_id=replay_recommendation.recommendation_id,
+                requester_identity="analyst-001",
+                recipient_identity="repo-owner-001",
+                message_intent="Notify the accountable repository owner about the reviewed permission change.",
+                escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
+                expires_at=future_expiry,
+            )
+
+    def test_service_reuses_reviewed_action_request_for_matching_idempotency_key(
+        self,
+    ) -> None:
+        store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Observed repository permission change requires tracked review.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before any approval-bound response.",
+            lead_id=service.record_case_lead(
+                case_id=promoted_case.case_id,
+                triage_owner="analyst-001",
+                triage_rationale="Privilege-impacting change needs durable business-hours follow-up.",
+                observation_id=observation.observation_id,
+            ).lead_id,
+        )
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=4)
+
+        first_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
+            expires_at=expires_at,
+        )
+        second_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
+            expires_at=expires_at,
+        )
+
+        self.assertEqual(second_request, first_request)
+        self.assertEqual(store.list(ActionRequestRecord), (first_request,))
+
+    def test_service_rechecks_reviewed_action_request_context_inside_transaction(
+        self,
+    ) -> None:
+        inner_store, _ = make_store()
+        (
+            _,
+            base_service,
+            promoted_case,
+            evidence_id,
+            reviewed_at,
+        ) = self._build_phase19_in_scope_case(store=inner_store)
+        observation = base_service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Observed repository permission change requires tracked review.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = base_service.record_case_lead(
+            case_id=promoted_case.case_id,
+            triage_owner="analyst-001",
+            triage_rationale="Privilege-impacting change needs durable business-hours follow-up.",
+            observation_id=observation.observation_id,
+        )
+        recommendation = base_service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before any approval-bound response.",
+            lead_id=lead.lead_id,
+        )
+        store = _TransactionMutationStore(
+            inner=inner_store,
+            mutate_once=lambda transactional_store: transactional_store.save(
+                replace(
+                    transactional_store.get(
+                        RecommendationRecord,
+                        recommendation.recommendation_id,
+                    ),
+                    intended_outcome=(
+                        "Execute an organization-wide response immediately without waiting "
+                        "for approval."
+                    ),
+                )
+            ),
+        )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "reviewed advisory context is not ready for approval-bound action requests",
+        ):
+            service.create_reviewed_action_request_from_advisory(
+                record_family="recommendation",
+                record_id=recommendation.recommendation_id,
+                requester_identity="analyst-001",
+                recipient_identity="repo-owner-001",
+                message_intent="Notify the accountable repository owner about the reviewed permission change.",
+                escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            )
+
+        self.assertEqual(inner_store.list(ActionRequestRecord), ())
+
 
 if __name__ == "__main__":
     unittest.main()

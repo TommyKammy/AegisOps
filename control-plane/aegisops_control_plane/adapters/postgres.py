@@ -231,7 +231,9 @@ _TABLES_BY_RECORD_TYPE: dict[Type[ControlPlaneRecord], TableConfig] = {
     ActionRequestRecord: TableConfig(
         ActionRequestRecord,
         "action_request_records",
-        json_fields=frozenset({"target_scope", "policy_basis", "policy_evaluation"}),
+        json_fields=frozenset(
+            {"target_scope", "requested_payload", "policy_basis", "policy_evaluation"}
+        ),
     ),
     ActionExecutionRecord: TableConfig(
         ActionExecutionRecord,
