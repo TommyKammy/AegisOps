@@ -21,6 +21,7 @@ import main
 from aegisops_control_plane.config import RuntimeConfig
 from aegisops_control_plane.adapters.wazuh import WazuhAlertAdapter
 from aegisops_control_plane.models import (
+    AITraceRecord,
     AlertRecord,
     AnalyticSignalRecord,
     CaseRecord,
@@ -69,6 +70,123 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         )
         promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
         return store, service, promoted_case, promoted_case.evidence_ids[0], reviewed_at
+
+    def _build_phase19_out_of_scope_case(
+        self,
+        *,
+        fixture_name: str,
+        host: str | None = None,
+        port: int | None = None,
+    ) -> tuple[AegisOpsControlPlaneService, CaseRecord]:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1" if host is None else host,
+                port=0 if port is None else port,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+            ),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+        admitted = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(_load_wazuh_fixture(fixture_name)),
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        return service, promoted_case
+
+    def _build_out_of_scope_case_advisory_review_records(
+        self,
+        *,
+        fixture_name: str,
+        host: str | None = None,
+        port: int | None = None,
+    ) -> tuple[AegisOpsControlPlaneService, RecommendationRecord, AITraceRecord]:
+        service, promoted_case = self._build_phase19_out_of_scope_case(
+            fixture_name=fixture_name,
+            host=host,
+            port=port,
+        )
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-phase19-cli-replay-linked-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id="ai-trace-phase19-cli-replay-linked-001",
+                review_owner="reviewer-001",
+                intended_outcome="Replay-linked advisory reads must fail closed.",
+                lifecycle_state="under_review",
+                reviewed_context=promoted_case.reviewed_context,
+            )
+        )
+        ai_trace = service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-phase19-cli-replay-linked-001",
+                subject_linkage={"recommendation_ids": (recommendation.recommendation_id,)},
+                model_identity="gpt-5.4",
+                prompt_version="prompt-v1",
+                generated_at=datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc),
+                material_input_refs=(),
+                reviewer_identity="reviewer-001",
+                lifecycle_state="under_review",
+            )
+        )
+        return service, recommendation, ai_trace
+
+    def _build_case_scoped_advisory_records_without_case_lineage(
+        self,
+        *,
+        host: str | None = None,
+        port: int | None = None,
+    ) -> tuple[AegisOpsControlPlaneService, RecommendationRecord, AITraceRecord]:
+        _, service, promoted_case, evidence_id, reviewed_at = self._build_phase19_in_scope_case(
+            host=host,
+            port=port,
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Case-scoped advisory reads must fail closed without case lineage.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            observation_id=observation.observation_id,
+            triage_owner="analyst-001",
+            triage_rationale="Preserve reviewed lead linkage for bounded advisory rendering.",
+        )
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-cli-lead-only-advisory-001",
+                lead_id=lead.lead_id,
+                hunt_run_id=None,
+                alert_id=None,
+                case_id=None,
+                ai_trace_id=None,
+                review_owner="analyst-001",
+                intended_outcome="Review the lead linkage before any broader response.",
+                lifecycle_state="under_review",
+                reviewed_context=promoted_case.reviewed_context,
+            )
+        )
+        ai_trace = service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-cli-lead-only-advisory-001",
+                subject_linkage={"recommendation_ids": (recommendation.recommendation_id,)},
+                model_identity="gpt-5.4",
+                prompt_version="prompt-v1",
+                generated_at=reviewed_at,
+                material_input_refs=(),
+                reviewer_identity="analyst-001",
+                lifecycle_state="under_review",
+            )
+        )
+        return service, recommendation, ai_trace
 
     def test_runtime_command_uses_runtime_service_builder_when_not_injected(self) -> None:
         store, _ = make_store()
@@ -1709,6 +1827,165 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                     servers[0].shutdown()
                 thread.join(timeout=2)
 
+    def test_long_running_runtime_surface_rejects_case_scoped_out_of_scope_advisory_reads(
+        self,
+    ) -> None:
+        service, recommendation, ai_trace = self._build_out_of_scope_case_advisory_review_records(
+            fixture_name="github-audit-alert.json",
+            host="127.0.0.1",
+            port=0,
+        )
+        expected_message = (
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice"
+        )
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+                base_url = f"http://127.0.0.1:{servers[0].server_port}"
+
+                for path, record_family, record_id in (
+                    (
+                        "/inspect-advisory-output",
+                        "recommendation",
+                        recommendation.recommendation_id,
+                    ),
+                    (
+                        "/inspect-advisory-output",
+                        "ai_trace",
+                        ai_trace.ai_trace_id,
+                    ),
+                    (
+                        "/render-recommendation-draft",
+                        "recommendation",
+                        recommendation.recommendation_id,
+                    ),
+                    (
+                        "/render-recommendation-draft",
+                        "ai_trace",
+                        ai_trace.ai_trace_id,
+                    ),
+                ):
+                    with self.subTest(
+                        path=path,
+                        record_family=record_family,
+                    ):
+                        with self.assertRaises(error.HTTPError) as exc_info:
+                            request.urlopen(  # noqa: S310 - local in-process test HTTP server
+                                (
+                                    f"{base_url}{path}"
+                                    f"?family={record_family}&record_id={record_id}"
+                                ),
+                                timeout=2,
+                            )
+
+                        self.assertEqual(exc_info.exception.code, 400)
+                        payload = json.loads(
+                            exc_info.exception.read().decode("utf-8")
+                        )
+                        self.assertEqual(payload["error"], "invalid_request")
+                        self.assertIn(expected_message, payload["message"])
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(timeout=2)
+
+    def test_long_running_runtime_surface_rejects_case_scoped_advisory_reads_without_linked_case(
+        self,
+    ) -> None:
+        service, recommendation, ai_trace = (
+            self._build_case_scoped_advisory_records_without_case_lineage(
+                host="127.0.0.1",
+                port=0,
+            )
+        )
+        expected_message = (
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice"
+        )
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+                base_url = f"http://127.0.0.1:{servers[0].server_port}"
+
+                for path, record_family, record_id in (
+                    (
+                        "/inspect-advisory-output",
+                        "recommendation",
+                        recommendation.recommendation_id,
+                    ),
+                    (
+                        "/inspect-advisory-output",
+                        "ai_trace",
+                        ai_trace.ai_trace_id,
+                    ),
+                    (
+                        "/render-recommendation-draft",
+                        "recommendation",
+                        recommendation.recommendation_id,
+                    ),
+                    (
+                        "/render-recommendation-draft",
+                        "ai_trace",
+                        ai_trace.ai_trace_id,
+                    ),
+                ):
+                    with self.subTest(
+                        path=path,
+                        record_family=record_family,
+                    ):
+                        with self.assertRaises(error.HTTPError) as exc_info:
+                            request.urlopen(  # noqa: S310 - local in-process test HTTP server
+                                (
+                                    f"{base_url}{path}"
+                                    f"?family={record_family}&record_id={record_id}"
+                                ),
+                                timeout=2,
+                            )
+
+                        self.assertEqual(exc_info.exception.code, 400)
+                        payload = json.loads(
+                            exc_info.exception.read().decode("utf-8")
+                        )
+                        self.assertEqual(payload["error"], "invalid_request")
+                        self.assertIn(expected_message, payload["message"])
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(timeout=2)
+
     def test_long_running_runtime_surface_rejects_oversized_operator_request_body(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
@@ -1894,59 +2171,124 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertIn(recommendation.recommendation_id, payload["linked_recommendation_ids"])
         self.assertTrue(payload["linked_reconciliation_ids"])
 
-    def test_cli_renders_recommendation_draft_with_source_review_outcome(self) -> None:
-        store, _ = make_store()
-        service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
-            store=store,
+    def test_cli_rejects_case_scoped_out_of_scope_advisory_reads_as_usage_errors(
+        self,
+    ) -> None:
+        service, recommendation, ai_trace = self._build_out_of_scope_case_advisory_review_records(
+            fixture_name="github-audit-alert.json"
         )
-        compared_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
-        reviewed_context = {
-            "asset": {
-                "asset_id": "asset-repo-draft-cli-outcome-001",
-                "criticality": "high",
-            },
-            "identity": {
-                "identity_id": "principal-repo-draft-cli-outcome-001",
-                "criticality": "elevated",
-            },
-        }
+        expected_message = (
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice"
+        )
 
-        admitted = service.ingest_finding_alert(
-            finding_id="finding-draft-cli-outcome-001",
-            analytic_signal_id="signal-draft-cli-outcome-001",
-            substrate_detection_record_id="substrate-detection-draft-cli-outcome-001",
-            correlation_key="claim:asset-repo-draft-cli-outcome-001:assistant-draft-cli",
-            first_seen_at=compared_at,
-            last_seen_at=compared_at,
-            reviewed_context=reviewed_context,
+        for command, record_family, record_id in (
+            (
+                "inspect-advisory-output",
+                "recommendation",
+                recommendation.recommendation_id,
+            ),
+            (
+                "inspect-advisory-output",
+                "ai_trace",
+                ai_trace.ai_trace_id,
+            ),
+            (
+                "render-recommendation-draft",
+                "recommendation",
+                recommendation.recommendation_id,
+            ),
+            (
+                "render-recommendation-draft",
+                "ai_trace",
+                ai_trace.ai_trace_id,
+            ),
+        ):
+            stderr = io.StringIO()
+            with self.subTest(
+                command=command,
+                record_family=record_family,
+            ), contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as exc_info:
+                    main.main(
+                        [
+                            command,
+                            "--family",
+                            record_family,
+                            "--record-id",
+                            record_id,
+                        ],
+                        service=service,
+                    )
+
+            self.assertEqual(exc_info.exception.code, 2)
+            self.assertIn(expected_message, stderr.getvalue())
+
+    def test_cli_rejects_case_scoped_advisory_reads_without_linked_case_as_usage_errors(
+        self,
+    ) -> None:
+        service, recommendation, ai_trace = (
+            self._build_case_scoped_advisory_records_without_case_lineage()
         )
-        evidence = service.persist_record(
-            EvidenceRecord(
-                evidence_id="evidence-draft-cli-outcome-001",
-                source_record_id="substrate-detection-draft-cli-outcome-001",
-                alert_id=admitted.alert.alert_id,
-                case_id=None,
-                source_system="reviewed-source",
-                collector_identity="control-plane-test",
-                acquired_at=compared_at,
-                derivation_relationship="admitted_analytic_signal",
-                lifecycle_state="collected",
-            )
+        expected_message = (
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice"
         )
-        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+
+        for command, record_family, record_id in (
+            (
+                "inspect-advisory-output",
+                "recommendation",
+                recommendation.recommendation_id,
+            ),
+            (
+                "inspect-advisory-output",
+                "ai_trace",
+                ai_trace.ai_trace_id,
+            ),
+            (
+                "render-recommendation-draft",
+                "recommendation",
+                recommendation.recommendation_id,
+            ),
+            (
+                "render-recommendation-draft",
+                "ai_trace",
+                ai_trace.ai_trace_id,
+            ),
+        ):
+            stderr = io.StringIO()
+            with self.subTest(
+                command=command,
+                record_family=record_family,
+            ), contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as exc_info:
+                    main.main(
+                        [
+                            command,
+                            "--family",
+                            record_family,
+                            "--record-id",
+                            record_id,
+                        ],
+                        service=service,
+                    )
+
+            self.assertEqual(exc_info.exception.code, 2)
+            self.assertIn(expected_message, stderr.getvalue())
+
+    def test_cli_renders_recommendation_draft_with_source_review_outcome(self) -> None:
+        _, service, promoted_case, evidence_id, _ = self._build_phase19_in_scope_case()
         recommendation = service.persist_record(
             RecommendationRecord(
                 recommendation_id="recommendation-draft-cli-outcome-001",
                 lead_id=None,
                 hunt_run_id=None,
-                alert_id=admitted.alert.alert_id,
+                alert_id=promoted_case.alert_id,
                 case_id=promoted_case.case_id,
                 ai_trace_id=None,
                 review_owner="reviewer-001",
                 intended_outcome="review the cited evidence before escalation",
                 lifecycle_state="accepted",
-                reviewed_context=reviewed_context,
+                reviewed_context=promoted_case.reviewed_context,
             )
         )
 
@@ -1983,7 +2325,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             payload["recommendation_draft"]["cited_summary"]["text"],
         )
         self.assertIn(
-            evidence.evidence_id,
+            evidence_id,
             payload["recommendation_draft"]["citations"],
         )
 
