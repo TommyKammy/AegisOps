@@ -4323,7 +4323,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
     def test_service_rejects_raced_observation_identifier_collision(self) -> None:
         store, _ = make_store()
-        store, base_service, promoted_case, evidence_id, reviewed_at = (
+        store, _base_service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case(store=store)
         )
         store = _OutOfBandMutationStore(
@@ -4462,7 +4462,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
     def test_service_rejects_raced_generated_observation_identifier_collision(self) -> None:
         store, _ = make_store()
-        store, base_service, promoted_case, evidence_id, reviewed_at = (
+        store, _base_service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case(store=store)
         )
         store = _OutOfBandMutationStore(
@@ -4635,7 +4635,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
     def test_service_merges_concurrent_reviewed_context_into_case_handoff(self) -> None:
         store, _ = make_store()
-        store, base_service, promoted_case, evidence_id, reviewed_at = (
+        store, _base_service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case(store=store)
         )
         store = _TransactionMutationStore(
@@ -4691,7 +4691,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
     def test_service_merges_concurrent_reviewed_context_into_case_disposition(self) -> None:
         store, _ = make_store()
-        store, base_service, promoted_case, _, reviewed_at = (
+        store, _base_service, promoted_case, _, reviewed_at = (
             self._build_phase19_in_scope_case(store=store)
         )
         store = _TransactionMutationStore(
