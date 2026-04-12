@@ -2782,7 +2782,10 @@ class AegisOpsControlPlaneService:
     ) -> str:
         normalized_id = self._normalize_optional_string(requested_id, field_name)
         if normalized_id is None:
-            return self._next_identifier(prefix)
+            generated_id = self._next_identifier(prefix)
+            if self._store.get(record_type, generated_id) is not None:
+                raise ValueError(f"{field_name} {generated_id!r} already exists")
+            return generated_id
         if self._store.get(record_type, normalized_id) is not None:
             raise ValueError(f"{field_name} {normalized_id!r} already exists")
         return normalized_id

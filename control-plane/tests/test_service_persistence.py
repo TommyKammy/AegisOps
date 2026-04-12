@@ -10,6 +10,7 @@ import secrets
 import sys
 from typing import Callable, Iterator
 import unittest
+from unittest import mock
 
 
 CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -123,6 +124,38 @@ class _ListCountingStore:
 
     @contextmanager
     def transaction(self) -> Iterator[None]:
+        with self.inner.transaction():
+            yield
+
+
+@dataclass
+class _OutOfBandMutationStore:
+    inner: object
+    mutate_once: Callable[[object], None]
+    _mutated: bool = False
+
+    @property
+    def dsn(self) -> str:
+        return self.inner.dsn
+
+    @property
+    def persistence_mode(self) -> str:
+        return self.inner.persistence_mode
+
+    def save(self, record: object) -> object:
+        return self.inner.save(record)
+
+    def get(self, record_type: object, record_id: str) -> object | None:
+        return self.inner.get(record_type, record_id)
+
+    def list(self, record_type: object) -> tuple[object, ...]:
+        return self.inner.list(record_type)
+
+    @contextmanager
+    def transaction(self) -> Iterator[None]:
+        if not self._mutated:
+            self.mutate_once(self.inner)
+            self._mutated = True
         with self.inner.transaction():
             yield
 
@@ -4170,7 +4203,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             )
         )
         promoted_case = base_service.promote_alert_to_case(admitted.alert.alert_id)
-        store = _TransactionMutationStore(
+        store = _OutOfBandMutationStore(
             inner=store,
             mutate_once=lambda transactional_store: transactional_store.save(
                 ObservationRecord(
@@ -4245,7 +4278,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             scope_statement="Seed observation for raced lead collision coverage.",
             supporting_evidence_ids=(evidence.evidence_id,),
         )
-        store = _TransactionMutationStore(
+        store = _OutOfBandMutationStore(
             inner=store,
             mutate_once=lambda transactional_store: transactional_store.save(
                 LeadRecord(
@@ -4332,7 +4365,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             triage_owner="analyst-001",
             triage_rationale="Seed lead for raced recommendation collision coverage.",
         )
-        store = _TransactionMutationStore(
+        store = _OutOfBandMutationStore(
             inner=store,
             mutate_once=lambda transactional_store: transactional_store.save(
                 RecommendationRecord(
@@ -4367,6 +4400,285 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                     "Caller-supplied recommendation IDs must reject raced duplicates."
                 ),
             )
+
+    def test_service_rejects_raced_generated_observation_identifier_collision(self) -> None:
+        store, _ = make_store()
+        base_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
+        admitted = base_service.ingest_finding_alert(
+            finding_id="finding-phase19-generated-observation-race-001",
+            analytic_signal_id="signal-phase19-generated-observation-race-001",
+            substrate_detection_record_id=(
+                "substrate-detection-phase19-generated-observation-race-001"
+            ),
+            correlation_key=(
+                "claim:asset-phase19-generated-observation-race-001:github-audit"
+            ),
+            first_seen_at=reviewed_at,
+            last_seen_at=reviewed_at,
+            reviewed_context={
+                "asset": {"asset_id": "asset-phase19-generated-observation-race-001"},
+                "identity": {
+                    "identity_id": "principal-phase19-generated-observation-race-001"
+                },
+            },
+        )
+        evidence = base_service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-phase19-generated-observation-race-001",
+                source_record_id=(
+                    "substrate-detection-phase19-generated-observation-race-001"
+                ),
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="collector://wazuh/live",
+                acquired_at=reviewed_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = base_service.promote_alert_to_case(admitted.alert.alert_id)
+        store = _OutOfBandMutationStore(
+            inner=store,
+            mutate_once=lambda transactional_store: transactional_store.save(
+                ObservationRecord(
+                    observation_id="observation-phase19-generated-race-001",
+                    hunt_id=None,
+                    hunt_run_id=None,
+                    alert_id=promoted_case.alert_id,
+                    case_id=promoted_case.case_id,
+                    supporting_evidence_ids=(evidence.evidence_id,),
+                    author_identity="analyst-racer",
+                    observed_at=reviewed_at,
+                    scope_statement="Concurrent writer inserted the minted observation ID.",
+                    lifecycle_state="confirmed",
+                )
+            ),
+        )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+
+        with mock.patch.object(
+            AegisOpsControlPlaneService,
+            "_next_identifier",
+            return_value="observation-phase19-generated-race-001",
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                "observation_id 'observation-phase19-generated-race-001' already exists",
+            ):
+                service.record_case_observation(
+                    case_id=promoted_case.case_id,
+                    author_identity="analyst-001",
+                    observed_at=reviewed_at,
+                    scope_statement="Generated observation IDs must reject raced duplicates.",
+                    supporting_evidence_ids=(evidence.evidence_id,),
+                )
+
+        observations = store.list(ObservationRecord)
+        self.assertEqual(len(observations), 1)
+        self.assertEqual(
+            observations[0].observation_id,
+            "observation-phase19-generated-race-001",
+        )
+
+    def test_service_rejects_raced_generated_lead_identifier_collision(self) -> None:
+        store, _ = make_store()
+        base_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
+        admitted = base_service.ingest_finding_alert(
+            finding_id="finding-phase19-generated-lead-race-001",
+            analytic_signal_id="signal-phase19-generated-lead-race-001",
+            substrate_detection_record_id=(
+                "substrate-detection-phase19-generated-lead-race-001"
+            ),
+            correlation_key="claim:asset-phase19-generated-lead-race-001:github-audit",
+            first_seen_at=reviewed_at,
+            last_seen_at=reviewed_at,
+            reviewed_context={
+                "asset": {"asset_id": "asset-phase19-generated-lead-race-001"},
+                "identity": {
+                    "identity_id": "principal-phase19-generated-lead-race-001"
+                },
+            },
+        )
+        evidence = base_service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-phase19-generated-lead-race-001",
+                source_record_id="substrate-detection-phase19-generated-lead-race-001",
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="collector://wazuh/live",
+                acquired_at=reviewed_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = base_service.promote_alert_to_case(admitted.alert.alert_id)
+        observation = base_service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Seed observation for generated lead race coverage.",
+            supporting_evidence_ids=(evidence.evidence_id,),
+        )
+        store = _OutOfBandMutationStore(
+            inner=store,
+            mutate_once=lambda transactional_store: transactional_store.save(
+                LeadRecord(
+                    lead_id="lead-phase19-generated-race-001",
+                    observation_id=observation.observation_id,
+                    finding_id=promoted_case.finding_id,
+                    hunt_run_id=None,
+                    alert_id=promoted_case.alert_id,
+                    case_id=promoted_case.case_id,
+                    triage_owner="analyst-racer",
+                    triage_rationale="Concurrent writer inserted the minted lead ID.",
+                    lifecycle_state="triaged",
+                )
+            ),
+        )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+
+        with mock.patch.object(
+            AegisOpsControlPlaneService,
+            "_next_identifier",
+            return_value="lead-phase19-generated-race-001",
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                "lead_id 'lead-phase19-generated-race-001' already exists",
+            ):
+                service.record_case_lead(
+                    case_id=promoted_case.case_id,
+                    observation_id=observation.observation_id,
+                    triage_owner="analyst-001",
+                    triage_rationale="Generated lead IDs must reject raced duplicates.",
+                )
+
+        leads = store.list(LeadRecord)
+        self.assertEqual(len(leads), 1)
+        self.assertEqual(leads[0].lead_id, "lead-phase19-generated-race-001")
+
+    def test_service_rejects_raced_generated_recommendation_identifier_collision(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        base_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
+        admitted = base_service.ingest_finding_alert(
+            finding_id="finding-phase19-generated-recommendation-race-001",
+            analytic_signal_id="signal-phase19-generated-recommendation-race-001",
+            substrate_detection_record_id=(
+                "substrate-detection-phase19-generated-recommendation-race-001"
+            ),
+            correlation_key=(
+                "claim:asset-phase19-generated-recommendation-race-001:github-audit"
+            ),
+            first_seen_at=reviewed_at,
+            last_seen_at=reviewed_at,
+            reviewed_context={
+                "asset": {
+                    "asset_id": "asset-phase19-generated-recommendation-race-001"
+                },
+                "identity": {
+                    "identity_id": "principal-phase19-generated-recommendation-race-001"
+                },
+            },
+        )
+        evidence = base_service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-phase19-generated-recommendation-race-001",
+                source_record_id=(
+                    "substrate-detection-phase19-generated-recommendation-race-001"
+                ),
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="collector://wazuh/live",
+                acquired_at=reviewed_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = base_service.promote_alert_to_case(admitted.alert.alert_id)
+        observation = base_service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Seed observation for generated recommendation race coverage.",
+            supporting_evidence_ids=(evidence.evidence_id,),
+        )
+        lead = base_service.record_case_lead(
+            case_id=promoted_case.case_id,
+            observation_id=observation.observation_id,
+            triage_owner="analyst-001",
+            triage_rationale="Seed lead for generated recommendation race coverage.",
+        )
+        store = _OutOfBandMutationStore(
+            inner=store,
+            mutate_once=lambda transactional_store: transactional_store.save(
+                RecommendationRecord(
+                    recommendation_id="recommendation-phase19-generated-race-001",
+                    lead_id=lead.lead_id,
+                    hunt_run_id=None,
+                    alert_id=promoted_case.alert_id,
+                    case_id=promoted_case.case_id,
+                    ai_trace_id=None,
+                    review_owner="analyst-racer",
+                    intended_outcome=(
+                        "Concurrent writer inserted the minted recommendation ID."
+                    ),
+                    lifecycle_state="under_review",
+                    reviewed_context=promoted_case.reviewed_context,
+                )
+            ),
+        )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+
+        with mock.patch.object(
+            AegisOpsControlPlaneService,
+            "_next_identifier",
+            return_value="recommendation-phase19-generated-race-001",
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                "recommendation_id 'recommendation-phase19-generated-race-001' already exists",
+            ):
+                service.record_case_recommendation(
+                    case_id=promoted_case.case_id,
+                    lead_id=lead.lead_id,
+                    review_owner="analyst-001",
+                    intended_outcome=(
+                        "Generated recommendation IDs must reject raced duplicates."
+                    ),
+                )
+
+        recommendations = store.list(RecommendationRecord)
+        self.assertEqual(len(recommendations), 1)
+        self.assertEqual(
+            recommendations[0].recommendation_id,
+            "recommendation-phase19-generated-race-001",
+        )
 
     def test_service_merges_concurrent_reviewed_context_into_case_handoff(self) -> None:
         store, _ = make_store()
@@ -4438,6 +4750,14 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(
             updated_case.reviewed_context["triage"]["disposition"],
             "pending_approval",
+        )
+        self.assertEqual(
+            updated_case.reviewed_context["asset"]["asset_id"],
+            "asset-phase19-handoff-merge-001",
+        )
+        self.assertEqual(
+            updated_case.reviewed_context["identity"]["identity_id"],
+            "principal-phase19-handoff-merge-001",
         )
         self.assertEqual(
             updated_case.reviewed_context["handoff"]["follow_up_evidence_ids"],
@@ -4520,6 +4840,14 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(
             updated_case.reviewed_context["handoff"]["handoff_owner"],
             "analyst-002",
+        )
+        self.assertEqual(
+            updated_case.reviewed_context["asset"]["asset_id"],
+            "asset-phase19-disposition-merge-001",
+        )
+        self.assertEqual(
+            updated_case.reviewed_context["identity"]["identity_id"],
+            "principal-phase19-disposition-merge-001",
         )
         self.assertEqual(
             updated_case.reviewed_context["triage"]["disposition"],
