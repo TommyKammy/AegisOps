@@ -23,6 +23,7 @@ from aegisops_control_plane.adapters.wazuh import WazuhAlertAdapter
 from aegisops_control_plane.models import (
     AlertRecord,
     AnalyticSignalRecord,
+    CaseRecord,
     EvidenceRecord,
     RecommendationRecord,
     ReconciliationRecord,
@@ -1596,8 +1597,8 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 base_url = f"http://127.0.0.1:{servers[0].server_port}"
 
                 def post_json(path: str, payload: dict[str, object]) -> dict[str, object]:
-                    response = request.urlopen(
-                        request.Request(
+                    response = request.urlopen(  # noqa: S310 - local in-process test HTTP server
+                        request.Request(  # noqa: S310 - local in-process test HTTP server
                             f"{base_url}{path}",
                             data=json.dumps(payload).encode("utf-8"),
                             headers={"Content-Type": "application/json"},
@@ -1675,7 +1676,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 self.assertEqual(disposition_payload["lifecycle_state"], "pending_action")
 
                 detail_payload = json.loads(
-                    request.urlopen(
+                    request.urlopen(  # noqa: S310 - local in-process test HTTP server
                         f"{base_url}/inspect-case-detail?case_id={case_id}",
                         timeout=2,
                     ).read().decode("utf-8")
@@ -1690,6 +1691,137 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                     detail_payload["case_record"]["reviewed_context"]["triage"]["disposition"],
                     "business_hours_handoff",
                 )
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(timeout=2)
+
+    def test_long_running_runtime_surface_rejects_oversized_operator_request_body(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+            ),
+            store=store,
+        )
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+
+                connection = http.client.HTTPConnection(
+                    "127.0.0.1",
+                    servers[0].server_port,
+                    timeout=2,
+                )
+                connection.putrequest("POST", "/operator/promote-alert-to-case")
+                connection.putheader("Content-Type", "application/json")
+                connection.putheader(
+                    "Content-Length",
+                    str(main.MAX_WAZUH_INGEST_BODY_BYTES + 1),
+                )
+                connection.endheaders()
+
+                response = connection.getresponse()
+                self.assertEqual(response.status, 413)
+                response_body = json.loads(response.read().decode("utf-8"))
+                connection.close()
+                self.assertEqual(response_body["error"], "request_too_large")
+                self.assertEqual(store.list(AlertRecord), ())
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(timeout=2)
+
+    def test_long_running_runtime_surface_forbids_non_loopback_operator_requests(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+            ),
+            store=store,
+        )
+        admitted = service.ingest_finding_alert(
+            finding_id="finding-phase19-http-auth-001",
+            analytic_signal_id="signal-phase19-http-auth-001",
+            substrate_detection_record_id="substrate-detection-phase19-http-auth-001",
+            correlation_key="claim:asset-phase19-http-auth-001:github-audit",
+            first_seen_at=datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc),
+            last_seen_at=datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc),
+            reviewed_context={
+                "asset": {"asset_id": "asset-phase19-http-auth-001"},
+                "identity": {"identity_id": "principal-phase19-http-auth-001"},
+            },
+        )
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with (
+            mock.patch.object(main, "ThreadingHTTPServer", RecordingServer),
+            mock.patch.object(
+                main,
+                "_require_loopback_operator_request",
+                side_effect=PermissionError(
+                    "operator write surface only accepts loopback callers until a reviewed operator auth boundary exists"
+                ),
+            ),
+        ):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+
+                with self.assertRaises(error.HTTPError) as exc_info:
+                    request.urlopen(  # noqa: S310 - local in-process test HTTP server
+                        request.Request(  # noqa: S310 - local in-process test HTTP server
+                            f"http://127.0.0.1:{servers[0].server_port}/operator/promote-alert-to-case",
+                            data=json.dumps({"alert_id": admitted.alert.alert_id}).encode("utf-8"),
+                            headers={"Content-Type": "application/json"},
+                            method="POST",
+                        ),
+                        timeout=2,
+                    )
+
+                self.assertEqual(exc_info.exception.code, 403)
+                response_body = json.loads(exc_info.exception.read().decode("utf-8"))
+                self.assertEqual(response_body["error"], "forbidden")
+                self.assertEqual(store.list(CaseRecord), ())
             finally:
                 if servers:
                     servers[0].shutdown()

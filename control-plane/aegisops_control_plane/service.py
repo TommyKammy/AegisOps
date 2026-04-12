@@ -2155,32 +2155,33 @@ class AegisOpsControlPlaneService:
                 }
             },
         )
-        updated_case = self.persist_record(
-            CaseRecord(
-                case_id=case.case_id,
-                alert_id=case.alert_id,
-                finding_id=case.finding_id,
-                evidence_ids=case.evidence_ids,
-                lifecycle_state=lifecycle_state,
-                reviewed_context=updated_reviewed_context,
-            )
-        )
-        if case.alert_id is not None and lifecycle_state == "closed":
-            alert = self._store.get(AlertRecord, case.alert_id)
-            if alert is not None:
-                self.persist_record(
-                    AlertRecord(
-                        alert_id=alert.alert_id,
-                        finding_id=alert.finding_id,
-                        analytic_signal_id=alert.analytic_signal_id,
-                        case_id=alert.case_id,
-                        lifecycle_state="closed",
-                        reviewed_context=_merge_reviewed_context(
-                            alert.reviewed_context,
-                            {"triage": updated_reviewed_context.get("triage", {})},
-                        ),
-                    )
+        with self._store.transaction():
+            updated_case = self.persist_record(
+                CaseRecord(
+                    case_id=case.case_id,
+                    alert_id=case.alert_id,
+                    finding_id=case.finding_id,
+                    evidence_ids=case.evidence_ids,
+                    lifecycle_state=lifecycle_state,
+                    reviewed_context=updated_reviewed_context,
                 )
+            )
+            if case.alert_id is not None and lifecycle_state == "closed":
+                alert = self._store.get(AlertRecord, case.alert_id)
+                if alert is not None:
+                    self.persist_record(
+                        AlertRecord(
+                            alert_id=alert.alert_id,
+                            finding_id=alert.finding_id,
+                            analytic_signal_id=alert.analytic_signal_id,
+                            case_id=alert.case_id,
+                            lifecycle_state="closed",
+                            reviewed_context=_merge_reviewed_context(
+                                alert.reviewed_context,
+                                {"triage": updated_reviewed_context.get("triage", {})},
+                            ),
+                        )
+                    )
         return updated_case
 
     def inspect_advisory_output(

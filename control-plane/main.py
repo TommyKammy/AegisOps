@@ -7,6 +7,7 @@ from dataclasses import fields, is_dataclass
 from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import ipaddress
 import json
 import sys
 from typing import Mapping, Sequence, TextIO
@@ -18,6 +19,10 @@ from aegisops_control_plane.service import (
 )
 
 MAX_WAZUH_INGEST_BODY_BYTES = 1_048_576
+
+
+class RequestTooLargeError(ValueError):
+    """Raised when a reviewed request body exceeds the allowed size limit."""
 
 
 def _normalize_alert_id(value: str) -> str:
@@ -89,7 +94,7 @@ def _read_json_request_body(handler: BaseHTTPRequestHandler) -> dict[str, object
     if content_length <= 0:
         raise ValueError("request body is required")
     if content_length > MAX_WAZUH_INGEST_BODY_BYTES:
-        raise ValueError("request body exceeds the reviewed size limit")
+        raise RequestTooLargeError("request body exceeds the reviewed size limit")
     try:
         raw_payload = handler.rfile.read(content_length).decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -101,6 +106,24 @@ def _read_json_request_body(handler: BaseHTTPRequestHandler) -> dict[str, object
     if not isinstance(payload, dict):
         raise ValueError("request body must be a JSON object")
     return payload
+
+
+def _peer_addr_is_loopback(peer_addr: str | None) -> bool:
+    if peer_addr is None or peer_addr.strip() == "":
+        return False
+    try:
+        return ipaddress.ip_address(peer_addr.strip()).is_loopback
+    except ValueError:
+        return False
+
+
+def _require_loopback_operator_request(handler: BaseHTTPRequestHandler) -> None:
+    peer_addr = handler.client_address[0] if handler.client_address else None
+    if _peer_addr_is_loopback(peer_addr):
+        return
+    raise PermissionError(
+        "operator write surface only accepts loopback callers until a reviewed operator auth boundary exists"
+    )
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -437,6 +460,19 @@ def run_control_plane_service(
             request_target = urlsplit(self.path)
             request_path = request_target.path
 
+            if request_path.startswith("/operator/"):
+                try:
+                    _require_loopback_operator_request(self)
+                except PermissionError as exc:
+                    self._write_json(
+                        HTTPStatus.FORBIDDEN,
+                        {
+                            "error": "forbidden",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+
             if request_path == "/operator/promote-alert-to-case":
                 try:
                     payload = _read_json_request_body(self)
@@ -450,6 +486,15 @@ def run_control_plane_service(
                         if "case_lifecycle_state" in payload
                         else "open",
                     )
+                except RequestTooLargeError as exc:
+                    self._write_json(
+                        HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                        {
+                            "error": "request_too_large",
+                            "message": str(exc),
+                        },
+                    )
+                    return
                 except (LookupError, ValueError) as exc:
                     status = (
                         HTTPStatus.NOT_FOUND
@@ -482,6 +527,15 @@ def run_control_plane_service(
                             "supporting_evidence_ids",
                         ),
                     )
+                except RequestTooLargeError as exc:
+                    self._write_json(
+                        HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                        {
+                            "error": "request_too_large",
+                            "message": str(exc),
+                        },
+                    )
+                    return
                 except (LookupError, ValueError) as exc:
                     status = (
                         HTTPStatus.NOT_FOUND
@@ -512,6 +566,15 @@ def run_control_plane_service(
                             payload.get("observation_id")
                         ),
                     )
+                except RequestTooLargeError as exc:
+                    self._write_json(
+                        HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                        {
+                            "error": "request_too_large",
+                            "message": str(exc),
+                        },
+                    )
+                    return
                 except (LookupError, ValueError) as exc:
                     status = (
                         HTTPStatus.NOT_FOUND
@@ -540,6 +603,15 @@ def run_control_plane_service(
                         intended_outcome=_require_json_string(payload, "intended_outcome"),
                         lead_id=_normalize_optional_string(payload.get("lead_id")),
                     )
+                except RequestTooLargeError as exc:
+                    self._write_json(
+                        HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                        {
+                            "error": "request_too_large",
+                            "message": str(exc),
+                        },
+                    )
+                    return
                 except (LookupError, ValueError) as exc:
                     status = (
                         HTTPStatus.NOT_FOUND
@@ -572,6 +644,15 @@ def run_control_plane_service(
                             "follow_up_evidence_ids",
                         ),
                     )
+                except RequestTooLargeError as exc:
+                    self._write_json(
+                        HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                        {
+                            "error": "request_too_large",
+                            "message": str(exc),
+                        },
+                    )
+                    return
                 except (LookupError, ValueError) as exc:
                     status = (
                         HTTPStatus.NOT_FOUND
@@ -600,6 +681,15 @@ def run_control_plane_service(
                         rationale=_require_json_string(payload, "rationale"),
                         recorded_at=_require_json_datetime(payload, "recorded_at"),
                     )
+                except RequestTooLargeError as exc:
+                    self._write_json(
+                        HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                        {
+                            "error": "request_too_large",
+                            "message": str(exc),
+                        },
+                    )
+                    return
                 except (LookupError, ValueError) as exc:
                     status = (
                         HTTPStatus.NOT_FOUND
