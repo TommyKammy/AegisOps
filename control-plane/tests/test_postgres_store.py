@@ -149,8 +149,27 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             "add column if not exists requested_payload jsonb not null default '{}'::jsonb;",
             migration_sql,
         )
+        self.assertIn(
+            (
+                "update aegisops_control.action_request_records\n"
+                "set requested_payload = '{}'::jsonb\n"
+                "where requested_payload is null;"
+            ),
+            migration_sql,
+        )
+        self.assertIn(
+            (
+                "alter table if exists aegisops_control.action_request_records\n"
+                "  alter column requested_payload drop default;"
+            ),
+            migration_sql,
+        )
         self.assertIn("requester_identity text", schema_sql)
         self.assertIn(
+            "requested_payload jsonb not null",
+            schema_sql,
+        )
+        self.assertNotIn(
             "requested_payload jsonb not null default '{}'::jsonb",
             schema_sql,
         )

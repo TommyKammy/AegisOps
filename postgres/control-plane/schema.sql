@@ -143,7 +143,7 @@ create table if not exists aegisops_control.action_request_records (
   idempotency_key text not null,
   target_scope jsonb not null,
   requester_identity text,
-  requested_payload jsonb not null default '{}'::jsonb,
+  requested_payload jsonb not null,
   policy_basis jsonb not null default '{}'::jsonb,
   policy_evaluation jsonb not null default '{}'::jsonb,
   payload_hash text not null,
