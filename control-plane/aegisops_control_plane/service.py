@@ -3916,6 +3916,11 @@ class AegisOpsControlPlaneService:
         if context_snapshot.record_family == "case":
             self._require_phase19_operator_case(context_snapshot.record_id)
             return
+        if not context_snapshot.linked_case_ids:
+            raise ValueError(
+                f"{context_snapshot.record_family} {context_snapshot.record_id!r} "
+                "is outside the approved Phase 19 Wazuh-backed GitHub audit live slice"
+            )
 
         for case_id in context_snapshot.linked_case_ids:
             self._require_phase19_operator_case(case_id)
