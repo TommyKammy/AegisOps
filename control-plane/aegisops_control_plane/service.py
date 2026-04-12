@@ -1863,7 +1863,7 @@ class AegisOpsControlPlaneService:
             for recommendation in linked_recommendation_records
         )
 
-        return AnalystAssistantContextSnapshot(
+        snapshot = AnalystAssistantContextSnapshot(
             read_only=True,
             record_family=record_family,
             record_id=record_id,
@@ -1898,6 +1898,7 @@ class AegisOpsControlPlaneService:
                 for reconciliation in linked_reconciliation_records
             ),
         )
+        return snapshot
 
     def inspect_case_detail(self, case_id: str) -> CaseDetailSnapshot:
         case = self._require_phase19_operator_case(case_id)
@@ -3913,17 +3914,75 @@ class AegisOpsControlPlaneService:
         self,
         context_snapshot: AnalystAssistantContextSnapshot,
     ) -> None:
+        error_message = self._phase19_case_scoped_read_error(
+            context_snapshot.record_family,
+            context_snapshot.record_id,
+        )
         if context_snapshot.record_family == "case":
             self._require_phase19_operator_case(context_snapshot.record_id)
             return
         if not context_snapshot.linked_case_ids:
-            raise ValueError(
-                f"{context_snapshot.record_family} {context_snapshot.record_id!r} "
-                "is outside the approved Phase 19 Wazuh-backed GitHub audit live slice"
-            )
+            raise ValueError(error_message)
 
+        approved_cases: dict[str, CaseRecord] = {}
         for case_id in context_snapshot.linked_case_ids:
-            self._require_phase19_operator_case(case_id)
+            approved_cases[case_id] = self._require_phase19_operator_case(case_id)
+
+        if context_snapshot.record_family == "recommendation":
+            self._require_phase19_case_scoped_recommendation_payload(
+                context_snapshot.record,
+                approved_cases=approved_cases,
+                error_message=error_message,
+            )
+        elif context_snapshot.record_family == "ai_trace":
+            if self._phase19_context_declares_out_of_scope_provenance(
+                context_snapshot.record.get("subject_linkage")
+            ):
+                raise ValueError(error_message)
+            if not context_snapshot.linked_recommendation_records:
+                raise ValueError(error_message)
+            for recommendation in context_snapshot.linked_recommendation_records:
+                self._require_phase19_case_scoped_recommendation_payload(
+                    recommendation,
+                    approved_cases=approved_cases,
+                    error_message=error_message,
+                )
+
+    @staticmethod
+    def _phase19_case_scoped_read_error(record_family: str, record_id: str) -> str:
+        return (
+            f"{record_family} {record_id!r} is outside the approved Phase 19 "
+            "Wazuh-backed GitHub audit live slice"
+        )
+
+    def _require_phase19_case_scoped_recommendation_payload(
+        self,
+        payload: Mapping[str, object],
+        *,
+        approved_cases: Mapping[str, CaseRecord],
+        error_message: str,
+    ) -> None:
+        case_id = self._normalize_optional_string(payload.get("case_id"), "case_id")
+        if case_id is None:
+            raise ValueError(error_message)
+        approved_case = approved_cases.get(case_id)
+        if approved_case is None:
+            raise ValueError(error_message)
+
+        alert_id = self._normalize_optional_string(payload.get("alert_id"), "alert_id")
+        if alert_id is not None and approved_case.alert_id != alert_id:
+            raise ValueError(error_message)
+
+        lead_id = self._normalize_optional_string(payload.get("lead_id"), "lead_id")
+        if lead_id is not None:
+            lead = self._store.get(LeadRecord, lead_id)
+            if lead is None or lead.case_id != case_id:
+                raise ValueError(error_message)
+
+        if self._phase19_context_declares_out_of_scope_provenance(
+            payload.get("reviewed_context")
+        ):
+            raise ValueError(error_message)
 
     def _require_phase19_operator_case_record(self, case: CaseRecord) -> CaseRecord:
         if not self._case_is_in_phase19_operator_slice(case):
@@ -3999,6 +4058,28 @@ class AegisOpsControlPlaneService:
                 return normalized_source_family
 
         return None
+
+    def _phase19_context_declares_out_of_scope_provenance(self, context: object) -> bool:
+        if not isinstance(context, Mapping):
+            return True
+
+        source_family = self._phase19_operator_source_family(
+            context
+        ) or self._phase19_operator_source_family(context.get("reviewed_source_profile"))
+        if source_family is not None and source_family != "github_audit":
+            return True
+
+        admission_provenance = _normalize_admission_provenance(
+            context.get("provenance")
+        ) or _normalize_admission_provenance(context.get("admission_provenance"))
+        return (
+            admission_provenance is not None
+            and admission_provenance
+            != {
+                "admission_kind": "live",
+                "admission_channel": "live_wazuh_webhook",
+            }
+        )
 
     def _normalize_linked_record_ids(
         self,

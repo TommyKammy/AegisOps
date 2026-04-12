@@ -4096,6 +4096,120 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 ):
                     service.render_recommendation_draft(record_family, record_id)
 
+    def test_service_rejects_synthetic_case_scoped_reads_spoofing_in_scope_case_lineage(
+        self,
+    ) -> None:
+        _, service, promoted_case, _, reviewed_at = self._build_phase19_in_scope_case()
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-phase19-synthetic-linked-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id="ai-trace-phase19-synthetic-linked-001",
+                review_owner="reviewer-001",
+                intended_outcome="Synthetic case-scoped advisory reads must fail closed.",
+                lifecycle_state="under_review",
+                reviewed_context={
+                    "source": {
+                        "source_family": "synthetic_review_fixture",
+                        "admission_kind": "replay",
+                    }
+                },
+            )
+        )
+        ai_trace = service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-phase19-synthetic-linked-001",
+                subject_linkage={"recommendation_ids": (recommendation.recommendation_id,)},
+                model_identity="gpt-5.4",
+                prompt_version="prompt-v1",
+                generated_at=reviewed_at,
+                material_input_refs=("fixture://synthetic-phase19-review",),
+                reviewer_identity="reviewer-001",
+                lifecycle_state="under_review",
+            )
+        )
+
+        for record_family, record_id in (
+            ("recommendation", recommendation.recommendation_id),
+            ("ai_trace", ai_trace.ai_trace_id),
+        ):
+            with self.subTest(record_family=record_family):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+                ):
+                    service.inspect_advisory_output(record_family, record_id)
+
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+                ):
+                    service.render_recommendation_draft(record_family, record_id)
+
+    def test_service_rejects_ai_trace_subject_linkage_declaring_out_of_scope_provenance(
+        self,
+    ) -> None:
+        _, service, promoted_case, _, reviewed_at = self._build_phase19_in_scope_case()
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-phase19-trace-provenance-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id="ai-trace-phase19-trace-provenance-001",
+                review_owner="reviewer-001",
+                intended_outcome="AI trace lineage must validate its own provenance.",
+                lifecycle_state="under_review",
+                reviewed_context=promoted_case.reviewed_context,
+            )
+        )
+        ai_trace = service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-phase19-trace-provenance-001",
+                subject_linkage={
+                    "recommendation_ids": (recommendation.recommendation_id,),
+                    "reviewed_source_profile": {
+                        "source_family": "synthetic_review_fixture",
+                    },
+                    "admission_provenance": {
+                        "admission_kind": "replay",
+                        "admission_channel": "fixture_replay",
+                    },
+                },
+                model_identity="gpt-5.4",
+                prompt_version="prompt-v1",
+                generated_at=reviewed_at,
+                material_input_refs=("fixture://synthetic-phase19-review",),
+                reviewer_identity="reviewer-001",
+                lifecycle_state="under_review",
+            )
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+        ):
+            service.inspect_advisory_output("ai_trace", ai_trace.ai_trace_id)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+        ):
+            service.render_recommendation_draft("ai_trace", ai_trace.ai_trace_id)
+
+    def test_service_treats_non_mapping_provenance_context_as_out_of_scope(self) -> None:
+        _, service, _, _, _ = self._build_phase19_in_scope_case()
+
+        self.assertTrue(
+            service._phase19_context_declares_out_of_scope_provenance(
+                "synthetic_review_fixture"
+            )
+        )
+
     def test_service_rejects_non_github_audit_case_from_phase19_operator_surface(
         self,
     ) -> None:
