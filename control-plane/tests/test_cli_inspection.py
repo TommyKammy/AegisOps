@@ -40,6 +40,36 @@ def _load_wazuh_fixture(name: str) -> dict[str, object]:
 
 
 class ControlPlaneCliInspectionTests(unittest.TestCase):
+    def _build_phase19_in_scope_case(
+        self,
+        *,
+        store: object | None = None,
+        host: str | None = None,
+        port: int | None = None,
+    ) -> tuple[object, AegisOpsControlPlaneService, CaseRecord, str, datetime]:
+        if store is None:
+            store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1" if host is None else host,
+                port=0 if port is None else port,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+            ),
+            store=store,
+        )
+        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
+        admitted = service.ingest_wazuh_alert(
+            raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
+            authorization_header="Bearer reviewed-shared-secret",  # noqa: S106 - test fixture secret
+            forwarded_proto="https",
+            reverse_proxy_secret_header="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+            peer_addr="127.0.0.1",
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        return store, service, promoted_case, promoted_case.evidence_ids[0], reviewed_at
+
     def test_runtime_command_uses_runtime_service_builder_when_not_injected(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
@@ -1224,50 +1254,15 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
     def test_cli_renders_case_detail_with_evidence_provenance_and_cited_advisory_output(
         self,
     ) -> None:
-        store, _ = make_store()
-        service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
-            store=store,
+        _, service, promoted_case, evidence_id, compared_at = (
+            self._build_phase19_in_scope_case()
         )
-        compared_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
-        reviewed_context = {
-            "asset": {
-                "asset_id": "asset-repo-case-detail-cli-001",
-                "criticality": "high",
-            },
-            "identity": {
-                "identity_id": "principal-case-detail-cli-001",
-            },
-        }
-        admitted = service.ingest_finding_alert(
-            finding_id="finding-case-detail-cli-001",
-            analytic_signal_id="signal-case-detail-cli-001",
-            substrate_detection_record_id="substrate-detection-case-detail-cli-001",
-            correlation_key="claim:asset-repo-case-detail-cli-001:case-detail-cli",
-            first_seen_at=compared_at,
-            last_seen_at=compared_at,
-            reviewed_context=reviewed_context,
-        )
-        evidence = service.persist_record(
-            EvidenceRecord(
-                evidence_id="evidence-case-detail-cli-001",
-                source_record_id="substrate-detection-case-detail-cli-001",
-                alert_id=admitted.alert.alert_id,
-                case_id=None,
-                source_system="reviewed-source",
-                collector_identity="collector://wazuh/live",
-                acquired_at=compared_at,
-                derivation_relationship="admitted_analytic_signal",
-                lifecycle_state="collected",
-            )
-        )
-        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
         observation = service.record_case_observation(
             case_id=promoted_case.case_id,
             author_identity="analyst-001",
             observed_at=compared_at,
             scope_statement="Observed permission change remains within reviewed GitHub audit scope.",
-            supporting_evidence_ids=(evidence.evidence_id,),
+            supporting_evidence_ids=(evidence_id,),
         )
         lead = service.record_case_lead(
             case_id=promoted_case.case_id,
@@ -1280,13 +1275,13 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 recommendation_id="recommendation-case-detail-cli-001",
                 lead_id=lead.lead_id,
                 hunt_run_id=None,
-                alert_id=admitted.alert.alert_id,
+                alert_id=promoted_case.alert_id,
                 case_id=promoted_case.case_id,
                 ai_trace_id=None,
                 review_owner="reviewer-001",
                 intended_outcome="review the cited evidence before any approval",
                 lifecycle_state="under_review",
-                reviewed_context=reviewed_context,
+                reviewed_context=promoted_case.reviewed_context,
             )
         )
         service.record_case_handoff(
@@ -1294,7 +1289,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             handoff_at=compared_at,
             handoff_owner="analyst-001",
             handoff_note="Resume owner-membership review during the next business-hours cycle.",
-            follow_up_evidence_ids=(evidence.evidence_id,),
+            follow_up_evidence_ids=(evidence_id,),
         )
         service.record_case_disposition(
             case_id=promoted_case.case_id,
@@ -1318,24 +1313,27 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertTrue(payload["read_only"])
         self.assertEqual(payload["case_id"], promoted_case.case_id)
         self.assertEqual(payload["case_record"]["case_id"], promoted_case.case_id)
-        self.assertEqual(payload["reviewed_context"]["asset"], reviewed_context["asset"])
+        self.assertEqual(
+            payload["reviewed_context"]["asset"],
+            promoted_case.reviewed_context["asset"],
+        )
         self.assertEqual(
             payload["reviewed_context"]["identity"],
-            reviewed_context["identity"],
+            promoted_case.reviewed_context["identity"],
         )
         self.assertEqual(
             payload["advisory_output"]["output_kind"],
             "case_summary",
         )
         self.assertEqual(payload["advisory_output"]["status"], "ready")
-        self.assertEqual(payload["linked_evidence_ids"], [evidence.evidence_id])
+        self.assertEqual(payload["linked_evidence_ids"], [evidence_id])
         self.assertEqual(
             payload["linked_evidence_records"][0]["collector_identity"],
-            "collector://wazuh/live",
+            "wazuh-native-detection-adapter",
         )
         self.assertEqual(
             payload["linked_evidence_records"][0]["derivation_relationship"],
-            "admitted_analytic_signal",
+            "native_detection_record",
         )
         self.assertEqual(payload["linked_observation_ids"], [observation.observation_id])
         self.assertEqual(payload["linked_lead_ids"], [lead.lead_id])
@@ -1352,47 +1350,30 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             payload["linked_recommendation_ids"],
         )
         self.assertIn(
-            admitted.reconciliation.reconciliation_id,
+            (
+                "reviewed_context.provenance.rule_id="
+                f"{promoted_case.reviewed_context['provenance']['rule_id']}"
+            ),
+            payload["advisory_output"]["citations"],
+        )
+        self.assertIn(
+            promoted_case.case_id,
+            payload["linked_reconciliation_records"][0]["subject_linkage"]["case_ids"],
+        )
+        self.assertIn(
+            payload["linked_reconciliation_records"][0]["reconciliation_id"],
             payload["linked_reconciliation_ids"],
         )
 
     def test_cli_records_bounded_operator_casework_actions(self) -> None:
-        store, _ = make_store()
-        service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
-            store=store,
+        _, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
         )
-        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
         handoff_at = datetime(2026, 4, 7, 17, 45, tzinfo=timezone.utc)
-        admitted = service.ingest_finding_alert(
-            finding_id="finding-phase19-cli-actions-001",
-            analytic_signal_id="signal-phase19-cli-actions-001",
-            substrate_detection_record_id="substrate-detection-phase19-cli-actions-001",
-            correlation_key="claim:asset-phase19-cli-actions-001:github-audit",
-            first_seen_at=reviewed_at,
-            last_seen_at=reviewed_at,
-            reviewed_context={
-                "asset": {"asset_id": "asset-phase19-cli-actions-001"},
-                "identity": {"identity_id": "principal-phase19-cli-actions-001"},
-            },
-        )
-        evidence = service.persist_record(
-            EvidenceRecord(
-                evidence_id="evidence-phase19-cli-actions-001",
-                source_record_id="substrate-detection-phase19-cli-actions-001",
-                alert_id=admitted.alert.alert_id,
-                case_id=None,
-                source_system="reviewed-source",
-                collector_identity="collector://wazuh/live",
-                acquired_at=reviewed_at,
-                derivation_relationship="admitted_analytic_signal",
-                lifecycle_state="collected",
-            )
-        )
 
         promote_stdout = io.StringIO()
         main.main(
-            ["promote-alert-to-case", "--alert-id", admitted.alert.alert_id],
+            ["promote-alert-to-case", "--alert-id", promoted_case.alert_id],
             stdout=promote_stdout,
             service=service,
         )
@@ -1413,14 +1394,14 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 "--scope-statement",
                 "Observed repository permission change requires tracked review.",
                 "--supporting-evidence-id",
-                evidence.evidence_id,
+                evidence_id,
             ],
             stdout=observation_stdout,
             service=service,
         )
         observation_payload = json.loads(observation_stdout.getvalue())
         self.assertEqual(observation_payload["case_id"], case_id)
-        self.assertEqual(observation_payload["supporting_evidence_ids"], [evidence.evidence_id])
+        self.assertEqual(observation_payload["supporting_evidence_ids"], [evidence_id])
 
         lead_stdout = io.StringIO()
         main.main(
@@ -1475,7 +1456,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 "--handoff-note",
                 "Recheck repository owner membership against approved change window at next business-hours review.",
                 "--follow-up-evidence-id",
-                evidence.evidence_id,
+                evidence_id,
             ],
             stdout=handoff_stdout,
             service=service,
@@ -1484,7 +1465,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(handoff_payload["case_id"], case_id)
         self.assertEqual(
             handoff_payload["reviewed_context"]["handoff"]["follow_up_evidence_ids"],
-            [evidence.evidence_id],
+            [evidence_id],
         )
 
         disposition_stdout = io.StringIO()
@@ -1534,44 +1515,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         )
 
     def test_long_running_runtime_surface_records_bounded_operator_casework_actions(self) -> None:
-        store, _ = make_store()
-        service = AegisOpsControlPlaneService(
-            RuntimeConfig(
-                host="127.0.0.1",
-                port=0,
-                postgres_dsn="postgresql://control-plane.local/aegisops",
-                wazuh_ingest_shared_secret="reviewed-shared-secret",
-                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
-            ),
-            store=store,
+        _, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case(host="127.0.0.1", port=0)
         )
-        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
         handoff_at = datetime(2026, 4, 7, 17, 45, tzinfo=timezone.utc)
-        admitted = service.ingest_finding_alert(
-            finding_id="finding-phase19-http-actions-001",
-            analytic_signal_id="signal-phase19-http-actions-001",
-            substrate_detection_record_id="substrate-detection-phase19-http-actions-001",
-            correlation_key="claim:asset-phase19-http-actions-001:github-audit",
-            first_seen_at=reviewed_at,
-            last_seen_at=reviewed_at,
-            reviewed_context={
-                "asset": {"asset_id": "asset-phase19-http-actions-001"},
-                "identity": {"identity_id": "principal-phase19-http-actions-001"},
-            },
-        )
-        evidence = service.persist_record(
-            EvidenceRecord(
-                evidence_id="evidence-phase19-http-actions-001",
-                source_record_id="substrate-detection-phase19-http-actions-001",
-                alert_id=admitted.alert.alert_id,
-                case_id=None,
-                source_system="reviewed-source",
-                collector_identity="collector://wazuh/live",
-                acquired_at=reviewed_at,
-                derivation_relationship="admitted_analytic_signal",
-                lifecycle_state="collected",
-            )
-        )
 
         servers: list[main.ThreadingHTTPServer] = []
 
@@ -1610,7 +1557,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
 
                 promoted_case_payload = post_json(
                     "/operator/promote-alert-to-case",
-                    {"alert_id": admitted.alert.alert_id},
+                    {"alert_id": promoted_case.alert_id},
                 )
                 case_id = promoted_case_payload["case_id"]
                 self.assertEqual(promoted_case_payload["lifecycle_state"], "open")
@@ -1622,7 +1569,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                         "author_identity": "analyst-001",
                         "observed_at": reviewed_at.isoformat(),
                         "scope_statement": "Observed repository permission change requires tracked review.",
-                        "supporting_evidence_ids": [evidence.evidence_id],
+                        "supporting_evidence_ids": [evidence_id],
                     },
                 )
                 self.assertEqual(observation_payload["case_id"], case_id)
@@ -1656,12 +1603,12 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                         "handoff_at": handoff_at.isoformat(),
                         "handoff_owner": "analyst-001",
                         "handoff_note": "Recheck repository owner membership against approved change window at next business-hours review.",
-                        "follow_up_evidence_ids": [evidence.evidence_id],
+                        "follow_up_evidence_ids": [evidence_id],
                     },
                 )
                 self.assertEqual(
                     handoff_payload["reviewed_context"]["handoff"]["follow_up_evidence_ids"],
-                    [evidence.evidence_id],
+                    [evidence_id],
                 )
 
                 disposition_payload = post_json(

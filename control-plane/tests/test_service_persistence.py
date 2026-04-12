@@ -161,6 +161,66 @@ class _OutOfBandMutationStore:
 
 
 class ControlPlaneServicePersistenceTests(unittest.TestCase):
+    def _build_phase19_in_scope_case(
+        self,
+        *,
+        store: object | None = None,
+    ) -> tuple[object, AegisOpsControlPlaneService, CaseRecord, str, datetime]:
+        if store is None:
+            store, _ = make_store()
+        shared_secret = secrets.token_urlsafe(24)
+        reverse_proxy_secret = secrets.token_urlsafe(24)
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret=shared_secret,
+                wazuh_ingest_reverse_proxy_secret=reverse_proxy_secret,
+            ),
+            store=store,
+        )
+        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
+        admitted = service.ingest_wazuh_alert(
+            raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
+            authorization_header=f"Bearer {shared_secret}",
+            forwarded_proto="https",
+            reverse_proxy_secret_header=reverse_proxy_secret,
+            peer_addr="127.0.0.1",
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        return store, service, promoted_case, promoted_case.evidence_ids[0], reviewed_at
+
+    def _build_phase19_out_of_scope_case(
+        self,
+        *,
+        fixture_name: str,
+    ) -> tuple[AegisOpsControlPlaneService, CaseRecord, str, datetime]:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
+        adapter = WazuhAlertAdapter()
+        admitted = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(_load_wazuh_fixture(fixture_name)),
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id=f"evidence-{fixture_name}",
+                source_record_id=admitted.alert.finding_id,
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="wazuh",
+                collector_identity="collector://wazuh/replay",
+                acquired_at=reviewed_at,
+                derivation_relationship="native_detection_record",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        return service, promoted_case, admitted.alert.alert_id, reviewed_at
+
     def test_service_admits_wazuh_fixture_through_substrate_adapter_boundary(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
@@ -1039,44 +1099,15 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         )
 
     def test_service_renders_lead_only_recommendation_draft_as_unresolved(self) -> None:
-        store, _ = make_store()
-        service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
-            store=store,
+        _, service, promoted_case, evidence_id, first_seen_at = (
+            self._build_phase19_in_scope_case()
         )
-        first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
-
-        admitted = service.ingest_finding_alert(
-            finding_id="finding-lead-only-advisory-001",
-            analytic_signal_id="signal-lead-only-advisory-001",
-            substrate_detection_record_id="substrate-detection-lead-only-advisory-001",
-            correlation_key="claim:lead-only:advisory:001",
-            first_seen_at=first_seen_at,
-            last_seen_at=first_seen_at,
-            reviewed_context={
-                "asset": {"asset_id": "asset-lead-only-advisory-001"},
-            },
-        )
-        evidence = service.persist_record(
-            EvidenceRecord(
-                evidence_id="evidence-lead-only-advisory-001",
-                source_record_id="substrate-detection-lead-only-advisory-001",
-                alert_id=admitted.alert.alert_id,
-                case_id=None,
-                source_system="reviewed-source",
-                collector_identity="control-plane-test",
-                acquired_at=first_seen_at,
-                derivation_relationship="admitted_analytic_signal",
-                lifecycle_state="collected",
-            )
-        )
-        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
         observation = service.record_case_observation(
             case_id=promoted_case.case_id,
             author_identity="analyst-001",
             observed_at=first_seen_at,
             scope_statement="Lead-only recommendation should fail closed without direct lineage.",
-            supporting_evidence_ids=(evidence.evidence_id,),
+            supporting_evidence_ids=(evidence_id,),
         )
         lead = service.record_case_lead(
             case_id=promoted_case.case_id,
@@ -1095,9 +1126,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 review_owner="analyst-001",
                 intended_outcome="Review the lead linkage before any broader response.",
                 lifecycle_state="under_review",
-                reviewed_context={
-                    "asset": {"asset_id": "asset-lead-only-advisory-001"},
-                },
+                reviewed_context=promoted_case.reviewed_context,
             )
         )
 
@@ -4000,46 +4029,17 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
     def test_service_records_bounded_casework_actions_for_triage_disposition_and_handoff(
         self,
     ) -> None:
-        store, _ = make_store()
-        service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
-            store=store,
+        _, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
         )
-        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
         handoff_at = datetime(2026, 4, 7, 17, 45, tzinfo=timezone.utc)
-        admitted = service.ingest_finding_alert(
-            finding_id="finding-phase19-casework-001",
-            analytic_signal_id="signal-phase19-casework-001",
-            substrate_detection_record_id="substrate-detection-phase19-casework-001",
-            correlation_key="claim:asset-phase19-casework-001:github-audit",
-            first_seen_at=reviewed_at,
-            last_seen_at=reviewed_at,
-            reviewed_context={
-                "asset": {"asset_id": "asset-phase19-casework-001"},
-                "identity": {"identity_id": "principal-phase19-casework-001"},
-            },
-        )
-        evidence = service.persist_record(
-            EvidenceRecord(
-                evidence_id="evidence-phase19-casework-001",
-                source_record_id="substrate-detection-phase19-casework-001",
-                alert_id=admitted.alert.alert_id,
-                case_id=None,
-                source_system="reviewed-source",
-                collector_identity="collector://wazuh/live",
-                acquired_at=reviewed_at,
-                derivation_relationship="admitted_analytic_signal",
-                lifecycle_state="collected",
-            )
-        )
-        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
 
         observation = service.record_case_observation(
             case_id=promoted_case.case_id,
             author_identity="analyst-001",
             observed_at=reviewed_at,
             scope_statement="Observed repository permission change requires tracked review.",
-            supporting_evidence_ids=(evidence.evidence_id,),
+            supporting_evidence_ids=(evidence_id,),
         )
         lead = service.record_case_lead(
             case_id=promoted_case.case_id,
@@ -4058,7 +4058,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             handoff_at=handoff_at,
             handoff_owner="analyst-001",
             handoff_note="Recheck repository owner membership against approved change window at next business-hours review.",
-            follow_up_evidence_ids=(evidence.evidence_id,),
+            follow_up_evidence_ids=(evidence_id,),
         )
         disposed_case = service.record_case_disposition(
             case_id=handed_off_case.case_id,
@@ -4097,53 +4097,164 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertIn(recommendation.recommendation_id, detail.linked_recommendation_ids)
         self.assertEqual(
             detail.linked_observation_records[0]["supporting_evidence_ids"],
-            (evidence.evidence_id,),
+            (evidence_id,),
         )
         self.assertEqual(
             detail.linked_lead_records[0]["triage_rationale"],
             "Privilege-impacting change needs durable business-hours follow-up.",
         )
 
-    def test_service_rejects_duplicate_casework_identifiers(self) -> None:
-        store, _ = make_store()
-        service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
-            store=store,
+    def test_service_rejects_replay_only_case_from_phase19_operator_surface(self) -> None:
+        service, promoted_case, _, reviewed_at = self._build_phase19_out_of_scope_case(
+            fixture_name="github-audit-alert.json"
         )
-        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
-        admitted = service.ingest_finding_alert(
-            finding_id="finding-phase19-duplicate-ids-001",
-            analytic_signal_id="signal-phase19-duplicate-ids-001",
-            substrate_detection_record_id="substrate-detection-phase19-duplicate-ids-001",
-            correlation_key="claim:asset-phase19-duplicate-ids-001:github-audit",
-            first_seen_at=reviewed_at,
-            last_seen_at=reviewed_at,
-            reviewed_context={
-                "asset": {"asset_id": "asset-phase19-duplicate-ids-001"},
-                "identity": {"identity_id": "principal-phase19-duplicate-ids-001"},
-            },
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+        ):
+            service.inspect_case_detail(promoted_case.case_id)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+        ):
+            service.record_case_observation(
+                case_id=promoted_case.case_id,
+                author_identity="analyst-001",
+                observed_at=reviewed_at,
+                scope_statement="Replay-only casework must fail closed.",
+            )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+        ):
+            service.record_case_lead(
+                case_id=promoted_case.case_id,
+                triage_owner="analyst-001",
+                triage_rationale="Replay-only casework must fail closed.",
+            )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+        ):
+            service.record_case_recommendation(
+                case_id=promoted_case.case_id,
+                review_owner="analyst-001",
+                intended_outcome="Replay-only casework must fail closed.",
+            )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+        ):
+            service.record_case_handoff(
+                case_id=promoted_case.case_id,
+                handoff_at=reviewed_at,
+                handoff_owner="analyst-001",
+                handoff_note="Replay-only casework must fail closed.",
+            )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+        ):
+            service.record_case_disposition(
+                case_id=promoted_case.case_id,
+                disposition="business_hours_handoff",
+                rationale="Replay-only casework must fail closed.",
+                recorded_at=reviewed_at,
+            )
+
+    def test_service_rejects_non_github_audit_case_from_phase19_operator_surface(
+        self,
+    ) -> None:
+        service, promoted_case, _, reviewed_at = self._build_phase19_out_of_scope_case(
+            fixture_name="microsoft-365-audit-alert.json"
         )
-        service.persist_record(
-            EvidenceRecord(
-                evidence_id="evidence-phase19-duplicate-ids-001",
-                source_record_id="substrate-detection-phase19-duplicate-ids-001",
-                alert_id=admitted.alert.alert_id,
-                case_id=None,
-                source_system="reviewed-source",
-                collector_identity="collector://wazuh/live",
-                acquired_at=reviewed_at,
-                derivation_relationship="admitted_analytic_signal",
-                lifecycle_state="collected",
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+        ):
+            service.inspect_case_detail(promoted_case.case_id)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+        ):
+            service.record_case_observation(
+                case_id=promoted_case.case_id,
+                author_identity="analyst-001",
+                observed_at=reviewed_at,
+                scope_statement="Broader source-family casework must fail closed.",
+            )
+
+    def test_service_rejects_case_without_reciprocal_alert_linkage_from_phase19_operator_surface(
+        self,
+    ) -> None:
+        _, service, promoted_case, _, _ = self._build_phase19_in_scope_case()
+        spoofed_case = service.persist_record(
+            CaseRecord(
+                case_id="case-phase19-spoofed-alert-linkage",
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                evidence_ids=promoted_case.evidence_ids,
+                lifecycle_state=promoted_case.lifecycle_state,
+                reviewed_context=dict(promoted_case.reviewed_context),
             )
         )
-        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+        ):
+            service.inspect_case_detail(spoofed_case.case_id)
+
+    def test_service_rejects_case_without_reciprocal_reconciliation_linkage_from_phase19_operator_surface(
+        self,
+    ) -> None:
+        _, service, promoted_case, _, _ = self._build_phase19_in_scope_case()
+        alert = service.get_record(AlertRecord, promoted_case.alert_id)
+        self.assertIsNotNone(alert)
+
+        spoofed_case_id = "case-phase19-spoofed-reconciliation-linkage"
+        service.persist_record(
+            replace(
+                alert,
+                case_id=spoofed_case_id,
+            )
+        )
+        spoofed_case = service.persist_record(
+            CaseRecord(
+                case_id=spoofed_case_id,
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                evidence_ids=promoted_case.evidence_ids,
+                lifecycle_state=promoted_case.lifecycle_state,
+                reviewed_context=dict(promoted_case.reviewed_context),
+            )
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+        ):
+            service.inspect_case_detail(spoofed_case.case_id)
+
+    def test_service_rejects_duplicate_casework_identifiers(self) -> None:
+        _, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
         observation = service.record_case_observation(
             case_id=promoted_case.case_id,
             observation_id="observation-phase19-duplicate-ids-001",
             author_identity="analyst-001",
             observed_at=reviewed_at,
             scope_statement="Initial observation for duplicate-id guard coverage.",
-            supporting_evidence_ids=("evidence-phase19-duplicate-ids-001",),
+            supporting_evidence_ids=(evidence_id,),
         )
         with self.assertRaisesRegex(
             ValueError,
@@ -4155,7 +4266,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 author_identity="analyst-002",
                 observed_at=reviewed_at,
                 scope_statement="Collision should be rejected before persist_record updates in place.",
-                supporting_evidence_ids=("evidence-phase19-duplicate-ids-001",),
+                supporting_evidence_ids=(evidence_id,),
             )
 
         lead = service.record_case_lead(
@@ -4197,46 +4308,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             )
 
     def test_service_rejects_unknown_case_disposition(self) -> None:
-        store, _ = make_store()
-        service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
-            store=store,
-        )
-        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
-        admitted = service.ingest_finding_alert(
-            finding_id="finding-phase19-unsupported-disposition-001",
-            analytic_signal_id="signal-phase19-unsupported-disposition-001",
-            substrate_detection_record_id=(
-                "substrate-detection-phase19-unsupported-disposition-001"
-            ),
-            correlation_key=(
-                "claim:asset-phase19-unsupported-disposition-001:github-audit"
-            ),
-            first_seen_at=reviewed_at,
-            last_seen_at=reviewed_at,
-            reviewed_context={
-                "asset": {"asset_id": "asset-phase19-unsupported-disposition-001"},
-                "identity": {
-                    "identity_id": "principal-phase19-unsupported-disposition-001"
-                },
-            },
-        )
-        service.persist_record(
-            EvidenceRecord(
-                evidence_id="evidence-phase19-unsupported-disposition-001",
-                source_record_id=(
-                    "substrate-detection-phase19-unsupported-disposition-001"
-                ),
-                alert_id=admitted.alert.alert_id,
-                case_id=None,
-                source_system="reviewed-source",
-                collector_identity="collector://wazuh/live",
-                acquired_at=reviewed_at,
-                derivation_relationship="admitted_analytic_signal",
-                lifecycle_state="collected",
-            )
-        )
-        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        _, service, promoted_case, _, reviewed_at = self._build_phase19_in_scope_case()
 
         with self.assertRaisesRegex(
             ValueError,
@@ -4251,39 +4323,9 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
     def test_service_rejects_raced_observation_identifier_collision(self) -> None:
         store, _ = make_store()
-        base_service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
-            store=store,
+        store, _base_service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case(store=store)
         )
-        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
-        admitted = base_service.ingest_finding_alert(
-            finding_id="finding-phase19-raced-observation-001",
-            analytic_signal_id="signal-phase19-raced-observation-001",
-            substrate_detection_record_id=(
-                "substrate-detection-phase19-raced-observation-001"
-            ),
-            correlation_key="claim:asset-phase19-raced-observation-001:github-audit",
-            first_seen_at=reviewed_at,
-            last_seen_at=reviewed_at,
-            reviewed_context={
-                "asset": {"asset_id": "asset-phase19-raced-observation-001"},
-                "identity": {"identity_id": "principal-phase19-raced-observation-001"},
-            },
-        )
-        evidence = base_service.persist_record(
-            EvidenceRecord(
-                evidence_id="evidence-phase19-raced-observation-001",
-                source_record_id="substrate-detection-phase19-raced-observation-001",
-                alert_id=admitted.alert.alert_id,
-                case_id=None,
-                source_system="reviewed-source",
-                collector_identity="collector://wazuh/live",
-                acquired_at=reviewed_at,
-                derivation_relationship="admitted_analytic_signal",
-                lifecycle_state="collected",
-            )
-        )
-        promoted_case = base_service.promote_alert_to_case(admitted.alert.alert_id)
         store = _OutOfBandMutationStore(
             inner=store,
             mutate_once=lambda transactional_store: transactional_store.save(
@@ -4293,7 +4335,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                     hunt_run_id=None,
                     alert_id=promoted_case.alert_id,
                     case_id=promoted_case.case_id,
-                    supporting_evidence_ids=(evidence.evidence_id,),
+                    supporting_evidence_ids=(evidence_id,),
                     author_identity="analyst-racer",
                     observed_at=reviewed_at,
                     scope_statement="Concurrent writer inserted the requested observation ID.",
@@ -4316,48 +4358,20 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 author_identity="analyst-001",
                 observed_at=reviewed_at,
                 scope_statement="Caller-supplied observation IDs must reject raced duplicates.",
-                supporting_evidence_ids=(evidence.evidence_id,),
+                supporting_evidence_ids=(evidence_id,),
             )
 
     def test_service_rejects_raced_lead_identifier_collision(self) -> None:
         store, _ = make_store()
-        base_service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
-            store=store,
+        store, base_service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case(store=store)
         )
-        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
-        admitted = base_service.ingest_finding_alert(
-            finding_id="finding-phase19-raced-lead-001",
-            analytic_signal_id="signal-phase19-raced-lead-001",
-            substrate_detection_record_id="substrate-detection-phase19-raced-lead-001",
-            correlation_key="claim:asset-phase19-raced-lead-001:github-audit",
-            first_seen_at=reviewed_at,
-            last_seen_at=reviewed_at,
-            reviewed_context={
-                "asset": {"asset_id": "asset-phase19-raced-lead-001"},
-                "identity": {"identity_id": "principal-phase19-raced-lead-001"},
-            },
-        )
-        evidence = base_service.persist_record(
-            EvidenceRecord(
-                evidence_id="evidence-phase19-raced-lead-001",
-                source_record_id="substrate-detection-phase19-raced-lead-001",
-                alert_id=admitted.alert.alert_id,
-                case_id=None,
-                source_system="reviewed-source",
-                collector_identity="collector://wazuh/live",
-                acquired_at=reviewed_at,
-                derivation_relationship="admitted_analytic_signal",
-                lifecycle_state="collected",
-            )
-        )
-        promoted_case = base_service.promote_alert_to_case(admitted.alert.alert_id)
         observation = base_service.record_case_observation(
             case_id=promoted_case.case_id,
             author_identity="analyst-001",
             observed_at=reviewed_at,
             scope_statement="Seed observation for raced lead collision coverage.",
-            supporting_evidence_ids=(evidence.evidence_id,),
+            supporting_evidence_ids=(evidence_id,),
         )
         store = _OutOfBandMutationStore(
             inner=store,
@@ -4394,51 +4408,15 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
     def test_service_rejects_raced_recommendation_identifier_collision(self) -> None:
         store, _ = make_store()
-        base_service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
-            store=store,
+        store, base_service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case(store=store)
         )
-        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
-        admitted = base_service.ingest_finding_alert(
-            finding_id="finding-phase19-raced-recommendation-001",
-            analytic_signal_id="signal-phase19-raced-recommendation-001",
-            substrate_detection_record_id=(
-                "substrate-detection-phase19-raced-recommendation-001"
-            ),
-            correlation_key=(
-                "claim:asset-phase19-raced-recommendation-001:github-audit"
-            ),
-            first_seen_at=reviewed_at,
-            last_seen_at=reviewed_at,
-            reviewed_context={
-                "asset": {"asset_id": "asset-phase19-raced-recommendation-001"},
-                "identity": {
-                    "identity_id": "principal-phase19-raced-recommendation-001"
-                },
-            },
-        )
-        evidence = base_service.persist_record(
-            EvidenceRecord(
-                evidence_id="evidence-phase19-raced-recommendation-001",
-                source_record_id=(
-                    "substrate-detection-phase19-raced-recommendation-001"
-                ),
-                alert_id=admitted.alert.alert_id,
-                case_id=None,
-                source_system="reviewed-source",
-                collector_identity="collector://wazuh/live",
-                acquired_at=reviewed_at,
-                derivation_relationship="admitted_analytic_signal",
-                lifecycle_state="collected",
-            )
-        )
-        promoted_case = base_service.promote_alert_to_case(admitted.alert.alert_id)
         observation = base_service.record_case_observation(
             case_id=promoted_case.case_id,
             author_identity="analyst-001",
             observed_at=reviewed_at,
             scope_statement="Seed observation for raced recommendation collision coverage.",
-            supporting_evidence_ids=(evidence.evidence_id,),
+            supporting_evidence_ids=(evidence_id,),
         )
         lead = base_service.record_case_lead(
             case_id=promoted_case.case_id,
@@ -4484,45 +4462,9 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
     def test_service_rejects_raced_generated_observation_identifier_collision(self) -> None:
         store, _ = make_store()
-        base_service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
-            store=store,
+        store, _base_service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case(store=store)
         )
-        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
-        admitted = base_service.ingest_finding_alert(
-            finding_id="finding-phase19-generated-observation-race-001",
-            analytic_signal_id="signal-phase19-generated-observation-race-001",
-            substrate_detection_record_id=(
-                "substrate-detection-phase19-generated-observation-race-001"
-            ),
-            correlation_key=(
-                "claim:asset-phase19-generated-observation-race-001:github-audit"
-            ),
-            first_seen_at=reviewed_at,
-            last_seen_at=reviewed_at,
-            reviewed_context={
-                "asset": {"asset_id": "asset-phase19-generated-observation-race-001"},
-                "identity": {
-                    "identity_id": "principal-phase19-generated-observation-race-001"
-                },
-            },
-        )
-        evidence = base_service.persist_record(
-            EvidenceRecord(
-                evidence_id="evidence-phase19-generated-observation-race-001",
-                source_record_id=(
-                    "substrate-detection-phase19-generated-observation-race-001"
-                ),
-                alert_id=admitted.alert.alert_id,
-                case_id=None,
-                source_system="reviewed-source",
-                collector_identity="collector://wazuh/live",
-                acquired_at=reviewed_at,
-                derivation_relationship="admitted_analytic_signal",
-                lifecycle_state="collected",
-            )
-        )
-        promoted_case = base_service.promote_alert_to_case(admitted.alert.alert_id)
         store = _OutOfBandMutationStore(
             inner=store,
             mutate_once=lambda transactional_store: transactional_store.save(
@@ -4532,7 +4474,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                     hunt_run_id=None,
                     alert_id=promoted_case.alert_id,
                     case_id=promoted_case.case_id,
-                    supporting_evidence_ids=(evidence.evidence_id,),
+                    supporting_evidence_ids=(evidence_id,),
                     author_identity="analyst-racer",
                     observed_at=reviewed_at,
                     scope_statement="Concurrent writer inserted the minted observation ID.",
@@ -4559,7 +4501,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                     author_identity="analyst-001",
                     observed_at=reviewed_at,
                     scope_statement="Generated observation IDs must reject raced duplicates.",
-                    supporting_evidence_ids=(evidence.evidence_id,),
+                    supporting_evidence_ids=(evidence_id,),
                 )
 
         observations = store.list(ObservationRecord)
@@ -4571,47 +4513,15 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
     def test_service_rejects_raced_generated_lead_identifier_collision(self) -> None:
         store, _ = make_store()
-        base_service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
-            store=store,
+        store, base_service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case(store=store)
         )
-        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
-        admitted = base_service.ingest_finding_alert(
-            finding_id="finding-phase19-generated-lead-race-001",
-            analytic_signal_id="signal-phase19-generated-lead-race-001",
-            substrate_detection_record_id=(
-                "substrate-detection-phase19-generated-lead-race-001"
-            ),
-            correlation_key="claim:asset-phase19-generated-lead-race-001:github-audit",
-            first_seen_at=reviewed_at,
-            last_seen_at=reviewed_at,
-            reviewed_context={
-                "asset": {"asset_id": "asset-phase19-generated-lead-race-001"},
-                "identity": {
-                    "identity_id": "principal-phase19-generated-lead-race-001"
-                },
-            },
-        )
-        evidence = base_service.persist_record(
-            EvidenceRecord(
-                evidence_id="evidence-phase19-generated-lead-race-001",
-                source_record_id="substrate-detection-phase19-generated-lead-race-001",
-                alert_id=admitted.alert.alert_id,
-                case_id=None,
-                source_system="reviewed-source",
-                collector_identity="collector://wazuh/live",
-                acquired_at=reviewed_at,
-                derivation_relationship="admitted_analytic_signal",
-                lifecycle_state="collected",
-            )
-        )
-        promoted_case = base_service.promote_alert_to_case(admitted.alert.alert_id)
         observation = base_service.record_case_observation(
             case_id=promoted_case.case_id,
             author_identity="analyst-001",
             observed_at=reviewed_at,
             scope_statement="Seed observation for generated lead race coverage.",
-            supporting_evidence_ids=(evidence.evidence_id,),
+            supporting_evidence_ids=(evidence_id,),
         )
         store = _OutOfBandMutationStore(
             inner=store,
@@ -4658,53 +4568,15 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self,
     ) -> None:
         store, _ = make_store()
-        base_service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
-            store=store,
+        store, base_service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case(store=store)
         )
-        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
-        admitted = base_service.ingest_finding_alert(
-            finding_id="finding-phase19-generated-recommendation-race-001",
-            analytic_signal_id="signal-phase19-generated-recommendation-race-001",
-            substrate_detection_record_id=(
-                "substrate-detection-phase19-generated-recommendation-race-001"
-            ),
-            correlation_key=(
-                "claim:asset-phase19-generated-recommendation-race-001:github-audit"
-            ),
-            first_seen_at=reviewed_at,
-            last_seen_at=reviewed_at,
-            reviewed_context={
-                "asset": {
-                    "asset_id": "asset-phase19-generated-recommendation-race-001"
-                },
-                "identity": {
-                    "identity_id": "principal-phase19-generated-recommendation-race-001"
-                },
-            },
-        )
-        evidence = base_service.persist_record(
-            EvidenceRecord(
-                evidence_id="evidence-phase19-generated-recommendation-race-001",
-                source_record_id=(
-                    "substrate-detection-phase19-generated-recommendation-race-001"
-                ),
-                alert_id=admitted.alert.alert_id,
-                case_id=None,
-                source_system="reviewed-source",
-                collector_identity="collector://wazuh/live",
-                acquired_at=reviewed_at,
-                derivation_relationship="admitted_analytic_signal",
-                lifecycle_state="collected",
-            )
-        )
-        promoted_case = base_service.promote_alert_to_case(admitted.alert.alert_id)
         observation = base_service.record_case_observation(
             case_id=promoted_case.case_id,
             author_identity="analyst-001",
             observed_at=reviewed_at,
             scope_statement="Seed observation for generated recommendation race coverage.",
-            supporting_evidence_ids=(evidence.evidence_id,),
+            supporting_evidence_ids=(evidence_id,),
         )
         lead = base_service.record_case_lead(
             case_id=promoted_case.case_id,
@@ -4763,37 +4635,9 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
     def test_service_merges_concurrent_reviewed_context_into_case_handoff(self) -> None:
         store, _ = make_store()
-        base_service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
-            store=store,
+        store, _base_service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case(store=store)
         )
-        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
-        admitted = base_service.ingest_finding_alert(
-            finding_id="finding-phase19-handoff-merge-001",
-            analytic_signal_id="signal-phase19-handoff-merge-001",
-            substrate_detection_record_id="substrate-detection-phase19-handoff-merge-001",
-            correlation_key="claim:asset-phase19-handoff-merge-001:github-audit",
-            first_seen_at=reviewed_at,
-            last_seen_at=reviewed_at,
-            reviewed_context={
-                "asset": {"asset_id": "asset-phase19-handoff-merge-001"},
-                "identity": {"identity_id": "principal-phase19-handoff-merge-001"},
-            },
-        )
-        evidence = base_service.persist_record(
-            EvidenceRecord(
-                evidence_id="evidence-phase19-handoff-merge-001",
-                source_record_id="substrate-detection-phase19-handoff-merge-001",
-                alert_id=admitted.alert.alert_id,
-                case_id=None,
-                source_system="reviewed-source",
-                collector_identity="collector://wazuh/live",
-                acquired_at=reviewed_at,
-                derivation_relationship="admitted_analytic_signal",
-                lifecycle_state="collected",
-            )
-        )
-        promoted_case = base_service.promote_alert_to_case(admitted.alert.alert_id)
         store = _TransactionMutationStore(
             inner=store,
             mutate_once=lambda transactional_store: transactional_store.save(
@@ -4825,7 +4669,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             handoff_at=reviewed_at,
             handoff_owner="analyst-001",
             handoff_note="Carry forward the next-step evidence review.",
-            follow_up_evidence_ids=(evidence.evidence_id,),
+            follow_up_evidence_ids=(evidence_id,),
         )
 
         self.assertEqual(
@@ -4833,57 +4677,23 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             "pending_approval",
         )
         self.assertEqual(
-            updated_case.reviewed_context["asset"]["asset_id"],
-            "asset-phase19-handoff-merge-001",
+            updated_case.reviewed_context["asset"]["repository"]["repository_full_name"],
+            "TommyKammy/AegisOps",
         )
         self.assertEqual(
-            updated_case.reviewed_context["identity"]["identity_id"],
-            "principal-phase19-handoff-merge-001",
+            updated_case.reviewed_context["identity"]["actor"]["identity_id"],
+            "octocat",
         )
         self.assertEqual(
             updated_case.reviewed_context["handoff"]["follow_up_evidence_ids"],
-            (evidence.evidence_id,),
+            (evidence_id,),
         )
 
     def test_service_merges_concurrent_reviewed_context_into_case_disposition(self) -> None:
         store, _ = make_store()
-        base_service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
-            store=store,
+        store, _base_service, promoted_case, _, reviewed_at = (
+            self._build_phase19_in_scope_case(store=store)
         )
-        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
-        admitted = base_service.ingest_finding_alert(
-            finding_id="finding-phase19-disposition-merge-001",
-            analytic_signal_id="signal-phase19-disposition-merge-001",
-            substrate_detection_record_id=(
-                "substrate-detection-phase19-disposition-merge-001"
-            ),
-            correlation_key="claim:asset-phase19-disposition-merge-001:github-audit",
-            first_seen_at=reviewed_at,
-            last_seen_at=reviewed_at,
-            reviewed_context={
-                "asset": {"asset_id": "asset-phase19-disposition-merge-001"},
-                "identity": {
-                    "identity_id": "principal-phase19-disposition-merge-001"
-                },
-            },
-        )
-        base_service.persist_record(
-            EvidenceRecord(
-                evidence_id="evidence-phase19-disposition-merge-001",
-                source_record_id=(
-                    "substrate-detection-phase19-disposition-merge-001"
-                ),
-                alert_id=admitted.alert.alert_id,
-                case_id=None,
-                source_system="reviewed-source",
-                collector_identity="collector://wazuh/live",
-                acquired_at=reviewed_at,
-                derivation_relationship="admitted_analytic_signal",
-                lifecycle_state="collected",
-            )
-        )
-        promoted_case = base_service.promote_alert_to_case(admitted.alert.alert_id)
         store = _TransactionMutationStore(
             inner=store,
             mutate_once=lambda transactional_store: transactional_store.save(
@@ -4923,12 +4733,12 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             "analyst-002",
         )
         self.assertEqual(
-            updated_case.reviewed_context["asset"]["asset_id"],
-            "asset-phase19-disposition-merge-001",
+            updated_case.reviewed_context["asset"]["repository"]["repository_full_name"],
+            "TommyKammy/AegisOps",
         )
         self.assertEqual(
-            updated_case.reviewed_context["identity"]["identity_id"],
-            "principal-phase19-disposition-merge-001",
+            updated_case.reviewed_context["identity"]["actor"]["identity_id"],
+            "octocat",
         )
         self.assertEqual(
             updated_case.reviewed_context["triage"]["disposition"],

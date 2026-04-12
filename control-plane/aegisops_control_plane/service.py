@@ -1899,7 +1899,8 @@ class AegisOpsControlPlaneService:
         )
 
     def inspect_case_detail(self, case_id: str) -> CaseDetailSnapshot:
-        case_id = self._require_non_empty_string(case_id, "case_id")
+        case = self._require_phase19_operator_case(case_id)
+        case_id = case.case_id
         context_snapshot = self.inspect_assistant_context("case", case_id)
         observation_records = tuple(
             _record_to_dict(record)
@@ -1961,7 +1962,7 @@ class AegisOpsControlPlaneService:
             "supporting_evidence_ids",
         )
         with self._store.transaction():
-            case = self._require_case_record(case_id)
+            case = self._require_phase19_operator_case(case_id)
             self._validate_case_evidence_linkage(
                 case=case,
                 evidence_ids=normalized_evidence_ids,
@@ -2012,7 +2013,7 @@ class AegisOpsControlPlaneService:
             "observation_id",
         )
         with self._store.transaction():
-            case = self._require_case_record(case_id)
+            case = self._require_phase19_operator_case(case_id)
             if resolved_observation_id is not None:
                 observation = self._store.get(ObservationRecord, resolved_observation_id)
                 if observation is None:
@@ -2064,7 +2065,7 @@ class AegisOpsControlPlaneService:
         )
         resolved_lead_id = self._normalize_optional_string(lead_id, "lead_id")
         with self._store.transaction():
-            case = self._require_case_record(case_id)
+            case = self._require_phase19_operator_case(case_id)
             if resolved_lead_id is not None:
                 lead = self._store.get(LeadRecord, resolved_lead_id)
                 if lead is None:
@@ -2116,7 +2117,7 @@ class AegisOpsControlPlaneService:
             "follow_up_evidence_ids",
         )
         with self._store.transaction():
-            case = self._require_case_record(case_id)
+            case = self._require_phase19_operator_case(case_id)
             self._validate_case_evidence_linkage(
                 case=case,
                 evidence_ids=normalized_evidence_ids,
@@ -2157,7 +2158,7 @@ class AegisOpsControlPlaneService:
         recorded_at = self._require_aware_datetime(recorded_at, "recorded_at")
         lifecycle_state = self._case_lifecycle_for_disposition(disposition)
         with self._store.transaction():
-            case = self._require_case_record(case_id)
+            case = self._require_phase19_operator_case(case_id)
             updated_reviewed_context = _merge_reviewed_context(
                 case.reviewed_context,
                 {
@@ -3900,6 +3901,82 @@ class AegisOpsControlPlaneService:
         if case is None:
             raise LookupError(f"Missing case {case_id!r}")
         return case
+
+    def _require_phase19_operator_case(self, case_id: str) -> CaseRecord:
+        case = self._require_case_record(case_id)
+        if not self._case_is_in_phase19_operator_slice(case):
+            raise ValueError(
+                f"Case {case.case_id!r} is outside the approved Phase 19 "
+                "Wazuh-backed GitHub audit live slice"
+            )
+        return case
+
+    def _case_is_in_phase19_operator_slice(self, case: CaseRecord) -> bool:
+        alert_id = self._normalize_optional_string(case.alert_id, "case.alert_id")
+        if alert_id is None:
+            return False
+
+        alert = self._store.get(AlertRecord, alert_id)
+        if alert is None:
+            return False
+        if alert.case_id != case.case_id:
+            return False
+
+        reconciliation = self._latest_detection_reconciliation_for_alert(alert.alert_id)
+        if reconciliation is None or not self._reconciliation_is_wazuh_origin(reconciliation):
+            return False
+        if not self._linked_id_exists(
+            reconciliation.subject_linkage.get("alert_ids"),
+            alert.alert_id,
+        ):
+            return False
+        if not self._linked_id_exists(
+            reconciliation.subject_linkage.get("case_ids"),
+            case.case_id,
+        ):
+            return False
+
+        admission_provenance = (
+            _normalize_admission_provenance(
+                reconciliation.subject_linkage.get("admission_provenance")
+            )
+            or _normalize_admission_provenance(case.reviewed_context.get("provenance"))
+            or _normalize_admission_provenance(alert.reviewed_context.get("provenance"))
+        )
+        if admission_provenance != {
+            "admission_kind": "live",
+            "admission_channel": "live_wazuh_webhook",
+        }:
+            return False
+
+        return (
+            self._phase19_operator_source_family(case.reviewed_context)
+            or self._phase19_operator_source_family(alert.reviewed_context)
+            or self._phase19_operator_source_family(
+                reconciliation.subject_linkage.get("reviewed_source_profile")
+            )
+        ) == "github_audit"
+
+    @staticmethod
+    def _phase19_operator_source_family(context: object) -> str | None:
+        if not isinstance(context, Mapping):
+            return None
+
+        source_context = context.get("source")
+        if isinstance(source_context, Mapping):
+            source_family = source_context.get("source_family")
+            if isinstance(source_family, str):
+                normalized_source_family = source_family.strip()
+                if normalized_source_family:
+                    return normalized_source_family
+
+        source_family = context.get("source_family")
+        if isinstance(source_family, str):
+            normalized_source_family = source_family.strip()
+            if normalized_source_family:
+                return normalized_source_family
+
+        return None
 
     def _normalize_linked_record_ids(
         self,
