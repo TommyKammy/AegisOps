@@ -1960,31 +1960,33 @@ class AegisOpsControlPlaneService:
             supporting_evidence_ids,
             "supporting_evidence_ids",
         )
-        self._validate_case_evidence_linkage(
-            case=case,
-            evidence_ids=normalized_evidence_ids,
-            field_name="supporting_evidence_ids",
-        )
-        resolved_observation_id = self._resolve_new_record_identifier(
-            ObservationRecord,
-            observation_id,
-            "observation_id",
-            "observation",
-        )
-        return self.persist_record(
-            ObservationRecord(
-                observation_id=resolved_observation_id,
-                hunt_id=None,
-                hunt_run_id=None,
-                alert_id=case.alert_id,
-                case_id=case.case_id,
-                supporting_evidence_ids=normalized_evidence_ids,
-                author_identity=author_identity,
-                observed_at=observed_at,
-                scope_statement=scope_statement,
-                lifecycle_state=lifecycle_state,
+        with self._store.transaction():
+            case = self._require_case_record(case_id)
+            self._validate_case_evidence_linkage(
+                case=case,
+                evidence_ids=normalized_evidence_ids,
+                field_name="supporting_evidence_ids",
             )
-        )
+            resolved_observation_id = self._resolve_new_record_identifier(
+                ObservationRecord,
+                observation_id,
+                "observation_id",
+                "observation",
+            )
+            return self.persist_record(
+                ObservationRecord(
+                    observation_id=resolved_observation_id,
+                    hunt_id=None,
+                    hunt_run_id=None,
+                    alert_id=case.alert_id,
+                    case_id=case.case_id,
+                    supporting_evidence_ids=normalized_evidence_ids,
+                    author_identity=author_identity,
+                    observed_at=observed_at,
+                    scope_statement=scope_statement,
+                    lifecycle_state=lifecycle_state,
+                )
+            )
 
     def record_case_lead(
         self,
@@ -1996,7 +1998,6 @@ class AegisOpsControlPlaneService:
         lead_id: str | None = None,
         lifecycle_state: str = "triaged",
     ) -> LeadRecord:
-        case = self._require_case_record(case_id)
         triage_owner = self._require_non_empty_string(triage_owner, "triage_owner")
         triage_rationale = self._require_non_empty_string(
             triage_rationale,
@@ -2010,35 +2011,37 @@ class AegisOpsControlPlaneService:
             observation_id,
             "observation_id",
         )
-        if resolved_observation_id is not None:
-            observation = self._store.get(ObservationRecord, resolved_observation_id)
-            if observation is None:
-                raise LookupError(f"Missing observation {resolved_observation_id!r}")
-            if observation.case_id != case.case_id:
-                raise ValueError(
-                    f"Observation {resolved_observation_id!r} is not linked to case "
-                    f"{case.case_id!r}"
-                )
+        with self._store.transaction():
+            case = self._require_case_record(case_id)
+            if resolved_observation_id is not None:
+                observation = self._store.get(ObservationRecord, resolved_observation_id)
+                if observation is None:
+                    raise LookupError(f"Missing observation {resolved_observation_id!r}")
+                if observation.case_id != case.case_id:
+                    raise ValueError(
+                        f"Observation {resolved_observation_id!r} is not linked to case "
+                        f"{case.case_id!r}"
+                    )
 
-        resolved_lead_id = self._resolve_new_record_identifier(
-            LeadRecord,
-            lead_id,
-            "lead_id",
-            "lead",
-        )
-        return self.persist_record(
-            LeadRecord(
-                lead_id=resolved_lead_id,
-                observation_id=resolved_observation_id,
-                finding_id=case.finding_id,
-                hunt_run_id=None,
-                alert_id=case.alert_id,
-                case_id=case.case_id,
-                triage_owner=triage_owner,
-                triage_rationale=triage_rationale,
-                lifecycle_state=lifecycle_state,
+            resolved_lead_id = self._resolve_new_record_identifier(
+                LeadRecord,
+                lead_id,
+                "lead_id",
+                "lead",
             )
-        )
+            return self.persist_record(
+                LeadRecord(
+                    lead_id=resolved_lead_id,
+                    observation_id=resolved_observation_id,
+                    finding_id=case.finding_id,
+                    hunt_run_id=None,
+                    alert_id=case.alert_id,
+                    case_id=case.case_id,
+                    triage_owner=triage_owner,
+                    triage_rationale=triage_rationale,
+                    lifecycle_state=lifecycle_state,
+                )
+            )
 
     def record_case_recommendation(
         self,
@@ -2050,7 +2053,6 @@ class AegisOpsControlPlaneService:
         recommendation_id: str | None = None,
         lifecycle_state: str = "under_review",
     ) -> RecommendationRecord:
-        case = self._require_case_record(case_id)
         review_owner = self._require_non_empty_string(review_owner, "review_owner")
         intended_outcome = self._require_non_empty_string(
             intended_outcome,
@@ -2061,35 +2063,37 @@ class AegisOpsControlPlaneService:
             "lifecycle_state",
         )
         resolved_lead_id = self._normalize_optional_string(lead_id, "lead_id")
-        if resolved_lead_id is not None:
-            lead = self._store.get(LeadRecord, resolved_lead_id)
-            if lead is None:
-                raise LookupError(f"Missing lead {resolved_lead_id!r}")
-            if lead.case_id != case.case_id:
-                raise ValueError(
-                    f"Lead {resolved_lead_id!r} is not linked to case {case.case_id!r}"
-                )
+        with self._store.transaction():
+            case = self._require_case_record(case_id)
+            if resolved_lead_id is not None:
+                lead = self._store.get(LeadRecord, resolved_lead_id)
+                if lead is None:
+                    raise LookupError(f"Missing lead {resolved_lead_id!r}")
+                if lead.case_id != case.case_id:
+                    raise ValueError(
+                        f"Lead {resolved_lead_id!r} is not linked to case {case.case_id!r}"
+                    )
 
-        resolved_recommendation_id = self._resolve_new_record_identifier(
-            RecommendationRecord,
-            recommendation_id,
-            "recommendation_id",
-            "recommendation",
-        )
-        return self.persist_record(
-            RecommendationRecord(
-                recommendation_id=resolved_recommendation_id,
-                lead_id=resolved_lead_id,
-                hunt_run_id=None,
-                alert_id=case.alert_id,
-                case_id=case.case_id,
-                ai_trace_id=None,
-                review_owner=review_owner,
-                intended_outcome=intended_outcome,
-                lifecycle_state=lifecycle_state,
-                reviewed_context=case.reviewed_context,
+            resolved_recommendation_id = self._resolve_new_record_identifier(
+                RecommendationRecord,
+                recommendation_id,
+                "recommendation_id",
+                "recommendation",
             )
-        )
+            return self.persist_record(
+                RecommendationRecord(
+                    recommendation_id=resolved_recommendation_id,
+                    lead_id=resolved_lead_id,
+                    hunt_run_id=None,
+                    alert_id=case.alert_id,
+                    case_id=case.case_id,
+                    ai_trace_id=None,
+                    review_owner=review_owner,
+                    intended_outcome=intended_outcome,
+                    lifecycle_state=lifecycle_state,
+                    reviewed_context=case.reviewed_context,
+                )
+            )
 
     def record_case_handoff(
         self,
