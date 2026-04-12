@@ -785,7 +785,7 @@ def _build_assistant_advisory_output(
             }
         )
 
-        status = "unresolved" if fail_closed else "ready"
+    status = "unresolved" if fail_closed else "ready"
     if status == "ready":
         if output_kind == "recommendation_draft":
             summary_text = _recommendation_draft_review_summary(
