@@ -1562,7 +1562,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 thread.join(timeout=2)
 
     def test_long_running_runtime_surface_exposes_cited_advisory_review_routes(self) -> None:
-        store, service, promoted_case, evidence_id, _ = self._build_phase19_in_scope_case(
+        _, service, promoted_case, evidence_id, _ = self._build_phase19_in_scope_case(
             host="127.0.0.1",
             port=0,
         )
