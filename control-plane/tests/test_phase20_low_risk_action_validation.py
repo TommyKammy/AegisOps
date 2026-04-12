@@ -28,6 +28,7 @@ class Phase20LowRiskActionValidationTests(unittest.TestCase):
             "def test_service_rejects_shuffle_delegation_when_target_scope_drifts(",
             "def test_service_reconciles_shuffle_run_back_into_authoritative_action_execution(",
             "def test_service_reconciliation_mismatch_does_not_mutate_authoritative_execution(",
+            "def test_service_reconciliation_fail_closes_when_downstream_run_identity_drifts(",
             '"action_type": "notify_identity_owner"',
             '"execution_surface_id": "shuffle"',
             "approved payload binding does not match",
