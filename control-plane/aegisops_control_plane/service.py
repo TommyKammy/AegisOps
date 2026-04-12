@@ -1519,6 +1519,8 @@ class AegisOpsControlPlaneService:
                 f"Unsupported control-plane record family {record_family!r}; "
                 f"expected one of: {known_families}"
             )
+        if record_family == "case":
+            self._require_phase19_operator_case(record_id)
 
         record = self._store.get(record_type, record_id)
         if record is None:

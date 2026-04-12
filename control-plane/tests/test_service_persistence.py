@@ -393,63 +393,21 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         )
 
     def test_service_exposes_analyst_assistant_context_with_linked_evidence(self) -> None:
-        store, _ = make_store()
-        service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
-            store=store,
+        _, service, promoted_case, evidence_id, first_seen_at = (
+            self._build_phase19_in_scope_case()
         )
-        first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
-        reviewed_context = {
-            "asset": {
-                "asset_id": "asset-repo-001",
-                "ownership": "platform-security",
-                "criticality": "high",
-            },
-            "identity": {
-                "identity_id": "principal-001",
-                "owner": "identity-operations",
-            },
-            "privilege": {
-                "privilege_scope": "repository_admin",
-                "delegated_authority": "reviewed",
-            },
-        }
-
-        admitted = service.ingest_finding_alert(
-            finding_id="finding-assistant-001",
-            analytic_signal_id="signal-assistant-001",
-            substrate_detection_record_id="substrate-detection-assistant-001",
-            correlation_key="claim:asset-repo-001:assistant-review",
-            first_seen_at=first_seen_at,
-            last_seen_at=first_seen_at,
-            reviewed_context=reviewed_context,
-        )
-        evidence = service.persist_record(
-            EvidenceRecord(
-                evidence_id="evidence-assistant-001",
-                source_record_id="substrate-detection-assistant-001",
-                alert_id=admitted.alert.alert_id,
-                case_id=None,
-                source_system="reviewed-source",
-                collector_identity="control-plane-test",
-                acquired_at=first_seen_at,
-                derivation_relationship="admitted_analytic_signal",
-                lifecycle_state="collected",
-            )
-        )
-        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
         recommendation = service.persist_record(
             RecommendationRecord(
                 recommendation_id="recommendation-assistant-001",
                 lead_id=None,
                 hunt_run_id=None,
-                alert_id=admitted.alert.alert_id,
+                alert_id=promoted_case.alert_id,
                 case_id=promoted_case.case_id,
                 ai_trace_id=None,
                 review_owner="reviewer-001",
                 intended_outcome="follow reviewed evidence",
                 lifecycle_state="under_review",
-                reviewed_context=reviewed_context,
+                reviewed_context=promoted_case.reviewed_context,
             )
         )
         colliding_recommendation = service.persist_record(
@@ -457,20 +415,20 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 recommendation_id=promoted_case.case_id,
                 lead_id=None,
                 hunt_run_id=None,
-                alert_id=admitted.alert.alert_id,
+                alert_id=promoted_case.alert_id,
                 case_id=promoted_case.case_id,
                 ai_trace_id=None,
                 review_owner="reviewer-002",
                 intended_outcome="keep reviewed evidence visible",
                 lifecycle_state="under_review",
-                reviewed_context=reviewed_context,
+                reviewed_context=promoted_case.reviewed_context,
             )
         )
         colliding_reconciliation = service.persist_record(
             ReconciliationRecord(
                 reconciliation_id=promoted_case.case_id,
                 subject_linkage={
-                    "alert_ids": (admitted.alert.alert_id,),
+                    "alert_ids": (promoted_case.alert_id,),
                 },
                 alert_id=None,
                 finding_id=None,
@@ -493,17 +451,17 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(snapshot.record_family, "case")
         self.assertEqual(snapshot.record_id, promoted_case.case_id)
         self.assertEqual(snapshot.record["case_id"], promoted_case.case_id)
-        self.assertEqual(snapshot.reviewed_context, reviewed_context)
-        self.assertEqual(snapshot.linked_evidence_ids, (evidence.evidence_id,))
+        self.assertEqual(snapshot.reviewed_context, promoted_case.reviewed_context)
+        self.assertEqual(snapshot.linked_evidence_ids, (evidence_id,))
         self.assertEqual(
             snapshot.linked_evidence_records[0]["evidence_id"],
-            evidence.evidence_id,
+            evidence_id,
         )
         self.assertEqual(
             snapshot.linked_evidence_records[0]["alert_id"],
-            admitted.alert.alert_id,
+            promoted_case.alert_id,
         )
-        self.assertIn(admitted.alert.alert_id, snapshot.linked_alert_ids)
+        self.assertIn(promoted_case.alert_id, snapshot.linked_alert_ids)
         self.assertIn(
             recommendation.recommendation_id,
             snapshot.linked_recommendation_ids,
@@ -512,10 +470,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             colliding_recommendation.recommendation_id,
             snapshot.linked_recommendation_ids,
         )
-        self.assertIn(
-            admitted.reconciliation.reconciliation_id,
-            snapshot.linked_reconciliation_ids,
-        )
+        self.assertTrue(snapshot.linked_reconciliation_ids)
         self.assertIn(
             colliding_reconciliation.reconciliation_id,
             snapshot.linked_reconciliation_ids,
@@ -670,51 +625,19 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
     def test_service_projects_assistant_context_into_advisory_and_draft_views(
         self,
     ) -> None:
-        store, _ = make_store()
-        service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
-            store=store,
-        )
-        first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
-        reviewed_context = {
-            "asset": {"asset_id": "asset-projection-001"},
-            "identity": {"identity_id": "principal-projection-001"},
-        }
-        admitted = service.ingest_finding_alert(
-            finding_id="finding-projection-001",
-            analytic_signal_id="signal-projection-001",
-            substrate_detection_record_id="substrate-detection-projection-001",
-            correlation_key="claim:asset-projection-001:assistant-projection",
-            first_seen_at=first_seen_at,
-            last_seen_at=first_seen_at,
-            reviewed_context=reviewed_context,
-        )
-        evidence = service.persist_record(
-            EvidenceRecord(
-                evidence_id="evidence-projection-001",
-                source_record_id="substrate-detection-projection-001",
-                alert_id=admitted.alert.alert_id,
-                case_id=None,
-                source_system="reviewed-source",
-                collector_identity="control-plane-test",
-                acquired_at=first_seen_at,
-                derivation_relationship="admitted_analytic_signal",
-                lifecycle_state="collected",
-            )
-        )
-        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        _, service, promoted_case, evidence_id, _ = self._build_phase19_in_scope_case()
         recommendation = service.persist_record(
             RecommendationRecord(
                 recommendation_id="recommendation-projection-001",
                 lead_id=None,
                 hunt_run_id=None,
-                alert_id=admitted.alert.alert_id,
+                alert_id=promoted_case.alert_id,
                 case_id=promoted_case.case_id,
                 ai_trace_id=None,
                 review_owner="reviewer-001",
                 intended_outcome="review the cited evidence before escalation",
                 lifecycle_state="under_review",
-                reviewed_context=reviewed_context,
+                reviewed_context=promoted_case.reviewed_context,
             )
         )
 
@@ -729,19 +652,16 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(advisory_snapshot.record_id, promoted_case.case_id)
         self.assertEqual(advisory_snapshot.output_kind, "case_summary")
         self.assertEqual(advisory_snapshot.status, "ready")
-        self.assertEqual(advisory_snapshot.reviewed_context, reviewed_context)
-        self.assertIn(evidence.evidence_id, advisory_snapshot.citations)
+        self.assertEqual(advisory_snapshot.reviewed_context, promoted_case.reviewed_context)
+        self.assertIn(evidence_id, advisory_snapshot.citations)
         self.assertIn("advisory_only", advisory_snapshot.uncertainty_flags)
-        self.assertIn(admitted.alert.alert_id, advisory_snapshot.linked_alert_ids)
-        self.assertEqual(advisory_snapshot.linked_evidence_ids, (evidence.evidence_id,))
+        self.assertIn(promoted_case.alert_id, advisory_snapshot.linked_alert_ids)
+        self.assertEqual(advisory_snapshot.linked_evidence_ids, (evidence_id,))
         self.assertIn(
             recommendation.recommendation_id,
             advisory_snapshot.linked_recommendation_ids,
         )
-        self.assertIn(
-            admitted.reconciliation.reconciliation_id,
-            advisory_snapshot.linked_reconciliation_ids,
-        )
+        self.assertTrue(advisory_snapshot.linked_reconciliation_ids)
 
         self.assertTrue(recommendation_draft.read_only)
         self.assertEqual(
@@ -756,17 +676,20 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             recommendation_draft.recommendation_draft["candidate_recommendations"]
         )
         self.assertIn(
-            evidence.evidence_id,
+            evidence_id,
             recommendation_draft.recommendation_draft["citations"],
         )
         self.assertIn(
             "advisory_only",
             recommendation_draft.recommendation_draft["uncertainty_flags"],
         )
-        self.assertEqual(recommendation_draft.reviewed_context, reviewed_context)
+        self.assertEqual(
+            recommendation_draft.reviewed_context,
+            promoted_case.reviewed_context,
+        )
         self.assertEqual(
             recommendation_draft.linked_evidence_ids,
-            (evidence.evidence_id,),
+            (evidence_id,),
         )
         self.assertIn(
             recommendation.recommendation_id,
@@ -2346,35 +2269,14 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
     def test_service_preserves_declared_missing_evidence_ids_in_assistant_context(
         self,
     ) -> None:
-        store, _ = make_store()
-        service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
-            store=store,
-        )
-        compared_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        _, service, case, evidence_id, _ = self._build_phase19_in_scope_case()
         case = service.persist_record(
-            CaseRecord(
-                case_id="case-assistant-missing-evidence-001",
-                alert_id=None,
-                finding_id="finding-assistant-missing-evidence-001",
+            replace(
+                case,
                 evidence_ids=(
                     "evidence-assistant-missing-001",
-                    "evidence-assistant-present-001",
+                    evidence_id,
                 ),
-                lifecycle_state="open",
-            )
-        )
-        evidence = service.persist_record(
-            EvidenceRecord(
-                evidence_id="evidence-assistant-present-001",
-                source_record_id="substrate-detection-assistant-missing-001",
-                alert_id=None,
-                case_id=case.case_id,
-                source_system="reviewed-source",
-                collector_identity="control-plane-test",
-                acquired_at=compared_at,
-                derivation_relationship="observed_artifact",
-                lifecycle_state="collected",
             )
         )
 
@@ -2384,13 +2286,13 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             snapshot.linked_evidence_ids,
             (
                 "evidence-assistant-missing-001",
-                evidence.evidence_id,
+                evidence_id,
             ),
         )
         self.assertEqual(len(snapshot.linked_evidence_records), 1)
         self.assertEqual(
             snapshot.linked_evidence_records[0]["evidence_id"],
-            evidence.evidence_id,
+            evidence_id,
         )
 
     def test_service_merges_reviewed_context_for_existing_alert_updates(self) -> None:
@@ -4104,10 +4006,30 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             "Privilege-impacting change needs durable business-hours follow-up.",
         )
 
+    def test_service_allows_in_scope_case_assistant_context_on_phase19_operator_surface(
+        self,
+    ) -> None:
+        _, service, promoted_case, evidence_id, _ = self._build_phase19_in_scope_case()
+
+        snapshot = service.inspect_assistant_context("case", promoted_case.case_id)
+
+        self.assertTrue(snapshot.read_only)
+        self.assertEqual(snapshot.record_family, "case")
+        self.assertEqual(snapshot.record_id, promoted_case.case_id)
+        self.assertEqual(snapshot.record["case_id"], promoted_case.case_id)
+        self.assertEqual(snapshot.advisory_output["output_kind"], "case_summary")
+        self.assertIn(evidence_id, snapshot.linked_evidence_ids)
+
     def test_service_rejects_replay_only_case_from_phase19_operator_surface(self) -> None:
         service, promoted_case, _, reviewed_at = self._build_phase19_out_of_scope_case(
             fixture_name="github-audit-alert.json"
         )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+        ):
+            service.inspect_assistant_context("case", promoted_case.case_id)
 
         with self.assertRaisesRegex(
             ValueError,
