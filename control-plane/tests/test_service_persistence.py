@@ -66,6 +66,38 @@ def _approved_binding_hash(
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _phase20_notify_identity_owner_payload(
+    *,
+    recipient_identity: str,
+    case_id: str,
+    alert_id: str,
+    finding_id: str,
+    source_record_family: str = "recommendation",
+    source_record_id: str = "recommendation-001",
+    recommendation_id: str = "recommendation-001",
+    linked_evidence_ids: tuple[str, ...] = ("evidence-001",),
+    message_intent: str = (
+        "Notify the accountable owner about the reviewed low-risk escalation."
+    ),
+    escalation_reason: str = (
+        "Reviewed evidence requires a bounded single-recipient owner notification."
+    ),
+) -> dict[str, object]:
+    return {
+        "action_type": "notify_identity_owner",
+        "recipient_identity": recipient_identity,
+        "message_intent": message_intent,
+        "escalation_reason": escalation_reason,
+        "source_record_family": source_record_family,
+        "source_record_id": source_record_id,
+        "recommendation_id": recommendation_id,
+        "case_id": case_id,
+        "alert_id": alert_id,
+        "finding_id": finding_id,
+        "linked_evidence_ids": linked_evidence_ids,
+    }
+
+
 @dataclass
 class _TransactionMutationStore:
     inner: object
@@ -1627,10 +1659,15 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             )
         )
         approval_target_scope = {"asset_id": "asset-repo-approval-001"}
-        approved_payload = {
-            "action_type": "notify_identity_owner",
-            "asset_id": "asset-repo-approval-001",
-        }
+        approved_payload = _phase20_notify_identity_owner_payload(
+            recipient_identity="repo-owner-001",
+            case_id=promoted_case.case_id,
+            alert_id=admitted.alert.alert_id,
+            finding_id=admitted.alert.finding_id,
+            source_record_id=recommendation.recommendation_id,
+            recommendation_id=recommendation.recommendation_id,
+            linked_evidence_ids=(evidence.evidence_id,),
+        )
         payload_hash = _approved_binding_hash(
             target_scope=approval_target_scope,
             approved_payload=approved_payload,
@@ -1797,10 +1834,15 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             )
         )
         approval_target_scope = {"asset_id": "asset-repo-reconciliation-001"}
-        approved_payload = {
-            "action_type": "notify_identity_owner",
-            "asset_id": "asset-repo-reconciliation-001",
-        }
+        approved_payload = _phase20_notify_identity_owner_payload(
+            recipient_identity="repo-owner-001",
+            case_id=promoted_case.case_id,
+            alert_id=admitted.alert.alert_id,
+            finding_id=admitted.alert.finding_id,
+            source_record_id=recommendation.recommendation_id,
+            recommendation_id=recommendation.recommendation_id,
+            linked_evidence_ids=("evidence-assistant-reconciliation-001",),
+        )
         payload_hash = _approved_binding_hash(
             target_scope=approval_target_scope,
             approved_payload=approved_payload,
@@ -6050,10 +6092,12 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
         compared_at = datetime(2026, 4, 5, 12, 12, tzinfo=timezone.utc)
         approved_target_scope = {"asset_id": "workstation-001"}
-        approved_payload = {
-            "action_type": "notify_identity_owner",
-            "asset_id": "workstation-001",
-        }
+        approved_payload = _phase20_notify_identity_owner_payload(
+            recipient_identity="repo-owner-001",
+            case_id="case-001",
+            alert_id="alert-001",
+            finding_id="finding-001",
+        )
         payload_hash = _approved_binding_hash(
             target_scope=approved_target_scope,
             approved_payload=approved_payload,
@@ -6256,10 +6300,12 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
         compared_at = datetime(2026, 4, 5, 12, 12, tzinfo=timezone.utc)
         approved_target_scope = {"asset_id": "workstation-001"}
-        approved_payload = {
-            "action_type": "notify_identity_owner",
-            "asset_id": "workstation-001",
-        }
+        approved_payload = _phase20_notify_identity_owner_payload(
+            recipient_identity="repo-owner-001",
+            case_id="case-001",
+            alert_id="alert-001",
+            finding_id="finding-001",
+        )
         payload_hash = _approved_binding_hash(
             target_scope=approved_target_scope,
             approved_payload=approved_payload,
@@ -6446,10 +6492,12 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
         expires_at = datetime(2026, 4, 5, 13, 0, tzinfo=timezone.utc)
         approved_target_scope = {"asset_id": "workstation-001"}
-        approved_payload = {
-            "action_type": "notify_identity_owner",
-            "asset_id": "workstation-001",
-        }
+        approved_payload = _phase20_notify_identity_owner_payload(
+            recipient_identity="repo-owner-001",
+            case_id="case-001",
+            alert_id="alert-001",
+            finding_id="finding-001",
+        )
         payload_hash = _approved_binding_hash(
             target_scope=approved_target_scope,
             approved_payload=approved_payload,
@@ -6524,10 +6572,12 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(execution.payload_hash, payload_hash)
         self.assertEqual(
             execution.approved_payload,
-            {
-                "action_type": "notify_identity_owner",
-                "asset_id": "workstation-001",
-            },
+            _phase20_notify_identity_owner_payload(
+                recipient_identity="repo-owner-001",
+                case_id="case-001",
+                alert_id="alert-001",
+                finding_id="finding-001",
+            ),
         )
         self.assertEqual(
             execution.provenance,
@@ -6554,10 +6604,12 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
         delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
         approved_target_scope = {"asset_id": "workstation-001"}
-        approved_payload = {
-            "action_type": "notify_identity_owner",
-            "asset_id": "workstation-001",
-        }
+        approved_payload = _phase20_notify_identity_owner_payload(
+            recipient_identity="repo-owner-001",
+            case_id="case-001",
+            alert_id="alert-001",
+            finding_id="finding-001",
+        )
         payload_hash = _approved_binding_hash(
             target_scope=approved_target_scope,
             approved_payload=approved_payload,
@@ -6941,6 +6993,74 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 delegated_at=datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc),
                 delegation_issuer="control-plane-service",
             )
+
+    def test_service_rejects_shuffle_delegation_for_non_phase20_live_action(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        approved_target_scope = {"asset_id": "workstation-unsupported-001"}
+        approved_payload = {
+            "action_type": "open_ticket",
+            "asset_id": "workstation-unsupported-001",
+            "ticket_queue": "soc-owner-followup",
+        }
+        payload_hash = _approved_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
+        service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-routine-unsupported-action-001",
+                action_request_id="action-request-routine-unsupported-action-001",
+                approver_identities=("approver-001",),
+                target_snapshot=approved_target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+            )
+        )
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-routine-unsupported-action-001",
+                approval_decision_id="approval-routine-unsupported-action-001",
+                case_id="case-001",
+                alert_id="alert-001",
+                finding_id="finding-001",
+                idempotency_key="idempotency-routine-unsupported-action-001",
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=None,
+                lifecycle_state="approved",
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "shuffle",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "approved action is outside the reviewed Phase 20 Shuffle delegation scope",
+        ):
+            service.delegate_approved_action_to_shuffle(
+                action_request_id="action-request-routine-unsupported-action-001",
+                approved_payload=approved_payload,
+                delegated_at=delegated_at,
+                delegation_issuer="control-plane-service",
+            )
+
+        self.assertEqual(store.list(ActionExecutionRecord), ())
 
     def test_service_delegates_approved_high_risk_action_through_isolated_executor(
         self,
