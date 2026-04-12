@@ -1703,8 +1703,8 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 host="127.0.0.1",
                 port=0,
                 postgres_dsn="postgresql://control-plane.local/aegisops",
-                wazuh_ingest_shared_secret="reviewed-shared-secret",
-                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
             ),
             store=store,
         )
@@ -1780,7 +1780,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 base_url = f"http://127.0.0.1:{servers[0].server_port}"
 
                 assistant_context = json.loads(
-                    request.urlopen(
+                    request.urlopen(  # noqa: S310 - local in-process test HTTP server
                         (
                             f"{base_url}/inspect-assistant-context"
                             f"?family=case&record_id={promoted_case.case_id}"
@@ -1789,7 +1789,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                     ).read().decode("utf-8")
                 )
                 advisory_output = json.loads(
-                    request.urlopen(
+                    request.urlopen(  # noqa: S310 - local in-process test HTTP server
                         (
                             f"{base_url}/inspect-advisory-output"
                             f"?family=case&record_id={promoted_case.case_id}"
@@ -1798,7 +1798,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                     ).read().decode("utf-8")
                 )
                 recommendation_draft = json.loads(
-                    request.urlopen(
+                    request.urlopen(  # noqa: S310 - local in-process test HTTP server
                         (
                             f"{base_url}/render-recommendation-draft"
                             f"?family=case&record_id={promoted_case.case_id}"
@@ -1841,7 +1841,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 )
 
                 with self.assertRaises(error.HTTPError) as invalid_family_exc:
-                    request.urlopen(
+                    request.urlopen(  # noqa: S310 - local in-process test HTTP server
                         (
                             f"{base_url}/inspect-advisory-output"
                             "?family=not-a-family"
@@ -1861,7 +1861,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 )
 
                 with self.assertRaises(error.HTTPError) as missing_record_exc:
-                    request.urlopen(
+                    request.urlopen(  # noqa: S310 - local in-process test HTTP server
                         (
                             f"{base_url}/render-recommendation-draft"
                             "?family=case"
