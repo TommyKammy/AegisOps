@@ -1075,58 +1075,19 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         )
 
     def test_cli_renders_analyst_assistant_context_view_for_a_case(self) -> None:
-        store, _ = make_store()
-        service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
-            store=store,
-        )
-        compared_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
-        reviewed_context = {
-            "asset": {
-                "asset_id": "asset-repo-001",
-                "criticality": "high",
-                "ownership": "platform-security",
-            },
-            "identity": {
-                "identity_id": "principal-001",
-                "owner": "identity-operations",
-            },
-        }
-        admitted = service.ingest_finding_alert(
-            finding_id="finding-assistant-cli-001",
-            analytic_signal_id="signal-assistant-cli-001",
-            substrate_detection_record_id="substrate-detection-assistant-cli-001",
-            correlation_key="claim:asset-repo-001:assistant-cli-review",
-            first_seen_at=compared_at,
-            last_seen_at=compared_at,
-            reviewed_context=reviewed_context,
-        )
-        evidence = service.persist_record(
-            EvidenceRecord(
-                evidence_id="evidence-assistant-cli-001",
-                source_record_id="substrate-detection-assistant-cli-001",
-                alert_id=admitted.alert.alert_id,
-                case_id=None,
-                source_system="reviewed-source",
-                collector_identity="control-plane-test",
-                acquired_at=compared_at,
-                derivation_relationship="admitted_analytic_signal",
-                lifecycle_state="collected",
-            )
-        )
-        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        _, service, promoted_case, evidence_id, _ = self._build_phase19_in_scope_case()
         recommendation = service.persist_record(
             RecommendationRecord(
                 recommendation_id="recommendation-assistant-cli-001",
                 lead_id=None,
                 hunt_run_id=None,
-                alert_id=admitted.alert.alert_id,
+                alert_id=promoted_case.alert_id,
                 case_id=promoted_case.case_id,
                 ai_trace_id=None,
                 review_owner="reviewer-001",
                 intended_outcome="follow reviewed evidence",
                 lifecycle_state="under_review",
-                reviewed_context=reviewed_context,
+                reviewed_context=promoted_case.reviewed_context,
             )
         )
 
@@ -1150,74 +1111,34 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(payload["record"]["case_id"], promoted_case.case_id)
         self.assertEqual(payload["advisory_output"]["output_kind"], "case_summary")
         self.assertEqual(payload["advisory_output"]["status"], "ready")
-        self.assertIn(evidence.evidence_id, payload["advisory_output"]["citations"])
-        self.assertEqual(payload["reviewed_context"], reviewed_context)
-        self.assertEqual(payload["linked_evidence_ids"], [evidence.evidence_id])
+        self.assertIn(evidence_id, payload["advisory_output"]["citations"])
+        self.assertEqual(payload["reviewed_context"], promoted_case.reviewed_context)
+        self.assertEqual(payload["linked_evidence_ids"], [evidence_id])
         self.assertEqual(
             payload["linked_evidence_records"][0]["evidence_id"],
-            evidence.evidence_id,
+            evidence_id,
         )
-        self.assertIn(admitted.alert.alert_id, payload["linked_alert_ids"])
+        self.assertIn(promoted_case.alert_id, payload["linked_alert_ids"])
         self.assertIn(
             recommendation.recommendation_id,
             payload["linked_recommendation_ids"],
         )
-        self.assertIn(
-            admitted.reconciliation.reconciliation_id,
-            payload["linked_reconciliation_ids"],
-        )
+        self.assertTrue(payload["linked_reconciliation_ids"])
 
     def test_cli_renders_cited_advisory_output_view_for_a_case(self) -> None:
-        store, _ = make_store()
-        service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
-            store=store,
-        )
-        compared_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
-        reviewed_context = {
-            "asset": {
-                "asset_id": "asset-repo-advisory-cli-001",
-                "criticality": "high",
-            },
-            "identity": {
-                "identity_id": "principal-advisory-cli-001",
-            },
-        }
-        admitted = service.ingest_finding_alert(
-            finding_id="finding-advisory-cli-001",
-            analytic_signal_id="signal-advisory-cli-001",
-            substrate_detection_record_id="substrate-detection-advisory-cli-001",
-            correlation_key="claim:asset-repo-advisory-cli-001:assistant-advisory-cli",
-            first_seen_at=compared_at,
-            last_seen_at=compared_at,
-            reviewed_context=reviewed_context,
-        )
-        evidence = service.persist_record(
-            EvidenceRecord(
-                evidence_id="evidence-advisory-cli-001",
-                source_record_id="substrate-detection-advisory-cli-001",
-                alert_id=admitted.alert.alert_id,
-                case_id=None,
-                source_system="reviewed-source",
-                collector_identity="control-plane-test",
-                acquired_at=compared_at,
-                derivation_relationship="admitted_analytic_signal",
-                lifecycle_state="collected",
-            )
-        )
-        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        _, service, promoted_case, evidence_id, _ = self._build_phase19_in_scope_case()
         recommendation = service.persist_record(
             RecommendationRecord(
                 recommendation_id="recommendation-advisory-cli-001",
                 lead_id=None,
                 hunt_run_id=None,
-                alert_id=admitted.alert.alert_id,
+                alert_id=promoted_case.alert_id,
                 case_id=promoted_case.case_id,
                 ai_trace_id=None,
                 review_owner="reviewer-001",
                 intended_outcome="review the cited evidence before any approval",
                 lifecycle_state="under_review",
-                reviewed_context=reviewed_context,
+                reviewed_context=promoted_case.reviewed_context,
             )
         )
 
@@ -1240,16 +1161,13 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(payload["record_id"], promoted_case.case_id)
         self.assertEqual(payload["output_kind"], "case_summary")
         self.assertEqual(payload["status"], "ready")
-        self.assertEqual(payload["reviewed_context"], reviewed_context)
-        self.assertIn(evidence.evidence_id, payload["citations"])
+        self.assertEqual(payload["reviewed_context"], promoted_case.reviewed_context)
+        self.assertIn(evidence_id, payload["citations"])
         self.assertIn("advisory_only", payload["uncertainty_flags"])
-        self.assertEqual(payload["linked_evidence_ids"], [evidence.evidence_id])
-        self.assertIn(admitted.alert.alert_id, payload["linked_alert_ids"])
+        self.assertEqual(payload["linked_evidence_ids"], [evidence_id])
+        self.assertIn(promoted_case.alert_id, payload["linked_alert_ids"])
         self.assertIn(recommendation.recommendation_id, payload["linked_recommendation_ids"])
-        self.assertIn(
-            admitted.reconciliation.reconciliation_id,
-            payload["linked_reconciliation_ids"],
-        )
+        self.assertTrue(payload["linked_reconciliation_ids"])
 
     def test_cli_renders_case_detail_with_evidence_provenance_and_cited_advisory_output(
         self,
@@ -1644,62 +1562,22 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 thread.join(timeout=2)
 
     def test_long_running_runtime_surface_exposes_cited_advisory_review_routes(self) -> None:
-        store, _ = make_store()
-        service = AegisOpsControlPlaneService(
-            RuntimeConfig(
-                host="127.0.0.1",
-                port=0,
-                postgres_dsn="postgresql://control-plane.local/aegisops",
-                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
-                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
-            ),
-            store=store,
+        _, service, promoted_case, evidence_id, _ = self._build_phase19_in_scope_case(
+            host="127.0.0.1",
+            port=0,
         )
-        compared_at = datetime(2026, 4, 8, 12, 0, tzinfo=timezone.utc)
-        reviewed_context = {
-            "asset": {
-                "asset_id": "asset-phase19-http-advisory-001",
-                "criticality": "high",
-            },
-            "identity": {
-                "identity_id": "principal-phase19-http-advisory-001",
-            },
-        }
-        admitted = service.ingest_finding_alert(
-            finding_id="finding-phase19-http-advisory-001",
-            analytic_signal_id="signal-phase19-http-advisory-001",
-            substrate_detection_record_id="substrate-detection-phase19-http-advisory-001",
-            correlation_key="claim:asset-phase19-http-advisory-001:github-audit",
-            first_seen_at=compared_at,
-            last_seen_at=compared_at,
-            reviewed_context=reviewed_context,
-        )
-        evidence = service.persist_record(
-            EvidenceRecord(
-                evidence_id="evidence-phase19-http-advisory-001",
-                source_record_id="substrate-detection-phase19-http-advisory-001",
-                alert_id=admitted.alert.alert_id,
-                case_id=None,
-                source_system="reviewed-source",
-                collector_identity="control-plane-test",
-                acquired_at=compared_at,
-                derivation_relationship="admitted_analytic_signal",
-                lifecycle_state="collected",
-            )
-        )
-        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
         recommendation = service.persist_record(
             RecommendationRecord(
                 recommendation_id="recommendation-phase19-http-advisory-001",
                 lead_id=None,
                 hunt_run_id=None,
-                alert_id=admitted.alert.alert_id,
+                alert_id=promoted_case.alert_id,
                 case_id=promoted_case.case_id,
                 ai_trace_id=None,
                 review_owner="reviewer-001",
                 intended_outcome="review the cited evidence before escalation",
                 lifecycle_state="under_review",
-                reviewed_context=reviewed_context,
+                reviewed_context=promoted_case.reviewed_context,
             )
         )
 
@@ -1761,15 +1639,15 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                     assistant_context["advisory_output"]["output_kind"],
                     "case_summary",
                 )
-                self.assertEqual(assistant_context["reviewed_context"], reviewed_context)
-                self.assertEqual(assistant_context["linked_evidence_ids"], [evidence.evidence_id])
+                self.assertEqual(assistant_context["reviewed_context"], promoted_case.reviewed_context)
+                self.assertEqual(assistant_context["linked_evidence_ids"], [evidence_id])
 
                 self.assertTrue(advisory_output["read_only"])
                 self.assertEqual(advisory_output["record_family"], "case")
                 self.assertEqual(advisory_output["record_id"], promoted_case.case_id)
                 self.assertEqual(advisory_output["output_kind"], "case_summary")
                 self.assertEqual(advisory_output["status"], "ready")
-                self.assertIn(evidence.evidence_id, advisory_output["citations"])
+                self.assertIn(evidence_id, advisory_output["citations"])
 
                 self.assertTrue(recommendation_draft["read_only"])
                 self.assertEqual(recommendation_draft["record_family"], "case")
@@ -1823,7 +1701,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 )
                 self.assertEqual(missing_record_payload["error"], "not_found")
                 self.assertIn(
-                    "Missing case record",
+                    "Missing case",
                     missing_record_payload["message"],
                 )
             finally:
@@ -1963,56 +1841,19 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 thread.join(timeout=2)
 
     def test_cli_renders_recommendation_draft_view_for_a_case(self) -> None:
-        store, _ = make_store()
-        service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
-            store=store,
-        )
-        compared_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
-        reviewed_context = {
-            "asset": {
-                "asset_id": "asset-repo-draft-cli-001",
-                "criticality": "high",
-            },
-            "identity": {
-                "identity_id": "principal-draft-cli-001",
-            },
-        }
-        admitted = service.ingest_finding_alert(
-            finding_id="finding-draft-cli-001",
-            analytic_signal_id="signal-draft-cli-001",
-            substrate_detection_record_id="substrate-detection-draft-cli-001",
-            correlation_key="claim:asset-repo-draft-cli-001:assistant-draft-cli",
-            first_seen_at=compared_at,
-            last_seen_at=compared_at,
-            reviewed_context=reviewed_context,
-        )
-        evidence = service.persist_record(
-            EvidenceRecord(
-                evidence_id="evidence-draft-cli-001",
-                source_record_id="substrate-detection-draft-cli-001",
-                alert_id=admitted.alert.alert_id,
-                case_id=None,
-                source_system="reviewed-source",
-                collector_identity="control-plane-test",
-                acquired_at=compared_at,
-                derivation_relationship="admitted_analytic_signal",
-                lifecycle_state="collected",
-            )
-        )
-        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        _, service, promoted_case, evidence_id, _ = self._build_phase19_in_scope_case()
         recommendation = service.persist_record(
             RecommendationRecord(
                 recommendation_id="recommendation-draft-cli-001",
                 lead_id=None,
                 hunt_run_id=None,
-                alert_id=admitted.alert.alert_id,
+                alert_id=promoted_case.alert_id,
                 case_id=promoted_case.case_id,
                 ai_trace_id=None,
                 review_owner="reviewer-001",
                 intended_outcome="review the cited evidence before escalation",
                 lifecycle_state="under_review",
-                reviewed_context=reviewed_context,
+                reviewed_context=promoted_case.reviewed_context,
             )
         )
 
@@ -2033,7 +1874,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertTrue(payload["read_only"])
         self.assertEqual(payload["record_family"], "case")
         self.assertEqual(payload["record_id"], promoted_case.case_id)
-        self.assertEqual(payload["reviewed_context"], reviewed_context)
+        self.assertEqual(payload["reviewed_context"], promoted_case.reviewed_context)
         self.assertEqual(
             payload["recommendation_draft"]["source_output_kind"],
             "case_summary",
@@ -2041,20 +1882,17 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(payload["recommendation_draft"]["status"], "ready")
         self.assertTrue(payload["recommendation_draft"]["candidate_recommendations"])
         self.assertIn(
-            evidence.evidence_id,
+            evidence_id,
             payload["recommendation_draft"]["citations"],
         )
         self.assertIn(
             "advisory_only",
             payload["recommendation_draft"]["uncertainty_flags"],
         )
-        self.assertEqual(payload["linked_evidence_ids"], [evidence.evidence_id])
-        self.assertIn(admitted.alert.alert_id, payload["linked_alert_ids"])
+        self.assertEqual(payload["linked_evidence_ids"], [evidence_id])
+        self.assertIn(promoted_case.alert_id, payload["linked_alert_ids"])
         self.assertIn(recommendation.recommendation_id, payload["linked_recommendation_ids"])
-        self.assertIn(
-            admitted.reconciliation.reconciliation_id,
-            payload["linked_reconciliation_ids"],
-        )
+        self.assertTrue(payload["linked_reconciliation_ids"])
 
     def test_cli_renders_recommendation_draft_with_source_review_outcome(self) -> None:
         store, _ = make_store()

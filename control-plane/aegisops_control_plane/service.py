@@ -1519,12 +1519,13 @@ class AegisOpsControlPlaneService:
                 f"Unsupported control-plane record family {record_family!r}; "
                 f"expected one of: {known_families}"
             )
-
         record = self._store.get(record_type, record_id)
         if record is None:
             raise LookupError(
                 f"Missing {record_family} record {record_id!r} for assistant context"
             )
+        if record_family == "case":
+            self._require_phase19_operator_case_record(record)
 
         linked_alert_ids = self._assistant_ids_from_value(
             getattr(record, "alert_id", None)
@@ -3904,6 +3905,9 @@ class AegisOpsControlPlaneService:
 
     def _require_phase19_operator_case(self, case_id: str) -> CaseRecord:
         case = self._require_case_record(case_id)
+        return self._require_phase19_operator_case_record(case)
+
+    def _require_phase19_operator_case_record(self, case: CaseRecord) -> CaseRecord:
         if not self._case_is_in_phase19_operator_slice(case):
             raise ValueError(
                 f"Case {case.case_id!r} is outside the approved Phase 19 "
