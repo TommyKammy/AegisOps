@@ -168,20 +168,22 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
     ) -> tuple[object, AegisOpsControlPlaneService, CaseRecord, str, datetime]:
         if store is None:
             store, _ = make_store()
+        shared_secret = secrets.token_urlsafe(24)
+        reverse_proxy_secret = secrets.token_urlsafe(24)
         service = AegisOpsControlPlaneService(
             RuntimeConfig(
                 postgres_dsn="postgresql://control-plane.local/aegisops",
-                wazuh_ingest_shared_secret="reviewed-shared-secret",
-                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+                wazuh_ingest_shared_secret=shared_secret,
+                wazuh_ingest_reverse_proxy_secret=reverse_proxy_secret,
             ),
             store=store,
         )
         reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
         admitted = service.ingest_wazuh_alert(
             raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
-            authorization_header="Bearer reviewed-shared-secret",
+            authorization_header=f"Bearer {shared_secret}",
             forwarded_proto="https",
-            reverse_proxy_secret_header="reviewed-proxy-secret",
+            reverse_proxy_secret_header=reverse_proxy_secret,
             peer_addr="127.0.0.1",
         )
         promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
@@ -4189,6 +4191,58 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 observed_at=reviewed_at,
                 scope_statement="Broader source-family casework must fail closed.",
             )
+
+    def test_service_rejects_case_without_reciprocal_alert_linkage_from_phase19_operator_surface(
+        self,
+    ) -> None:
+        _, service, promoted_case, _, _ = self._build_phase19_in_scope_case()
+        spoofed_case = service.persist_record(
+            CaseRecord(
+                case_id="case-phase19-spoofed-alert-linkage",
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                evidence_ids=promoted_case.evidence_ids,
+                lifecycle_state=promoted_case.lifecycle_state,
+                reviewed_context=dict(promoted_case.reviewed_context),
+            )
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+        ):
+            service.inspect_case_detail(spoofed_case.case_id)
+
+    def test_service_rejects_case_without_reciprocal_reconciliation_linkage_from_phase19_operator_surface(
+        self,
+    ) -> None:
+        _, service, promoted_case, _, _ = self._build_phase19_in_scope_case()
+        alert = service.get_record(AlertRecord, promoted_case.alert_id)
+        self.assertIsNotNone(alert)
+
+        spoofed_case_id = "case-phase19-spoofed-reconciliation-linkage"
+        service.persist_record(
+            replace(
+                alert,
+                case_id=spoofed_case_id,
+            )
+        )
+        spoofed_case = service.persist_record(
+            CaseRecord(
+                case_id=spoofed_case_id,
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                evidence_ids=promoted_case.evidence_ids,
+                lifecycle_state=promoted_case.lifecycle_state,
+                reviewed_context=dict(promoted_case.reviewed_context),
+            )
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+        ):
+            service.inspect_case_detail(spoofed_case.case_id)
 
     def test_service_rejects_duplicate_casework_identifiers(self) -> None:
         _, service, promoted_case, evidence_id, reviewed_at = (

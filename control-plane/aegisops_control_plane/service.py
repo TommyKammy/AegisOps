@@ -3919,9 +3919,21 @@ class AegisOpsControlPlaneService:
         alert = self._store.get(AlertRecord, alert_id)
         if alert is None:
             return False
+        if alert.case_id != case.case_id:
+            return False
 
         reconciliation = self._latest_detection_reconciliation_for_alert(alert.alert_id)
         if reconciliation is None or not self._reconciliation_is_wazuh_origin(reconciliation):
+            return False
+        if not self._linked_id_exists(
+            reconciliation.subject_linkage.get("alert_ids"),
+            alert.alert_id,
+        ):
+            return False
+        if not self._linked_id_exists(
+            reconciliation.subject_linkage.get("case_ids"),
+            case.case_id,
+        ):
             return False
 
         admission_provenance = (

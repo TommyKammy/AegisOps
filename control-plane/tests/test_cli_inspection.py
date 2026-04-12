@@ -54,17 +54,17 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 host="127.0.0.1" if host is None else host,
                 port=0 if port is None else port,
                 postgres_dsn="postgresql://control-plane.local/aegisops",
-                wazuh_ingest_shared_secret="reviewed-shared-secret",
-                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
             ),
             store=store,
         )
         reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
         admitted = service.ingest_wazuh_alert(
             raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
-            authorization_header="Bearer reviewed-shared-secret",
+            authorization_header="Bearer reviewed-shared-secret",  # noqa: S106 - test fixture secret
             forwarded_proto="https",
-            reverse_proxy_secret_header="reviewed-proxy-secret",
+            reverse_proxy_secret_header="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
             peer_addr="127.0.0.1",
         )
         promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
