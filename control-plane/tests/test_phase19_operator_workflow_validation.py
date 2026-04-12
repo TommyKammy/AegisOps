@@ -6,7 +6,7 @@ import pathlib
 import sys
 import threading
 import unittest
-from urllib import request
+from urllib import error, request
 from unittest import mock
 
 
@@ -15,7 +15,9 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
 import main
+from aegisops_control_plane.adapters.wazuh import WazuhAlertAdapter
 from aegisops_control_plane.config import RuntimeConfig
+from aegisops_control_plane.models import AITraceRecord, CaseRecord, RecommendationRecord
 from aegisops_control_plane.service import AegisOpsControlPlaneService
 from postgres_test_support import make_store
 
@@ -369,6 +371,235 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                     closed_case_detail["advisory_output"]["citations"],
                 )
                 self.assertIn(case_id, closed_case_detail["advisory_output"]["citations"])
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(timeout=2)
+
+    def test_reviewed_runtime_path_fails_closed_for_out_of_scope_case_reads(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret=REVIEWED_SHARED_SECRET,
+                wazuh_ingest_reverse_proxy_secret=REVIEWED_PROXY_SECRET,
+            ),
+            store=store,
+        )
+
+        admitted = service.ingest_wazuh_alert(
+            raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
+            authorization_header=f"Bearer {REVIEWED_SHARED_SECRET}",
+            forwarded_proto="https",
+            reverse_proxy_secret_header=REVIEWED_PROXY_SECRET,
+            peer_addr="127.0.0.1",
+        )
+        in_scope_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        in_scope_recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-phase19-workflow-live-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=in_scope_case.alert_id,
+                case_id=in_scope_case.case_id,
+                ai_trace_id="ai-trace-phase19-workflow-live-001",
+                review_owner="reviewer-001",
+                intended_outcome="Review cited evidence before any escalation-bound follow-up.",
+                lifecycle_state="under_review",
+            )
+        )
+        in_scope_ai_trace = service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-phase19-workflow-live-001",
+                subject_linkage={
+                    "recommendation_ids": (in_scope_recommendation.recommendation_id,)
+                },
+                model_identity="gpt-5.4",
+                prompt_version="prompt-v1",
+                generated_at=admitted.reconciliation.compared_at,
+                material_input_refs=in_scope_case.evidence_ids,
+                reviewer_identity="reviewer-001",
+                lifecycle_state="accepted_for_reference",
+            )
+        )
+
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+                base_url = f"http://127.0.0.1:{servers[0].server_port}"
+
+                def get_json(path: str) -> dict[str, object]:
+                    response = request.urlopen(f"{base_url}{path}", timeout=2)  # noqa: S310
+                    return json.loads(response.read().decode("utf-8"))
+
+                def get_error_payload(path: str) -> dict[str, object]:
+                    with self.assertRaises(error.HTTPError) as exc_info:
+                        request.urlopen(f"{base_url}{path}", timeout=2)  # noqa: S310
+                    self.assertEqual(exc_info.exception.code, 400)
+                    return json.loads(exc_info.exception.read().decode("utf-8"))
+
+                for path, record_family, record_id in (
+                    (
+                        "/inspect-advisory-output",
+                        "recommendation",
+                        in_scope_recommendation.recommendation_id,
+                    ),
+                    (
+                        "/inspect-advisory-output",
+                        "ai_trace",
+                        in_scope_ai_trace.ai_trace_id,
+                    ),
+                    (
+                        "/render-recommendation-draft",
+                        "recommendation",
+                        in_scope_recommendation.recommendation_id,
+                    ),
+                    (
+                        "/render-recommendation-draft",
+                        "ai_trace",
+                        in_scope_ai_trace.ai_trace_id,
+                    ),
+                ):
+                    with self.subTest(path=path, record_family=record_family):
+                        payload = get_json(
+                            f"{path}?family={record_family}&record_id={record_id}"
+                        )
+                        self.assertTrue(payload["read_only"])
+                        self.assertEqual(payload["record_family"], record_family)
+                        self.assertEqual(payload["record_id"], record_id)
+                        self.assertIn(in_scope_case.case_id, payload["linked_case_ids"])
+
+                adapter = WazuhAlertAdapter()
+                replay_admitted = service.ingest_native_detection_record(
+                    adapter,
+                    adapter.build_native_detection_record(
+                        _load_wazuh_fixture("github-audit-alert.json")
+                    ),
+                )
+                replay_case = service.promote_alert_to_case(replay_admitted.alert.alert_id)
+
+                spoofed_case = service.persist_record(
+                    CaseRecord(
+                        case_id="case-phase19-workflow-spoofed-001",
+                        alert_id=in_scope_case.alert_id,
+                        finding_id=in_scope_case.finding_id,
+                        evidence_ids=in_scope_case.evidence_ids,
+                        lifecycle_state=in_scope_case.lifecycle_state,
+                        reviewed_context=dict(in_scope_case.reviewed_context),
+                    )
+                )
+
+                synthetic_recommendation = service.persist_record(
+                    RecommendationRecord(
+                        recommendation_id="recommendation-phase19-workflow-synthetic-001",
+                        lead_id=None,
+                        hunt_run_id=None,
+                        alert_id=in_scope_case.alert_id,
+                        case_id=in_scope_case.case_id,
+                        ai_trace_id="ai-trace-phase19-workflow-synthetic-001",
+                        review_owner="reviewer-001",
+                        intended_outcome="Synthetic advisory reads must fail closed.",
+                        lifecycle_state="under_review",
+                        reviewed_context={
+                            "source": {
+                                "source_family": "synthetic_review_fixture",
+                                "admission_kind": "replay",
+                            }
+                        },
+                    )
+                )
+                synthetic_ai_trace = service.persist_record(
+                    AITraceRecord(
+                        ai_trace_id="ai-trace-phase19-workflow-synthetic-001",
+                        subject_linkage={
+                            "recommendation_ids": (
+                                synthetic_recommendation.recommendation_id,
+                            )
+                        },
+                        model_identity="gpt-5.4",
+                        prompt_version="prompt-v1",
+                        generated_at=admitted.reconciliation.compared_at,
+                        material_input_refs=("fixture://synthetic-phase19-review",),
+                        reviewer_identity="reviewer-001",
+                        lifecycle_state="under_review",
+                    )
+                )
+
+                for path in (
+                    f"/inspect-case-detail?case_id={replay_case.case_id}",
+                    (
+                        "/inspect-assistant-context"
+                        f"?family=case&record_id={replay_case.case_id}"
+                    ),
+                    f"/inspect-advisory-output?family=case&record_id={replay_case.case_id}",
+                    (
+                        "/render-recommendation-draft"
+                        f"?family=case&record_id={replay_case.case_id}"
+                    ),
+                    f"/inspect-case-detail?case_id={spoofed_case.case_id}",
+                    (
+                        "/inspect-assistant-context"
+                        f"?family=case&record_id={spoofed_case.case_id}"
+                    ),
+                ):
+                    with self.subTest(path=path):
+                        payload = get_error_payload(path)
+                        self.assertEqual(payload["error"], "invalid_request")
+                        self.assertIn(
+                            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+                            payload["message"],
+                        )
+
+                for path, record_family, record_id in (
+                    (
+                        "/inspect-advisory-output",
+                        "recommendation",
+                        synthetic_recommendation.recommendation_id,
+                    ),
+                    (
+                        "/inspect-advisory-output",
+                        "ai_trace",
+                        synthetic_ai_trace.ai_trace_id,
+                    ),
+                    (
+                        "/render-recommendation-draft",
+                        "recommendation",
+                        synthetic_recommendation.recommendation_id,
+                    ),
+                    (
+                        "/render-recommendation-draft",
+                        "ai_trace",
+                        synthetic_ai_trace.ai_trace_id,
+                    ),
+                ):
+                    with self.subTest(path=path, record_family=record_family):
+                        payload = get_error_payload(
+                            f"{path}?family={record_family}&record_id={record_id}"
+                        )
+                        self.assertEqual(payload["error"], "invalid_request")
+                        self.assertIn(
+                            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+                            payload["message"],
+                        )
             finally:
                 if servers:
                     servers[0].shutdown()

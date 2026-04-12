@@ -4096,6 +4096,59 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 ):
                     service.render_recommendation_draft(record_family, record_id)
 
+    def test_service_rejects_synthetic_case_scoped_reads_spoofing_in_scope_case_lineage(
+        self,
+    ) -> None:
+        _, service, promoted_case, _, reviewed_at = self._build_phase19_in_scope_case()
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-phase19-synthetic-linked-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id="ai-trace-phase19-synthetic-linked-001",
+                review_owner="reviewer-001",
+                intended_outcome="Synthetic case-scoped advisory reads must fail closed.",
+                lifecycle_state="under_review",
+                reviewed_context={
+                    "source": {
+                        "source_family": "synthetic_review_fixture",
+                        "admission_kind": "replay",
+                    }
+                },
+            )
+        )
+        ai_trace = service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-phase19-synthetic-linked-001",
+                subject_linkage={"recommendation_ids": (recommendation.recommendation_id,)},
+                model_identity="gpt-5.4",
+                prompt_version="prompt-v1",
+                generated_at=reviewed_at,
+                material_input_refs=("fixture://synthetic-phase19-review",),
+                reviewer_identity="reviewer-001",
+                lifecycle_state="under_review",
+            )
+        )
+
+        for record_family, record_id in (
+            ("recommendation", recommendation.recommendation_id),
+            ("ai_trace", ai_trace.ai_trace_id),
+        ):
+            with self.subTest(record_family=record_family):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+                ):
+                    service.inspect_advisory_output(record_family, record_id)
+
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+                ):
+                    service.render_recommendation_draft(record_family, record_id)
+
     def test_service_rejects_non_github_audit_case_from_phase19_operator_surface(
         self,
     ) -> None:
