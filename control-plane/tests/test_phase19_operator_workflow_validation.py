@@ -272,6 +272,52 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                 self.assertIn(created.alert.alert_id, case_detail["advisory_output"]["citations"])
                 self.assertIn(case_id, case_detail["advisory_output"]["citations"])
 
+                assistant_context = get_json(
+                    f"/inspect-assistant-context?family=case&record_id={case_id}"
+                )
+                self.assertTrue(assistant_context["read_only"])
+                self.assertEqual(assistant_context["record_family"], "case")
+                self.assertEqual(assistant_context["record_id"], case_id)
+                self.assertEqual(
+                    assistant_context["advisory_output"]["output_kind"],
+                    "case_summary",
+                )
+                self.assertIn(evidence_id, assistant_context["linked_evidence_ids"])
+                self.assertIn(
+                    recommendation["recommendation_id"],
+                    assistant_context["linked_recommendation_ids"],
+                )
+
+                advisory_output = get_json(
+                    f"/inspect-advisory-output?family=case&record_id={case_id}"
+                )
+                self.assertTrue(advisory_output["read_only"])
+                self.assertEqual(advisory_output["record_family"], "case")
+                self.assertEqual(advisory_output["record_id"], case_id)
+                self.assertEqual(advisory_output["output_kind"], "case_summary")
+                self.assertEqual(advisory_output["status"], "ready")
+                self.assertIn(evidence_id, advisory_output["citations"])
+                self.assertIn(created.alert.alert_id, advisory_output["citations"])
+
+                recommendation_draft = get_json(
+                    f"/render-recommendation-draft?family=case&record_id={case_id}"
+                )
+                self.assertTrue(recommendation_draft["read_only"])
+                self.assertEqual(recommendation_draft["record_family"], "case")
+                self.assertEqual(recommendation_draft["record_id"], case_id)
+                self.assertEqual(
+                    recommendation_draft["recommendation_draft"]["source_output_kind"],
+                    "case_summary",
+                )
+                self.assertEqual(
+                    recommendation_draft["recommendation_draft"]["status"],
+                    "ready",
+                )
+                self.assertIn(
+                    recommendation["recommendation_id"],
+                    recommendation_draft["linked_recommendation_ids"],
+                )
+
                 closed_case = post_json(
                     "/operator/record-case-disposition",
                     {

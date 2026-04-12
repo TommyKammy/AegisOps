@@ -33,6 +33,14 @@ def _normalize_case_id(value: str) -> str:
     return value.strip()
 
 
+def _normalize_record_family(value: str) -> str:
+    return value.strip()
+
+
+def _normalize_record_id(value: str) -> str:
+    return value.strip()
+
+
 def _normalize_optional_string(value: object) -> str | None:
     if value is None:
         return None
@@ -427,6 +435,72 @@ def run_control_plane_service(
                     return
                 try:
                     payload = service.inspect_case_detail(case_id).to_dict()
+                except ValueError as exc:
+                    self._write_json(
+                        HTTPStatus.BAD_REQUEST,
+                        {
+                            "error": "invalid_request",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                except LookupError as exc:
+                    self._write_json(
+                        HTTPStatus.NOT_FOUND,
+                        {
+                            "error": "not_found",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                self._write_json(HTTPStatus.OK, payload)
+                return
+
+            if request_path in {
+                "/inspect-assistant-context",
+                "/inspect-advisory-output",
+                "/render-recommendation-draft",
+            }:
+                family = _normalize_record_family(
+                    parse_qs(request_target.query).get("family", [""])[0]
+                )
+                if not family:
+                    self._write_json(
+                        HTTPStatus.BAD_REQUEST,
+                        {
+                            "error": "invalid_request",
+                            "message": "family query parameter is required",
+                        },
+                    )
+                    return
+                record_id = _normalize_record_id(
+                    parse_qs(request_target.query).get("record_id", [""])[0]
+                )
+                if not record_id:
+                    self._write_json(
+                        HTTPStatus.BAD_REQUEST,
+                        {
+                            "error": "invalid_request",
+                            "message": "record_id query parameter is required",
+                        },
+                    )
+                    return
+                try:
+                    if request_path == "/inspect-assistant-context":
+                        payload = service.inspect_assistant_context(
+                            family,
+                            record_id,
+                        ).to_dict()
+                    elif request_path == "/inspect-advisory-output":
+                        payload = service.inspect_advisory_output(
+                            family,
+                            record_id,
+                        ).to_dict()
+                    else:
+                        payload = service.render_recommendation_draft(
+                            family,
+                            record_id,
+                        ).to_dict()
                 except ValueError as exc:
                     self._write_json(
                         HTTPStatus.BAD_REQUEST,
