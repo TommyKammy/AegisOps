@@ -21,6 +21,8 @@ from postgres_test_support import make_store
 
 
 FIXTURES_ROOT = pathlib.Path(__file__).resolve().parent / "fixtures" / "wazuh"
+REVIEWED_SHARED_SECRET = "reviewed-shared-secret"  # noqa: S105
+REVIEWED_PROXY_SECRET = "reviewed-proxy-secret"  # noqa: S105
 
 
 def _load_wazuh_fixture(name: str) -> dict[str, object]:
@@ -35,8 +37,8 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                 host="127.0.0.1",
                 port=0,
                 postgres_dsn="postgresql://control-plane.local/aegisops",
-                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106
-                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106
+                wazuh_ingest_shared_secret=REVIEWED_SHARED_SECRET,
+                wazuh_ingest_reverse_proxy_secret=REVIEWED_PROXY_SECRET,
             ),
             store=store,
         )
@@ -49,23 +51,23 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
 
         created = service.ingest_wazuh_alert(
             raw_alert=created_alert,
-            authorization_header="Bearer reviewed-shared-secret",
+            authorization_header=f"Bearer {REVIEWED_SHARED_SECRET}",
             forwarded_proto="https",
-            reverse_proxy_secret_header="reviewed-proxy-secret",
+            reverse_proxy_secret_header=REVIEWED_PROXY_SECRET,
             peer_addr="127.0.0.1",
         )
         service.ingest_wazuh_alert(
             raw_alert=restated_alert,
-            authorization_header="Bearer reviewed-shared-secret",
+            authorization_header=f"Bearer {REVIEWED_SHARED_SECRET}",
             forwarded_proto="https",
-            reverse_proxy_secret_header="reviewed-proxy-secret",
+            reverse_proxy_secret_header=REVIEWED_PROXY_SECRET,
             peer_addr="127.0.0.1",
         )
         service.ingest_wazuh_alert(
             raw_alert=deduplicated_alert,
-            authorization_header="Bearer reviewed-shared-secret",
+            authorization_header=f"Bearer {REVIEWED_SHARED_SECRET}",
             forwarded_proto="https",
-            reverse_proxy_secret_header="reviewed-proxy-secret",
+            reverse_proxy_secret_header=REVIEWED_PROXY_SECRET,
             peer_addr="127.0.0.1",
         )
 
