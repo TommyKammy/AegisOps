@@ -2204,6 +2204,7 @@ class AegisOpsControlPlaneService:
         record_id: str,
     ) -> AdvisoryInspectionSnapshot:
         context_snapshot = self.inspect_assistant_context(record_family, record_id)
+        self._require_phase19_case_scoped_advisory_read(context_snapshot)
         return _advisory_inspection_snapshot_from_context(context_snapshot)
 
     def render_recommendation_draft(
@@ -2212,6 +2213,7 @@ class AegisOpsControlPlaneService:
         record_id: str,
     ) -> RecommendationDraftSnapshot:
         context_snapshot = self.inspect_assistant_context(record_family, record_id)
+        self._require_phase19_case_scoped_advisory_read(context_snapshot)
         return _recommendation_draft_snapshot_from_context(context_snapshot)
 
     def attach_assistant_advisory_draft(
@@ -3906,6 +3908,17 @@ class AegisOpsControlPlaneService:
     def _require_phase19_operator_case(self, case_id: str) -> CaseRecord:
         case = self._require_case_record(case_id)
         return self._require_phase19_operator_case_record(case)
+
+    def _require_phase19_case_scoped_advisory_read(
+        self,
+        context_snapshot: AnalystAssistantContextSnapshot,
+    ) -> None:
+        if context_snapshot.record_family == "case":
+            self._require_phase19_operator_case(context_snapshot.record_id)
+            return
+
+        for case_id in context_snapshot.linked_case_ids:
+            self._require_phase19_operator_case(case_id)
 
     def _require_phase19_operator_case_record(self, case: CaseRecord) -> CaseRecord:
         if not self._case_is_in_phase19_operator_slice(case):
