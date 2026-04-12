@@ -3935,6 +3935,10 @@ class AegisOpsControlPlaneService:
                 error_message=error_message,
             )
         elif context_snapshot.record_family == "ai_trace":
+            if self._phase19_context_declares_out_of_scope_provenance(
+                context_snapshot.record.get("subject_linkage")
+            ):
+                raise ValueError(error_message)
             if not context_snapshot.linked_recommendation_records:
                 raise ValueError(error_message)
             for recommendation in context_snapshot.linked_recommendation_records:
@@ -4057,13 +4061,17 @@ class AegisOpsControlPlaneService:
 
     def _phase19_context_declares_out_of_scope_provenance(self, context: object) -> bool:
         if not isinstance(context, Mapping):
-            return False
+            return True
 
-        source_family = self._phase19_operator_source_family(context)
+        source_family = self._phase19_operator_source_family(
+            context
+        ) or self._phase19_operator_source_family(context.get("reviewed_source_profile"))
         if source_family is not None and source_family != "github_audit":
             return True
 
-        admission_provenance = _normalize_admission_provenance(context.get("provenance"))
+        admission_provenance = _normalize_admission_provenance(
+            context.get("provenance")
+        ) or _normalize_admission_provenance(context.get("admission_provenance"))
         return (
             admission_provenance is not None
             and admission_provenance

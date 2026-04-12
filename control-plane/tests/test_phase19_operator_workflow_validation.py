@@ -560,6 +560,11 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                         "/inspect-assistant-context"
                         f"?family=case&record_id={spoofed_case.case_id}"
                     ),
+                    f"/inspect-advisory-output?family=case&record_id={spoofed_case.case_id}",
+                    (
+                        "/render-recommendation-draft"
+                        f"?family=case&record_id={spoofed_case.case_id}"
+                    ),
                 ):
                     with self.subTest(path=path):
                         payload = get_error_payload(path)
