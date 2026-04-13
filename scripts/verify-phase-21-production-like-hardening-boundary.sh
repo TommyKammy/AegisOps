@@ -14,6 +14,9 @@ response_doc="${repo_root}/docs/response-action-safety-model.md"
 source_onboarding_doc="${repo_root}/docs/source-onboarding-contract.md"
 phase14_doc="${repo_root}/docs/phase-14-identity-rich-source-family-design.md"
 phase18_doc="${repo_root}/docs/phase-18-wazuh-lab-topology-and-live-ingest-contract.md"
+wazuh_ingest_doc="${repo_root}/docs/wazuh-alert-ingest-contract.md"
+state_model_doc="${repo_root}/docs/control-plane-state-model.md"
+phase19_doc="${repo_root}/docs/phase-19-thin-operator-surface-and-daily-analyst-workflow.md"
 phase17_doc="${repo_root}/docs/phase-17-runtime-config-contract-and-boot-command-expectations.md"
 architecture_doc="${repo_root}/docs/architecture.md"
 docs_test="${repo_root}/control-plane/tests/test_phase21_production_like_hardening_boundary_docs.py"
@@ -64,6 +67,9 @@ require_file "${response_doc}" "Missing response action safety model doc"
 require_file "${source_onboarding_doc}" "Missing source onboarding contract doc"
 require_file "${phase14_doc}" "Missing Phase 14 identity-rich source family design doc"
 require_file "${phase18_doc}" "Missing Phase 18 live ingest contract doc"
+require_file "${wazuh_ingest_doc}" "Missing Wazuh alert ingest contract doc"
+require_file "${state_model_doc}" "Missing control-plane state model doc"
+require_file "${phase19_doc}" "Missing Phase 19 operator surface doc"
 require_file "${phase17_doc}" "Missing Phase 17 runtime config contract doc"
 require_file "${architecture_doc}" "Missing architecture overview doc"
 require_file "${docs_test}" "Missing Phase 21 docs unittest"
@@ -87,6 +93,10 @@ design_required_lines=(
   'The approved first reviewed second live source to onboard after the existing GitHub audit live slice is Entra ID.'
   '`GitHub audit -> Entra ID -> Microsoft 365 audit`'
   '`auth and secrets -> admin bootstrap and break-glass controls -> restore proof -> observability proof -> topology growth gate review -> Entra ID second-source onboarding`'
+  'Phase 21 therefore defines the reviewed conditions that must be met before AegisOps grows from the current one-node operating shape toward two-node or broader deployment patterns.'
+  'The reviewed topology-growth gate is therefore a one-node-to-multi-node admission review rather than pre-approval for cluster rollout.'
+  'The reviewed second-source onboarding boundary must reuse the existing control-plane contracts for payload admission, dedupe, restatement, evidence preservation, case linkage, and thin operator-surface visibility.'
+  'Phase 21 does not approve a parallel intake, evidence, case, or operator model for the second source.'
   'Phase 21 does not approve IdP-driven self-service role expansion, mailbox-backed service identities, shared administrator logins, source-side credentials stored in Git, or credentials that silently span monitoring, approval, workflow execution, and platform administration.'
   'The break-glass path is a recovery exception only. It must not become an alternate approval path, a permanent operator shortcut, or a way to bypass the reviewed reverse proxy and control-plane authority model.'
   'Phase 21 does not approve broad SIEM replacement analytics, broad metrics-platform rollout, after-hours autonomous operations, or observability-driven authority shortcuts that move approval or reconciliation truth outside AegisOps.'
@@ -114,7 +124,8 @@ validation_required_lines=(
   'Confirmed the fixed implementation order is `auth and secrets -> admin bootstrap and break-glass controls -> restore proof -> observability proof -> topology growth gate review -> Entra ID second-source onboarding`.'
   'Confirmed the design preserves the completed Phase 20 operator-to-approval-to-delegation path for `notify_identity_owner` and does not reopen broader action catalogs, unattended execution, or higher-risk live action growth.'
   'Confirmed Entra ID is the first reviewed second live source to onboard after the existing GitHub audit live slice, with the reviewed next identity-rich source order staying `GitHub audit -> Entra ID -> Microsoft 365 audit`.'
-  'Confirmed topology growth remains conditional only and cannot proceed unless auth, ingress, restore, observability, and authority-boundary guarantees remain intact.'
+  'Confirmed topology growth remains conditional only and cannot proceed unless auth, ingress, restore, observability, and authority-boundary guarantees remain intact across the one-node-to-multi-node admission review.'
+  'Confirmed the reviewed second-source onboarding boundary reuses the existing payload-admission, dedupe, restatement, evidence-preservation, case-linkage, and thin-operator-surface contracts rather than introducing a parallel second-source model.'
   'Confirmed explicit non-expansion rules keep broad multi-source breadth, broad UI expansion, direct vendor-local actioning, and production-scale topology claims out of scope for Phase 21.'
 )
 
@@ -153,6 +164,9 @@ required_artifacts=(
   "docs/source-onboarding-contract.md"
   "docs/phase-14-identity-rich-source-family-design.md"
   "docs/phase-18-wazuh-lab-topology-and-live-ingest-contract.md"
+  "docs/wazuh-alert-ingest-contract.md"
+  "docs/control-plane-state-model.md"
+  "docs/phase-19-thin-operator-surface-and-daily-analyst-workflow.md"
   "docs/phase-17-runtime-config-contract-and-boot-command-expectations.md"
   "docs/architecture.md"
   "control-plane/tests/test_phase21_production_like_hardening_boundary_docs.py"
