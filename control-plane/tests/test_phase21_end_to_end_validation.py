@@ -292,10 +292,7 @@ class Phase21EndToEndValidationTests(unittest.TestCase):
 
         backup = service.export_authoritative_record_chain_backup()
         restored_store, _ = make_store()
-        restored_service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
-            store=restored_store,
-        )
+        _, restored_service = self._build_service(store=restored_store)
 
         restore_summary = restored_service.restore_authoritative_record_chain_backup(backup)
         restored_readiness = restored_service.inspect_readiness_diagnostics()
@@ -321,6 +318,11 @@ class Phase21EndToEndValidationTests(unittest.TestCase):
         self.assertEqual(
             restored_readiness.metrics["phase20_notify_identity_owner"]["reconciled_executions"],
             1,
+        )
+        self.assertEqual(restored_readiness.status, "ready")
+        self.assertEqual(
+            restored_readiness.startup["validated_surfaces"],
+            readiness.startup["validated_surfaces"],
         )
         self.assertEqual(restored_case_detail.case_id, promoted_case.case_id)
         self.assertEqual(restored_case_detail.linked_evidence_ids, (evidence_id,))
@@ -396,6 +398,7 @@ class Phase21EndToEndValidationTests(unittest.TestCase):
             advisory_context.linked_evidence_ids,
             (promoted_case.evidence_ids[0],),
         )
+        baseline_readiness = service.inspect_readiness_diagnostics()
 
         with self.assertRaisesRegex(
             ValueError,
@@ -408,6 +411,19 @@ class Phase21EndToEndValidationTests(unittest.TestCase):
                 reverse_proxy_secret_header=REVIEWED_WAZUH_PROXY_SECRET,
                 peer_addr="127.0.0.1",
             )
+
+        post_rejection_queue = service.inspect_analyst_queue()
+        self.assertEqual(post_rejection_queue.total_records, queue_view.total_records)
+        self.assertEqual(post_rejection_queue.records, queue_view.records)
+        post_rejection_readiness = service.inspect_readiness_diagnostics()
+        self.assertEqual(
+            post_rejection_readiness.metrics["alerts"],
+            baseline_readiness.metrics["alerts"],
+        )
+        self.assertEqual(
+            post_rejection_readiness.metrics["cases"],
+            baseline_readiness.metrics["cases"],
+        )
 
 
 if __name__ == "__main__":
