@@ -123,6 +123,9 @@ class _TransactionMutationStore:
     def list(self, record_type: object) -> tuple[object, ...]:
         return self.inner.list(record_type)
 
+    def inspect_readiness_aggregates(self) -> object:
+        return self.inner.inspect_readiness_aggregates()
+
     @contextmanager
     def transaction(
         self,
@@ -163,6 +166,13 @@ class _ConcurrentListMutationStore:
             self._mutated = True
         return records
 
+    def inspect_readiness_aggregates(self) -> object:
+        aggregates = self.inner.inspect_readiness_aggregates()
+        if not self._mutated:
+            self.mutate_once()
+            self._mutated = True
+        return aggregates
+
     @contextmanager
     def transaction(
         self,
@@ -195,6 +205,9 @@ class _CommitFailingStore:
     def list(self, record_type: object) -> tuple[object, ...]:
         return self.inner.list(record_type)
 
+    def inspect_readiness_aggregates(self) -> object:
+        return self.inner.inspect_readiness_aggregates()
+
     @contextmanager
     def transaction(
         self,
@@ -209,6 +222,7 @@ class _CommitFailingStore:
 @dataclass
 class _ListCountingStore:
     inner: object
+    list_calls: int = 0
     reconciliation_list_calls: int = 0
 
     @property
@@ -226,9 +240,13 @@ class _ListCountingStore:
         return self.inner.get(record_type, record_id)
 
     def list(self, record_type: object) -> tuple[object, ...]:
+        self.list_calls += 1
         if record_type is ReconciliationRecord:
             self.reconciliation_list_calls += 1
         return self.inner.list(record_type)
+
+    def inspect_readiness_aggregates(self) -> object:
+        return self.inner.inspect_readiness_aggregates()
 
     @contextmanager
     def transaction(
@@ -262,6 +280,9 @@ class _OutOfBandMutationStore:
 
     def list(self, record_type: object) -> tuple[object, ...]:
         return self.inner.list(record_type)
+
+    def inspect_readiness_aggregates(self) -> object:
+        return self.inner.inspect_readiness_aggregates()
 
     @contextmanager
     def transaction(
@@ -8338,6 +8359,30 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             ),
             concurrent_reconciliation,
         )
+
+    def test_service_phase21_readiness_avoids_full_table_list_reads(self) -> None:
+        inner_store, _ = make_store()
+        store = _ListCountingStore(inner=inner_store)
+        _store, _service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case(store=store)
+        )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+            ),
+            store=store,
+        )
+
+        store.list_calls = 0
+        readiness = service.inspect_readiness_diagnostics()
+
+        self.assertEqual(readiness.status, "ready")
+        self.assertEqual(store.list_calls, 0)
 
     def test_service_phase21_readiness_counts_distinct_execution_runs_and_redacts_payload(
         self,

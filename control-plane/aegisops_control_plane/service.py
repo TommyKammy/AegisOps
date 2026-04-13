@@ -15,7 +15,10 @@ from typing import Mapping, Protocol, Type, TypeVar
 
 from .adapters.executor import IsolatedExecutorAdapter
 from .adapters.n8n import N8NReconciliationAdapter
-from .adapters.postgres import PostgresControlPlaneStore
+from .adapters.postgres import (
+    PostgresControlPlaneStore,
+    ReadinessDiagnosticsAggregates,
+)
 from .adapters.shuffle import ShuffleActionAdapter
 from .adapters.wazuh import WazuhAlertAdapter
 from .config import RuntimeConfig
@@ -61,6 +64,9 @@ class ControlPlaneStore(Protocol):
         *,
         isolation_level: str | None = None,
     ) -> AbstractContextManager[None]:
+        ...
+
+    def inspect_readiness_aggregates(self) -> ReadinessDiagnosticsAggregates:
         ...
 
 
@@ -631,6 +637,41 @@ def _redacted_reconciliation_payload(
         redacted_subject_linkage.pop("latest_native_payload", None)
         payload["subject_linkage"] = redacted_subject_linkage
     return payload
+
+
+def _build_shutdown_status_snapshot(
+    *,
+    open_case_ids: tuple[str, ...],
+    active_action_request_ids: tuple[str, ...],
+    active_action_execution_ids: tuple[str, ...],
+    unresolved_reconciliation_ids: tuple[str, ...],
+) -> ShutdownStatusSnapshot:
+    blocking_reasons: list[str] = []
+    if open_case_ids:
+        blocking_reasons.append(
+            "controlled shutdown requires resolving or explicitly handing off open casework"
+        )
+    if active_action_request_ids:
+        blocking_reasons.append(
+            "controlled shutdown requires approval-bound action requests to leave an inactive state"
+        )
+    if active_action_execution_ids:
+        blocking_reasons.append(
+            "controlled shutdown requires queued or running executions to reach a terminal state"
+        )
+    if unresolved_reconciliation_ids:
+        blocking_reasons.append(
+            "controlled shutdown requires pending reconciliation mismatches to be reviewed first"
+        )
+    return ShutdownStatusSnapshot(
+        read_only=True,
+        shutdown_ready=not blocking_reasons,
+        blocking_reasons=tuple(blocking_reasons),
+        open_case_ids=open_case_ids,
+        active_action_request_ids=active_action_request_ids,
+        active_action_execution_ids=active_action_execution_ids,
+        unresolved_reconciliation_ids=unresolved_reconciliation_ids,
+    )
 
 
 def _parse_backup_datetime(value: object, field_name: str) -> datetime | None:
@@ -1891,184 +1932,99 @@ class AegisOpsControlPlaneService:
         )
 
     def describe_shutdown_status(self) -> ShutdownStatusSnapshot:
-        open_case_ids = tuple(
-            record.case_id
-            for record in self._store.list(CaseRecord)
-            if record.lifecycle_state
-            in {
-                "open",
-                "investigating",
-                "pending_action",
-                "contained_pending_validation",
-                "reopened",
-            }
-        )
-        active_action_request_ids = tuple(
-            record.action_request_id
-            for record in self._store.list(ActionRequestRecord)
-            if record.lifecycle_state
-            in {"pending_approval", "approved", "executing", "unresolved"}
-        )
-        active_action_execution_ids = tuple(
-            record.action_execution_id
-            for record in self._store.list(ActionExecutionRecord)
-            if record.lifecycle_state in {"queued", "running"}
-        )
-        unresolved_reconciliation_ids = tuple(
-            record.reconciliation_id
-            for record in self._store.list(ReconciliationRecord)
-            if record.lifecycle_state in {"pending", "mismatched", "stale"}
-        )
-        blocking_reasons: list[str] = []
-        if open_case_ids:
-            blocking_reasons.append(
-                "controlled shutdown requires resolving or explicitly handing off open casework"
-            )
-        if active_action_request_ids:
-            blocking_reasons.append(
-                "controlled shutdown requires approval-bound action requests to leave an inactive state"
-            )
-        if active_action_execution_ids:
-            blocking_reasons.append(
-                "controlled shutdown requires queued or running executions to reach a terminal state"
-            )
-        if unresolved_reconciliation_ids:
-            blocking_reasons.append(
-                "controlled shutdown requires pending reconciliation mismatches to be reviewed first"
-            )
-        return ShutdownStatusSnapshot(
-            read_only=True,
-            shutdown_ready=not blocking_reasons,
-            blocking_reasons=tuple(blocking_reasons),
-            open_case_ids=open_case_ids,
-            active_action_request_ids=active_action_request_ids,
-            active_action_execution_ids=active_action_execution_ids,
-            unresolved_reconciliation_ids=unresolved_reconciliation_ids,
+        readiness_aggregates = self._inspect_readiness_aggregates()
+        return _build_shutdown_status_snapshot(
+            open_case_ids=readiness_aggregates.open_case_ids,
+            active_action_request_ids=readiness_aggregates.active_action_request_ids,
+            active_action_execution_ids=readiness_aggregates.active_action_execution_ids,
+            unresolved_reconciliation_ids=readiness_aggregates.unresolved_reconciliation_ids,
         )
 
     def inspect_readiness_diagnostics(self) -> ReadinessDiagnosticsSnapshot:
         with self._store.transaction(isolation_level="REPEATABLE READ"):
             startup = self.describe_startup_status()
-            shutdown = self.describe_shutdown_status()
-            alerts = self._store.list(AlertRecord)
-            cases = self._store.list(CaseRecord)
-            action_requests = self._store.list(ActionRequestRecord)
-            action_executions = self._store.list(ActionExecutionRecord)
-            reconciliations = self._store.list(ReconciliationRecord)
+            readiness_aggregates = self._inspect_readiness_aggregates()
 
-        latest_reconciliation = max(
-            reconciliations,
-            key=lambda record: (record.compared_at, record.reconciliation_id),
-            default=None,
+        shutdown = _build_shutdown_status_snapshot(
+            open_case_ids=readiness_aggregates.open_case_ids,
+            active_action_request_ids=readiness_aggregates.active_action_request_ids,
+            active_action_execution_ids=readiness_aggregates.active_action_execution_ids,
+            unresolved_reconciliation_ids=readiness_aggregates.unresolved_reconciliation_ids,
         )
-        reconciliation_states = Counter(
-            record.lifecycle_state for record in reconciliations
-        )
-        action_request_states = Counter(
-            record.lifecycle_state for record in action_requests
-        )
-        action_execution_states = Counter(
-            record.lifecycle_state for record in action_executions
-        )
-        alert_states = Counter(record.lifecycle_state for record in alerts)
-        open_case_states = {
-            "open",
-            "investigating",
-            "pending_action",
-            "contained_pending_validation",
-            "reopened",
-        }
-        phase20_action_requests = tuple(
-            record
-            for record in action_requests
-            if record.requested_payload.get("action_type") == "notify_identity_owner"
-        )
-        phase20_request_ids = {
-            record.action_request_id for record in phase20_action_requests
-        }
-        phase20_executions = tuple(
-            record
-            for record in action_executions
-            if record.action_request_id in phase20_request_ids
-        )
-        phase20_execution_run_ids = {
-            record.execution_run_id
-            for record in phase20_executions
-            if record.execution_run_id is not None
-        }
-        phase20_reconciliations = tuple(
-            record
-            for record in reconciliations
-            if record.execution_run_id in phase20_execution_run_ids
-        )
-        phase20_matched_execution_run_ids = {
-            record.execution_run_id
-            for record in phase20_reconciliations
-            if (
-                record.lifecycle_state == "matched"
-                and record.execution_run_id is not None
-            )
-        }
 
         if not startup.startup_ready:
             status = "failing_closed"
-        elif reconciliation_states.get("stale", 0):
+        elif readiness_aggregates.reconciliation_lifecycle_counts.get("stale", 0):
             status = "stale"
-        elif reconciliation_states.get("mismatched", 0):
+        elif readiness_aggregates.reconciliation_lifecycle_counts.get("mismatched", 0):
             status = "degraded"
         else:
             status = "ready"
 
         metrics = {
             "alerts": {
-                "total": len(alerts),
-                "by_lifecycle_state": dict(sorted(alert_states.items())),
-            },
-            "cases": {
-                "total": len(cases),
-                "open": sum(
-                    1 for record in cases if record.lifecycle_state in open_case_states
+                "total": readiness_aggregates.alert_total,
+                "by_lifecycle_state": dict(
+                    sorted(readiness_aggregates.alert_lifecycle_counts.items())
                 ),
             },
+            "cases": {
+                "total": readiness_aggregates.case_total,
+                "open": len(readiness_aggregates.open_case_ids),
+            },
             "action_requests": {
-                "total": len(action_requests),
-                "pending_approval": action_request_states.get("pending_approval", 0),
-                "approved": action_request_states.get("approved", 0),
-                "executing": action_request_states.get("executing", 0),
-                "unresolved": action_request_states.get("unresolved", 0),
+                "total": readiness_aggregates.action_request_total,
+                "pending_approval": readiness_aggregates.action_request_lifecycle_counts.get(
+                    "pending_approval", 0
+                ),
+                "approved": readiness_aggregates.action_request_lifecycle_counts.get(
+                    "approved", 0
+                ),
+                "executing": readiness_aggregates.action_request_lifecycle_counts.get(
+                    "executing", 0
+                ),
+                "unresolved": readiness_aggregates.action_request_lifecycle_counts.get(
+                    "unresolved", 0
+                ),
             },
             "action_executions": {
-                "total": len(action_executions),
-                "queued": action_execution_states.get("queued", 0),
-                "running": action_execution_states.get("running", 0),
+                "total": readiness_aggregates.action_execution_total,
+                "queued": readiness_aggregates.action_execution_lifecycle_counts.get(
+                    "queued", 0
+                ),
+                "running": readiness_aggregates.action_execution_lifecycle_counts.get(
+                    "running", 0
+                ),
                 "terminal": sum(
                     count
-                    for state, count in action_execution_states.items()
+                    for state, count in readiness_aggregates.action_execution_lifecycle_counts.items()
                     if state not in {"queued", "running"}
                 ),
             },
             "reconciliations": {
-                "total": len(reconciliations),
-                "matched": reconciliation_states.get("matched", 0),
-                "pending": reconciliation_states.get("pending", 0),
-                "mismatched": reconciliation_states.get("mismatched", 0),
-                "stale": reconciliation_states.get("stale", 0),
+                "total": readiness_aggregates.reconciliation_total,
+                "matched": readiness_aggregates.reconciliation_lifecycle_counts.get(
+                    "matched", 0
+                ),
+                "pending": readiness_aggregates.reconciliation_lifecycle_counts.get(
+                    "pending", 0
+                ),
+                "mismatched": readiness_aggregates.reconciliation_lifecycle_counts.get(
+                    "mismatched", 0
+                ),
+                "stale": readiness_aggregates.reconciliation_lifecycle_counts.get(
+                    "stale", 0
+                ),
                 "by_ingest_disposition": dict(
                     sorted(
-                        Counter(
-                            record.ingest_disposition for record in reconciliations
-                        ).items()
+                        readiness_aggregates.reconciliation_ingest_disposition_counts.items()
                     )
                 ),
             },
             "phase20_notify_identity_owner": {
-                "requested_action_requests": len(phase20_action_requests),
-                "approved_action_requests": sum(
-                    1
-                    for record in phase20_action_requests
-                    if record.lifecycle_state == "approved"
-                ),
-                "reconciled_executions": len(phase20_matched_execution_run_ids),
+                "requested_action_requests": readiness_aggregates.phase20_requested_action_requests,
+                "approved_action_requests": readiness_aggregates.phase20_approved_action_requests,
+                "reconciled_executions": readiness_aggregates.phase20_reconciled_executions,
             },
         }
 
@@ -2080,9 +2036,111 @@ class AegisOpsControlPlaneService:
             shutdown=shutdown.to_dict(),
             metrics=metrics,
             latest_reconciliation=(
-                _redacted_reconciliation_payload(latest_reconciliation)
-                if latest_reconciliation is not None
+                _redacted_reconciliation_payload(
+                    readiness_aggregates.latest_reconciliation
+                )
+                if readiness_aggregates.latest_reconciliation is not None
                 else None
+            ),
+        )
+
+    def _inspect_readiness_aggregates(self) -> ReadinessDiagnosticsAggregates:
+        aggregate_reader = getattr(self._store, "inspect_readiness_aggregates", None)
+        if callable(aggregate_reader):
+            return aggregate_reader()
+
+        alerts = self._store.list(AlertRecord)
+        cases = self._store.list(CaseRecord)
+        action_requests = self._store.list(ActionRequestRecord)
+        action_executions = self._store.list(ActionExecutionRecord)
+        reconciliations = self._store.list(ReconciliationRecord)
+
+        latest_reconciliation = max(
+            reconciliations,
+            key=lambda record: (record.compared_at, record.reconciliation_id),
+            default=None,
+        )
+        phase20_action_requests = tuple(
+            record
+            for record in action_requests
+            if record.requested_payload.get("action_type") == "notify_identity_owner"
+        )
+        phase20_request_ids = {
+            record.action_request_id for record in phase20_action_requests
+        }
+        phase20_execution_run_ids = {
+            record.execution_run_id
+            for record in action_executions
+            if (
+                record.action_request_id in phase20_request_ids
+                and record.execution_run_id is not None
+            )
+        }
+        return ReadinessDiagnosticsAggregates(
+            alert_total=len(alerts),
+            alert_lifecycle_counts=dict(
+                Counter(record.lifecycle_state for record in alerts)
+            ),
+            case_total=len(cases),
+            open_case_ids=tuple(
+                record.case_id
+                for record in cases
+                if record.lifecycle_state
+                in {
+                    "open",
+                    "investigating",
+                    "pending_action",
+                    "contained_pending_validation",
+                    "reopened",
+                }
+            ),
+            action_request_total=len(action_requests),
+            action_request_lifecycle_counts=dict(
+                Counter(record.lifecycle_state for record in action_requests)
+            ),
+            active_action_request_ids=tuple(
+                record.action_request_id
+                for record in action_requests
+                if record.lifecycle_state
+                in {"pending_approval", "approved", "executing", "unresolved"}
+            ),
+            action_execution_total=len(action_executions),
+            action_execution_lifecycle_counts=dict(
+                Counter(record.lifecycle_state for record in action_executions)
+            ),
+            active_action_execution_ids=tuple(
+                record.action_execution_id
+                for record in action_executions
+                if record.lifecycle_state in {"queued", "running"}
+            ),
+            reconciliation_total=len(reconciliations),
+            reconciliation_lifecycle_counts=dict(
+                Counter(record.lifecycle_state for record in reconciliations)
+            ),
+            reconciliation_ingest_disposition_counts=dict(
+                Counter(record.ingest_disposition for record in reconciliations)
+            ),
+            unresolved_reconciliation_ids=tuple(
+                record.reconciliation_id
+                for record in reconciliations
+                if record.lifecycle_state in {"pending", "mismatched", "stale"}
+            ),
+            latest_reconciliation=latest_reconciliation,
+            phase20_requested_action_requests=len(phase20_action_requests),
+            phase20_approved_action_requests=sum(
+                1
+                for record in phase20_action_requests
+                if record.lifecycle_state == "approved"
+            ),
+            phase20_reconciled_executions=len(
+                {
+                    record.execution_run_id
+                    for record in reconciliations
+                    if (
+                        record.lifecycle_state == "matched"
+                        and record.execution_run_id in phase20_execution_run_ids
+                    )
+                }
             ),
         )
 
