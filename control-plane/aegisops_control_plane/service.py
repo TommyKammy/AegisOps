@@ -1341,7 +1341,7 @@ class AegisOpsControlPlaneService:
                     f"only valid IP networks, got: {cidr!r}"
                 ) from exc
         if (
-            not self._wazuh_ingest_listener_is_loopback()
+            not self._listener_is_loopback()
             and not self._config.wazuh_ingest_trusted_proxy_cidrs
         ):
             raise ValueError(
@@ -1364,7 +1364,7 @@ class AegisOpsControlPlaneService:
                     f"only valid IP networks, got: {cidr!r}"
                 ) from exc
         if (
-            not self._wazuh_ingest_listener_is_loopback()
+            not self._listener_is_loopback()
             and not self._config.protected_surface_trusted_proxy_cidrs
         ):
             raise ValueError(
@@ -1588,7 +1588,7 @@ class AegisOpsControlPlaneService:
         )
         return ingest_result
 
-    def _wazuh_ingest_listener_is_loopback(self) -> bool:
+    def _listener_is_loopback(self) -> bool:
         host = self._config.host.strip()
         if host.lower() == "localhost":
             return True
@@ -1598,29 +1598,31 @@ class AegisOpsControlPlaneService:
             return False
 
     def _is_trusted_wazuh_ingest_peer(self, peer_addr: str | None) -> bool:
-        if peer_addr is None or peer_addr.strip() == "":
-            return False
-        try:
-            peer_ip = ipaddress.ip_address(peer_addr)
-        except ValueError:
-            return False
-        if self._wazuh_ingest_listener_is_loopback():
-            return peer_ip.is_loopback
-        for cidr in self._config.wazuh_ingest_trusted_proxy_cidrs:
-            if peer_ip in ipaddress.ip_network(cidr, strict=False):
-                return True
-        return False
+        return self._is_trusted_peer_for_proxy_cidrs(
+            peer_addr,
+            self._config.wazuh_ingest_trusted_proxy_cidrs,
+        )
 
     def _is_trusted_protected_surface_peer(self, peer_addr: str | None) -> bool:
+        return self._is_trusted_peer_for_proxy_cidrs(
+            peer_addr,
+            self._config.protected_surface_trusted_proxy_cidrs,
+        )
+
+    def _is_trusted_peer_for_proxy_cidrs(
+        self,
+        peer_addr: str | None,
+        trusted_proxy_cidrs: tuple[str, ...],
+    ) -> bool:
         if peer_addr is None or peer_addr.strip() == "":
             return False
         try:
             peer_ip = ipaddress.ip_address(peer_addr)
         except ValueError:
             return False
-        if self._wazuh_ingest_listener_is_loopback():
+        if self._listener_is_loopback():
             return peer_ip.is_loopback
-        for cidr in self._config.protected_surface_trusted_proxy_cidrs:
+        for cidr in trusted_proxy_cidrs:
             if peer_ip in ipaddress.ip_network(cidr, strict=False):
                 return True
         return False
@@ -6026,12 +6028,6 @@ class AegisOpsControlPlaneService:
         if alert.lifecycle_state == "escalated_to_case":
             return "tracked_case"
         return "next_business_hours_review"
-
-    @staticmethod
-    def _require_non_empty_string(value: object, field_name: str) -> str:
-        if not isinstance(value, str) or value.strip() == "":
-            raise ValueError(f"{field_name} must be a non-empty string")
-        return value
 
     @staticmethod
     def _require_mapping(value: object, field_name: str) -> dict[str, object]:

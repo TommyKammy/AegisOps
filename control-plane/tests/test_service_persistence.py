@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 import hashlib
+import inspect
 import json
 import logging
 import pathlib
@@ -329,6 +330,12 @@ class _OutOfBandMutationStore:
             self._mutated = True
         with self.inner.transaction(isolation_level=isolation_level):
             yield
+
+
+class ControlPlaneServiceHelperLayoutTests(unittest.TestCase):
+    def test_service_defines_require_non_empty_string_once(self) -> None:
+        source = inspect.getsource(AegisOpsControlPlaneService)
+        self.assertEqual(source.count("def _require_non_empty_string("), 1)
 
 
 class ControlPlaneServicePersistenceTests(unittest.TestCase):
