@@ -156,10 +156,11 @@ class _ConcurrentListMutationStore:
         return self.inner.get(record_type, record_id)
 
     def list(self, record_type: object) -> tuple[object, ...]:
+        records = self.inner.list(record_type)
         if not self._mutated:
             self.mutate_once()
             self._mutated = True
-        return self.inner.list(record_type)
+        return records
 
     @contextmanager
     def transaction(
@@ -7905,7 +7906,6 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             restore_summary = restored_service.restore_authoritative_record_chain_backup(
                 backup
             )
-            restore_drill = restored_service.run_authoritative_restore_drill()
 
         self.assertEqual(
             restored_backend.statements[statement_count_before_restore][0],
@@ -7918,21 +7918,25 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         )
         self.assertEqual(backup["record_counts"]["action_execution"], 1)
         self.assertEqual(restore_summary.restored_record_counts["reconciliation"], 2)
+        self.assertTrue(restore_summary.restore_drill.drill_passed)
         self.assertEqual(
-            restore_drill.verified_action_execution_ids,
+            restore_summary.restore_drill.verified_action_execution_ids,
             (execution.action_execution_id,),
         )
         self.assertEqual(
-            restore_drill.verified_approval_decision_ids,
+            restore_summary.restore_drill.verified_approval_decision_ids,
             (approval_decision.approval_decision_id,),
         )
-        self.assertIn(promoted_case.case_id, restore_drill.verified_case_ids)
+        self.assertIn(
+            promoted_case.case_id,
+            restore_summary.restore_drill.verified_case_ids,
+        )
         self.assertIn(
             reconciliation.reconciliation_id,
-            restore_drill.verified_reconciliation_ids,
+            restore_summary.restore_drill.verified_reconciliation_ids,
         )
         self.assertCountEqual(
-            restore_drill.verified_reconciliation_ids,
+            restore_summary.restore_drill.verified_reconciliation_ids,
             tuple(
                 record.reconciliation_id
                 for record in service._store.list(ReconciliationRecord)
@@ -7962,6 +7966,39 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             reconciliation.reconciliation_id,
             restored_approval_context.linked_reconciliation_ids,
         )
+
+    def test_service_phase21_restore_drill_can_run_standalone_after_restore(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        restore_summary = restored_service.restore_authoritative_record_chain_backup(
+            backup
+        )
+        restore_drill = restored_service.run_authoritative_restore_drill()
+
+        self.assertTrue(restore_drill.drill_passed)
+        self.assertEqual(
+            restore_drill.verified_case_ids,
+            restore_summary.restore_drill.verified_case_ids,
+        )
+        self.assertEqual(
+            restore_drill.verified_reconciliation_ids,
+            restore_summary.restore_drill.verified_reconciliation_ids,
+        )
+        self.assertEqual(restore_drill.verified_case_ids, (promoted_case.case_id,))
+
+        restored_case_detail = restored_service.inspect_case_detail(promoted_case.case_id)
+        self.assertEqual(restored_case_detail.linked_evidence_ids, (evidence_id,))
 
     def test_service_phase21_backup_uses_single_transaction_snapshot(self) -> None:
         base_store, backend = make_store()
@@ -8008,6 +8045,31 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 alert_id="alert-phase21-backup-concurrent-001",
             ),
         )
+
+    def test_service_phase21_restore_rejects_non_string_tuple_elements(
+        self,
+    ) -> None:
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        backup["record_families"]["case"][0]["evidence_ids"] = [
+            backup["record_families"]["case"][0]["evidence_ids"][0],
+            {"invalid": "evidence-id"},
+        ]
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "case.evidence_ids must contain only non-empty strings",
+        ):
+            restored_service.restore_authoritative_record_chain_backup(backup)
+        self._assert_authoritative_store_empty(restored_store)
 
     def test_service_phase21_restore_fails_closed_on_duplicate_alert_identifiers(
         self,
@@ -8598,7 +8660,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
     def test_service_phase21_restore_rejects_reconciliation_run_binding_mismatch(
         self,
     ) -> None:
-        _store, service, promoted_case, evidence_id, reviewed_at = (
+        _store, service, promoted_case, evidence_id, _reviewed_at = (
             self._build_phase19_in_scope_case()
         )
         recommendation = service.record_case_recommendation(

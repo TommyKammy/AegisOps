@@ -593,6 +593,10 @@ def _record_from_backup_payload(
                 raise ValueError(
                     f"{family}.{field_info.name} must be a JSON array in restore payload"
                 )
+            if any(not isinstance(item, str) or not item.strip() for item in value):
+                raise ValueError(
+                    f"{family}.{field_info.name} must contain only non-empty strings"
+                )
         elif field_info.name in mapping_fields:
             if not isinstance(value, Mapping):
                 raise ValueError(
