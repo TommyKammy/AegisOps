@@ -5522,8 +5522,9 @@ class AegisOpsControlPlaneService:
                 error_message=error_message,
             )
         elif context_snapshot.record_family == "ai_trace":
-            if self._phase19_context_declares_out_of_scope_provenance(
-                context_snapshot.record.get("subject_linkage")
+            subject_linkage = context_snapshot.record.get("subject_linkage")
+            if self._phase19_context_explicitly_declares_provenance(subject_linkage) and (
+                self._phase19_context_declares_out_of_scope_provenance(subject_linkage)
             ):
                 raise ValueError(error_message)
             if not context_snapshot.linked_recommendation_records:
@@ -5566,8 +5567,9 @@ class AegisOpsControlPlaneService:
             if lead is None or lead.case_id != case_id:
                 raise ValueError(error_message)
 
-        if self._phase19_context_declares_out_of_scope_provenance(
-            payload.get("reviewed_context")
+        reviewed_context = payload.get("reviewed_context")
+        if self._phase19_context_explicitly_declares_provenance(reviewed_context) and (
+            self._phase19_context_declares_out_of_scope_provenance(reviewed_context)
         ):
             raise ValueError(error_message)
 
@@ -5667,6 +5669,16 @@ class AegisOpsControlPlaneService:
                 "admission_channel": "live_wazuh_webhook",
             }
         )
+
+    @staticmethod
+    def _phase19_context_explicitly_declares_provenance(context: object) -> bool:
+        if not isinstance(context, Mapping):
+            return context is not None
+        if "source_family" in context or "source" in context:
+            return True
+        if "reviewed_source_profile" in context:
+            return True
+        return "provenance" in context or "admission_provenance" in context
 
     def _normalize_linked_record_ids(
         self,
