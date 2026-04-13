@@ -621,6 +621,18 @@ def _record_to_dict(record: ControlPlaneRecord) -> dict[str, object]:
     }
 
 
+def _redacted_reconciliation_payload(
+    reconciliation: ReconciliationRecord,
+) -> dict[str, object]:
+    payload = _record_to_dict(reconciliation)
+    subject_linkage_payload = payload.get("subject_linkage")
+    if isinstance(subject_linkage_payload, Mapping):
+        redacted_subject_linkage = dict(subject_linkage_payload)
+        redacted_subject_linkage.pop("latest_native_payload", None)
+        payload["subject_linkage"] = redacted_subject_linkage
+    return payload
+
+
 def _parse_backup_datetime(value: object, field_name: str) -> datetime | None:
     if value is None:
         return None
@@ -1636,18 +1648,18 @@ class AegisOpsControlPlaneService:
                     lifecycle_state="queued",
                 )
             )
-            self._emit_structured_event(
-                logging.INFO,
-                "action_execution_delegated",
-                action_execution_id=execution.action_execution_id,
-                action_request_id=execution.action_request_id,
-                approval_decision_id=execution.approval_decision_id,
-                execution_surface_type=execution.execution_surface_type,
-                execution_surface_id=execution.execution_surface_id,
-                execution_run_id=execution.execution_run_id,
-                lifecycle_state=execution.lifecycle_state,
-            )
-            return execution
+        self._emit_structured_event(
+            logging.INFO,
+            "action_execution_delegated",
+            action_execution_id=execution.action_execution_id,
+            action_request_id=execution.action_request_id,
+            approval_decision_id=execution.approval_decision_id,
+            execution_surface_type=execution.execution_surface_type,
+            execution_surface_id=execution.execution_surface_id,
+            execution_run_id=execution.execution_run_id,
+            lifecycle_state=execution.lifecycle_state,
+        )
+        return execution
 
     def delegate_approved_action_to_isolated_executor(
         self,
@@ -1971,14 +1983,24 @@ class AegisOpsControlPlaneService:
             for record in action_executions
             if record.action_request_id in phase20_request_ids
         )
-        phase20_execution_ids = {
-            record.execution_run_id for record in phase20_executions
+        phase20_execution_run_ids = {
+            record.execution_run_id
+            for record in phase20_executions
+            if record.execution_run_id is not None
         }
         phase20_reconciliations = tuple(
             record
             for record in reconciliations
-            if record.execution_run_id in phase20_execution_ids
+            if record.execution_run_id in phase20_execution_run_ids
         )
+        phase20_matched_execution_run_ids = {
+            record.execution_run_id
+            for record in phase20_reconciliations
+            if (
+                record.lifecycle_state == "matched"
+                and record.execution_run_id is not None
+            )
+        }
 
         if not startup.startup_ready:
             status = "failing_closed"
@@ -2038,11 +2060,7 @@ class AegisOpsControlPlaneService:
                     for record in phase20_action_requests
                     if record.lifecycle_state == "approved"
                 ),
-                "reconciled_executions": sum(
-                    1
-                    for record in phase20_reconciliations
-                    if record.lifecycle_state == "matched"
-                ),
+                "reconciled_executions": len(phase20_matched_execution_run_ids),
             },
         }
 
@@ -2054,7 +2072,7 @@ class AegisOpsControlPlaneService:
             shutdown=shutdown.to_dict(),
             metrics=metrics,
             latest_reconciliation=(
-                _record_to_dict(latest_reconciliation)
+                _redacted_reconciliation_payload(latest_reconciliation)
                 if latest_reconciliation is not None
                 else None
             ),
@@ -2315,12 +2333,9 @@ class AegisOpsControlPlaneService:
                 else (source_systems[0] if source_systems else "wazuh")
             )
         )
-        latest_reconciliation_payload = _record_to_dict(reconciliation)
-        subject_linkage_payload = latest_reconciliation_payload.get("subject_linkage")
-        if isinstance(subject_linkage_payload, Mapping):
-            redacted_subject_linkage = dict(subject_linkage_payload)
-            redacted_subject_linkage.pop("latest_native_payload", None)
-            latest_reconciliation_payload["subject_linkage"] = redacted_subject_linkage
+        latest_reconciliation_payload = _redacted_reconciliation_payload(
+            reconciliation
+        )
         lineage = {
             "finding_id": alert.finding_id,
             "analytic_signal_id": alert.analytic_signal_id,
@@ -3229,20 +3244,20 @@ class AegisOpsControlPlaneService:
                     },
                 )
             )
-            self._emit_structured_event(
-                logging.INFO,
-                "action_request_created",
-                action_request_id=created_request.action_request_id,
-                action_type=created_request.requested_payload.get("action_type"),
-                requester_identity=created_request.requester_identity,
-                case_id=created_request.case_id,
-                alert_id=created_request.alert_id,
-                lifecycle_state=created_request.lifecycle_state,
-                expires_at=created_request.expires_at.isoformat()
-                if created_request.expires_at is not None
-                else None,
-            )
-            return created_request
+        self._emit_structured_event(
+            logging.INFO,
+            "action_request_created",
+            action_request_id=created_request.action_request_id,
+            action_type=created_request.requested_payload.get("action_type"),
+            requester_identity=created_request.requester_identity,
+            case_id=created_request.case_id,
+            alert_id=created_request.alert_id,
+            lifecycle_state=created_request.lifecycle_state,
+            expires_at=created_request.expires_at.isoformat()
+            if created_request.expires_at is not None
+            else None,
+        )
+        return created_request
 
     def attach_assistant_advisory_draft(
         self,

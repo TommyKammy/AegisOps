@@ -173,6 +173,39 @@ class _ConcurrentListMutationStore:
 
 
 @dataclass
+class _CommitFailingStore:
+    inner: object
+    message: str = "synthetic commit failure"
+
+    @property
+    def dsn(self) -> str:
+        return self.inner.dsn
+
+    @property
+    def persistence_mode(self) -> str:
+        return self.inner.persistence_mode
+
+    def save(self, record: object) -> object:
+        return self.inner.save(record)
+
+    def get(self, record_type: object, record_id: str) -> object | None:
+        return self.inner.get(record_type, record_id)
+
+    def list(self, record_type: object) -> tuple[object, ...]:
+        return self.inner.list(record_type)
+
+    @contextmanager
+    def transaction(
+        self,
+        *,
+        isolation_level: str | None = None,
+    ) -> Iterator[None]:
+        with self.inner.transaction(isolation_level=isolation_level):
+            yield
+            raise RuntimeError(self.message)
+
+
+@dataclass
 class _ListCountingStore:
     inner: object
     reconciliation_list_calls: int = 0
@@ -6820,6 +6853,90 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             execution,
         )
 
+    def test_service_does_not_emit_action_execution_delegated_log_before_commit(
+        self,
+    ) -> None:
+        base_store, _ = make_store()
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        expires_at = datetime(2026, 4, 5, 13, 0, tzinfo=timezone.utc)
+        approved_target_scope = {"asset_id": "workstation-001"}
+        approved_payload = _phase20_notify_identity_owner_payload(
+            recipient_identity="repo-owner-001",
+            case_id="case-001",
+            alert_id="alert-001",
+            finding_id="finding-001",
+        )
+        payload_hash = _approved_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
+        seed_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=base_store,
+        )
+        seed_service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-routine-commit-failure-001",
+                action_request_id="action-request-routine-commit-failure-001",
+                approver_identities=("approver-001",),
+                target_snapshot=approved_target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+                approved_expires_at=expires_at,
+            )
+        )
+        seed_service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-routine-commit-failure-001",
+                approval_decision_id="approval-routine-commit-failure-001",
+                case_id="case-001",
+                alert_id="alert-001",
+                finding_id="finding-001",
+                idempotency_key="idempotency-routine-commit-failure-001",
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=expires_at,
+                lifecycle_state="approved",
+                policy_basis={
+                    "severity": "low",
+                    "target_scope": "single_asset",
+                    "action_reversibility": "reversible",
+                    "asset_criticality": "standard",
+                    "identity_criticality": "standard",
+                    "blast_radius": "single_target",
+                    "execution_constraint": "routine_allowed",
+                },
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "shuffle",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+                requested_payload=approved_payload,
+            )
+        )
+        failing_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=_CommitFailingStore(base_store),
+        )
+
+        with mock.patch.object(failing_service, "_emit_structured_event") as emit_event:
+            with self.assertRaisesRegex(RuntimeError, "synthetic commit failure"):
+                failing_service.delegate_approved_action_to_shuffle(
+                    action_request_id="action-request-routine-commit-failure-001",
+                    approved_payload=approved_payload,
+                    delegated_at=delegated_at,
+                    delegation_issuer="control-plane-service",
+                )
+
+        emit_event.assert_not_called()
+        self.assertEqual(base_store.list(ActionExecutionRecord), ())
+
     def test_service_rechecks_shuffle_approval_inside_transaction(self) -> None:
         inner_store, _ = make_store()
         seed_service = AegisOpsControlPlaneService(
@@ -7680,6 +7797,38 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         )
         self.assertEqual(store.list(ActionExecutionRecord), ())
 
+    def test_service_does_not_emit_action_request_created_log_before_commit(
+        self,
+    ) -> None:
+        base_store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Prepare a reviewed owner notification request.",
+        )
+        failing_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=_CommitFailingStore(base_store),
+        )
+        baseline_requests = base_store.list(ActionRequestRecord)
+
+        with mock.patch.object(failing_service, "_emit_structured_event") as emit_event:
+            with self.assertRaisesRegex(RuntimeError, "synthetic commit failure"):
+                failing_service.create_reviewed_action_request_from_advisory(
+                    record_family="recommendation",
+                    record_id=recommendation.recommendation_id,
+                    requester_identity="analyst-001",
+                    recipient_identity="repo-owner-001",
+                    message_intent="Notify the repository owner about the reviewed change.",
+                    escalation_reason="Reviewed low-risk action remains approval-bound.",
+                    expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+                )
+
+        emit_event.assert_not_called()
+        self.assertEqual(base_store.list(ActionRequestRecord), baseline_requests)
+
     def test_service_executes_phase20_first_live_action_end_to_end_from_reviewed_recommendation(
         self,
     ) -> None:
@@ -8103,6 +8252,180 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             ),
             concurrent_reconciliation,
         )
+
+    def test_service_phase21_readiness_counts_distinct_execution_runs_and_redacts_payload(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        target_scope = {"asset_id": "asset-phase21-readiness-001"}
+        latest_seed_reconciliation = max(
+            service._store.list(ReconciliationRecord),
+            key=lambda record: record.compared_at,
+        )
+        approved_payload = _phase20_notify_identity_owner_payload(
+            recipient_identity="repo-owner-001",
+            case_id=promoted_case.case_id,
+            alert_id=promoted_case.alert_id,
+            finding_id=promoted_case.finding_id,
+        )
+        payload_hash = _approved_binding_hash(
+            target_scope=target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
+        requested_at = latest_seed_reconciliation.compared_at + timedelta(minutes=10)
+        delegated_at = requested_at + timedelta(minutes=5)
+        expires_at = requested_at + timedelta(hours=1)
+        service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase21-readiness-001",
+                action_request_id="action-request-phase21-readiness-001",
+                approver_identities=("approver-001",),
+                target_snapshot=target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+                approved_expires_at=expires_at,
+            )
+        )
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-phase21-readiness-001",
+                approval_decision_id="approval-phase21-readiness-001",
+                case_id=promoted_case.case_id,
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                idempotency_key="idempotency-phase21-readiness-001",
+                target_scope=target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=expires_at,
+                lifecycle_state="approved",
+                requester_identity="analyst-001",
+                requested_payload=approved_payload,
+                policy_basis={
+                    "severity": "low",
+                    "target_scope": "single_identity",
+                    "action_reversibility": "reversible",
+                    "asset_criticality": "standard",
+                    "identity_criticality": "standard",
+                    "blast_radius": "single_target",
+                    "execution_constraint": "routine_allowed",
+                },
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "approval",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+        service.persist_record(
+            ActionExecutionRecord(
+                action_execution_id="action-execution-phase21-readiness-001",
+                action_request_id="action-request-phase21-readiness-001",
+                approval_decision_id="approval-phase21-readiness-001",
+                delegation_id="delegation-phase21-readiness-001",
+                execution_surface_type="automation_substrate",
+                execution_surface_id="shuffle",
+                execution_run_id="execution-run-phase21-readiness-001",
+                idempotency_key="idempotency-phase21-readiness-001",
+                target_scope=target_scope,
+                approved_payload=approved_payload,
+                payload_hash=payload_hash,
+                delegated_at=delegated_at,
+                expires_at=expires_at,
+                provenance={"adapter": "shuffle"},
+                lifecycle_state="queued",
+            )
+        )
+        service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-phase21-readiness-distinct-001",
+                subject_linkage={
+                    "action_request_ids": ("action-request-phase21-readiness-001",),
+                    "latest_native_payload": {"secret": "keep-in-store"},
+                },
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                analytic_signal_id=None,
+                execution_run_id="execution-run-phase21-readiness-001",
+                linked_execution_run_ids=(),
+                correlation_key="reconciliation:phase21-readiness:distinct-001",
+                first_seen_at=requested_at,
+                last_seen_at=delegated_at,
+                ingest_disposition="matched",
+                mismatch_summary="phase20 execution matched",
+                compared_at=delegated_at + timedelta(minutes=1),
+                lifecycle_state="matched",
+            )
+        )
+        service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-phase21-readiness-distinct-002",
+                subject_linkage={
+                    "action_request_ids": ("action-request-phase21-readiness-001",),
+                    "latest_native_payload": {"secret": "keep-in-store"},
+                },
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                analytic_signal_id=None,
+                execution_run_id="execution-run-phase21-readiness-001",
+                linked_execution_run_ids=(),
+                correlation_key="reconciliation:phase21-readiness:distinct-002",
+                first_seen_at=requested_at,
+                last_seen_at=delegated_at,
+                ingest_disposition="matched",
+                mismatch_summary="duplicate reconciliation for same execution run",
+                compared_at=delegated_at + timedelta(minutes=2),
+                lifecycle_state="matched",
+            )
+        )
+        service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-phase21-readiness-distinct-none-001",
+                subject_linkage={
+                    "action_request_ids": ("action-request-phase21-readiness-001",),
+                    "latest_native_payload": {"secret": "keep-in-store"},
+                },
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                analytic_signal_id=None,
+                execution_run_id=None,
+                linked_execution_run_ids=(),
+                correlation_key="reconciliation:phase21-readiness:distinct-none-001",
+                first_seen_at=requested_at,
+                last_seen_at=delegated_at,
+                ingest_disposition="matched",
+                mismatch_summary="null execution run should stay out of phase20 metric",
+                compared_at=delegated_at + timedelta(minutes=3),
+                lifecycle_state="matched",
+            )
+        )
+
+        readiness = service.inspect_readiness_diagnostics()
+
+        self.assertEqual(
+            readiness.metrics["phase20_notify_identity_owner"]["reconciled_executions"],
+            1,
+        )
+        self.assertEqual(
+            readiness.latest_reconciliation["reconciliation_id"],
+            "reconciliation-phase21-readiness-distinct-none-001",
+        )
+        self.assertNotIn(
+            "latest_native_payload",
+            readiness.latest_reconciliation["subject_linkage"],
+        )
+        stored_latest = service.get_record(
+            ReconciliationRecord,
+            "reconciliation-phase21-readiness-distinct-none-001",
+        )
+        self.assertIsNotNone(stored_latest)
+        self.assertIn("latest_native_payload", stored_latest.subject_linkage)
 
     def test_service_phase21_restore_rejects_non_string_tuple_elements(
         self,
