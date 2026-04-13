@@ -1470,7 +1470,10 @@ def main(
         elif command == "shutdown-status":
             payload = service.describe_shutdown_status().to_dict()
         elif command == "backup-authoritative-record-chain":
-            payload = service.export_authoritative_record_chain_backup()
+            try:
+                payload = service.export_authoritative_record_chain_backup()
+            except ValueError as exc:
+                parser.error(str(exc))
         elif command == "restore-authoritative-record-chain":
             try:
                 payload = service.restore_authoritative_record_chain_backup(

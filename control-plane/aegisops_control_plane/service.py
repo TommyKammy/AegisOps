@@ -1611,12 +1611,21 @@ class AegisOpsControlPlaneService:
         )
 
     def describe_startup_status(self) -> StartupStatusSnapshot:
+        protected_surface_proxy_bindings_required = bool(
+            self._config.protected_surface_trusted_proxy_cidrs
+        )
         required_bindings = (
             "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN",
             "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET",
             "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_REVERSE_PROXY_SECRET",
-            "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVERSE_PROXY_SECRET",
-            "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_PROXY_SERVICE_ACCOUNT",
+            *(
+                (
+                    "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVERSE_PROXY_SECRET",
+                    "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_PROXY_SERVICE_ACCOUNT",
+                )
+                if protected_surface_proxy_bindings_required
+                else ()
+            ),
             "AEGISOPS_CONTROL_PLANE_ADMIN_BOOTSTRAP_TOKEN",
             "AEGISOPS_CONTROL_PLANE_BREAK_GLASS_TOKEN",
         )
@@ -1827,6 +1836,8 @@ class AegisOpsControlPlaneService:
             self.inspect_assistant_context("approval_decision", approval_decision_id)
         for action_execution_id in verified_action_execution_ids:
             self.inspect_assistant_context("action_execution", action_execution_id)
+        for reconciliation_id in verified_reconciliation_ids:
+            self.inspect_assistant_context("reconciliation", reconciliation_id)
         self.inspect_reconciliation_status()
 
         return RestoreDrillSnapshot(
@@ -4607,9 +4618,10 @@ class AegisOpsControlPlaneService:
         return f"analytic-signal-{uuid.uuid5(uuid.NAMESPACE_URL, mint_material)}"
 
     def _require_empty_authoritative_restore_target(self) -> None:
+        all_record_types = tuple(dict.fromkeys(RECORD_TYPES_BY_FAMILY.values()))
         populated_families = [
             record_type.record_family
-            for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES
+            for record_type in all_record_types
             if self._store.list(record_type)
         ]
         if populated_families:
@@ -4676,6 +4688,20 @@ class AegisOpsControlPlaneService:
                 raise ValueError(
                     f"missing case record {alert.case_id!r} required by alert {alert.alert_id!r}"
                 )
+
+        for analytic_signal in analytic_signals.values():
+            for alert_id in analytic_signal.alert_ids:
+                if alert_id not in alerts:
+                    raise ValueError(
+                        f"missing alert record {alert_id!r} required by analytic signal "
+                        f"{analytic_signal.analytic_signal_id!r}"
+                    )
+            for case_id in analytic_signal.case_ids:
+                if case_id not in cases:
+                    raise ValueError(
+                        f"missing case record {case_id!r} required by analytic signal "
+                        f"{analytic_signal.analytic_signal_id!r}"
+                    )
 
         for evidence in evidence_records.values():
             if evidence.alert_id and evidence.alert_id not in alerts:
@@ -4771,7 +4797,14 @@ class AegisOpsControlPlaneService:
                     f"missing action execution run {reconciliation.execution_run_id!r} required by "
                     f"reconciliation {reconciliation.reconciliation_id!r}"
                 )
+            for linked_execution_run_id in reconciliation.linked_execution_run_ids:
+                if linked_execution_run_id not in action_executions_by_run_id:
+                    raise ValueError(
+                        f"missing action execution run {linked_execution_run_id!r} required by "
+                        f"reconciliation {reconciliation.reconciliation_id!r}"
+                    )
             for field_name, known_ids in (
+                ("analytic_signal_ids", analytic_signals),
                 ("alert_ids", alerts),
                 ("case_ids", cases),
                 ("evidence_ids", evidence_records),

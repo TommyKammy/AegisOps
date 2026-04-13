@@ -288,14 +288,14 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         service = AegisOpsControlPlaneService(
             RuntimeConfig(
                 postgres_dsn="postgresql://control-plane.local/aegisops",
-                wazuh_ingest_shared_secret="reviewed-shared-secret",
-                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
                 wazuh_ingest_trusted_proxy_cidrs=("10.10.0.5/32",),
-                protected_surface_reverse_proxy_secret="reviewed-surface-secret",
+                protected_surface_reverse_proxy_secret="reviewed-surface-secret",  # noqa: S106 - test fixture secret
                 protected_surface_trusted_proxy_cidrs=("10.10.0.5/32",),
                 protected_surface_proxy_service_account=REVIEWED_PROXY_SERVICE_ACCOUNT,
-                admin_bootstrap_token="reviewed-admin-bootstrap-token",
-                break_glass_token="reviewed-break-glass-token",
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
             ),
             store=store,
         )
@@ -323,6 +323,36 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         )
         self.assertFalse(shutdown_payload["shutdown_ready"])
         self.assertEqual(shutdown_payload["open_case_ids"], ["case-shutdown-001"])
+
+    def test_startup_status_allows_loopback_protected_surface_without_proxy_bindings(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+            ),
+            store=store,
+        )
+        startup_stdout = io.StringIO()
+
+        main.main(["startup-status"], stdout=startup_stdout, service=service)
+
+        startup_payload = json.loads(startup_stdout.getvalue())
+        self.assertTrue(startup_payload["startup_ready"])
+        self.assertNotIn(
+            "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVERSE_PROXY_SECRET",
+            startup_payload["required_bindings"],
+        )
+        self.assertEqual(
+            startup_payload["validated_surfaces"],
+            ["wazuh_ingest", "protected_surface"],
+        )
 
     def test_backup_and_restore_drill_commands_render_recovery_payloads(self) -> None:
         _store, service, promoted_case, evidence_id, reviewed_at = self._build_phase19_in_scope_case()
@@ -404,6 +434,22 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             approval_decision.approval_decision_id,
             drill_payload["verified_approval_decision_ids"],
         )
+
+    def test_backup_authoritative_record_chain_reports_usage_error_on_invalid_backup(
+        self,
+    ) -> None:
+        service = mock.Mock()
+        service.export_authoritative_record_chain_backup.side_effect = ValueError(
+            "backup invariants failed closed"
+        )
+        stderr = io.StringIO()
+
+        with mock.patch.object(sys, "stderr", stderr):
+            with self.assertRaises(SystemExit) as exc:
+                main.main(["backup-authoritative-record-chain"], service=service)
+
+        self.assertEqual(exc.exception.code, 2)
+        self.assertIn("backup invariants failed closed", stderr.getvalue())
 
     def test_long_running_runtime_surface_starts_http_server(self) -> None:
         store, _ = make_store()

@@ -7843,8 +7843,15 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
             store=restored_store,
         )
-        restore_summary = restored_service.restore_authoritative_record_chain_backup(backup)
-        restore_drill = restored_service.run_authoritative_restore_drill()
+        with mock.patch.object(
+            restored_service,
+            "inspect_assistant_context",
+            wraps=restored_service.inspect_assistant_context,
+        ) as inspect_assistant_context:
+            restore_summary = restored_service.restore_authoritative_record_chain_backup(
+                backup
+            )
+            restore_drill = restored_service.run_authoritative_restore_drill()
 
         self.assertEqual(
             backup["backup_schema_version"],
@@ -7864,6 +7871,10 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertIn(
             reconciliation.reconciliation_id,
             restore_drill.verified_reconciliation_ids,
+        )
+        self.assertIn(
+            mock.call("reconciliation", reconciliation.reconciliation_id),
+            inspect_assistant_context.call_args_list,
         )
 
         restored_case_detail = restored_service.inspect_case_detail(promoted_case.case_id)
@@ -7907,10 +7918,22 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
             expires_at=expires_at,
         )
+        approval_decision = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase21-missing-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at,
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
         approved_request = service.persist_record(
             replace(
                 action_request,
-                approval_decision_id="approval-phase21-missing-001",
+                approval_decision_id=approval_decision.approval_decision_id,
                 lifecycle_state="approved",
             )
         )
@@ -7934,8 +7957,15 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             )
         )
         backup = service.export_authoritative_record_chain_backup()
-        backup["record_families"]["approval_decision"] = []
-        backup["record_counts"]["approval_decision"] = 0
+        self.assertEqual(len(backup["record_families"]["approval_decision"]), 1)
+        backup["record_families"]["approval_decision"] = [
+            record
+            for record in backup["record_families"]["approval_decision"]
+            if record["approval_decision_id"] != approval_decision.approval_decision_id
+        ]
+        backup["record_counts"]["approval_decision"] = len(
+            backup["record_families"]["approval_decision"]
+        )
 
         restored_store, _ = make_store()
         restored_service = AegisOpsControlPlaneService(
@@ -7955,6 +7985,64 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 execution.action_execution_id,
             )
         )
+
+    def test_service_phase21_restore_fails_closed_when_target_contains_recommendation(
+        self,
+    ) -> None:
+        _store, service, _promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+        restored_service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-existing-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id="alert-existing-001",
+                case_id="case-existing-001",
+                ai_trace_id=None,
+                review_owner="analyst-001",
+                intended_outcome="Pre-existing recommendation should block restore.",
+                lifecycle_state="under_review",
+                reviewed_context={"reviewed_at": reviewed_at.isoformat()},
+            )
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "authoritative restore target must be empty before restore; found existing records for recommendation",
+        ):
+            restored_service.restore_authoritative_record_chain_backup(backup)
+
+    def test_service_phase21_restore_fails_closed_when_analytic_signal_links_missing_alert(
+        self,
+    ) -> None:
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        self.assertEqual(len(backup["record_families"]["analytic_signal"]), 1)
+        backup["record_families"]["analytic_signal"][0]["alert_ids"] = [
+            "alert-phase21-missing-analytic-signal-link-001"
+        ]
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "missing alert record 'alert-phase21-missing-analytic-signal-link-001' required by analytic signal",
+        ):
+            restored_service.restore_authoritative_record_chain_backup(backup)
 
     def test_service_phase20_first_live_action_fail_closes_on_downstream_execution_surface_mismatch(
         self,
