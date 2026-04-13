@@ -253,6 +253,47 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
         return service, promoted_case, admitted.alert.alert_id, reviewed_at
 
+    def _build_phase19_synthetic_out_of_scope_case(
+        self,
+    ) -> tuple[AegisOpsControlPlaneService, CaseRecord, datetime]:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
+        admitted = service.ingest_finding_alert(
+            finding_id="finding-phase19-synthetic-case-001",
+            analytic_signal_id="signal-phase19-synthetic-case-001",
+            substrate_detection_record_id="synthetic-phase19-case-record-001",
+            correlation_key="claim:asset-phase19-synthetic-case-001:synthetic",
+            first_seen_at=reviewed_at,
+            last_seen_at=reviewed_at,
+            reviewed_context={
+                "asset": {"asset_id": "asset-phase19-synthetic-case-001"},
+                "identity": {"identity_id": "principal-phase19-synthetic-case-001"},
+                "source": {
+                    "source_family": "synthetic_review_fixture",
+                    "admission_kind": "synthetic",
+                },
+            },
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-phase19-synthetic-case-001",
+                source_record_id=admitted.alert.finding_id,
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="synthetic",
+                collector_identity="collector://synthetic/fixture",
+                acquired_at=reviewed_at,
+                derivation_relationship="finding_alert",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        return service, promoted_case, reviewed_at
+
     def _build_case_scoped_advisory_records_without_case_lineage(
         self,
     ) -> tuple[AegisOpsControlPlaneService, RecommendationRecord, AITraceRecord]:
@@ -4190,6 +4231,29 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                     "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
                 ):
                     service.render_recommendation_draft(record_family, record_id)
+
+    def test_service_rejects_synthetic_case_scoped_advisory_reads_from_ingested_finding_case(
+        self,
+    ) -> None:
+        service, promoted_case, _ = self._build_phase19_synthetic_out_of_scope_case()
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+        ):
+            service.inspect_assistant_context("case", promoted_case.case_id)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+        ):
+            service.inspect_advisory_output("case", promoted_case.case_id)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+        ):
+            service.render_recommendation_draft("case", promoted_case.case_id)
 
     def test_service_rejects_ai_trace_subject_linkage_declaring_out_of_scope_provenance(
         self,
