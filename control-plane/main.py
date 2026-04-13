@@ -1479,7 +1479,7 @@ def main(
                 payload = service.restore_authoritative_record_chain_backup(
                     _read_json_file(parsed.input)
                 ).to_dict()
-            except ValueError as exc:
+            except (LookupError, ValueError) as exc:
                 parser.error(str(exc))
         elif command == "run-authoritative-restore-drill":
             try:

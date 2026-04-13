@@ -449,6 +449,16 @@ AUTHORITATIVE_RECORD_CHAIN_FAMILIES: tuple[str, ...] = tuple(
 AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION = (
     "phase21.authoritative-record-chain.v1"
 )
+_AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY: dict[str, str] = {
+    "analytic_signal": "analytic_signal_id",
+    "alert": "alert_id",
+    "evidence": "evidence_id",
+    "case": "case_id",
+    "approval_decision": "approval_decision_id",
+    "action_request": "action_request_id",
+    "action_execution": "action_execution_id",
+    "reconciliation": "reconciliation_id",
+}
 _BACKUP_DATETIME_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
     "analytic_signal": ("first_seen_at", "last_seen_at"),
     "evidence": ("acquired_at",),
@@ -615,6 +625,12 @@ def _dedupe_strings(values: object) -> tuple[str, ...]:
         if isinstance(value, str) and value not in deduped:
             deduped.append(value)
     return tuple(deduped)
+
+
+def _find_duplicate_strings(values: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(
+        sorted(value for value, count in Counter(values).items() if count > 1)
+    )
 
 
 def _collect_reviewed_context_scalar_paths(
@@ -1737,14 +1753,15 @@ class AegisOpsControlPlaneService:
     def export_authoritative_record_chain_backup(self) -> dict[str, object]:
         record_families: dict[str, list[dict[str, object]]] = {}
         record_counts: dict[str, int] = {}
-        for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES:
-            family = record_type.record_family
-            records = [
-                _json_ready(_record_to_dict(record))
-                for record in self._store.list(record_type)
-            ]
-            record_families[family] = records
-            record_counts[family] = len(records)
+        with self._store.transaction():
+            for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES:
+                family = record_type.record_family
+                records = [
+                    _json_ready(_record_to_dict(record))
+                    for record in self._store.list(record_type)
+                ]
+                record_families[family] = records
+                record_counts[family] = len(records)
         return {
             "backup_schema_version": AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION,
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -1793,7 +1810,10 @@ class AegisOpsControlPlaneService:
             parsed_records[family] = parsed
             restored_record_counts[family] = len(parsed)
 
-        self._validate_authoritative_record_chain_restore(parsed_records)
+        self._validate_authoritative_record_chain_restore(
+            parsed_records,
+            restored_record_counts=restored_record_counts,
+        )
         with self._store.transaction():
             self._require_empty_authoritative_restore_target()
             for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES:
@@ -4633,50 +4653,116 @@ class AegisOpsControlPlaneService:
     def _validate_authoritative_record_chain_restore(
         self,
         records_by_family: Mapping[str, tuple[ControlPlaneRecord, ...]],
+        *,
+        restored_record_counts: Mapping[str, int] | None = None,
     ) -> None:
-        analytic_signals = {
-            record.analytic_signal_id: record
+        def duplicate_restore_count_suffix(family: str) -> str:
+            if restored_record_counts is None:
+                return ""
+            return (
+                "; restored_record_counts"
+                f"[{family!r}]={restored_record_counts.get(family)!r}"
+            )
+
+        analytic_signal_records = tuple(
+            record
             for record in records_by_family.get("analytic_signal", ())
             if isinstance(record, AnalyticSignalRecord)
-        }
-        alerts = {
-            record.alert_id: record
+        )
+        alert_records = tuple(
+            record
             for record in records_by_family.get("alert", ())
             if isinstance(record, AlertRecord)
-        }
-        evidence_records = {
-            record.evidence_id: record
+        )
+        evidence_record_family = tuple(
+            record
             for record in records_by_family.get("evidence", ())
             if isinstance(record, EvidenceRecord)
-        }
-        cases = {
-            record.case_id: record
+        )
+        case_records = tuple(
+            record
             for record in records_by_family.get("case", ())
             if isinstance(record, CaseRecord)
-        }
-        approval_decisions = {
-            record.approval_decision_id: record
+        )
+        approval_decision_records = tuple(
+            record
             for record in records_by_family.get("approval_decision", ())
             if isinstance(record, ApprovalDecisionRecord)
-        }
-        action_requests = {
-            record.action_request_id: record
+        )
+        action_request_records = tuple(
+            record
             for record in records_by_family.get("action_request", ())
             if isinstance(record, ActionRequestRecord)
-        }
-        action_executions = {
-            record.action_execution_id: record
+        )
+        action_execution_records = tuple(
+            record
             for record in records_by_family.get("action_execution", ())
             if isinstance(record, ActionExecutionRecord)
-        }
-        action_executions_by_run_id = {
-            record.execution_run_id: record for record in action_executions.values()
-        }
+        )
         reconciliations = tuple(
             record
             for record in records_by_family.get("reconciliation", ())
             if isinstance(record, ReconciliationRecord)
         )
+        for family, records in (
+            ("analytic_signal", analytic_signal_records),
+            ("alert", alert_records),
+            ("evidence", evidence_record_family),
+            ("case", case_records),
+            ("approval_decision", approval_decision_records),
+            ("action_request", action_request_records),
+            ("action_execution", action_execution_records),
+            ("reconciliation", reconciliations),
+        ):
+            duplicates = _find_duplicate_strings(
+                tuple(
+                    getattr(record, _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY[family])
+                    for record in records
+                )
+            )
+            if duplicates:
+                raise ValueError(
+                    "restore payload contains duplicate "
+                    f"{family} identifiers {duplicates!r}"
+                    f"{duplicate_restore_count_suffix(family)}"
+                )
+        duplicate_execution_run_ids = _find_duplicate_strings(
+            tuple(
+                record.execution_run_id
+                for record in action_execution_records
+                if record.execution_run_id is not None
+            )
+        )
+        if duplicate_execution_run_ids:
+            raise ValueError(
+                "restore payload contains duplicate action_execution "
+                f"execution_run_id values {duplicate_execution_run_ids!r}"
+                f"{duplicate_restore_count_suffix('action_execution')}"
+            )
+
+        analytic_signals = {
+            record.analytic_signal_id: record for record in analytic_signal_records
+        }
+        alerts = {record.alert_id: record for record in alert_records}
+        evidence_records = {
+            record.evidence_id: record for record in evidence_record_family
+        }
+        cases = {record.case_id: record for record in case_records}
+        approval_decisions = {
+            record.approval_decision_id: record
+            for record in approval_decision_records
+        }
+        action_requests = {
+            record.action_request_id: record for record in action_request_records
+        }
+        action_executions = {
+            record.action_execution_id: record for record in action_execution_records
+        }
+        action_executions_by_run_id = {
+            record.execution_run_id: record
+            for record in action_execution_records
+            if record.execution_run_id is not None
+        }
 
         for alert in alerts.values():
             if alert.analytic_signal_id and alert.analytic_signal_id not in analytic_signals:

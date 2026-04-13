@@ -451,6 +451,30 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(exc.exception.code, 2)
         self.assertIn("backup invariants failed closed", stderr.getvalue())
 
+    def test_restore_authoritative_record_chain_reports_usage_error_on_lookup_failure(
+        self,
+    ) -> None:
+        service = mock.Mock()
+        service.restore_authoritative_record_chain_backup.side_effect = LookupError(
+            "restore drill failed closed"
+        )
+        stderr = io.StringIO()
+
+        with mock.patch.object(main, "_read_json_file", return_value={}):
+            with mock.patch.object(sys, "stderr", stderr):
+                with self.assertRaises(SystemExit) as exc:
+                    main.main(
+                        [
+                            "restore-authoritative-record-chain",
+                            "--input",
+                            "authoritative-backup.json",
+                        ],
+                        service=service,
+                    )
+
+        self.assertEqual(exc.exception.code, 2)
+        self.assertIn("restore drill failed closed", stderr.getvalue())
+
     def test_long_running_runtime_surface_starts_http_server(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(

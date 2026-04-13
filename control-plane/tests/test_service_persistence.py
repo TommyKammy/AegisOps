@@ -191,7 +191,6 @@ class _OutOfBandMutationStore:
         with self.inner.transaction():
             yield
 
-
 class ControlPlaneServicePersistenceTests(unittest.TestCase):
     def _build_phase19_in_scope_case(
         self,
@@ -7897,6 +7896,170 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             restored_approval_context.linked_reconciliation_ids,
         )
 
+    def test_service_phase21_backup_uses_single_transaction_snapshot(self) -> None:
+        base_store, _ = make_store()
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case(store=base_store)
+        )
+        seed_alert = service.get_record(AlertRecord, promoted_case.alert_id)
+        if seed_alert is None:
+            self.fail("expected seeded alert record before snapshot export")
+
+        snapshot_store = _TransactionMutationStore(
+            inner=base_store,
+            mutate_once=lambda inner_store: inner_store.save(
+                replace(
+                    seed_alert,
+                    alert_id="alert-phase21-backup-concurrent-001",
+                )
+            ),
+        )
+        snapshot_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=snapshot_store,
+        )
+
+        backup = snapshot_service.export_authoritative_record_chain_backup()
+
+        self.assertEqual(backup["record_counts"]["alert"], 2)
+        self.assertEqual(len(backup["record_families"]["alert"]), 2)
+        self.assertCountEqual(
+            [record["alert_id"] for record in backup["record_families"]["alert"]],
+            (
+                "alert-phase21-backup-concurrent-001",
+                promoted_case.alert_id,
+            ),
+        )
+        self.assertEqual(len(base_store.list(AlertRecord)), 2)
+
+    def test_service_phase21_restore_fails_closed_on_duplicate_alert_identifiers(
+        self,
+    ) -> None:
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        backup["record_families"]["alert"].append(
+            dict(backup["record_families"]["alert"][0])
+        )
+        backup["record_counts"]["alert"] = len(backup["record_families"]["alert"])
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"duplicate alert identifiers .*restored_record_counts\['alert'\]=2",
+        ):
+            restored_service.restore_authoritative_record_chain_backup(backup)
+        self.assertEqual(restored_store.list(AlertRecord), ())
+
+    def test_service_phase21_restore_fails_closed_on_duplicate_execution_run_ids(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Observed repository permission change requires tracked review.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            triage_owner="analyst-001",
+            triage_rationale="Privilege-impacting change needs durable business-hours follow-up.",
+            observation_id=observation.observation_id,
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before any approval-bound response.",
+            lead_id=lead.lead_id,
+        )
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=4)
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
+            expires_at=expires_at,
+        )
+        approval_decision = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase21-duplicate-run-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at,
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        approved_request = service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval_decision.approval_decision_id,
+                lifecycle_state="approved",
+            )
+        )
+        service.persist_record(
+            ActionExecutionRecord(
+                action_execution_id="action-execution-phase21-duplicate-run-001",
+                action_request_id=approved_request.action_request_id,
+                approval_decision_id=approval_decision.approval_decision_id,
+                delegation_id="delegation-phase21-duplicate-run-001",
+                execution_surface_type="automation_substrate",
+                execution_surface_id="shuffle",
+                execution_run_id="execution-run-phase21-duplicate-run-001",
+                idempotency_key=approved_request.idempotency_key,
+                target_scope=dict(approved_request.target_scope),
+                approved_payload=dict(approved_request.requested_payload),
+                payload_hash=approved_request.payload_hash,
+                delegated_at=reviewed_at + timedelta(minutes=1),
+                expires_at=approved_request.expires_at,
+                provenance={"evidence_ids": (evidence_id,)},
+                lifecycle_state="queued",
+            )
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        duplicate_execution = dict(backup["record_families"]["action_execution"][0])
+        duplicate_execution["action_execution_id"] = (
+            "action-execution-phase21-duplicate-run-002"
+        )
+        duplicate_execution["delegation_id"] = "delegation-phase21-duplicate-run-002"
+        duplicate_execution["delegated_at"] = (
+            reviewed_at + timedelta(minutes=2)
+        ).isoformat()
+        backup["record_families"]["action_execution"].append(duplicate_execution)
+        backup["record_counts"]["action_execution"] = len(
+            backup["record_families"]["action_execution"]
+        )
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                r"duplicate action_execution execution_run_id values "
+                r".*restored_record_counts\['action_execution'\]=2"
+            ),
+        ):
+            restored_service.restore_authoritative_record_chain_backup(backup)
+        self.assertEqual(restored_store.list(ActionExecutionRecord), ())
+
     def test_service_phase21_restore_fails_closed_when_approval_record_is_missing(
         self,
     ) -> None:
@@ -7979,11 +8142,19 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         ):
             restored_service.restore_authoritative_record_chain_backup(backup)
 
+        for record_type in (
+            AnalyticSignalRecord,
+            AlertRecord,
+            EvidenceRecord,
+            CaseRecord,
+            ApprovalDecisionRecord,
+            ActionRequestRecord,
+            ActionExecutionRecord,
+            ReconciliationRecord,
+        ):
+            self.assertEqual(restored_store.list(record_type), ())
         self.assertIsNone(
-            restored_service.get_record(
-                ActionExecutionRecord,
-                execution.action_execution_id,
-            )
+            restored_service.get_record(ActionExecutionRecord, execution.action_execution_id)
         )
 
     def test_service_phase21_restore_fails_closed_when_target_contains_recommendation(
