@@ -58,6 +58,33 @@ def _build_service(*, host: str = "127.0.0.1") -> AegisOpsControlPlaneService:
 
 
 class Phase21RuntimeAuthValidationTests(unittest.TestCase):
+    def test_startup_and_readiness_do_not_require_break_glass_when_unset(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret=REVIEWED_SHARED_SECRET,
+                wazuh_ingest_reverse_proxy_secret=REVIEWED_WAZUH_PROXY_SECRET,
+                admin_bootstrap_token=REVIEWED_ADMIN_BOOTSTRAP_TOKEN,
+            ),
+            store=store,
+        )
+
+        startup = service.describe_startup_status()
+        readiness = service.inspect_readiness_diagnostics()
+
+        self.assertTrue(startup.startup_ready)
+        self.assertNotIn(
+            "AEGISOPS_CONTROL_PLANE_BREAK_GLASS_TOKEN",
+            startup.required_bindings,
+        )
+        self.assertNotIn(
+            "AEGISOPS_CONTROL_PLANE_BREAK_GLASS_TOKEN",
+            startup.missing_bindings,
+        )
+        self.assertEqual(readiness.status, "ready")
+
     def test_protected_surface_runtime_fails_closed_without_trusted_proxy_bindings(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
@@ -202,6 +229,34 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
                     servers[0].shutdown()
                     servers[0].server_close()
                 thread.join(timeout=2)
+
+    def test_break_glass_contract_is_disabled_until_token_is_bound(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret=REVIEWED_SHARED_SECRET,
+                wazuh_ingest_reverse_proxy_secret=REVIEWED_WAZUH_PROXY_SECRET,
+                admin_bootstrap_token=REVIEWED_ADMIN_BOOTSTRAP_TOKEN,
+            ),
+            store=store,
+        )
+
+        with self.assertRaisesRegex(
+            PermissionError,
+            "break-glass contract is disabled until AEGISOPS_CONTROL_PLANE_BREAK_GLASS_TOKEN is bound",
+        ):
+            service.require_break_glass_token("reviewed-break-glass-token")
+
+    def test_break_glass_contract_rejects_wrong_token(self) -> None:
+        service = _build_service()
+
+        with self.assertRaisesRegex(
+            PermissionError,
+            "break-glass token did not match the reviewed secret",
+        ):
+            service.require_break_glass_token("wrong-token")
 
     def test_break_glass_contract_rejects_expiry_outside_reviewed_window(self) -> None:
         service = _build_service()

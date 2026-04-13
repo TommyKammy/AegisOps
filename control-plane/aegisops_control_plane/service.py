@@ -1896,7 +1896,6 @@ class AegisOpsControlPlaneService:
                 else ()
             ),
             "AEGISOPS_CONTROL_PLANE_ADMIN_BOOTSTRAP_TOKEN",
-            "AEGISOPS_CONTROL_PLANE_BREAK_GLASS_TOKEN",
         )
         binding_values = {
             "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN": self._config.postgres_dsn,
