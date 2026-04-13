@@ -1906,6 +1906,65 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                     servers[0].shutdown()
                 thread.join(timeout=2)
 
+    def test_long_running_runtime_surface_rejects_case_family_out_of_scope_advisory_reads(
+        self,
+    ) -> None:
+        service, promoted_case = self._build_phase19_out_of_scope_case(
+            fixture_name="github-audit-alert.json",
+            host="127.0.0.1",
+            port=0,
+        )
+        expected_message = (
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice"
+        )
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+                base_url = f"http://127.0.0.1:{servers[0].server_port}"
+
+                for path in (
+                    "/inspect-assistant-context",
+                    "/inspect-advisory-output",
+                    "/render-recommendation-draft",
+                ):
+                    with self.subTest(path=path):
+                        with self.assertRaises(error.HTTPError) as exc_info:
+                            request.urlopen(  # noqa: S310 - local in-process test HTTP server
+                                (
+                                    f"{base_url}{path}"
+                                    f"?family=case&record_id={promoted_case.case_id}"
+                                ),
+                                timeout=2,
+                            )
+
+                        self.assertEqual(exc_info.exception.code, 400)
+                        payload = json.loads(
+                            exc_info.exception.read().decode("utf-8")
+                        )
+                        self.assertEqual(payload["error"], "invalid_request")
+                        self.assertIn(expected_message, payload["message"])
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(timeout=2)
+
     def test_long_running_runtime_surface_rejects_case_scoped_advisory_reads_without_linked_case(
         self,
     ) -> None:
@@ -2282,6 +2341,38 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                             record_family,
                             "--record-id",
                             record_id,
+                        ],
+                        service=service,
+                    )
+
+            self.assertEqual(exc_info.exception.code, 2)
+            self.assertIn(expected_message, stderr.getvalue())
+
+    def test_cli_rejects_case_family_out_of_scope_advisory_reads_as_usage_errors(
+        self,
+    ) -> None:
+        service, promoted_case = self._build_phase19_out_of_scope_case(
+            fixture_name="github-audit-alert.json"
+        )
+        expected_message = (
+            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice"
+        )
+
+        for command in (
+            "inspect-assistant-context",
+            "inspect-advisory-output",
+            "render-recommendation-draft",
+        ):
+            stderr = io.StringIO()
+            with self.subTest(command=command), contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as exc_info:
+                    main.main(
+                        [
+                            command,
+                            "--family",
+                            "case",
+                            "--record-id",
+                            promoted_case.case_id,
                         ],
                         service=service,
                     )
