@@ -1046,64 +1046,66 @@ class AegisOpsControlPlaneService:
         self.validate_protected_surface_runtime()
 
         if self._peer_addr_is_loopback(peer_addr):
-            return AuthenticatedRuntimePrincipal(
+            principal = AuthenticatedRuntimePrincipal(
                 identity="loopback-local-operator",
                 role="loopback_local",
                 access_path="loopback_direct",
             )
+        else:
+            if not self._is_trusted_protected_surface_peer(peer_addr):
+                raise PermissionError(
+                    "protected control-plane surfaces reject requests that bypass the reviewed reverse proxy peer boundary"
+                )
+            if (forwarded_proto or "").strip().lower() != "https":
+                raise PermissionError(
+                    "protected control-plane surfaces require the reviewed reverse proxy HTTPS boundary"
+                )
+            if not hmac.compare_digest(
+                (reverse_proxy_secret_header or "").strip(),
+                self._config.protected_surface_reverse_proxy_secret,
+            ):
+                raise PermissionError(
+                    "protected control-plane surfaces require the reviewed reverse proxy boundary credential"
+                )
+            supplied_proxy_service_account = (proxy_service_account_header or "").strip()
+            if not hmac.compare_digest(
+                supplied_proxy_service_account,
+                self._config.protected_surface_proxy_service_account,
+            ):
+                raise PermissionError(
+                    "protected control-plane surfaces require the reviewed reverse proxy service account identity"
+                )
 
-        if not self._is_trusted_protected_surface_peer(peer_addr):
-            raise PermissionError(
-                "protected control-plane surfaces reject requests that bypass the reviewed reverse proxy peer boundary"
+            identity = (authenticated_identity_header or "").strip()
+            if identity == "":
+                raise PermissionError(
+                    "protected control-plane surfaces require an attributed authenticated identity header"
+                )
+            role = (
+                (authenticated_role_header or "")
+                .strip()
+                .lower()
+                .replace("-", "_")
+                .replace(" ", "_")
             )
-        if (forwarded_proto or "").strip().lower() != "https":
-            raise PermissionError(
-                "protected control-plane surfaces require the reviewed reverse proxy HTTPS boundary"
-            )
-        if not hmac.compare_digest(
-            (reverse_proxy_secret_header or "").strip(),
-            self._config.protected_surface_reverse_proxy_secret,
-        ):
-            raise PermissionError(
-                "protected control-plane surfaces require the reviewed reverse proxy boundary credential"
-            )
-        supplied_proxy_service_account = (proxy_service_account_header or "").strip()
-        if not hmac.compare_digest(
-            supplied_proxy_service_account,
-            self._config.protected_surface_proxy_service_account,
-        ):
-            raise PermissionError(
-                "protected control-plane surfaces require the reviewed reverse proxy service account identity"
+            if role == "":
+                raise PermissionError(
+                    "protected control-plane surfaces require an attributed authenticated role header"
+                )
+            principal = AuthenticatedRuntimePrincipal(
+                identity=identity,
+                role=role,
+                access_path="reviewed_reverse_proxy",
+                proxy_service_account=supplied_proxy_service_account,
             )
 
-        identity = (authenticated_identity_header or "").strip()
-        if identity == "":
-            raise PermissionError(
-                "protected control-plane surfaces require an attributed authenticated identity header"
-            )
-        role = (
-            (authenticated_role_header or "")
-            .strip()
-            .lower()
-            .replace("-", "_")
-            .replace(" ", "_")
-        )
-        if role == "":
-            raise PermissionError(
-                "protected control-plane surfaces require an attributed authenticated role header"
-            )
-        if role not in allowed_roles:
+        if principal.role not in allowed_roles:
             joined_roles = ", ".join(sorted(allowed_roles))
             raise PermissionError(
                 "protected control-plane surface role is not authorized for this endpoint; "
                 f"expected one of: {joined_roles}"
             )
-        return AuthenticatedRuntimePrincipal(
-            identity=identity,
-            role=role,
-            access_path="reviewed_reverse_proxy",
-            proxy_service_account=supplied_proxy_service_account,
-        )
+        return principal
 
     def require_admin_bootstrap_token(self, supplied_token: str | None) -> None:
         expected_token = self._config.admin_bootstrap_token.strip()

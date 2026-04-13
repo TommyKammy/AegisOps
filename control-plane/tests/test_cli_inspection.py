@@ -29,11 +29,27 @@ from aegisops_control_plane.models import (
     RecommendationRecord,
     ReconciliationRecord,
 )
-from aegisops_control_plane.service import AegisOpsControlPlaneService
+from aegisops_control_plane.service import (
+    AegisOpsControlPlaneService,
+    AuthenticatedRuntimePrincipal,
+)
 from postgres_test_support import make_store
 
 
 FIXTURES_ROOT = pathlib.Path(__file__).resolve().parent / "fixtures" / "wazuh"
+REVIEWED_PROXY_SERVICE_ACCOUNT = "svc-aegisops-proxy-control-plane"
+REVIEWED_ANALYST_PRINCIPAL = AuthenticatedRuntimePrincipal(
+    identity="analyst-001",
+    role="analyst",
+    access_path="reviewed_reverse_proxy",
+    proxy_service_account=REVIEWED_PROXY_SERVICE_ACCOUNT,
+)
+REVIEWED_PLATFORM_ADMIN_PRINCIPAL = AuthenticatedRuntimePrincipal(
+    identity="platform-admin-001",
+    role="platform_admin",
+    access_path="reviewed_reverse_proxy",
+    proxy_service_account=REVIEWED_PROXY_SERVICE_ACCOUNT,
+)
 
 
 def _load_wazuh_fixture(name: str) -> dict[str, object]:
@@ -41,6 +57,20 @@ def _load_wazuh_fixture(name: str) -> dict[str, object]:
 
 
 class ControlPlaneCliInspectionTests(unittest.TestCase):
+    @staticmethod
+    @contextlib.contextmanager
+    def _mock_authenticated_surface_access(
+        service: AegisOpsControlPlaneService,
+        *,
+        principal: AuthenticatedRuntimePrincipal,
+    ) -> object:
+        with mock.patch.object(
+            service,
+            "authenticate_protected_surface_request",
+            return_value=principal,
+        ):
+            yield
+
     def _build_phase19_in_scope_case(
         self,
         *,
@@ -322,7 +352,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 super().__init__(server_address, handler_class)
                 servers.append(self)
 
-        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_PLATFORM_ADMIN_PRINCIPAL,
+        ):
             thread = threading.Thread(
                 target=main.run_control_plane_service,
                 args=(service,),
@@ -393,7 +426,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 super().__init__(server_address, handler_class)
                 servers.append(self)
 
-        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_ANALYST_PRINCIPAL,
+        ):
             thread = threading.Thread(
                 target=main.run_control_plane_service,
                 args=(service,),
@@ -514,7 +550,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 super().__init__(server_address, handler_class)
                 servers.append(self)
 
-        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_ANALYST_PRINCIPAL,
+        ):
             thread = threading.Thread(
                 target=main.run_control_plane_service,
                 args=(service,),
@@ -570,7 +609,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 super().__init__(server_address, handler_class)
                 servers.append(self)
 
-        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_ANALYST_PRINCIPAL,
+        ):
             thread = threading.Thread(
                 target=main.run_control_plane_service,
                 args=(service,),
@@ -684,7 +726,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 super().__init__(server_address, handler_class)
                 servers.append(self)
 
-        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_ANALYST_PRINCIPAL,
+        ):
             thread = threading.Thread(
                 target=main.run_control_plane_service,
                 args=(service,),
@@ -738,7 +783,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 super().__init__(server_address, handler_class)
                 servers.append(self)
 
-        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_ANALYST_PRINCIPAL,
+        ):
             thread = threading.Thread(
                 target=main.run_control_plane_service,
                 args=(service,),
@@ -793,7 +841,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 super().__init__(server_address, handler_class)
                 servers.append(self)
 
-        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_ANALYST_PRINCIPAL,
+        ):
             thread = threading.Thread(
                 target=main.run_control_plane_service,
                 args=(service,),
@@ -847,7 +898,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 super().__init__(server_address, handler_class)
                 servers.append(self)
 
-        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_ANALYST_PRINCIPAL,
+        ):
             thread = threading.Thread(
                 target=main.run_control_plane_service,
                 args=(service,),
@@ -952,7 +1006,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 super().__init__(server_address, handler_class)
                 servers.append(self)
 
-        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_ANALYST_PRINCIPAL,
+        ):
             thread = threading.Thread(
                 target=main.run_control_plane_service,
                 args=(service,),
@@ -1563,7 +1620,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 super().__init__(server_address, handler_class)
                 servers.append(self)
 
-        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_ANALYST_PRINCIPAL,
+        ):
             thread = threading.Thread(
                 target=main.run_control_plane_service,
                 args=(service,),
@@ -1706,7 +1766,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 super().__init__(server_address, handler_class)
                 servers.append(self)
 
-        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_ANALYST_PRINCIPAL,
+        ):
             thread = threading.Thread(
                 target=main.run_control_plane_service,
                 args=(service,),
@@ -1845,7 +1908,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 super().__init__(server_address, handler_class)
                 servers.append(self)
 
-        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_ANALYST_PRINCIPAL,
+        ):
             thread = threading.Thread(
                 target=main.run_control_plane_service,
                 args=(service,),
@@ -1924,7 +1990,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 super().__init__(server_address, handler_class)
                 servers.append(self)
 
-        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_ANALYST_PRINCIPAL,
+        ):
             thread = threading.Thread(
                 target=main.run_control_plane_service,
                 args=(service,),
@@ -1984,7 +2053,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 super().__init__(server_address, handler_class)
                 servers.append(self)
 
-        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_ANALYST_PRINCIPAL,
+        ):
             thread = threading.Thread(
                 target=main.run_control_plane_service,
                 args=(service,),
@@ -2064,7 +2136,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 super().__init__(server_address, handler_class)
                 servers.append(self)
 
-        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_ANALYST_PRINCIPAL,
+        ):
             thread = threading.Thread(
                 target=main.run_control_plane_service,
                 args=(service,),

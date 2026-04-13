@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import json
@@ -19,13 +20,23 @@ import main
 from aegisops_control_plane.adapters.wazuh import WazuhAlertAdapter
 from aegisops_control_plane.config import RuntimeConfig
 from aegisops_control_plane.models import AITraceRecord, CaseRecord, RecommendationRecord
-from aegisops_control_plane.service import AegisOpsControlPlaneService
+from aegisops_control_plane.service import (
+    AegisOpsControlPlaneService,
+    AuthenticatedRuntimePrincipal,
+)
 from postgres_test_support import make_store
 
 
 FIXTURES_ROOT = pathlib.Path(__file__).resolve().parent / "fixtures" / "wazuh"
 REVIEWED_SHARED_SECRET = "reviewed-shared-secret"  # noqa: S105
 REVIEWED_PROXY_SECRET = "reviewed-proxy-secret"  # noqa: S105
+REVIEWED_PROXY_SERVICE_ACCOUNT = "svc-aegisops-proxy-control-plane"
+REVIEWED_ANALYST_PRINCIPAL = AuthenticatedRuntimePrincipal(
+    identity="analyst-001",
+    role="analyst",
+    access_path="reviewed_reverse_proxy",
+    proxy_service_account=REVIEWED_PROXY_SERVICE_ACCOUNT,
+)
 
 
 def _load_wazuh_fixture(name: str) -> dict[str, object]:
@@ -33,6 +44,18 @@ def _load_wazuh_fixture(name: str) -> dict[str, object]:
 
 
 class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
+    @staticmethod
+    @contextlib.contextmanager
+    def _mock_authenticated_surface_access(
+        service: AegisOpsControlPlaneService,
+    ) -> object:
+        with mock.patch.object(
+            service,
+            "authenticate_protected_surface_request",
+            return_value=REVIEWED_ANALYST_PRINCIPAL,
+        ):
+            yield
+
     def test_reviewed_runtime_path_covers_approved_operator_workflow(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
@@ -81,7 +104,9 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                 super().__init__(server_address, handler_class)
                 servers.append(self)
 
-        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service
+        ):
             thread = threading.Thread(
                 target=main.run_control_plane_service,
                 args=(service,),
@@ -469,7 +494,9 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                 super().__init__(server_address, handler_class)
                 servers.append(self)
 
-        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service
+        ):
             thread = threading.Thread(
                 target=main.run_control_plane_service,
                 args=(service,),

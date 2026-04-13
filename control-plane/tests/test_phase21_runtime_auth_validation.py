@@ -16,7 +16,10 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 import main
 from aegisops_control_plane.config import RuntimeConfig
-from aegisops_control_plane.service import AegisOpsControlPlaneService
+from aegisops_control_plane.service import (
+    AegisOpsControlPlaneService,
+    AuthenticatedRuntimePrincipal,
+)
 from postgres_test_support import make_store
 
 
@@ -26,6 +29,12 @@ REVIEWED_SURFACE_PROXY_SECRET = "reviewed-surface-proxy-secret"  # noqa: S105
 REVIEWED_PROXY_SERVICE_ACCOUNT = "svc-aegisops-proxy-control-plane"  # noqa: S105
 REVIEWED_ADMIN_BOOTSTRAP_TOKEN = "reviewed-admin-bootstrap-token"  # noqa: S105
 REVIEWED_BREAK_GLASS_TOKEN = "reviewed-break-glass-token"  # noqa: S105
+REVIEWED_PLATFORM_ADMIN_PRINCIPAL = AuthenticatedRuntimePrincipal(
+    identity="platform-admin-001",
+    role="platform_admin",
+    access_path="reviewed_reverse_proxy",
+    proxy_service_account=REVIEWED_PROXY_SERVICE_ACCOUNT,
+)
 
 
 def _build_service(*, host: str = "127.0.0.1") -> AegisOpsControlPlaneService:
@@ -110,6 +119,41 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
             REVIEWED_PROXY_SERVICE_ACCOUNT,
         )
 
+    def test_protected_surface_loopback_request_honors_allowed_roles(self) -> None:
+        service = _build_service()
+
+        with self.assertRaisesRegex(
+            PermissionError,
+            "protected control-plane surface role is not authorized for this endpoint",
+        ):
+            service.authenticate_protected_surface_request(
+                peer_addr="127.0.0.1",
+                forwarded_proto=None,
+                reverse_proxy_secret_header=None,
+                proxy_service_account_header=None,
+                authenticated_identity_header=None,
+                authenticated_role_header=None,
+                allowed_roles=("platform_admin",),
+            )
+
+    def test_protected_surface_loopback_request_allows_explicit_loopback_role(self) -> None:
+        service = _build_service()
+
+        principal = service.authenticate_protected_surface_request(
+            peer_addr="127.0.0.1",
+            forwarded_proto=None,
+            reverse_proxy_secret_header=None,
+            proxy_service_account_header=None,
+            authenticated_identity_header=None,
+            authenticated_role_header=None,
+            allowed_roles=("loopback_local",),
+        )
+
+        self.assertEqual(principal.identity, "loopback-local-operator")
+        self.assertEqual(principal.role, "loopback_local")
+        self.assertEqual(principal.access_path, "loopback_direct")
+        self.assertIsNone(principal.proxy_service_account)
+
     def test_admin_bootstrap_contract_rejects_wrong_token(self) -> None:
         service = _build_service()
         servers: list[main.ThreadingHTTPServer] = []
@@ -119,7 +163,11 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
                 super().__init__(server_address, handler_class)
                 servers.append(self)
 
-        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), mock.patch.object(
+            service,
+            "authenticate_protected_surface_request",
+            return_value=REVIEWED_PLATFORM_ADMIN_PRINCIPAL,
+        ):
             thread = threading.Thread(
                 target=main.run_control_plane_service,
                 args=(service,),
@@ -152,6 +200,7 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
             finally:
                 if servers:
                     servers[0].shutdown()
+                    servers[0].server_close()
                 thread.join(timeout=2)
 
     def test_break_glass_contract_rejects_expiry_outside_reviewed_window(self) -> None:
@@ -163,7 +212,11 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
                 super().__init__(server_address, handler_class)
                 servers.append(self)
 
-        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer):
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), mock.patch.object(
+            service,
+            "authenticate_protected_surface_request",
+            return_value=REVIEWED_PLATFORM_ADMIN_PRINCIPAL,
+        ):
             thread = threading.Thread(
                 target=main.run_control_plane_service,
                 args=(service,),
@@ -207,6 +260,7 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
             finally:
                 if servers:
                     servers[0].shutdown()
+                    servers[0].server_close()
                 thread.join(timeout=2)
 
 
