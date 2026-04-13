@@ -18,6 +18,7 @@
 - Fixed `describe_startup_status()` so break-glass is no longer treated as a mandatory startup binding while keeping admin bootstrap and other reviewed required bindings intact.
 - Extended runtime-auth coverage to prove the break-glass contract still fails closed when disabled by default and when a wrong token is supplied.
 - Verified the fix with focused runtime-auth, CLI inspection, end-to-end, and Phase 21 boundary validation suites.
+- Published commit `8b3f5c4` to `origin/codex/issue-449` and opened draft PR `#451`.
 
 ## Active Failure Context
 - None recorded.
@@ -27,11 +28,11 @@
 - Hypothesis: `describe_startup_status()` was incorrectly including `AEGISOPS_CONTROL_PLANE_BREAK_GLASS_TOKEN` in `required_bindings`, which forced readiness to fail closed even though the reviewed design keeps break-glass disabled by default until explicitly configured.
 - What changed: Removed break-glass from the mandatory startup binding tuple in `control-plane/aegisops_control_plane/service.py`; added a focused service test proving startup/readiness stay healthy with PostgreSQL, Wazuh ingest, and admin bootstrap configured but break-glass unset; added direct tests proving break-glass still rejects use when disabled and when a wrong token is supplied.
 - Current blocker: none
-- Next exact step: Commit the focused fix on `codex/issue-449`; PR does not exist yet.
+- Next exact step: Monitor draft PR `#451` and address any review or CI feedback.
 - Verification gap: Did not run the full repository test suite; focused Phase 21 runtime-auth, CLI, end-to-end, and boundary validation coverage passed.
 - Files touched: `control-plane/aegisops_control_plane/service.py`, `control-plane/tests/test_phase21_runtime_auth_validation.py`, `.codex-supervisor/issues/449/issue-journal.md`
 - Rollback concern: Low; change is limited to startup/readiness semantics and does not alter break-glass activation enforcement.
-- Last focused command: `python3 -m unittest control-plane.tests.test_phase21_production_like_hardening_boundary_validation`
+- Last focused command: `gh pr create --draft --title "[codex] Fix phase 21 startup break-glass readiness" --body-file "$tmpfile" --base main --head codex/issue-449`
 ### Scratchpad
 - Keep this section short. The supervisor may compact older notes automatically.
 - Reproducing test failure before fix: `python3 -m unittest control-plane.tests.test_phase21_runtime_auth_validation.Phase21RuntimeAuthValidationTests.test_startup_and_readiness_do_not_require_break_glass_when_unset` -> `AssertionError: False is not true`
