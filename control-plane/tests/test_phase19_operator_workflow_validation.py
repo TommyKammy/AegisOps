@@ -438,6 +438,81 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                     servers[0].shutdown()
                 thread.join(timeout=2)
 
+    def test_reviewed_runtime_path_exposes_live_entra_id_case_through_existing_operator_surface(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret=REVIEWED_SHARED_SECRET,
+                wazuh_ingest_reverse_proxy_secret=REVIEWED_PROXY_SECRET,
+            ),
+            store=store,
+        )
+
+        admitted = service.ingest_wazuh_alert(
+            raw_alert=_load_wazuh_fixture("entra-id-alert.json"),
+            authorization_header=f"Bearer {REVIEWED_SHARED_SECRET}",
+            forwarded_proto="https",
+            reverse_proxy_secret_header=REVIEWED_PROXY_SECRET,
+            peer_addr="127.0.0.1",
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service
+        ):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+                base_url = f"http://127.0.0.1:{servers[0].server_port}"
+
+                queue_payload = json.loads(
+                    request.urlopen(  # noqa: S310
+                        f"{base_url}/inspect-analyst-queue",
+                        timeout=2,
+                    ).read().decode("utf-8")
+                )
+                case_payload = json.loads(
+                    request.urlopen(  # noqa: S310
+                        f"{base_url}/inspect-case-detail?case_id={promoted_case.case_id}",
+                        timeout=2,
+                    ).read().decode("utf-8")
+                )
+
+                self.assertEqual(queue_payload["total_records"], 1)
+                self.assertEqual(
+                    queue_payload["records"][0]["reviewed_context"]["source"]["source_family"],
+                    "entra_id",
+                )
+                self.assertEqual(case_payload["case_id"], promoted_case.case_id)
+                self.assertEqual(
+                    case_payload["reviewed_context"]["source"]["source_family"],
+                    "entra_id",
+                )
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(timeout=2)
+
     def test_reviewed_runtime_path_fails_closed_for_out_of_scope_case_reads(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
@@ -634,7 +709,7 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                         payload = get_error_payload(path)
                         self.assertEqual(payload["error"], "invalid_request")
                         self.assertIn(
-                            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+                            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
                             payload["message"],
                         )
 
@@ -666,7 +741,7 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                         )
                         self.assertEqual(payload["error"], "invalid_request")
                         self.assertIn(
-                            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+                            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
                             payload["message"],
                         )
             finally:

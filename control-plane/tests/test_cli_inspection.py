@@ -2366,7 +2366,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             port=0,
         )
         expected_message = (
-            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice"
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice"
         )
         servers: list[main.ThreadingHTTPServer] = []
 
@@ -2448,7 +2448,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             port=0,
         )
         expected_message = (
-            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice"
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice"
         )
         servers: list[main.ThreadingHTTPServer] = []
 
@@ -2511,7 +2511,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             )
         )
         expected_message = (
-            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice"
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice"
         )
         servers: list[main.ThreadingHTTPServer] = []
 
@@ -2845,7 +2845,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             fixture_name="github-audit-alert.json"
         )
         expected_message = (
-            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice"
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice"
         )
 
         for command, record_family, record_id in (
@@ -2897,7 +2897,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             fixture_name="github-audit-alert.json"
         )
         expected_message = (
-            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice"
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice"
         )
 
         for command in (
@@ -2929,7 +2929,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             self._build_case_scoped_advisory_records_without_case_lineage()
         )
         expected_message = (
-            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice"
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice"
         )
 
         for command, record_family, record_id in (

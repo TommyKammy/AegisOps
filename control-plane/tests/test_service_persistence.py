@@ -1232,13 +1232,13 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             with self.subTest(record_family=record_family):
                 with self.assertRaisesRegex(
                     ValueError,
-                    "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+                    "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
                 ):
                     service.inspect_advisory_output(record_family, record_id)
 
                 with self.assertRaisesRegex(
                     ValueError,
-                    "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+                    "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
                 ):
                     service.render_recommendation_draft(record_family, record_id)
 
@@ -3288,6 +3288,45 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             (promoted_case.case_id, promoted_case.case_id),
         )
 
+    def test_service_exposes_live_wazuh_entra_id_ingest_through_phase19_operator_surface(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+            ),
+            store=store,
+        )
+
+        admitted = service.ingest_wazuh_alert(
+            raw_alert=_load_wazuh_fixture("entra-id-alert.json"),
+            authorization_header="Bearer reviewed-shared-secret",
+            forwarded_proto="https",
+            reverse_proxy_secret_header="reviewed-proxy-secret",
+            peer_addr="127.0.0.1",
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+
+        queue_view = service.inspect_analyst_queue()
+        self.assertEqual(queue_view.total_records, 1)
+        self.assertEqual(queue_view.records[0]["alert_id"], admitted.alert.alert_id)
+        self.assertEqual(queue_view.records[0]["case_id"], promoted_case.case_id)
+        self.assertEqual(
+            queue_view.records[0]["reviewed_context"]["source"]["source_family"],
+            "entra_id",
+        )
+
+        case_detail = service.inspect_case_detail(promoted_case.case_id)
+        self.assertEqual(case_detail.case_id, promoted_case.case_id)
+        self.assertEqual(
+            case_detail.reviewed_context["source"]["source_family"],
+            "entra_id",
+        )
+        self.assertEqual(case_detail.linked_alert_ids, (admitted.alert.alert_id,))
+
     def test_service_admits_microsoft_365_audit_fixture_through_wazuh_source_profile(
         self,
     ) -> None:
@@ -4208,19 +4247,19 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
         ):
             service.inspect_assistant_context("case", promoted_case.case_id)
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
         ):
             service.inspect_case_detail(promoted_case.case_id)
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
         ):
             service.record_case_observation(
                 case_id=promoted_case.case_id,
@@ -4231,7 +4270,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
         ):
             service.record_case_lead(
                 case_id=promoted_case.case_id,
@@ -4241,7 +4280,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
         ):
             service.record_case_recommendation(
                 case_id=promoted_case.case_id,
@@ -4251,7 +4290,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
         ):
             service.record_case_handoff(
                 case_id=promoted_case.case_id,
@@ -4262,7 +4301,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
         ):
             service.record_case_disposition(
                 case_id=promoted_case.case_id,
@@ -4312,13 +4351,13 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             with self.subTest(record_family=record_family):
                 with self.assertRaisesRegex(
                     ValueError,
-                    "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+                    "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
                 ):
                     service.inspect_advisory_output(record_family, record_id)
 
                 with self.assertRaisesRegex(
                     ValueError,
-                    "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+                    "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
                 ):
                     service.render_recommendation_draft(record_family, record_id)
 
@@ -4365,13 +4404,13 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             with self.subTest(record_family=record_family):
                 with self.assertRaisesRegex(
                     ValueError,
-                    "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+                    "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
                 ):
                     service.inspect_advisory_output(record_family, record_id)
 
                 with self.assertRaisesRegex(
                     ValueError,
-                    "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+                    "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
                 ):
                     service.render_recommendation_draft(record_family, record_id)
 
@@ -4382,19 +4421,19 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
         ):
             service.inspect_assistant_context("case", promoted_case.case_id)
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
         ):
             service.inspect_advisory_output("case", promoted_case.case_id)
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
         ):
             service.render_recommendation_draft("case", promoted_case.case_id)
 
@@ -4440,13 +4479,13 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
         ):
             service.inspect_advisory_output("ai_trace", ai_trace.ai_trace_id)
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
         ):
             service.render_recommendation_draft("ai_trace", ai_trace.ai_trace_id)
 
@@ -4468,13 +4507,13 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
         ):
             service.inspect_case_detail(promoted_case.case_id)
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
         ):
             service.record_case_observation(
                 case_id=promoted_case.case_id,
@@ -4500,7 +4539,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
         ):
             service.inspect_case_detail(spoofed_case.case_id)
 
@@ -4531,7 +4570,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
         ):
             service.inspect_case_detail(spoofed_case.case_id)
 
@@ -9684,7 +9723,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit live slice",
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
         ):
             replay_service.create_reviewed_action_request_from_advisory(
                 record_family="recommendation",
