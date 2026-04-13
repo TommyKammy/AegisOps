@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, contextmanager
 from collections import Counter
 from dataclasses import asdict, dataclass, fields, replace
 from datetime import datetime, timezone
@@ -11,7 +11,7 @@ import json
 import logging
 import re
 import uuid
-from typing import Mapping, Protocol, Type, TypeVar
+from typing import Iterator, Mapping, Protocol, Type, TypeVar
 
 from .adapters.executor import IsolatedExecutorAdapter
 from .adapters.n8n import N8NReconciliationAdapter
@@ -448,6 +448,20 @@ class ReadinessDiagnosticsSnapshot:
                 "latest_reconciliation": self.latest_reconciliation,
             }
         )
+
+
+def _derive_readiness_status(
+    *,
+    startup_ready: bool,
+    reconciliation_lifecycle_counts: Mapping[str, int],
+) -> str:
+    if not startup_ready:
+        return "failing_closed"
+    if reconciliation_lifecycle_counts.get("stale", 0):
+        return "stale"
+    if reconciliation_lifecycle_counts.get("mismatched", 0):
+        return "degraded"
+    return "ready"
 
 
 RECORD_TYPES_BY_FAMILY: dict[str, Type[ControlPlaneRecord]] = {
@@ -1954,14 +1968,10 @@ class AegisOpsControlPlaneService:
             unresolved_reconciliation_ids=readiness_aggregates.unresolved_reconciliation_ids,
         )
 
-        if not startup.startup_ready:
-            status = "failing_closed"
-        elif readiness_aggregates.reconciliation_lifecycle_counts.get("stale", 0):
-            status = "stale"
-        elif readiness_aggregates.reconciliation_lifecycle_counts.get("mismatched", 0):
-            status = "degraded"
-        else:
-            status = "ready"
+        status = _derive_readiness_status(
+            startup_ready=startup.startup_ready,
+            reconciliation_lifecycle_counts=readiness_aggregates.reconciliation_lifecycle_counts,
+        )
 
         metrics = {
             "alerts": {
@@ -2222,7 +2232,23 @@ class AegisOpsControlPlaneService:
             restore_drill=restore_drill,
         )
 
+    @contextmanager
+    def _restore_drill_snapshot_transaction(self) -> Iterator[None]:
+        try:
+            with self._store.transaction(isolation_level="REPEATABLE READ"):
+                yield
+                return
+        except ValueError as exc:
+            if str(exc) != "Cannot set isolation_level inside an active transaction":
+                raise
+        with self._store.transaction():
+            yield
+
     def run_authoritative_restore_drill(self) -> RestoreDrillSnapshot:
+        with self._restore_drill_snapshot_transaction():
+            return self._run_authoritative_restore_drill_snapshot()
+
+    def _run_authoritative_restore_drill_snapshot(self) -> RestoreDrillSnapshot:
         self._validate_authoritative_record_chain_restore(
             {
                 record_type.record_family: self._store.list(record_type)
@@ -2254,10 +2280,16 @@ class AegisOpsControlPlaneService:
         for reconciliation_id in verified_reconciliation_ids:
             self.inspect_assistant_context("reconciliation", reconciliation_id)
         self.inspect_reconciliation_status()
+        startup = self.describe_startup_status()
+        readiness_aggregates = self._inspect_readiness_aggregates()
+        readiness_status = _derive_readiness_status(
+            startup_ready=startup.startup_ready,
+            reconciliation_lifecycle_counts=readiness_aggregates.reconciliation_lifecycle_counts,
+        )
 
         return RestoreDrillSnapshot(
             read_only=True,
-            drill_passed=True,
+            drill_passed=readiness_status == "ready",
             verified_case_ids=verified_case_ids,
             verified_approval_decision_ids=verified_approval_decision_ids,
             verified_action_execution_ids=verified_action_execution_ids,

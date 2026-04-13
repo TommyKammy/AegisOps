@@ -89,6 +89,8 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 postgres_dsn="postgresql://control-plane.local/aegisops",
                 wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
                 wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
             ),
             store=store,
         )
