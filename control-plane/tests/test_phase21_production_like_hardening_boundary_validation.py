@@ -32,6 +32,14 @@ class Phase21ProductionLikeHardeningBoundaryValidationTests(unittest.TestCase):
         design_text = design_doc.read_text(encoding="utf-8")
         validation_text = validation_doc.read_text(encoding="utf-8")
         roadmap_doc = REPO_ROOT / "docs" / "Phase 16-21 Epic Roadmap.md"
+        end_to_end_test = (
+            REPO_ROOT / "control-plane" / "tests" / "test_phase21_end_to_end_validation.py"
+        )
+
+        self.assertTrue(
+            end_to_end_test.exists(),
+            f"expected Phase 21 end-to-end validation tests at {end_to_end_test}",
+        )
 
         for term in (
             "docs/phase-20-first-live-low-risk-action-and-reviewed-delegation-boundary.md",
@@ -51,6 +59,11 @@ class Phase21ProductionLikeHardeningBoundaryValidationTests(unittest.TestCase):
         ):
             self.assertIn(term, design_text)
             self.assertIn(term, validation_text)
+
+        self.assertIn(
+            "control-plane/tests/test_phase21_end_to_end_validation.py",
+            validation_text,
+        )
 
         validation_terms = [
             "Entra ID is the first reviewed second live source to onboard",
@@ -76,6 +89,12 @@ class Phase21ProductionLikeHardeningBoundaryValidationTests(unittest.TestCase):
             )
 
         for term in validation_terms:
+            self.assertIn(term, validation_text)
+
+        for term in (
+            "python3 -m unittest control-plane.tests.test_phase21_end_to_end_validation control-plane.tests.test_phase21_production_like_hardening_boundary_docs control-plane.tests.test_phase21_production_like_hardening_boundary_validation",
+            "Phase 21 end-to-end validation test keeps auth fail-closed behavior, restore readability, readiness diagnostics, second-source onboarding, and the completed Phase 20 live path under one focused runtime proof.",
+        ):
             self.assertIn(term, validation_text)
 
 

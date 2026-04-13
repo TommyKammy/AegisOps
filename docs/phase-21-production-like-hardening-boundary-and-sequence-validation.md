@@ -3,7 +3,7 @@
 - Validation date: 2026-04-13
 - Validation scope: Phase 21 review of the production-like hardening boundary around the completed Phase 20 live path, including auth and secrets, service-account ownership, reverse-proxy protections, admin bootstrap, break-glass access, restore, observability, one-node-to-multi-node growth conditions, and one reviewed second-source onboarding target without widening broader source, UI, or action scope
 - Baseline references: `docs/phase-21-production-like-hardening-boundary-and-sequence.md`, `docs/phase-20-first-live-low-risk-action-and-reviewed-delegation-boundary.md`, `docs/auth-baseline.md`, `docs/network-exposure-and-access-path-policy.md`, `docs/runbook.md`, `docs/automation-substrate-contract.md`, `docs/response-action-safety-model.md`, `docs/source-onboarding-contract.md`, `docs/phase-14-identity-rich-source-family-design.md`, `docs/phase-18-wazuh-lab-topology-and-live-ingest-contract.md`, `docs/wazuh-alert-ingest-contract.md`, `docs/control-plane-state-model.md`, `docs/phase-19-thin-operator-surface-and-daily-analyst-workflow.md`, `docs/phase-17-runtime-config-contract-and-boot-command-expectations.md`, `docs/architecture.md`
-- Verification commands: `python3 -m unittest control-plane.tests.test_phase21_production_like_hardening_boundary_docs control-plane.tests.test_phase21_production_like_hardening_boundary_validation`, `bash scripts/verify-phase-21-production-like-hardening-boundary.sh`, `bash scripts/test-verify-phase-21-production-like-hardening-boundary.sh`, `bash scripts/test-verify-ci-phase-21-workflow-coverage.sh`
+- Verification commands: `python3 -m unittest control-plane.tests.test_phase21_end_to_end_validation control-plane.tests.test_phase21_production_like_hardening_boundary_docs control-plane.tests.test_phase21_production_like_hardening_boundary_validation`, `bash scripts/verify-phase-21-production-like-hardening-boundary.sh`, `bash scripts/test-verify-phase-21-production-like-hardening-boundary.sh`, `bash scripts/test-verify-ci-phase-21-workflow-coverage.sh`
 - Validation status: FAIL
 
 ## Required Boundary Artifacts
@@ -24,6 +24,7 @@
 - `docs/phase-19-thin-operator-surface-and-daily-analyst-workflow.md`
 - `docs/phase-17-runtime-config-contract-and-boot-command-expectations.md`
 - `docs/architecture.md`
+- `control-plane/tests/test_phase21_end_to_end_validation.py`
 - `control-plane/tests/test_phase21_production_like_hardening_boundary_docs.py`
 - `control-plane/tests/test_phase21_production_like_hardening_boundary_validation.py`
 - `scripts/verify-phase-21-production-like-hardening-boundary.sh`
@@ -48,6 +49,8 @@ Confirmed topology growth remains conditional only and cannot proceed unless aut
 Confirmed the reviewed second-source onboarding boundary reuses the existing payload-admission, dedupe, restatement, evidence-preservation, case-linkage, and thin-operator-surface contracts rather than introducing a parallel second-source model.
 
 Confirmed explicit non-expansion rules keep broad multi-source breadth, broad UI expansion, direct vendor-local actioning, and production-scale topology claims out of scope for Phase 21.
+
+Phase 21 end-to-end validation test keeps auth fail-closed behavior, restore readability, readiness diagnostics, second-source onboarding, and the completed Phase 20 live path under one focused runtime proof.
 
 The issue requested review against `Phase 16-21 Epic Roadmap.md`, but that roadmap file was not present in the local worktree and could not be located via repository search during this validation snapshot.
 
