@@ -704,7 +704,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
 
                 base_url = f"http://127.0.0.1:{servers[0].server_port}"
                 diagnostics_payload = json.loads(
-                    request.urlopen(
+                    request.urlopen(  # noqa: S310 - local in-process test HTTP server
                         f"{base_url}/diagnostics/readiness",
                         timeout=2,
                     ).read().decode("utf-8")
@@ -747,7 +747,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
     def test_service_emits_structured_observability_logs_for_live_path_and_fail_closed_rejection(
         self,
     ) -> None:
-        _store, service, promoted_case, evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        _store, service, promoted_case, evidence_id, _ = self._build_phase19_in_scope_case()
         recommendation = service.record_case_recommendation(
             case_id=promoted_case.case_id,
             review_owner="analyst-001",
@@ -759,9 +759,9 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         with self.assertLogs("aegisops.control_plane", level="INFO") as log_output:
             service.ingest_wazuh_alert(
                 raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
-                authorization_header="Bearer reviewed-shared-secret",
+                authorization_header="Bearer reviewed-shared-secret",  # noqa: S106 - test fixture secret
                 forwarded_proto="https",
-                reverse_proxy_secret_header="reviewed-proxy-secret",
+                reverse_proxy_secret_header="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
                 peer_addr="127.0.0.1",
             )
             action_request = service.create_reviewed_action_request_from_advisory(
@@ -832,10 +832,14 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             ],
         )
         self.assertEqual(structured_events[0]["disposition"], "deduplicated")
+        self.assertEqual(structured_events[0]["peer_addr_class"], "loopback")
+        self.assertNotIn("peer_addr", structured_events[0])
         self.assertEqual(
             structured_events[1]["action_type"],
             "notify_identity_owner",
         )
+        self.assertTrue(structured_events[1]["requester_identity_present"])
+        self.assertNotIn("requester_identity", structured_events[1])
         self.assertEqual(structured_events[2]["execution_surface_id"], "shuffle")
         self.assertEqual(structured_events[3]["lifecycle_state"], "matched")
 
@@ -846,15 +850,17 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             ):
                 service.ingest_wazuh_alert(
                     raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
-                    authorization_header="Bearer reviewed-shared-secret",
+                    authorization_header="Bearer reviewed-shared-secret",  # noqa: S106 - test fixture secret
                     forwarded_proto="https",
-                    reverse_proxy_secret_header="invalid-secret",
+                    reverse_proxy_secret_header="invalid-secret",  # noqa: S106 - intentional negative test fixture
                     peer_addr="127.0.0.1",
                 )
 
         rejection_event = json.loads(rejected_logs.output[0].split(":", 2)[2])
         self.assertEqual(rejection_event["event"], "wazuh_ingest_rejected")
         self.assertEqual(rejection_event["reason"], "reverse_proxy_secret_mismatch")
+        self.assertEqual(rejection_event["peer_addr_class"], "loopback")
+        self.assertNotIn("peer_addr", rejection_event)
 
     def test_long_running_runtime_surface_exposes_analyst_queue_alert_detail_and_case_detail_http_views(
         self,

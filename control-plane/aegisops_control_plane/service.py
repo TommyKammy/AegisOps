@@ -567,6 +567,53 @@ def _json_ready(value: object) -> object:
     return value
 
 
+def _classify_network_identifier(value: object) -> str:
+    if not isinstance(value, str) or not value.strip():
+        return "missing"
+    try:
+        peer_ip = ipaddress.ip_address(value.strip())
+    except ValueError:
+        return "invalid"
+    if peer_ip.is_loopback:
+        return "loopback"
+    if peer_ip.is_private:
+        return "private"
+    if peer_ip.is_global:
+        return "public"
+    return "special"
+
+
+def _count_identity_values(value: object) -> int:
+    if isinstance(value, (tuple, list)):
+        return sum(
+            1 for item in value if isinstance(item, str) and item.strip()
+        )
+    if isinstance(value, str) and value.strip():
+        return 1
+    return 0
+
+
+def _sanitize_structured_event_fields(
+    fields: Mapping[str, object],
+) -> dict[str, object]:
+    sanitized: dict[str, object] = {}
+    for key, value in fields.items():
+        normalized_key = str(key)
+        if normalized_key == "peer_addr":
+            sanitized["peer_addr_class"] = _classify_network_identifier(value)
+            continue
+        if normalized_key.endswith("_identity"):
+            sanitized[f"{normalized_key}_present"] = (
+                _count_identity_values(value) > 0
+            )
+            continue
+        if normalized_key.endswith("_identities"):
+            sanitized[f"{normalized_key}_count"] = _count_identity_values(value)
+            continue
+        sanitized[normalized_key] = _json_ready(value)
+    return sanitized
+
+
 def _record_to_dict(record: ControlPlaneRecord) -> dict[str, object]:
     return {
         field.name: getattr(record, field.name)
@@ -1187,7 +1234,7 @@ class AegisOpsControlPlaneService:
             "event": event,
             "service_name": "aegisops-control-plane",
             "occurred_at": datetime.now(timezone.utc).isoformat(),
-            **_json_ready(fields),
+            **_sanitize_structured_event_fields(fields),
         }
         self._logger.log(level, json.dumps(payload, sort_keys=True, separators=(",", ":")))
 
@@ -1880,13 +1927,14 @@ class AegisOpsControlPlaneService:
         )
 
     def inspect_readiness_diagnostics(self) -> ReadinessDiagnosticsSnapshot:
-        startup = self.describe_startup_status()
-        shutdown = self.describe_shutdown_status()
-        alerts = self._store.list(AlertRecord)
-        cases = self._store.list(CaseRecord)
-        action_requests = self._store.list(ActionRequestRecord)
-        action_executions = self._store.list(ActionExecutionRecord)
-        reconciliations = self._store.list(ReconciliationRecord)
+        with self._store.transaction(isolation_level="REPEATABLE READ"):
+            startup = self.describe_startup_status()
+            shutdown = self.describe_shutdown_status()
+            alerts = self._store.list(AlertRecord)
+            cases = self._store.list(CaseRecord)
+            action_requests = self._store.list(ActionRequestRecord)
+            action_executions = self._store.list(ActionExecutionRecord)
+            reconciliations = self._store.list(ReconciliationRecord)
 
         latest_reconciliation = max(
             reconciliations,

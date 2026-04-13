@@ -8046,6 +8046,64 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             ),
         )
 
+    def test_service_phase21_readiness_uses_single_transaction_snapshot(self) -> None:
+        base_store, backend = make_store()
+        concurrent_store, _ = make_store(backend)
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case(store=base_store)
+        )
+        seed_reconciliation = max(
+            service._store.list(ReconciliationRecord),
+            key=lambda record: record.compared_at,
+            default=None,
+        )
+        if seed_reconciliation is None:
+            self.fail("expected seeded reconciliation record before readiness snapshot")
+
+        concurrent_reconciliation = replace(
+            seed_reconciliation,
+            reconciliation_id="reconciliation-phase21-readiness-concurrent-001",
+            compared_at=seed_reconciliation.compared_at + timedelta(minutes=30),
+            lifecycle_state="stale",
+        )
+        snapshot_store = _ConcurrentListMutationStore(
+            inner=base_store,
+            mutate_once=lambda: concurrent_store.save(concurrent_reconciliation),
+        )
+        snapshot_service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+            ),
+            store=snapshot_store,
+        )
+
+        statement_count_before_snapshot = len(backend.statements)
+        readiness = snapshot_service.inspect_readiness_diagnostics()
+
+        self.assertEqual(
+            backend.statements[statement_count_before_snapshot][0],
+            "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+        )
+        self.assertEqual(readiness.status, "ready")
+        self.assertEqual(readiness.metrics["reconciliations"]["stale"], 0)
+        self.assertEqual(
+            readiness.latest_reconciliation["reconciliation_id"],
+            seed_reconciliation.reconciliation_id,
+        )
+        self.assertEqual(len(base_store.list(ReconciliationRecord)), 2)
+        self.assertEqual(
+            concurrent_store.get(
+                ReconciliationRecord,
+                "reconciliation-phase21-readiness-concurrent-001",
+            ),
+            concurrent_reconciliation,
+        )
+
     def test_service_phase21_restore_rejects_non_string_tuple_elements(
         self,
     ) -> None:
