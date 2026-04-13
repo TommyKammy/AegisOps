@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, contextmanager
 from collections import Counter
 from dataclasses import asdict, dataclass, fields, replace
 from datetime import datetime, timezone
@@ -11,7 +11,7 @@ import json
 import logging
 import re
 import uuid
-from typing import Mapping, Protocol, Type, TypeVar
+from typing import Iterator, Mapping, Protocol, Type, TypeVar
 
 from .adapters.executor import IsolatedExecutorAdapter
 from .adapters.n8n import N8NReconciliationAdapter
@@ -2232,7 +2232,23 @@ class AegisOpsControlPlaneService:
             restore_drill=restore_drill,
         )
 
+    @contextmanager
+    def _restore_drill_snapshot_transaction(self) -> Iterator[None]:
+        try:
+            with self._store.transaction(isolation_level="REPEATABLE READ"):
+                yield
+                return
+        except ValueError as exc:
+            if str(exc) != "Cannot set isolation_level inside an active transaction":
+                raise
+        with self._store.transaction():
+            yield
+
     def run_authoritative_restore_drill(self) -> RestoreDrillSnapshot:
+        with self._restore_drill_snapshot_transaction():
+            return self._run_authoritative_restore_drill_snapshot()
+
+    def _run_authoritative_restore_drill_snapshot(self) -> RestoreDrillSnapshot:
         self._validate_authoritative_record_chain_restore(
             {
                 record_type.record_family: self._store.list(record_type)
