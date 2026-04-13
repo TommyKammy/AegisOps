@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import http.client
 import io
@@ -24,6 +25,7 @@ from aegisops_control_plane.models import (
     AITraceRecord,
     AlertRecord,
     AnalyticSignalRecord,
+    ApprovalDecisionRecord,
     CaseRecord,
     EvidenceRecord,
     RecommendationRecord,
@@ -280,6 +282,128 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         build_runtime_service.assert_called_once_with()
         run_control_plane_service.assert_called_once_with(service, stderr=mock.ANY)
+
+    def test_startup_and_shutdown_status_commands_render_reviewed_contracts(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+                wazuh_ingest_trusted_proxy_cidrs=("10.10.0.5/32",),
+                protected_surface_reverse_proxy_secret="reviewed-surface-secret",
+                protected_surface_trusted_proxy_cidrs=("10.10.0.5/32",),
+                protected_surface_proxy_service_account=REVIEWED_PROXY_SERVICE_ACCOUNT,
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",
+                break_glass_token="reviewed-break-glass-token",
+            ),
+            store=store,
+        )
+        service.persist_record(
+            CaseRecord(
+                case_id="case-shutdown-001",
+                alert_id="alert-shutdown-001",
+                finding_id="finding-shutdown-001",
+                evidence_ids=("evidence-shutdown-001",),
+                lifecycle_state="open",
+            )
+        )
+        startup_stdout = io.StringIO()
+        shutdown_stdout = io.StringIO()
+
+        main.main(["startup-status"], stdout=startup_stdout, service=service)
+        main.main(["shutdown-status"], stdout=shutdown_stdout, service=service)
+
+        startup_payload = json.loads(startup_stdout.getvalue())
+        shutdown_payload = json.loads(shutdown_stdout.getvalue())
+        self.assertTrue(startup_payload["startup_ready"])
+        self.assertEqual(
+            startup_payload["validated_surfaces"],
+            ["wazuh_ingest", "protected_surface"],
+        )
+        self.assertFalse(shutdown_payload["shutdown_ready"])
+        self.assertEqual(shutdown_payload["open_case_ids"], ["case-shutdown-001"])
+
+    def test_backup_and_restore_drill_commands_render_recovery_payloads(self) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before any approval-bound response.",
+        )
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=4)
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
+            expires_at=expires_at,
+        )
+        approval_decision = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-cli-restore-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        approved_request = service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval_decision.approval_decision_id,
+                lifecycle_state="approved",
+            )
+        )
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id=approved_request.action_request_id,
+            approved_payload=dict(approved_request.requested_payload),
+            delegated_at=action_request.requested_at + timedelta(minutes=10),
+            delegation_issuer="control-plane-service",
+            evidence_ids=(evidence_id,),
+        )
+        service.reconcile_action_execution(
+            action_request_id=approved_request.action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(
+                {
+                    "execution_run_id": execution.execution_run_id,
+                    "execution_surface_id": "shuffle",
+                    "idempotency_key": approved_request.idempotency_key,
+                    "approval_decision_id": execution.approval_decision_id,
+                    "delegation_id": execution.delegation_id,
+                    "payload_hash": execution.payload_hash,
+                    "observed_at": action_request.requested_at + timedelta(minutes=15),
+                    "status": "success",
+                },
+            ),
+            compared_at=action_request.requested_at + timedelta(minutes=16),
+            stale_after=action_request.requested_at + timedelta(hours=1),
+        )
+        backup_stdout = io.StringIO()
+        drill_stdout = io.StringIO()
+
+        main.main(["backup-authoritative-record-chain"], stdout=backup_stdout, service=service)
+        main.main(["run-authoritative-restore-drill"], stdout=drill_stdout, service=service)
+
+        backup_payload = json.loads(backup_stdout.getvalue())
+        drill_payload = json.loads(drill_stdout.getvalue())
+        self.assertEqual(
+            backup_payload["backup_schema_version"],
+            "phase21.authoritative-record-chain.v1",
+        )
+        self.assertEqual(backup_payload["record_counts"]["action_execution"], 1)
+        self.assertTrue(drill_payload["drill_passed"])
+        self.assertIn(
+            approval_decision.approval_decision_id,
+            drill_payload["verified_approval_decision_ids"],
+        )
 
     def test_long_running_runtime_surface_starts_http_server(self) -> None:
         store, _ = make_store()

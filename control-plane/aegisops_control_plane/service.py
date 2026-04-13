@@ -357,6 +357,62 @@ class RecommendationDraftSnapshot:
         )
 
 
+@dataclass(frozen=True)
+class StartupStatusSnapshot:
+    read_only: bool
+    startup_ready: bool
+    required_bindings: tuple[str, ...]
+    missing_bindings: tuple[str, ...]
+    validated_surfaces: tuple[str, ...]
+    blocking_reasons: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return _json_ready(asdict(self))
+
+
+@dataclass(frozen=True)
+class ShutdownStatusSnapshot:
+    read_only: bool
+    shutdown_ready: bool
+    blocking_reasons: tuple[str, ...]
+    open_case_ids: tuple[str, ...]
+    active_action_request_ids: tuple[str, ...]
+    active_action_execution_ids: tuple[str, ...]
+    unresolved_reconciliation_ids: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return _json_ready(asdict(self))
+
+
+@dataclass(frozen=True)
+class RestoreDrillSnapshot:
+    read_only: bool
+    drill_passed: bool
+    verified_case_ids: tuple[str, ...]
+    verified_approval_decision_ids: tuple[str, ...]
+    verified_action_execution_ids: tuple[str, ...]
+    verified_reconciliation_ids: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return _json_ready(asdict(self))
+
+
+@dataclass(frozen=True)
+class RestoreSummarySnapshot:
+    read_only: bool
+    restored_record_counts: dict[str, int]
+    restore_drill: RestoreDrillSnapshot
+
+    def to_dict(self) -> dict[str, object]:
+        return _json_ready(
+            {
+                "read_only": self.read_only,
+                "restored_record_counts": self.restored_record_counts,
+                "restore_drill": self.restore_drill.to_dict(),
+            }
+        )
+
+
 RECORD_TYPES_BY_FAMILY: dict[str, Type[ControlPlaneRecord]] = {
     record_type.record_family: record_type
     for record_type in (
@@ -375,6 +431,37 @@ RECORD_TYPES_BY_FAMILY: dict[str, Type[ControlPlaneRecord]] = {
         AITraceRecord,
         ReconciliationRecord,
     )
+}
+
+AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES: tuple[Type[ControlPlaneRecord], ...] = (
+    AnalyticSignalRecord,
+    AlertRecord,
+    EvidenceRecord,
+    CaseRecord,
+    ApprovalDecisionRecord,
+    ActionRequestRecord,
+    ActionExecutionRecord,
+    ReconciliationRecord,
+)
+AUTHORITATIVE_RECORD_CHAIN_FAMILIES: tuple[str, ...] = tuple(
+    record_type.record_family for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES
+)
+AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION = (
+    "phase21.authoritative-record-chain.v1"
+)
+_BACKUP_DATETIME_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
+    "analytic_signal": ("first_seen_at", "last_seen_at"),
+    "evidence": ("acquired_at",),
+    "approval_decision": ("decided_at", "approved_expires_at"),
+    "action_request": ("requested_at", "expires_at"),
+    "action_execution": ("delegated_at", "expires_at"),
+    "reconciliation": ("first_seen_at", "last_seen_at", "compared_at"),
+}
+_BACKUP_TUPLE_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
+    "analytic_signal": ("alert_ids", "case_ids"),
+    "case": ("evidence_ids",),
+    "approval_decision": ("approver_identities",),
+    "reconciliation": ("linked_execution_run_ids",),
 }
 
 _ACTION_POLICY_ALLOWED_VALUES: dict[str, tuple[str, ...]] = {
@@ -432,6 +519,53 @@ def _record_to_dict(record: ControlPlaneRecord) -> dict[str, object]:
         field.name: getattr(record, field.name)
         for field in fields(record)
     }
+
+
+def _parse_backup_datetime(value: object, field_name: str) -> datetime | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field_name} must be a non-empty ISO 8601 datetime")
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be a valid ISO 8601 datetime") from exc
+    if parsed.tzinfo is None:
+        raise ValueError(f"{field_name} must include a timezone offset")
+    return parsed
+
+
+def _record_from_backup_payload(
+    record_type: Type[RecordT],
+    payload: Mapping[str, object],
+) -> RecordT:
+    if not isinstance(payload, Mapping):
+        raise ValueError(
+            f"{record_type.record_family} backup entries must be JSON objects"
+        )
+    family = record_type.record_family
+    datetime_fields = set(_BACKUP_DATETIME_FIELDS_BY_FAMILY.get(family, ()))
+    tuple_fields = set(_BACKUP_TUPLE_FIELDS_BY_FAMILY.get(family, ()))
+    kwargs: dict[str, object] = {}
+    for field_info in fields(record_type):
+        if field_info.name not in payload:
+            raise ValueError(
+                f"{family} backup entry is missing required field {field_info.name!r}"
+            )
+        value = payload[field_info.name]
+        if field_info.name in datetime_fields:
+            value = _parse_backup_datetime(value, field_info.name)
+        elif field_info.name in tuple_fields:
+            if value is None:
+                value = ()
+            elif isinstance(value, list):
+                value = tuple(value)
+            elif not isinstance(value, tuple):
+                raise ValueError(
+                    f"{family}.{field_info.name} must be a JSON array in restore payload"
+                )
+        kwargs[field_info.name] = value
+    return record_type(**kwargs)
 
 
 def _approved_payload_binding_hash(
@@ -1474,6 +1608,234 @@ class AegisOpsControlPlaneService:
             by_lifecycle_state=by_lifecycle_state,
             by_ingest_disposition=by_ingest_disposition,
             records=tuple(_record_to_dict(record) for record in records),
+        )
+
+    def describe_startup_status(self) -> StartupStatusSnapshot:
+        required_bindings = (
+            "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN",
+            "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET",
+            "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_REVERSE_PROXY_SECRET",
+            "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVERSE_PROXY_SECRET",
+            "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_PROXY_SERVICE_ACCOUNT",
+            "AEGISOPS_CONTROL_PLANE_ADMIN_BOOTSTRAP_TOKEN",
+            "AEGISOPS_CONTROL_PLANE_BREAK_GLASS_TOKEN",
+        )
+        binding_values = {
+            "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN": self._config.postgres_dsn,
+            "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET": (
+                self._config.wazuh_ingest_shared_secret
+            ),
+            "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_REVERSE_PROXY_SECRET": (
+                self._config.wazuh_ingest_reverse_proxy_secret
+            ),
+            "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVERSE_PROXY_SECRET": (
+                self._config.protected_surface_reverse_proxy_secret
+            ),
+            "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_PROXY_SERVICE_ACCOUNT": (
+                self._config.protected_surface_proxy_service_account
+            ),
+            "AEGISOPS_CONTROL_PLANE_ADMIN_BOOTSTRAP_TOKEN": (
+                self._config.admin_bootstrap_token
+            ),
+            "AEGISOPS_CONTROL_PLANE_BREAK_GLASS_TOKEN": self._config.break_glass_token,
+        }
+        missing_bindings = tuple(
+            binding_name
+            for binding_name in required_bindings
+            if not str(binding_values[binding_name]).strip()
+            or binding_values[binding_name] == "<set-me>"
+        )
+        validated_surfaces: list[str] = []
+        blocking_reasons: list[str] = []
+        try:
+            self.validate_wazuh_ingest_runtime()
+        except ValueError as exc:
+            blocking_reasons.append(str(exc))
+        else:
+            validated_surfaces.append("wazuh_ingest")
+        try:
+            self.validate_protected_surface_runtime()
+        except ValueError as exc:
+            blocking_reasons.append(str(exc))
+        else:
+            validated_surfaces.append("protected_surface")
+
+        return StartupStatusSnapshot(
+            read_only=True,
+            startup_ready=not missing_bindings and not blocking_reasons,
+            required_bindings=required_bindings,
+            missing_bindings=missing_bindings,
+            validated_surfaces=tuple(validated_surfaces),
+            blocking_reasons=tuple(blocking_reasons),
+        )
+
+    def describe_shutdown_status(self) -> ShutdownStatusSnapshot:
+        open_case_ids = tuple(
+            record.case_id
+            for record in self._store.list(CaseRecord)
+            if record.lifecycle_state
+            in {
+                "open",
+                "investigating",
+                "pending_action",
+                "contained_pending_validation",
+                "reopened",
+            }
+        )
+        active_action_request_ids = tuple(
+            record.action_request_id
+            for record in self._store.list(ActionRequestRecord)
+            if record.lifecycle_state
+            in {"pending_approval", "approved", "executing", "unresolved"}
+        )
+        active_action_execution_ids = tuple(
+            record.action_execution_id
+            for record in self._store.list(ActionExecutionRecord)
+            if record.lifecycle_state in {"queued", "running"}
+        )
+        unresolved_reconciliation_ids = tuple(
+            record.reconciliation_id
+            for record in self._store.list(ReconciliationRecord)
+            if record.lifecycle_state in {"pending", "mismatched", "stale"}
+        )
+        blocking_reasons: list[str] = []
+        if open_case_ids:
+            blocking_reasons.append(
+                "controlled shutdown requires resolving or explicitly handing off open casework"
+            )
+        if active_action_request_ids:
+            blocking_reasons.append(
+                "controlled shutdown requires approval-bound action requests to leave an inactive state"
+            )
+        if active_action_execution_ids:
+            blocking_reasons.append(
+                "controlled shutdown requires queued or running executions to reach a terminal state"
+            )
+        if unresolved_reconciliation_ids:
+            blocking_reasons.append(
+                "controlled shutdown requires pending reconciliation mismatches to be reviewed first"
+            )
+        return ShutdownStatusSnapshot(
+            read_only=True,
+            shutdown_ready=not blocking_reasons,
+            blocking_reasons=tuple(blocking_reasons),
+            open_case_ids=open_case_ids,
+            active_action_request_ids=active_action_request_ids,
+            active_action_execution_ids=active_action_execution_ids,
+            unresolved_reconciliation_ids=unresolved_reconciliation_ids,
+        )
+
+    def export_authoritative_record_chain_backup(self) -> dict[str, object]:
+        record_families: dict[str, list[dict[str, object]]] = {}
+        record_counts: dict[str, int] = {}
+        for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES:
+            family = record_type.record_family
+            records = [
+                _json_ready(_record_to_dict(record))
+                for record in self._store.list(record_type)
+            ]
+            record_families[family] = records
+            record_counts[family] = len(records)
+        return {
+            "backup_schema_version": AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "persistence_mode": self._store.persistence_mode,
+            "record_families": record_families,
+            "record_counts": record_counts,
+        }
+
+    def restore_authoritative_record_chain_backup(
+        self,
+        backup_payload: Mapping[str, object],
+    ) -> RestoreSummarySnapshot:
+        if not isinstance(backup_payload, Mapping):
+            raise ValueError("restore payload must be a JSON object")
+        backup_schema_version = backup_payload.get("backup_schema_version")
+        if backup_schema_version != AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION:
+            raise ValueError(
+                "restore payload must declare the reviewed authoritative record-chain schema version"
+            )
+        record_families_payload = backup_payload.get("record_families")
+        if not isinstance(record_families_payload, Mapping):
+            raise ValueError("restore payload must contain record_families")
+        record_counts_payload = backup_payload.get("record_counts")
+        if not isinstance(record_counts_payload, Mapping):
+            raise ValueError("restore payload must contain record_counts")
+
+        parsed_records: dict[str, tuple[ControlPlaneRecord, ...]] = {}
+        restored_record_counts: dict[str, int] = {}
+        for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES:
+            family = record_type.record_family
+            raw_records = record_families_payload.get(family)
+            if not isinstance(raw_records, list):
+                raise ValueError(
+                    f"restore payload must contain a JSON array for record family {family!r}"
+                )
+            expected_count = record_counts_payload.get(family)
+            if expected_count != len(raw_records):
+                raise ValueError(
+                    f"restore payload record count mismatch for {family!r}: "
+                    f"expected {expected_count!r}, found {len(raw_records)}"
+                )
+            parsed = tuple(
+                _record_from_backup_payload(record_type, raw_record)
+                for raw_record in raw_records
+            )
+            parsed_records[family] = parsed
+            restored_record_counts[family] = len(parsed)
+
+        self._validate_authoritative_record_chain_restore(parsed_records)
+        with self._store.transaction():
+            self._require_empty_authoritative_restore_target()
+            for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES:
+                for record in parsed_records[record_type.record_family]:
+                    self.persist_record(record)
+            restore_drill = self.run_authoritative_restore_drill()
+        return RestoreSummarySnapshot(
+            read_only=True,
+            restored_record_counts=restored_record_counts,
+            restore_drill=restore_drill,
+        )
+
+    def run_authoritative_restore_drill(self) -> RestoreDrillSnapshot:
+        self._validate_authoritative_record_chain_restore(
+            {
+                record_type.record_family: self._store.list(record_type)
+                for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES
+            }
+        )
+        verified_case_ids = tuple(
+            record.case_id for record in self._store.list(CaseRecord)
+        )
+        verified_approval_decision_ids = tuple(
+            record.approval_decision_id
+            for record in self._store.list(ApprovalDecisionRecord)
+        )
+        verified_action_execution_ids = tuple(
+            record.action_execution_id
+            for record in self._store.list(ActionExecutionRecord)
+        )
+        verified_reconciliation_ids = tuple(
+            record.reconciliation_id
+            for record in self._store.list(ReconciliationRecord)
+            if record.execution_run_id is not None
+        )
+
+        for case_id in verified_case_ids:
+            self.inspect_case_detail(case_id)
+        for approval_decision_id in verified_approval_decision_ids:
+            self.inspect_assistant_context("approval_decision", approval_decision_id)
+        for action_execution_id in verified_action_execution_ids:
+            self.inspect_assistant_context("action_execution", action_execution_id)
+        self.inspect_reconciliation_status()
+
+        return RestoreDrillSnapshot(
+            read_only=True,
+            drill_passed=True,
+            verified_case_ids=verified_case_ids,
+            verified_approval_decision_ids=verified_approval_decision_ids,
+            verified_action_execution_ids=verified_action_execution_ids,
+            verified_reconciliation_ids=verified_reconciliation_ids,
         )
 
     def inspect_analyst_queue(self) -> AnalystQueueSnapshot:
@@ -4243,6 +4605,194 @@ class AegisOpsControlPlaneService:
             )
         )
         return f"analytic-signal-{uuid.uuid5(uuid.NAMESPACE_URL, mint_material)}"
+
+    def _require_empty_authoritative_restore_target(self) -> None:
+        populated_families = [
+            record_type.record_family
+            for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES
+            if self._store.list(record_type)
+        ]
+        if populated_families:
+            raise ValueError(
+                "authoritative restore target must be empty before restore; found existing "
+                f"records for {', '.join(populated_families)}"
+            )
+
+    def _validate_authoritative_record_chain_restore(
+        self,
+        records_by_family: Mapping[str, tuple[ControlPlaneRecord, ...]],
+    ) -> None:
+        analytic_signals = {
+            record.analytic_signal_id: record
+            for record in records_by_family.get("analytic_signal", ())
+            if isinstance(record, AnalyticSignalRecord)
+        }
+        alerts = {
+            record.alert_id: record
+            for record in records_by_family.get("alert", ())
+            if isinstance(record, AlertRecord)
+        }
+        evidence_records = {
+            record.evidence_id: record
+            for record in records_by_family.get("evidence", ())
+            if isinstance(record, EvidenceRecord)
+        }
+        cases = {
+            record.case_id: record
+            for record in records_by_family.get("case", ())
+            if isinstance(record, CaseRecord)
+        }
+        approval_decisions = {
+            record.approval_decision_id: record
+            for record in records_by_family.get("approval_decision", ())
+            if isinstance(record, ApprovalDecisionRecord)
+        }
+        action_requests = {
+            record.action_request_id: record
+            for record in records_by_family.get("action_request", ())
+            if isinstance(record, ActionRequestRecord)
+        }
+        action_executions = {
+            record.action_execution_id: record
+            for record in records_by_family.get("action_execution", ())
+            if isinstance(record, ActionExecutionRecord)
+        }
+        action_executions_by_run_id = {
+            record.execution_run_id: record for record in action_executions.values()
+        }
+        reconciliations = tuple(
+            record
+            for record in records_by_family.get("reconciliation", ())
+            if isinstance(record, ReconciliationRecord)
+        )
+
+        for alert in alerts.values():
+            if alert.analytic_signal_id and alert.analytic_signal_id not in analytic_signals:
+                raise ValueError(
+                    f"missing analytic_signal record {alert.analytic_signal_id!r} required by alert "
+                    f"{alert.alert_id!r}"
+                )
+            if alert.case_id and alert.case_id not in cases:
+                raise ValueError(
+                    f"missing case record {alert.case_id!r} required by alert {alert.alert_id!r}"
+                )
+
+        for evidence in evidence_records.values():
+            if evidence.alert_id and evidence.alert_id not in alerts:
+                raise ValueError(
+                    f"missing alert record {evidence.alert_id!r} required by evidence "
+                    f"{evidence.evidence_id!r}"
+                )
+            if evidence.case_id and evidence.case_id not in cases:
+                raise ValueError(
+                    f"missing case record {evidence.case_id!r} required by evidence "
+                    f"{evidence.evidence_id!r}"
+                )
+
+        for case in cases.values():
+            if case.alert_id and case.alert_id not in alerts:
+                raise ValueError(
+                    f"missing alert record {case.alert_id!r} required by case {case.case_id!r}"
+                )
+            for evidence_id in case.evidence_ids:
+                if evidence_id not in evidence_records:
+                    raise ValueError(
+                        f"missing evidence record {evidence_id!r} required by case {case.case_id!r}"
+                    )
+
+        for approval_decision in approval_decisions.values():
+            if approval_decision.action_request_id not in action_requests:
+                raise ValueError(
+                    f"missing action_request record {approval_decision.action_request_id!r} required by "
+                    f"approval decision {approval_decision.approval_decision_id!r}"
+                )
+
+        for action_request in action_requests.values():
+            if action_request.case_id and action_request.case_id not in cases:
+                raise ValueError(
+                    f"missing case record {action_request.case_id!r} required by action request "
+                    f"{action_request.action_request_id!r}"
+                )
+            if action_request.alert_id and action_request.alert_id not in alerts:
+                raise ValueError(
+                    f"missing alert record {action_request.alert_id!r} required by action request "
+                    f"{action_request.action_request_id!r}"
+                )
+            if (
+                action_request.approval_decision_id
+                and action_request.approval_decision_id not in approval_decisions
+            ):
+                raise ValueError(
+                    f"missing approval_decision record {action_request.approval_decision_id!r} "
+                    f"required by action request {action_request.action_request_id!r}"
+                )
+
+        for action_execution in action_executions.values():
+            action_request = action_requests.get(action_execution.action_request_id)
+            if action_request is None:
+                raise ValueError(
+                    f"missing action_request record {action_execution.action_request_id!r} required by "
+                    f"action execution {action_execution.action_execution_id!r}"
+                )
+            if action_execution.approval_decision_id not in approval_decisions:
+                raise ValueError(
+                    f"missing approval_decision record {action_execution.approval_decision_id!r} "
+                    f"required by action execution {action_execution.action_execution_id!r}"
+                )
+            if (
+                action_request.approval_decision_id is not None
+                and action_request.approval_decision_id
+                != action_execution.approval_decision_id
+            ):
+                raise ValueError(
+                    f"action execution {action_execution.action_execution_id!r} does not match action "
+                    f"request approval binding"
+                )
+
+        for reconciliation in reconciliations:
+            if reconciliation.alert_id and reconciliation.alert_id not in alerts:
+                raise ValueError(
+                    f"missing alert record {reconciliation.alert_id!r} required by reconciliation "
+                    f"{reconciliation.reconciliation_id!r}"
+                )
+            if (
+                reconciliation.analytic_signal_id
+                and reconciliation.analytic_signal_id not in analytic_signals
+            ):
+                raise ValueError(
+                    f"missing analytic_signal record {reconciliation.analytic_signal_id!r} required by "
+                    f"reconciliation {reconciliation.reconciliation_id!r}"
+                )
+            if (
+                reconciliation.execution_run_id
+                and reconciliation.execution_run_id not in action_executions_by_run_id
+            ):
+                raise ValueError(
+                    f"missing action execution run {reconciliation.execution_run_id!r} required by "
+                    f"reconciliation {reconciliation.reconciliation_id!r}"
+                )
+            for field_name, known_ids in (
+                ("alert_ids", alerts),
+                ("case_ids", cases),
+                ("evidence_ids", evidence_records),
+                ("approval_decision_ids", approval_decisions),
+                ("action_request_ids", action_requests),
+                ("action_execution_ids", action_executions),
+            ):
+                for linked_id in self._assistant_ids_from_mapping(
+                    reconciliation.subject_linkage,
+                    field_name,
+                ):
+                    if linked_id not in known_ids:
+                        singular_name = (
+                            field_name[:-4]
+                            if field_name.endswith("_ids")
+                            else field_name
+                        )
+                        raise ValueError(
+                            f"missing {singular_name} record {linked_id!r} required by reconciliation "
+                            f"{reconciliation.reconciliation_id!r}"
+                        )
 
     def _require_case_record(self, case_id: str) -> CaseRecord:
         case_id = self._require_non_empty_string(case_id, "case_id")

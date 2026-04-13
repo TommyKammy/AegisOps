@@ -7750,6 +7750,212 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             (evidence_id,),
         )
 
+    def test_service_phase21_backup_restore_and_restore_drill_preserve_record_chain(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Observed repository permission change requires tracked review.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            triage_owner="analyst-001",
+            triage_rationale="Privilege-impacting change needs durable business-hours follow-up.",
+            observation_id=observation.observation_id,
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before any approval-bound response.",
+            lead_id=lead.lead_id,
+        )
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=4)
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
+            expires_at=expires_at,
+        )
+        decided_at = action_request.requested_at + timedelta(minutes=5)
+        delegated_at = action_request.requested_at + timedelta(minutes=10)
+        observed_at = action_request.requested_at + timedelta(minutes=15)
+        compared_at = action_request.requested_at + timedelta(minutes=16)
+        stale_after = action_request.requested_at + timedelta(hours=1)
+        approval_decision = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase21-restore-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=decided_at,
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        approved_request = service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval_decision.approval_decision_id,
+                lifecycle_state="approved",
+            )
+        )
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id=approved_request.action_request_id,
+            approved_payload=dict(approved_request.requested_payload),
+            delegated_at=delegated_at,
+            delegation_issuer="control-plane-service",
+            evidence_ids=(evidence_id,),
+        )
+        reconciliation = service.reconcile_action_execution(
+            action_request_id=approved_request.action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(
+                {
+                    "execution_run_id": execution.execution_run_id,
+                    "execution_surface_id": "shuffle",
+                    "idempotency_key": approved_request.idempotency_key,
+                    "approval_decision_id": execution.approval_decision_id,
+                    "delegation_id": execution.delegation_id,
+                    "payload_hash": execution.payload_hash,
+                    "observed_at": observed_at,
+                    "status": "success",
+                },
+            ),
+            compared_at=compared_at,
+            stale_after=stale_after,
+        )
+
+        backup = service.export_authoritative_record_chain_backup()
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+        restore_summary = restored_service.restore_authoritative_record_chain_backup(backup)
+        restore_drill = restored_service.run_authoritative_restore_drill()
+
+        self.assertEqual(
+            backup["backup_schema_version"],
+            "phase21.authoritative-record-chain.v1",
+        )
+        self.assertEqual(backup["record_counts"]["action_execution"], 1)
+        self.assertEqual(restore_summary.restored_record_counts["reconciliation"], 2)
+        self.assertEqual(
+            restore_drill.verified_action_execution_ids,
+            (execution.action_execution_id,),
+        )
+        self.assertEqual(
+            restore_drill.verified_approval_decision_ids,
+            (approval_decision.approval_decision_id,),
+        )
+        self.assertIn(promoted_case.case_id, restore_drill.verified_case_ids)
+        self.assertIn(
+            reconciliation.reconciliation_id,
+            restore_drill.verified_reconciliation_ids,
+        )
+
+        restored_case_detail = restored_service.inspect_case_detail(promoted_case.case_id)
+        self.assertEqual(
+            restored_case_detail.case_record["case_id"],
+            promoted_case.case_id,
+        )
+        self.assertEqual(restored_case_detail.linked_evidence_ids, (evidence_id,))
+
+        restored_approval_context = restored_service.inspect_assistant_context(
+            "approval_decision",
+            approval_decision.approval_decision_id,
+        )
+        self.assertEqual(
+            restored_approval_context.linked_case_ids,
+            (promoted_case.case_id,),
+        )
+        self.assertIn(
+            reconciliation.reconciliation_id,
+            restored_approval_context.linked_reconciliation_ids,
+        )
+
+    def test_service_phase21_restore_fails_closed_when_approval_record_is_missing(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before any approval-bound response.",
+        )
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=4)
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
+            expires_at=expires_at,
+        )
+        approved_request = service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id="approval-phase21-missing-001",
+                lifecycle_state="approved",
+            )
+        )
+        execution = service.persist_record(
+            ActionExecutionRecord(
+                action_execution_id="action-execution-phase21-missing-001",
+                action_request_id=approved_request.action_request_id,
+                approval_decision_id="approval-phase21-missing-001",
+                delegation_id="delegation-phase21-missing-001",
+                execution_surface_type="automation_substrate",
+                execution_surface_id="shuffle",
+                execution_run_id="execution-run-phase21-missing-001",
+                idempotency_key=approved_request.idempotency_key,
+                target_scope=dict(approved_request.target_scope),
+                approved_payload=dict(approved_request.requested_payload),
+                payload_hash=approved_request.payload_hash,
+                delegated_at=reviewed_at + timedelta(minutes=1),
+                expires_at=approved_request.expires_at,
+                provenance={"evidence_ids": (evidence_id,)},
+                lifecycle_state="queued",
+            )
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        backup["record_families"]["approval_decision"] = []
+        backup["record_counts"]["approval_decision"] = 0
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "missing approval_decision record 'approval-phase21-missing-001' required by action request",
+        ):
+            restored_service.restore_authoritative_record_chain_backup(backup)
+
+        self.assertIsNone(
+            restored_service.get_record(
+                ActionExecutionRecord,
+                execution.action_execution_id,
+            )
+        )
+
     def test_service_phase20_first_live_action_fail_closes_on_downstream_execution_surface_mismatch(
         self,
     ) -> None:
