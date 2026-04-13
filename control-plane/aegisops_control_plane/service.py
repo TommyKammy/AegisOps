@@ -55,7 +55,11 @@ class ControlPlaneStore(Protocol):
     def list(self, record_type: Type[RecordT]) -> tuple[RecordT, ...]:
         ...
 
-    def transaction(self) -> AbstractContextManager[None]:
+    def transaction(
+        self,
+        *,
+        isolation_level: str | None = None,
+    ) -> AbstractContextManager[None]:
         ...
 
 
@@ -473,6 +477,20 @@ _BACKUP_TUPLE_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
     "approval_decision": ("approver_identities",),
     "reconciliation": ("linked_execution_run_ids",),
 }
+_BACKUP_MAPPING_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
+    "analytic_signal": ("reviewed_context",),
+    "alert": ("reviewed_context",),
+    "case": ("reviewed_context",),
+    "approval_decision": ("target_snapshot",),
+    "action_request": (
+        "target_scope",
+        "requested_payload",
+        "policy_basis",
+        "policy_evaluation",
+    ),
+    "action_execution": ("target_scope", "approved_payload", "provenance"),
+    "reconciliation": ("subject_linkage",),
+}
 
 _ACTION_POLICY_ALLOWED_VALUES: dict[str, tuple[str, ...]] = {
     "severity": ("low", "medium", "high", "critical"),
@@ -556,6 +574,7 @@ def _record_from_backup_payload(
     family = record_type.record_family
     datetime_fields = set(_BACKUP_DATETIME_FIELDS_BY_FAMILY.get(family, ()))
     tuple_fields = set(_BACKUP_TUPLE_FIELDS_BY_FAMILY.get(family, ()))
+    mapping_fields = set(_BACKUP_MAPPING_FIELDS_BY_FAMILY.get(family, ()))
     kwargs: dict[str, object] = {}
     for field_info in fields(record_type):
         if field_info.name not in payload:
@@ -574,6 +593,12 @@ def _record_from_backup_payload(
                 raise ValueError(
                     f"{family}.{field_info.name} must be a JSON array in restore payload"
                 )
+        elif field_info.name in mapping_fields:
+            if not isinstance(value, Mapping):
+                raise ValueError(
+                    f"{family}.{field_info.name} must be a JSON object in restore payload"
+                )
+            value = {str(key): item for key, item in value.items()}
         kwargs[field_info.name] = value
     return record_type(**kwargs)
 
@@ -1753,7 +1778,7 @@ class AegisOpsControlPlaneService:
     def export_authoritative_record_chain_backup(self) -> dict[str, object]:
         record_families: dict[str, list[dict[str, object]]] = {}
         record_counts: dict[str, int] = {}
-        with self._store.transaction():
+        with self._store.transaction(isolation_level="REPEATABLE READ"):
             for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES:
                 family = record_type.record_family
                 records = [
@@ -1847,7 +1872,6 @@ class AegisOpsControlPlaneService:
         verified_reconciliation_ids = tuple(
             record.reconciliation_id
             for record in self._store.list(ReconciliationRecord)
-            if record.execution_run_id is not None
         )
 
         for case_id in verified_case_ids:
@@ -4813,10 +4837,21 @@ class AegisOpsControlPlaneService:
                     )
 
         for approval_decision in approval_decisions.values():
-            if approval_decision.action_request_id not in action_requests:
+            action_request = action_requests.get(approval_decision.action_request_id)
+            if action_request is None:
                 raise ValueError(
                     f"missing action_request record {approval_decision.action_request_id!r} required by "
                     f"approval decision {approval_decision.approval_decision_id!r}"
+                )
+            if approval_decision.target_snapshot != action_request.target_scope:
+                raise ValueError(
+                    f"approval decision {approval_decision.approval_decision_id!r} does not match "
+                    "action request target binding"
+                )
+            if approval_decision.payload_hash != action_request.payload_hash:
+                raise ValueError(
+                    f"approval decision {approval_decision.approval_decision_id!r} does not match "
+                    "action request payload binding"
                 )
 
         for action_request in action_requests.values():
@@ -4838,6 +4873,24 @@ class AegisOpsControlPlaneService:
                     f"missing approval_decision record {action_request.approval_decision_id!r} "
                     f"required by action request {action_request.action_request_id!r}"
                 )
+            approval_decision = approval_decisions.get(action_request.approval_decision_id)
+            if approval_decision is None:
+                continue
+            if approval_decision.action_request_id != action_request.action_request_id:
+                raise ValueError(
+                    f"action request {action_request.action_request_id!r} does not match approval "
+                    "decision binding"
+                )
+            if approval_decision.target_snapshot != action_request.target_scope:
+                raise ValueError(
+                    f"action request {action_request.action_request_id!r} does not match approval "
+                    "decision target binding"
+                )
+            if approval_decision.payload_hash != action_request.payload_hash:
+                raise ValueError(
+                    f"action request {action_request.action_request_id!r} does not match approval "
+                    "decision payload binding"
+                )
 
         for action_execution in action_executions.values():
             action_request = action_requests.get(action_execution.action_request_id)
@@ -4851,14 +4904,63 @@ class AegisOpsControlPlaneService:
                     f"missing approval_decision record {action_execution.approval_decision_id!r} "
                     f"required by action execution {action_execution.action_execution_id!r}"
                 )
-            if (
-                action_request.approval_decision_id is not None
-                and action_request.approval_decision_id
-                != action_execution.approval_decision_id
-            ):
+            approval_decision = approval_decisions[action_execution.approval_decision_id]
+            if action_request.approval_decision_id != action_execution.approval_decision_id:
                 raise ValueError(
                     f"action execution {action_execution.action_execution_id!r} does not match action "
                     f"request approval binding"
+                )
+            if approval_decision.action_request_id != action_request.action_request_id:
+                raise ValueError(
+                    f"action execution {action_execution.action_execution_id!r} does not match approval "
+                    "decision binding"
+                )
+            if action_execution.idempotency_key != action_request.idempotency_key:
+                raise ValueError(
+                    f"action execution {action_execution.action_execution_id!r} does not match action "
+                    "request idempotency binding"
+                )
+            if action_execution.target_scope != action_request.target_scope:
+                raise ValueError(
+                    f"action execution {action_execution.action_execution_id!r} does not match action "
+                    "request target binding"
+                )
+            if action_execution.approved_payload != action_request.requested_payload:
+                raise ValueError(
+                    f"action execution {action_execution.action_execution_id!r} does not match action "
+                    "request approved payload binding"
+                )
+            if action_execution.payload_hash != action_request.payload_hash:
+                raise ValueError(
+                    f"action execution {action_execution.action_execution_id!r} does not match action "
+                    "request payload binding"
+                )
+            policy_evaluation = action_request.policy_evaluation
+            if (
+                policy_evaluation.get("execution_surface_type")
+                != action_execution.execution_surface_type
+            ):
+                raise ValueError(
+                    f"action execution {action_execution.action_execution_id!r} does not match action "
+                    "request execution surface binding"
+                )
+            if (
+                policy_evaluation.get("execution_surface_id")
+                != action_execution.execution_surface_id
+            ):
+                raise ValueError(
+                    f"action execution {action_execution.action_execution_id!r} does not match action "
+                    "request execution surface binding"
+                )
+            if approval_decision.target_snapshot != action_request.target_scope:
+                raise ValueError(
+                    f"action execution {action_execution.action_execution_id!r} does not match approval "
+                    "decision target binding"
+                )
+            if approval_decision.payload_hash != action_request.payload_hash:
+                raise ValueError(
+                    f"action execution {action_execution.action_execution_id!r} does not match approval "
+                    "decision payload binding"
                 )
 
         for reconciliation in reconciliations:

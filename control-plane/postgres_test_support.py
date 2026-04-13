@@ -68,6 +68,11 @@ class FakePostgresCursor:
         normalized = " ".join(query.strip().split())
         self.backend.statements.append((normalized, params))
 
+        if normalized.upper().startswith("SET TRANSACTION ISOLATION LEVEL "):
+            self.description = None
+            self._rows = []
+            return
+
         insert_match = _INSERT_RE.fullmatch(normalized)
         if insert_match is not None:
             self._execute_insert(insert_match.group("table"), insert_match.group("columns"), params)

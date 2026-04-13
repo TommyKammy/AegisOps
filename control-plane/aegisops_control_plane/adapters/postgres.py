@@ -60,6 +60,9 @@ class ConnectionProtocol(Protocol):
 
 
 ConnectionFactory = Callable[[str], ConnectionProtocol]
+_ALLOWED_TRANSACTION_ISOLATION_LEVELS = frozenset(
+    {"READ COMMITTED", "REPEATABLE READ", "SERIALIZABLE"}
+)
 
 
 @dataclass(frozen=True)
@@ -492,13 +495,31 @@ class PostgresControlPlaneStore:
             connection.close()
 
     @contextmanager
-    def transaction(self) -> Iterator[None]:
+    def transaction(
+        self,
+        *,
+        isolation_level: str | None = None,
+    ) -> Iterator[None]:
         active_connection = self._active_connection.get()
         if active_connection is not None:
             yield
             return
 
         with self._connection() as connection:
+            if isolation_level is not None:
+                normalized_isolation_level = isolation_level.strip().upper()
+                if normalized_isolation_level not in _ALLOWED_TRANSACTION_ISOLATION_LEVELS:
+                    raise ValueError(
+                        "Unsupported transaction isolation level "
+                        f"{isolation_level!r}"
+                    )
+                cursor = connection.cursor()
+                try:
+                    cursor.execute(
+                        f"SET TRANSACTION ISOLATION LEVEL {normalized_isolation_level}"
+                    )
+                finally:
+                    cursor.close()
             token = self._active_connection.set(connection)
             try:
                 yield
