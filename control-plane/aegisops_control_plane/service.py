@@ -2314,6 +2314,7 @@ class AegisOpsControlPlaneService:
                     "payload_hash": payload_hash,
                     "record_family": record_family,
                     "record_id": record_id,
+                    "requester_identity": requester_identity,
                     "expires_at": expires_at.isoformat(),
                 },
                 sort_keys=True,
