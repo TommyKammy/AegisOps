@@ -19,6 +19,7 @@ architecture_doc="${repo_root}/docs/architecture.md"
 docs_test="${repo_root}/control-plane/tests/test_phase21_production_like_hardening_boundary_docs.py"
 validation_test="${repo_root}/control-plane/tests/test_phase21_production_like_hardening_boundary_validation.py"
 workflow_path="${repo_root}/.github/workflows/ci.yml"
+roadmap_filename="Phase 16-21 Epic Roadmap.md"
 
 require_file() {
   local path="$1"
@@ -40,6 +41,16 @@ require_fixed_line() {
   fi
 }
 
+reject_fixed_line() {
+  local path="$1"
+  local unexpected="$2"
+
+  if grep -Fqx -- "${unexpected}" "${path}" >/dev/null; then
+    echo "Unexpected line in ${path}: ${unexpected}" >&2
+    exit 1
+  fi
+}
+
 require_file "${design_doc}" "Missing Phase 21 production-like hardening design doc"
 require_file "${validation_doc}" "Missing Phase 21 production-like hardening validation doc"
 require_file "${phase20_doc}" "Missing Phase 20 boundary doc"
@@ -56,6 +67,13 @@ require_file "${architecture_doc}" "Missing architecture overview doc"
 require_file "${docs_test}" "Missing Phase 21 docs unittest"
 require_file "${validation_test}" "Missing Phase 21 validation unittest"
 require_file "${workflow_path}" "Missing CI workflow"
+
+roadmap_path="$(find "${repo_root}" -type f -name "${roadmap_filename}" -print -quit)"
+roadmap_relative_path=""
+
+if [[ -n "${roadmap_path}" ]]; then
+  roadmap_relative_path="${roadmap_path#${repo_root}/}"
+fi
 
 design_required_lines=(
   '# AegisOps Phase 21 Production-Like Hardening Boundary and Sequence'
@@ -92,7 +110,6 @@ done
 validation_required_lines=(
   '# Phase 21 Production-Like Hardening Boundary and Sequence Validation'
   '- Validation date: 2026-04-13'
-  '- Validation status: PASS'
   '## Required Boundary Artifacts'
   '## Review Outcome'
   '## Cross-Link Review'
@@ -104,9 +121,26 @@ validation_required_lines=(
   'Confirmed Entra ID is the first reviewed second live source to onboard after the existing GitHub audit live slice, with the reviewed next identity-rich source order staying `GitHub audit -> Entra ID -> Microsoft 365 audit`.'
   'Confirmed topology growth remains conditional only and cannot proceed unless auth, ingress, restore, observability, and authority-boundary guarantees remain intact.'
   'Confirmed explicit non-expansion rules keep broad multi-source breadth, broad UI expansion, direct vendor-local actioning, and production-scale topology claims out of scope for Phase 21.'
-  'The issue requested review against `Phase 16-21 Epic Roadmap.md`, but that roadmap file was not present in the local worktree and could not be located via repository search during this validation snapshot.'
-  '- Requested comparison target `Phase 16-21 Epic Roadmap.md` was unavailable in the local worktree during this validation snapshot.'
 )
+
+if [[ -n "${roadmap_path}" ]]; then
+  validation_required_lines+=(
+    '- Validation status: PASS'
+    "Confirmed comparison against \`${roadmap_filename}\` completed using \`${roadmap_relative_path}\` as the reviewed roadmap baseline."
+  )
+  reject_fixed_line "${validation_doc}" '- Validation status: FAIL'
+  reject_fixed_line "${validation_doc}" "The issue requested review against \`${roadmap_filename}\`, but that roadmap file was not present in the local worktree and could not be located via repository search during this validation snapshot."
+  reject_fixed_line "${validation_doc}" "Validation cannot pass until the requested \`${roadmap_filename}\` comparison is completed from a reviewed local artifact."
+  reject_fixed_line "${validation_doc}" "- Requested comparison target \`${roadmap_filename}\` was unavailable in the local worktree during this validation snapshot."
+else
+  validation_required_lines+=(
+    '- Validation status: FAIL'
+    "The issue requested review against \`${roadmap_filename}\`, but that roadmap file was not present in the local worktree and could not be located via repository search during this validation snapshot."
+    "Validation cannot pass until the requested \`${roadmap_filename}\` comparison is completed from a reviewed local artifact."
+    "- Requested comparison target \`${roadmap_filename}\` was unavailable in the local worktree during this validation snapshot."
+  )
+  reject_fixed_line "${validation_doc}" '- Validation status: PASS'
+fi
 
 for line in "${validation_required_lines[@]}"; do
   require_fixed_line "${validation_doc}" "${line}"
@@ -132,6 +166,10 @@ required_artifacts=(
   "scripts/test-verify-phase-21-production-like-hardening-boundary.sh"
   "scripts/test-verify-ci-phase-21-workflow-coverage.sh"
 )
+
+if [[ -n "${roadmap_path}" ]]; then
+  required_artifacts+=("${roadmap_relative_path}")
+fi
 
 for artifact in "${required_artifacts[@]}"; do
   require_file "${repo_root}/${artifact}" "Missing required Phase 21 artifact"

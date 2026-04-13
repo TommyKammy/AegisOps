@@ -60,11 +60,12 @@ class Phase21ProductionLikeHardeningBoundaryDocsTests(unittest.TestCase):
 
         for term in (
             "Phase 21 Production-Like Hardening Boundary and Sequence Validation",
-            "Validation status: PASS",
+            "Validation status: FAIL",
             "production-like hardening around the completed Phase 20 live path",
             "auth and secrets -> admin bootstrap and break-glass controls -> restore proof -> observability proof -> topology growth gate review -> Entra ID second-source onboarding",
             "GitHub audit -> Entra ID -> Microsoft 365 audit",
             "Phase 16-21 Epic Roadmap.md",
+            "Validation cannot pass until the requested `Phase 16-21 Epic Roadmap.md` comparison is completed from a reviewed local artifact.",
         ):
             self.assertIn(term, text)
 

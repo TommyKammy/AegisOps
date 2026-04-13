@@ -49,10 +49,12 @@ class Phase21ProductionLikeHardeningBoundaryValidationTests(unittest.TestCase):
             self.assertIn(term, validation_text)
 
         for term in (
+            "Validation status: FAIL",
             "Entra ID is the first reviewed second live source to onboard",
             "topology growth remains conditional only",
             "does not reopen broader action catalogs",
             "direct vendor-local actioning",
+            "Validation cannot pass until the requested `Phase 16-21 Epic Roadmap.md` comparison is completed from a reviewed local artifact.",
         ):
             self.assertIn(term, validation_text)
 

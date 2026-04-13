@@ -64,6 +64,26 @@ remove_text_from_file() {
   git -C "${target}" add "${path}"
 }
 
+replace_text_in_file() {
+  local target="$1"
+  local path="$2"
+  local old_text="$3"
+  local new_text="$4"
+
+  OLD_TEXT="${old_text}" NEW_TEXT="${new_text}" perl -0pi -e 's/\Q$ENV{OLD_TEXT}\E/$ENV{NEW_TEXT}/g' "${target}/${path}"
+  git -C "${target}" add "${path}"
+}
+
+write_text_file() {
+  local target="$1"
+  local path="$2"
+  local content="$3"
+
+  mkdir -p "${target}/$(dirname "${path}")"
+  printf '%s\n' "${content}" >"${target}/${path}"
+  git -C "${target}" add "${path}"
+}
+
 commit_fixture() {
   local target="$1"
 
@@ -101,6 +121,78 @@ create_repo "${valid_repo}"
 write_required_artifacts "${valid_repo}"
 commit_fixture "${valid_repo}"
 assert_passes "${valid_repo}"
+
+incorrect_pass_status_repo="${workdir}/incorrect-pass-status"
+create_repo "${incorrect_pass_status_repo}"
+write_required_artifacts "${incorrect_pass_status_repo}"
+replace_text_in_file \
+  "${incorrect_pass_status_repo}" \
+  "docs/phase-21-production-like-hardening-boundary-and-sequence-validation.md" \
+  "- Validation status: FAIL" \
+  "- Validation status: PASS"
+commit_fixture "${incorrect_pass_status_repo}"
+assert_fails_with "${incorrect_pass_status_repo}" "Unexpected line in ${incorrect_pass_status_repo}/docs/phase-21-production-like-hardening-boundary-and-sequence-validation.md: - Validation status: PASS"
+
+roadmap_present_repo="${workdir}/roadmap-present"
+create_repo "${roadmap_present_repo}"
+write_required_artifacts "${roadmap_present_repo}"
+write_text_file \
+  "${roadmap_present_repo}" \
+  "docs/Phase 16-21 Epic Roadmap.md" \
+  "# Phase 16-21 Epic Roadmap"
+replace_text_in_file \
+  "${roadmap_present_repo}" \
+  "docs/phase-21-production-like-hardening-boundary-and-sequence-validation.md" \
+  "- Validation status: FAIL" \
+  "- Validation status: PASS"
+replace_text_in_file \
+  "${roadmap_present_repo}" \
+  "docs/phase-21-production-like-hardening-boundary-and-sequence-validation.md" \
+  "The issue requested review against \`Phase 16-21 Epic Roadmap.md\`, but that roadmap file was not present in the local worktree and could not be located via repository search during this validation snapshot." \
+  "Confirmed comparison against \`Phase 16-21 Epic Roadmap.md\` completed using \`docs/Phase 16-21 Epic Roadmap.md\` as the reviewed roadmap baseline."
+remove_text_from_file \
+  "${roadmap_present_repo}" \
+  "docs/phase-21-production-like-hardening-boundary-and-sequence-validation.md" \
+  'Validation cannot pass until the requested `Phase 16-21 Epic Roadmap.md` comparison is completed from a reviewed local artifact.'
+remove_text_from_file \
+  "${roadmap_present_repo}" \
+  "docs/phase-21-production-like-hardening-boundary-and-sequence-validation.md" \
+  '- Requested comparison target `Phase 16-21 Epic Roadmap.md` was unavailable in the local worktree during this validation snapshot.'
+replace_text_in_file \
+  "${roadmap_present_repo}" \
+  "docs/phase-21-production-like-hardening-boundary-and-sequence-validation.md" \
+  '- `docs/phase-21-production-like-hardening-boundary-and-sequence-validation.md`' \
+  $'- `docs/phase-21-production-like-hardening-boundary-and-sequence-validation.md`\n- `docs/Phase 16-21 Epic Roadmap.md`'
+commit_fixture "${roadmap_present_repo}"
+assert_passes "${roadmap_present_repo}"
+
+roadmap_present_missing_artifact_repo="${workdir}/roadmap-present-missing-artifact"
+create_repo "${roadmap_present_missing_artifact_repo}"
+write_required_artifacts "${roadmap_present_missing_artifact_repo}"
+write_text_file \
+  "${roadmap_present_missing_artifact_repo}" \
+  "docs/Phase 16-21 Epic Roadmap.md" \
+  "# Phase 16-21 Epic Roadmap"
+replace_text_in_file \
+  "${roadmap_present_missing_artifact_repo}" \
+  "docs/phase-21-production-like-hardening-boundary-and-sequence-validation.md" \
+  "- Validation status: FAIL" \
+  "- Validation status: PASS"
+replace_text_in_file \
+  "${roadmap_present_missing_artifact_repo}" \
+  "docs/phase-21-production-like-hardening-boundary-and-sequence-validation.md" \
+  "The issue requested review against \`Phase 16-21 Epic Roadmap.md\`, but that roadmap file was not present in the local worktree and could not be located via repository search during this validation snapshot." \
+  "Confirmed comparison against \`Phase 16-21 Epic Roadmap.md\` completed using \`docs/Phase 16-21 Epic Roadmap.md\` as the reviewed roadmap baseline."
+remove_text_from_file \
+  "${roadmap_present_missing_artifact_repo}" \
+  "docs/phase-21-production-like-hardening-boundary-and-sequence-validation.md" \
+  'Validation cannot pass until the requested `Phase 16-21 Epic Roadmap.md` comparison is completed from a reviewed local artifact.'
+remove_text_from_file \
+  "${roadmap_present_missing_artifact_repo}" \
+  "docs/phase-21-production-like-hardening-boundary-and-sequence-validation.md" \
+  '- Requested comparison target `Phase 16-21 Epic Roadmap.md` was unavailable in the local worktree during this validation snapshot.'
+commit_fixture "${roadmap_present_missing_artifact_repo}"
+assert_fails_with "${roadmap_present_missing_artifact_repo}" "Missing required line in ${roadmap_present_missing_artifact_repo}/docs/phase-21-production-like-hardening-boundary-and-sequence-validation.md: - \`docs/Phase 16-21 Epic Roadmap.md\`"
 
 missing_validation_repo="${workdir}/missing-validation"
 create_repo "${missing_validation_repo}"
