@@ -207,6 +207,10 @@ remove_text_from_file \
   "${roadmap_present_missing_artifact_repo}" \
   "docs/phase-21-production-like-hardening-boundary-and-sequence-validation.md" \
   '- Requested comparison target `Phase 16-21 Epic Roadmap.md` was unavailable in the local worktree during this validation snapshot.'
+remove_text_from_file \
+  "${roadmap_present_missing_artifact_repo}" \
+  "docs/phase-21-production-like-hardening-boundary-and-sequence-validation.md" \
+  '- `docs/Phase 16-21 Epic Roadmap.md`'
 commit_fixture "${roadmap_present_missing_artifact_repo}"
 assert_fails_with "${roadmap_present_missing_artifact_repo}" "Missing required line in ${roadmap_present_missing_artifact_repo}/docs/phase-21-production-like-hardening-boundary-and-sequence-validation.md: - \`docs/Phase 16-21 Epic Roadmap.md\`"
 
