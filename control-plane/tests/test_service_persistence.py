@@ -5,6 +5,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
+import logging
 import pathlib
 import secrets
 import sys
@@ -7506,6 +7507,91 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             execution,
         )
 
+    def test_service_emits_action_execution_delegated_log_for_isolated_executor(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        expires_at = datetime(2026, 4, 5, 13, 0, tzinfo=timezone.utc)
+        approved_target_scope = {"asset_id": "critical-host-003"}
+        approved_payload = {
+            "action_type": "disable_identity",
+            "asset_id": "critical-host-003",
+        }
+        payload_hash = _approved_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="executor",
+            execution_surface_id="isolated-executor",
+        )
+        service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-executor-log-001",
+                action_request_id="action-request-executor-log-001",
+                approver_identities=("approver-001",),
+                target_snapshot=approved_target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+                approved_expires_at=expires_at,
+            )
+        )
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-executor-log-001",
+                approval_decision_id="approval-executor-log-001",
+                case_id="case-001",
+                alert_id="alert-001",
+                finding_id="finding-001",
+                idempotency_key="idempotency-executor-log-001",
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=expires_at,
+                lifecycle_state="approved",
+                policy_basis={
+                    "severity": "critical",
+                    "target_scope": "single_asset",
+                    "action_reversibility": "irreversible",
+                    "asset_criticality": "critical",
+                    "identity_criticality": "high",
+                    "blast_radius": "organization",
+                    "execution_constraint": "requires_isolated_executor",
+                },
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "approval",
+                    "execution_surface_type": "executor",
+                    "execution_surface_id": "isolated-executor",
+                },
+            )
+        )
+
+        with mock.patch.object(service, "_emit_structured_event") as emit_event:
+            execution = service.delegate_approved_action_to_isolated_executor(
+                action_request_id="action-request-executor-log-001",
+                approved_payload=approved_payload,
+                delegated_at=delegated_at,
+                delegation_issuer="control-plane-service",
+            )
+
+        emit_event.assert_called_once_with(
+            logging.INFO,
+            "action_execution_delegated",
+            action_execution_id=execution.action_execution_id,
+            action_request_id=execution.action_request_id,
+            approval_decision_id=execution.approval_decision_id,
+            execution_surface_type=execution.execution_surface_type,
+            execution_surface_id=execution.execution_surface_id,
+            execution_run_id=execution.execution_run_id,
+            lifecycle_state=execution.lifecycle_state,
+        )
+
     def test_service_rejects_isolated_executor_delegation_for_cross_linked_approval(
         self,
     ) -> None:
@@ -8426,6 +8512,43 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         )
         self.assertIsNotNone(stored_latest)
         self.assertIn("latest_native_payload", stored_latest.subject_linkage)
+
+    def test_service_phase21_readiness_prefers_higher_reconciliation_id_when_compared_at_ties(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+
+        admitted = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(
+                _load_wazuh_fixture("agent-origin-alert.json")
+            ),
+        )
+        reconciliation = service.get_record(
+            ReconciliationRecord,
+            admitted.reconciliation.reconciliation_id,
+        )
+        self.assertIsNotNone(reconciliation)
+
+        preferred_reconciliation = replace(
+            reconciliation,
+            reconciliation_id=f"{reconciliation.reconciliation_id}-z",
+            correlation_key=f"{reconciliation.correlation_key}:z",
+        )
+        service.persist_record(preferred_reconciliation)
+
+        readiness = service.inspect_readiness_diagnostics()
+
+        self.assertIsNotNone(readiness.latest_reconciliation)
+        self.assertEqual(
+            readiness.latest_reconciliation["reconciliation_id"],
+            preferred_reconciliation.reconciliation_id,
+        )
 
     def test_service_phase21_restore_rejects_non_string_tuple_elements(
         self,

@@ -1250,6 +1250,22 @@ class AegisOpsControlPlaneService:
         }
         self._logger.log(level, json.dumps(payload, sort_keys=True, separators=(",", ":")))
 
+    def _emit_action_execution_delegated_event(
+        self,
+        execution: ActionExecutionRecord,
+    ) -> None:
+        self._emit_structured_event(
+            logging.INFO,
+            "action_execution_delegated",
+            action_execution_id=execution.action_execution_id,
+            action_request_id=execution.action_request_id,
+            approval_decision_id=execution.approval_decision_id,
+            execution_surface_type=execution.execution_surface_type,
+            execution_surface_id=execution.execution_surface_id,
+            execution_run_id=execution.execution_run_id,
+            lifecycle_state=execution.lifecycle_state,
+        )
+
     def get_record(self, record_type: Type[RecordT], record_id: str) -> RecordT | None:
         return self._store.get(record_type, record_id)
 
@@ -1648,17 +1664,7 @@ class AegisOpsControlPlaneService:
                     lifecycle_state="queued",
                 )
             )
-        self._emit_structured_event(
-            logging.INFO,
-            "action_execution_delegated",
-            action_execution_id=execution.action_execution_id,
-            action_request_id=execution.action_request_id,
-            approval_decision_id=execution.approval_decision_id,
-            execution_surface_type=execution.execution_surface_type,
-            execution_surface_id=execution.execution_surface_id,
-            execution_run_id=execution.execution_run_id,
-            lifecycle_state=execution.lifecycle_state,
-        )
+        self._emit_action_execution_delegated_event(execution)
         return execution
 
     def delegate_approved_action_to_isolated_executor(
@@ -1724,7 +1730,7 @@ class AegisOpsControlPlaneService:
             if receipt.base_url.strip() and receipt.base_url != "<set-me>":
                 provenance["adapter_base_url"] = receipt.base_url
 
-            return self.persist_record(
+            execution = self.persist_record(
                 ActionExecutionRecord(
                     action_execution_id=self._next_identifier("action-execution"),
                     action_request_id=action_request.action_request_id,
@@ -1743,6 +1749,8 @@ class AegisOpsControlPlaneService:
                     lifecycle_state="queued",
                 )
             )
+        self._emit_action_execution_delegated_event(execution)
+        return execution
 
     def evaluate_action_policy(self, action_request_id: str) -> ActionRequestRecord:
         action_request_id = self._require_non_empty_string(
@@ -1950,7 +1958,7 @@ class AegisOpsControlPlaneService:
 
         latest_reconciliation = max(
             reconciliations,
-            key=lambda record: record.compared_at,
+            key=lambda record: (record.compared_at, record.reconciliation_id),
             default=None,
         )
         reconciliation_states = Counter(
