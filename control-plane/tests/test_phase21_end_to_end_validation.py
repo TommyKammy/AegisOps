@@ -264,7 +264,7 @@ class Phase21EndToEndValidationTests(unittest.TestCase):
         service, promoted_case, evidence_id, reviewed_at = self._build_phase19_in_scope_case(
             service=service
         )
-        approved_request, approval_decision, execution, reconciliation = (
+        _approved_request, approval_decision, execution, reconciliation = (
             self._complete_phase20_live_path(
                 service,
                 case_id=promoted_case.case_id,
