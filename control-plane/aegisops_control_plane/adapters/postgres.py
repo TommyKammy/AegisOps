@@ -684,6 +684,10 @@ class PostgresControlPlaneStore:
         )
 
     def inspect_readiness_aggregates(self) -> ReadinessDiagnosticsAggregates:
+        if self._active_connection.get() is None:
+            with self.transaction(isolation_level="REPEATABLE READ"):
+                return self.inspect_readiness_aggregates()
+
         alert_lifecycle_counts = self._count_grouped_by_field(
             AlertRecord,
             "lifecycle_state",

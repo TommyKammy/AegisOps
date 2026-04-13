@@ -214,9 +214,43 @@ class _CommitFailingStore:
         *,
         isolation_level: str | None = None,
     ) -> Iterator[None]:
-        with self.inner.transaction(isolation_level=isolation_level):
-            yield
-            raise RuntimeError(self.message)
+        connection_factory = self.inner.connection_factory
+        if connection_factory is None:
+            raise AssertionError(
+                "_CommitFailingStore requires an explicit connection factory"
+            )
+
+        def commit_failing_connection_factory(dsn: str) -> "_CommitFailingConnection":
+            return _CommitFailingConnection(
+                inner=connection_factory(dsn),
+                message=self.message,
+            )
+
+        with mock.patch.object(
+            self.inner,
+            "connection_factory",
+            commit_failing_connection_factory,
+        ):
+            with self.inner.transaction(isolation_level=isolation_level):
+                yield
+
+
+@dataclass
+class _CommitFailingConnection:
+    inner: object
+    message: str
+
+    def cursor(self) -> object:
+        return self.inner.cursor()
+
+    def commit(self) -> None:
+        raise RuntimeError(self.message)
+
+    def rollback(self) -> object:
+        return self.inner.rollback()
+
+    def close(self) -> object:
+        return self.inner.close()
 
 
 @dataclass
@@ -8356,6 +8390,68 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             concurrent_store.get(
                 ReconciliationRecord,
                 "reconciliation-phase21-readiness-concurrent-001",
+            ),
+            concurrent_reconciliation,
+        )
+
+    def test_store_phase21_readiness_aggregates_use_single_transaction_snapshot(self) -> None:
+        base_store, backend = make_store()
+        concurrent_store, _ = make_store(backend)
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case(store=base_store)
+        )
+        seed_reconciliation = max(
+            service._store.list(ReconciliationRecord),
+            key=lambda record: record.compared_at,
+            default=None,
+        )
+        if seed_reconciliation is None:
+            self.fail("expected seeded reconciliation record before readiness aggregate snapshot")
+
+        concurrent_reconciliation = replace(
+            seed_reconciliation,
+            reconciliation_id="reconciliation-phase21-aggregate-concurrent-001",
+            compared_at=seed_reconciliation.compared_at + timedelta(minutes=30),
+            lifecycle_state="stale",
+        )
+        original_count_grouped_by_field = base_store._count_grouped_by_field
+        mutation_applied = False
+
+        def count_grouped_by_field(
+            record_type: object,
+            field_name: str,
+        ) -> dict[str, int]:
+            nonlocal mutation_applied
+            counts = original_count_grouped_by_field(record_type, field_name)
+            if not mutation_applied:
+                mutation_applied = True
+                concurrent_store.save(concurrent_reconciliation)
+            return counts
+
+        statement_count_before_snapshot = len(backend.statements)
+        with mock.patch.object(
+            base_store,
+            "_count_grouped_by_field",
+            side_effect=count_grouped_by_field,
+        ):
+            aggregates = base_store.inspect_readiness_aggregates()
+
+        self.assertEqual(
+            backend.statements[statement_count_before_snapshot][0],
+            "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+        )
+        self.assertEqual(aggregates.reconciliation_lifecycle_counts.get("stale", 0), 0)
+        self.assertEqual(
+            aggregates.latest_reconciliation.reconciliation_id
+            if aggregates.latest_reconciliation is not None
+            else None,
+            seed_reconciliation.reconciliation_id,
+        )
+        self.assertEqual(len(base_store.list(ReconciliationRecord)), 2)
+        self.assertEqual(
+            concurrent_store.get(
+                ReconciliationRecord,
+                "reconciliation-phase21-aggregate-concurrent-001",
             ),
             concurrent_reconciliation,
         )
