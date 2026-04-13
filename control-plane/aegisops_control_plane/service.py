@@ -1839,7 +1839,7 @@ class AegisOpsControlPlaneService:
             parsed_records,
             restored_record_counts=restored_record_counts,
         )
-        with self._store.transaction():
+        with self._store.transaction(isolation_level="SERIALIZABLE"):
             self._require_empty_authoritative_restore_target()
             for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES:
                 for record in parsed_records[record_type.record_family]:
@@ -4962,8 +4962,36 @@ class AegisOpsControlPlaneService:
                     f"action execution {action_execution.action_execution_id!r} does not match approval "
                     "decision payload binding"
                 )
+            if approval_decision.approved_expires_at != action_request.expires_at:
+                raise ValueError(
+                    f"action execution {action_execution.action_execution_id!r} does not match approval "
+                    "decision expiry binding"
+                )
+            if action_execution.expires_at != action_request.expires_at:
+                raise ValueError(
+                    f"action execution {action_execution.action_execution_id!r} does not match action "
+                    "request expiry binding"
+                )
+            if (
+                approval_decision.approved_expires_at is not None
+                and action_execution.delegated_at > approval_decision.approved_expires_at
+            ):
+                raise ValueError(
+                    f"action execution {action_execution.action_execution_id!r} exceeds approval "
+                    "expiry binding"
+                )
 
         for reconciliation in reconciliations:
+            subject_action_execution_ids = self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "action_execution_ids",
+            )
+            subject_execution_run_ids = {
+                action_executions[action_execution_id].execution_run_id
+                for action_execution_id in subject_action_execution_ids
+                if action_execution_id in action_executions
+                and action_executions[action_execution_id].execution_run_id is not None
+            }
             if reconciliation.alert_id and reconciliation.alert_id not in alerts:
                 raise ValueError(
                     f"missing alert record {reconciliation.alert_id!r} required by reconciliation "
@@ -4985,11 +5013,28 @@ class AegisOpsControlPlaneService:
                     f"missing action execution run {reconciliation.execution_run_id!r} required by "
                     f"reconciliation {reconciliation.reconciliation_id!r}"
                 )
+            if (
+                reconciliation.execution_run_id is not None
+                and subject_execution_run_ids
+                and reconciliation.execution_run_id not in subject_execution_run_ids
+            ):
+                raise ValueError(
+                    f"reconciliation {reconciliation.reconciliation_id!r} does not match its action "
+                    "execution run binding"
+                )
             for linked_execution_run_id in reconciliation.linked_execution_run_ids:
                 if linked_execution_run_id not in action_executions_by_run_id:
                     raise ValueError(
                         f"missing action execution run {linked_execution_run_id!r} required by "
                         f"reconciliation {reconciliation.reconciliation_id!r}"
+                    )
+                if (
+                    subject_execution_run_ids
+                    and linked_execution_run_id not in subject_execution_run_ids
+                ):
+                    raise ValueError(
+                        f"reconciliation {reconciliation.reconciliation_id!r} does not match its linked "
+                        "action execution runs"
                     )
             for field_name, known_ids in (
                 ("analytic_signal_ids", analytic_signals),

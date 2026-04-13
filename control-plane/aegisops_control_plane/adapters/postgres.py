@@ -502,6 +502,10 @@ class PostgresControlPlaneStore:
     ) -> Iterator[None]:
         active_connection = self._active_connection.get()
         if active_connection is not None:
+            if isolation_level is not None:
+                raise ValueError(
+                    "Cannot set isolation_level inside an active transaction"
+                )
             yield
             return
 

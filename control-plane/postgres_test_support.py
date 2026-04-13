@@ -38,12 +38,14 @@ class FakePostgresConnection:
         self.backend = backend
         self.dsn = dsn
         self.tables = copy.deepcopy(backend.tables)
+        self.dirty = False
 
     def cursor(self) -> "FakePostgresCursor":
-        return FakePostgresCursor(self.backend, self.tables)
+        return FakePostgresCursor(self.backend, self.tables, self)
 
     def commit(self) -> None:
-        self.backend.tables = copy.deepcopy(self.tables)
+        if self.dirty:
+            self.backend.tables = copy.deepcopy(self.tables)
 
     def rollback(self) -> None:
         self.tables = copy.deepcopy(self.backend.tables)
@@ -58,9 +60,11 @@ class FakePostgresCursor:
         self,
         backend: FakePostgresBackend,
         tables: dict[str, dict[str, dict[str, object]]],
+        connection: FakePostgresConnection,
     ) -> None:
         self.backend = backend
         self.tables = tables
+        self.connection = connection
         self.description: tuple[tuple[str], ...] | None = None
         self._rows: list[dict[str, object]] = []
 
@@ -109,6 +113,7 @@ class FakePostgresCursor:
         identifier_value = row[identifier_field]
         table_rows = self.tables.setdefault(table, {})
         table_rows[str(identifier_value)] = row
+        self.connection.dirty = True
         self.description = None
         self._rows = []
 

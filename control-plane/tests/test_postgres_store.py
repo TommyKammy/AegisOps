@@ -839,6 +839,17 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         self.assertIsNone(store.get(AlertRecord, "alert-001"))
         self.assertEqual(store.list(AlertRecord), ())
 
+    def test_store_rejects_nested_isolation_level_requests(self) -> None:
+        store, _ = make_store()
+
+        with store.transaction():
+            with self.assertRaisesRegex(
+                ValueError,
+                "Cannot set isolation_level inside an active transaction",
+            ):
+                with store.transaction(isolation_level="SERIALIZABLE"):
+                    pass
+
 
 if __name__ == "__main__":
     unittest.main()
