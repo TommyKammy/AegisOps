@@ -29,6 +29,28 @@ from ..models import (
 RecordT = TypeVar("RecordT", bound=ControlPlaneRecord)
 
 
+@dataclass(frozen=True)
+class ReadinessDiagnosticsAggregates:
+    alert_total: int
+    alert_lifecycle_counts: dict[str, int]
+    case_total: int
+    open_case_ids: tuple[str, ...]
+    action_request_total: int
+    action_request_lifecycle_counts: dict[str, int]
+    active_action_request_ids: tuple[str, ...]
+    action_execution_total: int
+    action_execution_lifecycle_counts: dict[str, int]
+    active_action_execution_ids: tuple[str, ...]
+    reconciliation_total: int
+    reconciliation_lifecycle_counts: dict[str, int]
+    reconciliation_ingest_disposition_counts: dict[str, int]
+    unresolved_reconciliation_ids: tuple[str, ...]
+    latest_reconciliation: ReconciliationRecord | None
+    phase20_requested_action_requests: int
+    phase20_approved_action_requests: int
+    phase20_reconciled_executions: int
+
+
 class CursorProtocol(Protocol):
     description: object | None
 
@@ -660,3 +682,210 @@ class PostgresControlPlaneStore:
             self._row_to_record(record_type, _row_to_mapping(cursor, row))
             for row in rows
         )
+
+    def inspect_readiness_aggregates(self) -> ReadinessDiagnosticsAggregates:
+        if self._active_connection.get() is None:
+            with self.transaction(isolation_level="REPEATABLE READ"):
+                return self.inspect_readiness_aggregates()
+
+        alert_lifecycle_counts = self._count_grouped_by_field(
+            AlertRecord,
+            "lifecycle_state",
+        )
+        case_lifecycle_counts = self._count_grouped_by_field(
+            CaseRecord,
+            "lifecycle_state",
+        )
+        action_request_lifecycle_counts = self._count_grouped_by_field(
+            ActionRequestRecord,
+            "lifecycle_state",
+        )
+        action_execution_lifecycle_counts = self._count_grouped_by_field(
+            ActionExecutionRecord,
+            "lifecycle_state",
+        )
+        reconciliation_lifecycle_counts = self._count_grouped_by_field(
+            ReconciliationRecord,
+            "lifecycle_state",
+        )
+        reconciliation_ingest_disposition_counts = self._count_grouped_by_field(
+            ReconciliationRecord,
+            "ingest_disposition",
+        )
+        return ReadinessDiagnosticsAggregates(
+            alert_total=sum(alert_lifecycle_counts.values()),
+            alert_lifecycle_counts=alert_lifecycle_counts,
+            case_total=sum(case_lifecycle_counts.values()),
+            open_case_ids=self._list_identifier_values_by_lifecycle_states(
+                CaseRecord,
+                (
+                    "open",
+                    "investigating",
+                    "pending_action",
+                    "contained_pending_validation",
+                    "reopened",
+                ),
+            ),
+            action_request_total=sum(action_request_lifecycle_counts.values()),
+            action_request_lifecycle_counts=action_request_lifecycle_counts,
+            active_action_request_ids=self._list_identifier_values_by_lifecycle_states(
+                ActionRequestRecord,
+                ("pending_approval", "approved", "executing", "unresolved"),
+            ),
+            action_execution_total=sum(action_execution_lifecycle_counts.values()),
+            action_execution_lifecycle_counts=action_execution_lifecycle_counts,
+            active_action_execution_ids=self._list_identifier_values_by_lifecycle_states(
+                ActionExecutionRecord,
+                ("queued", "running"),
+            ),
+            reconciliation_total=sum(reconciliation_lifecycle_counts.values()),
+            reconciliation_lifecycle_counts=reconciliation_lifecycle_counts,
+            reconciliation_ingest_disposition_counts=reconciliation_ingest_disposition_counts,
+            unresolved_reconciliation_ids=self._list_identifier_values_by_lifecycle_states(
+                ReconciliationRecord,
+                ("pending", "mismatched", "stale"),
+            ),
+            latest_reconciliation=self._latest_reconciliation(),
+            phase20_requested_action_requests=self._count_action_requests_by_action_type(
+                "notify_identity_owner"
+            ),
+            phase20_approved_action_requests=self._count_action_requests_by_action_type(
+                "notify_identity_owner",
+                lifecycle_state="approved",
+            ),
+            phase20_reconciled_executions=self._count_distinct_matched_execution_runs_for_action_type(
+                "notify_identity_owner"
+            ),
+        )
+
+    def _count_grouped_by_field(
+        self,
+        record_type: Type[ControlPlaneRecord],
+        field_name: str,
+    ) -> dict[str, int]:
+        table = self._table_config(record_type)
+        query = (
+            f"select {field_name} as group_value, count(*) as record_count "
+            f"from aegisops_control.{table.table_name} "
+            f"group by {field_name} order by {field_name}"
+        )
+
+        with self._borrow_connection() as connection:
+            cursor = connection.cursor()
+            try:
+                cursor.execute(query)
+                rows = cursor.fetchall()
+            finally:
+                cursor.close()
+
+        counts: dict[str, int] = {}
+        for row in rows:
+            mapping = _row_to_mapping(cursor, row)
+            group_value = mapping.get("group_value")
+            if group_value is None:
+                continue
+            counts[str(group_value)] = int(mapping["record_count"])
+        return counts
+
+    def _list_identifier_values_by_lifecycle_states(
+        self,
+        record_type: Type[ControlPlaneRecord],
+        lifecycle_states: tuple[str, ...],
+    ) -> tuple[str, ...]:
+        if not lifecycle_states:
+            return ()
+
+        table = self._table_config(record_type)
+        placeholders = ", ".join("%s" for _ in lifecycle_states)
+        query = (
+            f"select {table.identifier_field} "
+            f"from aegisops_control.{table.table_name} "
+            f"where lifecycle_state in ({placeholders}) "
+            f"order by {table.identifier_field}"
+        )
+
+        with self._borrow_connection() as connection:
+            cursor = connection.cursor()
+            try:
+                cursor.execute(query, lifecycle_states)
+                rows = cursor.fetchall()
+            finally:
+                cursor.close()
+
+        return tuple(str(_row_to_mapping(cursor, row)[table.identifier_field]) for row in rows)
+
+    def _latest_reconciliation(self) -> ReconciliationRecord | None:
+        table = self._table_config(ReconciliationRecord)
+        query = (
+            f"select {', '.join(table.record_fields)} "
+            f"from aegisops_control.{table.table_name} "
+            "order by compared_at desc, reconciliation_id desc limit 1"
+        )
+
+        with self._borrow_connection() as connection:
+            cursor = connection.cursor()
+            try:
+                cursor.execute(query)
+                row = cursor.fetchone()
+            finally:
+                cursor.close()
+
+        if row is None:
+            return None
+        return self._row_to_record(ReconciliationRecord, _row_to_mapping(cursor, row))
+
+    def _count_action_requests_by_action_type(
+        self,
+        action_type: str,
+        *,
+        lifecycle_state: str | None = None,
+    ) -> int:
+        query = (
+            "select count(*) as record_count "
+            "from aegisops_control.action_request_records "
+            "where requested_payload ->> 'action_type' = %s"
+        )
+        params: tuple[object, ...] = (action_type,)
+        if lifecycle_state is not None:
+            query += " and lifecycle_state = %s"
+            params += (lifecycle_state,)
+
+        with self._borrow_connection() as connection:
+            cursor = connection.cursor()
+            try:
+                cursor.execute(query, params)
+                row = cursor.fetchone()
+            finally:
+                cursor.close()
+
+        if row is None:
+            return 0
+        return int(_row_to_mapping(cursor, row)["record_count"])
+
+    def _count_distinct_matched_execution_runs_for_action_type(
+        self,
+        action_type: str,
+    ) -> int:
+        query = (
+            "select count(distinct reconciliation.execution_run_id) as record_count "
+            "from aegisops_control.reconciliation_records as reconciliation "
+            "join aegisops_control.action_execution_records as execution "
+            "on execution.execution_run_id = reconciliation.execution_run_id "
+            "join aegisops_control.action_request_records as action_request "
+            "on action_request.action_request_id = execution.action_request_id "
+            "where action_request.requested_payload ->> 'action_type' = %s "
+            "and reconciliation.lifecycle_state = 'matched' "
+            "and reconciliation.execution_run_id is not null"
+        )
+
+        with self._borrow_connection() as connection:
+            cursor = connection.cursor()
+            try:
+                cursor.execute(query, (action_type,))
+                row = cursor.fetchone()
+            finally:
+                cursor.close()
+
+        if row is None:
+            return 0
+        return int(_row_to_mapping(cursor, row)["record_count"])

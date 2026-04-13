@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import re
 
 from aegisops_control_plane.adapters.postgres import PostgresControlPlaneStore
@@ -20,6 +21,42 @@ _SELECT_ONE_RE = re.compile(
 _SELECT_ALL_RE = re.compile(
     r"select (?P<columns>.+) from aegisops_control\.(?P<table>\w+) "
     r"order by (?P<identifier>\w+)",
+    re.IGNORECASE,
+)
+_SELECT_GROUP_COUNT_RE = re.compile(
+    r"select (?P<field>\w+) as group_value, count\(\*\) as record_count "
+    r"from aegisops_control\.(?P<table>\w+) "
+    r"group by (?P=field) order by (?P=field)",
+    re.IGNORECASE,
+)
+_SELECT_IDS_BY_STATES_RE = re.compile(
+    r"select (?P<identifier>\w+) from aegisops_control\.(?P<table>\w+) "
+    r"where lifecycle_state in \((?P<placeholders>.+)\) "
+    r"order by (?P=identifier)",
+    re.IGNORECASE,
+)
+_SELECT_LATEST_RECONCILIATION_RE = re.compile(
+    r"select (?P<columns>.+) from aegisops_control\.reconciliation_records "
+    r"order by compared_at desc, reconciliation_id desc limit 1",
+    re.IGNORECASE,
+)
+_COUNT_ACTION_REQUESTS_BY_TYPE_RE = re.compile(
+    r"select count\(\*\) as record_count "
+    r"from aegisops_control\.action_request_records "
+    r"where requested_payload ->> 'action_type' = %s"
+    r"(?: and lifecycle_state = %s)?",
+    re.IGNORECASE,
+)
+_COUNT_MATCHED_EXECUTION_RUNS_BY_TYPE_RE = re.compile(
+    r"select count\(distinct reconciliation\.execution_run_id\) as record_count "
+    r"from aegisops_control\.reconciliation_records as reconciliation "
+    r"join aegisops_control\.action_execution_records as execution "
+    r"on execution\.execution_run_id = reconciliation\.execution_run_id "
+    r"join aegisops_control\.action_request_records as action_request "
+    r"on action_request\.action_request_id = execution\.action_request_id "
+    r"where action_request\.requested_payload ->> 'action_type' = %s "
+    r"and reconciliation\.lifecycle_state = 'matched' "
+    r"and reconciliation\.execution_run_id is not null",
     re.IGNORECASE,
 )
 
@@ -99,6 +136,46 @@ class FakePostgresCursor:
             )
             return
 
+        select_group_count_match = _SELECT_GROUP_COUNT_RE.fullmatch(normalized)
+        if select_group_count_match is not None:
+            self._execute_select_group_count(
+                select_group_count_match.group("table"),
+                select_group_count_match.group("field"),
+            )
+            return
+
+        select_ids_by_states_match = _SELECT_IDS_BY_STATES_RE.fullmatch(normalized)
+        if select_ids_by_states_match is not None:
+            self._execute_select_ids_by_states(
+                select_ids_by_states_match.group("table"),
+                select_ids_by_states_match.group("identifier"),
+                params,
+            )
+            return
+
+        select_latest_reconciliation_match = _SELECT_LATEST_RECONCILIATION_RE.fullmatch(
+            normalized
+        )
+        if select_latest_reconciliation_match is not None:
+            self._execute_select_latest_reconciliation(
+                select_latest_reconciliation_match.group("columns")
+            )
+            return
+
+        count_action_requests_match = _COUNT_ACTION_REQUESTS_BY_TYPE_RE.fullmatch(
+            normalized
+        )
+        if count_action_requests_match is not None:
+            self._execute_count_action_requests_by_type(params)
+            return
+
+        count_matched_execution_runs_match = (
+            _COUNT_MATCHED_EXECUTION_RUNS_BY_TYPE_RE.fullmatch(normalized)
+        )
+        if count_matched_execution_runs_match is not None:
+            self._execute_count_matched_execution_runs_by_type(params)
+            return
+
         raise AssertionError(f"Unsupported fake PostgreSQL query: {normalized}")
 
     def _execute_insert(
@@ -141,6 +218,93 @@ class FakePostgresCursor:
             self._project_row(rows[record_id], column_names)
             for record_id in sorted(rows)
         ]
+
+    def _execute_select_group_count(self, table: str, field_name: str) -> None:
+        grouped_counts: dict[object, int] = {}
+        for row in self.tables.get(table, {}).values():
+            grouped_counts[row[field_name]] = grouped_counts.get(row[field_name], 0) + 1
+        self.description = (("group_value",), ("record_count",))
+        self._rows = [
+            {"group_value": group_value, "record_count": grouped_counts[group_value]}
+            for group_value in sorted(grouped_counts, key=lambda value: str(value))
+        ]
+
+    def _execute_select_ids_by_states(
+        self,
+        table: str,
+        identifier_field: str,
+        params: tuple[object, ...] | None,
+    ) -> None:
+        lifecycle_states = {str(value) for value in (params or ())}
+        rows = self.tables.get(table, {})
+        self.description = ((identifier_field,),)
+        self._rows = [
+            {identifier_field: rows[record_id][identifier_field]}
+            for record_id in sorted(rows)
+            if str(rows[record_id]["lifecycle_state"]) in lifecycle_states
+        ]
+
+    def _execute_select_latest_reconciliation(self, columns: str) -> None:
+        column_names = [column.strip() for column in columns.split(",")]
+        rows = list(self.tables.get("reconciliation_records", {}).values())
+        rows.sort(
+            key=lambda row: (row["compared_at"], row["reconciliation_id"]),
+            reverse=True,
+        )
+        self.description = tuple((name,) for name in column_names)
+        if not rows:
+            self._rows = []
+            return
+        self._rows = [self._project_row(rows[0], column_names)]
+
+    def _execute_count_action_requests_by_type(
+        self,
+        params: tuple[object, ...] | None,
+    ) -> None:
+        action_type = str((params or ("",))[0])
+        lifecycle_state = str(params[1]) if params and len(params) > 1 else None
+        count = 0
+        for row in self.tables.get("action_request_records", {}).values():
+            payload = row.get("requested_payload") or {}
+            if isinstance(payload, str):
+                payload = json.loads(payload)
+            if payload.get("action_type") != action_type:
+                continue
+            if lifecycle_state is not None and row.get("lifecycle_state") != lifecycle_state:
+                continue
+            count += 1
+        self.description = (("record_count",),)
+        self._rows = [{"record_count": count}]
+
+    def _execute_count_matched_execution_runs_by_type(
+        self,
+        params: tuple[object, ...] | None,
+    ) -> None:
+        action_type = str((params or ("",))[0])
+        request_ids = {
+            row["action_request_id"]
+            for row in self.tables.get("action_request_records", {}).values()
+            if (
+                json.loads(row["requested_payload"])
+                if isinstance(row.get("requested_payload"), str)
+                else (row.get("requested_payload") or {})
+            ).get("action_type")
+            == action_type
+        }
+        execution_run_ids = {
+            row["execution_run_id"]
+            for row in self.tables.get("action_execution_records", {}).values()
+            if row.get("action_request_id") in request_ids
+            and row.get("execution_run_id") is not None
+        }
+        matched_execution_run_ids = {
+            row["execution_run_id"]
+            for row in self.tables.get("reconciliation_records", {}).values()
+            if row.get("lifecycle_state") == "matched"
+            and row.get("execution_run_id") in execution_run_ids
+        }
+        self.description = (("record_count",),)
+        self._rows = [{"record_count": len(matched_execution_run_ids)}]
 
     @staticmethod
     def _project_row(

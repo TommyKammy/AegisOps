@@ -5,6 +5,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
+import logging
 import pathlib
 import secrets
 import sys
@@ -122,6 +123,9 @@ class _TransactionMutationStore:
     def list(self, record_type: object) -> tuple[object, ...]:
         return self.inner.list(record_type)
 
+    def inspect_readiness_aggregates(self) -> object:
+        return self.inner.inspect_readiness_aggregates()
+
     @contextmanager
     def transaction(
         self,
@@ -162,6 +166,13 @@ class _ConcurrentListMutationStore:
             self._mutated = True
         return records
 
+    def inspect_readiness_aggregates(self) -> object:
+        aggregates = self.inner.inspect_readiness_aggregates()
+        if not self._mutated:
+            self.mutate_once()
+            self._mutated = True
+        return aggregates
+
     @contextmanager
     def transaction(
         self,
@@ -173,8 +184,79 @@ class _ConcurrentListMutationStore:
 
 
 @dataclass
+class _CommitFailingStore:
+    inner: object
+    message: str = "synthetic commit failure"
+
+    @property
+    def dsn(self) -> str:
+        return self.inner.dsn
+
+    @property
+    def persistence_mode(self) -> str:
+        return self.inner.persistence_mode
+
+    def save(self, record: object) -> object:
+        return self.inner.save(record)
+
+    def get(self, record_type: object, record_id: str) -> object | None:
+        return self.inner.get(record_type, record_id)
+
+    def list(self, record_type: object) -> tuple[object, ...]:
+        return self.inner.list(record_type)
+
+    def inspect_readiness_aggregates(self) -> object:
+        return self.inner.inspect_readiness_aggregates()
+
+    @contextmanager
+    def transaction(
+        self,
+        *,
+        isolation_level: str | None = None,
+    ) -> Iterator[None]:
+        connection_factory = self.inner.connection_factory
+        if connection_factory is None:
+            raise AssertionError(
+                "_CommitFailingStore requires an explicit connection factory"
+            )
+
+        def commit_failing_connection_factory(dsn: str) -> "_CommitFailingConnection":
+            return _CommitFailingConnection(
+                inner=connection_factory(dsn),
+                message=self.message,
+            )
+
+        with mock.patch.object(
+            self.inner,
+            "connection_factory",
+            commit_failing_connection_factory,
+        ):
+            with self.inner.transaction(isolation_level=isolation_level):
+                yield
+
+
+@dataclass
+class _CommitFailingConnection:
+    inner: object
+    message: str
+
+    def cursor(self) -> object:
+        return self.inner.cursor()
+
+    def commit(self) -> None:
+        raise RuntimeError(self.message)
+
+    def rollback(self) -> object:
+        return self.inner.rollback()
+
+    def close(self) -> object:
+        return self.inner.close()
+
+
+@dataclass
 class _ListCountingStore:
     inner: object
+    list_calls: int = 0
     reconciliation_list_calls: int = 0
 
     @property
@@ -192,9 +274,13 @@ class _ListCountingStore:
         return self.inner.get(record_type, record_id)
 
     def list(self, record_type: object) -> tuple[object, ...]:
+        self.list_calls += 1
         if record_type is ReconciliationRecord:
             self.reconciliation_list_calls += 1
         return self.inner.list(record_type)
+
+    def inspect_readiness_aggregates(self) -> object:
+        return self.inner.inspect_readiness_aggregates()
 
     @contextmanager
     def transaction(
@@ -228,6 +314,9 @@ class _OutOfBandMutationStore:
 
     def list(self, record_type: object) -> tuple[object, ...]:
         return self.inner.list(record_type)
+
+    def inspect_readiness_aggregates(self) -> object:
+        return self.inner.inspect_readiness_aggregates()
 
     @contextmanager
     def transaction(
@@ -6820,6 +6909,90 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             execution,
         )
 
+    def test_service_does_not_emit_action_execution_delegated_log_before_commit(
+        self,
+    ) -> None:
+        base_store, _ = make_store()
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        expires_at = datetime(2026, 4, 5, 13, 0, tzinfo=timezone.utc)
+        approved_target_scope = {"asset_id": "workstation-001"}
+        approved_payload = _phase20_notify_identity_owner_payload(
+            recipient_identity="repo-owner-001",
+            case_id="case-001",
+            alert_id="alert-001",
+            finding_id="finding-001",
+        )
+        payload_hash = _approved_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
+        seed_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=base_store,
+        )
+        seed_service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-routine-commit-failure-001",
+                action_request_id="action-request-routine-commit-failure-001",
+                approver_identities=("approver-001",),
+                target_snapshot=approved_target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+                approved_expires_at=expires_at,
+            )
+        )
+        seed_service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-routine-commit-failure-001",
+                approval_decision_id="approval-routine-commit-failure-001",
+                case_id="case-001",
+                alert_id="alert-001",
+                finding_id="finding-001",
+                idempotency_key="idempotency-routine-commit-failure-001",
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=expires_at,
+                lifecycle_state="approved",
+                policy_basis={
+                    "severity": "low",
+                    "target_scope": "single_asset",
+                    "action_reversibility": "reversible",
+                    "asset_criticality": "standard",
+                    "identity_criticality": "standard",
+                    "blast_radius": "single_target",
+                    "execution_constraint": "routine_allowed",
+                },
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "shuffle",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+                requested_payload=approved_payload,
+            )
+        )
+        failing_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=_CommitFailingStore(base_store),
+        )
+
+        with mock.patch.object(failing_service, "_emit_structured_event") as emit_event:
+            with self.assertRaisesRegex(RuntimeError, "synthetic commit failure"):
+                failing_service.delegate_approved_action_to_shuffle(
+                    action_request_id="action-request-routine-commit-failure-001",
+                    approved_payload=approved_payload,
+                    delegated_at=delegated_at,
+                    delegation_issuer="control-plane-service",
+                )
+
+        emit_event.assert_not_called()
+        self.assertEqual(base_store.list(ActionExecutionRecord), ())
+
     def test_service_rechecks_shuffle_approval_inside_transaction(self) -> None:
         inner_store, _ = make_store()
         seed_service = AegisOpsControlPlaneService(
@@ -7389,6 +7562,91 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             execution,
         )
 
+    def test_service_emits_action_execution_delegated_log_for_isolated_executor(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        expires_at = datetime(2026, 4, 5, 13, 0, tzinfo=timezone.utc)
+        approved_target_scope = {"asset_id": "critical-host-003"}
+        approved_payload = {
+            "action_type": "disable_identity",
+            "asset_id": "critical-host-003",
+        }
+        payload_hash = _approved_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="executor",
+            execution_surface_id="isolated-executor",
+        )
+        service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-executor-log-001",
+                action_request_id="action-request-executor-log-001",
+                approver_identities=("approver-001",),
+                target_snapshot=approved_target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+                approved_expires_at=expires_at,
+            )
+        )
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-executor-log-001",
+                approval_decision_id="approval-executor-log-001",
+                case_id="case-001",
+                alert_id="alert-001",
+                finding_id="finding-001",
+                idempotency_key="idempotency-executor-log-001",
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=expires_at,
+                lifecycle_state="approved",
+                policy_basis={
+                    "severity": "critical",
+                    "target_scope": "single_asset",
+                    "action_reversibility": "irreversible",
+                    "asset_criticality": "critical",
+                    "identity_criticality": "high",
+                    "blast_radius": "organization",
+                    "execution_constraint": "requires_isolated_executor",
+                },
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "approval",
+                    "execution_surface_type": "executor",
+                    "execution_surface_id": "isolated-executor",
+                },
+            )
+        )
+
+        with mock.patch.object(service, "_emit_structured_event") as emit_event:
+            execution = service.delegate_approved_action_to_isolated_executor(
+                action_request_id="action-request-executor-log-001",
+                approved_payload=approved_payload,
+                delegated_at=delegated_at,
+                delegation_issuer="control-plane-service",
+            )
+
+        emit_event.assert_called_once_with(
+            logging.INFO,
+            "action_execution_delegated",
+            action_execution_id=execution.action_execution_id,
+            action_request_id=execution.action_request_id,
+            approval_decision_id=execution.approval_decision_id,
+            execution_surface_type=execution.execution_surface_type,
+            execution_surface_id=execution.execution_surface_id,
+            execution_run_id=execution.execution_run_id,
+            lifecycle_state=execution.lifecycle_state,
+        )
+
     def test_service_rejects_isolated_executor_delegation_for_cross_linked_approval(
         self,
     ) -> None:
@@ -7679,6 +7937,38 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             action_request,
         )
         self.assertEqual(store.list(ActionExecutionRecord), ())
+
+    def test_service_does_not_emit_action_request_created_log_before_commit(
+        self,
+    ) -> None:
+        base_store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Prepare a reviewed owner notification request.",
+        )
+        failing_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=_CommitFailingStore(base_store),
+        )
+        baseline_requests = base_store.list(ActionRequestRecord)
+
+        with mock.patch.object(failing_service, "_emit_structured_event") as emit_event:
+            with self.assertRaisesRegex(RuntimeError, "synthetic commit failure"):
+                failing_service.create_reviewed_action_request_from_advisory(
+                    record_family="recommendation",
+                    record_id=recommendation.recommendation_id,
+                    requester_identity="analyst-001",
+                    recipient_identity="repo-owner-001",
+                    message_intent="Notify the repository owner about the reviewed change.",
+                    escalation_reason="Reviewed low-risk action remains approval-bound.",
+                    expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+                )
+
+        emit_event.assert_not_called()
+        self.assertEqual(base_store.list(ActionRequestRecord), baseline_requests)
 
     def test_service_executes_phase20_first_live_action_end_to_end_from_reviewed_recommendation(
         self,
@@ -8044,6 +8334,361 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
                 seed_alert,
                 alert_id="alert-phase21-backup-concurrent-001",
             ),
+        )
+
+    def test_service_phase21_readiness_uses_single_transaction_snapshot(self) -> None:
+        base_store, backend = make_store()
+        concurrent_store, _ = make_store(backend)
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case(store=base_store)
+        )
+        seed_reconciliation = max(
+            service._store.list(ReconciliationRecord),
+            key=lambda record: record.compared_at,
+            default=None,
+        )
+        if seed_reconciliation is None:
+            self.fail("expected seeded reconciliation record before readiness snapshot")
+
+        concurrent_reconciliation = replace(
+            seed_reconciliation,
+            reconciliation_id="reconciliation-phase21-readiness-concurrent-001",
+            compared_at=seed_reconciliation.compared_at + timedelta(minutes=30),
+            lifecycle_state="stale",
+        )
+        snapshot_store = _ConcurrentListMutationStore(
+            inner=base_store,
+            mutate_once=lambda: concurrent_store.save(concurrent_reconciliation),
+        )
+        snapshot_service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+            ),
+            store=snapshot_store,
+        )
+
+        statement_count_before_snapshot = len(backend.statements)
+        readiness = snapshot_service.inspect_readiness_diagnostics()
+
+        self.assertEqual(
+            backend.statements[statement_count_before_snapshot][0],
+            "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+        )
+        self.assertEqual(readiness.status, "ready")
+        self.assertEqual(readiness.metrics["reconciliations"]["stale"], 0)
+        self.assertEqual(
+            readiness.latest_reconciliation["reconciliation_id"],
+            seed_reconciliation.reconciliation_id,
+        )
+        self.assertEqual(len(base_store.list(ReconciliationRecord)), 2)
+        self.assertEqual(
+            concurrent_store.get(
+                ReconciliationRecord,
+                "reconciliation-phase21-readiness-concurrent-001",
+            ),
+            concurrent_reconciliation,
+        )
+
+    def test_store_phase21_readiness_aggregates_use_single_transaction_snapshot(self) -> None:
+        base_store, backend = make_store()
+        concurrent_store, _ = make_store(backend)
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case(store=base_store)
+        )
+        seed_reconciliation = max(
+            service._store.list(ReconciliationRecord),
+            key=lambda record: record.compared_at,
+            default=None,
+        )
+        if seed_reconciliation is None:
+            self.fail("expected seeded reconciliation record before readiness aggregate snapshot")
+
+        concurrent_reconciliation = replace(
+            seed_reconciliation,
+            reconciliation_id="reconciliation-phase21-aggregate-concurrent-001",
+            compared_at=seed_reconciliation.compared_at + timedelta(minutes=30),
+            lifecycle_state="stale",
+        )
+        original_count_grouped_by_field = base_store._count_grouped_by_field
+        mutation_applied = False
+
+        def count_grouped_by_field(
+            record_type: object,
+            field_name: str,
+        ) -> dict[str, int]:
+            nonlocal mutation_applied
+            counts = original_count_grouped_by_field(record_type, field_name)
+            if not mutation_applied:
+                mutation_applied = True
+                concurrent_store.save(concurrent_reconciliation)
+            return counts
+
+        statement_count_before_snapshot = len(backend.statements)
+        with mock.patch.object(
+            base_store,
+            "_count_grouped_by_field",
+            side_effect=count_grouped_by_field,
+        ):
+            aggregates = base_store.inspect_readiness_aggregates()
+
+        self.assertEqual(
+            backend.statements[statement_count_before_snapshot][0],
+            "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+        )
+        self.assertEqual(aggregates.reconciliation_lifecycle_counts.get("stale", 0), 0)
+        self.assertEqual(
+            aggregates.latest_reconciliation.reconciliation_id
+            if aggregates.latest_reconciliation is not None
+            else None,
+            seed_reconciliation.reconciliation_id,
+        )
+        self.assertEqual(len(base_store.list(ReconciliationRecord)), 2)
+        self.assertEqual(
+            concurrent_store.get(
+                ReconciliationRecord,
+                "reconciliation-phase21-aggregate-concurrent-001",
+            ),
+            concurrent_reconciliation,
+        )
+
+    def test_service_phase21_readiness_avoids_full_table_list_reads(self) -> None:
+        inner_store, _ = make_store()
+        store = _ListCountingStore(inner=inner_store)
+        _store, _service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case(store=store)
+        )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+            ),
+            store=store,
+        )
+
+        store.list_calls = 0
+        readiness = service.inspect_readiness_diagnostics()
+
+        self.assertEqual(readiness.status, "ready")
+        self.assertEqual(store.list_calls, 0)
+
+    def test_service_phase21_readiness_counts_distinct_execution_runs_and_redacts_payload(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        target_scope = {"asset_id": "asset-phase21-readiness-001"}
+        latest_seed_reconciliation = max(
+            service._store.list(ReconciliationRecord),
+            key=lambda record: record.compared_at,
+        )
+        approved_payload = _phase20_notify_identity_owner_payload(
+            recipient_identity="repo-owner-001",
+            case_id=promoted_case.case_id,
+            alert_id=promoted_case.alert_id,
+            finding_id=promoted_case.finding_id,
+        )
+        payload_hash = _approved_binding_hash(
+            target_scope=target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
+        requested_at = latest_seed_reconciliation.compared_at + timedelta(minutes=10)
+        delegated_at = requested_at + timedelta(minutes=5)
+        expires_at = requested_at + timedelta(hours=1)
+        service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase21-readiness-001",
+                action_request_id="action-request-phase21-readiness-001",
+                approver_identities=("approver-001",),
+                target_snapshot=target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+                approved_expires_at=expires_at,
+            )
+        )
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-phase21-readiness-001",
+                approval_decision_id="approval-phase21-readiness-001",
+                case_id=promoted_case.case_id,
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                idempotency_key="idempotency-phase21-readiness-001",
+                target_scope=target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=expires_at,
+                lifecycle_state="approved",
+                requester_identity="analyst-001",
+                requested_payload=approved_payload,
+                policy_basis={
+                    "severity": "low",
+                    "target_scope": "single_identity",
+                    "action_reversibility": "reversible",
+                    "asset_criticality": "standard",
+                    "identity_criticality": "standard",
+                    "blast_radius": "single_target",
+                    "execution_constraint": "routine_allowed",
+                },
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "approval",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+        service.persist_record(
+            ActionExecutionRecord(
+                action_execution_id="action-execution-phase21-readiness-001",
+                action_request_id="action-request-phase21-readiness-001",
+                approval_decision_id="approval-phase21-readiness-001",
+                delegation_id="delegation-phase21-readiness-001",
+                execution_surface_type="automation_substrate",
+                execution_surface_id="shuffle",
+                execution_run_id="execution-run-phase21-readiness-001",
+                idempotency_key="idempotency-phase21-readiness-001",
+                target_scope=target_scope,
+                approved_payload=approved_payload,
+                payload_hash=payload_hash,
+                delegated_at=delegated_at,
+                expires_at=expires_at,
+                provenance={"adapter": "shuffle"},
+                lifecycle_state="queued",
+            )
+        )
+        service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-phase21-readiness-distinct-001",
+                subject_linkage={
+                    "action_request_ids": ("action-request-phase21-readiness-001",),
+                    "latest_native_payload": {"secret": "keep-in-store"},
+                },
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                analytic_signal_id=None,
+                execution_run_id="execution-run-phase21-readiness-001",
+                linked_execution_run_ids=(),
+                correlation_key="reconciliation:phase21-readiness:distinct-001",
+                first_seen_at=requested_at,
+                last_seen_at=delegated_at,
+                ingest_disposition="matched",
+                mismatch_summary="phase20 execution matched",
+                compared_at=delegated_at + timedelta(minutes=1),
+                lifecycle_state="matched",
+            )
+        )
+        service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-phase21-readiness-distinct-002",
+                subject_linkage={
+                    "action_request_ids": ("action-request-phase21-readiness-001",),
+                    "latest_native_payload": {"secret": "keep-in-store"},
+                },
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                analytic_signal_id=None,
+                execution_run_id="execution-run-phase21-readiness-001",
+                linked_execution_run_ids=(),
+                correlation_key="reconciliation:phase21-readiness:distinct-002",
+                first_seen_at=requested_at,
+                last_seen_at=delegated_at,
+                ingest_disposition="matched",
+                mismatch_summary="duplicate reconciliation for same execution run",
+                compared_at=delegated_at + timedelta(minutes=2),
+                lifecycle_state="matched",
+            )
+        )
+        service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-phase21-readiness-distinct-none-001",
+                subject_linkage={
+                    "action_request_ids": ("action-request-phase21-readiness-001",),
+                    "latest_native_payload": {"secret": "keep-in-store"},
+                },
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                analytic_signal_id=None,
+                execution_run_id=None,
+                linked_execution_run_ids=(),
+                correlation_key="reconciliation:phase21-readiness:distinct-none-001",
+                first_seen_at=requested_at,
+                last_seen_at=delegated_at,
+                ingest_disposition="matched",
+                mismatch_summary="null execution run should stay out of phase20 metric",
+                compared_at=delegated_at + timedelta(minutes=3),
+                lifecycle_state="matched",
+            )
+        )
+
+        readiness = service.inspect_readiness_diagnostics()
+
+        self.assertEqual(
+            readiness.metrics["phase20_notify_identity_owner"]["reconciled_executions"],
+            1,
+        )
+        self.assertEqual(
+            readiness.latest_reconciliation["reconciliation_id"],
+            "reconciliation-phase21-readiness-distinct-none-001",
+        )
+        self.assertNotIn(
+            "latest_native_payload",
+            readiness.latest_reconciliation["subject_linkage"],
+        )
+        stored_latest = service.get_record(
+            ReconciliationRecord,
+            "reconciliation-phase21-readiness-distinct-none-001",
+        )
+        self.assertIsNotNone(stored_latest)
+        self.assertIn("latest_native_payload", stored_latest.subject_linkage)
+
+    def test_service_phase21_readiness_prefers_higher_reconciliation_id_when_compared_at_ties(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+
+        admitted = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(
+                _load_wazuh_fixture("agent-origin-alert.json")
+            ),
+        )
+        reconciliation = service.get_record(
+            ReconciliationRecord,
+            admitted.reconciliation.reconciliation_id,
+        )
+        self.assertIsNotNone(reconciliation)
+
+        preferred_reconciliation = replace(
+            reconciliation,
+            reconciliation_id=f"{reconciliation.reconciliation_id}-z",
+            correlation_key=f"{reconciliation.correlation_key}:z",
+        )
+        service.persist_record(preferred_reconciliation)
+
+        readiness = service.inspect_readiness_diagnostics()
+
+        self.assertIsNotNone(readiness.latest_reconciliation)
+        self.assertEqual(
+            readiness.latest_reconciliation["reconciliation_id"],
+            preferred_reconciliation.reconciliation_id,
         )
 
     def test_service_phase21_restore_rejects_non_string_tuple_elements(
