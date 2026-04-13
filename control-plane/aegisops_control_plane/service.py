@@ -1141,6 +1141,11 @@ class AegisOpsControlPlaneService:
                 "delegation_issuer": delegation_issuer,
                 "evidence_ids": evidence_ids,
                 "adapter": receipt.adapter,
+                "downstream_binding": {
+                    "approval_decision_id": receipt.approval_decision_id,
+                    "delegation_id": receipt.delegation_id,
+                    "payload_hash": receipt.payload_hash,
+                },
             }
             if receipt.base_url.strip() and receipt.base_url != "<set-me>":
                 provenance["adapter_base_url"] = receipt.base_url
@@ -3611,7 +3616,14 @@ class AegisOpsControlPlaneService:
                 f"(state={action_request.lifecycle_state!r})"
             )
 
-        normalized_executions = self._normalize_observed_executions(observed_executions)
+        require_binding_identifiers = (
+            execution_surface_type == "automation_substrate"
+            and execution_surface_id == "shuffle"
+        )
+        normalized_executions = self._normalize_observed_executions(
+            observed_executions,
+            require_binding_identifiers=require_binding_identifiers,
+        )
         linked_execution_run_ids = tuple(
             execution["execution_run_id"] for execution in normalized_executions
         )
@@ -3677,6 +3689,9 @@ class AegisOpsControlPlaneService:
             last_seen_at = latest_execution["observed_at"]
             observed_execution_surface_id = latest_execution["execution_surface_id"]
             observed_idempotency_key = latest_execution["idempotency_key"]
+            observed_approval_decision_id = latest_execution.get("approval_decision_id")
+            observed_delegation_id = latest_execution.get("delegation_id")
+            observed_payload_hash = latest_execution.get("payload_hash")
             expected_execution_run_id = (
                 None
                 if authoritative_execution is None
@@ -3709,6 +3724,23 @@ class AegisOpsControlPlaneService:
                 lifecycle_state = "mismatched"
                 mismatch_summary = (
                     "execution run identity mismatch between authoritative action execution "
+                    "and observed downstream execution"
+                )
+            elif (
+                authoritative_execution is not None
+                and authoritative_execution.execution_surface_type == "automation_substrate"
+                and authoritative_execution.execution_surface_id == "shuffle"
+                and (
+                    observed_approval_decision_id
+                    != authoritative_execution.approval_decision_id
+                    or observed_delegation_id != authoritative_execution.delegation_id
+                    or observed_payload_hash != authoritative_execution.payload_hash
+                )
+            ):
+                ingest_disposition = "mismatch"
+                lifecycle_state = "mismatched"
+                mismatch_summary = (
+                    "approved binding mismatch between authoritative action execution "
                     "and observed downstream execution"
                 )
             else:
@@ -4351,9 +4383,11 @@ class AegisOpsControlPlaneService:
             return substrate_detection_record_id
         return f"{namespaced_prefix}{substrate_detection_record_id}"
 
-    @staticmethod
     def _normalize_observed_executions(
+        self,
         observed_executions: tuple[Mapping[str, object], ...],
+        *,
+        require_binding_identifiers: bool = False,
     ) -> tuple[dict[str, object], ...]:
         normalized: list[dict[str, object]] = []
         for execution in observed_executions:
@@ -4361,6 +4395,9 @@ class AegisOpsControlPlaneService:
             execution_surface_id = execution.get("execution_surface_id")
             idempotency_key = execution.get("idempotency_key")
             observed_at = execution.get("observed_at")
+            approval_decision_id = execution.get("approval_decision_id")
+            delegation_id = execution.get("delegation_id")
+            payload_hash = execution.get("payload_hash")
             if not isinstance(execution_run_id, str):
                 raise ValueError("observed execution must include string execution_run_id")
             if not isinstance(execution_surface_id, str):
@@ -4375,12 +4412,24 @@ class AegisOpsControlPlaneService:
                 observed_at,
                 "observed_at",
             )
+            if require_binding_identifiers:
+                if not isinstance(approval_decision_id, str):
+                    raise ValueError(
+                        "observed execution must include string approval_decision_id"
+                    )
+                if not isinstance(delegation_id, str):
+                    raise ValueError("observed execution must include string delegation_id")
+                if not isinstance(payload_hash, str):
+                    raise ValueError("observed execution must include string payload_hash")
             normalized.append(
                 {
                     "execution_run_id": execution_run_id,
                     "execution_surface_id": execution_surface_id,
                     "idempotency_key": idempotency_key,
                     "observed_at": observed_at,
+                    "approval_decision_id": approval_decision_id,
+                    "delegation_id": delegation_id,
+                    "payload_hash": payload_hash,
                     "status": execution.get("status"),
                 }
             )

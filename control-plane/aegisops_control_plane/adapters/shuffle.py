@@ -10,6 +10,9 @@ class ShuffleDelegationReceipt:
     execution_surface_type: str
     execution_surface_id: str
     execution_run_id: str
+    approval_decision_id: str
+    delegation_id: str
+    payload_hash: str
     adapter: str
     base_url: str
 
@@ -34,8 +37,6 @@ class ShuffleActionAdapter:
         delegated_at: datetime,
     ) -> ShuffleDelegationReceipt:
         del action_request_id
-        del approval_decision_id
-        del payload_hash
         del idempotency_key
         del delegated_at
         self._require_reviewed_phase20_notify_payload(approved_payload)
@@ -43,6 +44,9 @@ class ShuffleActionAdapter:
             execution_surface_type=self.execution_surface_type,
             execution_surface_id=self.execution_surface_id,
             execution_run_id=f"shuffle-run-{delegation_id}",
+            approval_decision_id=approval_decision_id,
+            delegation_id=delegation_id,
+            payload_hash=payload_hash,
             adapter="shuffle",
             base_url=self.base_url,
         )
