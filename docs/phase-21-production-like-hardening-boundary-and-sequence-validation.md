@@ -26,6 +26,7 @@
 - `scripts/verify-phase-21-production-like-hardening-boundary.sh`
 - `scripts/test-verify-phase-21-production-like-hardening-boundary.sh`
 - `scripts/test-verify-ci-phase-21-workflow-coverage.sh`
+- `.github/workflows/ci.yml`
 
 ## Review Outcome
 

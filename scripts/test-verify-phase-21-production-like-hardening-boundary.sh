@@ -47,12 +47,18 @@ create_repo() {
 write_required_artifacts() {
   local target="$1"
   local artifact=""
+  local source_roadmap="${repo_root}/docs/Phase 16-21 Epic Roadmap.md"
 
   for artifact in "${required_artifacts[@]}"; do
     mkdir -p "${target}/$(dirname "${artifact}")"
     cp "${repo_root}/${artifact}" "${target}/${artifact}"
     git -C "${target}" add "${artifact}"
   done
+
+  if [[ -f "${source_roadmap}" ]]; then
+    cp "${source_roadmap}" "${target}/docs/Phase 16-21 Epic Roadmap.md"
+    git -C "${target}" add "docs/Phase 16-21 Epic Roadmap.md"
+  fi
 }
 
 remove_text_from_file() {
@@ -125,13 +131,23 @@ assert_passes "${valid_repo}"
 incorrect_pass_status_repo="${workdir}/incorrect-pass-status"
 create_repo "${incorrect_pass_status_repo}"
 write_required_artifacts "${incorrect_pass_status_repo}"
-replace_text_in_file \
-  "${incorrect_pass_status_repo}" \
-  "docs/phase-21-production-like-hardening-boundary-and-sequence-validation.md" \
-  "- Validation status: FAIL" \
-  "- Validation status: PASS"
-commit_fixture "${incorrect_pass_status_repo}"
-assert_fails_with "${incorrect_pass_status_repo}" "Unexpected line in ${incorrect_pass_status_repo}/docs/phase-21-production-like-hardening-boundary-and-sequence-validation.md: - Validation status: PASS"
+if [[ -f "${repo_root}/docs/Phase 16-21 Epic Roadmap.md" ]]; then
+  replace_text_in_file \
+    "${incorrect_pass_status_repo}" \
+    "docs/phase-21-production-like-hardening-boundary-and-sequence-validation.md" \
+    "- Validation status: PASS" \
+    "- Validation status: FAIL"
+  commit_fixture "${incorrect_pass_status_repo}"
+  assert_fails_with "${incorrect_pass_status_repo}" "Unexpected line in ${incorrect_pass_status_repo}/docs/phase-21-production-like-hardening-boundary-and-sequence-validation.md: - Validation status: FAIL"
+else
+  replace_text_in_file \
+    "${incorrect_pass_status_repo}" \
+    "docs/phase-21-production-like-hardening-boundary-and-sequence-validation.md" \
+    "- Validation status: FAIL" \
+    "- Validation status: PASS"
+  commit_fixture "${incorrect_pass_status_repo}"
+  assert_fails_with "${incorrect_pass_status_repo}" "Unexpected line in ${incorrect_pass_status_repo}/docs/phase-21-production-like-hardening-boundary-and-sequence-validation.md: - Validation status: PASS"
+fi
 
 roadmap_present_repo="${workdir}/roadmap-present"
 create_repo "${roadmap_present_repo}"

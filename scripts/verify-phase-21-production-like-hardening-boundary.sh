@@ -20,6 +20,8 @@ docs_test="${repo_root}/control-plane/tests/test_phase21_production_like_hardeni
 validation_test="${repo_root}/control-plane/tests/test_phase21_production_like_hardening_boundary_validation.py"
 workflow_path="${repo_root}/.github/workflows/ci.yml"
 roadmap_filename="Phase 16-21 Epic Roadmap.md"
+roadmap_relative_path="docs/${roadmap_filename}"
+roadmap_path="${repo_root}/${roadmap_relative_path}"
 
 require_file() {
   local path="$1"
@@ -67,13 +69,6 @@ require_file "${architecture_doc}" "Missing architecture overview doc"
 require_file "${docs_test}" "Missing Phase 21 docs unittest"
 require_file "${validation_test}" "Missing Phase 21 validation unittest"
 require_file "${workflow_path}" "Missing CI workflow"
-
-roadmap_path="$(find "${repo_root}" -type f -name "${roadmap_filename}" -print -quit)"
-roadmap_relative_path=""
-
-if [[ -n "${roadmap_path}" ]]; then
-  roadmap_relative_path="${roadmap_path#${repo_root}/}"
-fi
 
 design_required_lines=(
   '# AegisOps Phase 21 Production-Like Hardening Boundary and Sequence'
@@ -123,7 +118,7 @@ validation_required_lines=(
   'Confirmed explicit non-expansion rules keep broad multi-source breadth, broad UI expansion, direct vendor-local actioning, and production-scale topology claims out of scope for Phase 21.'
 )
 
-if [[ -n "${roadmap_path}" ]]; then
+if [[ -f "${roadmap_path}" ]]; then
   validation_required_lines+=(
     '- Validation status: PASS'
     "Confirmed comparison against \`${roadmap_filename}\` completed using \`${roadmap_relative_path}\` as the reviewed roadmap baseline."
@@ -165,9 +160,10 @@ required_artifacts=(
   "scripts/verify-phase-21-production-like-hardening-boundary.sh"
   "scripts/test-verify-phase-21-production-like-hardening-boundary.sh"
   "scripts/test-verify-ci-phase-21-workflow-coverage.sh"
+  ".github/workflows/ci.yml"
 )
 
-if [[ -n "${roadmap_path}" ]]; then
+if [[ -f "${roadmap_path}" ]]; then
   required_artifacts+=("${roadmap_relative_path}")
 fi
 

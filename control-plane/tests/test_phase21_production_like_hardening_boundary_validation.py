@@ -31,6 +31,7 @@ class Phase21ProductionLikeHardeningBoundaryValidationTests(unittest.TestCase):
 
         design_text = design_doc.read_text(encoding="utf-8")
         validation_text = validation_doc.read_text(encoding="utf-8")
+        roadmap_doc = REPO_ROOT / "docs" / "Phase 16-21 Epic Roadmap.md"
 
         for term in (
             "docs/phase-20-first-live-low-risk-action-and-reviewed-delegation-boundary.md",
@@ -48,14 +49,29 @@ class Phase21ProductionLikeHardeningBoundaryValidationTests(unittest.TestCase):
             self.assertIn(term, design_text)
             self.assertIn(term, validation_text)
 
-        for term in (
-            "Validation status: FAIL",
+        validation_terms = [
             "Entra ID is the first reviewed second live source to onboard",
             "topology growth remains conditional only",
             "does not reopen broader action catalogs",
             "direct vendor-local actioning",
-            "Validation cannot pass until the requested `Phase 16-21 Epic Roadmap.md` comparison is completed from a reviewed local artifact.",
-        ):
+        ]
+
+        if roadmap_doc.exists():
+            validation_terms.extend(
+                (
+                    "Validation status: PASS",
+                    "Confirmed comparison against `Phase 16-21 Epic Roadmap.md` completed using `docs/Phase 16-21 Epic Roadmap.md` as the reviewed roadmap baseline.",
+                )
+            )
+        else:
+            validation_terms.extend(
+                (
+                    "Validation status: FAIL",
+                    "Validation cannot pass until the requested `Phase 16-21 Epic Roadmap.md` comparison is completed from a reviewed local artifact.",
+                )
+            )
+
+        for term in validation_terms:
             self.assertIn(term, validation_text)
 
 
