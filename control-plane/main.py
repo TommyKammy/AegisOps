@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import fields, is_dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import ipaddress
@@ -327,11 +327,50 @@ def run_control_plane_service(
     stderr: TextIO | None = None,
 ) -> int:
     service.validate_wazuh_ingest_runtime()
+    service.validate_protected_surface_runtime()
     runtime_snapshot = service.describe_runtime().to_dict()
     stderr = stderr or sys.stderr
 
     class _RequestHandler(BaseHTTPRequestHandler):
         server_version = "AegisOpsControlPlane/1.0"
+
+        def _write_forbidden(self, message: str) -> None:
+            self._write_json(
+                HTTPStatus.FORBIDDEN,
+                {
+                    "error": "forbidden",
+                    "message": message,
+                },
+            )
+
+        def _require_authenticated_surface_access(
+            self,
+            *,
+            allowed_roles: tuple[str, ...],
+        ) -> object:
+            return service.authenticate_protected_surface_request(
+                peer_addr=self.client_address[0] if self.client_address else None,
+                forwarded_proto=self.headers.get("X-Forwarded-Proto"),
+                reverse_proxy_secret_header=self.headers.get("X-AegisOps-Proxy-Secret"),
+                proxy_service_account_header=self.headers.get(
+                    "X-AegisOps-Proxy-Service-Account"
+                ),
+                authenticated_identity_header=self.headers.get(
+                    "X-AegisOps-Authenticated-Identity"
+                ),
+                authenticated_role_header=self.headers.get("X-AegisOps-Authenticated-Role"),
+                allowed_roles=allowed_roles,
+            )
+
+        @staticmethod
+        def _require_matching_identity(
+            authenticated_identity: str,
+            asserted_identity: str,
+        ) -> None:
+            if authenticated_identity.strip() != asserted_identity.strip():
+                raise PermissionError(
+                    "authenticated identity header must match the asserted control-plane identity"
+                )
 
         def do_GET(self) -> None:  # noqa: N802
             request_target = urlsplit(self.path)
@@ -359,8 +398,59 @@ def run_control_plane_service(
                 return
 
             if request_path == "/runtime":
+                try:
+                    self._require_authenticated_surface_access(
+                        allowed_roles=("platform_admin",),
+                    )
+                except PermissionError as exc:
+                    self._write_forbidden(str(exc))
+                    return
                 self._write_json(HTTPStatus.OK, service.describe_runtime().to_dict())
                 return
+
+            if request_path == "/admin/bootstrap-status":
+                try:
+                    self._require_authenticated_surface_access(
+                        allowed_roles=("platform_admin",),
+                    )
+                except PermissionError as exc:
+                    self._write_forbidden(str(exc))
+                    return
+                self._write_json(
+                    HTTPStatus.OK,
+                    {
+                        "contract": "reviewed_admin_bootstrap",
+                        "bootstrap_token_configured": bool(
+                            service._config.admin_bootstrap_token.strip()
+                        ),
+                        "break_glass_token_configured": bool(
+                            service._config.break_glass_token.strip()
+                        ),
+                        "protected_surface_proxy_service_account": (
+                            service._config.protected_surface_proxy_service_account
+                        ),
+                        "break_glass_max_ttl_minutes": 60,
+                    },
+                )
+                return
+
+            if request_path in {
+                "/inspect-records",
+                "/inspect-reconciliation-status",
+                "/inspect-analyst-queue",
+                "/inspect-alert-detail",
+                "/inspect-case-detail",
+                "/inspect-assistant-context",
+                "/inspect-advisory-output",
+                "/render-recommendation-draft",
+            }:
+                try:
+                    self._require_authenticated_surface_access(
+                        allowed_roles=("analyst", "approver", "platform_admin"),
+                    )
+                except PermissionError as exc:
+                    self._write_forbidden(str(exc))
+                    return
 
             if request_path == "/inspect-records":
                 family = parse_qs(request_target.query).get("family", [""])[0]
@@ -551,16 +641,25 @@ def run_control_plane_service(
 
             if request_path.startswith("/operator/"):
                 try:
-                    _require_loopback_operator_request(self)
-                except PermissionError as exc:
-                    self._write_json(
-                        HTTPStatus.FORBIDDEN,
-                        {
-                            "error": "forbidden",
-                            "message": str(exc),
-                        },
+                    peer_addr = self.client_address[0] if self.client_address else None
+                    if _peer_addr_is_loopback(peer_addr):
+                        _require_loopback_operator_request(self)
+                    principal = self._require_authenticated_surface_access(
+                        allowed_roles=("analyst", "approver", "platform_admin"),
                     )
+                except PermissionError as exc:
+                    self._write_forbidden(str(exc))
                     return
+            elif request_path.startswith("/admin/"):
+                try:
+                    principal = self._require_authenticated_surface_access(
+                        allowed_roles=("platform_admin",),
+                    )
+                except PermissionError as exc:
+                    self._write_forbidden(str(exc))
+                    return
+            else:
+                principal = None
 
             if request_path == "/operator/promote-alert-to-case":
                 try:
@@ -606,6 +705,11 @@ def run_control_plane_service(
             if request_path == "/operator/record-case-observation":
                 try:
                     payload = _read_json_request_body(self)
+                    if getattr(principal, "access_path", "") == "reviewed_reverse_proxy":
+                        self._require_matching_identity(
+                            principal.identity,
+                            _require_json_string(payload, "author_identity"),
+                        )
                     observation = service.record_case_observation(
                         case_id=_normalize_case_id(_require_json_string(payload, "case_id")),
                         author_identity=_require_json_string(payload, "author_identity"),
@@ -647,6 +751,11 @@ def run_control_plane_service(
             if request_path == "/operator/record-case-lead":
                 try:
                     payload = _read_json_request_body(self)
+                    if getattr(principal, "access_path", "") == "reviewed_reverse_proxy":
+                        self._require_matching_identity(
+                            principal.identity,
+                            _require_json_string(payload, "triage_owner"),
+                        )
                     lead = service.record_case_lead(
                         case_id=_normalize_case_id(_require_json_string(payload, "case_id")),
                         triage_owner=_require_json_string(payload, "triage_owner"),
@@ -686,6 +795,11 @@ def run_control_plane_service(
             if request_path == "/operator/record-case-recommendation":
                 try:
                     payload = _read_json_request_body(self)
+                    if getattr(principal, "access_path", "") == "reviewed_reverse_proxy":
+                        self._require_matching_identity(
+                            principal.identity,
+                            _require_json_string(payload, "review_owner"),
+                        )
                     recommendation = service.record_case_recommendation(
                         case_id=_normalize_case_id(_require_json_string(payload, "case_id")),
                         review_owner=_require_json_string(payload, "review_owner"),
@@ -723,6 +837,11 @@ def run_control_plane_service(
             if request_path == "/operator/record-case-handoff":
                 try:
                     payload = _read_json_request_body(self)
+                    if getattr(principal, "access_path", "") == "reviewed_reverse_proxy":
+                        self._require_matching_identity(
+                            principal.identity,
+                            _require_json_string(payload, "handoff_owner"),
+                        )
                     case_record = service.record_case_handoff(
                         case_id=_normalize_case_id(_require_json_string(payload, "case_id")),
                         handoff_at=_require_json_datetime(payload, "handoff_at"),
@@ -801,6 +920,11 @@ def run_control_plane_service(
             if request_path == "/operator/create-reviewed-action-request":
                 try:
                     payload = _read_json_request_body(self)
+                    if getattr(principal, "access_path", "") == "reviewed_reverse_proxy":
+                        self._require_matching_identity(
+                            principal.identity,
+                            _require_json_string(payload, "requester_identity"),
+                        )
                     action_request = service.create_reviewed_action_request_from_advisory(
                         record_family=_require_json_string(payload, "family"),
                         record_id=_require_json_string(payload, "record_id"),
@@ -848,6 +972,108 @@ def run_control_plane_service(
                     )
                     return
                 self._write_json(HTTPStatus.OK, _json_ready(action_request))
+                return
+
+            if request_path == "/admin/bootstrap/claim":
+                try:
+                    payload = _read_json_request_body(self)
+                    admin_identity = _require_json_string(payload, "admin_identity")
+                    if getattr(principal, "access_path", "") == "reviewed_reverse_proxy":
+                        self._require_matching_identity(principal.identity, admin_identity)
+                    service.require_admin_bootstrap_token(
+                        _require_json_string(payload, "bootstrap_token")
+                    )
+                    bootstrap_reason = _require_json_string(payload, "bootstrap_reason")
+                    service_account_name = _require_json_string(
+                        payload,
+                        "service_account_name",
+                    )
+                except RequestTooLargeError as exc:
+                    self._write_json(
+                        HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                        {
+                            "error": "request_too_large",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                except (LookupError, PermissionError, ValueError) as exc:
+                    status = HTTPStatus.FORBIDDEN if isinstance(exc, PermissionError) else HTTPStatus.BAD_REQUEST
+                    self._write_json(
+                        status,
+                        {
+                            "error": "forbidden"
+                            if status == HTTPStatus.FORBIDDEN
+                            else "invalid_request",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                self._write_json(
+                    HTTPStatus.OK,
+                    {
+                        "mode": "admin_bootstrap",
+                        "admin_identity": admin_identity,
+                        "service_account_name": service_account_name,
+                        "bootstrap_reason": bootstrap_reason,
+                        "access_path": getattr(principal, "access_path", "unknown"),
+                        "claimed_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
+                return
+
+            if request_path == "/admin/break-glass/activate":
+                try:
+                    payload = _read_json_request_body(self)
+                    admin_identity = _require_json_string(payload, "admin_identity")
+                    if getattr(principal, "access_path", "") == "reviewed_reverse_proxy":
+                        self._require_matching_identity(principal.identity, admin_identity)
+                    service.require_break_glass_token(
+                        _require_json_string(payload, "break_glass_token")
+                    )
+                    reason = _require_json_string(payload, "reason")
+                    ticket_id = _require_json_string(payload, "ticket_id")
+                    expires_at = _require_json_datetime(payload, "expires_at")
+                    now = datetime.now(timezone.utc)
+                    if expires_at <= now:
+                        raise ValueError("expires_at must be in the future")
+                    if expires_at > now + timedelta(minutes=60):
+                        raise ValueError(
+                            "break-glass expiry must be within the reviewed 60 minute window"
+                        )
+                except RequestTooLargeError as exc:
+                    self._write_json(
+                        HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                        {
+                            "error": "request_too_large",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                except (LookupError, PermissionError, ValueError) as exc:
+                    status = HTTPStatus.FORBIDDEN if isinstance(exc, PermissionError) else HTTPStatus.BAD_REQUEST
+                    self._write_json(
+                        status,
+                        {
+                            "error": "forbidden"
+                            if status == HTTPStatus.FORBIDDEN
+                            else "invalid_request",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                self._write_json(
+                    HTTPStatus.OK,
+                    {
+                        "mode": "break_glass",
+                        "admin_identity": admin_identity,
+                        "reason": reason,
+                        "ticket_id": ticket_id,
+                        "expires_at": expires_at.isoformat(),
+                        "access_path": getattr(principal, "access_path", "unknown"),
+                        "activated_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
                 return
 
             if request_path != "/intake/wazuh":
