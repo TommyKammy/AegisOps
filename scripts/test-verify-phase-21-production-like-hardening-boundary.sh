@@ -32,6 +32,7 @@ required_artifacts=(
   "docs/architecture.md"
   "control-plane/tests/test_phase21_production_like_hardening_boundary_docs.py"
   "control-plane/tests/test_phase21_production_like_hardening_boundary_validation.py"
+  "control-plane/tests/test_phase21_end_to_end_validation.py"
   "scripts/verify-phase-21-production-like-hardening-boundary.sh"
   "scripts/test-verify-phase-21-production-like-hardening-boundary.sh"
   "scripts/test-verify-ci-phase-21-workflow-coverage.sh"

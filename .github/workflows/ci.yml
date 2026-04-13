@@ -145,7 +145,7 @@ jobs:
       - name: Run Phase 21 production-like hardening boundary validation
         run: |
           bash scripts/verify-phase-21-production-like-hardening-boundary.sh
-          python3 -m unittest control-plane.tests.test_phase21_production_like_hardening_boundary_docs control-plane.tests.test_phase21_production_like_hardening_boundary_validation
+          python3 -m unittest control-plane.tests.test_phase21_end_to_end_validation control-plane.tests.test_phase21_production_like_hardening_boundary_docs control-plane.tests.test_phase21_production_like_hardening_boundary_validation
 
       - name: Run Phase 21 workflow coverage guard
         run: bash scripts/test-verify-ci-phase-21-workflow-coverage.sh

@@ -68,6 +68,8 @@ class Phase21ProductionLikeHardeningBoundaryDocsTests(unittest.TestCase):
             "production-like hardening around the completed Phase 20 live path",
             "auth and secrets -> admin bootstrap and break-glass controls -> restore proof -> observability proof -> topology growth gate review -> Entra ID second-source onboarding",
             "GitHub audit -> Entra ID -> Microsoft 365 audit",
+            "control-plane/tests/test_phase21_end_to_end_validation.py",
+            "Phase 21 end-to-end validation test keeps auth fail-closed behavior, restore readability, readiness diagnostics, second-source onboarding, and the completed Phase 20 live path under one focused runtime proof.",
             "Phase 16-21 Epic Roadmap.md",
             "Validation cannot pass until the requested `Phase 16-21 Epic Roadmap.md` comparison is completed from a reviewed local artifact.",
         ):

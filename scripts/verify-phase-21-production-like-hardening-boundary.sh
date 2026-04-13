@@ -21,6 +21,7 @@ phase17_doc="${repo_root}/docs/phase-17-runtime-config-contract-and-boot-command
 architecture_doc="${repo_root}/docs/architecture.md"
 docs_test="${repo_root}/control-plane/tests/test_phase21_production_like_hardening_boundary_docs.py"
 validation_test="${repo_root}/control-plane/tests/test_phase21_production_like_hardening_boundary_validation.py"
+end_to_end_test="${repo_root}/control-plane/tests/test_phase21_end_to_end_validation.py"
 workflow_path="${repo_root}/.github/workflows/ci.yml"
 roadmap_filename="Phase 16-21 Epic Roadmap.md"
 roadmap_relative_path="docs/${roadmap_filename}"
@@ -74,6 +75,7 @@ require_file "${phase17_doc}" "Missing Phase 17 runtime config contract doc"
 require_file "${architecture_doc}" "Missing architecture overview doc"
 require_file "${docs_test}" "Missing Phase 21 docs unittest"
 require_file "${validation_test}" "Missing Phase 21 validation unittest"
+require_file "${end_to_end_test}" "Missing Phase 21 end-to-end validation unittest"
 require_file "${workflow_path}" "Missing CI workflow"
 
 design_required_lines=(
@@ -171,6 +173,7 @@ required_artifacts=(
   "docs/architecture.md"
   "control-plane/tests/test_phase21_production_like_hardening_boundary_docs.py"
   "control-plane/tests/test_phase21_production_like_hardening_boundary_validation.py"
+  "control-plane/tests/test_phase21_end_to_end_validation.py"
   "scripts/verify-phase-21-production-like-hardening-boundary.sh"
   "scripts/test-verify-phase-21-production-like-hardening-boundary.sh"
   "scripts/test-verify-ci-phase-21-workflow-coverage.sh"
@@ -186,15 +189,19 @@ for artifact in "${required_artifacts[@]}"; do
   require_fixed_line "${validation_doc}" "- \`${artifact}\`"
 done
 
-require_fixed_line "${validation_doc}" '- Verification commands: `python3 -m unittest control-plane.tests.test_phase21_production_like_hardening_boundary_docs control-plane.tests.test_phase21_production_like_hardening_boundary_validation`, `bash scripts/verify-phase-21-production-like-hardening-boundary.sh`, `bash scripts/test-verify-phase-21-production-like-hardening-boundary.sh`, `bash scripts/test-verify-ci-phase-21-workflow-coverage.sh`'
+require_fixed_line "${validation_doc}" '- Verification commands: `python3 -m unittest control-plane.tests.test_phase21_end_to_end_validation control-plane.tests.test_phase21_production_like_hardening_boundary_docs control-plane.tests.test_phase21_production_like_hardening_boundary_validation`, `bash scripts/verify-phase-21-production-like-hardening-boundary.sh`, `bash scripts/test-verify-phase-21-production-like-hardening-boundary.sh`, `bash scripts/test-verify-ci-phase-21-workflow-coverage.sh`'
 require_fixed_line "${docs_test}" 'class Phase21ProductionLikeHardeningBoundaryDocsTests(unittest.TestCase):'
 require_fixed_line "${docs_test}" '    def test_phase21_design_doc_exists(self) -> None:'
 require_fixed_line "${docs_test}" '    def test_phase21_design_doc_defines_boundary_sequence_and_non_expansion_rules(self) -> None:'
 require_fixed_line "${validation_test}" 'class Phase21ProductionLikeHardeningBoundaryValidationTests(unittest.TestCase):'
 require_fixed_line "${validation_test}" '    def test_phase21_validation_artifacts_cross_reference_governing_contracts(self) -> None:'
+require_fixed_line "${end_to_end_test}" 'class Phase21EndToEndValidationTests(unittest.TestCase):'
+require_fixed_line "${end_to_end_test}" '    def test_phase21_end_to_end_auth_boundaries_fail_closed_and_emit_observability('
+require_fixed_line "${end_to_end_test}" '    def test_phase21_end_to_end_restore_and_readiness_preserve_phase20_live_path('
+require_fixed_line "${end_to_end_test}" '    def test_phase21_end_to_end_second_source_onboarding_stays_narrow('
 require_fixed_line "${workflow_path}" '      - name: Run Phase 21 production-like hardening boundary validation'
 require_fixed_line "${workflow_path}" '          bash scripts/verify-phase-21-production-like-hardening-boundary.sh'
-require_fixed_line "${workflow_path}" '          python3 -m unittest control-plane.tests.test_phase21_production_like_hardening_boundary_docs control-plane.tests.test_phase21_production_like_hardening_boundary_validation'
+require_fixed_line "${workflow_path}" '          python3 -m unittest control-plane.tests.test_phase21_end_to_end_validation control-plane.tests.test_phase21_production_like_hardening_boundary_docs control-plane.tests.test_phase21_production_like_hardening_boundary_validation'
 require_fixed_line "${workflow_path}" '      - name: Run Phase 21 workflow coverage guard'
 require_fixed_line "${workflow_path}" '        run: bash scripts/test-verify-ci-phase-21-workflow-coverage.sh'
 require_fixed_line "${workflow_path}" '          bash scripts/test-verify-phase-21-production-like-hardening-boundary.sh'
