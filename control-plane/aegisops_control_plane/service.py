@@ -44,6 +44,8 @@ from .models import (
 
 
 RecordT = TypeVar("RecordT", bound=ControlPlaneRecord)
+REVIEWED_LIVE_WAZUH_SOURCE_FAMILIES = frozenset({"github_audit", "entra_id"})
+REVIEWED_PHASE19_LIVE_SLICE_LABEL = "Wazuh-backed GitHub audit and Entra ID live slice"
 
 
 class ControlPlaneStore(Protocol):
@@ -1541,7 +1543,7 @@ class AegisOpsControlPlaneService:
             ).get("source_family"),
             "data.source_family",
         )
-        if source_family != "github_audit":
+        if source_family not in REVIEWED_LIVE_WAZUH_SOURCE_FAMILIES:
             self._emit_structured_event(
                 logging.WARNING,
                 "wazuh_ingest_rejected",
@@ -1550,7 +1552,7 @@ class AegisOpsControlPlaneService:
                 source_family=source_family,
             )
             raise ValueError(
-                "live Wazuh ingest only admits the reviewed github_audit first live source family"
+                "live Wazuh ingest only admits the reviewed github_audit and entra_id live source families"
             )
 
         adapter = WazuhAlertAdapter()
@@ -5520,8 +5522,9 @@ class AegisOpsControlPlaneService:
                 error_message=error_message,
             )
         elif context_snapshot.record_family == "ai_trace":
-            if self._phase19_context_declares_out_of_scope_provenance(
-                context_snapshot.record.get("subject_linkage")
+            subject_linkage = context_snapshot.record.get("subject_linkage")
+            if self._phase19_context_explicitly_declares_provenance(subject_linkage) and (
+                self._phase19_context_declares_out_of_scope_provenance(subject_linkage)
             ):
                 raise ValueError(error_message)
             if not context_snapshot.linked_recommendation_records:
@@ -5537,7 +5540,7 @@ class AegisOpsControlPlaneService:
     def _phase19_case_scoped_read_error(record_family: str, record_id: str) -> str:
         return (
             f"{record_family} {record_id!r} is outside the approved Phase 19 "
-            "Wazuh-backed GitHub audit live slice"
+            f"{REVIEWED_PHASE19_LIVE_SLICE_LABEL}"
         )
 
     def _require_phase19_case_scoped_recommendation_payload(
@@ -5564,8 +5567,9 @@ class AegisOpsControlPlaneService:
             if lead is None or lead.case_id != case_id:
                 raise ValueError(error_message)
 
-        if self._phase19_context_declares_out_of_scope_provenance(
-            payload.get("reviewed_context")
+        reviewed_context = payload.get("reviewed_context")
+        if self._phase19_context_explicitly_declares_provenance(reviewed_context) and (
+            self._phase19_context_declares_out_of_scope_provenance(reviewed_context)
         ):
             raise ValueError(error_message)
 
@@ -5573,7 +5577,7 @@ class AegisOpsControlPlaneService:
         if not self._case_is_in_phase19_operator_slice(case):
             raise ValueError(
                 f"Case {case.case_id!r} is outside the approved Phase 19 "
-                "Wazuh-backed GitHub audit live slice"
+                f"{REVIEWED_PHASE19_LIVE_SLICE_LABEL}"
             )
         return case
 
@@ -5621,7 +5625,7 @@ class AegisOpsControlPlaneService:
             or self._phase19_operator_source_family(
                 reconciliation.subject_linkage.get("reviewed_source_profile")
             )
-        ) == "github_audit"
+        ) in REVIEWED_LIVE_WAZUH_SOURCE_FAMILIES
 
     @staticmethod
     def _phase19_operator_source_family(context: object) -> str | None:
@@ -5651,7 +5655,7 @@ class AegisOpsControlPlaneService:
         source_family = self._phase19_operator_source_family(
             context
         ) or self._phase19_operator_source_family(context.get("reviewed_source_profile"))
-        if source_family is not None and source_family != "github_audit":
+        if source_family not in REVIEWED_LIVE_WAZUH_SOURCE_FAMILIES:
             return True
 
         admission_provenance = _normalize_admission_provenance(
@@ -5665,6 +5669,16 @@ class AegisOpsControlPlaneService:
                 "admission_channel": "live_wazuh_webhook",
             }
         )
+
+    @staticmethod
+    def _phase19_context_explicitly_declares_provenance(context: object) -> bool:
+        if not isinstance(context, Mapping):
+            return context is not None
+        if "source_family" in context or "source" in context:
+            return True
+        if "reviewed_source_profile" in context:
+            return True
+        return "provenance" in context or "admission_provenance" in context
 
     def _normalize_linked_record_ids(
         self,
