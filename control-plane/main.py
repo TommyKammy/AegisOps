@@ -116,6 +116,22 @@ def _read_json_request_body(handler: BaseHTTPRequestHandler) -> dict[str, object
     return payload
 
 
+def _read_json_file(path: str) -> dict[str, object]:
+    normalized_path = path.strip()
+    if not normalized_path:
+        raise ValueError("input path must be a non-empty string")
+    try:
+        with open(normalized_path, encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except OSError as exc:
+        raise ValueError(f"input path must point to a readable JSON file: {normalized_path!r}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"input path must contain valid JSON: {exc.msg}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("input path must contain a JSON object")
+    return payload
+
+
 def _peer_addr_is_loopback(peer_addr: str | None) -> bool:
     if peer_addr is None or peer_addr.strip() == "":
         return False
@@ -162,6 +178,31 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser(
         "inspect-reconciliation-status",
         help="Render a read-only reconciliation status summary.",
+    )
+    subparsers.add_parser(
+        "startup-status",
+        help="Render the reviewed production-like startup readiness summary.",
+    )
+    subparsers.add_parser(
+        "shutdown-status",
+        help="Render the reviewed controlled shutdown readiness summary.",
+    )
+    subparsers.add_parser(
+        "backup-authoritative-record-chain",
+        help="Render the reviewed authoritative backup payload for the control-plane record chain.",
+    )
+    restore_backup = subparsers.add_parser(
+        "restore-authoritative-record-chain",
+        help="Restore the reviewed authoritative backup payload into an empty control-plane store.",
+    )
+    restore_backup.add_argument(
+        "--input",
+        required=True,
+        help="Path to the reviewed authoritative backup JSON payload.",
+    )
+    subparsers.add_parser(
+        "run-authoritative-restore-drill",
+        help="Reread the restored authoritative record chain through reviewed service inspections.",
     )
     subparsers.add_parser(
         "inspect-analyst-queue",
@@ -1424,6 +1465,27 @@ def main(
                 parser.error(str(exc))
         elif command == "inspect-reconciliation-status":
             payload = service.inspect_reconciliation_status().to_dict()
+        elif command == "startup-status":
+            payload = service.describe_startup_status().to_dict()
+        elif command == "shutdown-status":
+            payload = service.describe_shutdown_status().to_dict()
+        elif command == "backup-authoritative-record-chain":
+            try:
+                payload = service.export_authoritative_record_chain_backup()
+            except ValueError as exc:
+                parser.error(str(exc))
+        elif command == "restore-authoritative-record-chain":
+            try:
+                payload = service.restore_authoritative_record_chain_backup(
+                    _read_json_file(parsed.input)
+                ).to_dict()
+            except (LookupError, ValueError) as exc:
+                parser.error(str(exc))
+        elif command == "run-authoritative-restore-drill":
+            try:
+                payload = service.run_authoritative_restore_drill().to_dict()
+            except (LookupError, ValueError) as exc:
+                parser.error(str(exc))
         elif command == "inspect-analyst-queue":
             payload = service.inspect_analyst_queue().to_dict()
         elif command == "inspect-alert-detail":
