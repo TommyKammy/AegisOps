@@ -8,6 +8,7 @@ import hashlib
 import hmac
 import ipaddress
 import json
+import logging
 import re
 import uuid
 from typing import Mapping, Protocol, Type, TypeVar
@@ -413,6 +414,30 @@ class RestoreSummarySnapshot:
                 "read_only": self.read_only,
                 "restored_record_counts": self.restored_record_counts,
                 "restore_drill": self.restore_drill.to_dict(),
+            }
+        )
+
+
+@dataclass(frozen=True)
+class ReadinessDiagnosticsSnapshot:
+    read_only: bool
+    booted: bool
+    status: str
+    startup: dict[str, object]
+    shutdown: dict[str, object]
+    metrics: dict[str, object]
+    latest_reconciliation: dict[str, object] | None
+
+    def to_dict(self) -> dict[str, object]:
+        return _json_ready(
+            {
+                "read_only": self.read_only,
+                "booted": self.booted,
+                "status": self.status,
+                "startup": self.startup,
+                "shutdown": self.shutdown,
+                "metrics": self.metrics,
+                "latest_reconciliation": self.latest_reconciliation,
             }
         )
 
@@ -1126,6 +1151,7 @@ class AegisOpsControlPlaneService:
         self._isolated_executor = IsolatedExecutorAdapter(
             config.isolated_executor_base_url
         )
+        self._logger = logging.getLogger("aegisops.control_plane")
 
     def describe_runtime(self) -> RuntimeSnapshot:
         return RuntimeSnapshot(
@@ -1150,6 +1176,20 @@ class AegisOpsControlPlaneService:
 
     def persist_record(self, record: RecordT) -> RecordT:
         return self._store.save(record)
+
+    def _emit_structured_event(
+        self,
+        level: int,
+        event: str,
+        **fields: object,
+    ) -> None:
+        payload = {
+            "event": event,
+            "service_name": "aegisops-control-plane",
+            "occurred_at": datetime.now(timezone.utc).isoformat(),
+            **_json_ready(fields),
+        }
+        self._logger.log(level, json.dumps(payload, sort_keys=True, separators=(",", ":")))
 
     def get_record(self, record_type: Type[RecordT], record_id: str) -> RecordT | None:
         return self._store.get(record_type, record_id)
@@ -1316,11 +1356,23 @@ class AegisOpsControlPlaneService:
         self.validate_wazuh_ingest_runtime()
 
         if not self._is_trusted_wazuh_ingest_peer(peer_addr):
+            self._emit_structured_event(
+                logging.WARNING,
+                "wazuh_ingest_rejected",
+                reason="untrusted_peer",
+                peer_addr=peer_addr,
+            )
             raise PermissionError(
                 "live Wazuh ingest rejects requests that bypass the reviewed reverse proxy peer boundary"
             )
 
         if (forwarded_proto or "").strip().lower() != "https":
+            self._emit_structured_event(
+                logging.WARNING,
+                "wazuh_ingest_rejected",
+                reason="forwarded_proto_not_https",
+                peer_addr=peer_addr,
+            )
             raise PermissionError(
                 "live Wazuh ingest requires the reviewed reverse proxy HTTPS boundary"
             )
@@ -1328,12 +1380,24 @@ class AegisOpsControlPlaneService:
             (reverse_proxy_secret_header or "").strip(),
             self._config.wazuh_ingest_reverse_proxy_secret,
         ):
+            self._emit_structured_event(
+                logging.WARNING,
+                "wazuh_ingest_rejected",
+                reason="reverse_proxy_secret_mismatch",
+                peer_addr=peer_addr,
+            )
             raise PermissionError(
                 "live Wazuh ingest requires the reviewed reverse proxy boundary credential"
             )
 
         scheme, separator, supplied_secret = (authorization_header or "").partition(" ")
         if separator == "" or scheme != "Bearer" or supplied_secret.strip() == "":
+            self._emit_structured_event(
+                logging.WARNING,
+                "wazuh_ingest_rejected",
+                reason="missing_bearer_secret",
+                peer_addr=peer_addr,
+            )
             raise PermissionError(
                 "live Wazuh ingest requires Authorization: Bearer <shared secret>"
             )
@@ -1341,6 +1405,12 @@ class AegisOpsControlPlaneService:
             supplied_secret.strip(),
             self._config.wazuh_ingest_shared_secret,
         ):
+            self._emit_structured_event(
+                logging.WARNING,
+                "wazuh_ingest_rejected",
+                reason="bearer_secret_mismatch",
+                peer_addr=peer_addr,
+            )
             raise PermissionError(
                 "live Wazuh ingest bearer credential did not match the reviewed shared secret"
             )
@@ -1356,6 +1426,13 @@ class AegisOpsControlPlaneService:
             "data.source_family",
         )
         if source_family != "github_audit":
+            self._emit_structured_event(
+                logging.WARNING,
+                "wazuh_ingest_rejected",
+                reason="unsupported_source_family",
+                peer_addr=peer_addr,
+                source_family=source_family,
+            )
             raise ValueError(
                 "live Wazuh ingest only admits the reviewed github_audit first live source family"
             )
@@ -1366,7 +1443,18 @@ class AegisOpsControlPlaneService:
             admission_kind="live",
             admission_channel="live_wazuh_webhook",
         )
-        return self.ingest_native_detection_record(adapter, native_record)
+        ingest_result = self.ingest_native_detection_record(adapter, native_record)
+        self._emit_structured_event(
+            logging.INFO,
+            "wazuh_ingest_admitted",
+            peer_addr=peer_addr,
+            source_family=source_family,
+            disposition=ingest_result.disposition,
+            alert_id=ingest_result.alert.alert_id,
+            finding_id=ingest_result.alert.finding_id,
+            reconciliation_id=ingest_result.reconciliation.reconciliation_id,
+        )
+        return ingest_result
 
     def _wazuh_ingest_listener_is_loopback(self) -> bool:
         host = self._config.host.strip()
@@ -1482,7 +1570,7 @@ class AegisOpsControlPlaneService:
             if receipt.base_url.strip() and receipt.base_url != "<set-me>":
                 provenance["adapter_base_url"] = receipt.base_url
 
-            return self.persist_record(
+            execution = self.persist_record(
                 ActionExecutionRecord(
                     action_execution_id=self._next_identifier("action-execution"),
                     action_request_id=action_request.action_request_id,
@@ -1501,6 +1589,18 @@ class AegisOpsControlPlaneService:
                     lifecycle_state="queued",
                 )
             )
+            self._emit_structured_event(
+                logging.INFO,
+                "action_execution_delegated",
+                action_execution_id=execution.action_execution_id,
+                action_request_id=execution.action_request_id,
+                approval_decision_id=execution.approval_decision_id,
+                execution_surface_type=execution.execution_surface_type,
+                execution_surface_id=execution.execution_surface_id,
+                execution_run_id=execution.execution_run_id,
+                lifecycle_state=execution.lifecycle_state,
+            )
+            return execution
 
     def delegate_approved_action_to_isolated_executor(
         self,
@@ -1777,6 +1877,139 @@ class AegisOpsControlPlaneService:
             active_action_request_ids=active_action_request_ids,
             active_action_execution_ids=active_action_execution_ids,
             unresolved_reconciliation_ids=unresolved_reconciliation_ids,
+        )
+
+    def inspect_readiness_diagnostics(self) -> ReadinessDiagnosticsSnapshot:
+        startup = self.describe_startup_status()
+        shutdown = self.describe_shutdown_status()
+        alerts = self._store.list(AlertRecord)
+        cases = self._store.list(CaseRecord)
+        action_requests = self._store.list(ActionRequestRecord)
+        action_executions = self._store.list(ActionExecutionRecord)
+        reconciliations = self._store.list(ReconciliationRecord)
+
+        latest_reconciliation = max(
+            reconciliations,
+            key=lambda record: record.compared_at,
+            default=None,
+        )
+        reconciliation_states = Counter(
+            record.lifecycle_state for record in reconciliations
+        )
+        action_request_states = Counter(
+            record.lifecycle_state for record in action_requests
+        )
+        action_execution_states = Counter(
+            record.lifecycle_state for record in action_executions
+        )
+        alert_states = Counter(record.lifecycle_state for record in alerts)
+        open_case_states = {
+            "open",
+            "investigating",
+            "pending_action",
+            "contained_pending_validation",
+            "reopened",
+        }
+        phase20_action_requests = tuple(
+            record
+            for record in action_requests
+            if record.requested_payload.get("action_type") == "notify_identity_owner"
+        )
+        phase20_request_ids = {
+            record.action_request_id for record in phase20_action_requests
+        }
+        phase20_executions = tuple(
+            record
+            for record in action_executions
+            if record.action_request_id in phase20_request_ids
+        )
+        phase20_execution_ids = {
+            record.execution_run_id for record in phase20_executions
+        }
+        phase20_reconciliations = tuple(
+            record
+            for record in reconciliations
+            if record.execution_run_id in phase20_execution_ids
+        )
+
+        if not startup.startup_ready:
+            status = "failing_closed"
+        elif reconciliation_states.get("stale", 0):
+            status = "stale"
+        elif reconciliation_states.get("mismatched", 0):
+            status = "degraded"
+        else:
+            status = "ready"
+
+        metrics = {
+            "alerts": {
+                "total": len(alerts),
+                "by_lifecycle_state": dict(sorted(alert_states.items())),
+            },
+            "cases": {
+                "total": len(cases),
+                "open": sum(
+                    1 for record in cases if record.lifecycle_state in open_case_states
+                ),
+            },
+            "action_requests": {
+                "total": len(action_requests),
+                "pending_approval": action_request_states.get("pending_approval", 0),
+                "approved": action_request_states.get("approved", 0),
+                "executing": action_request_states.get("executing", 0),
+                "unresolved": action_request_states.get("unresolved", 0),
+            },
+            "action_executions": {
+                "total": len(action_executions),
+                "queued": action_execution_states.get("queued", 0),
+                "running": action_execution_states.get("running", 0),
+                "terminal": sum(
+                    count
+                    for state, count in action_execution_states.items()
+                    if state not in {"queued", "running"}
+                ),
+            },
+            "reconciliations": {
+                "total": len(reconciliations),
+                "matched": reconciliation_states.get("matched", 0),
+                "pending": reconciliation_states.get("pending", 0),
+                "mismatched": reconciliation_states.get("mismatched", 0),
+                "stale": reconciliation_states.get("stale", 0),
+                "by_ingest_disposition": dict(
+                    sorted(
+                        Counter(
+                            record.ingest_disposition for record in reconciliations
+                        ).items()
+                    )
+                ),
+            },
+            "phase20_notify_identity_owner": {
+                "requested_action_requests": len(phase20_action_requests),
+                "approved_action_requests": sum(
+                    1
+                    for record in phase20_action_requests
+                    if record.lifecycle_state == "approved"
+                ),
+                "reconciled_executions": sum(
+                    1
+                    for record in phase20_reconciliations
+                    if record.lifecycle_state == "matched"
+                ),
+            },
+        }
+
+        return ReadinessDiagnosticsSnapshot(
+            read_only=True,
+            booted=True,
+            status=status,
+            startup=startup.to_dict(),
+            shutdown=shutdown.to_dict(),
+            metrics=metrics,
+            latest_reconciliation=(
+                _record_to_dict(latest_reconciliation)
+                if latest_reconciliation is not None
+                else None
+            ),
         )
 
     def export_authoritative_record_chain_backup(self) -> dict[str, object]:
@@ -2900,6 +3133,14 @@ class AegisOpsControlPlaneService:
             )
             for existing in self._store.list(ActionRequestRecord):
                 if existing.idempotency_key == idempotency_key:
+                    self._emit_structured_event(
+                        logging.INFO,
+                        "action_request_reused",
+                        action_request_id=existing.action_request_id,
+                        action_type=existing.requested_payload.get("action_type"),
+                        lifecycle_state=existing.lifecycle_state,
+                        case_id=existing.case_id,
+                    )
                     return existing
 
             normalized_action_request_id = self._resolve_new_record_identifier(
@@ -2908,7 +3149,7 @@ class AegisOpsControlPlaneService:
                 "action_request_id",
                 "action-request",
             )
-            return self.persist_record(
+            created_request = self.persist_record(
                 ActionRequestRecord(
                     action_request_id=normalized_action_request_id,
                     approval_decision_id=None,
@@ -2940,6 +3181,20 @@ class AegisOpsControlPlaneService:
                     },
                 )
             )
+            self._emit_structured_event(
+                logging.INFO,
+                "action_request_created",
+                action_request_id=created_request.action_request_id,
+                action_type=created_request.requested_payload.get("action_type"),
+                requester_identity=created_request.requester_identity,
+                case_id=created_request.case_id,
+                alert_id=created_request.alert_id,
+                lifecycle_state=created_request.lifecycle_state,
+                expires_at=created_request.expires_at.isoformat()
+                if created_request.expires_at is not None
+                else None,
+            )
+            return created_request
 
     def attach_assistant_advisory_draft(
         self,
@@ -4355,7 +4610,7 @@ class AegisOpsControlPlaneService:
                     )
                 )
 
-        return self.persist_record(
+        reconciliation = self.persist_record(
             ReconciliationRecord(
                 reconciliation_id=self._next_identifier("reconciliation"),
                 subject_linkage=subject_linkage,
@@ -4378,6 +4633,18 @@ class AegisOpsControlPlaneService:
                 lifecycle_state=lifecycle_state,
             )
         )
+        self._emit_structured_event(
+            logging.INFO,
+            "action_execution_reconciled",
+            reconciliation_id=reconciliation.reconciliation_id,
+            action_request_id=action_request.action_request_id,
+            execution_surface_type=execution_surface_type,
+            execution_surface_id=execution_surface_id,
+            ingest_disposition=reconciliation.ingest_disposition,
+            lifecycle_state=reconciliation.lifecycle_state,
+            execution_run_id=reconciliation.execution_run_id,
+        )
+        return reconciliation
 
     def _build_action_execution_reconciliation_key(
         self,

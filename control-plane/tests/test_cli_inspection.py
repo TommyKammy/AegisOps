@@ -361,7 +361,8 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             review_owner="analyst-001",
             intended_outcome="Review repository owner change evidence before any approval-bound response.",
         )
-        expires_at = datetime.now(timezone.utc) + timedelta(hours=4)
+        base_now = datetime.now(timezone.utc)
+        expires_at = base_now + timedelta(hours=4)
         action_request = service.create_reviewed_action_request_from_advisory(
             record_family="recommendation",
             record_id=recommendation.recommendation_id,
@@ -378,7 +379,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 approver_identities=("approver-001",),
                 target_snapshot=dict(action_request.target_scope),
                 payload_hash=action_request.payload_hash,
-                decided_at=reviewed_at + timedelta(minutes=5),
+                decided_at=base_now + timedelta(minutes=5),
                 lifecycle_state="approved",
                 approved_expires_at=action_request.expires_at,
             )
@@ -588,6 +589,272 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 if servers:
                     servers[0].shutdown()
                 thread.join(timeout=2)
+
+    def test_long_running_runtime_surface_exposes_operator_readiness_diagnostics_http_view(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+            ),
+            store=store,
+        )
+        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
+        admitted = service.ingest_wazuh_alert(
+            raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
+            authorization_header="Bearer reviewed-shared-secret",  # noqa: S106 - test fixture secret
+            forwarded_proto="https",
+            reverse_proxy_secret_header="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+            peer_addr="127.0.0.1",
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        evidence_id = promoted_case.evidence_ids[0]
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before any approval-bound response.",
+        )
+        base_now = datetime.now(timezone.utc)
+        expires_at = base_now + timedelta(hours=4)
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
+            expires_at=expires_at,
+        )
+        approval_decision = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-http-readiness-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=base_now + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        approved_request = service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval_decision.approval_decision_id,
+                lifecycle_state="approved",
+            )
+        )
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id=approved_request.action_request_id,
+            approved_payload=dict(approved_request.requested_payload),
+            delegated_at=base_now + timedelta(minutes=10),
+            delegation_issuer="control-plane-service",
+            evidence_ids=(evidence_id,),
+        )
+        reconciliation = service.reconcile_action_execution(
+            action_request_id=approved_request.action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(
+                {
+                    "execution_run_id": execution.execution_run_id,
+                    "execution_surface_id": "shuffle",
+                    "idempotency_key": approved_request.idempotency_key,
+                    "approval_decision_id": execution.approval_decision_id,
+                    "delegation_id": execution.delegation_id,
+                    "payload_hash": execution.payload_hash,
+                    "observed_at": base_now + timedelta(minutes=15),
+                    "status": "success",
+                },
+            ),
+            compared_at=base_now + timedelta(minutes=16),
+            stale_after=base_now + timedelta(hours=1),
+        )
+
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_ANALYST_PRINCIPAL,
+        ):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+
+                base_url = f"http://127.0.0.1:{servers[0].server_port}"
+                diagnostics_payload = json.loads(
+                    request.urlopen(
+                        f"{base_url}/diagnostics/readiness",
+                        timeout=2,
+                    ).read().decode("utf-8")
+                )
+
+                self.assertTrue(diagnostics_payload["read_only"])
+                self.assertEqual(diagnostics_payload["status"], "ready")
+                self.assertTrue(diagnostics_payload["booted"])
+                self.assertTrue(diagnostics_payload["startup"]["startup_ready"])
+                self.assertFalse(diagnostics_payload["shutdown"]["shutdown_ready"])
+                self.assertEqual(
+                    diagnostics_payload["metrics"]["action_requests"]["approved"],
+                    1,
+                )
+                self.assertEqual(
+                    diagnostics_payload["metrics"]["action_executions"]["terminal"],
+                    1,
+                )
+                self.assertEqual(
+                    diagnostics_payload["metrics"]["reconciliations"]["matched"],
+                    2,
+                )
+                self.assertEqual(
+                    diagnostics_payload["metrics"]["phase20_notify_identity_owner"]["approved_action_requests"],
+                    1,
+                )
+                self.assertEqual(
+                    diagnostics_payload["metrics"]["phase20_notify_identity_owner"]["reconciled_executions"],
+                    1,
+                )
+                self.assertEqual(
+                    diagnostics_payload["latest_reconciliation"]["reconciliation_id"],
+                    reconciliation.reconciliation_id,
+                )
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(timeout=2)
+
+    def test_service_emits_structured_observability_logs_for_live_path_and_fail_closed_rejection(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before any approval-bound response.",
+        )
+        base_now = datetime.now(timezone.utc)
+        expires_at = base_now + timedelta(hours=4)
+
+        with self.assertLogs("aegisops.control_plane", level="INFO") as log_output:
+            service.ingest_wazuh_alert(
+                raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
+                authorization_header="Bearer reviewed-shared-secret",
+                forwarded_proto="https",
+                reverse_proxy_secret_header="reviewed-proxy-secret",
+                peer_addr="127.0.0.1",
+            )
+            action_request = service.create_reviewed_action_request_from_advisory(
+                record_family="recommendation",
+                record_id=recommendation.recommendation_id,
+                requester_identity="analyst-001",
+                recipient_identity="repo-owner-001",
+                message_intent="Notify the accountable repository owner about the reviewed permission change.",
+                escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
+                expires_at=expires_at,
+            )
+            approval_decision = service.persist_record(
+                ApprovalDecisionRecord(
+                    approval_decision_id="approval-observability-log-001",
+                    action_request_id=action_request.action_request_id,
+                    approver_identities=("approver-001",),
+                    target_snapshot=dict(action_request.target_scope),
+                    payload_hash=action_request.payload_hash,
+                    decided_at=base_now + timedelta(minutes=5),
+                    lifecycle_state="approved",
+                    approved_expires_at=action_request.expires_at,
+                )
+            )
+            approved_request = service.persist_record(
+                replace(
+                    action_request,
+                    approval_decision_id=approval_decision.approval_decision_id,
+                    lifecycle_state="approved",
+                )
+            )
+            execution = service.delegate_approved_action_to_shuffle(
+                action_request_id=approved_request.action_request_id,
+                approved_payload=dict(approved_request.requested_payload),
+                delegated_at=base_now + timedelta(minutes=10),
+                delegation_issuer="control-plane-service",
+                evidence_ids=(evidence_id,),
+            )
+            service.reconcile_action_execution(
+                action_request_id=approved_request.action_request_id,
+                execution_surface_type="automation_substrate",
+                execution_surface_id="shuffle",
+                observed_executions=(
+                    {
+                        "execution_run_id": execution.execution_run_id,
+                        "execution_surface_id": "shuffle",
+                        "idempotency_key": approved_request.idempotency_key,
+                        "approval_decision_id": execution.approval_decision_id,
+                        "delegation_id": execution.delegation_id,
+                        "payload_hash": execution.payload_hash,
+                        "observed_at": base_now + timedelta(minutes=15),
+                        "status": "success",
+                    },
+                ),
+                compared_at=base_now + timedelta(minutes=16),
+                stale_after=base_now + timedelta(hours=1),
+            )
+
+        structured_events = [
+            json.loads(entry.split(":", 2)[2]) for entry in log_output.output
+        ]
+        self.assertEqual(
+            [event["event"] for event in structured_events],
+            [
+                "wazuh_ingest_admitted",
+                "action_request_created",
+                "action_execution_delegated",
+                "action_execution_reconciled",
+            ],
+        )
+        self.assertEqual(structured_events[0]["disposition"], "deduplicated")
+        self.assertEqual(
+            structured_events[1]["action_type"],
+            "notify_identity_owner",
+        )
+        self.assertEqual(structured_events[2]["execution_surface_id"], "shuffle")
+        self.assertEqual(structured_events[3]["lifecycle_state"], "matched")
+
+        with self.assertLogs("aegisops.control_plane", level="WARNING") as rejected_logs:
+            with self.assertRaisesRegex(
+                PermissionError,
+                "reviewed reverse proxy boundary credential",
+            ):
+                service.ingest_wazuh_alert(
+                    raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
+                    authorization_header="Bearer reviewed-shared-secret",
+                    forwarded_proto="https",
+                    reverse_proxy_secret_header="invalid-secret",
+                    peer_addr="127.0.0.1",
+                )
+
+        rejection_event = json.loads(rejected_logs.output[0].split(":", 2)[2])
+        self.assertEqual(rejection_event["event"], "wazuh_ingest_rejected")
+        self.assertEqual(rejection_event["reason"], "reverse_proxy_secret_mismatch")
 
     def test_long_running_runtime_surface_exposes_analyst_queue_alert_detail_and_case_detail_http_views(
         self,

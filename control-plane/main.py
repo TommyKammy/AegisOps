@@ -449,6 +449,20 @@ def run_control_plane_service(
                 self._write_json(HTTPStatus.OK, service.describe_runtime().to_dict())
                 return
 
+            if request_path == "/diagnostics/readiness":
+                try:
+                    self._require_authenticated_surface_access(
+                        allowed_roles=("analyst", "approver", "platform_admin"),
+                    )
+                except PermissionError as exc:
+                    self._write_forbidden(str(exc))
+                    return
+                self._write_json(
+                    HTTPStatus.OK,
+                    service.inspect_readiness_diagnostics().to_dict(),
+                )
+                return
+
             if request_path == "/admin/bootstrap-status":
                 try:
                     self._require_authenticated_surface_access(
