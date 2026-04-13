@@ -94,6 +94,14 @@ class FindingAlertIngestResult:
 
 
 @dataclass(frozen=True)
+class AuthenticatedRuntimePrincipal:
+    identity: str
+    role: str
+    access_path: str
+    proxy_service_account: str | None = None
+
+
+@dataclass(frozen=True)
 class RecordInspectionSnapshot:
     read_only: bool
     record_family: str
@@ -995,6 +1003,126 @@ class AegisOpsControlPlaneService:
                 "before starting the live Wazuh ingest runtime"
             )
 
+    def validate_protected_surface_runtime(self) -> None:
+        for cidr in self._config.protected_surface_trusted_proxy_cidrs:
+            try:
+                ipaddress.ip_network(cidr, strict=False)
+            except ValueError as exc:
+                raise ValueError(
+                    "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_TRUSTED_PROXY_CIDRS must contain "
+                    f"only valid IP networks, got: {cidr!r}"
+                ) from exc
+        if (
+            not self._wazuh_ingest_listener_is_loopback()
+            and not self._config.protected_surface_trusted_proxy_cidrs
+        ):
+            raise ValueError(
+                "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_TRUSTED_PROXY_CIDRS must be set "
+                "before starting protected control-plane surfaces on a non-loopback interface"
+            )
+        if self._config.protected_surface_trusted_proxy_cidrs:
+            if self._config.protected_surface_reverse_proxy_secret.strip() == "":
+                raise ValueError(
+                    "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVERSE_PROXY_SECRET must be set "
+                    "before admitting reviewed reverse-proxy traffic to protected control-plane surfaces"
+                )
+            if self._config.protected_surface_proxy_service_account.strip() == "":
+                raise ValueError(
+                    "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_PROXY_SERVICE_ACCOUNT must be set "
+                    "before admitting reviewed reverse-proxy traffic to protected control-plane surfaces"
+                )
+
+    def authenticate_protected_surface_request(
+        self,
+        *,
+        peer_addr: str | None,
+        forwarded_proto: str | None,
+        reverse_proxy_secret_header: str | None,
+        proxy_service_account_header: str | None,
+        authenticated_identity_header: str | None,
+        authenticated_role_header: str | None,
+        allowed_roles: tuple[str, ...],
+    ) -> AuthenticatedRuntimePrincipal:
+        self.validate_protected_surface_runtime()
+
+        if self._peer_addr_is_loopback(peer_addr):
+            return AuthenticatedRuntimePrincipal(
+                identity="loopback-local-operator",
+                role="loopback_local",
+                access_path="loopback_direct",
+            )
+
+        if not self._is_trusted_protected_surface_peer(peer_addr):
+            raise PermissionError(
+                "protected control-plane surfaces reject requests that bypass the reviewed reverse proxy peer boundary"
+            )
+        if (forwarded_proto or "").strip().lower() != "https":
+            raise PermissionError(
+                "protected control-plane surfaces require the reviewed reverse proxy HTTPS boundary"
+            )
+        if not hmac.compare_digest(
+            (reverse_proxy_secret_header or "").strip(),
+            self._config.protected_surface_reverse_proxy_secret,
+        ):
+            raise PermissionError(
+                "protected control-plane surfaces require the reviewed reverse proxy boundary credential"
+            )
+        supplied_proxy_service_account = (proxy_service_account_header or "").strip()
+        if not hmac.compare_digest(
+            supplied_proxy_service_account,
+            self._config.protected_surface_proxy_service_account,
+        ):
+            raise PermissionError(
+                "protected control-plane surfaces require the reviewed reverse proxy service account identity"
+            )
+
+        identity = (authenticated_identity_header or "").strip()
+        if identity == "":
+            raise PermissionError(
+                "protected control-plane surfaces require an attributed authenticated identity header"
+            )
+        role = (
+            (authenticated_role_header or "")
+            .strip()
+            .lower()
+            .replace("-", "_")
+            .replace(" ", "_")
+        )
+        if role == "":
+            raise PermissionError(
+                "protected control-plane surfaces require an attributed authenticated role header"
+            )
+        if role not in allowed_roles:
+            joined_roles = ", ".join(sorted(allowed_roles))
+            raise PermissionError(
+                "protected control-plane surface role is not authorized for this endpoint; "
+                f"expected one of: {joined_roles}"
+            )
+        return AuthenticatedRuntimePrincipal(
+            identity=identity,
+            role=role,
+            access_path="reviewed_reverse_proxy",
+            proxy_service_account=supplied_proxy_service_account,
+        )
+
+    def require_admin_bootstrap_token(self, supplied_token: str | None) -> None:
+        expected_token = self._config.admin_bootstrap_token.strip()
+        if expected_token == "":
+            raise PermissionError(
+                "admin bootstrap contract is disabled until AEGISOPS_CONTROL_PLANE_ADMIN_BOOTSTRAP_TOKEN is bound"
+            )
+        if not hmac.compare_digest((supplied_token or "").strip(), expected_token):
+            raise PermissionError("admin bootstrap token did not match the reviewed secret")
+
+    def require_break_glass_token(self, supplied_token: str | None) -> None:
+        expected_token = self._config.break_glass_token.strip()
+        if expected_token == "":
+            raise PermissionError(
+                "break-glass contract is disabled until AEGISOPS_CONTROL_PLANE_BREAK_GLASS_TOKEN is bound"
+            )
+        if not hmac.compare_digest((supplied_token or "").strip(), expected_token):
+            raise PermissionError("break-glass token did not match the reviewed secret")
+
     def ingest_wazuh_alert(
         self,
         *,
@@ -1081,6 +1209,29 @@ class AegisOpsControlPlaneService:
             if peer_ip in ipaddress.ip_network(cidr, strict=False):
                 return True
         return False
+
+    def _is_trusted_protected_surface_peer(self, peer_addr: str | None) -> bool:
+        if peer_addr is None or peer_addr.strip() == "":
+            return False
+        try:
+            peer_ip = ipaddress.ip_address(peer_addr)
+        except ValueError:
+            return False
+        if self._wazuh_ingest_listener_is_loopback():
+            return peer_ip.is_loopback
+        for cidr in self._config.protected_surface_trusted_proxy_cidrs:
+            if peer_ip in ipaddress.ip_network(cidr, strict=False):
+                return True
+        return False
+
+    @staticmethod
+    def _peer_addr_is_loopback(peer_addr: str | None) -> bool:
+        if peer_addr is None or peer_addr.strip() == "":
+            return False
+        try:
+            return ipaddress.ip_address(peer_addr.strip()).is_loopback
+        except ValueError:
+            return False
 
     def delegate_approved_action_to_shuffle(
         self,

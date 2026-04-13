@@ -31,4 +31,11 @@ Current persistence status:
 - The runtime snapshot now reports `persistence_mode="postgresql"` so the reviewed control-plane runtime makes its authoritative store explicit.
 - Live read/write access still depends on PostgreSQL client tooling in the runtime environment, but the control-plane adapter no longer models the reviewed authority path as process-local in-memory state.
 
+Phase 21 runtime hardening adds these reviewed contracts to the local service boundary:
+
+- PostgreSQL DSNs, Wazuh ingress secrets, protected-surface proxy secrets, admin bootstrap tokens, and break-glass tokens may be loaded from explicit `*_FILE` bindings so runtime secrets can come from mounted secret files instead of tracked worktree env values.
+- Operator-facing read and write routes now accept either direct loopback access for local reviewed testing or reviewed reverse-proxy access with `X-Forwarded-Proto: https`, `X-AegisOps-Proxy-Secret`, `X-AegisOps-Proxy-Service-Account`, `X-AegisOps-Authenticated-Identity`, and `X-AegisOps-Authenticated-Role`.
+- Administrative runtime routes live under `/admin/` and require the protected-surface contract plus an explicit bootstrap or break-glass token in the request body.
+- The break-glass contract is time-bounded: `/admin/break-glass/activate` rejects expiry windows longer than 60 minutes and requires a ticket identifier and reason.
+
 This scaffold is intentionally minimal. It does not introduce real credentials, production deployment, analyst UI, or live detector execution.
