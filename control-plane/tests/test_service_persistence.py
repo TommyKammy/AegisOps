@@ -8237,7 +8237,13 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         restored_store, restored_backend = make_store()
         restored_service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            RuntimeConfig(
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+            ),
             store=restored_store,
         )
         statement_count_before_restore = len(restored_backend.statements)
@@ -8320,7 +8326,13 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         restored_store, _ = make_store()
         restored_service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            RuntimeConfig(
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+            ),
             store=restored_store,
         )
 
@@ -8342,6 +8354,36 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         restored_case_detail = restored_service.inspect_case_detail(promoted_case.case_id)
         self.assertEqual(restored_case_detail.linked_evidence_ids, (evidence_id,))
+
+    def test_service_phase21_restore_drill_fails_closed_when_runtime_bindings_missing_after_restore(
+        self,
+    ) -> None:
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        restore_summary = restored_service.restore_authoritative_record_chain_backup(
+            backup
+        )
+        readiness = restored_service.inspect_readiness_diagnostics()
+
+        self.assertFalse(restore_summary.restore_drill.drill_passed)
+        self.assertEqual(readiness.status, "failing_closed")
+        self.assertIn(
+            "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET",
+            readiness.startup["missing_bindings"],
+        )
+        self.assertIn(
+            "AEGISOPS_CONTROL_PLANE_ADMIN_BOOTSTRAP_TOKEN",
+            readiness.startup["missing_bindings"],
+        )
 
     def test_service_phase21_backup_uses_single_transaction_snapshot(self) -> None:
         base_store, backend = make_store()
