@@ -8104,7 +8104,17 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(first_request.requester_identity, "analyst-001")
         self.assertEqual(second_request.requester_identity, "analyst-002")
         self.assertNotEqual(second_request.idempotency_key, first_request.idempotency_key)
-        self.assertEqual(store.list(ActionRequestRecord), (first_request, second_request))
+        persisted_by_requester = {
+            record.requester_identity: record
+            for record in store.list(ActionRequestRecord)
+        }
+        self.assertEqual(
+            persisted_by_requester,
+            {
+                "analyst-001": first_request,
+                "analyst-002": second_request,
+            },
+        )
 
     def test_service_rechecks_reviewed_action_request_context_inside_transaction(
         self,
