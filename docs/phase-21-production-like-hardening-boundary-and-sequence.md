@@ -81,6 +81,8 @@ Phase 21 does not approve broad SIEM replacement analytics, broad metrics-platfo
 
 Phase 21 does not itself approve topology growth. It defines the conditions that must be met before the reviewed single-node boundary may expand.
 
+Phase 21 therefore defines the reviewed conditions that must be met before AegisOps grows from the current one-node operating shape toward two-node or broader deployment patterns.
+
 Topology growth remains blocked unless the reviewed Phase 21 hardening work proves all of the following:
 
 - auth and service-account boundaries remain attributable and least-privileged after the topology change;
@@ -88,6 +90,8 @@ Topology growth remains blocked unless the reviewed Phase 21 hardening work prov
 - restore evidence covers the expanded topology components without weakening the AegisOps-owned authority boundary;
 - observability remains able to distinguish ingress, auth, delegation, reconciliation, and restore failures across the expanded topology; and
 - topology expansion does not make OpenSearch, n8n, Shuffle, or any source system the authority for alert, case, approval, action intent, execution, or reconciliation truth.
+
+The reviewed topology-growth gate is therefore a one-node-to-multi-node admission review rather than pre-approval for cluster rollout.
 
 Any topology proposal that adds production-scale breadth before these conditions are proven is out of scope for Phase 21.
 
@@ -102,11 +106,17 @@ The reviewed next identity-rich source order remains:
 Phase 21 may define the hardening prerequisites for the reviewed second source, but it must keep second-source onboarding narrow:
 
 - Entra ID remains audit-only and Wazuh-backed for the reviewed next live slice;
+- the reviewed second-source onboarding boundary must reuse the existing control-plane contracts for payload admission, dedupe, restatement, evidence preservation, case linkage, and thin operator-surface visibility;
+- no new parallel intake, case, evidence, or operator model may be introduced for the second source;
 - Microsoft 365 audit remains third in the reviewed order and stays deferred during Phase 21 implementation sequencing;
 - broad multi-source parallel onboarding remains out of scope; and
 - no direct vendor-local actioning, source-side credential sprawl, or non-audit telemetry expansion is approved as part of this boundary.
 
 Entra ID is the reviewed second-source target because it preserves the strongest directory and privilege context for the next identity-rich live slice without reopening broad source-family breadth.
+
+The reviewed second-source onboarding boundary must reuse the existing control-plane contracts for payload admission, dedupe, restatement, evidence preservation, case linkage, and thin operator-surface visibility.
+
+Phase 21 does not approve a parallel intake, evidence, case, or operator model for the second source.
 
 ## 3. Fixed Implementation Sequence
 
@@ -155,6 +165,6 @@ Phase 21 must not reopen the approved first live action, broaden Shuffle authori
 
 `docs/automation-substrate-contract.md` and `docs/response-action-safety-model.md` remain the normative source for approval-bound delegation, idempotency, payload binding, expiry, and reconciliation requirements on the completed Phase 20 path.
 
-`docs/source-onboarding-contract.md`, `docs/phase-14-identity-rich-source-family-design.md`, and `docs/phase-18-wazuh-lab-topology-and-live-ingest-contract.md` remain the normative source for family ordering, Wazuh-backed live admission, and the rule that second-source onboarding must not widen into broad source breadth.
+`docs/source-onboarding-contract.md`, `docs/phase-14-identity-rich-source-family-design.md`, `docs/phase-18-wazuh-lab-topology-and-live-ingest-contract.md`, `docs/wazuh-alert-ingest-contract.md`, `docs/control-plane-state-model.md`, and `docs/phase-19-thin-operator-surface-and-daily-analyst-workflow.md` remain the normative source for family ordering, Wazuh-backed live admission, dedupe and restatement continuity, evidence and case-linkage continuity, operator-surface visibility, and the rule that second-source onboarding must not widen into broad source breadth.
 
 `docs/phase-17-runtime-config-contract-and-boot-command-expectations.md` and `docs/architecture.md` remain the normative source for the reviewed runtime floor, reverse-proxy-first exposure model, and AegisOps-owned authority boundary that Phase 21 hardening must preserve.

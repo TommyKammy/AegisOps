@@ -43,6 +43,9 @@ class Phase21ProductionLikeHardeningBoundaryValidationTests(unittest.TestCase):
             "docs/source-onboarding-contract.md",
             "docs/phase-14-identity-rich-source-family-design.md",
             "docs/phase-18-wazuh-lab-topology-and-live-ingest-contract.md",
+            "docs/wazuh-alert-ingest-contract.md",
+            "docs/control-plane-state-model.md",
+            "docs/phase-19-thin-operator-surface-and-daily-analyst-workflow.md",
             "docs/phase-17-runtime-config-contract-and-boot-command-expectations.md",
             "docs/architecture.md",
         ):
@@ -51,7 +54,8 @@ class Phase21ProductionLikeHardeningBoundaryValidationTests(unittest.TestCase):
 
         validation_terms = [
             "Entra ID is the first reviewed second live source to onboard",
-            "topology growth remains conditional only",
+            "one-node-to-multi-node admission review",
+            "reuses the existing payload-admission, dedupe, restatement, evidence-preservation, case-linkage, and thin-operator-surface contracts",
             "does not reopen broader action catalogs",
             "direct vendor-local actioning",
         ]
