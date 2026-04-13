@@ -5653,10 +5653,7 @@ class AegisOpsControlPlaneService:
         source_family = self._phase19_operator_source_family(
             context
         ) or self._phase19_operator_source_family(context.get("reviewed_source_profile"))
-        if (
-            source_family is not None
-            and source_family not in REVIEWED_LIVE_WAZUH_SOURCE_FAMILIES
-        ):
+        if source_family not in REVIEWED_LIVE_WAZUH_SOURCE_FAMILIES:
             return True
 
         admission_provenance = _normalize_admission_provenance(

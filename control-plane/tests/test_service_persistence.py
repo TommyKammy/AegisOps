@@ -3049,8 +3049,8 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         live_service = AegisOpsControlPlaneService(
             RuntimeConfig(
                 postgres_dsn="postgresql://control-plane.local/aegisops",
-                wazuh_ingest_shared_secret="reviewed-shared-secret",
-                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
             ),
             store=live_store,
         )
@@ -3065,7 +3065,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             raw_alert=payload,
             authorization_header="Bearer reviewed-shared-secret",
             forwarded_proto="https",
-            reverse_proxy_secret_header="reviewed-proxy-secret",
+            reverse_proxy_secret_header="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
             peer_addr="127.0.0.1",
         )
 
@@ -3113,8 +3113,8 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         service = AegisOpsControlPlaneService(
             RuntimeConfig(
                 postgres_dsn="postgresql://control-plane.local/aegisops",
-                wazuh_ingest_shared_secret="reviewed-shared-secret",
-                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
             ),
             store=store,
         )
@@ -3124,7 +3124,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             raw_alert=payload,
             authorization_header="Bearer reviewed-shared-secret",
             forwarded_proto="https",
-            reverse_proxy_secret_header="reviewed-proxy-secret",
+            reverse_proxy_secret_header="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
             peer_addr="127.0.0.1",
         )
         promoted_case = service.promote_alert_to_case(created.alert.alert_id)
@@ -3136,14 +3136,14 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             raw_alert=restated_payload,
             authorization_header="Bearer reviewed-shared-secret",
             forwarded_proto="https",
-            reverse_proxy_secret_header="reviewed-proxy-secret",
+            reverse_proxy_secret_header="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
             peer_addr="127.0.0.1",
         )
         deduplicated = service.ingest_wazuh_alert(
             raw_alert=restated_payload,
             authorization_header="Bearer reviewed-shared-secret",
             forwarded_proto="https",
-            reverse_proxy_secret_header="reviewed-proxy-secret",
+            reverse_proxy_secret_header="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
             peer_addr="127.0.0.1",
         )
 
@@ -3295,8 +3295,8 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         service = AegisOpsControlPlaneService(
             RuntimeConfig(
                 postgres_dsn="postgresql://control-plane.local/aegisops",
-                wazuh_ingest_shared_secret="reviewed-shared-secret",
-                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
             ),
             store=store,
         )
@@ -3305,7 +3305,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             raw_alert=_load_wazuh_fixture("entra-id-alert.json"),
             authorization_header="Bearer reviewed-shared-secret",
             forwarded_proto="https",
-            reverse_proxy_secret_header="reviewed-proxy-secret",
+            reverse_proxy_secret_header="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
             peer_addr="127.0.0.1",
         )
         promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
@@ -4495,6 +4495,20 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertTrue(
             service._phase19_context_declares_out_of_scope_provenance(
                 "synthetic_review_fixture"
+            )
+        )
+
+    def test_service_treats_missing_source_family_as_out_of_scope(self) -> None:
+        _, service, _, _, _ = self._build_phase19_in_scope_case()
+
+        self.assertTrue(
+            service._phase19_context_declares_out_of_scope_provenance(
+                {
+                    "provenance": {
+                        "admission_kind": "live",
+                        "admission_channel": "live_wazuh_webhook",
+                    }
+                }
             )
         )
 
