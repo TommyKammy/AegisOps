@@ -1504,8 +1504,8 @@ class AegisOpsControlPlaneService:
         ]
         chains.sort(
             key=lambda chain: (
-                self._action_review_priority(chain),
                 chain.get("requested_at") or datetime.min.replace(tzinfo=timezone.utc),
+                self._action_review_priority(chain),
                 chain.get("action_request_id") or "",
             ),
             reverse=True,
@@ -1817,27 +1817,47 @@ class AegisOpsControlPlaneService:
         recommendation_id = requested_payload.get("recommendation_id")
         action_type = requested_payload.get("action_type")
         if record_index is not None:
-            candidate_requests = record_index.scoped_requests(
+            candidate_requests = record_index.matching_requests(
                 case_id=action_request.case_id,
                 alert_id=action_request.alert_id,
             )
+            matches = [
+                record
+                for record in candidate_requests
+                if record.action_request_id != action_request.action_request_id
+                and record.requested_at >= action_request.requested_at
+                and record.lifecycle_state != "superseded"
+                and dict(record.requested_payload).get("action_type") == action_type
+                and (
+                    recommendation_id is None
+                    or dict(record.requested_payload).get("recommendation_id")
+                    == recommendation_id
+                )
+            ]
         else:
-            candidate_requests = self._store.list(ActionRequestRecord)
-        matches = [
-            record
-            for record in candidate_requests
-            if record.action_request_id != action_request.action_request_id
-            and record.case_id == action_request.case_id
-            and record.alert_id == action_request.alert_id
-            and record.requested_at >= action_request.requested_at
-            and record.lifecycle_state != "superseded"
-            and dict(record.requested_payload).get("action_type") == action_type
-            and (
-                recommendation_id is None
-                or dict(record.requested_payload).get("recommendation_id")
-                == recommendation_id
-            )
-        ]
+            matches = [
+                record
+                for record in self._store.list(ActionRequestRecord)
+                if record.action_request_id != action_request.action_request_id
+                and (
+                    (
+                        action_request.case_id is not None
+                        and record.case_id == action_request.case_id
+                    )
+                    or (
+                        action_request.alert_id is not None
+                        and record.alert_id == action_request.alert_id
+                    )
+                )
+                and record.requested_at >= action_request.requested_at
+                and record.lifecycle_state != "superseded"
+                and dict(record.requested_payload).get("action_type") == action_type
+                and (
+                    recommendation_id is None
+                    or dict(record.requested_payload).get("recommendation_id")
+                    == recommendation_id
+                )
+            ]
         if not matches:
             return None
         matches.sort(
