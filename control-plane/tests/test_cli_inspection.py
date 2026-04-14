@@ -2851,6 +2851,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             payload["policy_evaluation"],
             {
                 "approval_requirement": "human_required",
+                "approval_requirement_override": "human_required",
                 "routing_target": "approval",
                 "execution_surface_type": "automation_substrate",
                 "execution_surface_id": "shuffle",

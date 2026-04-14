@@ -174,6 +174,7 @@ _LIFECYCLE_STATES_BY_FAMILY: dict[str, frozenset[str]] = {
     ),
     "action_execution": frozenset(
         {
+            "dispatching",
             "queued",
             "running",
             "succeeded",

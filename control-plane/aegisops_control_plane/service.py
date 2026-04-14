@@ -1312,7 +1312,12 @@ class AegisOpsControlPlaneService:
         normalized_policy_basis = self._normalize_action_policy_basis(
             action_request.policy_basis
         )
-        policy_evaluation = self._determine_action_policy(normalized_policy_basis)
+        policy_evaluation = self._apply_action_policy_evaluation_overrides(
+            computed_policy_evaluation=self._determine_action_policy(
+                normalized_policy_basis
+            ),
+            persisted_policy_evaluation=action_request.policy_evaluation,
+        )
         evaluated = ActionRequestRecord(
             action_request_id=action_request.action_request_id,
             approval_decision_id=action_request.approval_decision_id,
@@ -3665,6 +3670,34 @@ class AegisOpsControlPlaneService:
             "execution_surface_type": execution_surface_type,
             "execution_surface_id": execution_surface_id,
         }
+
+    def _apply_action_policy_evaluation_overrides(
+        self,
+        *,
+        computed_policy_evaluation: Mapping[str, str],
+        persisted_policy_evaluation: Mapping[str, object],
+    ) -> dict[str, str]:
+        merged = dict(computed_policy_evaluation)
+        approval_requirement_override = persisted_policy_evaluation.get(
+            "approval_requirement_override"
+        )
+        if approval_requirement_override is None:
+            return merged
+
+        normalized_override = self._require_non_empty_string(
+            approval_requirement_override,
+            "policy_evaluation.approval_requirement_override",
+        )
+        if normalized_override != "human_required":
+            raise ValueError(
+                "policy_evaluation.approval_requirement_override must be "
+                "'human_required'"
+            )
+
+        merged["approval_requirement"] = "human_required"
+        merged["routing_target"] = "approval"
+        merged["approval_requirement_override"] = normalized_override
+        return merged
 
     @staticmethod
     def _merge_linked_ids(

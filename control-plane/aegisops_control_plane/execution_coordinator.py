@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -274,6 +275,7 @@ class ExecutionCoordinator:
                     },
                     policy_evaluation={
                         "approval_requirement": "human_required",
+                        "approval_requirement_override": "human_required",
                         "routing_target": "approval",
                         "execution_surface_type": "automation_substrate",
                         "execution_surface_id": "shuffle",
@@ -605,6 +607,15 @@ class ExecutionCoordinator:
             approved_payload,
             "approved_payload",
         )
+        adapter = (
+            self._service._shuffle
+            if execution_surface_id == "shuffle"
+            else self._service._isolated_executor
+        )
+        predispatch_execution: ActionExecutionRecord
+        action_request: ActionRequestRecord
+        approval_decision: ApprovalDecisionRecord
+        approval_decision_id: str
         with self._service._store.transaction():
             action_request, approval_decision = self._load_approved_delegation_context(
                 action_request_id=action_request_id,
@@ -628,14 +639,41 @@ class ExecutionCoordinator:
                     and existing.execution_surface_id == execution_surface_id
                     and existing.idempotency_key == action_request.idempotency_key
                 ):
+                    if existing.lifecycle_state == "dispatching":
+                        raise RuntimeError(
+                            "approved action delegation is already dispatching"
+                        )
                     return existing
+            if execution_surface_id == "shuffle":
+                self._require_reviewed_phase20_shuffle_payload(normalized_payload)
 
             delegation_id = self._service._next_identifier("delegation")
-            adapter = (
-                self._service._shuffle
-                if execution_surface_id == "shuffle"
-                else self._service._isolated_executor
+            predispatch_execution = self._service.persist_record(
+                ActionExecutionRecord(
+                    action_execution_id=self._service._next_identifier("action-execution"),
+                    action_request_id=action_request.action_request_id,
+                    approval_decision_id=approval_decision_id,
+                    delegation_id=delegation_id,
+                    execution_surface_type=execution_surface_type,
+                    execution_surface_id=execution_surface_id,
+                    execution_run_id=self._pending_dispatch_execution_run_id(
+                        delegation_id
+                    ),
+                    idempotency_key=action_request.idempotency_key,
+                    target_scope=action_request.target_scope,
+                    approved_payload=normalized_payload,
+                    payload_hash=action_request.payload_hash,
+                    delegated_at=delegated_at,
+                    expires_at=action_request.expires_at,
+                    provenance={
+                        "delegation_issuer": delegation_issuer,
+                        "evidence_ids": evidence_ids,
+                    },
+                    lifecycle_state="dispatching",
+                )
             )
+        receipt = None
+        try:
             receipt = adapter.dispatch_approved_action(
                 delegation_id=delegation_id,
                 action_request_id=action_request.action_request_id,
@@ -645,41 +683,159 @@ class ExecutionCoordinator:
                 approved_payload=normalized_payload,
                 delegated_at=delegated_at,
             )
-            provenance: dict[str, object] = {
-                "delegation_issuer": delegation_issuer,
-                "evidence_ids": evidence_ids,
-                "adapter": receipt.adapter,
-            }
-            if execution_surface_id == "shuffle":
-                provenance["downstream_binding"] = {
-                    "approval_decision_id": receipt.approval_decision_id,
-                    "delegation_id": receipt.delegation_id,
-                    "payload_hash": receipt.payload_hash,
-                }
-            if receipt.base_url.strip() and receipt.base_url != "<set-me>":
-                provenance["adapter_base_url"] = receipt.base_url
+            self._require_exact_adapter_receipt_binding(
+                receipt=receipt,
+                action_request=action_request,
+                approval_decision_id=approval_decision_id,
+                delegation_id=delegation_id,
+                execution_surface_type=execution_surface_type,
+                execution_surface_id=execution_surface_id,
+            )
+        except Exception as exc:
+            self._mark_dispatch_failure(
+                execution=predispatch_execution,
+                error=exc,
+                receipt=receipt,
+            )
+            raise
 
+        with self._service._store.transaction():
+            stored_execution = self._service._store.get(
+                ActionExecutionRecord,
+                predispatch_execution.action_execution_id,
+            )
+            if stored_execution is None:
+                raise LookupError(
+                    "missing pre-dispatch action execution record during delegation finalization"
+                )
             execution = self._service.persist_record(
-                ActionExecutionRecord(
-                    action_execution_id=self._service._next_identifier("action-execution"),
-                    action_request_id=action_request.action_request_id,
-                    approval_decision_id=approval_decision_id,
-                    delegation_id=delegation_id,
-                    execution_surface_type=receipt.execution_surface_type,
-                    execution_surface_id=receipt.execution_surface_id,
+                replace(
+                    stored_execution,
                     execution_run_id=receipt.execution_run_id,
-                    idempotency_key=action_request.idempotency_key,
-                    target_scope=action_request.target_scope,
-                    approved_payload=normalized_payload,
-                    payload_hash=action_request.payload_hash,
-                    delegated_at=delegated_at,
-                    expires_at=action_request.expires_at,
-                    provenance=provenance,
+                    provenance=self._finalized_execution_provenance(
+                        execution=stored_execution,
+                        receipt=receipt,
+                        execution_surface_id=execution_surface_id,
+                    ),
                     lifecycle_state="queued",
                 )
             )
         self._service._emit_action_execution_delegated_event(execution)
         return execution
+
+    @staticmethod
+    def _pending_dispatch_execution_run_id(delegation_id: str) -> str:
+        return f"pending-dispatch-{delegation_id}"
+
+    def _require_reviewed_phase20_shuffle_payload(
+        self,
+        approved_payload: Mapping[str, object],
+    ) -> None:
+        action_type = approved_payload.get("action_type")
+        if action_type != "notify_identity_owner":
+            raise ValueError(
+                "approved action is outside the reviewed Phase 20 Shuffle delegation scope"
+            )
+
+        for field_name in (
+            "recipient_identity",
+            "message_intent",
+            "escalation_reason",
+        ):
+            value = approved_payload.get(field_name)
+            if not isinstance(value, str) or value.strip() == "":
+                raise ValueError(
+                    "approved action is outside the reviewed Phase 20 Shuffle delegation scope"
+                )
+
+    def _require_exact_adapter_receipt_binding(
+        self,
+        *,
+        receipt: object,
+        action_request: ActionRequestRecord,
+        approval_decision_id: str,
+        delegation_id: str,
+        execution_surface_type: str,
+        execution_surface_id: str,
+    ) -> None:
+        if getattr(receipt, "execution_surface_type", None) != execution_surface_type:
+            raise ValueError("adapter receipt does not match approved execution surface")
+        if getattr(receipt, "execution_surface_id", None) != execution_surface_id:
+            raise ValueError("adapter receipt does not match approved execution surface")
+        if execution_surface_id == "shuffle" and any(
+            (
+                getattr(receipt, "approval_decision_id", None) != approval_decision_id,
+                getattr(receipt, "delegation_id", None) != delegation_id,
+                getattr(receipt, "payload_hash", None) != action_request.payload_hash,
+            )
+        ):
+            raise ValueError(
+                "shuffle receipt does not match approved delegation binding"
+            )
+
+    def _finalized_execution_provenance(
+        self,
+        *,
+        execution: ActionExecutionRecord,
+        receipt: object,
+        execution_surface_id: str,
+    ) -> dict[str, object]:
+        provenance = dict(execution.provenance)
+        provenance["adapter"] = getattr(receipt, "adapter")
+        base_url = getattr(receipt, "base_url", "")
+        if isinstance(base_url, str) and base_url.strip() and base_url != "<set-me>":
+            provenance["adapter_base_url"] = base_url
+        if execution_surface_id == "shuffle":
+            provenance["downstream_binding"] = {
+                "approval_decision_id": getattr(receipt, "approval_decision_id"),
+                "delegation_id": getattr(receipt, "delegation_id"),
+                "payload_hash": getattr(receipt, "payload_hash"),
+            }
+        return provenance
+
+    def _mark_dispatch_failure(
+        self,
+        *,
+        execution: ActionExecutionRecord,
+        error: Exception,
+        receipt: object | None,
+    ) -> None:
+        failure_provenance = dict(execution.provenance)
+        dispatch_failure = {
+            "error": str(error),
+            "error_type": type(error).__name__,
+        }
+        if receipt is not None:
+            adapter = getattr(receipt, "adapter", None)
+            if isinstance(adapter, str) and adapter.strip():
+                failure_provenance["adapter"] = adapter
+            base_url = getattr(receipt, "base_url", None)
+            if isinstance(base_url, str) and base_url.strip() and base_url != "<set-me>":
+                failure_provenance["adapter_base_url"] = base_url
+            observed_surface_type = getattr(receipt, "execution_surface_type", None)
+            observed_surface_id = getattr(receipt, "execution_surface_id", None)
+            if isinstance(observed_surface_type, str) and observed_surface_type.strip():
+                dispatch_failure["observed_execution_surface_type"] = (
+                    observed_surface_type
+                )
+            if isinstance(observed_surface_id, str) and observed_surface_id.strip():
+                dispatch_failure["observed_execution_surface_id"] = observed_surface_id
+
+        failure_provenance["dispatch_failure"] = dispatch_failure
+        with self._service._store.transaction():
+            current_execution = self._service._store.get(
+                ActionExecutionRecord,
+                execution.action_execution_id,
+            )
+            if current_execution is None or current_execution.lifecycle_state != "dispatching":
+                return
+            self._service.persist_record(
+                replace(
+                    current_execution,
+                    provenance=failure_provenance,
+                    lifecycle_state="failed",
+                )
+            )
 
     @staticmethod
     def _action_execution_lifecycle_from_status(
