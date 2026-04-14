@@ -1456,6 +1456,31 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(len(store.list(AlertRecord)), 1)
         self.assertEqual(len(store.list(AnalyticSignalRecord)), 1)
 
+    def test_service_admits_trusted_proxy_peer_with_surrounding_whitespace(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="0.0.0.0",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+                wazuh_ingest_trusted_proxy_cidrs=("10.10.0.5/32",),
+            ),
+            store=store,
+        )
+
+        ingest_result = service.ingest_wazuh_alert(
+            raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
+            authorization_header="Bearer reviewed-shared-secret",
+            forwarded_proto="https",
+            reverse_proxy_secret_header="reviewed-proxy-secret",
+            peer_addr=" 10.10.0.5 ",
+        )
+
+        self.assertEqual(ingest_result.disposition, "created")
+        self.assertEqual(len(store.list(AlertRecord)), 1)
+        self.assertEqual(len(store.list(AnalyticSignalRecord)), 1)
+
     def test_long_running_runtime_surface_rejects_oversized_wazuh_ingest_body(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(

@@ -1614,10 +1614,13 @@ class AegisOpsControlPlaneService:
         peer_addr: str | None,
         trusted_proxy_cidrs: tuple[str, ...],
     ) -> bool:
-        if peer_addr is None or peer_addr.strip() == "":
+        if peer_addr is None:
+            return False
+        normalized_peer_addr = peer_addr.strip()
+        if normalized_peer_addr == "":
             return False
         try:
-            peer_ip = ipaddress.ip_address(peer_addr)
+            peer_ip = ipaddress.ip_address(normalized_peer_addr)
         except ValueError:
             return False
         if self._listener_is_loopback():
