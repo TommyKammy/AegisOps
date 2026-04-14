@@ -622,7 +622,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(review["timeline"][3]["state"], "queued")
         self.assertEqual(
             review["timeline"][3]["occurred_at"],
-            reconciliation.last_seen_at.isoformat(),
+            None,
         )
         self.assertEqual(
             review["timeline"][3]["actor_identities"],
@@ -3427,7 +3427,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         )
         self.assertEqual(
             review["timeline"][3]["occurred_at"],
-            seeded["selected_reconciliation"].last_seen_at.isoformat(),
+            None,
         )
         self.assertEqual(
             review["timeline"][4]["record_id"],

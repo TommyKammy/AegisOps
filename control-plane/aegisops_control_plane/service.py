@@ -1994,14 +1994,6 @@ class AegisOpsControlPlaneService:
             adapter_base_url = action_execution.provenance.get("adapter_base_url")
             if isinstance(adapter_base_url, str) and adapter_base_url.strip():
                 action_execution_details["adapter_base_url"] = adapter_base_url
-            if reconciliation is not None and (
-                reconciliation.execution_run_id is not None
-                or reconciliation.linked_execution_run_ids
-            ):
-                action_execution_occurred_at = (
-                    reconciliation.last_seen_at or reconciliation.compared_at
-                )
-
         timeline = (
             self._action_review_stage_snapshot(
                 stage="action_request",

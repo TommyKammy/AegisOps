@@ -3641,18 +3641,19 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
             recipient_identity="repo-owner-indexed-001",
             message_intent="Notify the accountable repository owner about the reviewed permission change.",
             escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            expires_at=support.datetime.now(support.timezone.utc)
+            + support.timedelta(hours=4),
             action_request_id="action-request-surface-indexed-lineage-001",
         )
         action_request = service.persist_record(
-            replace(
+            support.replace(
                 action_request,
                 approval_decision_id="approval-surface-missing-indexed-001",
                 lifecycle_state="approved",
             )
         )
         action_execution = service.persist_record(
-            ActionExecutionRecord(
+            support.ActionExecutionRecord(
                 action_execution_id="action-execution-surface-indexed-lineage-001",
                 action_request_id=action_request.action_request_id,
                 approval_decision_id="approval-surface-missing-indexed-001",
@@ -3664,14 +3665,15 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
                 target_scope=dict(action_request.target_scope),
                 approved_payload=dict(action_request.requested_payload),
                 payload_hash=action_request.payload_hash,
-                delegated_at=action_request.requested_at + timedelta(minutes=10),
+                delegated_at=action_request.requested_at
+                + support.timedelta(minutes=10),
                 expires_at=action_request.expires_at,
                 provenance={"initiated_by": "operator-review"},
                 lifecycle_state="queued",
             )
         )
         reconciliation = service.persist_record(
-            ReconciliationRecord(
+            support.ReconciliationRecord(
                 reconciliation_id="reconciliation-surface-indexed-lineage-001",
                 subject_linkage={
                     "case_ids": (promoted_case.case_id,),
@@ -3686,11 +3688,14 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
                     "execution-run-surface-indexed-lineage-observed-001",
                 ),
                 correlation_key="surface-indexed-lineage-001",
-                first_seen_at=action_execution.delegated_at + timedelta(minutes=1),
-                last_seen_at=action_execution.delegated_at + timedelta(minutes=2),
+                first_seen_at=action_execution.delegated_at
+                + support.timedelta(minutes=1),
+                last_seen_at=action_execution.delegated_at
+                + support.timedelta(minutes=2),
                 ingest_disposition="mismatch",
                 mismatch_summary="execution lineage should remain visible without approval lookup",
-                compared_at=action_execution.delegated_at + timedelta(minutes=3),
+                compared_at=action_execution.delegated_at
+                + support.timedelta(minutes=3),
                 lifecycle_state="mismatched",
             )
         )
