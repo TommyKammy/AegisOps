@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import pathlib
 import sys
+import threading
 from typing import Callable, Iterator
 from unittest import mock
 
@@ -21,6 +22,11 @@ class TransactionMutationStore:
     inner: object
     mutate_once: Callable[[object], None]
     _mutated: bool = False
+    _mutate_lock: threading.Lock = field(
+        default_factory=threading.Lock,
+        init=False,
+        repr=False,
+    )
 
     @property
     def dsn(self) -> str:
@@ -42,6 +48,13 @@ class TransactionMutationStore:
     def inspect_readiness_aggregates(self) -> object:
         return self.inner.inspect_readiness_aggregates()
 
+    def _consume_mutation_token(self) -> bool:
+        with self._mutate_lock:
+            if self._mutated:
+                return False
+            self._mutated = True
+            return True
+
     @contextmanager
     def transaction(
         self,
@@ -49,9 +62,8 @@ class TransactionMutationStore:
         isolation_level: str | None = None,
     ) -> Iterator[None]:
         with self.inner.transaction(isolation_level=isolation_level):
-            if not self._mutated:
+            if self._consume_mutation_token():
                 self.mutate_once(self.inner)
-                self._mutated = True
             yield
 
 
@@ -60,6 +72,11 @@ class ConcurrentListMutationStore:
     inner: object
     mutate_once: Callable[[], None]
     _mutated: bool = False
+    _mutate_lock: threading.Lock = field(
+        default_factory=threading.Lock,
+        init=False,
+        repr=False,
+    )
 
     @property
     def dsn(self) -> str:
@@ -69,6 +86,13 @@ class ConcurrentListMutationStore:
     def persistence_mode(self) -> str:
         return self.inner.persistence_mode
 
+    def _consume_mutation_token(self) -> bool:
+        with self._mutate_lock:
+            if self._mutated:
+                return False
+            self._mutated = True
+            return True
+
     def save(self, record: object) -> object:
         return self.inner.save(record)
 
@@ -77,16 +101,14 @@ class ConcurrentListMutationStore:
 
     def list(self, record_type: object) -> tuple[object, ...]:
         records = self.inner.list(record_type)
-        if not self._mutated:
+        if self._consume_mutation_token():
             self.mutate_once()
-            self._mutated = True
         return records
 
     def inspect_readiness_aggregates(self) -> object:
         aggregates = self.inner.inspect_readiness_aggregates()
-        if not self._mutated:
+        if self._consume_mutation_token():
             self.mutate_once()
-            self._mutated = True
         return aggregates
 
     @contextmanager
@@ -251,6 +273,11 @@ class OutOfBandMutationStore:
     inner: object
     mutate_once: Callable[[object], None]
     _mutated: bool = False
+    _mutate_lock: threading.Lock = field(
+        default_factory=threading.Lock,
+        init=False,
+        repr=False,
+    )
 
     @property
     def dsn(self) -> str:
@@ -272,15 +299,20 @@ class OutOfBandMutationStore:
     def inspect_readiness_aggregates(self) -> object:
         return self.inner.inspect_readiness_aggregates()
 
+    def _consume_mutation_token(self) -> bool:
+        with self._mutate_lock:
+            if self._mutated:
+                return False
+            self._mutated = True
+            return True
+
     @contextmanager
     def transaction(
         self,
         *,
         isolation_level: str | None = None,
     ) -> Iterator[None]:
-        if not self._mutated:
+        if self._consume_mutation_token():
             self.mutate_once(self.inner)
-            self._mutated = True
         with self.inner.transaction(isolation_level=isolation_level):
             yield
-
