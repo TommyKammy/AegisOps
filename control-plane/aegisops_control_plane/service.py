@@ -1801,17 +1801,17 @@ class AegisOpsControlPlaneService:
         execution_state = (
             action_execution.lifecycle_state if action_execution is not None else None
         )
-        if lifecycle_state in {"expired", "rejected", "superseded"}:
+        if lifecycle_state in {"expired", "rejected", "superseded", "canceled"}:
             return lifecycle_state
         if lifecycle_state in {"completed", "failed", "unresolved"}:
             return lifecycle_state
         if execution_state == "succeeded":
             return "completed"
-        if execution_state in {"failed", "superseded"}:
+        if execution_state in {"failed", "canceled", "superseded"}:
             return execution_state
         if lifecycle_state == "executing" or action_execution is not None:
             return "executing"
-        if approval_state in {"expired", "rejected", "superseded"}:
+        if approval_state in {"expired", "rejected", "superseded", "canceled"}:
             return approval_state
         if approval_state == "approved":
             return "approved"
@@ -1900,6 +1900,7 @@ class AegisOpsControlPlaneService:
             "executing": "await_execution_reconciliation",
             "expired": "create_replacement_or_close_case",
             "rejected": "review_rejection_and_record_follow_up",
+            "canceled": "investigate_execution_cancellation",
             "superseded": "inspect_replacing_review_record",
             "completed": "review_execution_outcome",
             "failed": "investigate_execution_failure",
