@@ -4,6 +4,7 @@ import pathlib
 import sys
 import tempfile
 import unittest
+from http.server import BaseHTTPRequestHandler
 
 
 CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -12,7 +13,10 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 from aegisops_control_plane import AlertRecord, ControlPlaneRecord
 from aegisops_control_plane.config import RuntimeConfig
-from aegisops_control_plane.service import build_runtime_snapshot
+from aegisops_control_plane.service import (
+    AegisOpsControlPlaneService,
+    build_runtime_snapshot,
+)
 
 
 class RuntimeSkeletonTests(unittest.TestCase):
@@ -165,6 +169,35 @@ class RuntimeSkeletonTests(unittest.TestCase):
                     ),
                 }
             )
+
+    def test_cli_module_owns_parser_and_command_dispatch(self) -> None:
+        from aegisops_control_plane import cli
+
+        parser = cli.build_parser()
+        parsed = parser.parse_args(["runtime"])
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops")
+        )
+
+        payload = cli.run_command(parsed, service=service)
+
+        self.assertEqual(payload["service_name"], "aegisops-control-plane")
+        self.assertEqual(payload["persistence_mode"], "postgresql")
+
+    def test_http_surface_module_owns_request_handler_construction(self) -> None:
+        from aegisops_control_plane import http_surface
+
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops")
+        )
+
+        handler_class = http_surface.build_handler_class(
+            service=service,
+            runtime_snapshot=service.describe_runtime().to_dict(),
+            stderr=sys.stderr,
+        )
+
+        self.assertTrue(issubclass(handler_class, BaseHTTPRequestHandler))
 
 
 if __name__ == "__main__":
