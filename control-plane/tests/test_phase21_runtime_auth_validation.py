@@ -40,6 +40,7 @@ REVIEWED_PLATFORM_ADMIN_PRINCIPAL = AuthenticatedRuntimePrincipal(
     proxy_service_account=REVIEWED_PROXY_SERVICE_ACCOUNT,
 )
 TEST_NON_LOOPBACK_HOST = "0.0.0.0"  # noqa: S104 - config only; no socket bind
+TEST_PLACEHOLDER_BINDING = "<set-me>"  # noqa: S105 - intentional validation placeholder
 
 
 def _build_service(*, host: str = "127.0.0.1") -> AegisOpsControlPlaneService:
@@ -300,14 +301,14 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
                 host=TEST_NON_LOOPBACK_HOST,
                 port=8080,
                 postgres_dsn="postgresql://control-plane.local/aegisops",
-                wazuh_ingest_shared_secret="<set-me>",
-                wazuh_ingest_reverse_proxy_secret="<set-me>",
+                wazuh_ingest_shared_secret=TEST_PLACEHOLDER_BINDING,
+                wazuh_ingest_reverse_proxy_secret=TEST_PLACEHOLDER_BINDING,
                 wazuh_ingest_trusted_proxy_cidrs=("10.10.0.5/32",),
-                protected_surface_reverse_proxy_secret="<set-me>",
+                protected_surface_reverse_proxy_secret=TEST_PLACEHOLDER_BINDING,
                 protected_surface_trusted_proxy_cidrs=("10.10.0.5/32",),
                 protected_surface_proxy_service_account=REVIEWED_PROXY_SERVICE_ACCOUNT,
-                admin_bootstrap_token="<set-me>",
-                break_glass_token="<set-me>",
+                admin_bootstrap_token=TEST_PLACEHOLDER_BINDING,
+                break_glass_token=TEST_PLACEHOLDER_BINDING,
             ),
             store=store,
         )
@@ -320,7 +321,7 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
                 wazuh_ingest_reverse_proxy_secret=REVIEWED_WAZUH_PROXY_SECRET,
                 protected_surface_reverse_proxy_secret=REVIEWED_SURFACE_PROXY_SECRET,
                 protected_surface_trusted_proxy_cidrs=("10.10.0.5/32",),
-                protected_surface_proxy_service_account="<set-me>",
+                protected_surface_proxy_service_account=TEST_PLACEHOLDER_BINDING,
                 admin_bootstrap_token=REVIEWED_ADMIN_BOOTSTRAP_TOKEN,
                 break_glass_token=REVIEWED_BREAK_GLASS_TOKEN,
             ),
@@ -338,13 +339,13 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
                 port=8080,
                 postgres_dsn="postgresql://control-plane.local/aegisops",
                 wazuh_ingest_shared_secret=REVIEWED_SHARED_SECRET,
-                wazuh_ingest_reverse_proxy_secret="<set-me>",
+                wazuh_ingest_reverse_proxy_secret=TEST_PLACEHOLDER_BINDING,
                 wazuh_ingest_trusted_proxy_cidrs=("10.10.0.5/32",),
-                protected_surface_reverse_proxy_secret="<set-me>",
+                protected_surface_reverse_proxy_secret=TEST_PLACEHOLDER_BINDING,
                 protected_surface_trusted_proxy_cidrs=("10.10.0.5/32",),
                 protected_surface_proxy_service_account=REVIEWED_PROXY_SERVICE_ACCOUNT,
-                admin_bootstrap_token="<set-me>",
-                break_glass_token="<set-me>",
+                admin_bootstrap_token=TEST_PLACEHOLDER_BINDING,
+                break_glass_token=TEST_PLACEHOLDER_BINDING,
             ),
             store=store,
         )
