@@ -10,7 +10,8 @@ contract_doc="${repo_root}/docs/wazuh-alert-ingest-contract.md"
 runbook_doc="${repo_root}/docs/wazuh-rule-lifecycle-runbook.md"
 contract_doc_tests="${repo_root}/control-plane/tests/test_wazuh_alert_ingest_contract_docs.py"
 adapter_tests="${repo_root}/control-plane/tests/test_wazuh_adapter.py"
-service_tests="${repo_root}/control-plane/tests/test_service_persistence.py"
+assistant_tests="${repo_root}/control-plane/tests/test_service_persistence_assistant_advisory.py"
+lifecycle_tests="${repo_root}/control-plane/tests/test_service_persistence_ingest_case_lifecycle.py"
 cli_tests="${repo_root}/control-plane/tests/test_cli_inspection.py"
 workflow_path="${repo_root}/.github/workflows/ci.yml"
 
@@ -51,7 +52,8 @@ require_file "${contract_doc}" "Missing Wazuh alert ingest contract document"
 require_file "${runbook_doc}" "Missing Wazuh rule lifecycle runbook"
 require_file "${contract_doc_tests}" "Missing Wazuh contract documentation tests"
 require_file "${adapter_tests}" "Missing Wazuh adapter tests"
-require_file "${service_tests}" "Missing control-plane service persistence tests"
+require_file "${assistant_tests}" "Missing control-plane Wazuh assistant/advisory persistence tests"
+require_file "${lifecycle_tests}" "Missing control-plane Wazuh lifecycle persistence tests"
 require_file "${cli_tests}" "Missing control-plane CLI inspection tests"
 require_file "${workflow_path}" "Missing CI workflow"
 
@@ -59,8 +61,8 @@ validation_required_phrases=(
   "# Phase 12 Wazuh Ingest and Workflow CI Validation"
   "- Validation date: 2026-04-07"
   "- Validation scope: Phase 12 review of Wazuh ingest contract coverage, fixture-backed admissions, alert and case lifecycle behavior, analyst queue invariants, and CI wiring for the reviewed Wazuh control-plane path"
-  "- Baseline references: \`docs/wazuh-alert-ingest-contract.md\`, \`docs/wazuh-rule-lifecycle-runbook.md\`, \`control-plane/tests/test_wazuh_alert_ingest_contract_docs.py\`, \`control-plane/tests/test_wazuh_adapter.py\`, \`control-plane/tests/test_service_persistence.py\`, \`control-plane/tests/test_cli_inspection.py\`, \`.github/workflows/ci.yml\`"
-  "- Verification commands: \`bash scripts/verify-wazuh-rule-lifecycle-runbook.sh\`, \`python3 -m unittest control-plane.tests.test_wazuh_alert_ingest_contract_docs control-plane.tests.test_wazuh_adapter control-plane.tests.test_service_persistence control-plane.tests.test_cli_inspection\`, \`bash scripts/test-verify-ci-phase-12-workflow-coverage.sh\`, \`bash scripts/verify-phase-12-wazuh-ci-validation.sh\`"
+  "- Baseline references: \`docs/wazuh-alert-ingest-contract.md\`, \`docs/wazuh-rule-lifecycle-runbook.md\`, \`control-plane/tests/test_wazuh_alert_ingest_contract_docs.py\`, \`control-plane/tests/test_wazuh_adapter.py\`, \`control-plane/tests/test_service_persistence_assistant_advisory.py\`, \`control-plane/tests/test_service_persistence_ingest_case_lifecycle.py\`, \`control-plane/tests/test_cli_inspection.py\`, \`.github/workflows/ci.yml\`"
+  "- Verification commands: \`bash scripts/verify-wazuh-rule-lifecycle-runbook.sh\`, \`python3 -m unittest control-plane.tests.test_wazuh_alert_ingest_contract_docs control-plane.tests.test_wazuh_adapter control-plane.tests.test_service_persistence_assistant_advisory control-plane.tests.test_service_persistence_ingest_case_lifecycle control-plane.tests.test_cli_inspection\`, \`bash scripts/test-verify-ci-phase-12-workflow-coverage.sh\`, \`bash scripts/verify-phase-12-wazuh-ci-validation.sh\`"
   "- Validation status: PASS"
   "## Required Boundary Artifacts"
   "## Review Outcome"
@@ -76,7 +78,7 @@ validation_required_phrases=(
   '`docs/wazuh-rule-lifecycle-runbook.md` must continue to require fixture refresh and aligned adapter and persistence tests before downstream workflow logic relies on a Wazuh rule change.'
   '`control-plane/tests/test_wazuh_alert_ingest_contract_docs.py` must continue to guard the reviewed Wazuh contract document and its required cross-links.'
   '`control-plane/tests/test_wazuh_adapter.py` must continue to guard fixture-backed Wazuh native-record and source-identity admission behavior.'
-  '`control-plane/tests/test_service_persistence.py` must continue to guard Wazuh ingest admission, alert and case lifecycle linkage, and analyst queue invariants.'
+  '`control-plane/tests/test_service_persistence_assistant_advisory.py` and `control-plane/tests/test_service_persistence_ingest_case_lifecycle.py` must continue to guard Wazuh ingest admission, alert and case lifecycle linkage, and analyst queue invariants.'
   '`control-plane/tests/test_cli_inspection.py` must continue to guard the read-only Wazuh analyst queue inspection path.'
   '`.github/workflows/ci.yml` must continue to run the dedicated Phase 12 validation step, the focused Wazuh unit-test command, and the workflow coverage guard.'
   "No deviations found."
@@ -91,7 +93,8 @@ required_artifacts=(
   "docs/wazuh-rule-lifecycle-runbook.md"
   "control-plane/tests/test_wazuh_alert_ingest_contract_docs.py"
   "control-plane/tests/test_wazuh_adapter.py"
-  "control-plane/tests/test_service_persistence.py"
+  "control-plane/tests/test_service_persistence_assistant_advisory.py"
+  "control-plane/tests/test_service_persistence_ingest_case_lifecycle.py"
   "control-plane/tests/test_cli_inspection.py"
   ".github/workflows/ci.yml"
 )
@@ -106,15 +109,15 @@ for artifact in "${required_artifacts[@]}"; do
 done
 
 require_fixed_string "${contract_doc}" '| `substrate_detection_record_id` | Set to `wazuh:<id>` unless the input is already namespaced as `wazuh:<id>`. This matches the shipped control-plane rule that substrate detection identifiers are namespaced by substrate key. |'
-require_fixed_string "${runbook_doc}" 'At minimum, the fixture-backed review path must keep `control-plane/tests/test_wazuh_adapter.py` and `control-plane/tests/test_service_persistence.py` aligned with the reviewed rule behavior before downstream workflow logic can rely on it.'
+require_fixed_string "${runbook_doc}" 'At minimum, the fixture-backed review path must keep `control-plane/tests/test_wazuh_adapter.py`, `control-plane/tests/test_service_persistence_assistant_advisory.py`, and `control-plane/tests/test_service_persistence_ingest_case_lifecycle.py` aligned with the reviewed rule behavior before downstream workflow logic can rely on it.'
 
 require_test_name "${contract_doc_tests}" "test_wazuh_contract_doc_defines_required_mapping_and_ownership_terms"
 require_test_name "${adapter_tests}" "test_adapter_builds_native_detection_record_from_agent_origin_fixture"
 require_test_name "${adapter_tests}" "test_adapter_accepts_manager_origin_fixture_when_agent_identity_is_absent"
-require_test_name "${service_tests}" "test_service_admits_wazuh_fixture_through_substrate_adapter_boundary"
-require_test_name "${service_tests}" "test_service_extends_promoted_wazuh_alert_with_existing_case_linkage"
-require_test_name "${service_tests}" "test_service_exposes_wazuh_origin_alerts_in_business_hours_analyst_queue"
-require_test_name "${service_tests}" "test_service_analyst_queue_prefers_explicit_wazuh_source_for_multi_source_linkage"
+require_test_name "${assistant_tests}" "test_service_admits_wazuh_fixture_through_substrate_adapter_boundary"
+require_test_name "${lifecycle_tests}" "test_service_extends_promoted_wazuh_alert_with_existing_case_linkage"
+require_test_name "${lifecycle_tests}" "test_service_exposes_wazuh_origin_alerts_in_business_hours_analyst_queue"
+require_test_name "${lifecycle_tests}" "test_service_analyst_queue_prefers_explicit_wazuh_source_for_multi_source_linkage"
 require_test_name "${cli_tests}" "test_cli_renders_wazuh_business_hours_analyst_queue_view"
 
 require_fixed_string "${workflow_path}" "      - name: Run Phase 12 workflow coverage guard"

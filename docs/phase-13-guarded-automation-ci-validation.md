@@ -2,8 +2,8 @@
 
 - Validation date: 2026-04-07
 - Validation scope: Phase 13 review of guarded-automation policy routing, approval-bound delegation, isolated-executor boundary invariants, authoritative reconciliation behavior, and CI wiring for the reviewed Phase 13 path
-- Baseline references: `docs/automation-substrate-contract.md`, `docs/control-plane-state-model.md`, `docs/architecture.md`, `control-plane/tests/test_service_persistence.py`, `control-plane/tests/test_wazuh_alert_ingest_contract_docs.py`, `.github/workflows/ci.yml`
-- Verification commands: `bash scripts/verify-automation-substrate-contract-doc.sh`, `bash scripts/verify-control-plane-state-model-doc.sh`, `python3 -m unittest control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_records_execution_correlation_mismatch_states_separately control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_evaluates_action_policy_into_approval_and_isolated_executor control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_evaluates_action_policy_into_shuffle_without_human_approval control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_delegates_approved_low_risk_action_through_shuffle_adapter control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_rejects_shuffle_delegation_for_non_shuffle_execution_policy control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_delegates_approved_high_risk_action_through_isolated_executor control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_reconciles_shuffle_run_back_into_authoritative_action_execution control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_reconciles_isolated_executor_run_back_into_authoritative_action_execution control-plane.tests.test_wazuh_alert_ingest_contract_docs.WazuhAlertIngestContractDocsTests.test_reconciliation_identity_is_consistent_with_delegation_contract`, `bash scripts/test-verify-ci-phase-13-workflow-coverage.sh`, `bash scripts/verify-phase-13-guarded-automation-ci-validation.sh`
+- Baseline references: `docs/automation-substrate-contract.md`, `docs/control-plane-state-model.md`, `docs/architecture.md`, `control-plane/tests/test_service_persistence_action_reconciliation.py`, `control-plane/tests/test_wazuh_alert_ingest_contract_docs.py`, `.github/workflows/ci.yml`
+- Verification commands: `bash scripts/verify-automation-substrate-contract-doc.sh`, `bash scripts/verify-control-plane-state-model-doc.sh`, `python3 -m unittest control-plane.tests.test_service_persistence_action_reconciliation.ActionReconciliationPersistenceTests.test_service_records_execution_correlation_mismatch_states_separately control-plane.tests.test_service_persistence_action_reconciliation.ActionReconciliationPersistenceTests.test_service_evaluates_action_policy_into_approval_and_isolated_executor control-plane.tests.test_service_persistence_action_reconciliation.ActionReconciliationPersistenceTests.test_service_evaluates_action_policy_into_shuffle_without_human_approval control-plane.tests.test_service_persistence_action_reconciliation.ActionReconciliationPersistenceTests.test_service_delegates_approved_low_risk_action_through_shuffle_adapter control-plane.tests.test_service_persistence_action_reconciliation.ActionReconciliationPersistenceTests.test_service_rejects_shuffle_delegation_for_non_shuffle_execution_policy control-plane.tests.test_service_persistence_action_reconciliation.ActionReconciliationPersistenceTests.test_service_delegates_approved_high_risk_action_through_isolated_executor control-plane.tests.test_service_persistence_action_reconciliation.ActionReconciliationPersistenceTests.test_service_reconciles_shuffle_run_back_into_authoritative_action_execution control-plane.tests.test_service_persistence_action_reconciliation.ActionReconciliationPersistenceTests.test_service_reconciles_isolated_executor_run_back_into_authoritative_action_execution control-plane.tests.test_wazuh_alert_ingest_contract_docs.WazuhAlertIngestContractDocsTests.test_reconciliation_identity_is_consistent_with_delegation_contract`, `bash scripts/test-verify-ci-phase-13-workflow-coverage.sh`, `bash scripts/verify-phase-13-guarded-automation-ci-validation.sh`
 - Validation status: PASS
 
 ## Required Boundary Artifacts
@@ -11,7 +11,7 @@
 - `docs/automation-substrate-contract.md`
 - `docs/control-plane-state-model.md`
 - `docs/architecture.md`
-- `control-plane/tests/test_service_persistence.py`
+- `control-plane/tests/test_service_persistence_action_reconciliation.py`
 - `control-plane/tests/test_wazuh_alert_ingest_contract_docs.py`
 - `.github/workflows/ci.yml`
 
@@ -37,7 +37,7 @@ Confirmed CI now runs a dedicated Phase 13 validation step and a workflow covera
 
 `docs/architecture.md` must continue to keep the policy-sensitive path explicit and forbid external substrates or executors from becoming the authority for approval or reconciliation truth.
 
-`control-plane/tests/test_service_persistence.py` must continue to guard Phase 13 policy routing, Shuffle delegation boundaries, isolated-executor boundaries, and authoritative reconciliation behavior.
+`control-plane/tests/test_service_persistence_action_reconciliation.py` must continue to guard Phase 13 policy routing, Shuffle delegation boundaries, isolated-executor boundaries, and authoritative reconciliation behavior.
 
 `control-plane/tests/test_wazuh_alert_ingest_contract_docs.py` must continue to guard the shared-doc contract that `delegation_id` survives into later reconciliation expectations.
 

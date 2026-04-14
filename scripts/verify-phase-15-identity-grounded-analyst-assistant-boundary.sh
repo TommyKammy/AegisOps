@@ -16,7 +16,7 @@ phase13_doc="${repo_root}/docs/phase-13-guarded-automation-ci-validation.md"
 response_safety_doc="${repo_root}/docs/response-action-safety-model.md"
 adr_doc="${repo_root}/docs/adr/0002-wazuh-shuffle-control-plane-thesis.md"
 phase15_tests="${repo_root}/control-plane/tests/test_phase15_identity_grounded_analyst_assistant_boundary_docs.py"
-runtime_tests="${repo_root}/control-plane/tests/test_service_persistence.py"
+runtime_tests="${repo_root}/control-plane/tests/test_service_persistence_assistant_advisory.py"
 workflow_path="${repo_root}/.github/workflows/ci.yml"
 
 require_file() {
@@ -42,48 +42,10 @@ require_fixed_string() {
 require_test_name() {
   local file_path="$1"
   local test_name="$2"
+  local pattern="^[[:space:]]*def[[:space:]]+${test_name}[[:space:]]*\\("
 
-  if ! python3 - "$file_path" "$test_name" <<'PY'
-from __future__ import annotations
-
-import ast
-import sys
-from pathlib import Path
-
-
-def is_unittest_testcase(base: ast.expr) -> bool:
-    if isinstance(base, ast.Attribute):
-        return (
-            base.attr == "TestCase"
-            and isinstance(base.value, ast.Name)
-            and base.value.id == "unittest"
-        )
-
-    if isinstance(base, ast.Name):
-        return base.id == "TestCase"
-
-    return False
-
-
-file_path = Path(sys.argv[1])
-test_name = sys.argv[2]
-tree = ast.parse(file_path.read_text(encoding="utf-8"), filename=str(file_path))
-
-for node in tree.body:
-    if not isinstance(node, ast.ClassDef):
-        continue
-
-    if not any(is_unittest_testcase(base) for base in node.bases):
-        continue
-
-    for stmt in node.body:
-        if isinstance(stmt, ast.FunctionDef) and stmt.name == test_name:
-            raise SystemExit(0)
-
-print(f"Missing required Phase 15 unittest-discoverable test in {file_path}: {test_name}", file=sys.stderr)
-raise SystemExit(1)
-PY
-  then
+  if ! grep -Eq -- "${pattern}" "${file_path}" >/dev/null; then
+    echo "Missing required Phase 15 unittest-discoverable test in ${file_path}: ${test_name}" >&2
     exit 1
   fi
 }
@@ -109,8 +71,8 @@ validation_required_phrases=(
   "# Phase 15 Identity-Grounded Analyst-Assistant Boundary Validation"
   "- Validation date: 2026-04-09"
   "- Validation scope: Phase 15 review of the approved analyst-assistant boundary, operator-facing operating guidance, safe-query policy, citation completeness, prompt-injection resistance, identity ambiguity handling, assistant-context snapshot output contracts, optional OpenSearch extension boundaries, advisory-only ceiling, and CI wiring for the reviewed assistant boundary"
-  "- Baseline references: \`docs/phase-15-identity-grounded-analyst-assistant-boundary.md\`, \`docs/phase-15-identity-grounded-analyst-assistant-operating-guidance.md\`, \`docs/safe-query-gateway-and-tool-policy.md\`, \`docs/phase-7-ai-hunt-design-validation.md\`, \`docs/control-plane-state-model.md\`, \`docs/control-plane-runtime-service-boundary.md\`, \`docs/asset-identity-privilege-context-baseline.md\`, \`docs/phase-14-identity-rich-source-family-design.md\`, \`docs/phase-13-guarded-automation-ci-validation.md\`, \`docs/response-action-safety-model.md\`, \`docs/adr/0002-wazuh-shuffle-control-plane-thesis.md\`, \`control-plane/tests/test_phase15_identity_grounded_analyst_assistant_boundary_docs.py\`, \`control-plane/tests/test_service_persistence.py\`, \`.github/workflows/ci.yml\`"
-  "- Verification commands: \`bash scripts/verify-safe-query-gateway-doc.sh\`, \`bash scripts/verify-phase-7-ai-hunt-design-validation.sh\`, \`bash scripts/verify-phase-15-identity-grounded-analyst-assistant-boundary.sh\`, \`python3 -m unittest control-plane.tests.test_phase15_identity_grounded_analyst_assistant_boundary_docs control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_fails_closed_when_identity_context_is_alias_only control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_fails_closed_when_recommendation_text_claims_authority_or_scope_expansion\`, \`bash scripts/test-verify-phase-15-identity-grounded-analyst-assistant-boundary.sh\`, \`bash scripts/test-verify-ci-phase-15-workflow-coverage.sh\`"
+  "- Baseline references: \`docs/phase-15-identity-grounded-analyst-assistant-boundary.md\`, \`docs/phase-15-identity-grounded-analyst-assistant-operating-guidance.md\`, \`docs/safe-query-gateway-and-tool-policy.md\`, \`docs/phase-7-ai-hunt-design-validation.md\`, \`docs/control-plane-state-model.md\`, \`docs/control-plane-runtime-service-boundary.md\`, \`docs/asset-identity-privilege-context-baseline.md\`, \`docs/phase-14-identity-rich-source-family-design.md\`, \`docs/phase-13-guarded-automation-ci-validation.md\`, \`docs/response-action-safety-model.md\`, \`docs/adr/0002-wazuh-shuffle-control-plane-thesis.md\`, \`control-plane/tests/test_phase15_identity_grounded_analyst_assistant_boundary_docs.py\`, \`control-plane/tests/test_service_persistence_assistant_advisory.py\`, \`.github/workflows/ci.yml\`"
+  "- Verification commands: \`bash scripts/verify-safe-query-gateway-doc.sh\`, \`bash scripts/verify-phase-7-ai-hunt-design-validation.sh\`, \`bash scripts/verify-phase-15-identity-grounded-analyst-assistant-boundary.sh\`, \`python3 -m unittest control-plane.tests.test_phase15_identity_grounded_analyst_assistant_boundary_docs control-plane.tests.test_service_persistence_assistant_advisory.AssistantAdvisoryPersistenceTests.test_service_fails_closed_when_identity_context_is_alias_only control-plane.tests.test_service_persistence_assistant_advisory.AssistantAdvisoryPersistenceTests.test_service_fails_closed_when_recommendation_text_claims_authority_or_scope_expansion\`, \`bash scripts/test-verify-phase-15-identity-grounded-analyst-assistant-boundary.sh\`, \`bash scripts/test-verify-ci-phase-15-workflow-coverage.sh\`"
   "- Validation status: PASS"
   "## Required Boundary Artifacts"
   "## Review Outcome"
@@ -145,7 +107,7 @@ required_artifacts=(
   "docs/response-action-safety-model.md"
   "docs/adr/0002-wazuh-shuffle-control-plane-thesis.md"
   "control-plane/tests/test_phase15_identity_grounded_analyst_assistant_boundary_docs.py"
-  "control-plane/tests/test_service_persistence.py"
+  "control-plane/tests/test_service_persistence_assistant_advisory.py"
   ".github/workflows/ci.yml"
 )
 

@@ -86,7 +86,7 @@ For AegisOps, a custom-rule change is admissible only when the resulting Wazuh a
 
 Phase 12 implementers must update or add fixture coverage under `control-plane/tests/fixtures/wazuh/` whenever a custom rule introduces a new reviewed alert shape, source-identity branch, or provenance expectation.
 
-At minimum, the fixture-backed review path must keep `control-plane/tests/test_wazuh_adapter.py` and `control-plane/tests/test_service_persistence.py` aligned with the reviewed rule behavior before downstream workflow logic can rely on it.
+At minimum, the fixture-backed review path must keep `control-plane/tests/test_wazuh_adapter.py`, `control-plane/tests/test_service_persistence_assistant_advisory.py`, and `control-plane/tests/test_service_persistence_ingest_case_lifecycle.py` aligned with the reviewed rule behavior before downstream workflow logic can rely on it.
 
 ## 5. `wazuh-logtest` Validation Runbook
 
@@ -131,7 +131,7 @@ For AegisOps, a custom-rule change is admissible only when the resulting Wazuh a
 
 Phase 12 implementers must update or add fixture coverage under `control-plane/tests/fixtures/wazuh/` whenever a custom rule introduces a new reviewed alert shape, source-identity branch, or provenance expectation.
 
-At minimum, the fixture-backed review path must keep `control-plane/tests/test_wazuh_adapter.py` and `control-plane/tests/test_service_persistence.py` aligned with the reviewed rule behavior before downstream workflow logic can rely on it.
+At minimum, the fixture-backed review path must keep `control-plane/tests/test_wazuh_adapter.py`, `control-plane/tests/test_service_persistence_assistant_advisory.py`, and `control-plane/tests/test_service_persistence_ingest_case_lifecycle.py` aligned with the reviewed rule behavior before downstream workflow logic can rely on it.
 
 ## 5. `wazuh-logtest` Validation Runbook
 

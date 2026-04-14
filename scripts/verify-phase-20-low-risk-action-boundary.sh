@@ -14,7 +14,7 @@ business_hours_doc="${repo_root}/docs/secops-business-hours-operating-model.md"
 architecture_doc="${repo_root}/docs/architecture.md"
 docs_test="${repo_root}/control-plane/tests/test_phase20_low_risk_action_docs.py"
 runtime_validation_test="${repo_root}/control-plane/tests/test_phase20_low_risk_action_validation.py"
-service_test_doc="${repo_root}/control-plane/tests/test_service_persistence.py"
+service_test_doc="${repo_root}/control-plane/tests/test_service_persistence_action_reconciliation.py"
 workflow_path="${repo_root}/.github/workflows/ci.yml"
 
 require_file() {
@@ -96,7 +96,7 @@ validation_required_lines=(
   'Confirmed the reviewed Phase 20 path stays anchored to the Phase 19 operator surface by requiring reviewed casework, an explicit action request, explicit human approval, reviewed Shuffle delegation, and authoritative reconciliation.'
   'Confirmed the design keeps AegisOps authoritative for request, approval, execution, and reconciliation truth while using Shuffle only as the approved low-risk execution substrate for the already-approved transport step.'
   'Confirmed payload binding, approval expiry, and mismatch handling remain fail closed by requiring the reviewed path to preserve `approval_decision_id`, `delegation_id`, `idempotency_key`, `payload_hash`, execution-surface identity, and the approved expiry window before delegation may proceed.'
-  'Confirmed focused repository-local coverage already exercises the current reviewed Shuffle path for `notify_identity_owner`, including approval recheck, payload-binding drift rejection, expiry-window drift rejection, target-scope drift rejection, authoritative reconciliation, and mismatch preservation in `control-plane/tests/test_service_persistence.py`.'
+  'Confirmed focused repository-local coverage already exercises the current reviewed Shuffle path for `notify_identity_owner`, including approval recheck, payload-binding drift rejection, expiry-window drift rejection, target-scope drift rejection, authoritative reconciliation, and mismatch preservation in `control-plane/tests/test_service_persistence_action_reconciliation.py`.'
   'Confirmed deferred scope remains visible, including broader action catalogs, multi-recipient fanout, unattended low-risk execution, high-risk executor live wiring, and broad workflow orchestration.'
   'The issue requested review against `Phase 16-21 Epic Roadmap.md`, but that roadmap file was not present in the local worktree and could not be located via repository search during this validation snapshot.'
   '- Requested comparison target `Phase 16-21 Epic Roadmap.md` was unavailable in the local worktree during this validation snapshot.'
@@ -118,7 +118,7 @@ required_artifacts=(
   "docs/architecture.md"
   "control-plane/tests/test_phase20_low_risk_action_docs.py"
   "control-plane/tests/test_phase20_low_risk_action_validation.py"
-  "control-plane/tests/test_service_persistence.py"
+  "control-plane/tests/test_service_persistence_action_reconciliation.py"
   "scripts/verify-phase-20-low-risk-action-boundary.sh"
   "scripts/test-verify-phase-20-low-risk-action-boundary.sh"
   "scripts/test-verify-ci-phase-20-workflow-coverage.sh"

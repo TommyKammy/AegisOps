@@ -18,7 +18,7 @@ required_artifacts=(
   "docs/control-plane-state-model.md"
   "docs/architecture.md"
   "docs/phase-13-guarded-automation-ci-validation.md"
-  "control-plane/tests/test_service_persistence.py"
+  "control-plane/tests/test_service_persistence_action_reconciliation.py"
   "control-plane/tests/test_wazuh_alert_ingest_contract_docs.py"
   ".github/workflows/ci.yml"
 )
@@ -111,20 +111,20 @@ assert_fails_with "${missing_validation_repo}" "Missing Phase 13 guarded-automat
 missing_test_repo="${workdir}/missing-test"
 create_repo "${missing_test_repo}"
 write_required_artifacts "${missing_test_repo}"
-remove_text_from_file "${missing_test_repo}" "control-plane/tests/test_service_persistence.py" "    def test_service_delegates_approved_high_risk_action_through_isolated_executor("
+remove_text_from_file "${missing_test_repo}" "control-plane/tests/test_service_persistence_action_reconciliation.py" "    def test_service_delegates_approved_high_risk_action_through_isolated_executor("
 commit_fixture "${missing_test_repo}"
-assert_fails_with "${missing_test_repo}" "Missing required Phase 13 test in ${missing_test_repo}/control-plane/tests/test_service_persistence.py: test_service_delegates_approved_high_risk_action_through_isolated_executor"
+assert_fails_with "${missing_test_repo}" "Missing required Phase 13 test in ${missing_test_repo}/control-plane/tests/test_service_persistence_action_reconciliation.py: test_service_delegates_approved_high_risk_action_through_isolated_executor"
 
 commented_test_repo="${workdir}/commented-test"
 create_repo "${commented_test_repo}"
 write_required_artifacts "${commented_test_repo}"
 replace_text_in_file \
   "${commented_test_repo}" \
-  "control-plane/tests/test_service_persistence.py" \
+  "control-plane/tests/test_service_persistence_action_reconciliation.py" \
   "    def test_service_delegates_approved_high_risk_action_through_isolated_executor(" \
   "    # def test_service_delegates_approved_high_risk_action_through_isolated_executor("
 commit_fixture "${commented_test_repo}"
-assert_fails_with "${commented_test_repo}" "Missing required Phase 13 test in ${commented_test_repo}/control-plane/tests/test_service_persistence.py: test_service_delegates_approved_high_risk_action_through_isolated_executor"
+assert_fails_with "${commented_test_repo}" "Missing required Phase 13 test in ${commented_test_repo}/control-plane/tests/test_service_persistence_action_reconciliation.py: test_service_delegates_approved_high_risk_action_through_isolated_executor"
 
 stale_contract_repo="${workdir}/stale-contract"
 create_repo "${stale_contract_repo}"

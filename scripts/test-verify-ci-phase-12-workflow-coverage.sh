@@ -14,7 +14,7 @@ required_tests=(
 )
 
 required_runtime_commands=(
-  "python3 -m unittest control-plane.tests.test_wazuh_alert_ingest_contract_docs control-plane.tests.test_wazuh_adapter control-plane.tests.test_service_persistence control-plane.tests.test_cli_inspection"
+  "python3 -m unittest control-plane.tests.test_wazuh_alert_ingest_contract_docs control-plane.tests.test_wazuh_adapter control-plane.tests.test_service_persistence_assistant_advisory control-plane.tests.test_service_persistence_ingest_case_lifecycle control-plane.tests.test_cli_inspection"
 )
 
 self_guard_step_name="Run Phase 12 workflow coverage guard"

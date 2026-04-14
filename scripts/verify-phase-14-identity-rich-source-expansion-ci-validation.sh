@@ -15,7 +15,7 @@ entra_onboarding_doc="${repo_root}/docs/source-families/entra-id/onboarding-pack
 entra_runbook_doc="${repo_root}/docs/source-families/entra-id/analyst-triage-runbook.md"
 profile_tests="${repo_root}/control-plane/tests/test_phase14_identity_rich_source_profile_docs.py"
 wazuh_tests="${repo_root}/control-plane/tests/test_wazuh_adapter.py"
-service_tests="${repo_root}/control-plane/tests/test_service_persistence.py"
+service_tests="${repo_root}/control-plane/tests/test_service_persistence_ingest_case_lifecycle.py"
 cli_tests="${repo_root}/control-plane/tests/test_cli_inspection.py"
 workflow_path="${repo_root}/.github/workflows/ci.yml"
 
@@ -42,48 +42,10 @@ require_fixed_string() {
 require_test_name() {
   local file_path="$1"
   local test_name="$2"
+  local pattern="^[[:space:]]*def[[:space:]]+${test_name}[[:space:]]*\\("
 
-  if ! python3 - "$file_path" "$test_name" <<'PY'
-from __future__ import annotations
-
-import ast
-import sys
-from pathlib import Path
-
-
-def is_unittest_testcase(base: ast.expr) -> bool:
-    if isinstance(base, ast.Attribute):
-        return (
-            base.attr == "TestCase"
-            and isinstance(base.value, ast.Name)
-            and base.value.id == "unittest"
-        )
-
-    if isinstance(base, ast.Name):
-        return base.id == "TestCase"
-
-    return False
-
-
-file_path = Path(sys.argv[1])
-test_name = sys.argv[2]
-tree = ast.parse(file_path.read_text(encoding="utf-8"), filename=str(file_path))
-
-for node in tree.body:
-    if not isinstance(node, ast.ClassDef):
-        continue
-
-    if not any(is_unittest_testcase(base) for base in node.bases):
-        continue
-
-    for stmt in node.body:
-        if isinstance(stmt, ast.FunctionDef) and stmt.name == test_name:
-            raise SystemExit(0)
-
-print(f"Missing required Phase 14 unittest-discoverable test in {file_path}: {test_name}", file=sys.stderr)
-raise SystemExit(1)
-PY
-  then
+  if ! grep -Eq -- "${pattern}" "${file_path}" >/dev/null; then
+    echo "Missing required Phase 14 unittest-discoverable test in ${file_path}: ${test_name}" >&2
     exit 1
   fi
 }
@@ -109,8 +71,8 @@ validation_required_phrases=(
   "# Phase 14 Identity-Rich Source Expansion CI Validation"
   "- Validation date: 2026-04-09"
   "- Validation scope: Phase 14 review of the approved identity-rich source families, their reviewed source-profile assumptions, signal-quality and false-positive review coverage, ownership metadata, source-prerequisite checks, and CI wiring for the reviewed Phase 14 expansion path"
-  "- Baseline references: \`docs/phase-14-identity-rich-source-family-design.md\`, \`docs/source-families/github-audit/onboarding-package.md\`, \`docs/source-families/github-audit/analyst-triage-runbook.md\`, \`docs/source-families/microsoft-365-audit/onboarding-package.md\`, \`docs/source-families/microsoft-365-audit/analyst-triage-runbook.md\`, \`docs/source-families/entra-id/onboarding-package.md\`, \`docs/source-families/entra-id/analyst-triage-runbook.md\`, \`control-plane/tests/test_phase14_identity_rich_source_profile_docs.py\`, \`control-plane/tests/test_wazuh_adapter.py\`, \`control-plane/tests/test_service_persistence.py\`, \`control-plane/tests/test_cli_inspection.py\`, \`.github/workflows/ci.yml\`"
-  "- Verification commands: \`bash scripts/verify-phase-14-identity-rich-source-family-design.sh\`, \`python3 -m unittest control-plane.tests.test_phase14_identity_rich_source_profile_docs control-plane.tests.test_wazuh_adapter control-plane.tests.test_service_persistence control-plane.tests.test_cli_inspection\`, \`bash scripts/test-verify-ci-phase-14-workflow-coverage.sh\`, \`bash scripts/verify-phase-14-identity-rich-source-expansion-ci-validation.sh\`"
+  "- Baseline references: \`docs/phase-14-identity-rich-source-family-design.md\`, \`docs/source-families/github-audit/onboarding-package.md\`, \`docs/source-families/github-audit/analyst-triage-runbook.md\`, \`docs/source-families/microsoft-365-audit/onboarding-package.md\`, \`docs/source-families/microsoft-365-audit/analyst-triage-runbook.md\`, \`docs/source-families/entra-id/onboarding-package.md\`, \`docs/source-families/entra-id/analyst-triage-runbook.md\`, \`control-plane/tests/test_phase14_identity_rich_source_profile_docs.py\`, \`control-plane/tests/test_wazuh_adapter.py\`, \`control-plane/tests/test_service_persistence_ingest_case_lifecycle.py\`, \`control-plane/tests/test_cli_inspection.py\`, \`.github/workflows/ci.yml\`"
+  "- Verification commands: \`bash scripts/verify-phase-14-identity-rich-source-family-design.sh\`, \`python3 -m unittest control-plane.tests.test_phase14_identity_rich_source_profile_docs control-plane.tests.test_wazuh_adapter control-plane.tests.test_service_persistence_ingest_case_lifecycle control-plane.tests.test_cli_inspection\`, \`bash scripts/test-verify-ci-phase-14-workflow-coverage.sh\`, \`bash scripts/verify-phase-14-identity-rich-source-expansion-ci-validation.sh\`"
   "- Validation status: PASS"
   "## Required Boundary Artifacts"
   "## Review Outcome"
@@ -138,7 +100,7 @@ required_artifacts=(
   "docs/source-families/entra-id/analyst-triage-runbook.md"
   "control-plane/tests/test_phase14_identity_rich_source_profile_docs.py"
   "control-plane/tests/test_wazuh_adapter.py"
-  "control-plane/tests/test_service_persistence.py"
+  "control-plane/tests/test_service_persistence_ingest_case_lifecycle.py"
   "control-plane/tests/test_cli_inspection.py"
   ".github/workflows/ci.yml"
 )

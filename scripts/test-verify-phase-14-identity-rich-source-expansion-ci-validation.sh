@@ -24,7 +24,7 @@ required_artifacts=(
   "docs/source-families/entra-id/analyst-triage-runbook.md"
   "control-plane/tests/test_phase14_identity_rich_source_profile_docs.py"
   "control-plane/tests/test_wazuh_adapter.py"
-  "control-plane/tests/test_service_persistence.py"
+  "control-plane/tests/test_service_persistence_ingest_case_lifecycle.py"
   "control-plane/tests/test_cli_inspection.py"
   ".github/workflows/ci.yml"
 )
@@ -139,11 +139,11 @@ create_repo "${missing_entra_service_test_repo}"
 write_required_artifacts "${missing_entra_service_test_repo}"
 replace_text_in_file \
   "${missing_entra_service_test_repo}" \
-  "control-plane/tests/test_service_persistence.py" \
+  "control-plane/tests/test_service_persistence_ingest_case_lifecycle.py" \
   "    def test_service_admits_entra_id_fixture_through_wazuh_source_profile(" \
   "    def _missing_service_admits_entra_id_fixture_through_wazuh_source_profile("
 commit_fixture "${missing_entra_service_test_repo}"
-assert_fails_with "${missing_entra_service_test_repo}" "Missing required Phase 14 unittest-discoverable test in ${missing_entra_service_test_repo}/control-plane/tests/test_service_persistence.py: test_service_admits_entra_id_fixture_through_wazuh_source_profile"
+assert_fails_with "${missing_entra_service_test_repo}" "Missing required Phase 14 unittest-discoverable test in ${missing_entra_service_test_repo}/control-plane/tests/test_service_persistence_ingest_case_lifecycle.py: test_service_admits_entra_id_fixture_through_wazuh_source_profile"
 
 missing_prerequisite_test_repo="${workdir}/missing-prerequisite-test"
 create_repo "${missing_prerequisite_test_repo}"
