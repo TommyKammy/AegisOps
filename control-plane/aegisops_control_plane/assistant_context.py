@@ -425,7 +425,7 @@ class AssistantContextAssembler:
                 f"Missing {record_family} record {record_id!r} for assistant context"
             )
         if record_family == "case":
-            self._service._require_phase19_operator_case_record(record)
+            self._service._require_reviewed_operator_case_record(record)
 
         linked_alert_ids = self._service._assistant_ids_from_value(
             getattr(record, "alert_id", None)
@@ -807,10 +807,10 @@ class AssistantContextAssembler:
 
     def inspect_advisory_output(self, record_family: str, record_id: str) -> Any:
         context_snapshot = self.inspect_assistant_context(record_family, record_id)
-        self._service._require_phase19_case_scoped_advisory_read(context_snapshot)
+        self._service._require_reviewed_case_scoped_advisory_read(context_snapshot)
         return self._advisory_snapshot_from_context(context_snapshot)
 
     def render_recommendation_draft(self, record_family: str, record_id: str) -> Any:
         context_snapshot = self.inspect_assistant_context(record_family, record_id)
-        self._service._require_phase19_case_scoped_advisory_read(context_snapshot)
+        self._service._require_reviewed_case_scoped_advisory_read(context_snapshot)
         return self._recommendation_draft_snapshot_from_context(context_snapshot)

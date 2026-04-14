@@ -43,7 +43,10 @@ class ExecutionCoordinatorServiceDependencies(Protocol):
     ) -> None:
         ...
 
-    def _require_phase19_case_scoped_advisory_read(self, context_snapshot: object) -> None:
+    def _require_reviewed_case_scoped_advisory_read(
+        self,
+        context_snapshot: object,
+    ) -> None:
         ...
 
     def _require_single_recommendation_binding(
@@ -58,7 +61,7 @@ class ExecutionCoordinatorServiceDependencies(Protocol):
     def _require_single_linked_case_id(self, linked_case_ids: tuple[str, ...]) -> str:
         ...
 
-    def _require_phase19_operator_case(self, case_id: str) -> object:
+    def _require_reviewed_operator_case(self, case_id: str) -> object:
         ...
 
     def _resolve_new_record_identifier(
@@ -165,7 +168,7 @@ class ExecutionCoordinator:
                 record_family,
                 record_id,
             )
-            self._service._require_phase19_case_scoped_advisory_read(context_snapshot)
+            self._service._require_reviewed_case_scoped_advisory_read(context_snapshot)
             recommendation_draft = self._service.render_recommendation_draft(
                 record_family,
                 record_id,
@@ -183,7 +186,7 @@ class ExecutionCoordinator:
             case_id = self._service._require_single_linked_case_id(
                 recommendation_draft.linked_case_ids
             )
-            case = self._service._require_phase19_operator_case(case_id)
+            case = self._service._require_reviewed_operator_case(case_id)
             if expires_at <= datetime.now(timezone.utc):
                 raise ValueError("expires_at must be in the future")
 
