@@ -10,7 +10,12 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 class Phase20LowRiskActionValidationTests(unittest.TestCase):
     @staticmethod
     def _service_test_doc() -> pathlib.Path:
-        return REPO_ROOT / "control-plane" / "tests" / "test_service_persistence.py"
+        return (
+            REPO_ROOT
+            / "control-plane"
+            / "tests"
+            / "test_service_persistence_action_reconciliation.py"
+        )
 
     def test_reviewed_runtime_path_covers_phase20_low_risk_action_boundary(self) -> None:
         service_test_doc = self._service_test_doc()
