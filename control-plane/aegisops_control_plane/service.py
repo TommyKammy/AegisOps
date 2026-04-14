@@ -192,6 +192,8 @@ class AlertDetailSnapshot:
     native_rule: dict[str, object] | None
     provenance: dict[str, str] | None
     lineage: dict[str, object]
+    current_action_review: dict[str, object] | None
+    action_reviews: tuple[dict[str, object], ...]
 
     def to_dict(self) -> dict[str, object]:
         return _json_ready(
@@ -210,6 +212,8 @@ class AlertDetailSnapshot:
                 "native_rule": self.native_rule,
                 "provenance": self.provenance,
                 "lineage": self.lineage,
+                "current_action_review": self.current_action_review,
+                "action_reviews": self.action_reviews,
             }
         )
 
@@ -233,6 +237,8 @@ class CaseDetailSnapshot:
     linked_evidence_records: tuple[dict[str, object], ...]
     linked_recommendation_records: tuple[dict[str, object], ...]
     linked_reconciliation_records: tuple[dict[str, object], ...]
+    current_action_review: dict[str, object] | None
+    action_reviews: tuple[dict[str, object], ...]
 
     def to_dict(self) -> dict[str, object]:
         return _json_ready(
@@ -254,6 +260,8 @@ class CaseDetailSnapshot:
                 "linked_evidence_records": self.linked_evidence_records,
                 "linked_recommendation_records": self.linked_recommendation_records,
                 "linked_reconciliation_records": self.linked_reconciliation_records,
+                "current_action_review": self.current_action_review,
+                "action_reviews": self.action_reviews,
             }
         )
 
@@ -1300,6 +1308,310 @@ class AegisOpsControlPlaneService:
     def _run_authoritative_restore_drill_snapshot(self) -> RestoreDrillSnapshot:
         return self._restore_readiness_service.run_authoritative_restore_drill_snapshot()
 
+    def _action_review_chains_for_scope(
+        self,
+        *,
+        case_id: str | None,
+        alert_id: str | None,
+    ) -> tuple[dict[str, object], ...]:
+        matching_requests = [
+            record
+            for record in self._store.list(ActionRequestRecord)
+            if (
+                (case_id is not None and record.case_id == case_id)
+                or (alert_id is not None and record.alert_id == alert_id)
+            )
+        ]
+        chains = [
+            self._build_action_review_chain_snapshot(action_request)
+            for action_request in matching_requests
+        ]
+        chains.sort(
+            key=lambda chain: (
+                self._action_review_priority(chain),
+                chain.get("requested_at") or datetime.min.replace(tzinfo=timezone.utc),
+                chain.get("action_request_id") or "",
+            ),
+            reverse=True,
+        )
+        return tuple(chains)
+
+    @staticmethod
+    def _action_review_priority(chain: Mapping[str, object]) -> int:
+        review_state = chain.get("review_state")
+        if review_state == "pending":
+            return 5
+        if review_state in {"approved", "executing"}:
+            return 4
+        if review_state in {"expired", "rejected"}:
+            return 3
+        if review_state == "superseded":
+            return 2
+        return 1
+
+    def _build_action_review_chain_snapshot(
+        self,
+        action_request: ActionRequestRecord,
+    ) -> dict[str, object]:
+        approval_decision = self._action_review_approval_decision(action_request)
+        action_execution = self._action_review_execution(action_request)
+        reconciliation = self._latest_action_review_reconciliation(
+            action_request=action_request,
+            approval_decision=approval_decision,
+            action_execution=action_execution,
+        )
+        approval_state = self._action_review_approval_state(
+            action_request=action_request,
+            approval_decision=approval_decision,
+        )
+        review_state = self._action_review_state(
+            action_request=action_request,
+            approval_state=approval_state,
+            action_execution=action_execution,
+        )
+        replacement_action_request = self._replacement_action_request(action_request)
+        requested_payload = dict(action_request.requested_payload)
+
+        return {
+            "review_state": review_state,
+            "next_expected_action": self._next_expected_action_for_review_state(
+                review_state
+            ),
+            "action_request_id": action_request.action_request_id,
+            "action_request_state": action_request.lifecycle_state,
+            "approval_decision_id": (
+                approval_decision.approval_decision_id if approval_decision is not None else None
+            ),
+            "approval_state": approval_state,
+            "requester_identity": action_request.requester_identity,
+            "approver_identities": (
+                approval_decision.approver_identities if approval_decision is not None else ()
+            ),
+            "requested_at": action_request.requested_at,
+            "expires_at": action_request.expires_at,
+            "target_scope": dict(action_request.target_scope),
+            "requested_payload": requested_payload,
+            "recommendation_id": requested_payload.get("recommendation_id"),
+            "recipient_identity": requested_payload.get("recipient_identity"),
+            "message_intent": requested_payload.get("message_intent"),
+            "escalation_reason": requested_payload.get("escalation_reason"),
+            "execution_surface_type": action_request.policy_evaluation.get(
+                "execution_surface_type"
+            ),
+            "execution_surface_id": action_request.policy_evaluation.get(
+                "execution_surface_id"
+            ),
+            "action_execution_id": (
+                action_execution.action_execution_id if action_execution is not None else None
+            ),
+            "action_execution_state": (
+                action_execution.lifecycle_state if action_execution is not None else None
+            ),
+            "delegation_id": (
+                action_execution.delegation_id if action_execution is not None else None
+            ),
+            "execution_run_id": (
+                action_execution.execution_run_id if action_execution is not None else None
+            ),
+            "reconciliation_id": (
+                reconciliation.reconciliation_id if reconciliation is not None else None
+            ),
+            "reconciliation_state": (
+                reconciliation.lifecycle_state if reconciliation is not None else None
+            ),
+            "replacement_action_request_id": (
+                replacement_action_request.action_request_id
+                if replacement_action_request is not None
+                else None
+            ),
+            "replacement_approval_decision_id": (
+                replacement_action_request.approval_decision_id
+                if replacement_action_request is not None
+                else None
+            ),
+        }
+
+    def _action_review_approval_decision(
+        self,
+        action_request: ActionRequestRecord,
+    ) -> ApprovalDecisionRecord | None:
+        if action_request.approval_decision_id:
+            decision = self._store.get(
+                ApprovalDecisionRecord,
+                action_request.approval_decision_id,
+            )
+            if decision is not None:
+                return decision
+        matches = [
+            record
+            for record in self._store.list(ApprovalDecisionRecord)
+            if record.action_request_id == action_request.action_request_id
+        ]
+        if not matches:
+            return None
+        matches.sort(
+            key=lambda record: (
+                record.decided_at or datetime.min.replace(tzinfo=timezone.utc),
+                record.approval_decision_id,
+            ),
+            reverse=True,
+        )
+        return matches[0]
+
+    def _action_review_execution(
+        self,
+        action_request: ActionRequestRecord,
+    ) -> ActionExecutionRecord | None:
+        matches = [
+            record
+            for record in self._store.list(ActionExecutionRecord)
+            if record.action_request_id == action_request.action_request_id
+        ]
+        if not matches:
+            return None
+        matches.sort(
+            key=lambda record: (
+                record.delegated_at,
+                record.action_execution_id,
+            ),
+            reverse=True,
+        )
+        return matches[0]
+
+    def _latest_action_review_reconciliation(
+        self,
+        *,
+        action_request: ActionRequestRecord,
+        approval_decision: ApprovalDecisionRecord | None,
+        action_execution: ActionExecutionRecord | None,
+    ) -> ReconciliationRecord | None:
+        matches: list[ReconciliationRecord] = []
+        for reconciliation in self._store.list(ReconciliationRecord):
+            subject_action_request_ids = self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "action_request_ids",
+            )
+            if action_request.action_request_id in subject_action_request_ids:
+                matches.append(reconciliation)
+                continue
+            if approval_decision is not None:
+                subject_approval_decision_ids = self._assistant_ids_from_mapping(
+                    reconciliation.subject_linkage,
+                    "approval_decision_ids",
+                )
+                if approval_decision.approval_decision_id in subject_approval_decision_ids:
+                    matches.append(reconciliation)
+                    continue
+            if action_execution is not None:
+                subject_action_execution_ids = self._assistant_ids_from_mapping(
+                    reconciliation.subject_linkage,
+                    "action_execution_ids",
+                )
+                if action_execution.action_execution_id in subject_action_execution_ids:
+                    matches.append(reconciliation)
+                    continue
+                subject_delegation_ids = self._assistant_ids_from_mapping(
+                    reconciliation.subject_linkage,
+                    "delegation_ids",
+                )
+                if action_execution.delegation_id in subject_delegation_ids:
+                    matches.append(reconciliation)
+                    continue
+        if not matches:
+            return None
+        matches.sort(
+            key=lambda record: (
+                record.compared_at or record.last_seen_at or record.first_seen_at,
+                record.reconciliation_id,
+            ),
+            reverse=True,
+        )
+        return matches[0]
+
+    @staticmethod
+    def _action_review_approval_state(
+        *,
+        action_request: ActionRequestRecord,
+        approval_decision: ApprovalDecisionRecord | None,
+    ) -> str | None:
+        if approval_decision is not None:
+            return approval_decision.lifecycle_state
+        if action_request.lifecycle_state == "pending_approval":
+            return "pending"
+        if action_request.lifecycle_state in {"rejected", "expired", "superseded", "canceled"}:
+            return action_request.lifecycle_state
+        return None
+
+    @staticmethod
+    def _action_review_state(
+        *,
+        action_request: ActionRequestRecord,
+        approval_state: str | None,
+        action_execution: ActionExecutionRecord | None,
+    ) -> str:
+        lifecycle_state = action_request.lifecycle_state
+        if lifecycle_state == "pending_approval":
+            return "pending"
+        if lifecycle_state in {"expired", "rejected", "superseded", "approved"}:
+            return lifecycle_state
+        if lifecycle_state in {"completed", "failed", "unresolved"}:
+            return lifecycle_state
+        if lifecycle_state == "executing":
+            return "executing"
+        if action_execution is not None:
+            return "executing"
+        if approval_state in {"expired", "rejected", "superseded"}:
+            return approval_state
+        if approval_state == "approved":
+            return "approved"
+        return lifecycle_state
+
+    def _replacement_action_request(
+        self,
+        action_request: ActionRequestRecord,
+    ) -> ActionRequestRecord | None:
+        if action_request.lifecycle_state != "superseded":
+            return None
+        requested_payload = dict(action_request.requested_payload)
+        recommendation_id = requested_payload.get("recommendation_id")
+        action_type = requested_payload.get("action_type")
+        matches = [
+            record
+            for record in self._store.list(ActionRequestRecord)
+            if record.action_request_id != action_request.action_request_id
+            and record.case_id == action_request.case_id
+            and record.alert_id == action_request.alert_id
+            and record.requested_at >= action_request.requested_at
+            and record.lifecycle_state != "superseded"
+            and dict(record.requested_payload).get("action_type") == action_type
+            and (
+                recommendation_id is None
+                or dict(record.requested_payload).get("recommendation_id")
+                == recommendation_id
+            )
+        ]
+        if not matches:
+            return None
+        matches.sort(
+            key=lambda record: (record.requested_at, record.action_request_id),
+            reverse=True,
+        )
+        return matches[0]
+
+    @staticmethod
+    def _next_expected_action_for_review_state(review_state: str) -> str | None:
+        return {
+            "pending": "await_approver_decision",
+            "approved": "await_reviewed_delegation",
+            "executing": "await_execution_reconciliation",
+            "expired": "create_replacement_or_close_case",
+            "rejected": "review_rejection_and_record_follow_up",
+            "superseded": "inspect_replacing_review_record",
+            "completed": "review_execution_outcome",
+            "failed": "investigate_execution_failure",
+            "unresolved": "investigate_reconciliation_gap",
+        }.get(review_state)
+
     def inspect_analyst_queue(self) -> AnalystQueueSnapshot:
         active_alert_states = {
             "new",
@@ -1334,6 +1646,10 @@ class AegisOpsControlPlaneService:
                 self._store.get(CaseRecord, alert.case_id)
                 if alert.case_id is not None
                 else None
+            )
+            action_reviews = self._action_review_chains_for_scope(
+                case_id=alert.case_id,
+                alert_id=alert.alert_id,
             )
             review_state = self._alert_review_state(alert)
             queue_records.append(
@@ -1371,6 +1687,9 @@ class AegisOpsControlPlaneService:
                     "correlation_key": reconciliation.correlation_key,
                     "first_seen_at": reconciliation.first_seen_at,
                     "last_seen_at": reconciliation.last_seen_at,
+                    "current_action_review": (
+                        dict(action_reviews[0]) if action_reviews else None
+                    ),
                 }
             )
 
@@ -1456,6 +1775,10 @@ class AegisOpsControlPlaneService:
             "first_seen_at": reconciliation.first_seen_at,
             "last_seen_at": reconciliation.last_seen_at,
         }
+        action_reviews = self._action_review_chains_for_scope(
+            case_id=alert.case_id,
+            alert_id=alert.alert_id,
+        )
 
         return AlertDetailSnapshot(
             read_only=True,
@@ -1484,6 +1807,8 @@ class AegisOpsControlPlaneService:
                 reconciliation.subject_linkage.get("admission_provenance")
             ),
             lineage=lineage,
+            current_action_review=dict(action_reviews[0]) if action_reviews else None,
+            action_reviews=action_reviews,
         )
 
     def inspect_assistant_context(
@@ -1508,6 +1833,10 @@ class AegisOpsControlPlaneService:
             _record_to_dict(record)
             for record in self._leads_for_case(case_id)
         )
+        action_reviews = self._action_review_chains_for_scope(
+            case_id=case_id,
+            alert_id=case.alert_id,
+        )
         return CaseDetailSnapshot(
             read_only=True,
             case_id=case_id,
@@ -1528,6 +1857,8 @@ class AegisOpsControlPlaneService:
             linked_evidence_records=context_snapshot.linked_evidence_records,
             linked_recommendation_records=context_snapshot.linked_recommendation_records,
             linked_reconciliation_records=context_snapshot.linked_reconciliation_records,
+            current_action_review=dict(action_reviews[0]) if action_reviews else None,
+            action_reviews=action_reviews,
         )
 
     def record_case_observation(

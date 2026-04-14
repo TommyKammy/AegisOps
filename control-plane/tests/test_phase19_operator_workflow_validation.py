@@ -385,6 +385,92 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                     recommendation["recommendation_id"],
                 )
 
+                queue_with_pending_action = get_json("/inspect-analyst-queue")
+                self.assertEqual(
+                    queue_with_pending_action["records"][0]["current_action_review"][
+                        "review_state"
+                    ],
+                    "pending",
+                )
+                self.assertEqual(
+                    queue_with_pending_action["records"][0]["current_action_review"][
+                        "action_request_id"
+                    ],
+                    action_request["action_request_id"],
+                )
+                self.assertEqual(
+                    queue_with_pending_action["records"][0]["current_action_review"][
+                        "requester_identity"
+                    ],
+                    "analyst-001",
+                )
+                self.assertEqual(
+                    queue_with_pending_action["records"][0]["current_action_review"][
+                        "approval_state"
+                    ],
+                    "pending",
+                )
+                self.assertEqual(
+                    queue_with_pending_action["records"][0]["current_action_review"][
+                        "next_expected_action"
+                    ],
+                    "await_approver_decision",
+                )
+
+                alert_detail_with_pending_action = get_json(
+                    f"/inspect-alert-detail?alert_id={created.alert.alert_id}"
+                )
+                self.assertEqual(
+                    alert_detail_with_pending_action["current_action_review"][
+                        "review_state"
+                    ],
+                    "pending",
+                )
+                self.assertEqual(
+                    alert_detail_with_pending_action["action_reviews"][0][
+                        "action_request_state"
+                    ],
+                    "pending_approval",
+                )
+                self.assertEqual(
+                    alert_detail_with_pending_action["action_reviews"][0][
+                        "requester_identity"
+                    ],
+                    "analyst-001",
+                )
+                self.assertEqual(
+                    alert_detail_with_pending_action["action_reviews"][0][
+                        "requested_payload"
+                    ]["action_type"],
+                    "notify_identity_owner",
+                )
+
+                case_detail_with_pending_action = get_json(
+                    f"/inspect-case-detail?case_id={case_id}"
+                )
+                self.assertEqual(
+                    case_detail_with_pending_action["current_action_review"][
+                        "review_state"
+                    ],
+                    "pending",
+                )
+                self.assertEqual(
+                    case_detail_with_pending_action["action_reviews"][0][
+                        "action_request_id"
+                    ],
+                    action_request["action_request_id"],
+                )
+                self.assertEqual(
+                    case_detail_with_pending_action["action_reviews"][0]["expires_at"],
+                    action_request["expires_at"],
+                )
+                self.assertEqual(
+                    case_detail_with_pending_action["action_reviews"][0][
+                        "recommendation_id"
+                    ],
+                    recommendation["recommendation_id"],
+                )
+
                 closed_case = post_json(
                     "/operator/record-case-disposition",
                     {
