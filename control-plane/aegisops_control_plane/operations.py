@@ -22,6 +22,12 @@ from .models import (
 )
 
 
+def _is_missing_runtime_binding(value: object) -> bool:
+    if value is None:
+        return True
+    return str(value).strip() in {"", "<set-me>"}
+
+
 class ControlPlaneStore(Protocol):
     dsn: str
     persistence_mode: str
@@ -82,7 +88,7 @@ class RuntimeBoundaryService:
         )
 
     def validate_wazuh_ingest_runtime(self) -> None:
-        if self._config.wazuh_ingest_shared_secret.strip() == "":
+        if _is_missing_runtime_binding(self._config.wazuh_ingest_shared_secret):
             raise ValueError(
                 "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET must be set "
                 "before starting the live Wazuh ingest runtime"
@@ -103,7 +109,9 @@ class RuntimeBoundaryService:
                 "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_TRUSTED_PROXY_CIDRS must be set "
                 "before starting the live Wazuh ingest runtime on a non-loopback interface"
             )
-        if self._config.wazuh_ingest_reverse_proxy_secret.strip() == "":
+        if _is_missing_runtime_binding(
+            self._config.wazuh_ingest_reverse_proxy_secret
+        ):
             raise ValueError(
                 "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_REVERSE_PROXY_SECRET must be set "
                 "before starting the live Wazuh ingest runtime"
@@ -127,12 +135,16 @@ class RuntimeBoundaryService:
                 "before starting protected control-plane surfaces on a non-loopback interface"
             )
         if self._config.protected_surface_trusted_proxy_cidrs:
-            if self._config.protected_surface_reverse_proxy_secret.strip() == "":
+            if _is_missing_runtime_binding(
+                self._config.protected_surface_reverse_proxy_secret
+            ):
                 raise ValueError(
                     "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVERSE_PROXY_SECRET must be set "
                     "before admitting reviewed reverse-proxy traffic to protected control-plane surfaces"
                 )
-            if self._config.protected_surface_proxy_service_account.strip() == "":
+            if _is_missing_runtime_binding(
+                self._config.protected_surface_proxy_service_account
+            ):
                 raise ValueError(
                     "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_PROXY_SERVICE_ACCOUNT must be set "
                     "before admitting reviewed reverse-proxy traffic to protected control-plane surfaces"
@@ -215,7 +227,7 @@ class RuntimeBoundaryService:
 
     def require_admin_bootstrap_token(self, supplied_token: str | None) -> None:
         expected_token = self._config.admin_bootstrap_token.strip()
-        if expected_token == "":
+        if _is_missing_runtime_binding(expected_token):
             raise PermissionError(
                 "admin bootstrap contract is disabled until AEGISOPS_CONTROL_PLANE_ADMIN_BOOTSTRAP_TOKEN is bound"
             )
@@ -224,7 +236,7 @@ class RuntimeBoundaryService:
 
     def require_break_glass_token(self, supplied_token: str | None) -> None:
         expected_token = self._config.break_glass_token.strip()
-        if expected_token == "":
+        if _is_missing_runtime_binding(expected_token):
             raise PermissionError(
                 "break-glass contract is disabled until AEGISOPS_CONTROL_PLANE_BREAK_GLASS_TOKEN is bound"
             )
@@ -381,8 +393,7 @@ class RestoreReadinessService:
         missing_bindings = tuple(
             binding_name
             for binding_name in required_bindings
-            if not str(binding_values[binding_name]).strip()
-            or binding_values[binding_name] == "<set-me>"
+            if _is_missing_runtime_binding(binding_values[binding_name])
         )
         validated_surfaces: list[str] = []
         blocking_reasons: list[str] = []
@@ -896,9 +907,22 @@ class RestoreReadinessService:
                     f"missing analytic_signal record {alert.analytic_signal_id!r} required by alert "
                     f"{alert.alert_id!r}"
                 )
+            if (
+                alert.analytic_signal_id
+                and alert.alert_id
+                not in analytic_signals[alert.analytic_signal_id].alert_ids
+            ):
+                raise ValueError(
+                    f"alert {alert.alert_id!r} does not match analytic signal binding "
+                    f"{alert.analytic_signal_id!r}"
+                )
             if alert.case_id and alert.case_id not in cases:
                 raise ValueError(
                     f"missing case record {alert.case_id!r} required by alert {alert.alert_id!r}"
+                )
+            if alert.case_id and cases[alert.case_id].alert_id != alert.alert_id:
+                raise ValueError(
+                    f"alert {alert.alert_id!r} does not match case binding {alert.case_id!r}"
                 )
 
         for analytic_signal in analytic_signals.values():
@@ -907,6 +931,11 @@ class RestoreReadinessService:
                     raise ValueError(
                         f"missing alert record {alert_id!r} required by analytic signal "
                         f"{analytic_signal.analytic_signal_id!r}"
+                    )
+                if alerts[alert_id].analytic_signal_id != analytic_signal.analytic_signal_id:
+                    raise ValueError(
+                        f"analytic signal {analytic_signal.analytic_signal_id!r} does not match "
+                        f"alert binding {alert_id!r}"
                     )
             for case_id in analytic_signal.case_ids:
                 if case_id not in cases:
@@ -931,6 +960,10 @@ class RestoreReadinessService:
             if case.alert_id and case.alert_id not in alerts:
                 raise ValueError(
                     f"missing alert record {case.alert_id!r} required by case {case.case_id!r}"
+                )
+            if case.alert_id and alerts[case.alert_id].case_id != case.case_id:
+                raise ValueError(
+                    f"case {case.case_id!r} does not match alert binding {case.alert_id!r}"
                 )
             for evidence_id in case.evidence_ids:
                 if evidence_id not in evidence_records:
