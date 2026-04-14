@@ -327,6 +327,100 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             "replacement_request": replacement_request,
         }
 
+    def _seed_action_review_timeline_mismatch_for_case(
+        self,
+        service: AegisOpsControlPlaneService,
+        promoted_case: CaseRecord,
+        reviewed_at: datetime,
+        evidence_id: str,
+    ) -> dict[str, object]:
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-009",
+            observed_at=reviewed_at,
+            scope_statement=(
+                "Observed control-plane timeline fixture requires preserved review lineage."
+            ),
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            observation_id=observation.observation_id,
+            triage_owner="analyst-009",
+            triage_rationale="Timeline inspection requires approval-bound reviewed lineage.",
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-009",
+            intended_outcome=(
+                "Review repository owner change evidence before any approval-bound response."
+            ),
+            lead_id=lead.lead_id,
+        )
+        requested_at = datetime.now(timezone.utc)
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-009",
+            recipient_identity="repo-owner-timeline-001",
+            message_intent="Notify the accountable owner using the reviewed action path.",
+            escalation_reason="Timeline inspection needs a reviewed action chain fixture.",
+            expires_at=requested_at + timedelta(hours=4),
+            action_request_id="action-request-cli-timeline-001",
+        )
+        approval_decision = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-cli-timeline-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-timeline-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=requested_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        approved_request = service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval_decision.approval_decision_id,
+                lifecycle_state="approved",
+            )
+        )
+        action_execution = service.delegate_approved_action_to_shuffle(
+            action_request_id=approved_request.action_request_id,
+            approved_payload=dict(approved_request.requested_payload),
+            delegated_at=requested_at + timedelta(minutes=7),
+            delegation_issuer="control-plane-service",
+            evidence_ids=(evidence_id,),
+        )
+        reconciliation = service.reconcile_action_execution(
+            action_request_id=approved_request.action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(
+                {
+                    "execution_run_id": "shuffle-run-cli-timeline-observed-002",
+                    "execution_surface_id": "shuffle",
+                    "idempotency_key": approved_request.idempotency_key,
+                    "approval_decision_id": action_execution.approval_decision_id,
+                    "delegation_id": action_execution.delegation_id,
+                    "payload_hash": action_execution.payload_hash,
+                    "observed_at": requested_at + timedelta(minutes=9),
+                    "status": "failed",
+                },
+            ),
+            compared_at=requested_at + timedelta(minutes=10),
+            stale_after=requested_at + timedelta(minutes=30),
+        )
+        return {
+            "recommendation": recommendation,
+            "action_request": approved_request,
+            "approval_decision": approval_decision,
+            "action_execution": action_execution,
+            "reconciliation": reconciliation,
+        }
+
     def test_runtime_command_uses_runtime_service_builder_when_not_injected(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
@@ -3027,6 +3121,86 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 "replacement_action_request_id"
             ],
             seeded["replacement_request"].action_request_id,
+        )
+
+    def test_cli_inspect_case_detail_renders_review_timeline_and_mismatch_details(
+        self,
+    ) -> None:
+        _, service, promoted_case, evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        seeded = self._seed_action_review_timeline_mismatch_for_case(
+            service,
+            promoted_case,
+            reviewed_at,
+            evidence_id,
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-case-detail", "--case-id", promoted_case.case_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        review = payload["current_action_review"]
+        self.assertEqual(review["action_request_id"], seeded["action_request"].action_request_id)
+        self.assertEqual(
+            [stage["stage"] for stage in review["timeline"]],
+            [
+                "action_request",
+                "approval_decision",
+                "delegation",
+                "action_execution",
+                "reconciliation",
+            ],
+        )
+        self.assertEqual(review["timeline"][0]["state"], "approved")
+        self.assertEqual(
+            review["timeline"][0]["actor_identities"],
+            ["analyst-009"],
+        )
+        self.assertEqual(review["timeline"][1]["state"], "approved")
+        self.assertEqual(
+            review["timeline"][1]["actor_identities"],
+            ["approver-timeline-001"],
+        )
+        self.assertEqual(review["timeline"][2]["state"], "delegated")
+        self.assertEqual(
+            review["timeline"][2]["actor_identities"],
+            ["control-plane-service"],
+        )
+        self.assertEqual(review["timeline"][3]["state"], "queued")
+        self.assertEqual(
+            review["timeline"][4]["state"],
+            "mismatched",
+        )
+        self.assertEqual(
+            review["timeline"][4]["record_id"],
+            seeded["reconciliation"].reconciliation_id,
+        )
+        self.assertEqual(
+            review["mismatch_inspection"]["reconciliation_id"],
+            seeded["reconciliation"].reconciliation_id,
+        )
+        self.assertEqual(
+            review["mismatch_inspection"]["lifecycle_state"],
+            "mismatched",
+        )
+        self.assertEqual(
+            review["mismatch_inspection"]["ingest_disposition"],
+            "mismatch",
+        )
+        self.assertIn(
+            "execution run identity mismatch",
+            review["mismatch_inspection"]["mismatch_summary"],
+        )
+        self.assertEqual(
+            review["mismatch_inspection"]["execution_run_id"],
+            "shuffle-run-cli-timeline-observed-002",
+        )
+        self.assertEqual(
+            review["mismatch_inspection"]["linked_execution_run_ids"],
+            ["shuffle-run-cli-timeline-observed-002"],
         )
 
     def test_cli_rejects_case_scoped_out_of_scope_advisory_reads_as_usage_errors(
