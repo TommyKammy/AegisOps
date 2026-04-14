@@ -1716,49 +1716,55 @@ class AegisOpsControlPlaneService:
         action_execution: ActionExecutionRecord | None,
         record_index: _ActionReviewRecordIndex | None = None,
     ) -> ReconciliationRecord | None:
+        def _dedupe(
+            reconciliations: tuple[ReconciliationRecord, ...] | list[ReconciliationRecord],
+        ) -> list[ReconciliationRecord]:
+            by_id: dict[str, ReconciliationRecord] = {}
+            for reconciliation in reconciliations:
+                by_id[reconciliation.reconciliation_id] = reconciliation
+            return list(by_id.values())
+
         matches: list[ReconciliationRecord] = []
         if record_index is not None:
-            matches_by_id: dict[str, ReconciliationRecord] = {}
-            for reconciliation in record_index.reconciliations_by_action_request_id.get(
-                action_request.action_request_id,
-                (),
-            ):
-                matches_by_id[reconciliation.reconciliation_id] = reconciliation
-            if approval_decision is not None:
-                for reconciliation in record_index.reconciliations_by_approval_decision_id.get(
-                    approval_decision.approval_decision_id,
-                    (),
-                ):
-                    matches_by_id[reconciliation.reconciliation_id] = reconciliation
             if action_execution is not None:
-                for reconciliation in record_index.reconciliations_by_action_execution_id.get(
-                    action_execution.action_execution_id,
-                    (),
-                ):
-                    matches_by_id[reconciliation.reconciliation_id] = reconciliation
-                for reconciliation in record_index.reconciliations_by_delegation_id.get(
-                    action_execution.delegation_id,
-                    (),
-                ):
-                    matches_by_id[reconciliation.reconciliation_id] = reconciliation
-            matches = list(matches_by_id.values())
+                matches = _dedupe(
+                    list(
+                        record_index.reconciliations_by_action_execution_id.get(
+                            action_execution.action_execution_id,
+                            (),
+                        )
+                    )
+                    + list(
+                        record_index.reconciliations_by_delegation_id.get(
+                            action_execution.delegation_id,
+                            (),
+                        )
+                    )
+                )
+            elif approval_decision is not None:
+                matches = _dedupe(
+                    list(
+                        record_index.reconciliations_by_approval_decision_id.get(
+                            approval_decision.approval_decision_id,
+                            (),
+                        )
+                    )
+                    + list(
+                        record_index.reconciliations_by_action_request_id.get(
+                            action_request.action_request_id,
+                            (),
+                        )
+                    )
+                )
+            else:
+                matches = list(
+                    record_index.reconciliations_by_action_request_id.get(
+                        action_request.action_request_id,
+                        (),
+                    )
+                )
         else:
             for reconciliation in self._store.list(ReconciliationRecord):
-                subject_action_request_ids = self._assistant_ids_from_mapping(
-                    reconciliation.subject_linkage,
-                    "action_request_ids",
-                )
-                if action_request.action_request_id in subject_action_request_ids:
-                    matches.append(reconciliation)
-                    continue
-                if approval_decision is not None:
-                    subject_approval_decision_ids = self._assistant_ids_from_mapping(
-                        reconciliation.subject_linkage,
-                        "approval_decision_ids",
-                    )
-                    if approval_decision.approval_decision_id in subject_approval_decision_ids:
-                        matches.append(reconciliation)
-                        continue
                 if action_execution is not None:
                     subject_action_execution_ids = self._assistant_ids_from_mapping(
                         reconciliation.subject_linkage,
@@ -1773,7 +1779,21 @@ class AegisOpsControlPlaneService:
                     )
                     if action_execution.delegation_id in subject_delegation_ids:
                         matches.append(reconciliation)
+                    continue
+                if approval_decision is not None:
+                    subject_approval_decision_ids = self._assistant_ids_from_mapping(
+                        reconciliation.subject_linkage,
+                        "approval_decision_ids",
+                    )
+                    if approval_decision.approval_decision_id in subject_approval_decision_ids:
+                        matches.append(reconciliation)
                         continue
+                subject_action_request_ids = self._assistant_ids_from_mapping(
+                    reconciliation.subject_linkage,
+                    "action_request_ids",
+                )
+                if action_request.action_request_id in subject_action_request_ids:
+                    matches.append(reconciliation)
         if not matches:
             return None
         matches.sort(
@@ -1959,7 +1979,9 @@ class AegisOpsControlPlaneService:
         delegation_details: dict[str, object] = {}
         action_execution_details: dict[str, object] = {}
         execution_actor_identities: tuple[str, ...] = ()
+        action_execution_occurred_at: datetime | None = None
         if action_execution is not None:
+            delegation_details["delegation_id"] = action_execution.delegation_id
             downstream_binding = action_execution.provenance.get("downstream_binding")
             if isinstance(downstream_binding, Mapping):
                 delegation_details["downstream_binding"] = dict(downstream_binding)
@@ -1969,6 +1991,13 @@ class AegisOpsControlPlaneService:
             adapter_base_url = action_execution.provenance.get("adapter_base_url")
             if isinstance(adapter_base_url, str) and adapter_base_url.strip():
                 action_execution_details["adapter_base_url"] = adapter_base_url
+            if reconciliation is not None and (
+                reconciliation.execution_run_id is not None
+                or reconciliation.linked_execution_run_ids
+            ):
+                action_execution_occurred_at = (
+                    reconciliation.last_seen_at or reconciliation.compared_at
+                )
 
         timeline = (
             self._action_review_stage_snapshot(
@@ -2020,7 +2049,9 @@ class AegisOpsControlPlaneService:
                 stage="delegation",
                 record_family="action_execution",
                 record_id=(
-                    None if action_execution is None else action_execution.delegation_id
+                    None
+                    if action_execution is None
+                    else action_execution.action_execution_id
                 ),
                 state=(
                     "awaiting_delegation"
@@ -2053,9 +2084,7 @@ class AegisOpsControlPlaneService:
                     if action_execution is None
                     else action_execution.lifecycle_state
                 ),
-                occurred_at=(
-                    None if action_execution is None else action_execution.delegated_at
-                ),
+                occurred_at=action_execution_occurred_at,
                 actor_identities=execution_actor_identities,
                 details=(
                     {}

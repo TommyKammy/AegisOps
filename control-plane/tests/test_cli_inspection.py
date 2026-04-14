@@ -421,6 +421,163 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             "reconciliation": reconciliation,
         }
 
+    def _seed_action_review_retried_execution_for_case(
+        self,
+        service: AegisOpsControlPlaneService,
+        promoted_case: CaseRecord,
+        reviewed_at: datetime,
+        evidence_id: str,
+    ) -> dict[str, object]:
+        seeded = self._seed_action_review_timeline_mismatch_for_case(
+            service,
+            promoted_case,
+            reviewed_at,
+            evidence_id,
+        )
+        first_execution = seeded["action_execution"]
+        first_reconciliation = seeded["reconciliation"]
+        latest_execution = service.persist_record(
+            replace(
+                first_execution,
+                action_execution_id="action-execution-cli-timeline-002",
+                delegation_id="delegation-cli-timeline-002",
+                execution_run_id="shuffle-run-cli-timeline-current-003",
+                delegated_at=first_execution.delegated_at + timedelta(minutes=4),
+                provenance={
+                    **dict(first_execution.provenance),
+                    "downstream_binding": {
+                        "approval_decision_id": first_execution.approval_decision_id,
+                        "delegation_id": "delegation-cli-timeline-002",
+                        "payload_hash": first_execution.payload_hash,
+                    },
+                },
+                lifecycle_state="queued",
+            )
+        )
+        current_reconciliation = service.persist_record(
+            replace(
+                first_reconciliation,
+                reconciliation_id="reconciliation-cli-timeline-current-003",
+                subject_linkage={
+                    **dict(first_reconciliation.subject_linkage),
+                    "action_execution_ids": (latest_execution.action_execution_id,),
+                    "delegation_ids": (latest_execution.delegation_id,),
+                },
+                execution_run_id=latest_execution.execution_run_id,
+                linked_execution_run_ids=(latest_execution.execution_run_id,),
+                last_seen_at=latest_execution.delegated_at + timedelta(minutes=2),
+                mismatch_summary="matched latest reviewed execution lineage",
+                compared_at=latest_execution.delegated_at + timedelta(minutes=3),
+                lifecycle_state="matched",
+                ingest_disposition="matched",
+            )
+        )
+        unrelated_later_reconciliation = service.persist_record(
+            replace(
+                first_reconciliation,
+                reconciliation_id="reconciliation-cli-timeline-older-004",
+                last_seen_at=latest_execution.delegated_at + timedelta(minutes=8),
+                compared_at=latest_execution.delegated_at + timedelta(minutes=9),
+                mismatch_summary=(
+                    "older execution lineage must not outrank the selected retry"
+                ),
+            )
+        )
+        return {
+            **seeded,
+            "selected_action_execution": latest_execution,
+            "selected_reconciliation": current_reconciliation,
+            "unrelated_later_reconciliation": unrelated_later_reconciliation,
+        }
+
+    def _assert_review_timeline_snapshot(
+        self,
+        review: dict[str, object],
+        seeded: dict[str, object],
+    ) -> None:
+        action_execution = seeded["action_execution"]
+        reconciliation = seeded["reconciliation"]
+        self.assertEqual(review["action_request_id"], seeded["action_request"].action_request_id)
+        self.assertEqual(
+            [stage["stage"] for stage in review["timeline"]],
+            [
+                "action_request",
+                "approval_decision",
+                "delegation",
+                "action_execution",
+                "reconciliation",
+            ],
+        )
+        self.assertEqual(review["timeline"][0]["state"], "approved")
+        self.assertEqual(
+            review["timeline"][0]["actor_identities"],
+            ["analyst-009"],
+        )
+        self.assertEqual(review["timeline"][1]["state"], "approved")
+        self.assertEqual(
+            review["timeline"][1]["actor_identities"],
+            ["approver-timeline-001"],
+        )
+        self.assertEqual(review["timeline"][2]["state"], "delegated")
+        self.assertEqual(review["timeline"][2]["record_family"], "action_execution")
+        self.assertEqual(
+            review["timeline"][2]["record_id"],
+            action_execution.action_execution_id,
+        )
+        self.assertEqual(
+            review["timeline"][2]["occurred_at"],
+            action_execution.delegated_at.isoformat(),
+        )
+        self.assertEqual(
+            review["timeline"][2]["actor_identities"],
+            ["control-plane-service"],
+        )
+        self.assertEqual(
+            review["timeline"][2]["details"]["delegation_id"],
+            action_execution.delegation_id,
+        )
+        self.assertEqual(review["timeline"][3]["state"], "queued")
+        self.assertEqual(
+            review["timeline"][3]["occurred_at"],
+            reconciliation.last_seen_at.isoformat(),
+        )
+        self.assertNotEqual(
+            review["timeline"][3]["occurred_at"],
+            action_execution.delegated_at.isoformat(),
+        )
+        self.assertEqual(
+            review["timeline"][4]["state"],
+            "mismatched",
+        )
+        self.assertEqual(
+            review["timeline"][4]["record_id"],
+            reconciliation.reconciliation_id,
+        )
+        self.assertEqual(
+            review["mismatch_inspection"]["reconciliation_id"],
+            reconciliation.reconciliation_id,
+        )
+        self.assertEqual(
+            review["mismatch_inspection"]["lifecycle_state"],
+            "mismatched",
+        )
+        self.assertEqual(
+            review["mismatch_inspection"]["ingest_disposition"],
+            "mismatch",
+        )
+        self.assertIn(
+            "execution run identity mismatch",
+            review["mismatch_inspection"]["mismatch_summary"],
+        )
+        self.assertEqual(
+            review["mismatch_inspection"]["execution_run_id"],
+            "shuffle-run-cli-timeline-observed-002",
+        )
+        self.assertEqual(
+            review["mismatch_inspection"]["linked_execution_run_ids"],
+            ["shuffle-run-cli-timeline-observed-002"],
+        )
+
     def test_runtime_command_uses_runtime_service_builder_when_not_injected(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
@@ -3143,64 +3300,97 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
 
         payload = json.loads(stdout.getvalue())
         review = payload["current_action_review"]
-        self.assertEqual(review["action_request_id"], seeded["action_request"].action_request_id)
-        self.assertEqual(
-            [stage["stage"] for stage in review["timeline"]],
-            [
-                "action_request",
-                "approval_decision",
-                "delegation",
-                "action_execution",
-                "reconciliation",
-            ],
+        self._assert_review_timeline_snapshot(review, seeded)
+
+    def test_cli_inspect_case_detail_keeps_reconciliation_bound_to_selected_execution(
+        self,
+    ) -> None:
+        _, service, promoted_case, evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        seeded = self._seed_action_review_retried_execution_for_case(
+            service,
+            promoted_case,
+            reviewed_at,
+            evidence_id,
         )
-        self.assertEqual(review["timeline"][0]["state"], "approved")
-        self.assertEqual(
-            review["timeline"][0]["actor_identities"],
-            ["analyst-009"],
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-case-detail", "--case-id", promoted_case.case_id],
+            stdout=stdout,
+            service=service,
         )
-        self.assertEqual(review["timeline"][1]["state"], "approved")
+
+        payload = json.loads(stdout.getvalue())
+        review = payload["current_action_review"]
         self.assertEqual(
-            review["timeline"][1]["actor_identities"],
-            ["approver-timeline-001"],
+            review["action_execution_id"],
+            seeded["selected_action_execution"].action_execution_id,
         )
-        self.assertEqual(review["timeline"][2]["state"], "delegated")
         self.assertEqual(
-            review["timeline"][2]["actor_identities"],
-            ["control-plane-service"],
+            review["delegation_id"],
+            seeded["selected_action_execution"].delegation_id,
         )
-        self.assertEqual(review["timeline"][3]["state"], "queued")
         self.assertEqual(
-            review["timeline"][4]["state"],
-            "mismatched",
+            review["reconciliation_id"],
+            seeded["selected_reconciliation"].reconciliation_id,
+        )
+        self.assertEqual(
+            review["mismatch_inspection"],
+            None,
+        )
+        self.assertEqual(
+            review["timeline"][3]["occurred_at"],
+            seeded["selected_reconciliation"].last_seen_at.isoformat(),
         )
         self.assertEqual(
             review["timeline"][4]["record_id"],
-            seeded["reconciliation"].reconciliation_id,
+            seeded["selected_reconciliation"].reconciliation_id,
         )
         self.assertEqual(
-            review["mismatch_inspection"]["reconciliation_id"],
-            seeded["reconciliation"].reconciliation_id,
+            review["timeline"][4]["details"]["execution_run_id"],
+            seeded["selected_action_execution"].execution_run_id,
         )
-        self.assertEqual(
-            review["mismatch_inspection"]["lifecycle_state"],
-            "mismatched",
+
+    def test_cli_inspect_alert_detail_renders_review_timeline_and_mismatch_details(
+        self,
+    ) -> None:
+        _, service, promoted_case, evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        seeded = self._seed_action_review_timeline_mismatch_for_case(
+            service,
+            promoted_case,
+            reviewed_at,
+            evidence_id,
         )
-        self.assertEqual(
-            review["mismatch_inspection"]["ingest_disposition"],
-            "mismatch",
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-alert-detail", "--alert-id", promoted_case.alert_id],
+            stdout=stdout,
+            service=service,
         )
-        self.assertIn(
-            "execution run identity mismatch",
-            review["mismatch_inspection"]["mismatch_summary"],
+
+        payload = json.loads(stdout.getvalue())
+        self._assert_review_timeline_snapshot(payload["current_action_review"], seeded)
+
+    def test_cli_inspect_analyst_queue_renders_review_timeline_and_mismatch_details(
+        self,
+    ) -> None:
+        _, service, promoted_case, evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        seeded = self._seed_action_review_timeline_mismatch_for_case(
+            service,
+            promoted_case,
+            reviewed_at,
+            evidence_id,
         )
-        self.assertEqual(
-            review["mismatch_inspection"]["execution_run_id"],
-            "shuffle-run-cli-timeline-observed-002",
-        )
-        self.assertEqual(
-            review["mismatch_inspection"]["linked_execution_run_ids"],
-            ["shuffle-run-cli-timeline-observed-002"],
+
+        stdout = io.StringIO()
+        main.main(["inspect-analyst-queue"], stdout=stdout, service=service)
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["total_records"], 1)
+        self._assert_review_timeline_snapshot(
+            payload["records"][0]["current_action_review"],
+            seeded,
         )
 
     def test_cli_rejects_case_scoped_out_of_scope_advisory_reads_as_usage_errors(
