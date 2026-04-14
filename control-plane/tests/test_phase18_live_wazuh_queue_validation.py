@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from copy import deepcopy
-import json
 import pathlib
 import sys
 import unittest
@@ -10,18 +9,18 @@ import unittest
 CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
+TESTS_ROOT = pathlib.Path(__file__).resolve().parent
+if str(TESTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TESTS_ROOT))
 
 from aegisops_control_plane.config import RuntimeConfig
 from aegisops_control_plane.models import ReconciliationRecord
 from aegisops_control_plane.service import AegisOpsControlPlaneService
 from postgres_test_support import make_store
+from support.fixtures import load_wazuh_fixture
 
 
-FIXTURES_ROOT = pathlib.Path(__file__).resolve().parent / "fixtures" / "wazuh"
-
-
-def _load_wazuh_fixture(name: str) -> dict[str, object]:
-    return json.loads((FIXTURES_ROOT / name).read_text(encoding="utf-8"))
+_load_wazuh_fixture = load_wazuh_fixture
 
 
 class Phase18LiveWazuhQueueValidationTests(unittest.TestCase):

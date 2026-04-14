@@ -15,15 +15,18 @@ from unittest import mock
 CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
+TESTS_ROOT = pathlib.Path(__file__).resolve().parent
+if str(TESTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TESTS_ROOT))
 
 import main
 from aegisops_control_plane.config import RuntimeConfig
 from aegisops_control_plane.models import ApprovalDecisionRecord, ReconciliationRecord
 from aegisops_control_plane.service import AegisOpsControlPlaneService
 from postgres_test_support import make_store
+from support.fixtures import load_wazuh_fixture
 
 
-FIXTURES_ROOT = pathlib.Path(__file__).resolve().parent / "fixtures" / "wazuh"
 REVIEWED_SHARED_SECRET = "reviewed-shared-secret"  # noqa: S105
 REVIEWED_WAZUH_PROXY_SECRET = "reviewed-wazuh-proxy-secret"  # noqa: S105
 REVIEWED_SURFACE_PROXY_SECRET = "reviewed-surface-proxy-secret"  # noqa: S105
@@ -32,8 +35,7 @@ REVIEWED_ADMIN_BOOTSTRAP_TOKEN = "reviewed-admin-bootstrap-token"  # noqa: S105
 REVIEWED_BREAK_GLASS_TOKEN = "reviewed-break-glass-token"  # noqa: S105
 
 
-def _load_wazuh_fixture(name: str) -> dict[str, object]:
-    return json.loads((FIXTURES_ROOT / name).read_text(encoding="utf-8"))
+_load_wazuh_fixture = load_wazuh_fixture
 
 
 class Phase21EndToEndValidationTests(unittest.TestCase):

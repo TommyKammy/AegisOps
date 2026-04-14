@@ -15,6 +15,9 @@ from unittest import mock
 CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
+TESTS_ROOT = pathlib.Path(__file__).resolve().parent
+if str(TESTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TESTS_ROOT))
 
 import main
 from aegisops_control_plane.adapters.wazuh import WazuhAlertAdapter
@@ -25,9 +28,9 @@ from aegisops_control_plane.service import (
     AuthenticatedRuntimePrincipal,
 )
 from postgres_test_support import make_store
+from support.fixtures import load_wazuh_fixture
 
 
-FIXTURES_ROOT = pathlib.Path(__file__).resolve().parent / "fixtures" / "wazuh"
 REVIEWED_SHARED_SECRET = "reviewed-shared-secret"  # noqa: S105
 REVIEWED_PROXY_SECRET = "reviewed-proxy-secret"  # noqa: S105
 REVIEWED_PROXY_SERVICE_ACCOUNT = "svc-aegisops-proxy-control-plane"
@@ -39,8 +42,7 @@ REVIEWED_ANALYST_PRINCIPAL = AuthenticatedRuntimePrincipal(
 )
 
 
-def _load_wazuh_fixture(name: str) -> dict[str, object]:
-    return json.loads((FIXTURES_ROOT / name).read_text(encoding="utf-8"))
+_load_wazuh_fixture = load_wazuh_fixture
 
 
 class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
