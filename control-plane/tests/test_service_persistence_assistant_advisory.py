@@ -7,12 +7,29 @@ TESTS_ROOT = pathlib.Path(__file__).resolve().parent
 if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
-import _service_persistence_support as support
-from _service_persistence_support import ServicePersistenceTestBase
-
-for name, value in vars(support).items():
-    if not (name.startswith("__") and name.endswith("__")):
-        globals()[name] = value
+from _service_persistence_support import (
+    AITraceRecord,
+    ActionRequestRecord,
+    AegisOpsControlPlaneService,
+    AlertRecord,
+    AnalyticSignalRecord,
+    ApprovalDecisionRecord,
+    CaseRecord,
+    EvidenceRecord,
+    RecommendationRecord,
+    ReconciliationRecord,
+    RuntimeConfig,
+    ServicePersistenceTestBase,
+    WazuhAlertAdapter,
+    _approved_binding_hash,
+    _load_wazuh_fixture,
+    _phase20_notify_identity_owner_payload,
+    datetime,
+    make_store,
+    mock,
+    replace,
+    timezone,
+)
 
 
 class AssistantAdvisoryPersistenceTests(ServicePersistenceTestBase):

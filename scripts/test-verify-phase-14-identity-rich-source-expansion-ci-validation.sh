@@ -29,6 +29,8 @@ required_artifacts=(
   ".github/workflows/ci.yml"
 )
 
+support_artifact="control-plane/tests/_service_persistence_support.py"
+
 create_repo() {
   local target="$1"
 
@@ -47,6 +49,10 @@ write_required_artifacts() {
     cp "${repo_root}/${artifact}" "${target}/${artifact}"
     git -C "${target}" add "${artifact}"
   done
+
+  mkdir -p "${target}/$(dirname "${support_artifact}")"
+  cp "${repo_root}/${support_artifact}" "${target}/${support_artifact}"
+  git -C "${target}" add "${support_artifact}"
 }
 
 remove_text_from_file() {
@@ -65,6 +71,15 @@ replace_text_in_file() {
   local new_text="$4"
 
   OLD_TEXT="${old_text}" NEW_TEXT="${new_text}" perl -0pi -e 's/\Q$ENV{OLD_TEXT}\E/$ENV{NEW_TEXT}/g' "${target}/${path}"
+  git -C "${target}" add "${path}"
+}
+
+append_text_to_file() {
+  local target="$1"
+  local path="$2"
+  local text="$3"
+
+  printf '%s' "${text}" >> "${target}/${path}"
   git -C "${target}" add "${path}"
 }
 
@@ -155,6 +170,21 @@ replace_text_in_file \
   "    def _missing_test_phase14_onboarding_packages_define_reviewed_ownership_and_prerequisites("
 commit_fixture "${missing_prerequisite_test_repo}"
 assert_fails_with "${missing_prerequisite_test_repo}" "Missing required Phase 14 unittest-discoverable test in ${missing_prerequisite_test_repo}/control-plane/tests/test_phase14_identity_rich_source_profile_docs.py: test_phase14_onboarding_packages_define_reviewed_ownership_and_prerequisites"
+
+module_level_false_positive_repo="${workdir}/module-level-false-positive"
+create_repo "${module_level_false_positive_repo}"
+write_required_artifacts "${module_level_false_positive_repo}"
+replace_text_in_file \
+  "${module_level_false_positive_repo}" \
+  "control-plane/tests/test_phase14_identity_rich_source_profile_docs.py" \
+  "    def test_phase14_onboarding_packages_define_reviewed_ownership_and_prerequisites(" \
+  "    def _missing_test_phase14_onboarding_packages_define_reviewed_ownership_and_prerequisites("
+append_text_to_file \
+  "${module_level_false_positive_repo}" \
+  "control-plane/tests/test_phase14_identity_rich_source_profile_docs.py" \
+  $'\n\ndef test_phase14_onboarding_packages_define_reviewed_ownership_and_prerequisites() -> None:\n    raise AssertionError("module-level impostor should not satisfy verifier")\n'
+commit_fixture "${module_level_false_positive_repo}"
+assert_fails_with "${module_level_false_positive_repo}" "Missing required Phase 14 unittest-discoverable test in ${module_level_false_positive_repo}/control-plane/tests/test_phase14_identity_rich_source_profile_docs.py: test_phase14_onboarding_packages_define_reviewed_ownership_and_prerequisites"
 
 missing_ci_step_repo="${workdir}/missing-ci-step"
 create_repo "${missing_ci_step_repo}"

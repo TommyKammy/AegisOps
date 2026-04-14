@@ -42,9 +42,88 @@ require_fixed_string() {
 require_test_name() {
   local file_path="$1"
   local test_name="$2"
-  local pattern="^[[:space:]]*def[[:space:]]+${test_name}[[:space:]]*\\("
+  local support_path
+  support_path="$(dirname "${file_path}")/_service_persistence_support.py"
 
-  if ! grep -Eq -- "${pattern}" "${file_path}" >/dev/null; then
+  if ! python3 - "${file_path}" "${support_path}" "${test_name}" <<'PY'
+from __future__ import annotations
+
+import ast
+import pathlib
+import sys
+
+
+def base_name(node: ast.expr) -> str | None:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        parent = base_name(node.value)
+        if parent is None:
+            return None
+        return f"{parent}.{node.attr}"
+    return None
+
+
+def class_index(path: pathlib.Path) -> dict[str, tuple[set[str], list[str]]]:
+    if not path.is_file():
+        return {}
+
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    index: dict[str, tuple[set[str], list[str]]] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.ClassDef):
+            continue
+        methods = {
+            child.name for child in node.body if isinstance(child, ast.FunctionDef)
+        }
+        bases = [name for base in node.bases if (name := base_name(base))]
+        index[node.name] = (methods, bases)
+    return index
+
+
+def is_testcase_class(
+    class_name: str,
+    classes: dict[str, tuple[set[str], list[str]]],
+    seen: set[str] | None = None,
+) -> bool:
+    if seen is None:
+        seen = set()
+    if class_name in seen:
+        return False
+    seen.add(class_name)
+
+    class_def = classes.get(class_name)
+    if class_def is None:
+        return False
+
+    _, bases = class_def
+    for candidate in bases:
+        if candidate == "unittest.TestCase":
+            return True
+        if candidate in classes and is_testcase_class(candidate, classes, seen):
+            return True
+        short_name = candidate.rsplit(".", 1)[-1]
+        if short_name == "TestCase":
+            return True
+        if short_name in classes and is_testcase_class(short_name, classes, seen):
+            return True
+    return False
+
+
+target_path = pathlib.Path(sys.argv[1])
+support_path = pathlib.Path(sys.argv[2])
+target_test = sys.argv[3]
+
+classes = class_index(target_path)
+classes.update(class_index(support_path))
+
+for class_name, (methods, _) in class_index(target_path).items():
+    if target_test in methods and is_testcase_class(class_name, classes):
+        raise SystemExit(0)
+
+raise SystemExit(1)
+PY
+  then
     echo "Missing required Phase 15 unittest-discoverable test in ${file_path}: ${test_name}" >&2
     exit 1
   fi
