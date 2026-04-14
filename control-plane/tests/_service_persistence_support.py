@@ -57,7 +57,9 @@ from support.payloads import (
     approved_binding_hash,
     phase20_notify_identity_owner_payload,
 )
-from support.service_persistence import ServicePersistenceTestBase
+from support.service_persistence import (
+    ServicePersistenceTestBase as _SharedServicePersistenceTestBase,
+)
 
 
 _load_wazuh_fixture = load_wazuh_fixture
@@ -69,3 +71,15 @@ _CommitFailingStore = CommitFailingStore
 _RecordTypeSaveFailingStore = RecordTypeSaveFailingStore
 _ListCountingStore = ListCountingStore
 _OutOfBandMutationStore = OutOfBandMutationStore
+
+
+# Keep an AST-visible unittest.TestCase base in this compatibility module so
+# repo validation scripts still recognize legacy test classes as discoverable.
+class ServicePersistenceTestBase(unittest.TestCase):
+    pass
+
+
+for _helper_name, _helper_value in vars(_SharedServicePersistenceTestBase).items():
+    if _helper_name.startswith("__") and _helper_name.endswith("__"):
+        continue
+    setattr(ServicePersistenceTestBase, _helper_name, _helper_value)
