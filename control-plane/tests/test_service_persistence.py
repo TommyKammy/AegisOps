@@ -339,6 +339,50 @@ class ControlPlaneServiceHelperLayoutTests(unittest.TestCase):
 
 
 class ControlPlaneServicePersistenceTests(unittest.TestCase):
+    def test_service_delegates_assistant_context_and_advisory_rendering_to_assembler(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        service._assistant_context_assembler = mock.Mock()
+        service._assistant_context_assembler.inspect_assistant_context.return_value = (
+            mock.sentinel.assistant_context_snapshot
+        )
+        service._assistant_context_assembler.inspect_advisory_output.return_value = (
+            mock.sentinel.advisory_output_snapshot
+        )
+        service._assistant_context_assembler.render_recommendation_draft.return_value = (
+            mock.sentinel.recommendation_draft_snapshot
+        )
+
+        self.assertIs(
+            service.inspect_assistant_context("case", "case-delegated-001"),
+            mock.sentinel.assistant_context_snapshot,
+        )
+        self.assertIs(
+            service.inspect_advisory_output("case", "case-delegated-001"),
+            mock.sentinel.advisory_output_snapshot,
+        )
+        self.assertIs(
+            service.render_recommendation_draft("case", "case-delegated-001"),
+            mock.sentinel.recommendation_draft_snapshot,
+        )
+        service._assistant_context_assembler.inspect_assistant_context.assert_called_once_with(
+            "case",
+            "case-delegated-001",
+        )
+        service._assistant_context_assembler.inspect_advisory_output.assert_called_once_with(
+            "case",
+            "case-delegated-001",
+        )
+        service._assistant_context_assembler.render_recommendation_draft.assert_called_once_with(
+            "case",
+            "case-delegated-001",
+        )
+
     def _assert_authoritative_store_empty(self, store: object) -> None:
         for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES:
             self.assertEqual(store.list(record_type), ())
