@@ -1,9 +1,22 @@
 # AegisOps
 
-**AegisOps** is a governed SecOps decision and execution control plane above reviewed detection and automation substrates.
+**AegisOps** is a governed SecOps control plane above external detection and automation substrates.
 
 It is **not** a SIEM/SOAR replacement.
 It is the layer that owns the authoritative record chain for analyst work, approval, delegation, execution, and reconciliation.
+AegisOps is built to support **human-controlled security operations** with an explicit authority boundary for approvals, evidence, action intent, and reconciliation.
+
+Current scope:
+
+- Platform baseline definition
+- Architecture design and operating guidance
+- Repository scaffolding
+- Parameter catalog structure
+- Implementation guardrails for AI-assisted development
+
+The repository is no longer design-only: Phase 16 defines the approved first-boot runtime target for Phase 17 bring-up.
+That first-boot target is limited to the AegisOps control-plane service, PostgreSQL for control-plane state, the approved reverse proxy boundary, and reviewed Wazuh-facing analytic-signal intake expectations.
+OpenSearch, n8n, the full analyst-assistant surface, and the high-risk executor path remain optional, deferred, or non-blocking for first boot.
 
 Initial standard substrates:
 
@@ -12,9 +25,9 @@ Initial standard substrates:
 
 Current optional / transitional assets:
 
-- **OpenSearch** — optional analytics and enrichment extension, not the product core
-- **Sigma** — optional research / prototyping rule asset, not the product core
-- **n8n** — optional / transitional orchestration asset, not the mainline security path
+- **OpenSearch** — optional or transitional analytics substrate, not the product core
+- **Sigma** — optional or transitional rule-definition format or translation source, not the product core
+- **n8n** — optional, transitional, or experimental orchestration substrate, not the product core
 
 ---
 
@@ -219,9 +232,12 @@ aegisops/
 
 Notes:
 
-- `control-plane/` is the home of the live AegisOps runtime
-- `postgres/control-plane/` is the home of the reviewed control-plane schema and migrations
-- `opensearch/`, `sigma/`, and `n8n/` remain tracked, but they are not the product core
+- **Control Plane Runtime** — future authoritative AegisOps service boundary for platform state and reconciliation
+Within `control-plane/`, the first live AegisOps-owned control-plane runtime will live as application code and service-local tests.
+Within `postgres/`, the `control-plane/` directory is the repository home for the reviewed AegisOps-owned control-plane schema baseline and migration assets. It does not authorize live deployment, production data migration, or credentials.
+That schema boundary remains separate from n8n-owned PostgreSQL metadata and execution-state tables, and future rollout, access-control, and index-tuning work stays explicit.
+- OpenSearch, Sigma, and n8n remain repository-tracked assets, but they are subordinate to the approved control-plane thesis and must not redefine the product narrative around themselves.
+- The current top-level tree still includes older substrate-specific directories and should be treated as transitional until a later ADR approves any substrate-specific repository rebaseline.
 
 ---
 
@@ -324,4 +340,3 @@ Recommended starting points for a new reader:
 If you want the shortest mental model, remember this:
 
 > **Wazuh detects. AegisOps decides, records, and reconciles. Shuffle executes only the reviewed delegated work.**
-

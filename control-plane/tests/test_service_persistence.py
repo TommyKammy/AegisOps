@@ -19,6 +19,9 @@ CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
+from aegisops_control_plane.assistant_context import (
+    _reviewed_context_identifier_citations,
+)
 from aegisops_control_plane.config import RuntimeConfig
 from aegisops_control_plane.models import (
     AITraceRecord,
@@ -338,7 +341,74 @@ class ControlPlaneServiceHelperLayoutTests(unittest.TestCase):
         self.assertEqual(source.count("def _require_non_empty_string("), 1)
 
 
+class AssistantContextHelperTests(unittest.TestCase):
+    def test_reviewed_context_identifier_citations_skip_blank_and_null_values(
+        self,
+    ) -> None:
+        citations = _reviewed_context_identifier_citations(
+            {
+                "identity": {
+                    "identity_id": "   ",
+                    "principal_id": "None",
+                    "subject_id": None,
+                },
+                "asset": {
+                    "asset_id": "asset-citation-001",
+                },
+            }
+        )
+
+        self.assertEqual(
+            citations,
+            ("reviewed_context.asset.asset_id=asset-citation-001",),
+        )
+
+
 class ControlPlaneServicePersistenceTests(unittest.TestCase):
+    def test_service_delegates_assistant_context_and_advisory_rendering_to_assembler(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        service._assistant_context_assembler = mock.Mock()
+        service._assistant_context_assembler.inspect_assistant_context.return_value = (
+            mock.sentinel.assistant_context_snapshot
+        )
+        service._assistant_context_assembler.inspect_advisory_output.return_value = (
+            mock.sentinel.advisory_output_snapshot
+        )
+        service._assistant_context_assembler.render_recommendation_draft.return_value = (
+            mock.sentinel.recommendation_draft_snapshot
+        )
+
+        self.assertIs(
+            service.inspect_assistant_context("case", "case-delegated-001"),
+            mock.sentinel.assistant_context_snapshot,
+        )
+        self.assertIs(
+            service.inspect_advisory_output("case", "case-delegated-001"),
+            mock.sentinel.advisory_output_snapshot,
+        )
+        self.assertIs(
+            service.render_recommendation_draft("case", "case-delegated-001"),
+            mock.sentinel.recommendation_draft_snapshot,
+        )
+        service._assistant_context_assembler.inspect_assistant_context.assert_called_once_with(
+            "case",
+            "case-delegated-001",
+        )
+        service._assistant_context_assembler.inspect_advisory_output.assert_called_once_with(
+            "case",
+            "case-delegated-001",
+        )
+        service._assistant_context_assembler.render_recommendation_draft.assert_called_once_with(
+            "case",
+            "case-delegated-001",
+        )
+
     def _assert_authoritative_store_empty(self, store: object) -> None:
         for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES:
             self.assertEqual(store.list(record_type), ())
@@ -1713,6 +1783,10 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             sibling_recommendation.recommendation_id,
             snapshot.linked_recommendation_ids,
         )
+        self.assertNotIn(
+            anchored_recommendation.recommendation_id,
+            snapshot.linked_recommendation_ids,
+        )
         self.assertNotIn(second_admitted.alert.alert_id, snapshot.linked_alert_ids)
         self.assertNotIn(second_case.case_id, snapshot.linked_case_ids)
         self.assertNotIn(second_evidence.evidence_id, snapshot.linked_evidence_ids)
@@ -2451,6 +2525,10 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(snapshot.reviewed_context, reviewed_context)
         self.assertIn(
             delegation_reconciliation.reconciliation_id,
+            snapshot.linked_reconciliation_ids,
+        )
+        self.assertNotIn(
+            reconciliation.reconciliation_id,
             snapshot.linked_reconciliation_ids,
         )
 
