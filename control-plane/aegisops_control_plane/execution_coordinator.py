@@ -112,7 +112,9 @@ def _approved_payload_binding_hash(
 
 def _json_ready(value: object) -> object:
     if isinstance(value, datetime):
-        return value.isoformat()
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("datetime values used for binding must be timezone-aware")
+        return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
     if isinstance(value, Mapping):
         return {str(key): _json_ready(item) for key, item in value.items()}
     if isinstance(value, tuple):
@@ -217,13 +219,15 @@ class ExecutionCoordinator:
                 raise ValueError("expires_at must be after requested_at")
 
             idempotency_material = json.dumps(
-                {
-                    "payload_hash": payload_hash,
-                    "record_family": record_family,
-                    "record_id": record_id,
-                    "requester_identity": requester_identity,
-                    "expires_at": expires_at.isoformat(),
-                },
+                _json_ready(
+                    {
+                        "payload_hash": payload_hash,
+                        "record_family": record_family,
+                        "record_id": record_id,
+                        "requester_identity": requester_identity,
+                        "expires_at": expires_at,
+                    }
+                ),
                 sort_keys=True,
                 separators=(",", ":"),
             )
@@ -672,6 +676,7 @@ class ExecutionCoordinator:
                 )
             )
         receipt = None
+        execution_run_id: str
         try:
             receipt = adapter.dispatch_approved_action(
                 delegation_id=delegation_id,
@@ -689,6 +694,10 @@ class ExecutionCoordinator:
                 delegation_id=delegation_id,
                 execution_surface_type=execution_surface_type,
                 execution_surface_id=execution_surface_id,
+            )
+            execution_run_id = self._require_receipt_string_attribute(
+                receipt,
+                "execution_run_id",
             )
         except Exception as exc:
             self._mark_dispatch_failure(
@@ -711,7 +720,7 @@ class ExecutionCoordinator:
                 execution = self._service.persist_record(
                     replace(
                         stored_execution,
-                        execution_run_id=receipt.execution_run_id,
+                        execution_run_id=execution_run_id,
                         provenance=self._finalized_execution_provenance(
                             execution=stored_execution,
                             receipt=receipt,

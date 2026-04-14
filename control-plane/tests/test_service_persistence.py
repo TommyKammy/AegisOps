@@ -41,6 +41,7 @@ from aegisops_control_plane.models import (
     RecommendationRecord,
 )
 from aegisops_control_plane.adapters.wazuh import WazuhAlertAdapter
+from aegisops_control_plane.execution_coordinator import _approved_payload_binding_hash
 from aegisops_control_plane.service import (
     AegisOpsControlPlaneService,
     AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES,
@@ -7698,6 +7699,100 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             "adapter receipt missing required 'adapter' attribute",
         )
 
+    def test_service_fail_closes_when_shuffle_receipt_omits_execution_run_id(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        approved_target_scope = {"asset_id": "workstation-001"}
+        approved_payload = _phase20_notify_identity_owner_payload(
+            recipient_identity="repo-owner-001",
+            case_id="case-001",
+            alert_id="alert-001",
+            finding_id="finding-001",
+        )
+        payload_hash = _approved_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
+        service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-routine-missing-run-id-001",
+                action_request_id="action-request-routine-missing-run-id-001",
+                approver_identities=("approver-001",),
+                target_snapshot=approved_target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+            )
+        )
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-routine-missing-run-id-001",
+                approval_decision_id="approval-routine-missing-run-id-001",
+                case_id="case-001",
+                alert_id="alert-001",
+                finding_id="finding-001",
+                idempotency_key="idempotency-routine-missing-run-id-001",
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=None,
+                lifecycle_state="approved",
+                requested_payload=approved_payload,
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "approval",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+        original_dispatch = type(service._shuffle).dispatch_approved_action
+
+        def dispatch_without_execution_run_id(adapter: object, **kwargs: object) -> object:
+            receipt = original_dispatch(adapter, **kwargs)
+            return replace(receipt, execution_run_id="")
+
+        with mock.patch.object(
+            type(service._shuffle),
+            "dispatch_approved_action",
+            autospec=True,
+            side_effect=dispatch_without_execution_run_id,
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                "adapter receipt missing required 'execution_run_id' attribute",
+            ):
+                service.delegate_approved_action_to_shuffle(
+                    action_request_id="action-request-routine-missing-run-id-001",
+                    approved_payload=approved_payload,
+                    delegated_at=delegated_at,
+                    delegation_issuer="control-plane-service",
+                )
+
+        executions = store.list(ActionExecutionRecord)
+        self.assertEqual(len(executions), 1)
+        self.assertEqual(executions[0].lifecycle_state, "failed")
+        self.assertTrue(
+            executions[0].execution_run_id.startswith("pending-dispatch-delegation-")
+        )
+        self.assertEqual(
+            executions[0].provenance["dispatch_failure"]["error_type"],
+            "ValueError",
+        )
+        self.assertEqual(
+            executions[0].provenance["dispatch_failure"]["error"],
+            "adapter receipt missing required 'execution_run_id' attribute",
+        )
+
     def test_service_fail_closes_when_isolated_executor_receipt_surface_drifts(
         self,
     ) -> None:
@@ -7799,6 +7894,107 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(
             executions[0].provenance["dispatch_failure"]["error_type"],
             "ValueError",
+        )
+
+    def test_service_fail_closes_when_isolated_executor_receipt_omits_execution_run_id(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        approved_target_scope = {"asset_id": "critical-host-001"}
+        approved_payload = {
+            "action_type": "disable_identity",
+            "asset_id": "critical-host-001",
+        }
+        payload_hash = _approved_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="executor",
+            execution_surface_id="isolated-executor",
+        )
+        service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-executor-missing-run-id-001",
+                action_request_id="action-request-executor-missing-run-id-001",
+                approver_identities=("approver-001",),
+                target_snapshot=approved_target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+            )
+        )
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-executor-missing-run-id-001",
+                approval_decision_id="approval-executor-missing-run-id-001",
+                case_id="case-001",
+                alert_id="alert-001",
+                finding_id="finding-001",
+                idempotency_key="idempotency-executor-missing-run-id-001",
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=None,
+                lifecycle_state="approved",
+                requested_payload=approved_payload,
+                policy_basis={
+                    "severity": "critical",
+                    "target_scope": "single_asset",
+                    "action_reversibility": "irreversible",
+                    "asset_criticality": "critical",
+                    "identity_criticality": "high",
+                    "blast_radius": "organization",
+                    "execution_constraint": "requires_isolated_executor",
+                },
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "approval",
+                    "execution_surface_type": "executor",
+                    "execution_surface_id": "isolated-executor",
+                },
+            )
+        )
+        original_dispatch = type(service._isolated_executor).dispatch_approved_action
+
+        def dispatch_without_execution_run_id(adapter: object, **kwargs: object) -> object:
+            receipt = original_dispatch(adapter, **kwargs)
+            return replace(receipt, execution_run_id="")
+
+        with mock.patch.object(
+            type(service._isolated_executor),
+            "dispatch_approved_action",
+            autospec=True,
+            side_effect=dispatch_without_execution_run_id,
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                "adapter receipt missing required 'execution_run_id' attribute",
+            ):
+                service.delegate_approved_action_to_isolated_executor(
+                    action_request_id="action-request-executor-missing-run-id-001",
+                    approved_payload=approved_payload,
+                    delegated_at=delegated_at,
+                    delegation_issuer="control-plane-service",
+                )
+
+        executions = store.list(ActionExecutionRecord)
+        self.assertEqual(len(executions), 1)
+        self.assertEqual(executions[0].lifecycle_state, "failed")
+        self.assertTrue(
+            executions[0].execution_run_id.startswith("pending-dispatch-delegation-")
+        )
+        self.assertEqual(
+            executions[0].provenance["dispatch_failure"]["error_type"],
+            "ValueError",
+        )
+        self.assertEqual(
+            executions[0].provenance["dispatch_failure"]["error"],
+            "adapter receipt missing required 'execution_run_id' attribute",
         )
 
     def test_service_rejects_shuffle_delegation_when_payload_binding_drifts(
@@ -10439,7 +10635,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
     def test_service_reconciliation_rolls_back_execution_state_when_reconciliation_write_fails(
         self,
     ) -> None:
-        base_store, seed_service, promoted_case, evidence_id, reviewed_at = (
+        base_store, seed_service, promoted_case, evidence_id, _reviewed_at = (
             self._build_phase19_in_scope_case()
         )
         recommendation = seed_service.record_case_recommendation(
@@ -10543,7 +10739,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
     def test_service_reconciliation_does_not_downgrade_authoritative_execution_lifecycle(
         self,
     ) -> None:
-        _store, service, promoted_case, evidence_id, reviewed_at = (
+        _store, service, promoted_case, evidence_id, _reviewed_at = (
             self._build_phase19_in_scope_case()
         )
         recommendation = service.record_case_recommendation(
@@ -10825,6 +11021,92 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
 
         self.assertEqual(second_request, first_request)
         self.assertEqual(store.list(ActionRequestRecord), (first_request,))
+
+    def test_service_reuses_reviewed_action_request_for_equivalent_expiry_instants(
+        self,
+    ) -> None:
+        store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Observed repository permission change requires tracked review.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before any approval-bound response.",
+            lead_id=service.record_case_lead(
+                case_id=promoted_case.case_id,
+                triage_owner="analyst-001",
+                triage_rationale="Privilege-impacting change needs durable business-hours follow-up.",
+                observation_id=observation.observation_id,
+            ).lead_id,
+        )
+        expires_at_utc = datetime.now(timezone.utc) + timedelta(hours=4)
+        expires_at_plus_two = expires_at_utc.astimezone(
+            timezone(timedelta(hours=2))
+        )
+
+        first_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
+            expires_at=expires_at_utc,
+        )
+        second_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
+            expires_at=expires_at_plus_two,
+        )
+
+        self.assertEqual(second_request, first_request)
+        self.assertEqual(store.list(ActionRequestRecord), (first_request,))
+
+    def test_approved_payload_binding_hash_normalizes_equivalent_datetime_offsets(
+        self,
+    ) -> None:
+        scheduled_for_utc = datetime.now(timezone.utc) + timedelta(hours=4)
+        scheduled_for_plus_two = scheduled_for_utc.astimezone(
+            timezone(timedelta(hours=2))
+        )
+
+        binding_hash_utc = _approved_payload_binding_hash(
+            target_scope={
+                "asset_id": "critical-host-001",
+                "scheduled_for": scheduled_for_utc,
+            },
+            approved_payload={
+                "action_type": "disable_identity",
+                "scheduled_for": scheduled_for_utc,
+            },
+            execution_surface_type="executor",
+            execution_surface_id="isolated-executor",
+        )
+        binding_hash_plus_two = _approved_payload_binding_hash(
+            target_scope={
+                "asset_id": "critical-host-001",
+                "scheduled_for": scheduled_for_plus_two,
+            },
+            approved_payload={
+                "action_type": "disable_identity",
+                "scheduled_for": scheduled_for_plus_two,
+            },
+            execution_surface_type="executor",
+            execution_surface_id="isolated-executor",
+        )
+
+        self.assertEqual(binding_hash_plus_two, binding_hash_utc)
 
     def test_service_keeps_requester_identity_inside_reviewed_action_request_deduplication(
         self,
