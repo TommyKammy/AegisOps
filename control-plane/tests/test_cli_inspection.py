@@ -26,6 +26,7 @@ from aegisops_control_plane.config import RuntimeConfig
 from aegisops_control_plane.adapters.wazuh import WazuhAlertAdapter
 from aegisops_control_plane.models import (
     AITraceRecord,
+    ActionRequestRecord,
     AlertRecord,
     AnalyticSignalRecord,
     ApprovalDecisionRecord,
@@ -213,6 +214,118 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             )
         )
         return service, recommendation, ai_trace
+
+    def _seed_action_review_states_for_case(
+        self,
+        service: AegisOpsControlPlaneService,
+        promoted_case: CaseRecord,
+        reviewed_at: datetime,
+        evidence_id: str,
+    ) -> dict[str, object]:
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Observed repository permission change requires tracked review.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            observation_id=observation.observation_id,
+            triage_owner="analyst-001",
+            triage_rationale="Privilege-impacting change needs durable business-hours follow-up.",
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before any approval-bound response.",
+            lead_id=lead.lead_id,
+        )
+        base_requested_at = datetime.now(timezone.utc)
+        pending_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-pending-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
+            expires_at=base_requested_at + timedelta(hours=4),
+            action_request_id="action-request-cli-review-pending-001",
+        )
+        base_requested_at = pending_request.requested_at
+        rejected_decision = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-cli-review-rejected-001",
+                action_request_id="action-request-cli-review-rejected-001",
+                approver_identities=("approver-rejected-001",),
+                target_snapshot=dict(pending_request.target_scope),
+                payload_hash=pending_request.payload_hash,
+                decided_at=base_requested_at + timedelta(minutes=10),
+                lifecycle_state="rejected",
+            )
+        )
+        rejected_request = service.persist_record(
+            replace(
+                pending_request,
+                action_request_id="action-request-cli-review-rejected-001",
+                approval_decision_id=rejected_decision.approval_decision_id,
+                idempotency_key="idempotency-cli-review-rejected-001",
+                requested_at=base_requested_at + timedelta(minutes=5),
+                lifecycle_state="rejected",
+                requester_identity="analyst-002",
+            )
+        )
+        expired_decision = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-cli-review-expired-001",
+                action_request_id="action-request-cli-review-expired-001",
+                approver_identities=("approver-expired-001",),
+                target_snapshot=dict(pending_request.target_scope),
+                payload_hash=pending_request.payload_hash,
+                decided_at=base_requested_at + timedelta(minutes=20),
+                lifecycle_state="expired",
+                approved_expires_at=base_requested_at + timedelta(minutes=30),
+            )
+        )
+        expired_request = service.persist_record(
+            replace(
+                pending_request,
+                action_request_id="action-request-cli-review-expired-001",
+                approval_decision_id=expired_decision.approval_decision_id,
+                idempotency_key="idempotency-cli-review-expired-001",
+                requested_at=base_requested_at + timedelta(minutes=15),
+                expires_at=base_requested_at + timedelta(minutes=30),
+                lifecycle_state="expired",
+                requester_identity="analyst-003",
+            )
+        )
+        superseded_request = service.persist_record(
+            replace(
+                pending_request,
+                action_request_id="action-request-cli-review-superseded-001",
+                idempotency_key="idempotency-cli-review-superseded-001",
+                requested_at=base_requested_at + timedelta(minutes=25),
+                lifecycle_state="superseded",
+                requester_identity="analyst-004",
+            )
+        )
+        replacement_request = service.persist_record(
+            replace(
+                pending_request,
+                action_request_id="action-request-cli-review-replacement-001",
+                idempotency_key="idempotency-cli-review-replacement-001",
+                requested_at=base_requested_at + timedelta(minutes=35),
+                requester_identity="analyst-005",
+            )
+        )
+        return {
+            "recommendation": recommendation,
+            "pending_request": pending_request,
+            "rejected_request": rejected_request,
+            "expired_request": expired_request,
+            "superseded_request": superseded_request,
+            "replacement_request": replacement_request,
+        }
 
     def test_runtime_command_uses_runtime_service_builder_when_not_injected(self) -> None:
         store, _ = make_store()
@@ -2856,6 +2969,64 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(
             payload["requested_payload"]["recommendation_id"],
             recommendation.recommendation_id,
+        )
+
+    def test_cli_inspect_case_detail_renders_action_review_states(self) -> None:
+        _, service, promoted_case, evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        seeded = self._seed_action_review_states_for_case(
+            service,
+            promoted_case,
+            reviewed_at,
+            evidence_id,
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-case-detail", "--case-id", promoted_case.case_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["current_action_review"]["review_state"], "pending")
+        self.assertEqual(
+            payload["current_action_review"]["action_request_id"],
+            seeded["replacement_request"].action_request_id,
+        )
+        action_reviews_by_id = {
+            record["action_request_id"]: record for record in payload["action_reviews"]
+        }
+        self.assertEqual(
+            action_reviews_by_id[seeded["pending_request"].action_request_id]["review_state"],
+            "pending",
+        )
+        self.assertEqual(
+            action_reviews_by_id[seeded["rejected_request"].action_request_id][
+                "review_state"
+            ],
+            "rejected",
+        )
+        self.assertEqual(
+            action_reviews_by_id[seeded["rejected_request"].action_request_id][
+                "approver_identities"
+            ],
+            ["approver-rejected-001"],
+        )
+        self.assertEqual(
+            action_reviews_by_id[seeded["expired_request"].action_request_id]["review_state"],
+            "expired",
+        )
+        self.assertEqual(
+            action_reviews_by_id[seeded["superseded_request"].action_request_id][
+                "review_state"
+            ],
+            "superseded",
+        )
+        self.assertEqual(
+            action_reviews_by_id[seeded["superseded_request"].action_request_id][
+                "replacement_action_request_id"
+            ],
+            seeded["replacement_request"].action_request_id,
         )
 
     def test_cli_rejects_case_scoped_out_of_scope_advisory_reads_as_usage_errors(
