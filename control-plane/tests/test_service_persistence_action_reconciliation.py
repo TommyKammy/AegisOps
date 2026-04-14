@@ -4093,6 +4093,98 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
             "investigate_execution_cancellation",
         )
 
+    def test_service_action_review_surfaces_preserve_failed_execution_state(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Observed repository permission change requires tracked review.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            observation_id=observation.observation_id,
+            triage_owner="analyst-001",
+            triage_rationale="Privilege-impacting change needs durable business-hours follow-up.",
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before any approval-bound response.",
+            lead_id=lead.lead_id,
+        )
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=4)
+        request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-failed-execution-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
+            expires_at=expires_at,
+            action_request_id="action-request-surface-failed-execution-001",
+        )
+        decision = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-surface-failed-execution-001",
+                action_request_id=request.action_request_id,
+                approver_identities=("approver-failed-execution-001",),
+                target_snapshot=dict(request.target_scope),
+                payload_hash=request.payload_hash,
+                decided_at=request.requested_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=expires_at,
+            )
+        )
+        request = service.persist_record(
+            replace(
+                request,
+                approval_decision_id=decision.approval_decision_id,
+                lifecycle_state="approved",
+            )
+        )
+        service.persist_record(
+            ActionExecutionRecord(
+                action_execution_id="action-execution-surface-failed-001",
+                action_request_id=request.action_request_id,
+                approval_decision_id=decision.approval_decision_id,
+                delegation_id="delegation-surface-failed-001",
+                execution_surface_type="automation_substrate",
+                execution_surface_id="shuffle",
+                execution_run_id="execution-run-surface-failed-001",
+                idempotency_key=request.idempotency_key,
+                target_scope=dict(request.target_scope),
+                approved_payload=dict(request.requested_payload),
+                payload_hash=request.payload_hash,
+                delegated_at=request.requested_at + timedelta(minutes=10),
+                expires_at=expires_at,
+                provenance={"initiated_by": "operator-review"},
+                lifecycle_state="failed",
+            )
+        )
+
+        case_snapshot = service.inspect_case_detail(promoted_case.case_id).to_dict()
+        action_review = case_snapshot["current_action_review"]
+
+        self.assertEqual(
+            action_review["action_request_id"],
+            request.action_request_id,
+        )
+        self.assertEqual(action_review["review_state"], "failed")
+        self.assertEqual(
+            action_review["action_execution_state"],
+            "failed",
+        )
+        self.assertEqual(
+            action_review["next_expected_action"],
+            "investigate_execution_failure",
+        )
+
     def test_service_action_review_surfaces_use_newest_review_as_current(
         self,
     ) -> None:
