@@ -42,11 +42,14 @@ from .models import (
 )
 from .operations import RestoreReadinessService, RuntimeBoundaryService
 from .assistant_context import AssistantContextAssembler
+from .reviewed_slice_policy import (
+    REVIEWED_LIVE_SLICE_LABEL,
+    REVIEWED_LIVE_SOURCE_FAMILIES,
+    ReviewedSlicePolicy,
+)
 
 
 RecordT = TypeVar("RecordT", bound=ControlPlaneRecord)
-REVIEWED_LIVE_WAZUH_SOURCE_FAMILIES = frozenset({"github_audit", "entra_id"})
-REVIEWED_PHASE19_LIVE_SLICE_LABEL = "Wazuh-backed GitHub audit and Entra ID live slice"
 
 
 class ControlPlaneStore(Protocol):
@@ -884,6 +887,10 @@ class AegisOpsControlPlaneService:
             config.isolated_executor_base_url
         )
         self._logger = logging.getLogger("aegisops.control_plane")
+        self._reviewed_slice_policy = ReviewedSlicePolicy(
+            self,
+            normalize_admission_provenance=_normalize_admission_provenance,
+        )
         self._assistant_context_assembler = AssistantContextAssembler(
             self,
             record_types_by_family=RECORD_TYPES_BY_FAMILY,
@@ -1094,7 +1101,7 @@ class AegisOpsControlPlaneService:
             ).get("source_family"),
             "data.source_family",
         )
-        if source_family not in REVIEWED_LIVE_WAZUH_SOURCE_FAMILIES:
+        if source_family not in REVIEWED_LIVE_SOURCE_FAMILIES:
             self._emit_structured_event(
                 logging.WARNING,
                 "wazuh_ingest_rejected",
@@ -1490,7 +1497,7 @@ class AegisOpsControlPlaneService:
         )
 
     def inspect_case_detail(self, case_id: str) -> CaseDetailSnapshot:
-        case = self._require_phase19_operator_case(case_id)
+        case = self._require_reviewed_operator_case(case_id)
         case_id = case.case_id
         context_snapshot = self.inspect_assistant_context("case", case_id)
         observation_records = tuple(
@@ -1553,7 +1560,7 @@ class AegisOpsControlPlaneService:
             "supporting_evidence_ids",
         )
         with self._store.transaction():
-            case = self._require_phase19_operator_case(case_id)
+            case = self._require_reviewed_operator_case(case_id)
             self._validate_case_evidence_linkage(
                 case=case,
                 evidence_ids=normalized_evidence_ids,
@@ -1604,7 +1611,7 @@ class AegisOpsControlPlaneService:
             "observation_id",
         )
         with self._store.transaction():
-            case = self._require_phase19_operator_case(case_id)
+            case = self._require_reviewed_operator_case(case_id)
             if resolved_observation_id is not None:
                 observation = self._store.get(ObservationRecord, resolved_observation_id)
                 if observation is None:
@@ -1656,7 +1663,7 @@ class AegisOpsControlPlaneService:
         )
         resolved_lead_id = self._normalize_optional_string(lead_id, "lead_id")
         with self._store.transaction():
-            case = self._require_phase19_operator_case(case_id)
+            case = self._require_reviewed_operator_case(case_id)
             if resolved_lead_id is not None:
                 lead = self._store.get(LeadRecord, resolved_lead_id)
                 if lead is None:
@@ -1708,7 +1715,7 @@ class AegisOpsControlPlaneService:
             "follow_up_evidence_ids",
         )
         with self._store.transaction():
-            case = self._require_phase19_operator_case(case_id)
+            case = self._require_reviewed_operator_case(case_id)
             self._validate_case_evidence_linkage(
                 case=case,
                 evidence_ids=normalized_evidence_ids,
@@ -1749,7 +1756,7 @@ class AegisOpsControlPlaneService:
         recorded_at = self._require_aware_datetime(recorded_at, "recorded_at")
         lifecycle_state = self._case_lifecycle_for_disposition(disposition)
         with self._store.transaction():
-            case = self._require_phase19_operator_case(case_id)
+            case = self._require_reviewed_operator_case(case_id)
             updated_reviewed_context = _merge_reviewed_context(
                 case.reviewed_context,
                 {
@@ -3384,9 +3391,8 @@ class AegisOpsControlPlaneService:
             raise LookupError(f"Missing case {case_id!r}")
         return case
 
-    def _require_phase19_operator_case(self, case_id: str) -> CaseRecord:
-        case = self._require_case_record(case_id)
-        return self._require_phase19_operator_case_record(case)
+    def _require_reviewed_operator_case(self, case_id: str) -> CaseRecord:
+        return self._reviewed_slice_policy.require_operator_case(case_id)
 
     @staticmethod
     def _require_single_linked_case_id(linked_case_ids: tuple[str, ...]) -> str:
@@ -3412,188 +3418,47 @@ class AegisOpsControlPlaneService:
             )
         return recommendation_ids[0]
 
-    def _require_phase19_case_scoped_advisory_read(
+    def _require_reviewed_case_scoped_advisory_read(
         self,
         context_snapshot: AnalystAssistantContextSnapshot,
     ) -> None:
-        error_message = self._phase19_case_scoped_read_error(
-            context_snapshot.record_family,
-            context_snapshot.record_id,
-        )
-        if context_snapshot.record_family == "case":
-            self._require_phase19_operator_case(context_snapshot.record_id)
-            return
-        if not context_snapshot.linked_case_ids:
-            raise ValueError(error_message)
-
-        approved_cases: dict[str, CaseRecord] = {}
-        for case_id in context_snapshot.linked_case_ids:
-            approved_cases[case_id] = self._require_phase19_operator_case(case_id)
-
-        if context_snapshot.record_family == "recommendation":
-            self._require_phase19_case_scoped_recommendation_payload(
-                context_snapshot.record,
-                approved_cases=approved_cases,
-                error_message=error_message,
-            )
-        elif context_snapshot.record_family == "ai_trace":
-            subject_linkage = context_snapshot.record.get("subject_linkage")
-            if self._phase19_context_explicitly_declares_provenance(subject_linkage) and (
-                self._phase19_context_declares_out_of_scope_provenance(subject_linkage)
-            ):
-                raise ValueError(error_message)
-            if not context_snapshot.linked_recommendation_records:
-                raise ValueError(error_message)
-            for recommendation in context_snapshot.linked_recommendation_records:
-                self._require_phase19_case_scoped_recommendation_payload(
-                    recommendation,
-                    approved_cases=approved_cases,
-                    error_message=error_message,
-                )
+        self._reviewed_slice_policy.require_case_scoped_advisory_read(context_snapshot)
 
     @staticmethod
-    def _phase19_case_scoped_read_error(record_family: str, record_id: str) -> str:
-        return (
-            f"{record_family} {record_id!r} is outside the approved Phase 19 "
-            f"{REVIEWED_PHASE19_LIVE_SLICE_LABEL}"
-        )
+    def _reviewed_case_scoped_read_error(record_family: str, record_id: str) -> str:
+        return ReviewedSlicePolicy.case_scoped_read_error(record_family, record_id)
 
-    def _require_phase19_case_scoped_recommendation_payload(
+    def _require_reviewed_case_scoped_recommendation_payload(
         self,
         payload: Mapping[str, object],
         *,
         approved_cases: Mapping[str, CaseRecord],
         error_message: str,
     ) -> None:
-        case_id = self._normalize_optional_string(payload.get("case_id"), "case_id")
-        if case_id is None:
-            raise ValueError(error_message)
-        approved_case = approved_cases.get(case_id)
-        if approved_case is None:
-            raise ValueError(error_message)
-
-        alert_id = self._normalize_optional_string(payload.get("alert_id"), "alert_id")
-        if alert_id is not None and approved_case.alert_id != alert_id:
-            raise ValueError(error_message)
-
-        lead_id = self._normalize_optional_string(payload.get("lead_id"), "lead_id")
-        if lead_id is not None:
-            lead = self._store.get(LeadRecord, lead_id)
-            if lead is None or lead.case_id != case_id:
-                raise ValueError(error_message)
-
-        reviewed_context = payload.get("reviewed_context")
-        if self._phase19_context_explicitly_declares_provenance(reviewed_context) and (
-            self._phase19_context_declares_out_of_scope_provenance(reviewed_context)
-        ):
-            raise ValueError(error_message)
-
-    def _require_phase19_operator_case_record(self, case: CaseRecord) -> CaseRecord:
-        if not self._case_is_in_phase19_operator_slice(case):
-            raise ValueError(
-                f"Case {case.case_id!r} is outside the approved Phase 19 "
-                f"{REVIEWED_PHASE19_LIVE_SLICE_LABEL}"
-            )
-        return case
-
-    def _case_is_in_phase19_operator_slice(self, case: CaseRecord) -> bool:
-        alert_id = self._normalize_optional_string(case.alert_id, "case.alert_id")
-        if alert_id is None:
-            return False
-
-        alert = self._store.get(AlertRecord, alert_id)
-        if alert is None:
-            return False
-        if alert.case_id != case.case_id:
-            return False
-
-        reconciliation = self._latest_detection_reconciliation_for_alert(alert.alert_id)
-        if reconciliation is None or not self._reconciliation_is_wazuh_origin(reconciliation):
-            return False
-        if not self._linked_id_exists(
-            reconciliation.subject_linkage.get("alert_ids"),
-            alert.alert_id,
-        ):
-            return False
-        if not self._linked_id_exists(
-            reconciliation.subject_linkage.get("case_ids"),
-            case.case_id,
-        ):
-            return False
-
-        admission_provenance = (
-            _normalize_admission_provenance(
-                reconciliation.subject_linkage.get("admission_provenance")
-            )
-            or _normalize_admission_provenance(case.reviewed_context.get("provenance"))
-            or _normalize_admission_provenance(alert.reviewed_context.get("provenance"))
+        self._reviewed_slice_policy.require_case_scoped_recommendation_payload(
+            payload,
+            approved_cases=approved_cases,
+            error_message=error_message,
         )
-        if admission_provenance != {
-            "admission_kind": "live",
-            "admission_channel": "live_wazuh_webhook",
-        }:
-            return False
-
-        return (
-            self._phase19_operator_source_family(case.reviewed_context)
-            or self._phase19_operator_source_family(alert.reviewed_context)
-            or self._phase19_operator_source_family(
-                reconciliation.subject_linkage.get("reviewed_source_profile")
-            )
-        ) in REVIEWED_LIVE_WAZUH_SOURCE_FAMILIES
 
     @staticmethod
-    def _phase19_operator_source_family(context: object) -> str | None:
-        if not isinstance(context, Mapping):
-            return None
+    def _reviewed_operator_source_family(context: object) -> str | None:
+        return ReviewedSlicePolicy.source_family(context)
 
-        source_context = context.get("source")
-        if isinstance(source_context, Mapping):
-            source_family = source_context.get("source_family")
-            if isinstance(source_family, str):
-                normalized_source_family = source_family.strip()
-                if normalized_source_family:
-                    return normalized_source_family
+    @staticmethod
+    def _reviewed_context_explicitly_declares_provenance(context: object) -> bool:
+        return ReviewedSlicePolicy.context_explicitly_declares_provenance(context)
 
-        source_family = context.get("source_family")
-        if isinstance(source_family, str):
-            normalized_source_family = source_family.strip()
-            if normalized_source_family:
-                return normalized_source_family
+    def _require_reviewed_operator_case_record(self, case: CaseRecord) -> CaseRecord:
+        return self._reviewed_slice_policy.require_operator_case_record(case)
 
-        return None
+    def _case_is_in_reviewed_operator_slice(self, case: CaseRecord) -> bool:
+        return self._reviewed_slice_policy.case_is_in_operator_slice(case)
 
-    def _phase19_context_declares_out_of_scope_provenance(self, context: object) -> bool:
-        if not isinstance(context, Mapping):
-            return True
-
-        source_family = self._phase19_operator_source_family(
+    def _reviewed_context_declares_out_of_scope_provenance(self, context: object) -> bool:
+        return self._reviewed_slice_policy.context_declares_out_of_scope_provenance(
             context
-        ) or self._phase19_operator_source_family(context.get("reviewed_source_profile"))
-        if source_family not in REVIEWED_LIVE_WAZUH_SOURCE_FAMILIES:
-            return True
-
-        admission_provenance = _normalize_admission_provenance(
-            context.get("provenance")
-        ) or _normalize_admission_provenance(context.get("admission_provenance"))
-        return (
-            admission_provenance is not None
-            and admission_provenance
-            != {
-                "admission_kind": "live",
-                "admission_channel": "live_wazuh_webhook",
-            }
         )
-
-    @staticmethod
-    def _phase19_context_explicitly_declares_provenance(context: object) -> bool:
-        if not isinstance(context, Mapping):
-            return context is not None
-        if "source_family" in context or "source" in context:
-            return True
-        if "reviewed_source_profile" in context:
-            return True
-        return "provenance" in context or "admission_provenance" in context
 
     def _normalize_linked_record_ids(
         self,

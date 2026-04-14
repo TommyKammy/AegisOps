@@ -449,6 +449,55 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             "case-delegated-001",
         )
 
+    def test_service_routes_reviewed_slice_checks_through_policy_module(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        service._reviewed_slice_policy = mock.Mock()
+        service._reviewed_slice_policy.require_operator_case.return_value = (
+            mock.sentinel.case_record
+        )
+        service._reviewed_slice_policy.require_operator_case_record.return_value = (
+            mock.sentinel.validated_case_record
+        )
+        service._reviewed_slice_policy.context_declares_out_of_scope_provenance.return_value = (
+            True
+        )
+        context_snapshot = mock.sentinel.context_snapshot
+
+        self.assertIs(
+            service._require_reviewed_operator_case("case-reviewed-001"),
+            mock.sentinel.case_record,
+        )
+        self.assertIs(
+            service._require_reviewed_operator_case_record(mock.sentinel.case_record),
+            mock.sentinel.validated_case_record,
+        )
+        service._require_reviewed_case_scoped_advisory_read(context_snapshot)
+        self.assertTrue(
+            service._reviewed_context_declares_out_of_scope_provenance(
+                mock.sentinel.reviewed_context
+            )
+        )
+
+        service._reviewed_slice_policy.require_operator_case.assert_called_once_with(
+            "case-reviewed-001"
+        )
+        (
+            service._reviewed_slice_policy.require_operator_case_record
+            .assert_called_once_with(mock.sentinel.case_record)
+        )
+        (
+            service._reviewed_slice_policy.require_case_scoped_advisory_read
+            .assert_called_once_with(context_snapshot)
+        )
+        (
+            service._reviewed_slice_policy.context_declares_out_of_scope_provenance
+            .assert_called_once_with(mock.sentinel.reviewed_context)
+        )
+
     def _assert_authoritative_store_empty(self, store: object) -> None:
         for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES:
             self.assertEqual(store.list(record_type), ())
@@ -4618,7 +4667,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         _, service, _, _, _ = self._build_phase19_in_scope_case()
 
         self.assertTrue(
-            service._phase19_context_declares_out_of_scope_provenance(
+            service._reviewed_context_declares_out_of_scope_provenance(
                 "synthetic_review_fixture"
             )
         )
@@ -4627,7 +4676,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         _, service, _, _, _ = self._build_phase19_in_scope_case()
 
         self.assertTrue(
-            service._phase19_context_declares_out_of_scope_provenance(
+            service._reviewed_context_declares_out_of_scope_provenance(
                 {
                     "provenance": {
                         "admission_kind": "live",
