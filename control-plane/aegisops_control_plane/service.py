@@ -1495,6 +1495,11 @@ class AegisOpsControlPlaneService:
                     or (alert_id is not None and record.alert_id == alert_id)
                 )
             ]
+        matching_requests = [
+            record
+            for record in matching_requests
+            if self._action_request_is_review_bound(record)
+        ]
         chains = [
             self._build_action_review_chain_snapshot(
                 action_request,
@@ -1583,11 +1588,15 @@ class AegisOpsControlPlaneService:
             "recipient_identity": requested_payload.get("recipient_identity"),
             "message_intent": requested_payload.get("message_intent"),
             "escalation_reason": requested_payload.get("escalation_reason"),
-            "execution_surface_type": action_request.policy_evaluation.get(
-                "execution_surface_type"
+            "execution_surface_type": (
+                action_execution.execution_surface_type
+                if action_execution is not None
+                else action_request.policy_evaluation.get("execution_surface_type")
             ),
-            "execution_surface_id": action_request.policy_evaluation.get(
-                "execution_surface_id"
+            "execution_surface_id": (
+                action_execution.execution_surface_id
+                if action_execution is not None
+                else action_request.policy_evaluation.get("execution_surface_id")
             ),
             "action_execution_id": (
                 action_execution.action_execution_id if action_execution is not None else None
@@ -1789,10 +1798,17 @@ class AegisOpsControlPlaneService:
         action_execution: ActionExecutionRecord | None,
     ) -> str:
         lifecycle_state = action_request.lifecycle_state
+        execution_state = (
+            action_execution.lifecycle_state if action_execution is not None else None
+        )
         if lifecycle_state in {"expired", "rejected", "superseded"}:
             return lifecycle_state
         if lifecycle_state in {"completed", "failed", "unresolved"}:
             return lifecycle_state
+        if execution_state == "succeeded":
+            return "completed"
+        if execution_state in {"failed", "superseded"}:
+            return execution_state
         if lifecycle_state == "executing" or action_execution is not None:
             return "executing"
         if approval_state in {"expired", "rejected", "superseded"}:
@@ -1825,6 +1841,7 @@ class AegisOpsControlPlaneService:
                 record
                 for record in candidate_requests
                 if record.action_request_id != action_request.action_request_id
+                and self._action_request_is_review_bound(record)
                 and record.requested_at >= action_request.requested_at
                 and record.lifecycle_state != "superseded"
                 and dict(record.requested_payload).get("action_type") == action_type
@@ -1839,6 +1856,7 @@ class AegisOpsControlPlaneService:
                 record
                 for record in self._store.list(ActionRequestRecord)
                 if record.action_request_id != action_request.action_request_id
+                and self._action_request_is_review_bound(record)
                 and (
                     (
                         action_request.case_id is not None
@@ -1865,6 +1883,14 @@ class AegisOpsControlPlaneService:
             reverse=True,
         )
         return matches[0]
+
+    @staticmethod
+    def _action_request_is_review_bound(action_request: ActionRequestRecord) -> bool:
+        return not (
+            action_request.policy_evaluation.get("approval_requirement")
+            == "policy_authorized"
+            and action_request.approval_decision_id is None
+        )
 
     @staticmethod
     def _next_expected_action_for_review_state(review_state: str) -> str | None:

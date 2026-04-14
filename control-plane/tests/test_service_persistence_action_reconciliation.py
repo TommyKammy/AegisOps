@@ -3797,6 +3797,209 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
             ],
             "action-execution-surface-stale-executing-001",
         )
+        self.assertEqual(
+            action_reviews_by_id[executing_request.action_request_id][
+                "execution_surface_type"
+            ],
+            "automation_substrate",
+        )
+        self.assertEqual(
+            action_reviews_by_id[executing_request.action_request_id][
+                "execution_surface_id"
+            ],
+            "n8n",
+        )
+
+    def test_service_action_review_surfaces_keep_policy_authorized_requests_out_of_review_chains(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Observed repository permission change requires tracked review.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            observation_id=observation.observation_id,
+            triage_owner="analyst-001",
+            triage_rationale="Privilege-impacting change needs durable business-hours follow-up.",
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before any approval-bound response.",
+            lead_id=lead.lead_id,
+        )
+        reviewed_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-reviewed-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-surface-reviewed-superseded-001",
+        )
+        reviewed_request = service.persist_record(
+            replace(
+                reviewed_request,
+                lifecycle_state="superseded",
+            )
+        )
+        reviewed_replacement = service.persist_record(
+            replace(
+                reviewed_request,
+                action_request_id="action-request-surface-reviewed-replacement-001",
+                idempotency_key="idempotency-surface-reviewed-replacement-001",
+                requested_at=reviewed_request.requested_at + timedelta(minutes=10),
+                lifecycle_state="pending_approval",
+                requester_identity="analyst-002",
+            )
+        )
+        policy_authorized_request = service.persist_record(
+            replace(
+                reviewed_request,
+                action_request_id="action-request-surface-policy-authorized-001",
+                approval_decision_id=None,
+                idempotency_key="idempotency-surface-policy-authorized-001",
+                requested_at=reviewed_request.requested_at + timedelta(minutes=20),
+                lifecycle_state="approved",
+                requester_identity="policy-engine",
+                policy_evaluation={
+                    "approval_requirement": "policy_authorized",
+                    "routing_target": "shuffle",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+
+        queue_snapshot = service.inspect_analyst_queue().to_dict()
+        alert_snapshot = service.inspect_alert_detail(promoted_case.alert_id).to_dict()
+        case_snapshot = service.inspect_case_detail(promoted_case.case_id).to_dict()
+        action_reviews_by_id = {
+            record["action_request_id"]: record for record in case_snapshot["action_reviews"]
+        }
+
+        self.assertEqual(
+            queue_snapshot["records"][0]["current_action_review"]["action_request_id"],
+            reviewed_replacement.action_request_id,
+        )
+        self.assertEqual(
+            alert_snapshot["current_action_review"]["action_request_id"],
+            reviewed_replacement.action_request_id,
+        )
+        self.assertEqual(
+            case_snapshot["current_action_review"]["action_request_id"],
+            reviewed_replacement.action_request_id,
+        )
+        self.assertNotIn(
+            policy_authorized_request.action_request_id,
+            action_reviews_by_id,
+        )
+        self.assertEqual(
+            action_reviews_by_id[reviewed_request.action_request_id][
+                "replacement_action_request_id"
+            ],
+            reviewed_replacement.action_request_id,
+        )
+
+    def test_service_action_review_surfaces_preserve_terminal_execution_states(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Observed repository permission change requires tracked review.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            observation_id=observation.observation_id,
+            triage_owner="analyst-001",
+            triage_rationale="Privilege-impacting change needs durable business-hours follow-up.",
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before any approval-bound response.",
+            lead_id=lead.lead_id,
+        )
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=4)
+        request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-completed-execution-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
+            expires_at=expires_at,
+            action_request_id="action-request-surface-completed-execution-001",
+        )
+        decision = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-surface-completed-execution-001",
+                action_request_id=request.action_request_id,
+                approver_identities=("approver-completed-execution-001",),
+                target_snapshot=dict(request.target_scope),
+                payload_hash=request.payload_hash,
+                decided_at=request.requested_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=expires_at,
+            )
+        )
+        request = service.persist_record(
+            replace(
+                request,
+                approval_decision_id=decision.approval_decision_id,
+                lifecycle_state="approved",
+            )
+        )
+        service.persist_record(
+            ActionExecutionRecord(
+                action_execution_id="action-execution-surface-completed-001",
+                action_request_id=request.action_request_id,
+                approval_decision_id=decision.approval_decision_id,
+                delegation_id="delegation-surface-completed-001",
+                execution_surface_type="automation_substrate",
+                execution_surface_id="shuffle",
+                execution_run_id="execution-run-surface-completed-001",
+                idempotency_key=request.idempotency_key,
+                target_scope=dict(request.target_scope),
+                approved_payload=dict(request.requested_payload),
+                payload_hash=request.payload_hash,
+                delegated_at=request.requested_at + timedelta(minutes=10),
+                expires_at=expires_at,
+                provenance={"initiated_by": "operator-review"},
+                lifecycle_state="succeeded",
+            )
+        )
+
+        case_snapshot = service.inspect_case_detail(promoted_case.case_id).to_dict()
+        action_review = case_snapshot["current_action_review"]
+
+        self.assertEqual(
+            action_review["action_request_id"],
+            request.action_request_id,
+        )
+        self.assertEqual(action_review["review_state"], "completed")
+        self.assertEqual(
+            action_review["action_execution_state"],
+            "succeeded",
+        )
+        self.assertEqual(
+            action_review["next_expected_action"],
+            "review_execution_outcome",
+        )
 
     def test_service_action_review_surfaces_use_newest_review_as_current(
         self,
