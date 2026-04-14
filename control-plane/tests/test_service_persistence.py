@@ -241,6 +241,44 @@ class _CommitFailingStore:
 
 
 @dataclass
+class _RecordTypeSaveFailingStore:
+    inner: object
+    record_type: type[object]
+    message: str = "synthetic save failure"
+
+    @property
+    def dsn(self) -> str:
+        return self.inner.dsn
+
+    @property
+    def persistence_mode(self) -> str:
+        return self.inner.persistence_mode
+
+    def save(self, record: object) -> object:
+        if isinstance(record, self.record_type):
+            raise RuntimeError(self.message)
+        return self.inner.save(record)
+
+    def get(self, record_type: object, record_id: str) -> object | None:
+        return self.inner.get(record_type, record_id)
+
+    def list(self, record_type: object) -> tuple[object, ...]:
+        return self.inner.list(record_type)
+
+    def inspect_readiness_aggregates(self) -> object:
+        return self.inner.inspect_readiness_aggregates()
+
+    @contextmanager
+    def transaction(
+        self,
+        *,
+        isolation_level: str | None = None,
+    ) -> Iterator[None]:
+        with self.inner.transaction(isolation_level=isolation_level):
+            yield
+
+
+@dataclass
 class _CommitFailingConnection:
     inner: object
     message: str
@@ -10396,6 +10434,200 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         self.assertEqual(
             reconciliation.subject_linkage["action_execution_ids"],
             (execution.action_execution_id,),
+        )
+
+    def test_service_reconciliation_rolls_back_execution_state_when_reconciliation_write_fails(
+        self,
+    ) -> None:
+        base_store, seed_service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = seed_service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before any approval-bound response.",
+        )
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=4)
+        action_request = seed_service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
+            expires_at=expires_at,
+        )
+        decided_at = action_request.requested_at + timedelta(minutes=5)
+        delegated_at = action_request.requested_at + timedelta(minutes=10)
+        observed_at = action_request.requested_at + timedelta(minutes=15)
+        compared_at = action_request.requested_at + timedelta(minutes=16)
+        stale_after = action_request.requested_at + timedelta(hours=1)
+        approval_decision = seed_service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase20-reconciliation-atomic-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=decided_at,
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        approved_request = seed_service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval_decision.approval_decision_id,
+                lifecycle_state="approved",
+            )
+        )
+        execution = seed_service.delegate_approved_action_to_shuffle(
+            action_request_id=approved_request.action_request_id,
+            approved_payload=dict(approved_request.requested_payload),
+            delegated_at=delegated_at,
+            delegation_issuer="control-plane-service",
+            evidence_ids=(evidence_id,),
+        )
+        existing_reconciliation_ids = {
+            record.reconciliation_id for record in base_store.list(ReconciliationRecord)
+        }
+        failing_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=_RecordTypeSaveFailingStore(
+                inner=base_store,
+                record_type=ReconciliationRecord,
+                message="synthetic reconciliation save failure",
+            ),
+        )
+
+        with mock.patch.object(failing_service, "_emit_structured_event") as emit_event:
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "synthetic reconciliation save failure",
+            ):
+                failing_service.reconcile_action_execution(
+                    action_request_id=approved_request.action_request_id,
+                    execution_surface_type="automation_substrate",
+                    execution_surface_id="shuffle",
+                    observed_executions=(
+                        {
+                            "execution_run_id": execution.execution_run_id,
+                            "execution_surface_id": "shuffle",
+                            "idempotency_key": approved_request.idempotency_key,
+                            "approval_decision_id": execution.approval_decision_id,
+                            "delegation_id": execution.delegation_id,
+                            "payload_hash": execution.payload_hash,
+                            "observed_at": observed_at,
+                            "status": "success",
+                        },
+                    ),
+                    compared_at=compared_at,
+                    stale_after=stale_after,
+                )
+
+        emit_event.assert_not_called()
+        stored_execution = base_store.get(
+            ActionExecutionRecord,
+            execution.action_execution_id,
+        )
+        self.assertIsNotNone(stored_execution)
+        self.assertEqual(stored_execution.lifecycle_state, "queued")
+        self.assertEqual(
+            {
+                record.reconciliation_id
+                for record in base_store.list(ReconciliationRecord)
+            },
+            existing_reconciliation_ids,
+        )
+
+    def test_service_reconciliation_does_not_downgrade_authoritative_execution_lifecycle(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before any approval-bound response.",
+        )
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=4)
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
+            expires_at=expires_at,
+        )
+        decided_at = action_request.requested_at + timedelta(minutes=5)
+        delegated_at = action_request.requested_at + timedelta(minutes=10)
+        observed_at = action_request.requested_at + timedelta(minutes=15)
+        compared_at = action_request.requested_at + timedelta(minutes=16)
+        stale_after = action_request.requested_at + timedelta(hours=1)
+        approval_decision = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase20-reconciliation-monotonic-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=decided_at,
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        approved_request = service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval_decision.approval_decision_id,
+                lifecycle_state="approved",
+            )
+        )
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id=approved_request.action_request_id,
+            approved_payload=dict(approved_request.requested_payload),
+            delegated_at=delegated_at,
+            delegation_issuer="control-plane-service",
+            evidence_ids=(evidence_id,),
+        )
+        service.persist_record(replace(execution, lifecycle_state="running"))
+
+        reconciliation = service.reconcile_action_execution(
+            action_request_id=approved_request.action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(
+                {
+                    "execution_run_id": execution.execution_run_id,
+                    "execution_surface_id": "shuffle",
+                    "idempotency_key": approved_request.idempotency_key,
+                    "approval_decision_id": execution.approval_decision_id,
+                    "delegation_id": execution.delegation_id,
+                    "payload_hash": execution.payload_hash,
+                    "observed_at": observed_at,
+                    "status": "queued",
+                },
+            ),
+            compared_at=compared_at,
+            stale_after=stale_after,
+        )
+
+        stored_execution = service.get_record(
+            ActionExecutionRecord,
+            execution.action_execution_id,
+        )
+        self.assertIsNotNone(stored_execution)
+        self.assertEqual(stored_execution.lifecycle_state, "running")
+        self.assertEqual(reconciliation.ingest_disposition, "matched")
+        self.assertEqual(reconciliation.lifecycle_state, "matched")
+        self.assertEqual(
+            service._execution_coordinator._action_execution_lifecycle_from_status(
+                "running",
+                "succeeded",
+            ),
+            "succeeded",
         )
 
     def test_service_phase20_reconciliation_rejects_downstream_evidence_missing_binding_identifiers(

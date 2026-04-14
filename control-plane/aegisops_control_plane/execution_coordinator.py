@@ -514,59 +514,58 @@ class ExecutionCoordinator:
                     "matched approved action request to reviewed execution run"
                 )
 
-        if (
-            authoritative_execution is not None
-            and latest_execution is not None
-            and ingest_disposition == "matched"
-        ):
-            reconciled_lifecycle_state = self._action_execution_lifecycle_from_status(
-                latest_execution.get("status"),
-                authoritative_execution.lifecycle_state,
-            )
-            if reconciled_lifecycle_state != authoritative_execution.lifecycle_state:
-                authoritative_execution = self._service.persist_record(
-                    ActionExecutionRecord(
-                        action_execution_id=authoritative_execution.action_execution_id,
-                        action_request_id=authoritative_execution.action_request_id,
-                        approval_decision_id=authoritative_execution.approval_decision_id,
-                        delegation_id=authoritative_execution.delegation_id,
-                        execution_surface_type=authoritative_execution.execution_surface_type,
-                        execution_surface_id=authoritative_execution.execution_surface_id,
-                        execution_run_id=authoritative_execution.execution_run_id,
-                        idempotency_key=authoritative_execution.idempotency_key,
-                        target_scope=authoritative_execution.target_scope,
-                        approved_payload=authoritative_execution.approved_payload,
-                        payload_hash=authoritative_execution.payload_hash,
-                        delegated_at=authoritative_execution.delegated_at,
-                        expires_at=authoritative_execution.expires_at,
-                        provenance=authoritative_execution.provenance,
-                        lifecycle_state=reconciled_lifecycle_state,
-                    )
+        with self._service._store.transaction():
+            if authoritative_execution is not None:
+                stored_execution = self._service._store.get(
+                    ActionExecutionRecord,
+                    authoritative_execution.action_execution_id,
                 )
+                if stored_execution is None:
+                    raise LookupError(
+                        "missing authoritative action execution during reconciliation"
+                    )
+                authoritative_execution = stored_execution
 
-        reconciliation = self._service.persist_record(
-            ReconciliationRecord(
-                reconciliation_id=self._service._next_identifier("reconciliation"),
-                subject_linkage=subject_linkage,
-                alert_id=action_request.alert_id,
-                finding_id=action_request.finding_id,
-                analytic_signal_id=None,
-                execution_run_id=execution_run_id,
-                linked_execution_run_ids=linked_execution_run_ids,
-                correlation_key=self._build_action_execution_reconciliation_key(
-                    action_request=action_request,
-                    execution_surface_type=execution_surface_type,
-                    execution_surface_id=execution_surface_id,
-                    authoritative_execution=authoritative_execution,
-                ),
-                first_seen_at=action_request.requested_at,
-                last_seen_at=last_seen_at,
-                ingest_disposition=ingest_disposition,
-                mismatch_summary=mismatch_summary,
-                compared_at=compared_at,
-                lifecycle_state=lifecycle_state,
+            if (
+                authoritative_execution is not None
+                and latest_execution is not None
+                and ingest_disposition == "matched"
+            ):
+                reconciled_lifecycle_state = self._action_execution_lifecycle_from_status(
+                    latest_execution.get("status"),
+                    authoritative_execution.lifecycle_state,
+                )
+                if reconciled_lifecycle_state != authoritative_execution.lifecycle_state:
+                    authoritative_execution = self._service.persist_record(
+                        replace(
+                            authoritative_execution,
+                            lifecycle_state=reconciled_lifecycle_state,
+                        )
+                    )
+
+            reconciliation = self._service.persist_record(
+                ReconciliationRecord(
+                    reconciliation_id=self._service._next_identifier("reconciliation"),
+                    subject_linkage=subject_linkage,
+                    alert_id=action_request.alert_id,
+                    finding_id=action_request.finding_id,
+                    analytic_signal_id=None,
+                    execution_run_id=execution_run_id,
+                    linked_execution_run_ids=linked_execution_run_ids,
+                    correlation_key=self._build_action_execution_reconciliation_key(
+                        action_request=action_request,
+                        execution_surface_type=execution_surface_type,
+                        execution_surface_id=execution_surface_id,
+                        authoritative_execution=authoritative_execution,
+                    ),
+                    first_seen_at=action_request.requested_at,
+                    last_seen_at=last_seen_at,
+                    ingest_disposition=ingest_disposition,
+                    mismatch_summary=mismatch_summary,
+                    compared_at=compared_at,
+                    lifecycle_state=lifecycle_state,
+                )
             )
-        )
         self._service._emit_structured_event(
             logging.INFO,
             "action_execution_reconciled",
@@ -875,16 +874,39 @@ class ExecutionCoordinator:
             return current_lifecycle_state
 
         normalized_status = status.strip().lower()
-        if normalized_status in {"queued", "pending"}:
-            return "queued"
-        if normalized_status in {"running", "in_progress"}:
-            return "running"
-        if normalized_status in {"success", "succeeded", "completed"}:
-            return "succeeded"
-        if normalized_status in {"failed", "error"}:
-            return "failed"
-        if normalized_status in {"canceled", "cancelled"}:
-            return "canceled"
+        observed_state = {
+            "queued": "queued",
+            "pending": "queued",
+            "running": "running",
+            "in_progress": "running",
+            "success": "succeeded",
+            "succeeded": "succeeded",
+            "completed": "succeeded",
+            "failed": "failed",
+            "error": "failed",
+            "canceled": "canceled",
+            "cancelled": "canceled",
+        }.get(normalized_status)
+        if observed_state is None:
+            return current_lifecycle_state
+
+        normalized_current_lifecycle_state = current_lifecycle_state.strip().lower()
+        if normalized_current_lifecycle_state in {"succeeded", "failed", "canceled"}:
+            return current_lifecycle_state
+
+        lifecycle_rank = {
+            "dispatching": 0,
+            "queued": 1,
+            "running": 2,
+            "succeeded": 3,
+            "failed": 3,
+            "canceled": 3,
+        }
+        if lifecycle_rank[observed_state] >= lifecycle_rank.get(
+            normalized_current_lifecycle_state,
+            -1,
+        ):
+            return observed_state
         return current_lifecycle_state
 
     def _build_action_execution_reconciliation_key(
