@@ -70,6 +70,9 @@ def _reviewed_context_identifier_citations(
             continue
         for value in sorted(values):
             normalized_value = value[1:-1] if value.startswith("'") and value.endswith("'") else value
+            normalized_value = normalized_value.strip()
+            if normalized_value in {"", "None"}:
+                continue
             citation = f"reviewed_context.{path}={normalized_value}"
             if citation not in citations:
                 citations.append(citation)
@@ -684,9 +687,7 @@ class AssistantContextAssembler:
             case_ids=linked_case_ids,
             ai_trace_records=linked_ai_trace_records,
             exclude_recommendation_id=(
-                getattr(record, "record_id", None)
-                if isinstance(record, RecommendationRecord)
-                else None
+                record.record_id if isinstance(record, RecommendationRecord) else None
             ),
         )
         linked_recommendation_ids = tuple(
@@ -728,9 +729,7 @@ class AssistantContextAssembler:
             finding_ids=linked_finding_ids,
             evidence_ids=linked_evidence_ids,
             exclude_reconciliation_id=(
-                getattr(record, "record_id", None)
-                if isinstance(record, ReconciliationRecord)
-                else None
+                record.record_id if isinstance(record, ReconciliationRecord) else None
             ),
         )
         linked_reconciliation_ids = tuple(
