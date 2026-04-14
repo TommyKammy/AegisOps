@@ -737,7 +737,7 @@ class PostgresControlPlaneStore:
             action_execution_lifecycle_counts=action_execution_lifecycle_counts,
             active_action_execution_ids=self._list_identifier_values_by_lifecycle_states(
                 ActionExecutionRecord,
-                ("queued", "running"),
+                ("dispatching", "queued", "running"),
             ),
             reconciliation_total=sum(reconciliation_lifecycle_counts.values()),
             reconciliation_lifecycle_counts=reconciliation_lifecycle_counts,

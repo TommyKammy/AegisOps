@@ -673,7 +673,7 @@ def _build_shutdown_status_snapshot(
         )
     if active_action_execution_ids:
         blocking_reasons.append(
-            "controlled shutdown requires queued or running executions to reach a terminal state"
+            "controlled shutdown requires dispatching, queued, or running executions to reach a terminal state"
         )
     if unresolved_reconciliation_ids:
         blocking_reasons.append(
@@ -1618,7 +1618,7 @@ class AegisOpsControlPlaneService:
             active_action_execution_ids=tuple(
                 record.action_execution_id
                 for record in action_executions
-                if record.lifecycle_state in {"queued", "running"}
+                if record.lifecycle_state in {"dispatching", "queued", "running"}
             ),
             reconciliation_total=len(reconciliations),
             reconciliation_lifecycle_counts=dict(

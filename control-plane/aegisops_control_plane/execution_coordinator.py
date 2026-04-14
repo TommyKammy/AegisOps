@@ -699,27 +699,35 @@ class ExecutionCoordinator:
             )
             raise
 
-        with self._service._store.transaction():
-            stored_execution = self._service._store.get(
-                ActionExecutionRecord,
-                predispatch_execution.action_execution_id,
-            )
-            if stored_execution is None:
-                raise LookupError(
-                    "missing pre-dispatch action execution record during delegation finalization"
+        try:
+            with self._service._store.transaction():
+                stored_execution = self._service._store.get(
+                    ActionExecutionRecord,
+                    predispatch_execution.action_execution_id,
                 )
-            execution = self._service.persist_record(
-                replace(
-                    stored_execution,
-                    execution_run_id=receipt.execution_run_id,
-                    provenance=self._finalized_execution_provenance(
-                        execution=stored_execution,
-                        receipt=receipt,
-                        execution_surface_id=execution_surface_id,
-                    ),
-                    lifecycle_state="queued",
+                if stored_execution is None:
+                    raise LookupError(
+                        "missing pre-dispatch action execution record during delegation finalization"
+                    )
+                execution = self._service.persist_record(
+                    replace(
+                        stored_execution,
+                        execution_run_id=receipt.execution_run_id,
+                        provenance=self._finalized_execution_provenance(
+                            execution=stored_execution,
+                            receipt=receipt,
+                            execution_surface_id=execution_surface_id,
+                        ),
+                        lifecycle_state="queued",
+                    )
                 )
+        except Exception as exc:
+            self._mark_dispatch_failure(
+                execution=predispatch_execution,
+                error=exc,
+                receipt=receipt,
             )
+            raise
         self._service._emit_action_execution_delegated_event(execution)
         return execution
 
