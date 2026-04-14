@@ -1355,6 +1355,19 @@ class AegisOpsControlPlaneService:
             }
 
         action_requests = self._store.list(ActionRequestRecord)
+        if not action_requests:
+            return _ActionReviewRecordIndex(
+                requests_by_case_id={},
+                requests_by_alert_id={},
+                requests_by_scope={},
+                approvals_by_id={},
+                approvals_by_action_request_id={},
+                executions_by_action_request_id={},
+                reconciliations_by_action_request_id={},
+                reconciliations_by_approval_decision_id={},
+                reconciliations_by_action_execution_id={},
+                reconciliations_by_delegation_id={},
+            )
         approvals = self._store.list(ApprovalDecisionRecord)
         action_executions = self._store.list(ActionExecutionRecord)
         reconciliations = self._store.list(ReconciliationRecord)

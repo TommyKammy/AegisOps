@@ -2655,7 +2655,7 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
     def test_service_creates_approval_bound_action_request_from_reviewed_recommendation(
         self,
     ) -> None:
-        _, service, promoted_case, evidence_id, reviewed_at = (
+        store, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
         )
         observation = service.record_case_observation(
