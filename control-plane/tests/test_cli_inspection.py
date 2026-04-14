@@ -17,6 +17,9 @@ from unittest import mock
 CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
+TESTS_ROOT = pathlib.Path(__file__).resolve().parent
+if str(TESTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TESTS_ROOT))
 
 import main
 from aegisops_control_plane.config import RuntimeConfig
@@ -36,26 +39,15 @@ from aegisops_control_plane.service import (
     AuthenticatedRuntimePrincipal,
 )
 from postgres_test_support import make_store
-
-
-FIXTURES_ROOT = pathlib.Path(__file__).resolve().parent / "fixtures" / "wazuh"
-REVIEWED_PROXY_SERVICE_ACCOUNT = "svc-aegisops-proxy-control-plane"
-REVIEWED_ANALYST_PRINCIPAL = AuthenticatedRuntimePrincipal(
-    identity="analyst-001",
-    role="analyst",
-    access_path="reviewed_reverse_proxy",
-    proxy_service_account=REVIEWED_PROXY_SERVICE_ACCOUNT,
+from support.auth import (
+    REVIEWED_ANALYST_PRINCIPAL,
+    REVIEWED_PLATFORM_ADMIN_PRINCIPAL,
+    REVIEWED_PROXY_SERVICE_ACCOUNT,
 )
-REVIEWED_PLATFORM_ADMIN_PRINCIPAL = AuthenticatedRuntimePrincipal(
-    identity="platform-admin-001",
-    role="platform_admin",
-    access_path="reviewed_reverse_proxy",
-    proxy_service_account=REVIEWED_PROXY_SERVICE_ACCOUNT,
-)
+from support.fixtures import load_wazuh_fixture
 
 
-def _load_wazuh_fixture(name: str) -> dict[str, object]:
-    return json.loads((FIXTURES_ROOT / name).read_text(encoding="utf-8"))
+_load_wazuh_fixture = load_wazuh_fixture
 
 
 class ControlPlaneCliInspectionTests(unittest.TestCase):
