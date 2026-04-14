@@ -1496,6 +1496,9 @@ class AegisOpsControlPlaneService:
             },
             "action_executions": {
                 "total": readiness_aggregates.action_execution_total,
+                "dispatching": readiness_aggregates.action_execution_lifecycle_counts.get(
+                    "dispatching", 0
+                ),
                 "queued": readiness_aggregates.action_execution_lifecycle_counts.get(
                     "queued", 0
                 ),
@@ -1505,7 +1508,7 @@ class AegisOpsControlPlaneService:
                 "terminal": sum(
                     count
                     for state, count in readiness_aggregates.action_execution_lifecycle_counts.items()
-                    if state not in {"queued", "running"}
+                    if state not in {"dispatching", "queued", "running"}
                 ),
             },
             "reconciliations": {

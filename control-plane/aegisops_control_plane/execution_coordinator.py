@@ -789,17 +789,38 @@ class ExecutionCoordinator:
         execution_surface_id: str,
     ) -> dict[str, object]:
         provenance = dict(execution.provenance)
-        provenance["adapter"] = getattr(receipt, "adapter")
+        provenance["adapter"] = self._require_receipt_string_attribute(
+            receipt,
+            "adapter",
+        )
         base_url = getattr(receipt, "base_url", "")
         if isinstance(base_url, str) and base_url.strip() and base_url != "<set-me>":
             provenance["adapter_base_url"] = base_url
         if execution_surface_id == "shuffle":
             provenance["downstream_binding"] = {
-                "approval_decision_id": getattr(receipt, "approval_decision_id"),
-                "delegation_id": getattr(receipt, "delegation_id"),
-                "payload_hash": getattr(receipt, "payload_hash"),
+                "approval_decision_id": self._require_receipt_string_attribute(
+                    receipt,
+                    "approval_decision_id",
+                ),
+                "delegation_id": self._require_receipt_string_attribute(
+                    receipt,
+                    "delegation_id",
+                ),
+                "payload_hash": self._require_receipt_string_attribute(
+                    receipt,
+                    "payload_hash",
+                ),
             }
         return provenance
+
+    @staticmethod
+    def _require_receipt_string_attribute(receipt: object, field_name: str) -> str:
+        value = getattr(receipt, field_name, None)
+        if not isinstance(value, str) or value.strip() == "":
+            raise ValueError(
+                f"adapter receipt missing required '{field_name}' attribute"
+            )
+        return value
 
     def _mark_dispatch_failure(
         self,

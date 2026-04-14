@@ -9,6 +9,7 @@ import json
 import logging
 import pathlib
 import secrets
+from types import SimpleNamespace
 import sys
 from typing import Callable, Iterator
 import unittest
@@ -7561,6 +7562,104 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             "synthetic finalization failure",
         )
 
+    def test_service_fail_closes_when_shuffle_receipt_omits_adapter(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        approved_target_scope = {"asset_id": "workstation-001"}
+        approved_payload = _phase20_notify_identity_owner_payload(
+            recipient_identity="repo-owner-001",
+            case_id="case-001",
+            alert_id="alert-001",
+            finding_id="finding-001",
+        )
+        payload_hash = _approved_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
+        service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-routine-missing-adapter-001",
+                action_request_id="action-request-routine-missing-adapter-001",
+                approver_identities=("approver-001",),
+                target_snapshot=approved_target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+            )
+        )
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-routine-missing-adapter-001",
+                approval_decision_id="approval-routine-missing-adapter-001",
+                case_id="case-001",
+                alert_id="alert-001",
+                finding_id="finding-001",
+                idempotency_key="idempotency-routine-missing-adapter-001",
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=None,
+                lifecycle_state="approved",
+                requested_payload=approved_payload,
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "approval",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+        original_dispatch = type(service._shuffle).dispatch_approved_action
+
+        def dispatch_without_adapter(adapter: object, **kwargs: object) -> object:
+            receipt = original_dispatch(adapter, **kwargs)
+            return SimpleNamespace(
+                execution_surface_type=receipt.execution_surface_type,
+                execution_surface_id=receipt.execution_surface_id,
+                execution_run_id=receipt.execution_run_id,
+                approval_decision_id=receipt.approval_decision_id,
+                delegation_id=receipt.delegation_id,
+                payload_hash=receipt.payload_hash,
+                base_url=receipt.base_url,
+            )
+
+        with mock.patch.object(
+            type(service._shuffle),
+            "dispatch_approved_action",
+            autospec=True,
+            side_effect=dispatch_without_adapter,
+        ):
+            with self.assertRaisesRegex(
+                ValueError,
+                "adapter receipt missing required 'adapter' attribute",
+            ):
+                service.delegate_approved_action_to_shuffle(
+                    action_request_id="action-request-routine-missing-adapter-001",
+                    approved_payload=approved_payload,
+                    delegated_at=delegated_at,
+                    delegation_issuer="control-plane-service",
+                )
+
+        executions = store.list(ActionExecutionRecord)
+        self.assertEqual(len(executions), 1)
+        self.assertEqual(executions[0].lifecycle_state, "failed")
+        self.assertNotIn("adapter", executions[0].provenance)
+        self.assertEqual(
+            executions[0].provenance["dispatch_failure"]["error_type"],
+            "ValueError",
+        )
+        self.assertEqual(
+            executions[0].provenance["dispatch_failure"]["error"],
+            "adapter receipt missing required 'adapter' attribute",
+        )
+
     def test_service_fail_closes_when_isolated_executor_receipt_surface_drifts(
         self,
     ) -> None:
@@ -9402,6 +9501,8 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
             aggregates.active_action_execution_ids,
             (execution.action_execution_id,),
         )
+        self.assertEqual(readiness.metrics["action_executions"]["dispatching"], 1)
+        self.assertEqual(readiness.metrics["action_executions"]["terminal"], 0)
 
     def test_service_phase21_readiness_prefers_higher_reconciliation_id_when_compared_at_ties(
         self,
