@@ -16,7 +16,7 @@ phase13_doc="${repo_root}/docs/phase-13-guarded-automation-ci-validation.md"
 response_safety_doc="${repo_root}/docs/response-action-safety-model.md"
 adr_doc="${repo_root}/docs/adr/0002-wazuh-shuffle-control-plane-thesis.md"
 phase15_tests="${repo_root}/control-plane/tests/test_phase15_identity_grounded_analyst_assistant_boundary_docs.py"
-runtime_tests="${repo_root}/control-plane/tests/test_service_persistence.py"
+runtime_tests="${repo_root}/control-plane/tests/test_service_persistence_assistant_advisory.py"
 workflow_path="${repo_root}/.github/workflows/ci.yml"
 
 require_file() {
@@ -42,48 +42,89 @@ require_fixed_string() {
 require_test_name() {
   local file_path="$1"
   local test_name="$2"
+  local support_path
+  support_path="$(dirname "${file_path}")/_service_persistence_support.py"
 
-  if ! python3 - "$file_path" "$test_name" <<'PY'
+  if ! python3 - "${file_path}" "${support_path}" "${test_name}" <<'PY'
 from __future__ import annotations
 
 import ast
+import pathlib
 import sys
-from pathlib import Path
 
 
-def is_unittest_testcase(base: ast.expr) -> bool:
-    if isinstance(base, ast.Attribute):
-        return (
-            base.attr == "TestCase"
-            and isinstance(base.value, ast.Name)
-            and base.value.id == "unittest"
-        )
+def base_name(node: ast.expr) -> str | None:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        parent = base_name(node.value)
+        if parent is None:
+            return None
+        return f"{parent}.{node.attr}"
+    return None
 
-    if isinstance(base, ast.Name):
-        return base.id == "TestCase"
 
+def class_index(path: pathlib.Path) -> dict[str, tuple[set[str], list[str]]]:
+    if not path.is_file():
+        return {}
+
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    index: dict[str, tuple[set[str], list[str]]] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.ClassDef):
+            continue
+        methods = {
+            child.name for child in node.body if isinstance(child, ast.FunctionDef)
+        }
+        bases = [name for base in node.bases if (name := base_name(base))]
+        index[node.name] = (methods, bases)
+    return index
+
+
+def is_testcase_class(
+    class_name: str,
+    classes: dict[str, tuple[set[str], list[str]]],
+    seen: set[str] | None = None,
+) -> bool:
+    if seen is None:
+        seen = set()
+    if class_name in seen:
+        return False
+    seen.add(class_name)
+
+    class_def = classes.get(class_name)
+    if class_def is None:
+        return False
+
+    _, bases = class_def
+    for candidate in bases:
+        if candidate == "unittest.TestCase":
+            return True
+        if candidate in classes and is_testcase_class(candidate, classes, seen):
+            return True
+        short_name = candidate.rsplit(".", 1)[-1]
+        if short_name == "TestCase":
+            return True
+        if short_name in classes and is_testcase_class(short_name, classes, seen):
+            return True
     return False
 
 
-file_path = Path(sys.argv[1])
-test_name = sys.argv[2]
-tree = ast.parse(file_path.read_text(encoding="utf-8"), filename=str(file_path))
+target_path = pathlib.Path(sys.argv[1])
+support_path = pathlib.Path(sys.argv[2])
+target_test = sys.argv[3]
 
-for node in tree.body:
-    if not isinstance(node, ast.ClassDef):
-        continue
+classes = class_index(target_path)
+classes.update(class_index(support_path))
 
-    if not any(is_unittest_testcase(base) for base in node.bases):
-        continue
+for class_name, (methods, _) in class_index(target_path).items():
+    if target_test in methods and is_testcase_class(class_name, classes):
+        raise SystemExit(0)
 
-    for stmt in node.body:
-        if isinstance(stmt, ast.FunctionDef) and stmt.name == test_name:
-            raise SystemExit(0)
-
-print(f"Missing required Phase 15 unittest-discoverable test in {file_path}: {test_name}", file=sys.stderr)
 raise SystemExit(1)
 PY
   then
+    echo "Missing required Phase 15 unittest-discoverable test in ${file_path}: ${test_name}" >&2
     exit 1
   fi
 }
@@ -109,8 +150,8 @@ validation_required_phrases=(
   "# Phase 15 Identity-Grounded Analyst-Assistant Boundary Validation"
   "- Validation date: 2026-04-09"
   "- Validation scope: Phase 15 review of the approved analyst-assistant boundary, operator-facing operating guidance, safe-query policy, citation completeness, prompt-injection resistance, identity ambiguity handling, assistant-context snapshot output contracts, optional OpenSearch extension boundaries, advisory-only ceiling, and CI wiring for the reviewed assistant boundary"
-  "- Baseline references: \`docs/phase-15-identity-grounded-analyst-assistant-boundary.md\`, \`docs/phase-15-identity-grounded-analyst-assistant-operating-guidance.md\`, \`docs/safe-query-gateway-and-tool-policy.md\`, \`docs/phase-7-ai-hunt-design-validation.md\`, \`docs/control-plane-state-model.md\`, \`docs/control-plane-runtime-service-boundary.md\`, \`docs/asset-identity-privilege-context-baseline.md\`, \`docs/phase-14-identity-rich-source-family-design.md\`, \`docs/phase-13-guarded-automation-ci-validation.md\`, \`docs/response-action-safety-model.md\`, \`docs/adr/0002-wazuh-shuffle-control-plane-thesis.md\`, \`control-plane/tests/test_phase15_identity_grounded_analyst_assistant_boundary_docs.py\`, \`control-plane/tests/test_service_persistence.py\`, \`.github/workflows/ci.yml\`"
-  "- Verification commands: \`bash scripts/verify-safe-query-gateway-doc.sh\`, \`bash scripts/verify-phase-7-ai-hunt-design-validation.sh\`, \`bash scripts/verify-phase-15-identity-grounded-analyst-assistant-boundary.sh\`, \`python3 -m unittest control-plane.tests.test_phase15_identity_grounded_analyst_assistant_boundary_docs control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_fails_closed_when_identity_context_is_alias_only control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_fails_closed_when_recommendation_text_claims_authority_or_scope_expansion\`, \`bash scripts/test-verify-phase-15-identity-grounded-analyst-assistant-boundary.sh\`, \`bash scripts/test-verify-ci-phase-15-workflow-coverage.sh\`"
+  "- Baseline references: \`docs/phase-15-identity-grounded-analyst-assistant-boundary.md\`, \`docs/phase-15-identity-grounded-analyst-assistant-operating-guidance.md\`, \`docs/safe-query-gateway-and-tool-policy.md\`, \`docs/phase-7-ai-hunt-design-validation.md\`, \`docs/control-plane-state-model.md\`, \`docs/control-plane-runtime-service-boundary.md\`, \`docs/asset-identity-privilege-context-baseline.md\`, \`docs/phase-14-identity-rich-source-family-design.md\`, \`docs/phase-13-guarded-automation-ci-validation.md\`, \`docs/response-action-safety-model.md\`, \`docs/adr/0002-wazuh-shuffle-control-plane-thesis.md\`, \`control-plane/tests/test_phase15_identity_grounded_analyst_assistant_boundary_docs.py\`, \`control-plane/tests/test_service_persistence_assistant_advisory.py\`, \`.github/workflows/ci.yml\`"
+  "- Verification commands: \`bash scripts/verify-safe-query-gateway-doc.sh\`, \`bash scripts/verify-phase-7-ai-hunt-design-validation.sh\`, \`bash scripts/verify-phase-15-identity-grounded-analyst-assistant-boundary.sh\`, \`python3 -m unittest control-plane.tests.test_phase15_identity_grounded_analyst_assistant_boundary_docs control-plane.tests.test_service_persistence_assistant_advisory.AssistantAdvisoryPersistenceTests.test_service_fails_closed_when_identity_context_is_alias_only control-plane.tests.test_service_persistence_assistant_advisory.AssistantAdvisoryPersistenceTests.test_service_fails_closed_when_recommendation_text_claims_authority_or_scope_expansion\`, \`bash scripts/test-verify-phase-15-identity-grounded-analyst-assistant-boundary.sh\`, \`bash scripts/test-verify-ci-phase-15-workflow-coverage.sh\`"
   "- Validation status: PASS"
   "## Required Boundary Artifacts"
   "## Review Outcome"
@@ -145,7 +186,7 @@ required_artifacts=(
   "docs/response-action-safety-model.md"
   "docs/adr/0002-wazuh-shuffle-control-plane-thesis.md"
   "control-plane/tests/test_phase15_identity_grounded_analyst_assistant_boundary_docs.py"
-  "control-plane/tests/test_service_persistence.py"
+  "control-plane/tests/test_service_persistence_assistant_advisory.py"
   ".github/workflows/ci.yml"
 )
 

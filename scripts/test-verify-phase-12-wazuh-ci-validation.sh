@@ -19,7 +19,8 @@ required_artifacts=(
   "docs/phase-12-wazuh-ci-validation.md"
   "control-plane/tests/test_wazuh_alert_ingest_contract_docs.py"
   "control-plane/tests/test_wazuh_adapter.py"
-  "control-plane/tests/test_service_persistence.py"
+  "control-plane/tests/test_service_persistence_assistant_advisory.py"
+  "control-plane/tests/test_service_persistence_ingest_case_lifecycle.py"
   "control-plane/tests/test_cli_inspection.py"
   ".github/workflows/ci.yml"
 )
@@ -112,9 +113,9 @@ assert_fails_with "${missing_validation_repo}" "Missing Phase 12 Wazuh CI valida
 missing_queue_test_repo="${workdir}/missing-queue-test"
 create_repo "${missing_queue_test_repo}"
 write_required_artifacts "${missing_queue_test_repo}"
-remove_text_from_file "${missing_queue_test_repo}" "control-plane/tests/test_service_persistence.py" "def test_service_exposes_wazuh_origin_alerts_in_business_hours_analyst_queue(self) -> None:"
+remove_text_from_file "${missing_queue_test_repo}" "control-plane/tests/test_service_persistence_ingest_case_lifecycle.py" "def test_service_exposes_wazuh_origin_alerts_in_business_hours_analyst_queue(self) -> None:"
 commit_fixture "${missing_queue_test_repo}"
-assert_fails_with "${missing_queue_test_repo}" "Missing required Phase 12 test in ${missing_queue_test_repo}/control-plane/tests/test_service_persistence.py: test_service_exposes_wazuh_origin_alerts_in_business_hours_analyst_queue"
+assert_fails_with "${missing_queue_test_repo}" "Missing required Phase 12 test in ${missing_queue_test_repo}/control-plane/tests/test_service_persistence_ingest_case_lifecycle.py: test_service_exposes_wazuh_origin_alerts_in_business_hours_analyst_queue"
 
 stale_contract_repo="${workdir}/stale-contract"
 create_repo "${stale_contract_repo}"

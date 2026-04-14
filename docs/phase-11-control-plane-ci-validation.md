@@ -2,15 +2,16 @@
 
 - Validation date: 2026-04-06
 - Validation scope: Phase 11 review of PostgreSQL-authoritative control-plane persistence, vendor-neutral analytic-signal and execution-surface coverage, and CI wiring for the reviewed local runtime and inspection paths
-- Baseline references: `docs/control-plane-state-model.md`, `control-plane/README.md`, `control-plane/tests/test_service_persistence.py`, `control-plane/tests/test_postgres_store.py`, `control-plane/tests/test_cli_inspection.py`, `.github/workflows/ci.yml`
-- Verification commands: `bash scripts/verify-control-plane-state-model-doc.sh`, `python3 -m unittest control-plane.tests.test_service_persistence control-plane.tests.test_postgres_store control-plane.tests.test_cli_inspection`, `bash scripts/test-verify-ci-phase-11-workflow-coverage.sh`, `bash scripts/verify-phase-11-control-plane-ci-validation.sh`
+- Baseline references: `docs/control-plane-state-model.md`, `control-plane/README.md`, `control-plane/tests/test_service_persistence_ingest_case_lifecycle.py`, `control-plane/tests/test_service_persistence_action_reconciliation.py`, `control-plane/tests/test_postgres_store.py`, `control-plane/tests/test_cli_inspection.py`, `.github/workflows/ci.yml`
+- Verification commands: `bash scripts/verify-control-plane-state-model-doc.sh`, `python3 -m unittest control-plane.tests.test_service_persistence_ingest_case_lifecycle control-plane.tests.test_service_persistence_action_reconciliation control-plane.tests.test_postgres_store control-plane.tests.test_cli_inspection`, `bash scripts/test-verify-ci-phase-11-workflow-coverage.sh`, `bash scripts/verify-phase-11-control-plane-ci-validation.sh`
 - Validation status: PASS
 
 ## Required Boundary Artifacts
 
 - `docs/control-plane-state-model.md`
 - `control-plane/README.md`
-- `control-plane/tests/test_service_persistence.py`
+- `control-plane/tests/test_service_persistence_ingest_case_lifecycle.py`
+- `control-plane/tests/test_service_persistence_action_reconciliation.py`
 - `control-plane/tests/test_postgres_store.py`
 - `control-plane/tests/test_cli_inspection.py`
 - `.github/workflows/ci.yml`
@@ -37,7 +38,7 @@ Confirmed CI now runs a dedicated Phase 11 validation step and a workflow covera
 
 `control-plane/tests/test_postgres_store.py` must continue to guard authoritative PostgreSQL persistence mode reporting.
 
-`control-plane/tests/test_service_persistence.py` must continue to guard substrate-adapter intake boundaries, first-class analytic-signal handling, and vendor-neutral execution-surface reconciliation.
+`control-plane/tests/test_service_persistence_ingest_case_lifecycle.py` and `control-plane/tests/test_service_persistence_action_reconciliation.py` must continue to guard substrate-adapter intake boundaries, first-class analytic-signal handling, and vendor-neutral execution-surface reconciliation.
 
 `control-plane/tests/test_cli_inspection.py` must continue to guard the reviewed runtime and inspection paths against PostgreSQL-backed read-only control-plane views.
 

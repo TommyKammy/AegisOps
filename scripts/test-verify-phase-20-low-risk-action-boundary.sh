@@ -25,7 +25,7 @@ required_artifacts=(
   "docs/architecture.md"
   "control-plane/tests/test_phase20_low_risk_action_docs.py"
   "control-plane/tests/test_phase20_low_risk_action_validation.py"
-  "control-plane/tests/test_service_persistence.py"
+  "control-plane/tests/test_service_persistence_action_reconciliation.py"
   "scripts/verify-phase-20-low-risk-action-boundary.sh"
   "scripts/test-verify-phase-20-low-risk-action-boundary.sh"
   "scripts/test-verify-ci-phase-20-workflow-coverage.sh"

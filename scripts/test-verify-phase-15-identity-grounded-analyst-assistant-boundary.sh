@@ -27,9 +27,11 @@ required_artifacts=(
   "docs/response-action-safety-model.md"
   "docs/adr/0002-wazuh-shuffle-control-plane-thesis.md"
   "control-plane/tests/test_phase15_identity_grounded_analyst_assistant_boundary_docs.py"
-  "control-plane/tests/test_service_persistence.py"
+  "control-plane/tests/test_service_persistence_assistant_advisory.py"
   ".github/workflows/ci.yml"
 )
+
+support_artifact="control-plane/tests/_service_persistence_support.py"
 
 create_repo() {
   local target="$1"
@@ -49,6 +51,10 @@ write_required_artifacts() {
     cp "${repo_root}/${artifact}" "${target}/${artifact}"
     git -C "${target}" add "${artifact}"
   done
+
+  mkdir -p "${target}/$(dirname "${support_artifact}")"
+  cp "${repo_root}/${support_artifact}" "${target}/${support_artifact}"
+  git -C "${target}" add "${support_artifact}"
 }
 
 remove_text_from_file() {
@@ -198,9 +204,20 @@ assert_fails_with "${missing_test_repo}" "Missing required Phase 15 unittest-dis
 missing_runtime_test_repo="${workdir}/missing-runtime-test"
 create_repo "${missing_runtime_test_repo}"
 write_required_artifacts "${missing_runtime_test_repo}"
-remove_text_from_file "${missing_runtime_test_repo}" "control-plane/tests/test_service_persistence.py" "    def test_service_fails_closed_when_identity_context_is_alias_only(self) -> None:"
+remove_text_from_file "${missing_runtime_test_repo}" "control-plane/tests/test_service_persistence_assistant_advisory.py" "    def test_service_fails_closed_when_identity_context_is_alias_only(self) -> None:"
 commit_fixture "${missing_runtime_test_repo}"
-assert_fails_with "${missing_runtime_test_repo}" "Missing required Phase 15 unittest-discoverable test in ${missing_runtime_test_repo}/control-plane/tests/test_service_persistence.py: test_service_fails_closed_when_identity_context_is_alias_only"
+assert_fails_with "${missing_runtime_test_repo}" "Missing required Phase 15 unittest-discoverable test in ${missing_runtime_test_repo}/control-plane/tests/test_service_persistence_assistant_advisory.py: test_service_fails_closed_when_identity_context_is_alias_only"
+
+module_level_false_positive_repo="${workdir}/module-level-false-positive"
+create_repo "${module_level_false_positive_repo}"
+write_required_artifacts "${module_level_false_positive_repo}"
+replace_text_in_file \
+  "${module_level_false_positive_repo}" \
+  "control-plane/tests/test_service_persistence_assistant_advisory.py" \
+  "    def test_service_fails_closed_when_identity_context_is_alias_only(self) -> None:" \
+  "def test_service_fails_closed_when_identity_context_is_alias_only(self) -> None:"
+commit_fixture "${module_level_false_positive_repo}"
+assert_fails_with "${module_level_false_positive_repo}" "Missing required Phase 15 unittest-discoverable test in ${module_level_false_positive_repo}/control-plane/tests/test_service_persistence_assistant_advisory.py: test_service_fails_closed_when_identity_context_is_alias_only"
 
 missing_ci_step_repo="${workdir}/missing-ci-step"
 create_repo "${missing_ci_step_repo}"

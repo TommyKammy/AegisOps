@@ -2,8 +2,8 @@
 
 - Validation date: 2026-04-09
 - Validation scope: Phase 15 review of the approved analyst-assistant boundary, operator-facing operating guidance, safe-query policy, citation completeness, prompt-injection resistance, identity ambiguity handling, assistant-context snapshot output contracts, optional OpenSearch extension boundaries, advisory-only ceiling, and CI wiring for the reviewed assistant boundary
-- Baseline references: `docs/phase-15-identity-grounded-analyst-assistant-boundary.md`, `docs/phase-15-identity-grounded-analyst-assistant-operating-guidance.md`, `docs/safe-query-gateway-and-tool-policy.md`, `docs/phase-7-ai-hunt-design-validation.md`, `docs/control-plane-state-model.md`, `docs/control-plane-runtime-service-boundary.md`, `docs/asset-identity-privilege-context-baseline.md`, `docs/phase-14-identity-rich-source-family-design.md`, `docs/phase-13-guarded-automation-ci-validation.md`, `docs/response-action-safety-model.md`, `docs/adr/0002-wazuh-shuffle-control-plane-thesis.md`, `control-plane/tests/test_phase15_identity_grounded_analyst_assistant_boundary_docs.py`, `control-plane/tests/test_service_persistence.py`, `.github/workflows/ci.yml`
-- Verification commands: `bash scripts/verify-safe-query-gateway-doc.sh`, `bash scripts/verify-phase-7-ai-hunt-design-validation.sh`, `bash scripts/verify-phase-15-identity-grounded-analyst-assistant-boundary.sh`, `python3 -m unittest control-plane.tests.test_phase15_identity_grounded_analyst_assistant_boundary_docs control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_fails_closed_when_identity_context_is_alias_only control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_fails_closed_when_recommendation_text_claims_authority_or_scope_expansion`, `bash scripts/test-verify-phase-15-identity-grounded-analyst-assistant-boundary.sh`, `bash scripts/test-verify-ci-phase-15-workflow-coverage.sh`
+- Baseline references: `docs/phase-15-identity-grounded-analyst-assistant-boundary.md`, `docs/phase-15-identity-grounded-analyst-assistant-operating-guidance.md`, `docs/safe-query-gateway-and-tool-policy.md`, `docs/phase-7-ai-hunt-design-validation.md`, `docs/control-plane-state-model.md`, `docs/control-plane-runtime-service-boundary.md`, `docs/asset-identity-privilege-context-baseline.md`, `docs/phase-14-identity-rich-source-family-design.md`, `docs/phase-13-guarded-automation-ci-validation.md`, `docs/response-action-safety-model.md`, `docs/adr/0002-wazuh-shuffle-control-plane-thesis.md`, `control-plane/tests/test_phase15_identity_grounded_analyst_assistant_boundary_docs.py`, `control-plane/tests/test_service_persistence_assistant_advisory.py`, `.github/workflows/ci.yml`
+- Verification commands: `bash scripts/verify-safe-query-gateway-doc.sh`, `bash scripts/verify-phase-7-ai-hunt-design-validation.sh`, `bash scripts/verify-phase-15-identity-grounded-analyst-assistant-boundary.sh`, `python3 -m unittest control-plane.tests.test_phase15_identity_grounded_analyst_assistant_boundary_docs control-plane.tests.test_service_persistence_assistant_advisory.AssistantAdvisoryPersistenceTests.test_service_fails_closed_when_identity_context_is_alias_only control-plane.tests.test_service_persistence_assistant_advisory.AssistantAdvisoryPersistenceTests.test_service_fails_closed_when_recommendation_text_claims_authority_or_scope_expansion`, `bash scripts/test-verify-phase-15-identity-grounded-analyst-assistant-boundary.sh`, `bash scripts/test-verify-ci-phase-15-workflow-coverage.sh`
 - Validation status: PASS
 
 ## Required Boundary Artifacts
@@ -21,7 +21,7 @@
 - `docs/response-action-safety-model.md`
 - `docs/adr/0002-wazuh-shuffle-control-plane-thesis.md`
 - `control-plane/tests/test_phase15_identity_grounded_analyst_assistant_boundary_docs.py`
-- `control-plane/tests/test_service_persistence.py`
+- `control-plane/tests/test_service_persistence_assistant_advisory.py`
 - `scripts/verify-phase-15-identity-grounded-analyst-assistant-boundary.sh`
 - `scripts/test-verify-phase-15-identity-grounded-analyst-assistant-boundary.sh`
 - `scripts/test-verify-ci-phase-15-workflow-coverage.sh`
@@ -75,7 +75,7 @@ Confirmed CI now has a dedicated Phase 15 validation step and workflow coverage 
 
 `control-plane/tests/test_phase15_identity_grounded_analyst_assistant_boundary_docs.py` must continue to guard the reviewed boundary text and fail closed when the boundary drifts.
 
-`control-plane/tests/test_service_persistence.py` must continue to guard response-path fail-closed behavior for alias-only identity ambiguity and authority-overreach recommendation text.
+`control-plane/tests/test_service_persistence_assistant_advisory.py` must continue to guard response-path fail-closed behavior for alias-only identity ambiguity and authority-overreach recommendation text.
 
 `.github/workflows/ci.yml` must continue to run the dedicated Phase 15 validation step, the focused Phase 15 unittest command, and the workflow coverage guard.
 

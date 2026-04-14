@@ -95,17 +95,17 @@ jobs:
       - name: Run Phase 11 control-plane validation
         run: |
           bash scripts/verify-phase-11-control-plane-ci-validation.sh
-          python3 -m unittest control-plane.tests.test_service_persistence control-plane.tests.test_postgres_store control-plane.tests.test_cli_inspection
+          python3 -m unittest control-plane.tests.test_service_persistence_ingest_case_lifecycle control-plane.tests.test_service_persistence_action_reconciliation control-plane.tests.test_postgres_store control-plane.tests.test_cli_inspection
 
       - name: Run Phase 12 Wazuh validation
         run: |
           bash scripts/verify-phase-12-wazuh-ci-validation.sh
-          python3 -m unittest control-plane.tests.test_wazuh_alert_ingest_contract_docs control-plane.tests.test_wazuh_adapter control-plane.tests.test_service_persistence control-plane.tests.test_cli_inspection
+          python3 -m unittest control-plane.tests.test_wazuh_alert_ingest_contract_docs control-plane.tests.test_wazuh_adapter control-plane.tests.test_service_persistence_assistant_advisory control-plane.tests.test_service_persistence_ingest_case_lifecycle control-plane.tests.test_cli_inspection
 
       - name: Run Phase 13 guarded automation validation
         run: |
           bash scripts/verify-phase-13-guarded-automation-ci-validation.sh
-          python3 -m unittest control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_records_execution_correlation_mismatch_states_separately control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_evaluates_action_policy_into_approval_and_isolated_executor control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_evaluates_action_policy_into_shuffle_without_human_approval control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_delegates_approved_low_risk_action_through_shuffle_adapter control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_rejects_shuffle_delegation_for_non_shuffle_execution_policy control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_delegates_approved_high_risk_action_through_isolated_executor control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_reconciles_shuffle_run_back_into_authoritative_action_execution control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_reconciles_isolated_executor_run_back_into_authoritative_action_execution
+          python3 -m unittest control-plane.tests.test_service_persistence_action_reconciliation.ActionReconciliationPersistenceTests.test_service_records_execution_correlation_mismatch_states_separately control-plane.tests.test_service_persistence_action_reconciliation.ActionReconciliationPersistenceTests.test_service_evaluates_action_policy_into_approval_and_isolated_executor control-plane.tests.test_service_persistence_action_reconciliation.ActionReconciliationPersistenceTests.test_service_evaluates_action_policy_into_shuffle_without_human_approval control-plane.tests.test_service_persistence_action_reconciliation.ActionReconciliationPersistenceTests.test_service_delegates_approved_low_risk_action_through_shuffle_adapter control-plane.tests.test_service_persistence_action_reconciliation.ActionReconciliationPersistenceTests.test_service_rejects_shuffle_delegation_for_non_shuffle_execution_policy control-plane.tests.test_service_persistence_action_reconciliation.ActionReconciliationPersistenceTests.test_service_delegates_approved_high_risk_action_through_isolated_executor control-plane.tests.test_service_persistence_action_reconciliation.ActionReconciliationPersistenceTests.test_service_reconciles_shuffle_run_back_into_authoritative_action_execution control-plane.tests.test_service_persistence_action_reconciliation.ActionReconciliationPersistenceTests.test_service_reconciles_isolated_executor_run_back_into_authoritative_action_execution
 
       - name: Run Phase 14 identity-rich source family validation
         run: bash scripts/verify-phase-14-identity-rich-source-family-design.sh
@@ -113,7 +113,7 @@ jobs:
       - name: Run Phase 14 identity-rich source expansion validation
         run: |
           bash scripts/verify-phase-14-identity-rich-source-expansion-ci-validation.sh
-          python3 -m unittest control-plane.tests.test_phase14_identity_rich_source_profile_docs control-plane.tests.test_wazuh_adapter control-plane.tests.test_service_persistence control-plane.tests.test_cli_inspection
+          python3 -m unittest control-plane.tests.test_phase14_identity_rich_source_profile_docs control-plane.tests.test_wazuh_adapter control-plane.tests.test_service_persistence_ingest_case_lifecycle control-plane.tests.test_cli_inspection
 
       - name: Run Phase 14 workflow coverage guard
         run: bash scripts/test-verify-ci-phase-14-workflow-coverage.sh
@@ -121,7 +121,7 @@ jobs:
       - name: Run Phase 15 identity-grounded analyst-assistant boundary validation
         run: |
           bash scripts/verify-phase-15-identity-grounded-analyst-assistant-boundary.sh
-          python3 -m unittest control-plane.tests.test_phase15_identity_grounded_analyst_assistant_boundary_docs control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_fails_closed_when_identity_context_is_alias_only control-plane.tests.test_service_persistence.ControlPlaneServicePersistenceTests.test_service_fails_closed_when_recommendation_text_claims_authority_or_scope_expansion
+          python3 -m unittest control-plane.tests.test_phase15_identity_grounded_analyst_assistant_boundary_docs control-plane.tests.test_service_persistence_assistant_advisory.AssistantAdvisoryPersistenceTests.test_service_fails_closed_when_identity_context_is_alias_only control-plane.tests.test_service_persistence_assistant_advisory.AssistantAdvisoryPersistenceTests.test_service_fails_closed_when_recommendation_text_claims_authority_or_scope_expansion
 
       - name: Run Phase 15 workflow coverage guard
         run: bash scripts/test-verify-ci-phase-15-workflow-coverage.sh

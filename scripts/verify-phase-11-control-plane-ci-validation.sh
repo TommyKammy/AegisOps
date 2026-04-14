@@ -8,7 +8,8 @@ repo_root="${1:-${default_repo_root}}"
 validation_doc="${repo_root}/docs/phase-11-control-plane-ci-validation.md"
 state_model_doc="${repo_root}/docs/control-plane-state-model.md"
 control_plane_readme="${repo_root}/control-plane/README.md"
-service_tests="${repo_root}/control-plane/tests/test_service_persistence.py"
+ingest_tests="${repo_root}/control-plane/tests/test_service_persistence_ingest_case_lifecycle.py"
+reconciliation_tests="${repo_root}/control-plane/tests/test_service_persistence_action_reconciliation.py"
 store_tests="${repo_root}/control-plane/tests/test_postgres_store.py"
 cli_tests="${repo_root}/control-plane/tests/test_cli_inspection.py"
 workflow_path="${repo_root}/.github/workflows/ci.yml"
@@ -47,7 +48,8 @@ require_test_name() {
 
 require_file "${state_model_doc}" "Missing control-plane state model document"
 require_file "${control_plane_readme}" "Missing control-plane runtime README"
-require_file "${service_tests}" "Missing control-plane service persistence tests"
+require_file "${ingest_tests}" "Missing control-plane Phase 11 ingest persistence tests"
+require_file "${reconciliation_tests}" "Missing control-plane Phase 11 reconciliation persistence tests"
 require_file "${store_tests}" "Missing control-plane PostgreSQL store tests"
 require_file "${cli_tests}" "Missing control-plane CLI inspection tests"
 require_file "${workflow_path}" "Missing CI workflow"
@@ -57,8 +59,8 @@ validation_required_phrases=(
   "# Phase 11 Control-Plane Persistence and Vendor-Neutral CI Validation"
   "- Validation date: 2026-04-06"
   "- Validation scope: Phase 11 review of PostgreSQL-authoritative control-plane persistence, vendor-neutral analytic-signal and execution-surface coverage, and CI wiring for the reviewed local runtime and inspection paths"
-  "- Baseline references: \`docs/control-plane-state-model.md\`, \`control-plane/README.md\`, \`control-plane/tests/test_service_persistence.py\`, \`control-plane/tests/test_postgres_store.py\`, \`control-plane/tests/test_cli_inspection.py\`, \`.github/workflows/ci.yml\`"
-  "- Verification commands: \`bash scripts/verify-control-plane-state-model-doc.sh\`, \`python3 -m unittest control-plane.tests.test_service_persistence control-plane.tests.test_postgres_store control-plane.tests.test_cli_inspection\`, \`bash scripts/test-verify-ci-phase-11-workflow-coverage.sh\`, \`bash scripts/verify-phase-11-control-plane-ci-validation.sh\`"
+  "- Baseline references: \`docs/control-plane-state-model.md\`, \`control-plane/README.md\`, \`control-plane/tests/test_service_persistence_ingest_case_lifecycle.py\`, \`control-plane/tests/test_service_persistence_action_reconciliation.py\`, \`control-plane/tests/test_postgres_store.py\`, \`control-plane/tests/test_cli_inspection.py\`, \`.github/workflows/ci.yml\`"
+  "- Verification commands: \`bash scripts/verify-control-plane-state-model-doc.sh\`, \`python3 -m unittest control-plane.tests.test_service_persistence_ingest_case_lifecycle control-plane.tests.test_service_persistence_action_reconciliation control-plane.tests.test_postgres_store control-plane.tests.test_cli_inspection\`, \`bash scripts/test-verify-ci-phase-11-workflow-coverage.sh\`, \`bash scripts/verify-phase-11-control-plane-ci-validation.sh\`"
   "- Validation status: PASS"
   "## Required Boundary Artifacts"
   "## Review Outcome"
@@ -73,7 +75,7 @@ validation_required_phrases=(
   '`docs/control-plane-state-model.md` must continue to describe the reviewed local runtime as `persistence_mode="postgresql"` and the PostgreSQL-backed control-plane store as the authoritative local persistence path.'
   '`control-plane/README.md` must continue to describe the reviewed runtime and inspection commands as the authoritative local operator flow while keeping injected in-memory stores limited to tests and local doubles.'
   '`control-plane/tests/test_postgres_store.py` must continue to guard authoritative PostgreSQL persistence mode reporting.'
-  '`control-plane/tests/test_service_persistence.py` must continue to guard substrate-adapter intake boundaries, first-class analytic-signal handling, and vendor-neutral execution-surface reconciliation.'
+  '`control-plane/tests/test_service_persistence_ingest_case_lifecycle.py` and `control-plane/tests/test_service_persistence_action_reconciliation.py` must continue to guard substrate-adapter intake boundaries, first-class analytic-signal handling, and vendor-neutral execution-surface reconciliation.'
   '`control-plane/tests/test_cli_inspection.py` must continue to guard the reviewed runtime and inspection paths against PostgreSQL-backed read-only control-plane views.'
   '`.github/workflows/ci.yml` must continue to run the dedicated Phase 11 validation step, the focused Phase 11 unit-test command, and the workflow coverage guard.'
   "No deviations found."
@@ -86,7 +88,8 @@ done
 required_artifacts=(
   "docs/control-plane-state-model.md"
   "control-plane/README.md"
-  "control-plane/tests/test_service_persistence.py"
+  "control-plane/tests/test_service_persistence_ingest_case_lifecycle.py"
+  "control-plane/tests/test_service_persistence_action_reconciliation.py"
   "control-plane/tests/test_postgres_store.py"
   "control-plane/tests/test_cli_inspection.py"
   ".github/workflows/ci.yml"
@@ -106,9 +109,9 @@ require_fixed_string "${control_plane_readme}" '- The runtime snapshot now repor
 require_fixed_string "${control_plane_readme}" '- Those runtime and inspection commands now construct the same reviewed control-plane service path, so PostgreSQL-backed runtime configuration remains the authoritative local operator flow while injected in-memory stores stay limited to tests and local doubles.'
 
 require_test_name "${store_tests}" "test_store_reports_postgresql_authoritative_persistence_mode"
-require_test_name "${service_tests}" "test_service_admits_native_detection_records_via_substrate_adapter_boundary"
-require_test_name "${service_tests}" "test_service_inspects_analytic_signal_records_as_first_class_records"
-require_test_name "${service_tests}" "test_service_reconcile_action_execution_supports_generic_execution_surfaces"
+require_test_name "${ingest_tests}" "test_service_admits_native_detection_records_via_substrate_adapter_boundary"
+require_test_name "${ingest_tests}" "test_service_inspects_analytic_signal_records_as_first_class_records"
+require_test_name "${reconciliation_tests}" "test_service_reconcile_action_execution_supports_generic_execution_surfaces"
 require_test_name "${cli_tests}" "test_cli_renders_read_only_record_and_reconciliation_views"
 
 require_fixed_string "${workflow_path}" "      - name: Run Phase 11 workflow coverage guard"

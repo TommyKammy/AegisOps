@@ -53,7 +53,7 @@ Phase 12 implementers must review the rule change against all of the following b
 
 Phase 12 implementers must update or add fixture coverage under `control-plane/tests/fixtures/wazuh/` whenever a custom rule introduces a new reviewed alert shape, source-identity branch, or provenance expectation.
 
-At minimum, the fixture-backed review path must keep `control-plane/tests/test_wazuh_adapter.py` and `control-plane/tests/test_service_persistence.py` aligned with the reviewed rule behavior before downstream workflow logic can rely on it.
+At minimum, the fixture-backed review path must keep `control-plane/tests/test_wazuh_adapter.py`, `control-plane/tests/test_service_persistence_assistant_advisory.py`, and `control-plane/tests/test_service_persistence_ingest_case_lifecycle.py` aligned with the reviewed rule behavior before downstream workflow logic can rely on it.
 
 If a rule change alters `rule.id`, `rule.description`, source-identity handling, or correlation-relevant fields such as manager-versus-agent provenance, the affected fixtures and tests must be refreshed in the same review slice.
 
@@ -82,7 +82,7 @@ The validation record should answer these questions explicitly:
 | Did the candidate event trigger the intended Wazuh rule and no unintended reviewed rule? | Confirms the rule behavior is stable enough for lifecycle review. |
 | Does the emitted alert preserve the required ingest fields? | Confirms the rule remains admissible at the AegisOps boundary. |
 | Is accountable source identity still reviewable as `agent:*` or manager-local provenance when agent identity is absent? | Confirms downstream correlation and reconciliation assumptions remain valid. |
-| Do the resulting fixtures still support `control-plane/tests/test_wazuh_adapter.py` and `control-plane/tests/test_service_persistence.py`? | Confirms the review is backed by executable Phase 12 evidence instead of prose alone. |
+| Do the resulting fixtures still support `control-plane/tests/test_wazuh_adapter.py`, `control-plane/tests/test_service_persistence_assistant_advisory.py`, and `control-plane/tests/test_service_persistence_ingest_case_lifecycle.py`? | Confirms the review is backed by executable Phase 12 evidence instead of prose alone. |
 | Are any downstream workflow expectations changed? | Forces review before analyst routing or automation assumptions drift. |
 
 If `wazuh-logtest` output does not preserve the reviewed rule metadata or accountable source identity needed by AegisOps, the rule must return to `draft` or `candidate` rather than moving forward on analyst workflow assumptions.

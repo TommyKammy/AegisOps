@@ -2,8 +2,8 @@
 
 - Validation date: 2026-04-07
 - Validation scope: Phase 12 review of Wazuh ingest contract coverage, fixture-backed admissions, alert and case lifecycle behavior, analyst queue invariants, and CI wiring for the reviewed Wazuh control-plane path
-- Baseline references: `docs/wazuh-alert-ingest-contract.md`, `docs/wazuh-rule-lifecycle-runbook.md`, `control-plane/tests/test_wazuh_alert_ingest_contract_docs.py`, `control-plane/tests/test_wazuh_adapter.py`, `control-plane/tests/test_service_persistence.py`, `control-plane/tests/test_cli_inspection.py`, `.github/workflows/ci.yml`
-- Verification commands: `bash scripts/verify-wazuh-rule-lifecycle-runbook.sh`, `python3 -m unittest control-plane.tests.test_wazuh_alert_ingest_contract_docs control-plane.tests.test_wazuh_adapter control-plane.tests.test_service_persistence control-plane.tests.test_cli_inspection`, `bash scripts/test-verify-ci-phase-12-workflow-coverage.sh`, `bash scripts/verify-phase-12-wazuh-ci-validation.sh`
+- Baseline references: `docs/wazuh-alert-ingest-contract.md`, `docs/wazuh-rule-lifecycle-runbook.md`, `control-plane/tests/test_wazuh_alert_ingest_contract_docs.py`, `control-plane/tests/test_wazuh_adapter.py`, `control-plane/tests/test_service_persistence_assistant_advisory.py`, `control-plane/tests/test_service_persistence_ingest_case_lifecycle.py`, `control-plane/tests/test_cli_inspection.py`, `.github/workflows/ci.yml`
+- Verification commands: `bash scripts/verify-wazuh-rule-lifecycle-runbook.sh`, `python3 -m unittest control-plane.tests.test_wazuh_alert_ingest_contract_docs control-plane.tests.test_wazuh_adapter control-plane.tests.test_service_persistence_assistant_advisory control-plane.tests.test_service_persistence_ingest_case_lifecycle control-plane.tests.test_cli_inspection`, `bash scripts/test-verify-ci-phase-12-workflow-coverage.sh`, `bash scripts/verify-phase-12-wazuh-ci-validation.sh`
 - Validation status: PASS
 
 ## Required Boundary Artifacts
@@ -12,7 +12,8 @@
 - `docs/wazuh-rule-lifecycle-runbook.md`
 - `control-plane/tests/test_wazuh_alert_ingest_contract_docs.py`
 - `control-plane/tests/test_wazuh_adapter.py`
-- `control-plane/tests/test_service_persistence.py`
+- `control-plane/tests/test_service_persistence_assistant_advisory.py`
+- `control-plane/tests/test_service_persistence_ingest_case_lifecycle.py`
 - `control-plane/tests/test_cli_inspection.py`
 - `.github/workflows/ci.yml`
 
@@ -40,7 +41,7 @@ Confirmed CI now runs a dedicated Phase 12 validation step and a workflow covera
 
 `control-plane/tests/test_wazuh_adapter.py` must continue to guard fixture-backed Wazuh native-record and source-identity admission behavior.
 
-`control-plane/tests/test_service_persistence.py` must continue to guard Wazuh ingest admission, alert and case lifecycle linkage, and analyst queue invariants.
+`control-plane/tests/test_service_persistence_assistant_advisory.py` and `control-plane/tests/test_service_persistence_ingest_case_lifecycle.py` must continue to guard Wazuh ingest admission, alert and case lifecycle linkage, and analyst queue invariants.
 
 `control-plane/tests/test_cli_inspection.py` must continue to guard the read-only Wazuh analyst queue inspection path.
 

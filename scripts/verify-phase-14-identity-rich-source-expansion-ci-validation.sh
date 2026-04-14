@@ -15,7 +15,7 @@ entra_onboarding_doc="${repo_root}/docs/source-families/entra-id/onboarding-pack
 entra_runbook_doc="${repo_root}/docs/source-families/entra-id/analyst-triage-runbook.md"
 profile_tests="${repo_root}/control-plane/tests/test_phase14_identity_rich_source_profile_docs.py"
 wazuh_tests="${repo_root}/control-plane/tests/test_wazuh_adapter.py"
-service_tests="${repo_root}/control-plane/tests/test_service_persistence.py"
+service_tests="${repo_root}/control-plane/tests/test_service_persistence_ingest_case_lifecycle.py"
 cli_tests="${repo_root}/control-plane/tests/test_cli_inspection.py"
 workflow_path="${repo_root}/.github/workflows/ci.yml"
 
@@ -42,48 +42,89 @@ require_fixed_string() {
 require_test_name() {
   local file_path="$1"
   local test_name="$2"
+  local support_path
+  support_path="$(dirname "${file_path}")/_service_persistence_support.py"
 
-  if ! python3 - "$file_path" "$test_name" <<'PY'
+  if ! python3 - "${file_path}" "${support_path}" "${test_name}" <<'PY'
 from __future__ import annotations
 
 import ast
+import pathlib
 import sys
-from pathlib import Path
 
 
-def is_unittest_testcase(base: ast.expr) -> bool:
-    if isinstance(base, ast.Attribute):
-        return (
-            base.attr == "TestCase"
-            and isinstance(base.value, ast.Name)
-            and base.value.id == "unittest"
-        )
+def base_name(node: ast.expr) -> str | None:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        parent = base_name(node.value)
+        if parent is None:
+            return None
+        return f"{parent}.{node.attr}"
+    return None
 
-    if isinstance(base, ast.Name):
-        return base.id == "TestCase"
 
+def class_index(path: pathlib.Path) -> dict[str, tuple[set[str], list[str]]]:
+    if not path.is_file():
+        return {}
+
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    index: dict[str, tuple[set[str], list[str]]] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.ClassDef):
+            continue
+        methods = {
+            child.name for child in node.body if isinstance(child, ast.FunctionDef)
+        }
+        bases = [name for base in node.bases if (name := base_name(base))]
+        index[node.name] = (methods, bases)
+    return index
+
+
+def is_testcase_class(
+    class_name: str,
+    classes: dict[str, tuple[set[str], list[str]]],
+    seen: set[str] | None = None,
+) -> bool:
+    if seen is None:
+        seen = set()
+    if class_name in seen:
+        return False
+    seen.add(class_name)
+
+    class_def = classes.get(class_name)
+    if class_def is None:
+        return False
+
+    _, bases = class_def
+    for candidate in bases:
+        if candidate == "unittest.TestCase":
+            return True
+        if candidate in classes and is_testcase_class(candidate, classes, seen):
+            return True
+        short_name = candidate.rsplit(".", 1)[-1]
+        if short_name == "TestCase":
+            return True
+        if short_name in classes and is_testcase_class(short_name, classes, seen):
+            return True
     return False
 
 
-file_path = Path(sys.argv[1])
-test_name = sys.argv[2]
-tree = ast.parse(file_path.read_text(encoding="utf-8"), filename=str(file_path))
+target_path = pathlib.Path(sys.argv[1])
+support_path = pathlib.Path(sys.argv[2])
+target_test = sys.argv[3]
 
-for node in tree.body:
-    if not isinstance(node, ast.ClassDef):
-        continue
+classes = class_index(target_path)
+classes.update(class_index(support_path))
 
-    if not any(is_unittest_testcase(base) for base in node.bases):
-        continue
+for class_name, (methods, _) in class_index(target_path).items():
+    if target_test in methods and is_testcase_class(class_name, classes):
+        raise SystemExit(0)
 
-    for stmt in node.body:
-        if isinstance(stmt, ast.FunctionDef) and stmt.name == test_name:
-            raise SystemExit(0)
-
-print(f"Missing required Phase 14 unittest-discoverable test in {file_path}: {test_name}", file=sys.stderr)
 raise SystemExit(1)
 PY
   then
+    echo "Missing required Phase 14 unittest-discoverable test in ${file_path}: ${test_name}" >&2
     exit 1
   fi
 }
@@ -109,8 +150,8 @@ validation_required_phrases=(
   "# Phase 14 Identity-Rich Source Expansion CI Validation"
   "- Validation date: 2026-04-09"
   "- Validation scope: Phase 14 review of the approved identity-rich source families, their reviewed source-profile assumptions, signal-quality and false-positive review coverage, ownership metadata, source-prerequisite checks, and CI wiring for the reviewed Phase 14 expansion path"
-  "- Baseline references: \`docs/phase-14-identity-rich-source-family-design.md\`, \`docs/source-families/github-audit/onboarding-package.md\`, \`docs/source-families/github-audit/analyst-triage-runbook.md\`, \`docs/source-families/microsoft-365-audit/onboarding-package.md\`, \`docs/source-families/microsoft-365-audit/analyst-triage-runbook.md\`, \`docs/source-families/entra-id/onboarding-package.md\`, \`docs/source-families/entra-id/analyst-triage-runbook.md\`, \`control-plane/tests/test_phase14_identity_rich_source_profile_docs.py\`, \`control-plane/tests/test_wazuh_adapter.py\`, \`control-plane/tests/test_service_persistence.py\`, \`control-plane/tests/test_cli_inspection.py\`, \`.github/workflows/ci.yml\`"
-  "- Verification commands: \`bash scripts/verify-phase-14-identity-rich-source-family-design.sh\`, \`python3 -m unittest control-plane.tests.test_phase14_identity_rich_source_profile_docs control-plane.tests.test_wazuh_adapter control-plane.tests.test_service_persistence control-plane.tests.test_cli_inspection\`, \`bash scripts/test-verify-ci-phase-14-workflow-coverage.sh\`, \`bash scripts/verify-phase-14-identity-rich-source-expansion-ci-validation.sh\`"
+  "- Baseline references: \`docs/phase-14-identity-rich-source-family-design.md\`, \`docs/source-families/github-audit/onboarding-package.md\`, \`docs/source-families/github-audit/analyst-triage-runbook.md\`, \`docs/source-families/microsoft-365-audit/onboarding-package.md\`, \`docs/source-families/microsoft-365-audit/analyst-triage-runbook.md\`, \`docs/source-families/entra-id/onboarding-package.md\`, \`docs/source-families/entra-id/analyst-triage-runbook.md\`, \`control-plane/tests/test_phase14_identity_rich_source_profile_docs.py\`, \`control-plane/tests/test_wazuh_adapter.py\`, \`control-plane/tests/test_service_persistence_ingest_case_lifecycle.py\`, \`control-plane/tests/test_cli_inspection.py\`, \`.github/workflows/ci.yml\`"
+  "- Verification commands: \`bash scripts/verify-phase-14-identity-rich-source-family-design.sh\`, \`python3 -m unittest control-plane.tests.test_phase14_identity_rich_source_profile_docs control-plane.tests.test_wazuh_adapter control-plane.tests.test_service_persistence_ingest_case_lifecycle control-plane.tests.test_cli_inspection\`, \`bash scripts/test-verify-ci-phase-14-workflow-coverage.sh\`, \`bash scripts/verify-phase-14-identity-rich-source-expansion-ci-validation.sh\`"
   "- Validation status: PASS"
   "## Required Boundary Artifacts"
   "## Review Outcome"
@@ -138,7 +179,7 @@ required_artifacts=(
   "docs/source-families/entra-id/analyst-triage-runbook.md"
   "control-plane/tests/test_phase14_identity_rich_source_profile_docs.py"
   "control-plane/tests/test_wazuh_adapter.py"
-  "control-plane/tests/test_service_persistence.py"
+  "control-plane/tests/test_service_persistence_ingest_case_lifecycle.py"
   "control-plane/tests/test_cli_inspection.py"
   ".github/workflows/ci.yml"
 )
