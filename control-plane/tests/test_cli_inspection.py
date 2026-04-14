@@ -1410,10 +1410,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(
-                host="0.0.0.0",
+                host="0.0.0.0",  # noqa: S104 - intentional non-loopback test coverage
                 postgres_dsn="postgresql://control-plane.local/aegisops",
-                wazuh_ingest_shared_secret="reviewed-shared-secret",
-                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
                 wazuh_ingest_trusted_proxy_cidrs=("10.10.0.5/32",),
             ),
             store=store,
@@ -1427,7 +1427,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
                 authorization_header="Bearer reviewed-shared-secret",
                 forwarded_proto="https",
-                reverse_proxy_secret_header="reviewed-proxy-secret",
+                reverse_proxy_secret_header="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
                 peer_addr="10.10.0.6",
             )
 
@@ -1435,10 +1435,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(
-                host="0.0.0.0",
+                host="0.0.0.0",  # noqa: S104 - intentional non-loopback test coverage
                 postgres_dsn="postgresql://control-plane.local/aegisops",
-                wazuh_ingest_shared_secret="reviewed-shared-secret",
-                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
                 wazuh_ingest_trusted_proxy_cidrs=("10.10.0.5/32",),
             ),
             store=store,
@@ -1448,7 +1448,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
             authorization_header="Bearer reviewed-shared-secret",
             forwarded_proto="https",
-            reverse_proxy_secret_header="reviewed-proxy-secret",
+            reverse_proxy_secret_header="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
             peer_addr="10.10.0.5",
         )
 
@@ -1460,10 +1460,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(
-                host="0.0.0.0",
+                host="0.0.0.0",  # noqa: S104 - intentional non-loopback test coverage
                 postgres_dsn="postgresql://control-plane.local/aegisops",
-                wazuh_ingest_shared_secret="reviewed-shared-secret",
-                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
                 wazuh_ingest_trusted_proxy_cidrs=("10.10.0.5/32",),
             ),
             store=store,
@@ -1473,7 +1473,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
             authorization_header="Bearer reviewed-shared-secret",
             forwarded_proto="https",
-            reverse_proxy_secret_header="reviewed-proxy-secret",
+            reverse_proxy_secret_header="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
             peer_addr=" 10.10.0.5 ",
         )
 
