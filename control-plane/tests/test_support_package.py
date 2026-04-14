@@ -1,62 +1,49 @@
 from __future__ import annotations
 
+import importlib
+import importlib.util
 from contextlib import contextmanager
 import pathlib
 import sys
 import threading
-import time
 import unittest
 
 
 TESTS_ROOT = pathlib.Path(__file__).resolve().parent
-if str(TESTS_ROOT) not in sys.path:
-    sys.path.insert(0, str(TESTS_ROOT))
+SUPPORT_PACKAGE_ROOT = TESTS_ROOT / "support"
+SUPPORT_PACKAGE_NAME = "_control_plane_test_support"
 
 
 class ControlPlaneTestSupportPackageTests(unittest.TestCase):
     def test_support_package_exposes_shared_control_plane_test_helpers(self) -> None:
-        from support.auth import (
-            REVIEWED_ANALYST_PRINCIPAL,
-            REVIEWED_PLATFORM_ADMIN_PRINCIPAL,
-            REVIEWED_PROXY_SERVICE_ACCOUNT,
-        )
-        from support.fake_store import (
-            CommitFailingStore,
-            ConcurrentListMutationStore,
-            ListCountingStore,
-            OutOfBandMutationStore,
-            RecordTypeSaveFailingStore,
-            TransactionMutationStore,
-        )
-        from support.fixtures import load_wazuh_fixture
-        from support.payloads import (
-            approved_binding_hash,
-            phase20_notify_identity_owner_payload,
-        )
+        auth = _import_support_submodule("auth")
+        fake_store = _import_support_submodule("fake_store")
+        fixtures = _import_support_submodule("fixtures")
+        payloads = _import_support_submodule("payloads")
 
         self.assertEqual(
-            REVIEWED_PROXY_SERVICE_ACCOUNT,
+            auth.REVIEWED_PROXY_SERVICE_ACCOUNT,
             "svc-aegisops-proxy-control-plane",
         )
-        self.assertEqual(REVIEWED_ANALYST_PRINCIPAL.identity, "analyst-001")
+        self.assertEqual(auth.REVIEWED_ANALYST_PRINCIPAL.identity, "analyst-001")
         self.assertEqual(
-            REVIEWED_PLATFORM_ADMIN_PRINCIPAL.identity,
+            auth.REVIEWED_PLATFORM_ADMIN_PRINCIPAL.identity,
             "platform-admin-001",
         )
-        self.assertTrue(callable(load_wazuh_fixture))
-        self.assertTrue(callable(phase20_notify_identity_owner_payload))
-        self.assertTrue(callable(approved_binding_hash))
-        self.assertTrue(issubclass(TransactionMutationStore, object))
-        self.assertTrue(issubclass(ConcurrentListMutationStore, object))
-        self.assertTrue(issubclass(CommitFailingStore, object))
-        self.assertTrue(issubclass(RecordTypeSaveFailingStore, object))
-        self.assertTrue(issubclass(ListCountingStore, object))
-        self.assertTrue(issubclass(OutOfBandMutationStore, object))
+        self.assertTrue(callable(fixtures.load_wazuh_fixture))
+        self.assertTrue(callable(payloads.phase20_notify_identity_owner_payload))
+        self.assertTrue(callable(payloads.approved_binding_hash))
+        self.assertTrue(issubclass(fake_store.TransactionMutationStore, object))
+        self.assertTrue(issubclass(fake_store.ConcurrentListMutationStore, object))
+        self.assertTrue(issubclass(fake_store.CommitFailingStore, object))
+        self.assertTrue(issubclass(fake_store.RecordTypeSaveFailingStore, object))
+        self.assertTrue(issubclass(fake_store.ListCountingStore, object))
+        self.assertTrue(issubclass(fake_store.OutOfBandMutationStore, object))
 
     def test_transaction_mutation_store_consumes_mutation_token_once(self) -> None:
-        from support.fake_store import TransactionMutationStore
+        fake_store = _import_support_submodule("fake_store")
 
-        store = TransactionMutationStore(
+        store = fake_store.TransactionMutationStore(
             inner=_NoOpStore(),
             mutate_once=_BlockingMutation(),
         )
@@ -66,11 +53,12 @@ class ControlPlaneTestSupportPackageTests(unittest.TestCase):
         self.assertEqual(store.mutate_once.calls, 1)
 
     def test_concurrent_list_mutation_store_consumes_mutation_token_once(self) -> None:
-        from support.fake_store import ConcurrentListMutationStore
+        fake_store = _import_support_submodule("fake_store")
 
         mutation = _BlockingMutation()
-        store = ConcurrentListMutationStore(
-            inner=_NoOpStore(),
+        readiness_started = threading.Event()
+        store = fake_store.ConcurrentListMutationStore(
+            inner=_NoOpStore(readiness_started=readiness_started),
             mutate_once=mutation,
         )
 
@@ -86,7 +74,7 @@ class ControlPlaneTestSupportPackageTests(unittest.TestCase):
         )
         second_thread.start()
 
-        time.sleep(0.05)
+        self.assertTrue(readiness_started.wait(timeout=1))
         mutation.release.set()
         first_thread.join(timeout=1)
         second_thread.join(timeout=1)
@@ -96,9 +84,9 @@ class ControlPlaneTestSupportPackageTests(unittest.TestCase):
         self.assertEqual(mutation.calls, 1)
 
     def test_out_of_band_mutation_store_consumes_mutation_token_once(self) -> None:
-        from support.fake_store import OutOfBandMutationStore
+        fake_store = _import_support_submodule("fake_store")
 
-        store = OutOfBandMutationStore(
+        store = fake_store.OutOfBandMutationStore(
             inner=_NoOpStore(),
             mutate_once=_BlockingMutation(),
         )
@@ -108,14 +96,24 @@ class ControlPlaneTestSupportPackageTests(unittest.TestCase):
         self.assertEqual(store.mutate_once.calls, 1)
 
     def _run_transaction_threads(self, store: object) -> None:
-        first_thread = threading.Thread(target=self._run_transaction, args=(store,))
+        first_ready = threading.Event()
+        second_ready = threading.Event()
+
+        first_thread = threading.Thread(
+            target=self._run_transaction,
+            args=(store, first_ready),
+        )
         first_thread.start()
+        self.assertTrue(first_ready.wait(timeout=1))
         self.assertTrue(store.mutate_once.started.wait(timeout=1))
 
-        second_thread = threading.Thread(target=self._run_transaction, args=(store,))
+        second_thread = threading.Thread(
+            target=self._run_transaction,
+            args=(store, second_ready),
+        )
         second_thread.start()
+        self.assertTrue(second_ready.wait(timeout=1))
 
-        time.sleep(0.05)
         store.mutate_once.release.set()
         first_thread.join(timeout=1)
         second_thread.join(timeout=1)
@@ -124,9 +122,32 @@ class ControlPlaneTestSupportPackageTests(unittest.TestCase):
         self.assertFalse(second_thread.is_alive())
 
     @staticmethod
-    def _run_transaction(store: object) -> None:
+    def _run_transaction(store: object, ready: threading.Event) -> None:
+        ready.set()
         with store.transaction():
             return
+
+
+def _import_support_submodule(module_name: str) -> object:
+    _load_support_package()
+    return importlib.import_module(f"{SUPPORT_PACKAGE_NAME}.{module_name}")
+
+
+def _load_support_package() -> None:
+    if SUPPORT_PACKAGE_NAME in sys.modules:
+        return
+
+    spec = importlib.util.spec_from_file_location(
+        SUPPORT_PACKAGE_NAME,
+        SUPPORT_PACKAGE_ROOT / "__init__.py",
+        submodule_search_locations=[str(SUPPORT_PACKAGE_ROOT)],
+    )
+    if spec is None or spec.loader is None:
+        raise AssertionError("Unable to load control-plane test support package")
+
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[SUPPORT_PACKAGE_NAME] = module
+    spec.loader.exec_module(module)
 
 
 class _BlockingMutation:
@@ -147,6 +168,9 @@ class _NoOpStore:
     dsn = "sqlite://:memory:"
     persistence_mode = "test"
 
+    def __init__(self, *, readiness_started: threading.Event | None = None) -> None:
+        self._readiness_started = readiness_started
+
     def save(self, record: object) -> object:
         return record
 
@@ -157,6 +181,8 @@ class _NoOpStore:
         return ()
 
     def inspect_readiness_aggregates(self) -> dict[str, object]:
+        if self._readiness_started is not None:
+            self._readiness_started.set()
         return {}
 
     @contextmanager
