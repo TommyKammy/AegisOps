@@ -1561,6 +1561,7 @@ class AegisOpsControlPlaneService:
         )
         timeline = self._action_review_timeline(
             action_request=action_request,
+            approval_state=approval_state,
             approval_decision=approval_decision,
             action_execution=action_execution,
             reconciliation=reconciliation,
@@ -1759,44 +1760,33 @@ class AegisOpsControlPlaneService:
 
         matches: list[ReconciliationRecord] = []
         if record_index is not None:
-            if approval_decision is not None:
-                matches = _dedupe(
-                    (
-                        []
-                        if action_execution is None
-                        else list(
-                            record_index.reconciliations_by_action_execution_id.get(
-                                action_execution.action_execution_id,
-                                (),
-                            )
-                        )
-                        + list(
-                            record_index.reconciliations_by_delegation_id.get(
-                                action_execution.delegation_id,
-                                (),
-                            )
-                        )
-                    )
-                    + list(
-                        record_index.reconciliations_by_approval_decision_id.get(
-                            approval_decision.approval_decision_id,
-                            (),
-                        )
-                    )
-                    + list(
-                        record_index.reconciliations_by_action_request_id.get(
-                            action_request.action_request_id,
-                            (),
-                        )
-                    )
+            indexed_matches: list[ReconciliationRecord] = list(
+                record_index.reconciliations_by_action_request_id.get(
+                    action_request.action_request_id,
+                    (),
                 )
-            else:
-                matches = list(
-                    record_index.reconciliations_by_action_request_id.get(
-                        action_request.action_request_id,
+            )
+            if approval_decision is not None:
+                indexed_matches += list(
+                    record_index.reconciliations_by_approval_decision_id.get(
+                        approval_decision.approval_decision_id,
                         (),
                     )
                 )
+            if action_execution is not None:
+                indexed_matches += list(
+                    record_index.reconciliations_by_action_execution_id.get(
+                        action_execution.action_execution_id,
+                        (),
+                    )
+                )
+                indexed_matches += list(
+                    record_index.reconciliations_by_delegation_id.get(
+                        action_execution.delegation_id,
+                        (),
+                    )
+                )
+            matches = _dedupe(indexed_matches)
         else:
             for reconciliation in self._store.list(ReconciliationRecord):
                 if _matches_review_lineage(reconciliation):
@@ -1980,6 +1970,7 @@ class AegisOpsControlPlaneService:
         self,
         *,
         action_request: ActionRequestRecord,
+        approval_state: str | None,
         approval_decision: ApprovalDecisionRecord | None,
         action_execution: ActionExecutionRecord | None,
         reconciliation: ReconciliationRecord | None,
@@ -2044,9 +2035,9 @@ class AegisOpsControlPlaneService:
                     else approval_decision.approval_decision_id
                 ),
                 state=(
-                    "pending"
-                    if approval_decision is None
-                    else approval_decision.lifecycle_state
+                    approval_decision.lifecycle_state
+                    if approval_decision is not None
+                    else (approval_state or "pending")
                 ),
                 occurred_at=(
                     None if approval_decision is None else approval_decision.decided_at
