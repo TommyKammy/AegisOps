@@ -40,6 +40,7 @@ from .models import (
     ReconciliationRecord,
     RecommendationRecord,
 )
+from .operations import RestoreReadinessService, RuntimeBoundaryService
 from .assistant_context import AssistantContextAssembler
 
 
@@ -895,27 +896,53 @@ class AegisOpsControlPlaneService:
             ),
         )
         self._execution_coordinator = ExecutionCoordinator(self)
+        self._runtime_boundary_service = RuntimeBoundaryService(
+            config=self._config,
+            store=self._store,
+            reconciliation_adapter=self._reconciliation,
+            shuffle_adapter=self._shuffle,
+            isolated_executor_adapter=self._isolated_executor,
+            runtime_snapshot_factory=RuntimeSnapshot,
+            authenticated_principal_factory=AuthenticatedRuntimePrincipal,
+        )
+        self._restore_readiness_service = RestoreReadinessService(
+            config=self._config,
+            store=self._store,
+            runtime_boundary_service=self._runtime_boundary_service,
+            startup_status_snapshot_factory=StartupStatusSnapshot,
+            readiness_diagnostics_snapshot_factory=ReadinessDiagnosticsSnapshot,
+            restore_drill_snapshot_factory=RestoreDrillSnapshot,
+            restore_summary_snapshot_factory=RestoreSummarySnapshot,
+            record_to_dict=_record_to_dict,
+            json_ready=_json_ready,
+            redacted_reconciliation_payload=_redacted_reconciliation_payload,
+            build_shutdown_status_snapshot=_build_shutdown_status_snapshot,
+            derive_readiness_status=_derive_readiness_status,
+            record_from_backup_payload=_record_from_backup_payload,
+            authoritative_record_chain_record_types=(
+                AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES
+            ),
+            authoritative_record_chain_backup_schema_version=(
+                AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION
+            ),
+            authoritative_primary_id_field_by_family=(
+                _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY
+            ),
+            record_types_by_family=RECORD_TYPES_BY_FAMILY,
+            find_duplicate_strings=_find_duplicate_strings,
+            assistant_ids_from_mapping=self._assistant_ids_from_mapping,
+            inspect_case_detail=lambda case_id: self.inspect_case_detail(case_id),
+            inspect_assistant_context=(
+                lambda record_family, record_id: self.inspect_assistant_context(
+                    record_family,
+                    record_id,
+                )
+            ),
+            inspect_reconciliation_status=lambda: self.inspect_reconciliation_status(),
+        )
 
     def describe_runtime(self) -> RuntimeSnapshot:
-        return RuntimeSnapshot(
-            service_name="aegisops-control-plane",
-            bind_host=self._config.host,
-            bind_port=self._config.port,
-            postgres_dsn=self._store.dsn,
-            persistence_mode=self._store.persistence_mode,
-            opensearch_url=self._config.opensearch_url,
-            n8n_base_url=self._reconciliation.base_url,
-            shuffle_base_url=self._shuffle.base_url,
-            isolated_executor_base_url=self._isolated_executor.base_url,
-            ownership_boundary={
-                "runtime_root": "control-plane/",
-                "postgres_contract_root": "postgres/control-plane/",
-                "native_detection_intake": "substrate-adapters/",
-                "admitted_signal_model": "control-plane/analytic-signals",
-                "routine_automation_substrate": "shuffle/",
-                "controlled_execution_surface": "executor/isolated-executor",
-            },
-        )
+        return self._runtime_boundary_service.describe_runtime()
 
     def persist_record(self, record: RecordT) -> RecordT:
         return self._store.save(record)
@@ -954,61 +981,10 @@ class AegisOpsControlPlaneService:
         return self._store.get(record_type, record_id)
 
     def validate_wazuh_ingest_runtime(self) -> None:
-        if self._config.wazuh_ingest_shared_secret.strip() == "":
-            raise ValueError(
-                "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET must be set "
-                "before starting the live Wazuh ingest runtime"
-            )
-        for cidr in self._config.wazuh_ingest_trusted_proxy_cidrs:
-            try:
-                ipaddress.ip_network(cidr, strict=False)
-            except ValueError as exc:
-                raise ValueError(
-                    "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_TRUSTED_PROXY_CIDRS must contain "
-                    f"only valid IP networks, got: {cidr!r}"
-                ) from exc
-        if (
-            not self._listener_is_loopback()
-            and not self._config.wazuh_ingest_trusted_proxy_cidrs
-        ):
-            raise ValueError(
-                "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_TRUSTED_PROXY_CIDRS must be set "
-                "before starting the live Wazuh ingest runtime on a non-loopback interface"
-            )
-        if self._config.wazuh_ingest_reverse_proxy_secret.strip() == "":
-            raise ValueError(
-                "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_REVERSE_PROXY_SECRET must be set "
-                "before starting the live Wazuh ingest runtime"
-            )
+        self._runtime_boundary_service.validate_wazuh_ingest_runtime()
 
     def validate_protected_surface_runtime(self) -> None:
-        for cidr in self._config.protected_surface_trusted_proxy_cidrs:
-            try:
-                ipaddress.ip_network(cidr, strict=False)
-            except ValueError as exc:
-                raise ValueError(
-                    "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_TRUSTED_PROXY_CIDRS must contain "
-                    f"only valid IP networks, got: {cidr!r}"
-                ) from exc
-        if (
-            not self._listener_is_loopback()
-            and not self._config.protected_surface_trusted_proxy_cidrs
-        ):
-            raise ValueError(
-                "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_TRUSTED_PROXY_CIDRS must be set "
-                "before starting protected control-plane surfaces on a non-loopback interface"
-            )
-        if self._config.protected_surface_trusted_proxy_cidrs:
-            if self._config.protected_surface_reverse_proxy_secret.strip() == "":
-                raise ValueError(
-                    "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVERSE_PROXY_SECRET must be set "
-                    "before admitting reviewed reverse-proxy traffic to protected control-plane surfaces"
-                )
-            if self._config.protected_surface_proxy_service_account.strip() == "":
-                raise ValueError(
-                    "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_PROXY_SERVICE_ACCOUNT must be set "
-                    "before admitting reviewed reverse-proxy traffic to protected control-plane surfaces"
-                )
+        self._runtime_boundary_service.validate_protected_surface_runtime()
 
     def authenticate_protected_surface_request(
         self,
@@ -1021,87 +997,21 @@ class AegisOpsControlPlaneService:
         authenticated_role_header: str | None,
         allowed_roles: tuple[str, ...],
     ) -> AuthenticatedRuntimePrincipal:
-        self.validate_protected_surface_runtime()
-
-        if self._peer_addr_is_loopback(peer_addr):
-            principal = AuthenticatedRuntimePrincipal(
-                identity="loopback-local-operator",
-                role="loopback_local",
-                access_path="loopback_direct",
-            )
-        else:
-            if not self._is_trusted_protected_surface_peer(peer_addr):
-                raise PermissionError(
-                    "protected control-plane surfaces reject requests that bypass the reviewed reverse proxy peer boundary"
-                )
-            if (forwarded_proto or "").strip().lower() != "https":
-                raise PermissionError(
-                    "protected control-plane surfaces require the reviewed reverse proxy HTTPS boundary"
-                )
-            if not hmac.compare_digest(
-                (reverse_proxy_secret_header or "").strip(),
-                self._config.protected_surface_reverse_proxy_secret,
-            ):
-                raise PermissionError(
-                    "protected control-plane surfaces require the reviewed reverse proxy boundary credential"
-                )
-            supplied_proxy_service_account = (proxy_service_account_header or "").strip()
-            if not hmac.compare_digest(
-                supplied_proxy_service_account,
-                self._config.protected_surface_proxy_service_account,
-            ):
-                raise PermissionError(
-                    "protected control-plane surfaces require the reviewed reverse proxy service account identity"
-                )
-
-            identity = (authenticated_identity_header or "").strip()
-            if identity == "":
-                raise PermissionError(
-                    "protected control-plane surfaces require an attributed authenticated identity header"
-                )
-            role = (
-                (authenticated_role_header or "")
-                .strip()
-                .lower()
-                .replace("-", "_")
-                .replace(" ", "_")
-            )
-            if role == "":
-                raise PermissionError(
-                    "protected control-plane surfaces require an attributed authenticated role header"
-                )
-            principal = AuthenticatedRuntimePrincipal(
-                identity=identity,
-                role=role,
-                access_path="reviewed_reverse_proxy",
-                proxy_service_account=supplied_proxy_service_account,
-            )
-
-        if principal.role not in allowed_roles:
-            joined_roles = ", ".join(sorted(allowed_roles))
-            raise PermissionError(
-                "protected control-plane surface role is not authorized for this endpoint; "
-                f"expected one of: {joined_roles}"
-            )
-        return principal
+        return self._runtime_boundary_service.authenticate_protected_surface_request(
+            peer_addr=peer_addr,
+            forwarded_proto=forwarded_proto,
+            reverse_proxy_secret_header=reverse_proxy_secret_header,
+            proxy_service_account_header=proxy_service_account_header,
+            authenticated_identity_header=authenticated_identity_header,
+            authenticated_role_header=authenticated_role_header,
+            allowed_roles=allowed_roles,
+        )
 
     def require_admin_bootstrap_token(self, supplied_token: str | None) -> None:
-        expected_token = self._config.admin_bootstrap_token.strip()
-        if expected_token == "":
-            raise PermissionError(
-                "admin bootstrap contract is disabled until AEGISOPS_CONTROL_PLANE_ADMIN_BOOTSTRAP_TOKEN is bound"
-            )
-        if not hmac.compare_digest((supplied_token or "").strip(), expected_token):
-            raise PermissionError("admin bootstrap token did not match the reviewed secret")
+        self._runtime_boundary_service.require_admin_bootstrap_token(supplied_token)
 
     def require_break_glass_token(self, supplied_token: str | None) -> None:
-        expected_token = self._config.break_glass_token.strip()
-        if expected_token == "":
-            raise PermissionError(
-                "break-glass contract is disabled until AEGISOPS_CONTROL_PLANE_BREAK_GLASS_TOKEN is bound"
-            )
-        if not hmac.compare_digest((supplied_token or "").strip(), expected_token):
-            raise PermissionError("break-glass token did not match the reviewed secret")
+        self._runtime_boundary_service.require_break_glass_token(supplied_token)
 
     def ingest_wazuh_alert(
         self,
@@ -1112,9 +1022,9 @@ class AegisOpsControlPlaneService:
         reverse_proxy_secret_header: str | None,
         peer_addr: str | None,
     ) -> FindingAlertIngestResult:
-        self.validate_wazuh_ingest_runtime()
+        self._runtime_boundary_service.validate_wazuh_ingest_runtime()
 
-        if not self._is_trusted_wazuh_ingest_peer(peer_addr):
+        if not self._runtime_boundary_service.is_trusted_wazuh_ingest_peer(peer_addr):
             self._emit_structured_event(
                 logging.WARNING,
                 "wazuh_ingest_rejected",
@@ -1216,24 +1126,14 @@ class AegisOpsControlPlaneService:
         return ingest_result
 
     def _listener_is_loopback(self) -> bool:
-        host = self._config.host.strip()
-        if host.lower() == "localhost":
-            return True
-        try:
-            return ipaddress.ip_address(host).is_loopback
-        except ValueError:
-            return False
+        return self._runtime_boundary_service.listener_is_loopback()
 
     def _is_trusted_wazuh_ingest_peer(self, peer_addr: str | None) -> bool:
-        return self._is_trusted_peer_for_proxy_cidrs(
-            peer_addr,
-            self._config.wazuh_ingest_trusted_proxy_cidrs,
-        )
+        return self._runtime_boundary_service.is_trusted_wazuh_ingest_peer(peer_addr)
 
     def _is_trusted_protected_surface_peer(self, peer_addr: str | None) -> bool:
-        return self._is_trusted_peer_for_proxy_cidrs(
-            peer_addr,
-            self._config.protected_surface_trusted_proxy_cidrs,
+        return self._runtime_boundary_service.is_trusted_protected_surface_peer(
+            peer_addr
         )
 
     def _is_trusted_peer_for_proxy_cidrs(
@@ -1241,30 +1141,14 @@ class AegisOpsControlPlaneService:
         peer_addr: str | None,
         trusted_proxy_cidrs: tuple[str, ...],
     ) -> bool:
-        if peer_addr is None:
-            return False
-        normalized_peer_addr = peer_addr.strip()
-        if normalized_peer_addr == "":
-            return False
-        try:
-            peer_ip = ipaddress.ip_address(normalized_peer_addr)
-        except ValueError:
-            return False
-        if self._listener_is_loopback():
-            return peer_ip.is_loopback
-        for cidr in trusted_proxy_cidrs:
-            if peer_ip in ipaddress.ip_network(cidr, strict=False):
-                return True
-        return False
+        return self._runtime_boundary_service.is_trusted_peer_for_proxy_cidrs(
+            peer_addr,
+            trusted_proxy_cidrs,
+        )
 
     @staticmethod
     def _peer_addr_is_loopback(peer_addr: str | None) -> bool:
-        if peer_addr is None or peer_addr.strip() == "":
-            return False
-        try:
-            return ipaddress.ip_address(peer_addr.strip()).is_loopback
-        except ValueError:
-            return False
+        return RuntimeBoundaryService.peer_addr_is_loopback(peer_addr)
 
     def delegate_approved_action_to_shuffle(
         self,
@@ -1376,423 +1260,38 @@ class AegisOpsControlPlaneService:
         )
 
     def describe_startup_status(self) -> StartupStatusSnapshot:
-        protected_surface_proxy_bindings_required = bool(
-            self._config.protected_surface_trusted_proxy_cidrs
-        )
-        required_bindings = (
-            "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN",
-            "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET",
-            "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_REVERSE_PROXY_SECRET",
-            *(
-                (
-                    "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVERSE_PROXY_SECRET",
-                    "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_PROXY_SERVICE_ACCOUNT",
-                )
-                if protected_surface_proxy_bindings_required
-                else ()
-            ),
-            "AEGISOPS_CONTROL_PLANE_ADMIN_BOOTSTRAP_TOKEN",
-        )
-        binding_values = {
-            "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN": self._config.postgres_dsn,
-            "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET": (
-                self._config.wazuh_ingest_shared_secret
-            ),
-            "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_REVERSE_PROXY_SECRET": (
-                self._config.wazuh_ingest_reverse_proxy_secret
-            ),
-            "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVERSE_PROXY_SECRET": (
-                self._config.protected_surface_reverse_proxy_secret
-            ),
-            "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_PROXY_SERVICE_ACCOUNT": (
-                self._config.protected_surface_proxy_service_account
-            ),
-            "AEGISOPS_CONTROL_PLANE_ADMIN_BOOTSTRAP_TOKEN": (
-                self._config.admin_bootstrap_token
-            ),
-            "AEGISOPS_CONTROL_PLANE_BREAK_GLASS_TOKEN": self._config.break_glass_token,
-        }
-        missing_bindings = tuple(
-            binding_name
-            for binding_name in required_bindings
-            if not str(binding_values[binding_name]).strip()
-            or binding_values[binding_name] == "<set-me>"
-        )
-        validated_surfaces: list[str] = []
-        blocking_reasons: list[str] = []
-        try:
-            self.validate_wazuh_ingest_runtime()
-        except ValueError as exc:
-            blocking_reasons.append(str(exc))
-        else:
-            validated_surfaces.append("wazuh_ingest")
-        try:
-            self.validate_protected_surface_runtime()
-        except ValueError as exc:
-            blocking_reasons.append(str(exc))
-        else:
-            validated_surfaces.append("protected_surface")
-
-        return StartupStatusSnapshot(
-            read_only=True,
-            startup_ready=not missing_bindings and not blocking_reasons,
-            required_bindings=required_bindings,
-            missing_bindings=missing_bindings,
-            validated_surfaces=tuple(validated_surfaces),
-            blocking_reasons=tuple(blocking_reasons),
-        )
+        return self._restore_readiness_service.describe_startup_status()
 
     def describe_shutdown_status(self) -> ShutdownStatusSnapshot:
-        readiness_aggregates = self._inspect_readiness_aggregates()
-        return _build_shutdown_status_snapshot(
-            open_case_ids=readiness_aggregates.open_case_ids,
-            active_action_request_ids=readiness_aggregates.active_action_request_ids,
-            active_action_execution_ids=readiness_aggregates.active_action_execution_ids,
-            unresolved_reconciliation_ids=readiness_aggregates.unresolved_reconciliation_ids,
-        )
+        return self._restore_readiness_service.describe_shutdown_status()
 
     def inspect_readiness_diagnostics(self) -> ReadinessDiagnosticsSnapshot:
-        with self._store.transaction(isolation_level="REPEATABLE READ"):
-            startup = self.describe_startup_status()
-            readiness_aggregates = self._inspect_readiness_aggregates()
-
-        shutdown = _build_shutdown_status_snapshot(
-            open_case_ids=readiness_aggregates.open_case_ids,
-            active_action_request_ids=readiness_aggregates.active_action_request_ids,
-            active_action_execution_ids=readiness_aggregates.active_action_execution_ids,
-            unresolved_reconciliation_ids=readiness_aggregates.unresolved_reconciliation_ids,
-        )
-
-        status = _derive_readiness_status(
-            startup_ready=startup.startup_ready,
-            reconciliation_lifecycle_counts=readiness_aggregates.reconciliation_lifecycle_counts,
-        )
-
-        metrics = {
-            "alerts": {
-                "total": readiness_aggregates.alert_total,
-                "by_lifecycle_state": dict(
-                    sorted(readiness_aggregates.alert_lifecycle_counts.items())
-                ),
-            },
-            "cases": {
-                "total": readiness_aggregates.case_total,
-                "open": len(readiness_aggregates.open_case_ids),
-            },
-            "action_requests": {
-                "total": readiness_aggregates.action_request_total,
-                "pending_approval": readiness_aggregates.action_request_lifecycle_counts.get(
-                    "pending_approval", 0
-                ),
-                "approved": readiness_aggregates.action_request_lifecycle_counts.get(
-                    "approved", 0
-                ),
-                "executing": readiness_aggregates.action_request_lifecycle_counts.get(
-                    "executing", 0
-                ),
-                "unresolved": readiness_aggregates.action_request_lifecycle_counts.get(
-                    "unresolved", 0
-                ),
-            },
-            "action_executions": {
-                "total": readiness_aggregates.action_execution_total,
-                "dispatching": readiness_aggregates.action_execution_lifecycle_counts.get(
-                    "dispatching", 0
-                ),
-                "queued": readiness_aggregates.action_execution_lifecycle_counts.get(
-                    "queued", 0
-                ),
-                "running": readiness_aggregates.action_execution_lifecycle_counts.get(
-                    "running", 0
-                ),
-                "terminal": sum(
-                    count
-                    for state, count in readiness_aggregates.action_execution_lifecycle_counts.items()
-                    if state not in {"dispatching", "queued", "running"}
-                ),
-            },
-            "reconciliations": {
-                "total": readiness_aggregates.reconciliation_total,
-                "matched": readiness_aggregates.reconciliation_lifecycle_counts.get(
-                    "matched", 0
-                ),
-                "pending": readiness_aggregates.reconciliation_lifecycle_counts.get(
-                    "pending", 0
-                ),
-                "mismatched": readiness_aggregates.reconciliation_lifecycle_counts.get(
-                    "mismatched", 0
-                ),
-                "stale": readiness_aggregates.reconciliation_lifecycle_counts.get(
-                    "stale", 0
-                ),
-                "by_ingest_disposition": dict(
-                    sorted(
-                        readiness_aggregates.reconciliation_ingest_disposition_counts.items()
-                    )
-                ),
-            },
-            "phase20_notify_identity_owner": {
-                "requested_action_requests": readiness_aggregates.phase20_requested_action_requests,
-                "approved_action_requests": readiness_aggregates.phase20_approved_action_requests,
-                "reconciled_executions": readiness_aggregates.phase20_reconciled_executions,
-            },
-        }
-
-        return ReadinessDiagnosticsSnapshot(
-            read_only=True,
-            booted=True,
-            status=status,
-            startup=startup.to_dict(),
-            shutdown=shutdown.to_dict(),
-            metrics=metrics,
-            latest_reconciliation=(
-                _redacted_reconciliation_payload(
-                    readiness_aggregates.latest_reconciliation
-                )
-                if readiness_aggregates.latest_reconciliation is not None
-                else None
-            ),
-        )
+        return self._restore_readiness_service.inspect_readiness_diagnostics()
 
     def _inspect_readiness_aggregates(self) -> ReadinessDiagnosticsAggregates:
-        aggregate_reader = getattr(self._store, "inspect_readiness_aggregates", None)
-        if callable(aggregate_reader):
-            return aggregate_reader()
-
-        alerts = self._store.list(AlertRecord)
-        cases = self._store.list(CaseRecord)
-        action_requests = self._store.list(ActionRequestRecord)
-        action_executions = self._store.list(ActionExecutionRecord)
-        reconciliations = self._store.list(ReconciliationRecord)
-
-        latest_reconciliation = max(
-            reconciliations,
-            key=lambda record: (record.compared_at, record.reconciliation_id),
-            default=None,
-        )
-        phase20_action_requests = tuple(
-            record
-            for record in action_requests
-            if record.requested_payload.get("action_type") == "notify_identity_owner"
-        )
-        phase20_request_ids = {
-            record.action_request_id for record in phase20_action_requests
-        }
-        phase20_execution_run_ids = {
-            record.execution_run_id
-            for record in action_executions
-            if (
-                record.action_request_id in phase20_request_ids
-                and record.execution_run_id is not None
-            )
-        }
-        return ReadinessDiagnosticsAggregates(
-            alert_total=len(alerts),
-            alert_lifecycle_counts=dict(
-                Counter(record.lifecycle_state for record in alerts)
-            ),
-            case_total=len(cases),
-            open_case_ids=tuple(
-                record.case_id
-                for record in cases
-                if record.lifecycle_state
-                in {
-                    "open",
-                    "investigating",
-                    "pending_action",
-                    "contained_pending_validation",
-                    "reopened",
-                }
-            ),
-            action_request_total=len(action_requests),
-            action_request_lifecycle_counts=dict(
-                Counter(record.lifecycle_state for record in action_requests)
-            ),
-            active_action_request_ids=tuple(
-                record.action_request_id
-                for record in action_requests
-                if record.lifecycle_state
-                in {"pending_approval", "approved", "executing", "unresolved"}
-            ),
-            action_execution_total=len(action_executions),
-            action_execution_lifecycle_counts=dict(
-                Counter(record.lifecycle_state for record in action_executions)
-            ),
-            active_action_execution_ids=tuple(
-                record.action_execution_id
-                for record in action_executions
-                if record.lifecycle_state in {"dispatching", "queued", "running"}
-            ),
-            reconciliation_total=len(reconciliations),
-            reconciliation_lifecycle_counts=dict(
-                Counter(record.lifecycle_state for record in reconciliations)
-            ),
-            reconciliation_ingest_disposition_counts=dict(
-                Counter(record.ingest_disposition for record in reconciliations)
-            ),
-            unresolved_reconciliation_ids=tuple(
-                record.reconciliation_id
-                for record in reconciliations
-                if record.lifecycle_state in {"pending", "mismatched", "stale"}
-            ),
-            latest_reconciliation=latest_reconciliation,
-            phase20_requested_action_requests=len(phase20_action_requests),
-            phase20_approved_action_requests=sum(
-                1
-                for record in phase20_action_requests
-                if record.lifecycle_state == "approved"
-            ),
-            phase20_reconciled_executions=len(
-                {
-                    record.execution_run_id
-                    for record in reconciliations
-                    if (
-                        record.lifecycle_state == "matched"
-                        and record.execution_run_id in phase20_execution_run_ids
-                    )
-                }
-            ),
-        )
+        return self._restore_readiness_service.inspect_readiness_aggregates()
 
     def export_authoritative_record_chain_backup(self) -> dict[str, object]:
-        record_families: dict[str, list[dict[str, object]]] = {}
-        record_counts: dict[str, int] = {}
-        with self._store.transaction(isolation_level="REPEATABLE READ"):
-            for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES:
-                family = record_type.record_family
-                records = [
-                    _json_ready(_record_to_dict(record))
-                    for record in self._store.list(record_type)
-                ]
-                record_families[family] = records
-                record_counts[family] = len(records)
-        return {
-            "backup_schema_version": AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "persistence_mode": self._store.persistence_mode,
-            "record_families": record_families,
-            "record_counts": record_counts,
-        }
+        return self._restore_readiness_service.export_authoritative_record_chain_backup()
 
     def restore_authoritative_record_chain_backup(
         self,
         backup_payload: Mapping[str, object],
     ) -> RestoreSummarySnapshot:
-        if not isinstance(backup_payload, Mapping):
-            raise ValueError("restore payload must be a JSON object")
-        backup_schema_version = backup_payload.get("backup_schema_version")
-        if backup_schema_version != AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION:
-            raise ValueError(
-                "restore payload must declare the reviewed authoritative record-chain schema version"
-            )
-        record_families_payload = backup_payload.get("record_families")
-        if not isinstance(record_families_payload, Mapping):
-            raise ValueError("restore payload must contain record_families")
-        record_counts_payload = backup_payload.get("record_counts")
-        if not isinstance(record_counts_payload, Mapping):
-            raise ValueError("restore payload must contain record_counts")
-
-        parsed_records: dict[str, tuple[ControlPlaneRecord, ...]] = {}
-        restored_record_counts: dict[str, int] = {}
-        for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES:
-            family = record_type.record_family
-            raw_records = record_families_payload.get(family)
-            if not isinstance(raw_records, list):
-                raise ValueError(
-                    f"restore payload must contain a JSON array for record family {family!r}"
-                )
-            expected_count = record_counts_payload.get(family)
-            if expected_count != len(raw_records):
-                raise ValueError(
-                    f"restore payload record count mismatch for {family!r}: "
-                    f"expected {expected_count!r}, found {len(raw_records)}"
-                )
-            parsed = tuple(
-                _record_from_backup_payload(record_type, raw_record)
-                for raw_record in raw_records
-            )
-            parsed_records[family] = parsed
-            restored_record_counts[family] = len(parsed)
-
-        self._validate_authoritative_record_chain_restore(
-            parsed_records,
-            restored_record_counts=restored_record_counts,
-        )
-        with self._store.transaction(isolation_level="SERIALIZABLE"):
-            self._require_empty_authoritative_restore_target()
-            for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES:
-                for record in parsed_records[record_type.record_family]:
-                    self.persist_record(record)
-            restore_drill = self.run_authoritative_restore_drill()
-        return RestoreSummarySnapshot(
-            read_only=True,
-            restored_record_counts=restored_record_counts,
-            restore_drill=restore_drill,
+        return self._restore_readiness_service.restore_authoritative_record_chain_backup(
+            backup_payload
         )
 
     @contextmanager
     def _restore_drill_snapshot_transaction(self) -> Iterator[None]:
-        try:
-            with self._store.transaction(isolation_level="REPEATABLE READ"):
-                yield
-                return
-        except ValueError as exc:
-            if str(exc) != "Cannot set isolation_level inside an active transaction":
-                raise
-        with self._store.transaction():
+        with self._restore_readiness_service.restore_drill_snapshot_transaction():
             yield
 
     def run_authoritative_restore_drill(self) -> RestoreDrillSnapshot:
-        with self._restore_drill_snapshot_transaction():
-            return self._run_authoritative_restore_drill_snapshot()
+        return self._restore_readiness_service.run_authoritative_restore_drill()
 
     def _run_authoritative_restore_drill_snapshot(self) -> RestoreDrillSnapshot:
-        self._validate_authoritative_record_chain_restore(
-            {
-                record_type.record_family: self._store.list(record_type)
-                for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES
-            }
-        )
-        verified_case_ids = tuple(
-            record.case_id for record in self._store.list(CaseRecord)
-        )
-        verified_approval_decision_ids = tuple(
-            record.approval_decision_id
-            for record in self._store.list(ApprovalDecisionRecord)
-        )
-        verified_action_execution_ids = tuple(
-            record.action_execution_id
-            for record in self._store.list(ActionExecutionRecord)
-        )
-        verified_reconciliation_ids = tuple(
-            record.reconciliation_id
-            for record in self._store.list(ReconciliationRecord)
-        )
-
-        for case_id in verified_case_ids:
-            self.inspect_case_detail(case_id)
-        for approval_decision_id in verified_approval_decision_ids:
-            self.inspect_assistant_context("approval_decision", approval_decision_id)
-        for action_execution_id in verified_action_execution_ids:
-            self.inspect_assistant_context("action_execution", action_execution_id)
-        for reconciliation_id in verified_reconciliation_ids:
-            self.inspect_assistant_context("reconciliation", reconciliation_id)
-        self.inspect_reconciliation_status()
-        startup = self.describe_startup_status()
-        readiness_aggregates = self._inspect_readiness_aggregates()
-        readiness_status = _derive_readiness_status(
-            startup_ready=startup.startup_ready,
-            reconciliation_lifecycle_counts=readiness_aggregates.reconciliation_lifecycle_counts,
-        )
-
-        return RestoreDrillSnapshot(
-            read_only=True,
-            drill_passed=readiness_status == "ready",
-            verified_case_ids=verified_case_ids,
-            verified_approval_decision_ids=verified_approval_decision_ids,
-            verified_action_execution_ids=verified_action_execution_ids,
-            verified_reconciliation_ids=verified_reconciliation_ids,
-        )
+        return self._restore_readiness_service.run_authoritative_restore_drill_snapshot()
 
     def inspect_analyst_queue(self) -> AnalystQueueSnapshot:
         active_alert_states = {
@@ -3865,17 +3364,7 @@ class AegisOpsControlPlaneService:
         return f"analytic-signal-{uuid.uuid5(uuid.NAMESPACE_URL, mint_material)}"
 
     def _require_empty_authoritative_restore_target(self) -> None:
-        all_record_types = tuple(dict.fromkeys(RECORD_TYPES_BY_FAMILY.values()))
-        populated_families = [
-            record_type.record_family
-            for record_type in all_record_types
-            if self._store.list(record_type)
-        ]
-        if populated_families:
-            raise ValueError(
-                "authoritative restore target must be empty before restore; found existing "
-                f"records for {', '.join(populated_families)}"
-            )
+        self._restore_readiness_service.require_empty_authoritative_restore_target()
 
     def _validate_authoritative_record_chain_restore(
         self,
@@ -3883,385 +3372,10 @@ class AegisOpsControlPlaneService:
         *,
         restored_record_counts: Mapping[str, int] | None = None,
     ) -> None:
-        def duplicate_restore_count_suffix(family: str) -> str:
-            if restored_record_counts is None:
-                return ""
-            return (
-                "; restored_record_counts"
-                f"[{family!r}]={restored_record_counts.get(family)!r}"
-            )
-
-        analytic_signal_records = tuple(
-            record
-            for record in records_by_family.get("analytic_signal", ())
-            if isinstance(record, AnalyticSignalRecord)
+        self._restore_readiness_service.validate_authoritative_record_chain_restore(
+            records_by_family,
+            restored_record_counts=restored_record_counts,
         )
-        alert_records = tuple(
-            record
-            for record in records_by_family.get("alert", ())
-            if isinstance(record, AlertRecord)
-        )
-        evidence_record_family = tuple(
-            record
-            for record in records_by_family.get("evidence", ())
-            if isinstance(record, EvidenceRecord)
-        )
-        case_records = tuple(
-            record
-            for record in records_by_family.get("case", ())
-            if isinstance(record, CaseRecord)
-        )
-        approval_decision_records = tuple(
-            record
-            for record in records_by_family.get("approval_decision", ())
-            if isinstance(record, ApprovalDecisionRecord)
-        )
-        action_request_records = tuple(
-            record
-            for record in records_by_family.get("action_request", ())
-            if isinstance(record, ActionRequestRecord)
-        )
-        action_execution_records = tuple(
-            record
-            for record in records_by_family.get("action_execution", ())
-            if isinstance(record, ActionExecutionRecord)
-        )
-        reconciliations = tuple(
-            record
-            for record in records_by_family.get("reconciliation", ())
-            if isinstance(record, ReconciliationRecord)
-        )
-        for family, records in (
-            ("analytic_signal", analytic_signal_records),
-            ("alert", alert_records),
-            ("evidence", evidence_record_family),
-            ("case", case_records),
-            ("approval_decision", approval_decision_records),
-            ("action_request", action_request_records),
-            ("action_execution", action_execution_records),
-            ("reconciliation", reconciliations),
-        ):
-            duplicates = _find_duplicate_strings(
-                tuple(
-                    getattr(record, _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY[family])
-                    for record in records
-                )
-            )
-            if duplicates:
-                raise ValueError(
-                    "restore payload contains duplicate "
-                    f"{family} identifiers {duplicates!r}"
-                    f"{duplicate_restore_count_suffix(family)}"
-                )
-        duplicate_execution_run_ids = _find_duplicate_strings(
-            tuple(
-                record.execution_run_id
-                for record in action_execution_records
-                if record.execution_run_id is not None
-            )
-        )
-        if duplicate_execution_run_ids:
-            raise ValueError(
-                "restore payload contains duplicate action_execution "
-                f"execution_run_id values {duplicate_execution_run_ids!r}"
-                f"{duplicate_restore_count_suffix('action_execution')}"
-            )
-
-        analytic_signals = {
-            record.analytic_signal_id: record for record in analytic_signal_records
-        }
-        alerts = {record.alert_id: record for record in alert_records}
-        evidence_records = {
-            record.evidence_id: record for record in evidence_record_family
-        }
-        cases = {record.case_id: record for record in case_records}
-        approval_decisions = {
-            record.approval_decision_id: record
-            for record in approval_decision_records
-        }
-        action_requests = {
-            record.action_request_id: record for record in action_request_records
-        }
-        action_executions = {
-            record.action_execution_id: record for record in action_execution_records
-        }
-        action_executions_by_run_id = {
-            record.execution_run_id: record
-            for record in action_execution_records
-            if record.execution_run_id is not None
-        }
-
-        for alert in alerts.values():
-            if alert.analytic_signal_id and alert.analytic_signal_id not in analytic_signals:
-                raise ValueError(
-                    f"missing analytic_signal record {alert.analytic_signal_id!r} required by alert "
-                    f"{alert.alert_id!r}"
-                )
-            if alert.case_id and alert.case_id not in cases:
-                raise ValueError(
-                    f"missing case record {alert.case_id!r} required by alert {alert.alert_id!r}"
-                )
-
-        for analytic_signal in analytic_signals.values():
-            for alert_id in analytic_signal.alert_ids:
-                if alert_id not in alerts:
-                    raise ValueError(
-                        f"missing alert record {alert_id!r} required by analytic signal "
-                        f"{analytic_signal.analytic_signal_id!r}"
-                    )
-            for case_id in analytic_signal.case_ids:
-                if case_id not in cases:
-                    raise ValueError(
-                        f"missing case record {case_id!r} required by analytic signal "
-                        f"{analytic_signal.analytic_signal_id!r}"
-                    )
-
-        for evidence in evidence_records.values():
-            if evidence.alert_id and evidence.alert_id not in alerts:
-                raise ValueError(
-                    f"missing alert record {evidence.alert_id!r} required by evidence "
-                    f"{evidence.evidence_id!r}"
-                )
-            if evidence.case_id and evidence.case_id not in cases:
-                raise ValueError(
-                    f"missing case record {evidence.case_id!r} required by evidence "
-                    f"{evidence.evidence_id!r}"
-                )
-
-        for case in cases.values():
-            if case.alert_id and case.alert_id not in alerts:
-                raise ValueError(
-                    f"missing alert record {case.alert_id!r} required by case {case.case_id!r}"
-                )
-            for evidence_id in case.evidence_ids:
-                if evidence_id not in evidence_records:
-                    raise ValueError(
-                        f"missing evidence record {evidence_id!r} required by case {case.case_id!r}"
-                    )
-
-        for approval_decision in approval_decisions.values():
-            action_request = action_requests.get(approval_decision.action_request_id)
-            if action_request is None:
-                raise ValueError(
-                    f"missing action_request record {approval_decision.action_request_id!r} required by "
-                    f"approval decision {approval_decision.approval_decision_id!r}"
-                )
-            if approval_decision.target_snapshot != action_request.target_scope:
-                raise ValueError(
-                    f"approval decision {approval_decision.approval_decision_id!r} does not match "
-                    "action request target binding"
-                )
-            if approval_decision.payload_hash != action_request.payload_hash:
-                raise ValueError(
-                    f"approval decision {approval_decision.approval_decision_id!r} does not match "
-                    "action request payload binding"
-                )
-
-        for action_request in action_requests.values():
-            if action_request.case_id and action_request.case_id not in cases:
-                raise ValueError(
-                    f"missing case record {action_request.case_id!r} required by action request "
-                    f"{action_request.action_request_id!r}"
-                )
-            if action_request.alert_id and action_request.alert_id not in alerts:
-                raise ValueError(
-                    f"missing alert record {action_request.alert_id!r} required by action request "
-                    f"{action_request.action_request_id!r}"
-                )
-            if (
-                action_request.approval_decision_id
-                and action_request.approval_decision_id not in approval_decisions
-            ):
-                raise ValueError(
-                    f"missing approval_decision record {action_request.approval_decision_id!r} "
-                    f"required by action request {action_request.action_request_id!r}"
-                )
-            approval_decision = approval_decisions.get(action_request.approval_decision_id)
-            if approval_decision is None:
-                continue
-            if approval_decision.action_request_id != action_request.action_request_id:
-                raise ValueError(
-                    f"action request {action_request.action_request_id!r} does not match approval "
-                    "decision binding"
-                )
-            if approval_decision.target_snapshot != action_request.target_scope:
-                raise ValueError(
-                    f"action request {action_request.action_request_id!r} does not match approval "
-                    "decision target binding"
-                )
-            if approval_decision.payload_hash != action_request.payload_hash:
-                raise ValueError(
-                    f"action request {action_request.action_request_id!r} does not match approval "
-                    "decision payload binding"
-                )
-
-        for action_execution in action_executions.values():
-            action_request = action_requests.get(action_execution.action_request_id)
-            if action_request is None:
-                raise ValueError(
-                    f"missing action_request record {action_execution.action_request_id!r} required by "
-                    f"action execution {action_execution.action_execution_id!r}"
-                )
-            if action_execution.approval_decision_id not in approval_decisions:
-                raise ValueError(
-                    f"missing approval_decision record {action_execution.approval_decision_id!r} "
-                    f"required by action execution {action_execution.action_execution_id!r}"
-                )
-            approval_decision = approval_decisions[action_execution.approval_decision_id]
-            if action_request.approval_decision_id != action_execution.approval_decision_id:
-                raise ValueError(
-                    f"action execution {action_execution.action_execution_id!r} does not match action "
-                    f"request approval binding"
-                )
-            if approval_decision.action_request_id != action_request.action_request_id:
-                raise ValueError(
-                    f"action execution {action_execution.action_execution_id!r} does not match approval "
-                    "decision binding"
-                )
-            if action_execution.idempotency_key != action_request.idempotency_key:
-                raise ValueError(
-                    f"action execution {action_execution.action_execution_id!r} does not match action "
-                    "request idempotency binding"
-                )
-            if action_execution.target_scope != action_request.target_scope:
-                raise ValueError(
-                    f"action execution {action_execution.action_execution_id!r} does not match action "
-                    "request target binding"
-                )
-            if action_execution.approved_payload != action_request.requested_payload:
-                raise ValueError(
-                    f"action execution {action_execution.action_execution_id!r} does not match action "
-                    "request approved payload binding"
-                )
-            if action_execution.payload_hash != action_request.payload_hash:
-                raise ValueError(
-                    f"action execution {action_execution.action_execution_id!r} does not match action "
-                    "request payload binding"
-                )
-            policy_evaluation = action_request.policy_evaluation
-            if (
-                policy_evaluation.get("execution_surface_type")
-                != action_execution.execution_surface_type
-            ):
-                raise ValueError(
-                    f"action execution {action_execution.action_execution_id!r} does not match action "
-                    "request execution surface binding"
-                )
-            if (
-                policy_evaluation.get("execution_surface_id")
-                != action_execution.execution_surface_id
-            ):
-                raise ValueError(
-                    f"action execution {action_execution.action_execution_id!r} does not match action "
-                    "request execution surface binding"
-                )
-            if approval_decision.target_snapshot != action_request.target_scope:
-                raise ValueError(
-                    f"action execution {action_execution.action_execution_id!r} does not match approval "
-                    "decision target binding"
-                )
-            if approval_decision.payload_hash != action_request.payload_hash:
-                raise ValueError(
-                    f"action execution {action_execution.action_execution_id!r} does not match approval "
-                    "decision payload binding"
-                )
-            if approval_decision.approved_expires_at != action_request.expires_at:
-                raise ValueError(
-                    f"action execution {action_execution.action_execution_id!r} does not match approval "
-                    "decision expiry binding"
-                )
-            if action_execution.expires_at != action_request.expires_at:
-                raise ValueError(
-                    f"action execution {action_execution.action_execution_id!r} does not match action "
-                    "request expiry binding"
-                )
-            if (
-                approval_decision.approved_expires_at is not None
-                and action_execution.delegated_at > approval_decision.approved_expires_at
-            ):
-                raise ValueError(
-                    f"action execution {action_execution.action_execution_id!r} exceeds approval "
-                    "expiry binding"
-                )
-
-        for reconciliation in reconciliations:
-            subject_action_execution_ids = self._assistant_ids_from_mapping(
-                reconciliation.subject_linkage,
-                "action_execution_ids",
-            )
-            subject_execution_run_ids = {
-                action_executions[action_execution_id].execution_run_id
-                for action_execution_id in subject_action_execution_ids
-                if action_execution_id in action_executions
-                and action_executions[action_execution_id].execution_run_id is not None
-            }
-            if reconciliation.alert_id and reconciliation.alert_id not in alerts:
-                raise ValueError(
-                    f"missing alert record {reconciliation.alert_id!r} required by reconciliation "
-                    f"{reconciliation.reconciliation_id!r}"
-                )
-            if (
-                reconciliation.analytic_signal_id
-                and reconciliation.analytic_signal_id not in analytic_signals
-            ):
-                raise ValueError(
-                    f"missing analytic_signal record {reconciliation.analytic_signal_id!r} required by "
-                    f"reconciliation {reconciliation.reconciliation_id!r}"
-                )
-            if (
-                reconciliation.execution_run_id
-                and reconciliation.execution_run_id not in action_executions_by_run_id
-            ):
-                raise ValueError(
-                    f"missing action execution run {reconciliation.execution_run_id!r} required by "
-                    f"reconciliation {reconciliation.reconciliation_id!r}"
-                )
-            if (
-                reconciliation.execution_run_id is not None
-                and subject_execution_run_ids
-                and reconciliation.execution_run_id not in subject_execution_run_ids
-            ):
-                raise ValueError(
-                    f"reconciliation {reconciliation.reconciliation_id!r} does not match its action "
-                    "execution run binding"
-                )
-            for linked_execution_run_id in reconciliation.linked_execution_run_ids:
-                if linked_execution_run_id not in action_executions_by_run_id:
-                    raise ValueError(
-                        f"missing action execution run {linked_execution_run_id!r} required by "
-                        f"reconciliation {reconciliation.reconciliation_id!r}"
-                    )
-                if (
-                    subject_execution_run_ids
-                    and linked_execution_run_id not in subject_execution_run_ids
-                ):
-                    raise ValueError(
-                        f"reconciliation {reconciliation.reconciliation_id!r} does not match its linked "
-                        "action execution runs"
-                    )
-            for field_name, known_ids in (
-                ("analytic_signal_ids", analytic_signals),
-                ("alert_ids", alerts),
-                ("case_ids", cases),
-                ("evidence_ids", evidence_records),
-                ("approval_decision_ids", approval_decisions),
-                ("action_request_ids", action_requests),
-                ("action_execution_ids", action_executions),
-            ):
-                for linked_id in self._assistant_ids_from_mapping(
-                    reconciliation.subject_linkage,
-                    field_name,
-                ):
-                    if linked_id not in known_ids:
-                        singular_name = (
-                            field_name[:-4]
-                            if field_name.endswith("_ids")
-                            else field_name
-                        )
-                        raise ValueError(
-                            f"missing {singular_name} record {linked_id!r} required by reconciliation "
-                            f"{reconciliation.reconciliation_id!r}"
-                        )
 
     def _require_case_record(self, case_id: str) -> CaseRecord:
         case_id = self._require_non_empty_string(case_id, "case_id")

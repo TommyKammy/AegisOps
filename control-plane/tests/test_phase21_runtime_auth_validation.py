@@ -16,6 +16,10 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 import main
 from aegisops_control_plane.config import RuntimeConfig
+from aegisops_control_plane.operations import (
+    RestoreReadinessService,
+    RuntimeBoundaryService,
+)
 from aegisops_control_plane.service import (
     AegisOpsControlPlaneService,
     AuthenticatedRuntimePrincipal,
@@ -58,6 +62,64 @@ def _build_service(*, host: str = "127.0.0.1") -> AegisOpsControlPlaneService:
 
 
 class Phase21RuntimeAuthValidationTests(unittest.TestCase):
+    def test_operational_runtime_surfaces_are_extracted_into_dedicated_collaborators(
+        self,
+    ) -> None:
+        service = _build_service(host="0.0.0.0")
+
+        self.assertIsInstance(service._runtime_boundary_service, RuntimeBoundaryService)
+        self.assertIsInstance(
+            service._restore_readiness_service,
+            RestoreReadinessService,
+        )
+
+        with mock.patch.object(
+            service._runtime_boundary_service,
+            "authenticate_protected_surface_request",
+            return_value=REVIEWED_PLATFORM_ADMIN_PRINCIPAL,
+        ) as authenticate_runtime:
+            principal = service.authenticate_protected_surface_request(
+                peer_addr="10.10.0.5",
+                forwarded_proto="https",
+                reverse_proxy_secret_header=REVIEWED_SURFACE_PROXY_SECRET,
+                proxy_service_account_header=REVIEWED_PROXY_SERVICE_ACCOUNT,
+                authenticated_identity_header="platform-admin-001",
+                authenticated_role_header="platform_admin",
+                allowed_roles=("platform_admin",),
+            )
+
+        self.assertIs(principal, REVIEWED_PLATFORM_ADMIN_PRINCIPAL)
+        authenticate_runtime.assert_called_once_with(
+            peer_addr="10.10.0.5",
+            forwarded_proto="https",
+            reverse_proxy_secret_header=REVIEWED_SURFACE_PROXY_SECRET,
+            proxy_service_account_header=REVIEWED_PROXY_SERVICE_ACCOUNT,
+            authenticated_identity_header="platform-admin-001",
+            authenticated_role_header="platform_admin",
+            allowed_roles=("platform_admin",),
+        )
+
+        readiness_snapshot = mock.sentinel.readiness_snapshot
+        with mock.patch.object(
+            service._restore_readiness_service,
+            "inspect_readiness_diagnostics",
+            return_value=readiness_snapshot,
+        ) as inspect_readiness:
+            self.assertIs(service.inspect_readiness_diagnostics(), readiness_snapshot)
+        inspect_readiness.assert_called_once_with()
+
+        restore_snapshot = mock.sentinel.restore_summary
+        with mock.patch.object(
+            service._restore_readiness_service,
+            "restore_authoritative_record_chain_backup",
+            return_value=restore_snapshot,
+        ) as restore_backup:
+            self.assertIs(
+                service.restore_authoritative_record_chain_backup({"record_families": {}}),
+                restore_snapshot,
+            )
+        restore_backup.assert_called_once_with({"record_families": {}})
+
     def test_startup_and_readiness_do_not_require_break_glass_when_unset(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
