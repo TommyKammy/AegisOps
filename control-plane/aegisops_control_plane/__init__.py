@@ -20,6 +20,7 @@ from .models import (
     ReconciliationRecord,
     RecommendationRecord,
 )
+from .operations import RestoreReadinessService, RuntimeBoundaryService
 from .service import (
     AegisOpsControlPlaneService,
     AnalystAssistantContextSnapshot,
@@ -55,8 +56,10 @@ __all__ = [
     "ReconciliationStatusSnapshot",
     "RecommendationRecord",
     "RecordInspectionSnapshot",
+    "RestoreReadinessService",
     "RuntimeConfig",
     "RuntimeSnapshot",
+    "RuntimeBoundaryService",
     "WazuhAlertAdapter",
     "build_runtime_service",
     "build_runtime_snapshot",

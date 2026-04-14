@@ -16,6 +16,10 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 import main
 from aegisops_control_plane.config import RuntimeConfig
+from aegisops_control_plane.operations import (
+    RestoreReadinessService,
+    RuntimeBoundaryService,
+)
 from aegisops_control_plane.service import (
     AegisOpsControlPlaneService,
     AuthenticatedRuntimePrincipal,
@@ -35,6 +39,8 @@ REVIEWED_PLATFORM_ADMIN_PRINCIPAL = AuthenticatedRuntimePrincipal(
     access_path="reviewed_reverse_proxy",
     proxy_service_account=REVIEWED_PROXY_SERVICE_ACCOUNT,
 )
+TEST_NON_LOOPBACK_HOST = "0.0.0.0"  # noqa: S104 - config only; no socket bind
+TEST_PLACEHOLDER_BINDING = "<set-me>"  # noqa: S105 - intentional validation placeholder
 
 
 def _build_service(*, host: str = "127.0.0.1") -> AegisOpsControlPlaneService:
@@ -58,6 +64,64 @@ def _build_service(*, host: str = "127.0.0.1") -> AegisOpsControlPlaneService:
 
 
 class Phase21RuntimeAuthValidationTests(unittest.TestCase):
+    def test_operational_runtime_surfaces_are_extracted_into_dedicated_collaborators(
+        self,
+    ) -> None:
+        service = _build_service(host=TEST_NON_LOOPBACK_HOST)
+
+        self.assertIsInstance(service._runtime_boundary_service, RuntimeBoundaryService)
+        self.assertIsInstance(
+            service._restore_readiness_service,
+            RestoreReadinessService,
+        )
+
+        with mock.patch.object(
+            service._runtime_boundary_service,
+            "authenticate_protected_surface_request",
+            return_value=REVIEWED_PLATFORM_ADMIN_PRINCIPAL,
+        ) as authenticate_runtime:
+            principal = service.authenticate_protected_surface_request(
+                peer_addr="10.10.0.5",
+                forwarded_proto="https",
+                reverse_proxy_secret_header=REVIEWED_SURFACE_PROXY_SECRET,
+                proxy_service_account_header=REVIEWED_PROXY_SERVICE_ACCOUNT,
+                authenticated_identity_header="platform-admin-001",
+                authenticated_role_header="platform_admin",
+                allowed_roles=("platform_admin",),
+            )
+
+        self.assertIs(principal, REVIEWED_PLATFORM_ADMIN_PRINCIPAL)
+        authenticate_runtime.assert_called_once_with(
+            peer_addr="10.10.0.5",
+            forwarded_proto="https",
+            reverse_proxy_secret_header=REVIEWED_SURFACE_PROXY_SECRET,
+            proxy_service_account_header=REVIEWED_PROXY_SERVICE_ACCOUNT,
+            authenticated_identity_header="platform-admin-001",
+            authenticated_role_header="platform_admin",
+            allowed_roles=("platform_admin",),
+        )
+
+        readiness_snapshot = mock.sentinel.readiness_snapshot
+        with mock.patch.object(
+            service._restore_readiness_service,
+            "inspect_readiness_diagnostics",
+            return_value=readiness_snapshot,
+        ) as inspect_readiness:
+            self.assertIs(service.inspect_readiness_diagnostics(), readiness_snapshot)
+        inspect_readiness.assert_called_once_with()
+
+        restore_snapshot = mock.sentinel.restore_summary
+        with mock.patch.object(
+            service._restore_readiness_service,
+            "restore_authoritative_record_chain_backup",
+            return_value=restore_snapshot,
+        ) as restore_backup:
+            self.assertIs(
+                service.restore_authoritative_record_chain_backup({"record_families": {}}),
+                restore_snapshot,
+            )
+        restore_backup.assert_called_once_with({"record_families": {}})
+
     def test_startup_and_readiness_do_not_require_break_glass_when_unset(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
@@ -89,7 +153,7 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(
-                host="0.0.0.0",
+                host=TEST_NON_LOOPBACK_HOST,
                 port=8080,
                 postgres_dsn="postgresql://control-plane.local/aegisops",
                 wazuh_ingest_shared_secret=REVIEWED_SHARED_SECRET,
@@ -107,7 +171,7 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
     def test_protected_surface_request_rejects_missing_authenticated_identity_header(
         self,
     ) -> None:
-        service = _build_service(host="0.0.0.0")
+        service = _build_service(host=TEST_NON_LOOPBACK_HOST)
 
         with self.assertRaisesRegex(
             PermissionError,
@@ -126,7 +190,7 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
     def test_protected_surface_request_accepts_reviewed_reverse_proxy_identity_headers(
         self,
     ) -> None:
-        service = _build_service(host="0.0.0.0")
+        service = _build_service(host=TEST_NON_LOOPBACK_HOST)
 
         principal = service.authenticate_protected_surface_request(
             peer_addr="10.10.0.5",
@@ -229,6 +293,91 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
                     servers[0].shutdown()
                     servers[0].server_close()
                 thread.join(timeout=2)
+
+    def test_runtime_validation_rejects_placeholder_bound_runtime_credentials(self) -> None:
+        store, _ = make_store()
+        placeholder_secret_service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host=TEST_NON_LOOPBACK_HOST,
+                port=8080,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret=TEST_PLACEHOLDER_BINDING,
+                wazuh_ingest_reverse_proxy_secret=TEST_PLACEHOLDER_BINDING,
+                wazuh_ingest_trusted_proxy_cidrs=("10.10.0.5/32",),
+                protected_surface_reverse_proxy_secret=TEST_PLACEHOLDER_BINDING,
+                protected_surface_trusted_proxy_cidrs=("10.10.0.5/32",),
+                protected_surface_proxy_service_account=REVIEWED_PROXY_SERVICE_ACCOUNT,
+                admin_bootstrap_token=TEST_PLACEHOLDER_BINDING,
+                break_glass_token=TEST_PLACEHOLDER_BINDING,
+            ),
+            store=store,
+        )
+        placeholder_service_account_service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host=TEST_NON_LOOPBACK_HOST,
+                port=8080,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret=REVIEWED_SHARED_SECRET,
+                wazuh_ingest_reverse_proxy_secret=REVIEWED_WAZUH_PROXY_SECRET,
+                protected_surface_reverse_proxy_secret=REVIEWED_SURFACE_PROXY_SECRET,
+                protected_surface_trusted_proxy_cidrs=("10.10.0.5/32",),
+                protected_surface_proxy_service_account=TEST_PLACEHOLDER_BINDING,
+                admin_bootstrap_token=REVIEWED_ADMIN_BOOTSTRAP_TOKEN,
+                break_glass_token=REVIEWED_BREAK_GLASS_TOKEN,
+            ),
+            store=store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET must be set",
+        ):
+            placeholder_secret_service.validate_wazuh_ingest_runtime()
+        placeholder_secret_service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host=TEST_NON_LOOPBACK_HOST,
+                port=8080,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret=REVIEWED_SHARED_SECRET,
+                wazuh_ingest_reverse_proxy_secret=TEST_PLACEHOLDER_BINDING,
+                wazuh_ingest_trusted_proxy_cidrs=("10.10.0.5/32",),
+                protected_surface_reverse_proxy_secret=TEST_PLACEHOLDER_BINDING,
+                protected_surface_trusted_proxy_cidrs=("10.10.0.5/32",),
+                protected_surface_proxy_service_account=REVIEWED_PROXY_SERVICE_ACCOUNT,
+                admin_bootstrap_token=TEST_PLACEHOLDER_BINDING,
+                break_glass_token=TEST_PLACEHOLDER_BINDING,
+            ),
+            store=store,
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_REVERSE_PROXY_SECRET must be set",
+        ):
+            placeholder_secret_service.validate_wazuh_ingest_runtime()
+        with self.assertRaisesRegex(
+            ValueError,
+            "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVERSE_PROXY_SECRET must be set",
+        ):
+            placeholder_secret_service.validate_protected_surface_runtime()
+        with self.assertRaisesRegex(
+            ValueError,
+            "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_PROXY_SERVICE_ACCOUNT must be set",
+        ):
+            placeholder_service_account_service.validate_protected_surface_runtime()
+        with self.assertRaisesRegex(
+            PermissionError,
+            "admin bootstrap contract is disabled until AEGISOPS_CONTROL_PLANE_ADMIN_BOOTSTRAP_TOKEN is bound",
+        ):
+            placeholder_secret_service.require_admin_bootstrap_token(
+                "reviewed-admin-bootstrap-token"
+            )
+        with self.assertRaisesRegex(
+            PermissionError,
+            "break-glass contract is disabled until AEGISOPS_CONTROL_PLANE_BREAK_GLASS_TOKEN is bound",
+        ):
+            placeholder_secret_service.require_break_glass_token(
+                "reviewed-break-glass-token"
+            )
 
     def test_break_glass_contract_is_disabled_until_token_is_bound(self) -> None:
         store, _ = make_store()

@@ -10058,6 +10058,7 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         backup = service.export_authoritative_record_chain_backup()
         self.assertEqual(len(backup["record_families"]["analytic_signal"]), 1)
         backup["record_families"]["analytic_signal"][0]["alert_ids"] = [
+            backup["record_families"]["alert"][0]["alert_id"],
             "alert-phase21-missing-analytic-signal-link-001"
         ]
 
@@ -10070,6 +10071,63 @@ class ControlPlaneServicePersistenceTests(unittest.TestCase):
         with self.assertRaisesRegex(
             ValueError,
             "missing alert record 'alert-phase21-missing-analytic-signal-link-001' required by analytic signal",
+        ):
+            restored_service.restore_authoritative_record_chain_backup(backup)
+        self._assert_authoritative_store_empty(restored_store)
+
+    def test_service_phase21_restore_rejects_alert_analytic_signal_binding_mismatch(
+        self,
+    ) -> None:
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        alert_payload = backup["record_families"]["alert"][0]
+        self.assertIsNotNone(alert_payload["analytic_signal_id"])
+        backup["record_families"]["analytic_signal"][0]["alert_ids"] = []
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                f"alert {alert_payload['alert_id']!r} does not match analytic signal "
+                f"binding {alert_payload['analytic_signal_id']!r}"
+            ),
+        ):
+            restored_service.restore_authoritative_record_chain_backup(backup)
+        self._assert_authoritative_store_empty(restored_store)
+
+    def test_service_phase21_restore_rejects_alert_case_binding_mismatch(self) -> None:
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        original_alert_payload = dict(backup["record_families"]["alert"][0])
+        mismatched_alert_payload = dict(original_alert_payload)
+        mismatched_alert_payload["alert_id"] = "alert-phase21-mismatched-case-binding-001"
+        mismatched_alert_payload["analytic_signal_id"] = None
+        mismatched_alert_payload["case_id"] = None
+        backup["record_families"]["alert"].append(mismatched_alert_payload)
+        backup["record_counts"]["alert"] = len(backup["record_families"]["alert"])
+        backup["record_families"]["case"][0]["alert_id"] = mismatched_alert_payload["alert_id"]
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                f"alert {promoted_case.alert_id!r} does not match case binding "
+                f"{promoted_case.case_id!r}"
+            ),
         ):
             restored_service.restore_authoritative_record_chain_backup(backup)
         self._assert_authoritative_store_empty(restored_store)
