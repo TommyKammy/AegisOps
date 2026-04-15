@@ -132,6 +132,31 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
         ):
             self.assertIn(term, auth_end_to_end_and_cli_tests)
 
+    def test_phase22_regression_validation_keeps_operator_trust_runtime_coverage(
+        self,
+    ) -> None:
+        phase22_end_to_end_tests = self._defined_test_names(
+            "control-plane/tests/test_phase22_end_to_end_validation.py"
+        )
+        phase19_to_phase21_validation_tests = self._defined_test_names(
+            "control-plane/tests/test_phase19_operator_workflow_validation.py",
+            "control-plane/tests/test_phase20_low_risk_action_validation.py",
+            "control-plane/tests/test_phase21_end_to_end_validation.py",
+        )
+
+        for term in (
+            "test_phase22_end_to_end_keeps_review_states_and_visibility_explicit",
+            "test_phase22_end_to_end_keeps_success_claims_non_authoritative_until_reconciliation_matches",
+        ):
+            self.assertIn(term, phase22_end_to_end_tests)
+
+        for term in (
+            "test_reviewed_runtime_path_covers_approved_operator_workflow",
+            "test_reviewed_runtime_path_covers_phase20_low_risk_action_boundary",
+            "test_phase21_end_to_end_restore_and_readiness_preserve_phase20_live_path",
+        ):
+            self.assertIn(term, phase19_to_phase21_validation_tests)
+
 
 if __name__ == "__main__":
     unittest.main()

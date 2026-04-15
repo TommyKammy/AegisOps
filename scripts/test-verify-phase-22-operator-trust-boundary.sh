@@ -24,6 +24,7 @@ required_artifacts=(
   "docs/response-action-safety-model.md"
   "docs/secops-business-hours-operating-model.md"
   "docs/architecture.md"
+  "control-plane/tests/test_phase22_end_to_end_validation.py"
   "control-plane/tests/test_phase22_operator_trust_boundary_docs.py"
   "control-plane/tests/test_phase22_operator_trust_boundary_validation.py"
   "scripts/verify-phase-22-operator-trust-boundary.sh"
