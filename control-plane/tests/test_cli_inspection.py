@@ -3908,12 +3908,14 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             review["action_request_id"]: review for review in payload["action_reviews"]
         }
 
-        for request in (
+        for action_request in (
             seeded["expired_request"],
             seeded["rejected_request"],
             seeded["superseded_request"],
         ):
-            visibility = reviews_by_id[request.action_request_id]["runtime_visibility"] or {}
+            visibility = (
+                reviews_by_id[action_request.action_request_id]["runtime_visibility"] or {}
+            )
             self.assertEqual(
                 visibility["after_hours_handoff"]["handoff_owner"],
                 "analyst-visibility-001",
