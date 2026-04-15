@@ -1816,10 +1816,11 @@ class AegisOpsControlPlaneService:
             ("residual_uncertainty", "residual_uncertainty"),
         ):
             value = manual_fallback.get(source_key)
-            if value is not None and target_key not in visibility:
-                visibility[target_key] = value
-            elif value is not None:
-                visibility[target_key] = value
+            if value is None:
+                continue
+            if source_key == "performed_at" and target_key in visibility:
+                continue
+            visibility[target_key] = value
         return visibility
 
     @staticmethod

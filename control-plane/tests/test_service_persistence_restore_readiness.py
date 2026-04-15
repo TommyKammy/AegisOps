@@ -497,6 +497,107 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             "analyst-004",
         )
 
+    def test_service_phase21_restore_prefers_canonical_manual_fallback_timestamp(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep legacy manual fallback timestamps auditable after restore.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Legacy fallback timestamps must not rewrite the reviewed record.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-phase21-restore-fallback-alias-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase21-restore-fallback-alias-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+        service.record_action_review_manual_fallback(
+            action_request_id=action_request.action_request_id,
+            fallback_at=reviewed_at + timedelta(minutes=45),
+            fallback_actor_identity="analyst-003",
+            authority_boundary="approved_human_fallback",
+            reason="The reviewed automation path was unavailable after approval.",
+            action_taken="Notified the accountable repository owner using the approved manual procedure.",
+            verification_evidence_ids=(evidence_id,),
+            residual_uncertainty="Awaiting written owner acknowledgement.",
+        )
+
+        case_with_fallback = service.get_record(CaseRecord, promoted_case.case_id)
+        self.assertIsNotNone(case_with_fallback)
+        assert case_with_fallback is not None
+        action_review_visibility = dict(
+            case_with_fallback.reviewed_context["action_review_visibility"]
+        )
+        scoped_visibility = dict(action_review_visibility[action_request.action_request_id])
+        manual_fallback = dict(scoped_visibility["manual_fallback"])
+        manual_fallback["performed_at"] = (
+            reviewed_at + timedelta(minutes=50)
+        ).isoformat()
+        scoped_visibility["manual_fallback"] = manual_fallback
+        action_review_visibility[action_request.action_request_id] = scoped_visibility
+        service.persist_record(
+            replace(
+                case_with_fallback,
+                reviewed_context={
+                    **dict(case_with_fallback.reviewed_context),
+                    "action_review_visibility": action_review_visibility,
+                },
+            )
+        )
+
+        backup = service.export_authoritative_record_chain_backup()
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+            ),
+            store=restored_store,
+        )
+
+        restored_service.restore_authoritative_record_chain_backup(backup)
+        restored_case_detail = restored_service.inspect_case_detail(promoted_case.case_id)
+        runtime_visibility = restored_case_detail.current_action_review["runtime_visibility"]
+
+        self.assertEqual(
+            runtime_visibility["manual_fallback"]["fallback_at"],
+            (reviewed_at + timedelta(minutes=45)).isoformat(),
+        )
+        self.assertEqual(
+            runtime_visibility["manual_fallback"]["fallback_actor_identity"],
+            "analyst-003",
+        )
+
     def test_manual_fallback_requires_approved_post_approval_action_review(self) -> None:
         _store, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
