@@ -752,6 +752,7 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                     {
                         "action_request_id": action_request.action_request_id,
                         "escalated_at": (reviewed_at + timedelta(minutes=15)).isoformat(),
+                        "escalated_by_identity": "analyst-001",
                         "escalated_to": "on-call-manager-001",
                         "note": "On-call manager notified because the unresolved action could not be left unattended.",
                     },
@@ -793,6 +794,102 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                     ]["escalation_reason"],
                     "Waiting until the next business-hours cycle is unsafe for this repository owner change.",
                 )
+                self.assertEqual(
+                    case_payload["current_action_review"]["runtime_visibility"][
+                        "escalation_notes"
+                    ]["escalated_by_identity"],
+                    "analyst-001",
+                )
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(timeout=2)
+
+    def test_reviewed_runtime_path_rejects_mismatched_escalation_actor_identity(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret=REVIEWED_SHARED_SECRET,
+                wazuh_ingest_reverse_proxy_secret=REVIEWED_PROXY_SECRET,
+            ),
+            store=store,
+        )
+
+        admitted = service.ingest_wazuh_alert(
+            raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
+            authorization_header=f"Bearer {REVIEWED_SHARED_SECRET}",
+            forwarded_proto="https",
+            reverse_proxy_secret_header=REVIEWED_PROXY_SECRET,
+            peer_addr="127.0.0.1",
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep the reviewed escalation path attributable.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Escalate the reviewed repository owner change.",
+            escalation_reason="Waiting until the next business-hours cycle is unsafe.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-phase19-escalation-identity-001",
+        )
+
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service
+        ):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+                base_url = f"http://127.0.0.1:{servers[0].server_port}"
+
+                with self.assertRaises(error.HTTPError) as exc_info:
+                    request.urlopen(  # noqa: S310
+                        request.Request(  # noqa: S310
+                            f"{base_url}/operator/record-action-review-escalation-note",
+                            data=json.dumps(
+                                {
+                                    "action_request_id": action_request.action_request_id,
+                                    "escalated_at": (
+                                        admitted.reconciliation.compared_at
+                                        + timedelta(minutes=15)
+                                    ).isoformat(),
+                                    "escalated_by_identity": "analyst-002",
+                                    "escalated_to": "on-call-manager-001",
+                                    "note": "Mismatched reviewed identity should fail closed.",
+                                }
+                            ).encode("utf-8"),
+                            headers={"Content-Type": "application/json"},
+                            method="POST",
+                        ),
+                        timeout=2,
+                    )
+                self.assertEqual(exc_info.exception.code, 403)
             finally:
                 if servers:
                     servers[0].shutdown()

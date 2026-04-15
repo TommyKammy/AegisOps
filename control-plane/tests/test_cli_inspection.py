@@ -3472,6 +3472,8 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 request.action_request_id,
                 "--escalated-at",
                 (reviewed_at + timedelta(minutes=15)).isoformat(),
+                "--escalated-by-identity",
+                "analyst-003",
                 "--escalated-to",
                 "on-call-manager-001",
                 "--note",
@@ -3526,6 +3528,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(
             review["runtime_visibility"]["escalation_notes"]["escalated_to"],
             "on-call-manager-001",
+        )
+        self.assertEqual(
+            review["runtime_visibility"]["escalation_notes"]["escalated_by_identity"],
+            "analyst-003",
         )
 
     def test_cli_inspect_case_detail_scopes_runtime_visibility_to_the_matching_action_review(
@@ -3638,6 +3644,8 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 second_request.action_request_id,
                 "--escalated-at",
                 (reviewed_at + timedelta(minutes=15)).isoformat(),
+                "--escalated-by-identity",
+                "analyst-003",
                 "--escalated-to",
                 "on-call-manager-001",
                 "--note",
@@ -3666,13 +3674,9 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             "Keep the unresolved action review explicit for the next analyst.",
         )
         self.assertNotIn("manual_fallback", first_review["runtime_visibility"])
-        self.assertEqual(
-            first_review["runtime_visibility"]["escalation_notes"]["escalation_reason"],
-            "First reviewed request remains approval-bound.",
-        )
         self.assertNotIn(
-            "escalated_to",
-            first_review["runtime_visibility"]["escalation_notes"],
+            "escalation_notes",
+            first_review["runtime_visibility"],
         )
         self.assertEqual(
             second_review["runtime_visibility"]["manual_fallback"]["action_request_id"],
@@ -3689,6 +3693,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(
             second_review["runtime_visibility"]["escalation_notes"]["escalated_to"],
             "on-call-manager-001",
+        )
+        self.assertEqual(
+            second_review["runtime_visibility"]["escalation_notes"]["escalated_by_identity"],
+            "analyst-003",
         )
 
     def test_cli_inspect_case_detail_hides_after_hours_handoff_for_completed_review_history(
@@ -3753,10 +3761,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         reviews_by_id = {
             review["action_request_id"]: review for review in payload["action_reviews"]
         }
-        self.assertNotIn(
-            "after_hours_handoff",
-            reviews_by_id[completed_request.action_request_id]["runtime_visibility"],
+        completed_visibility = (
+            reviews_by_id[completed_request.action_request_id]["runtime_visibility"] or {}
         )
+        self.assertNotIn("after_hours_handoff", completed_visibility)
         self.assertEqual(
             reviews_by_id[unresolved_request.action_request_id]["runtime_visibility"][
                 "after_hours_handoff"
@@ -3816,6 +3824,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         service.record_action_review_escalation_note(
             action_request_id=request.action_request_id,
             escalated_at=reviewed_at + timedelta(minutes=15),
+            escalated_by_identity="analyst-004",
             escalated_to="on-call-manager-001",
             note="On-call manager notified because the alert-scoped approval could not be left unattended.",
         )
@@ -3842,6 +3851,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(
             review["runtime_visibility"]["escalation_notes"]["escalated_to"],
             "on-call-manager-001",
+        )
+        self.assertEqual(
+            review["runtime_visibility"]["escalation_notes"]["escalated_by_identity"],
+            "analyst-004",
         )
 
     def test_cli_inspect_case_detail_keeps_reconciliation_bound_to_selected_execution(

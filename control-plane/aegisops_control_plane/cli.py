@@ -195,6 +195,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     record_action_review_escalation_note.add_argument("--action-request-id", required=True)
     record_action_review_escalation_note.add_argument("--escalated-at", required=True)
+    record_action_review_escalation_note.add_argument(
+        "--escalated-by-identity",
+        required=True,
+    )
     record_action_review_escalation_note.add_argument("--escalated-to", required=True)
     record_action_review_escalation_note.add_argument("--note", required=True)
     create_reviewed_action_request = subparsers.add_parser(
@@ -417,6 +421,7 @@ def run_command(
                 service.record_action_review_escalation_note(
                     action_request_id=action_request_id,
                     escalated_at=parse_datetime_arg(parsed.escalated_at, "escalated_at"),
+                    escalated_by_identity=parsed.escalated_by_identity.strip(),
                     escalated_to=parsed.escalated_to.strip(),
                     note=parsed.note.strip(),
                 )

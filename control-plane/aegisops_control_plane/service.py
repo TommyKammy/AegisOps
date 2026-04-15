@@ -1673,6 +1673,7 @@ class AegisOpsControlPlaneService:
             reviewed_context=reviewed_context,
             action_request=action_request,
             approval_decision=approval_decision,
+            review_state=review_state,
             allow_unscoped_context=allow_unscoped_action_visibility,
         )
         if manual_fallback is not None:
@@ -1755,6 +1756,7 @@ class AegisOpsControlPlaneService:
         reviewed_context: Mapping[str, object],
         action_request: ActionRequestRecord,
         approval_decision: ApprovalDecisionRecord | None,
+        review_state: str,
         allow_unscoped_context: bool,
     ) -> dict[str, object] | None:
         manual_fallback = reviewed_context.get("manual_fallback")
@@ -1766,6 +1768,12 @@ class AegisOpsControlPlaneService:
             if approval_decision is not None
             else action_request.approval_decision_id
         )
+        if (
+            approval_decision is None
+            or approval_decision.lifecycle_state != "approved"
+            or review_state in {"pending", "rejected", "expired", "superseded"}
+        ):
+            return None
         if not AegisOpsControlPlaneService._action_review_context_matches_lineage(
             visibility_context=manual_fallback,
             action_request_id=action_request.action_request_id,
@@ -1807,9 +1815,7 @@ class AegisOpsControlPlaneService:
     ) -> dict[str, object] | None:
         requested_payload = action_request.requested_payload
         escalation_context = reviewed_context.get("escalation")
-        if not isinstance(escalation_context, Mapping) and not requested_payload.get(
-            "escalation_reason"
-        ):
+        if not isinstance(escalation_context, Mapping):
             return None
 
         approval_decision_id = (
@@ -1817,31 +1823,37 @@ class AegisOpsControlPlaneService:
             if approval_decision is not None
             else action_request.approval_decision_id
         )
+        if not AegisOpsControlPlaneService._action_review_context_matches_lineage(
+            visibility_context=escalation_context,
+            action_request_id=action_request.action_request_id,
+            approval_decision_id=approval_decision_id,
+            allow_unscoped_context=allow_unscoped_context,
+        ):
+            return None
+
+        recorded_review_state = escalation_context.get("review_state")
         visibility: dict[str, object] = {
             "action_request_id": action_request.action_request_id,
             "approval_decision_id": approval_decision_id,
             "requester_identity": action_request.requester_identity,
-            "review_state": review_state,
+            "review_state": (
+                recorded_review_state
+                if isinstance(recorded_review_state, str) and recorded_review_state.strip()
+                else review_state
+            ),
         }
         escalation_reason = requested_payload.get("escalation_reason")
         if escalation_reason is not None:
             visibility["escalation_reason"] = escalation_reason
-        if isinstance(escalation_context, Mapping):
-            if not AegisOpsControlPlaneService._action_review_context_matches_lineage(
-                visibility_context=escalation_context,
-                action_request_id=action_request.action_request_id,
-                approval_decision_id=approval_decision_id,
-                allow_unscoped_context=allow_unscoped_context,
-            ):
-                return visibility if escalation_reason is not None else None
-            for source_key, target_key in (
-                ("escalated_at", "escalated_at"),
-                ("escalated_to", "escalated_to"),
-                ("note", "note"),
-            ):
-                value = escalation_context.get(source_key)
-                if value is not None:
-                    visibility[target_key] = value
+        for source_key, target_key in (
+            ("escalated_at", "escalated_at"),
+            ("escalated_to", "escalated_to"),
+            ("escalated_by_identity", "escalated_by_identity"),
+            ("note", "note"),
+        ):
+            value = escalation_context.get(source_key)
+            if value is not None:
+                visibility[target_key] = value
         return visibility
 
     @staticmethod
@@ -2948,6 +2960,24 @@ class AegisOpsControlPlaneService:
         )
         with self._store.transaction():
             action_request = self._require_review_bound_action_request(action_request_id)
+            approval_decision = self._action_review_approval_decision(action_request)
+            approval_state = self._action_review_approval_state(
+                action_request=action_request,
+                approval_decision=approval_decision,
+            )
+            review_state = self._action_review_state(
+                action_request=action_request,
+                approval_state=approval_state,
+                action_execution=self._action_review_execution(action_request),
+            )
+            if (
+                approval_decision is None
+                or approval_decision.lifecycle_state != "approved"
+                or review_state in {"pending", "rejected", "expired", "superseded"}
+            ):
+                raise ValueError(
+                    "manual fallback requires an approved action review in a live post-approval state"
+                )
             context_record = self._require_action_review_visibility_context_record(
                 action_request
             )
@@ -2965,6 +2995,7 @@ class AegisOpsControlPlaneService:
                 )
             manual_fallback_context: dict[str, object] = {
                 "action_request_id": action_request.action_request_id,
+                "approval_decision_id": approval_decision.approval_decision_id,
                 "fallback_at": fallback_at.isoformat(),
                 "fallback_actor_identity": fallback_actor_identity,
                 "authority_boundary": authority_boundary,
@@ -2972,10 +3003,6 @@ class AegisOpsControlPlaneService:
                 "action_taken": action_taken,
                 "verification_evidence_ids": normalized_evidence_ids,
             }
-            if action_request.approval_decision_id is not None:
-                manual_fallback_context["approval_decision_id"] = (
-                    action_request.approval_decision_id
-                )
             if normalized_residual_uncertainty is not None:
                 manual_fallback_context["residual_uncertainty"] = (
                     normalized_residual_uncertainty
@@ -2990,26 +3017,43 @@ class AegisOpsControlPlaneService:
         *,
         action_request_id: str,
         escalated_at: datetime,
+        escalated_by_identity: str,
         escalated_to: str,
         note: str,
     ) -> CaseRecord | AlertRecord:
         escalated_at = self._require_aware_datetime(escalated_at, "escalated_at")
+        escalated_by_identity = self._require_non_empty_string(
+            escalated_by_identity,
+            "escalated_by_identity",
+        )
         escalated_to = self._require_non_empty_string(escalated_to, "escalated_to")
         note = self._require_non_empty_string(note, "note")
         with self._store.transaction():
             action_request = self._require_review_bound_action_request(action_request_id)
+            approval_decision = self._action_review_approval_decision(action_request)
+            approval_state = self._action_review_approval_state(
+                action_request=action_request,
+                approval_decision=approval_decision,
+            )
+            review_state = self._action_review_state(
+                action_request=action_request,
+                approval_state=approval_state,
+                action_execution=self._action_review_execution(action_request),
+            )
             context_record = self._require_action_review_visibility_context_record(
                 action_request
             )
             escalation_context: dict[str, object] = {
                 "action_request_id": action_request.action_request_id,
                 "escalated_at": escalated_at.isoformat(),
+                "escalated_by_identity": escalated_by_identity,
                 "escalated_to": escalated_to,
                 "note": note,
+                "review_state": review_state,
             }
-            if action_request.approval_decision_id is not None:
+            if approval_decision is not None:
                 escalation_context["approval_decision_id"] = (
-                    action_request.approval_decision_id
+                    approval_decision.approval_decision_id
                 )
             return self._persist_action_review_visibility_context_record(
                 context_record=context_record,

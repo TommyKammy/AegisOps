@@ -445,6 +445,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         service.record_action_review_escalation_note(
             action_request_id=action_request.action_request_id,
             escalated_at=reviewed_at + timedelta(minutes=15),
+            escalated_by_identity="analyst-004",
             escalated_to="on-call-manager-001",
             note="On-call manager notified because the unresolved action could not be left unattended.",
         )
@@ -490,6 +491,142 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         self.assertEqual(
             runtime_visibility["escalation_notes"]["escalated_to"],
             "on-call-manager-001",
+        )
+        self.assertEqual(
+            runtime_visibility["escalation_notes"]["escalated_by_identity"],
+            "analyst-004",
+        )
+
+    def test_manual_fallback_requires_approved_post_approval_action_review(self) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep manual fallback approval-bound.",
+        )
+        pending_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Review before any fallback path is used.",
+            escalation_reason="Pending approval must not masquerade as manual fallback.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-phase21-manual-fallback-pending-001",
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "manual fallback requires an approved action review in a live post-approval state",
+        ):
+            service.record_action_review_manual_fallback(
+                action_request_id=pending_request.action_request_id,
+                fallback_at=reviewed_at + timedelta(minutes=15),
+                fallback_actor_identity="analyst-001",
+                authority_boundary="approved_human_fallback",
+                reason="Pending approvals must not write fallback visibility.",
+                action_taken="No manual action should be recorded.",
+                verification_evidence_ids=(evidence_id,),
+            )
+
+        rejected_decision = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase21-manual-fallback-rejected-001",
+                action_request_id=pending_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(pending_request.target_scope),
+                payload_hash=pending_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=20),
+                lifecycle_state="rejected",
+            )
+        )
+        rejected_request = service.persist_record(
+            replace(
+                pending_request,
+                approval_decision_id=rejected_decision.approval_decision_id,
+                lifecycle_state="rejected",
+            )
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "manual fallback requires an approved action review in a live post-approval state",
+        ):
+            service.record_action_review_manual_fallback(
+                action_request_id=rejected_request.action_request_id,
+                fallback_at=reviewed_at + timedelta(minutes=25),
+                fallback_actor_identity="analyst-001",
+                authority_boundary="approved_human_fallback",
+                reason="Rejected approvals must not write fallback visibility.",
+                action_taken="No manual action should be recorded.",
+                verification_evidence_ids=(evidence_id,),
+            )
+
+        current_action_review = service.inspect_case_detail(promoted_case.case_id).current_action_review
+        self.assertNotIn(
+            "manual_fallback",
+            current_action_review["runtime_visibility"] or {},
+        )
+
+    def test_escalation_visibility_requires_recorded_note_and_preserves_recorded_state(self) -> None:
+        _store, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep escalation visibility record-driven.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Escalate the reviewed request if waiting is unsafe.",
+            escalation_reason="The pending review cannot wait for the next shift.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-phase21-escalation-state-001",
+        )
+
+        initial_review = service.inspect_case_detail(promoted_case.case_id).current_action_review
+        self.assertNotIn("escalation_notes", initial_review["runtime_visibility"] or {})
+
+        service.record_action_review_escalation_note(
+            action_request_id=action_request.action_request_id,
+            escalated_at=reviewed_at + timedelta(minutes=10),
+            escalated_by_identity="analyst-009",
+            escalated_to="on-call-manager-001",
+            note="Pending review escalated before any approval decision existed.",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase21-escalation-state-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=20),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+
+        runtime_visibility = service.inspect_case_detail(promoted_case.case_id).current_action_review[
+            "runtime_visibility"
+        ]
+        self.assertEqual(runtime_visibility["escalation_notes"]["review_state"], "pending")
+        self.assertEqual(
+            runtime_visibility["escalation_notes"]["escalated_by_identity"],
+            "analyst-009",
         )
 
     def test_service_phase21_restore_drill_can_run_standalone_after_restore(

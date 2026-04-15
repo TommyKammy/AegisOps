@@ -602,9 +602,18 @@ def build_handler_class(
             if request_path == "/operator/record-action-review-escalation-note":
                 try:
                     payload = read_json_request_body(self)
+                    if getattr(principal, "access_path", "") == "reviewed_reverse_proxy":
+                        self._require_matching_identity(
+                            principal.identity,
+                            require_json_string(payload, "escalated_by_identity"),
+                        )
                     context_record = service.record_action_review_escalation_note(
                         action_request_id=require_json_string(payload, "action_request_id"),
                         escalated_at=require_json_datetime(payload, "escalated_at"),
+                        escalated_by_identity=require_json_string(
+                            payload,
+                            "escalated_by_identity",
+                        ),
                         escalated_to=require_json_string(payload, "escalated_to"),
                         note=require_json_string(payload, "note"),
                     )
@@ -617,8 +626,8 @@ def build_handler_class(
                         },
                     )
                     return
-                except (LookupError, ValueError) as exc:
-                    self._write_lookup_or_bad_request(exc)
+                except (LookupError, PermissionError, ValueError) as exc:
+                    self._write_permission_or_bad_request(exc)
                     return
                 self._write_json(HTTPStatus.OK, json_ready(context_record))
                 return
