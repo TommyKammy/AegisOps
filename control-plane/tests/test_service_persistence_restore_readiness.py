@@ -151,7 +151,11 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         )
         matched = ReconciliationRecord(
             reconciliation_id="reconciliation-001",
-            subject_linkage={"alert_ids": ("alert-001",), "finding_ids": ("finding-001",)},
+            subject_linkage={
+                "alert_ids": ("alert-001",),
+                "finding_ids": ("finding-001",),
+                "latest_native_payload": {"secret": "keep-in-store"},
+            },
             alert_id="alert-001",
             finding_id="finding-001",
             analytic_signal_id="signal-001",
@@ -172,6 +176,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
                 "finding_ids": ("finding-001",),
                 "execution_surface_types": ("automation_substrate",),
                 "execution_surface_ids": ("n8n",),
+                "latest_native_payload": {"secret": "keep-in-store"},
             },
             alert_id="alert-001",
             finding_id="finding-001",
@@ -209,6 +214,17 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             tuple(record["reconciliation_id"] for record in status_view.records),
             ("reconciliation-001", "reconciliation-002"),
         )
+        self.assertNotIn(
+            "latest_native_payload",
+            status_view.records[0]["subject_linkage"],
+        )
+        self.assertNotIn(
+            "latest_native_payload",
+            status_view.records[1]["subject_linkage"],
+        )
+        stored_latest = service.get_record(type(stale), "reconciliation-002")
+        self.assertIsNotNone(stored_latest)
+        self.assertIn("latest_native_payload", stored_latest.subject_linkage)
 
     def test_service_phase21_backup_restore_and_restore_drill_preserve_record_chain(
         self,

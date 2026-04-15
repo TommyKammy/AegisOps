@@ -1315,7 +1315,9 @@ class AegisOpsControlPlaneService:
             latest_compared_at=latest_compared_at,
             by_lifecycle_state=by_lifecycle_state,
             by_ingest_disposition=by_ingest_disposition,
-            records=tuple(_record_to_dict(record) for record in records),
+            records=tuple(
+                _redacted_reconciliation_payload(record) for record in records
+            ),
         )
 
     def describe_startup_status(self) -> StartupStatusSnapshot:
