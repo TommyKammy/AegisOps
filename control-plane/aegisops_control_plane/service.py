@@ -1704,7 +1704,7 @@ class AegisOpsControlPlaneService:
         reviewed_context: Mapping[str, object],
         review_state: str,
     ) -> dict[str, object] | None:
-        if review_state in {"completed", "failed", "expired", "rejected", "superseded", "canceled"}:
+        if review_state in {"completed", "failed", "canceled"}:
             return None
         handoff = reviewed_context.get("handoff")
         triage = reviewed_context.get("triage")
