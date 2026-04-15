@@ -3872,6 +3872,63 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(queue_payload["total_records"], 1)
         self.assertIsNone(queue_payload["records"][0]["current_action_review"]["runtime_visibility"])
 
+    def test_cli_inspect_case_detail_keeps_after_hours_handoff_visible_for_non_executed_review_states(
+        self,
+    ) -> None:
+        _, service, promoted_case, evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        seeded = self._seed_action_review_states_for_case(
+            service,
+            promoted_case,
+            reviewed_at,
+            evidence_id,
+        )
+        service.record_case_handoff(
+            case_id=promoted_case.case_id,
+            handoff_at=reviewed_at + timedelta(hours=8),
+            handoff_owner="analyst-visibility-001",
+            handoff_note="Keep non-executed review states explicit for the next analyst handoff.",
+            follow_up_evidence_ids=(evidence_id,),
+        )
+        service.record_case_disposition(
+            case_id=promoted_case.case_id,
+            disposition="business_hours_handoff",
+            rationale="Expired, rejected, and superseded reviewed requests must remain visibly handed off.",
+            recorded_at=reviewed_at + timedelta(hours=8),
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-case-detail", "--case-id", promoted_case.case_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        reviews_by_id = {
+            review["action_request_id"]: review for review in payload["action_reviews"]
+        }
+
+        for action_request in (
+            seeded["expired_request"],
+            seeded["rejected_request"],
+            seeded["superseded_request"],
+        ):
+            visibility = (
+                reviews_by_id[action_request.action_request_id]["runtime_visibility"] or {}
+            )
+            self.assertEqual(
+                visibility["after_hours_handoff"]["handoff_owner"],
+                "analyst-visibility-001",
+            )
+            self.assertEqual(
+                visibility["after_hours_handoff"]["disposition"],
+                "business_hours_handoff",
+            )
+            self.assertEqual(
+                visibility["after_hours_handoff"]["rationale"],
+                "Expired, rejected, and superseded reviewed requests must remain visibly handed off.",
+            )
+
     def test_cli_inspect_alert_detail_renders_alert_scoped_runtime_visibility(
         self,
     ) -> None:

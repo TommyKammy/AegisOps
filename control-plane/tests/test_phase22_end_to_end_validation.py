@@ -136,21 +136,24 @@ class Phase22EndToEndValidationTests(unittest.TestCase):
             ],
             seeded["replacement_request"].action_request_id,
         )
-        self.assertIsNone(
-            action_reviews_by_id[seeded["rejected_request"].action_request_id][
-                "runtime_visibility"
-            ]
-        )
-        self.assertIsNone(
-            action_reviews_by_id[seeded["expired_request"].action_request_id][
-                "runtime_visibility"
-            ]
-        )
-        self.assertIsNone(
-            action_reviews_by_id[seeded["superseded_request"].action_request_id][
-                "runtime_visibility"
-            ]
-        )
+        for request_key in ("rejected_request", "expired_request", "superseded_request"):
+            runtime_visibility = (
+                action_reviews_by_id[seeded[request_key].action_request_id]["runtime_visibility"]
+                or {}
+            )
+            self.assertEqual(
+                runtime_visibility["after_hours_handoff"]["handoff_owner"],
+                "analyst-phase22-002",
+            )
+            self.assertEqual(
+                runtime_visibility["after_hours_handoff"]["disposition"],
+                "business_hours_handoff",
+            )
+            self.assertEqual(
+                runtime_visibility["after_hours_handoff"]["rationale"],
+                "Keep the unresolved reviewed action visible for the next operator review window.",
+            )
+            self.assertNotIn("manual_fallback", runtime_visibility)
 
         unresolved_review = action_reviews_by_id[unresolved_request.action_request_id]
         self.assertEqual(unresolved_review["review_state"], "unresolved")
