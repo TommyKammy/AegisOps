@@ -222,7 +222,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             "latest_native_payload",
             status_view.records[1]["subject_linkage"],
         )
-        stored_latest = service.get_record(ReconciliationRecord, "reconciliation-002")
+        stored_latest = service.get_record(type(stale), "reconciliation-002")
         self.assertIsNotNone(stored_latest)
         self.assertIn("latest_native_payload", stored_latest.subject_linkage)
 
