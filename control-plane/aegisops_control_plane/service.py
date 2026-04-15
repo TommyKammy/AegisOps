@@ -1576,6 +1576,7 @@ class AegisOpsControlPlaneService:
             action_request=action_request,
             approval_decision=approval_decision,
             review_state=review_state,
+            record_index=record_index,
         )
 
         return {
@@ -1650,6 +1651,7 @@ class AegisOpsControlPlaneService:
         action_request: ActionRequestRecord,
         approval_decision: ApprovalDecisionRecord | None,
         review_state: str,
+        record_index: _ActionReviewRecordIndex | None = None,
     ) -> dict[str, object] | None:
         case = (
             self._store.get(CaseRecord, action_request.case_id)
@@ -1662,6 +1664,10 @@ class AegisOpsControlPlaneService:
         if not isinstance(reviewed_context, Mapping):
             return None
 
+        allow_unscoped_action_visibility = self._case_has_single_review_bound_action_request(
+            action_request.case_id,
+            record_index=record_index,
+        )
         visibility: dict[str, object] = {}
         after_hours_handoff = self._action_review_after_hours_handoff_visibility(
             reviewed_context=reviewed_context,
@@ -1673,6 +1679,7 @@ class AegisOpsControlPlaneService:
             reviewed_context=reviewed_context,
             action_request=action_request,
             approval_decision=approval_decision,
+            allow_unscoped_context=allow_unscoped_action_visibility,
         )
         if manual_fallback is not None:
             visibility["manual_fallback"] = manual_fallback
@@ -1682,6 +1689,7 @@ class AegisOpsControlPlaneService:
             action_request=action_request,
             approval_decision=approval_decision,
             review_state=review_state,
+            allow_unscoped_context=allow_unscoped_action_visibility,
         )
         if escalation_notes is not None:
             visibility["escalation_notes"] = escalation_notes
@@ -1712,12 +1720,16 @@ class AegisOpsControlPlaneService:
         if isinstance(triage, Mapping):
             for source_key, target_key in (
                 ("disposition", "disposition"),
-                ("rationale", "rationale"),
                 ("recorded_at", "recorded_at"),
             ):
                 value = triage.get(source_key)
                 if value is not None:
                     visibility[target_key] = value
+            rationale = triage.get("closure_rationale")
+            if rationale is None:
+                rationale = triage.get("rationale")
+            if rationale is not None:
+                visibility["rationale"] = rationale
         return visibility or None
 
     @staticmethod
@@ -1726,19 +1738,30 @@ class AegisOpsControlPlaneService:
         reviewed_context: Mapping[str, object],
         action_request: ActionRequestRecord,
         approval_decision: ApprovalDecisionRecord | None,
+        allow_unscoped_context: bool,
     ) -> dict[str, object] | None:
         manual_fallback = reviewed_context.get("manual_fallback")
         if not isinstance(manual_fallback, Mapping):
             return None
 
-        visibility: dict[str, object] = {
-            "action_request_id": action_request.action_request_id,
-            "approval_decision_id": (
-                approval_decision.approval_decision_id
-                if approval_decision is not None
-                else action_request.approval_decision_id
-            ),
-        }
+        approval_decision_id = (
+            approval_decision.approval_decision_id
+            if approval_decision is not None
+            else action_request.approval_decision_id
+        )
+        if not AegisOpsControlPlaneService._action_review_context_matches_lineage(
+            visibility_context=manual_fallback,
+            action_request_id=action_request.action_request_id,
+            approval_decision_id=approval_decision_id,
+            allow_unscoped_context=allow_unscoped_context,
+        ):
+            return None
+
+        visibility: dict[str, object] = {}
+        for source_key in ("action_request_id", "approval_decision_id"):
+            value = manual_fallback.get(source_key)
+            if value is not None:
+                visibility[source_key] = value
         for source_key, target_key in (
             ("fallback_at", "fallback_at"),
             ("performed_at", "fallback_at"),
@@ -1763,6 +1786,7 @@ class AegisOpsControlPlaneService:
         action_request: ActionRequestRecord,
         approval_decision: ApprovalDecisionRecord | None,
         review_state: str,
+        allow_unscoped_context: bool,
     ) -> dict[str, object] | None:
         requested_payload = action_request.requested_payload
         escalation_context = reviewed_context.get("escalation")
@@ -1771,13 +1795,14 @@ class AegisOpsControlPlaneService:
         ):
             return None
 
+        approval_decision_id = (
+            approval_decision.approval_decision_id
+            if approval_decision is not None
+            else action_request.approval_decision_id
+        )
         visibility: dict[str, object] = {
             "action_request_id": action_request.action_request_id,
-            "approval_decision_id": (
-                approval_decision.approval_decision_id
-                if approval_decision is not None
-                else action_request.approval_decision_id
-            ),
+            "approval_decision_id": approval_decision_id,
             "requester_identity": action_request.requester_identity,
             "review_state": review_state,
         }
@@ -1785,6 +1810,13 @@ class AegisOpsControlPlaneService:
         if escalation_reason is not None:
             visibility["escalation_reason"] = escalation_reason
         if isinstance(escalation_context, Mapping):
+            if not AegisOpsControlPlaneService._action_review_context_matches_lineage(
+                visibility_context=escalation_context,
+                action_request_id=action_request.action_request_id,
+                approval_decision_id=approval_decision_id,
+                allow_unscoped_context=allow_unscoped_context,
+            ):
+                return visibility if escalation_reason is not None else None
             for source_key, target_key in (
                 ("escalated_at", "escalated_at"),
                 ("escalated_to", "escalated_to"),
@@ -1794,6 +1826,57 @@ class AegisOpsControlPlaneService:
                 if value is not None:
                     visibility[target_key] = value
         return visibility
+
+    @staticmethod
+    def _action_review_context_matches_lineage(
+        *,
+        visibility_context: Mapping[str, object],
+        action_request_id: str,
+        approval_decision_id: str | None,
+        allow_unscoped_context: bool,
+    ) -> bool:
+        scoped_action_request_id = visibility_context.get("action_request_id")
+        scoped_approval_decision_id = visibility_context.get("approval_decision_id")
+
+        if scoped_action_request_id is None:
+            if scoped_approval_decision_id is not None:
+                return (
+                    approval_decision_id is not None
+                    and scoped_approval_decision_id == approval_decision_id
+                )
+            return allow_unscoped_context
+
+        if scoped_action_request_id != action_request_id:
+            return False
+        if scoped_approval_decision_id is not None:
+            return (
+                approval_decision_id is not None
+                and scoped_approval_decision_id == approval_decision_id
+            )
+        return True
+
+    def _case_has_single_review_bound_action_request(
+        self,
+        case_id: str | None,
+        *,
+        record_index: _ActionReviewRecordIndex | None = None,
+    ) -> bool:
+        if case_id is None:
+            return False
+        if record_index is not None:
+            matching_requests = record_index.requests_by_case_id.get(case_id, ())
+        else:
+            matching_requests = tuple(
+                record
+                for record in self._store.list(ActionRequestRecord)
+                if record.case_id == case_id
+            )
+        review_bound_count = sum(
+            1
+            for record in matching_requests
+            if self._action_request_is_review_bound(record)
+        )
+        return review_bound_count == 1
 
     def _action_review_approval_decision(
         self,

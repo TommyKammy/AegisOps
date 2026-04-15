@@ -666,23 +666,27 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                 lifecycle_state="unresolved",
             )
         )
+        promoted_case = service.record_case_handoff(
+            case_id=promoted_case.case_id,
+            handoff_at=reviewed_at + timedelta(hours=8),
+            handoff_owner="analyst-002",
+            handoff_note="Resume the unresolved approval review at next business-hours open.",
+            follow_up_evidence_ids=promoted_case.evidence_ids,
+        )
+        promoted_case = service.record_case_disposition(
+            case_id=promoted_case.case_id,
+            disposition="business_hours_handoff",
+            rationale="Keep the unresolved action visible for the next analyst handoff.",
+            recorded_at=reviewed_at + timedelta(hours=8),
+        )
         service.persist_record(
             replace(
                 promoted_case,
                 reviewed_context={
                     **dict(promoted_case.reviewed_context),
-                    "handoff": {
-                        "handoff_at": (reviewed_at + timedelta(hours=8)).isoformat(),
-                        "handoff_owner": "analyst-002",
-                        "note": "Resume the unresolved approval review at next business-hours open.",
-                        "follow_up_evidence_ids": promoted_case.evidence_ids,
-                    },
-                    "triage": {
-                        "disposition": "business_hours_handoff",
-                        "rationale": "Keep the unresolved action visible for the next analyst handoff.",
-                        "recorded_at": (reviewed_at + timedelta(hours=8)).isoformat(),
-                    },
                     "manual_fallback": {
+                        "action_request_id": action_request.action_request_id,
+                        "approval_decision_id": approval.approval_decision_id,
                         "fallback_at": (reviewed_at + timedelta(minutes=45)).isoformat(),
                         "fallback_actor_identity": "analyst-003",
                         "authority_boundary": "approved_human_fallback",
@@ -692,6 +696,8 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                         "residual_uncertainty": "Awaiting written owner acknowledgement.",
                     },
                     "escalation": {
+                        "action_request_id": action_request.action_request_id,
+                        "approval_decision_id": approval.approval_decision_id,
                         "escalated_at": (reviewed_at + timedelta(minutes=15)).isoformat(),
                         "escalated_to": "on-call-manager-001",
                         "note": "On-call manager notified because the unresolved action could not be left unattended.",
@@ -742,6 +748,12 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                         "after_hours_handoff"
                     ]["handoff_owner"],
                     "analyst-002",
+                )
+                self.assertEqual(
+                    queue_payload["records"][0]["current_action_review"]["runtime_visibility"][
+                        "after_hours_handoff"
+                    ]["rationale"],
+                    "Keep the unresolved action visible for the next analyst handoff.",
                 )
                 self.assertEqual(
                     case_payload["current_action_review"]["runtime_visibility"][
