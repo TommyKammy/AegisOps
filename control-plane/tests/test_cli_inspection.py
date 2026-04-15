@@ -969,7 +969,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         service.persist_record(
             ReconciliationRecord(
                 reconciliation_id="reconciliation-http-001",
-                subject_linkage={"alert_ids": ("alert-http-001",)},
+                subject_linkage={
+                    "alert_ids": ("alert-http-001",),
+                    "latest_native_payload": {"secret": "keep-in-store"},
+                },
                 alert_id="alert-http-001",
                 finding_id="finding-http-001",
                 analytic_signal_id="signal-http-001",
@@ -1030,6 +1033,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 self.assertEqual(records_payload["record_family"], "alert")
                 self.assertEqual(records_payload["records"][0]["alert_id"], "alert-http-001")
                 self.assertEqual(status_payload["by_ingest_disposition"], {"created": 1})
+                self.assertNotIn(
+                    "latest_native_payload",
+                    status_payload["records"][0]["subject_linkage"],
+                )
             finally:
                 if servers:
                     servers[0].shutdown()
@@ -2020,7 +2027,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         service.persist_record(
             ReconciliationRecord(
                 reconciliation_id="reconciliation-001",
-                subject_linkage={"alert_ids": ("alert-001",)},
+                subject_linkage={
+                    "alert_ids": ("alert-001",),
+                    "latest_native_payload": {"secret": "keep-in-store"},
+                },
                 alert_id="alert-001",
                 finding_id="finding-001",
                 analytic_signal_id="signal-001",
@@ -2081,6 +2091,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(
             status_payload["latest_compared_at"],
             "2026-04-05T12:00:00+00:00",
+        )
+        self.assertNotIn(
+            "latest_native_payload",
+            status_payload["records"][0]["subject_linkage"],
         )
 
     def test_cli_renders_wazuh_business_hours_analyst_queue_view(self) -> None:
