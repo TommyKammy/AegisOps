@@ -570,6 +570,95 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             current_action_review["runtime_visibility"] or {},
         )
 
+    def test_manual_fallback_rejects_unrelated_alert_scoped_evidence(self) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep alert-scoped fallback evidence linked to the correct alert.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Record the approved alert-scoped fallback without borrowing other alerts' evidence.",
+            escalation_reason="The approved alert-scoped follow-up cannot wait for the next shift.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-phase21-alert-scoped-fallback-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase21-alert-scoped-fallback-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        action_request = service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                case_id=None,
+                lifecycle_state="unresolved",
+            )
+        )
+
+        unrelated_admission = service.ingest_finding_alert(
+            finding_id="finding-phase21-alert-scoped-fallback-unrelated-001",
+            analytic_signal_id="signal-phase21-alert-scoped-fallback-unrelated-001",
+            substrate_detection_record_id=(
+                "substrate-detection-phase21-alert-scoped-fallback-unrelated-001"
+            ),
+            correlation_key="claim:asset-phase21-alert-scoped-fallback-unrelated-001:synthetic",
+            first_seen_at=reviewed_at + timedelta(minutes=1),
+            last_seen_at=reviewed_at + timedelta(minutes=1),
+            reviewed_context={
+                "asset": {"asset_id": "asset-phase21-alert-scoped-fallback-unrelated-001"},
+                "identity": {
+                    "identity_id": "principal-phase21-alert-scoped-fallback-unrelated-001"
+                },
+                "source": {
+                    "source_family": "synthetic_review_fixture",
+                    "admission_kind": "synthetic",
+                },
+            },
+        )
+        unrelated_evidence_id = "evidence-phase21-alert-scoped-fallback-unrelated-001"
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id=unrelated_evidence_id,
+                source_record_id=unrelated_admission.alert.finding_id,
+                alert_id=unrelated_admission.alert.alert_id,
+                case_id=None,
+                source_system="synthetic",
+                collector_identity="collector://synthetic/fixture",
+                acquired_at=reviewed_at + timedelta(minutes=1),
+                derivation_relationship="finding_alert",
+                lifecycle_state="collected",
+            )
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            f"verification_evidence_ids contains evidence {unrelated_evidence_id!r} that is not linked to alert {promoted_case.alert_id!r}",
+        ):
+            service.record_action_review_manual_fallback(
+                action_request_id=action_request.action_request_id,
+                fallback_at=reviewed_at + timedelta(minutes=15),
+                fallback_actor_identity="analyst-001",
+                authority_boundary="approved_human_fallback",
+                reason="Only evidence from the same alert or a real shared case should be allowed.",
+                action_taken="No manual fallback should be recorded with unrelated evidence.",
+                verification_evidence_ids=(evidence_id, unrelated_evidence_id),
+            )
+
     def test_escalation_visibility_requires_recorded_note_and_preserves_recorded_state(self) -> None:
         _store, service, promoted_case, _evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()

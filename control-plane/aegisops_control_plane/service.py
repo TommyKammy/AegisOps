@@ -4888,7 +4888,9 @@ class AegisOpsControlPlaneService:
             evidence = self._store.get(EvidenceRecord, evidence_id)
             if evidence is None:
                 raise LookupError(f"Missing evidence {evidence_id!r}")
-            if evidence.alert_id != alert.alert_id and evidence.case_id != alert.case_id:
+            shares_alert = evidence.alert_id == alert.alert_id
+            shares_case = alert.case_id is not None and evidence.case_id == alert.case_id
+            if not shares_alert and not shares_case:
                 raise ValueError(
                     f"{field_name} contains evidence {evidence_id!r} that is not "
                     f"linked to alert {alert.alert_id!r}"

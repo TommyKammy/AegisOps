@@ -728,12 +728,6 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                     )
                     return json.loads(response.read().decode("utf-8"))
 
-                queue_payload = json.loads(
-                    request.urlopen(  # noqa: S310
-                        f"{base_url}/inspect-analyst-queue",
-                        timeout=2,
-                    ).read().decode("utf-8")
-                )
                 post_json(
                     "/operator/record-action-review-manual-fallback",
                     {
@@ -756,6 +750,12 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                         "escalated_to": "on-call-manager-001",
                         "note": "On-call manager notified because the unresolved action could not be left unattended.",
                     },
+                )
+                queue_payload = json.loads(
+                    request.urlopen(  # noqa: S310
+                        f"{base_url}/inspect-analyst-queue",
+                        timeout=2,
+                    ).read().decode("utf-8")
                 )
                 case_payload = json.loads(
                     request.urlopen(  # noqa: S310
@@ -800,6 +800,96 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                     ]["escalated_by_identity"],
                     "analyst-001",
                 )
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(timeout=2)
+
+    def test_reviewed_runtime_path_returns_not_found_for_missing_runtime_visibility_records(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret=REVIEWED_SHARED_SECRET,
+                wazuh_ingest_reverse_proxy_secret=REVIEWED_PROXY_SECRET,
+            ),
+            store=store,
+        )
+
+        service.ingest_wazuh_alert(
+            raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
+            authorization_header=f"Bearer {REVIEWED_SHARED_SECRET}",
+            forwarded_proto="https",
+            reverse_proxy_secret_header=REVIEWED_PROXY_SECRET,
+            peer_addr="127.0.0.1",
+        )
+
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service
+        ):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+                base_url = f"http://127.0.0.1:{servers[0].server_port}"
+
+                for path, payload in (
+                    (
+                        "/operator/record-action-review-manual-fallback",
+                        {
+                            "action_request_id": "missing-action-request-id",
+                            "fallback_at": datetime.now(timezone.utc).isoformat(),
+                            "fallback_actor_identity": "analyst-001",
+                            "authority_boundary": "approved_human_fallback",
+                            "reason": "Missing requests should produce the operator not-found envelope.",
+                            "action_taken": "No fallback should be recorded.",
+                            "verification_evidence_ids": [],
+                        },
+                    ),
+                    (
+                        "/operator/record-action-review-escalation-note",
+                        {
+                            "action_request_id": "missing-action-request-id",
+                            "escalated_at": datetime.now(timezone.utc).isoformat(),
+                            "escalated_by_identity": "analyst-001",
+                            "escalated_to": "on-call-manager-001",
+                            "note": "Missing requests should produce the operator not-found envelope.",
+                        },
+                    ),
+                ):
+                    with self.subTest(path=path):
+                        with self.assertRaises(error.HTTPError) as exc_info:
+                            request.urlopen(  # noqa: S310
+                                request.Request(  # noqa: S310
+                                    f"{base_url}{path}",
+                                    data=json.dumps(payload).encode("utf-8"),
+                                    headers={"Content-Type": "application/json"},
+                                    method="POST",
+                                ),
+                                timeout=2,
+                            )
+                        self.assertEqual(exc_info.exception.code, 404)
+                        error_payload = json.loads(exc_info.exception.read().decode("utf-8"))
+                        self.assertEqual(error_payload["error"], "not_found")
             finally:
                 if servers:
                     servers[0].shutdown()
