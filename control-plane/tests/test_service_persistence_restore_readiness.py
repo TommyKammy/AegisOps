@@ -760,6 +760,12 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
                 verification_evidence_ids=(evidence_id, unrelated_evidence_id),
             )
 
+        current_action_review = service.inspect_case_detail(promoted_case.case_id).current_action_review
+        self.assertNotIn(
+            "manual_fallback",
+            current_action_review["runtime_visibility"] or {},
+        )
+
     def test_escalation_visibility_requires_recorded_note_and_preserves_recorded_state(self) -> None:
         _store, service, promoted_case, _evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
