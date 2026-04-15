@@ -13,6 +13,7 @@ automation_doc="${repo_root}/docs/automation-substrate-contract.md"
 response_doc="${repo_root}/docs/response-action-safety-model.md"
 business_hours_doc="${repo_root}/docs/secops-business-hours-operating-model.md"
 architecture_doc="${repo_root}/docs/architecture.md"
+end_to_end_test="${repo_root}/control-plane/tests/test_phase22_end_to_end_validation.py"
 docs_test="${repo_root}/control-plane/tests/test_phase22_operator_trust_boundary_docs.py"
 validation_test="${repo_root}/control-plane/tests/test_phase22_operator_trust_boundary_validation.py"
 workflow_path="${repo_root}/.github/workflows/ci.yml"
@@ -47,6 +48,7 @@ require_file "${automation_doc}" "Missing automation substrate contract doc"
 require_file "${response_doc}" "Missing response action safety model doc"
 require_file "${business_hours_doc}" "Missing business-hours operating model doc"
 require_file "${architecture_doc}" "Missing architecture overview doc"
+require_file "${end_to_end_test}" "Missing Phase 22 end-to-end validation unittest"
 require_file "${docs_test}" "Missing Phase 22 doc unittest"
 require_file "${validation_test}" "Missing Phase 22 validation unittest"
 require_file "${workflow_path}" "Missing CI workflow"
@@ -111,6 +113,7 @@ required_artifacts=(
   "docs/response-action-safety-model.md"
   "docs/secops-business-hours-operating-model.md"
   "docs/architecture.md"
+  "control-plane/tests/test_phase22_end_to_end_validation.py"
   "control-plane/tests/test_phase22_operator_trust_boundary_docs.py"
   "control-plane/tests/test_phase22_operator_trust_boundary_validation.py"
   "scripts/verify-phase-22-operator-trust-boundary.sh"
@@ -123,7 +126,10 @@ for artifact in "${required_artifacts[@]}"; do
   require_fixed_line "${validation_doc}" "- \`${artifact}\`"
 done
 
-require_fixed_line "${validation_doc}" '- Verification commands: `python3 -m unittest control-plane.tests.test_phase22_operator_trust_boundary_docs control-plane.tests.test_phase22_operator_trust_boundary_validation`, `bash scripts/verify-phase-22-operator-trust-boundary.sh`, `bash scripts/test-verify-phase-22-operator-trust-boundary.sh`, `bash scripts/test-verify-ci-phase-22-workflow-coverage.sh`'
+require_fixed_line "${validation_doc}" '- Verification commands: `python3 -m unittest control-plane.tests.test_phase22_end_to_end_validation control-plane.tests.test_phase22_operator_trust_boundary_docs control-plane.tests.test_phase22_operator_trust_boundary_validation`, `bash scripts/verify-phase-22-operator-trust-boundary.sh`, `bash scripts/test-verify-phase-22-operator-trust-boundary.sh`, `bash scripts/test-verify-ci-phase-22-workflow-coverage.sh`'
+require_fixed_line "${end_to_end_test}" 'class Phase22EndToEndValidationTests(unittest.TestCase):'
+require_fixed_line "${end_to_end_test}" '    def test_phase22_end_to_end_keeps_review_states_and_visibility_explicit(self) -> None:'
+require_fixed_line "${end_to_end_test}" '    def test_phase22_end_to_end_keeps_success_claims_non_authoritative_until_reconciliation_matches('
 require_fixed_line "${docs_test}" 'class Phase22OperatorTrustBoundaryDocsTests(unittest.TestCase):'
 require_fixed_line "${docs_test}" '    def test_phase22_design_doc_exists(self) -> None:'
 require_fixed_line "${docs_test}" '    def test_phase22_design_doc_defines_state_semantics_mismatch_taxonomy_and_boundary('
@@ -131,7 +137,7 @@ require_fixed_line "${validation_test}" 'class Phase22OperatorTrustBoundaryValid
 require_fixed_line "${validation_test}" '    def test_phase22_validation_artifacts_cross_reference_governing_contracts(self) -> None:'
 require_fixed_line "${workflow_path}" '      - name: Run Phase 22 operator trust boundary validation'
 require_fixed_line "${workflow_path}" '          bash scripts/verify-phase-22-operator-trust-boundary.sh'
-require_fixed_line "${workflow_path}" '          python3 -m unittest control-plane.tests.test_phase22_operator_trust_boundary_docs control-plane.tests.test_phase22_operator_trust_boundary_validation'
+require_fixed_line "${workflow_path}" '          python3 -m unittest control-plane.tests.test_phase22_end_to_end_validation control-plane.tests.test_phase22_operator_trust_boundary_docs control-plane.tests.test_phase22_operator_trust_boundary_validation'
 require_fixed_line "${workflow_path}" '      - name: Run Phase 22 workflow coverage guard'
 require_fixed_line "${workflow_path}" '        run: bash scripts/test-verify-ci-phase-22-workflow-coverage.sh'
 require_fixed_line "${workflow_path}" '          bash scripts/test-verify-phase-22-operator-trust-boundary.sh'

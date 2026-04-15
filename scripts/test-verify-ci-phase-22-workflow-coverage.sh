@@ -14,7 +14,7 @@ required_tests=(
 )
 
 required_runtime_commands=(
-  "python3 -m unittest control-plane.tests.test_phase22_operator_trust_boundary_docs control-plane.tests.test_phase22_operator_trust_boundary_validation"
+  "python3 -m unittest control-plane.tests.test_phase22_end_to_end_validation control-plane.tests.test_phase22_operator_trust_boundary_docs control-plane.tests.test_phase22_operator_trust_boundary_validation"
 )
 
 self_guard_step_name="Run Phase 22 workflow coverage guard"
