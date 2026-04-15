@@ -593,8 +593,8 @@ def build_handler_class(
                         },
                     )
                     return
-                except (LookupError, ValueError) as exc:
-                    self._write_lookup_or_bad_request(exc)
+                except (LookupError, PermissionError, ValueError) as exc:
+                    self._write_permission_or_bad_request(exc)
                     return
                 self._write_json(HTTPStatus.OK, json_ready(context_record))
                 return

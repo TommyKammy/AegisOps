@@ -3618,6 +3618,44 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             [
                 "record-action-review-manual-fallback",
                 "--action-request-id",
+                first_request.action_request_id,
+                "--fallback-at",
+                (reviewed_at + timedelta(minutes=30)).isoformat(),
+                "--fallback-actor-identity",
+                "analyst-002",
+                "--authority-boundary",
+                "approved_human_fallback",
+                "--reason",
+                "The first reviewed automation path was unavailable after approval.",
+                "--action-taken",
+                "Used the approved manual procedure for the first request only.",
+                "--verification-evidence-id",
+                evidence_id,
+            ],
+            stdout=io.StringIO(),
+            service=service,
+        )
+        main.main(
+            [
+                "record-action-review-escalation-note",
+                "--action-request-id",
+                first_request.action_request_id,
+                "--escalated-at",
+                (reviewed_at + timedelta(minutes=12)).isoformat(),
+                "--escalated-by-identity",
+                "analyst-002",
+                "--escalated-to",
+                "on-call-manager-000",
+                "--note",
+                "On-call manager notified because the first open approval could not be left unattended.",
+            ],
+            stdout=io.StringIO(),
+            service=service,
+        )
+        main.main(
+            [
+                "record-action-review-manual-fallback",
+                "--action-request-id",
                 second_request.action_request_id,
                 "--fallback-at",
                 (reviewed_at + timedelta(minutes=45)).isoformat(),
@@ -3673,10 +3711,29 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             first_review["runtime_visibility"]["after_hours_handoff"]["rationale"],
             "Keep the unresolved action review explicit for the next analyst.",
         )
-        self.assertNotIn("manual_fallback", first_review["runtime_visibility"])
-        self.assertNotIn(
-            "escalation_notes",
-            first_review["runtime_visibility"],
+        self.assertEqual(
+            first_review["runtime_visibility"]["manual_fallback"]["action_request_id"],
+            first_request.action_request_id,
+        )
+        self.assertEqual(
+            first_review["runtime_visibility"]["manual_fallback"]["approval_decision_id"],
+            first_approval.approval_decision_id,
+        )
+        self.assertEqual(
+            first_review["runtime_visibility"]["manual_fallback"]["fallback_actor_identity"],
+            "analyst-002",
+        )
+        self.assertEqual(
+            first_review["runtime_visibility"]["escalation_notes"]["escalation_reason"],
+            "First reviewed request remains approval-bound.",
+        )
+        self.assertEqual(
+            first_review["runtime_visibility"]["escalation_notes"]["escalated_to"],
+            "on-call-manager-000",
+        )
+        self.assertEqual(
+            first_review["runtime_visibility"]["escalation_notes"]["escalated_by_identity"],
+            "analyst-002",
         )
         self.assertEqual(
             second_review["runtime_visibility"]["manual_fallback"]["action_request_id"],

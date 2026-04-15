@@ -1759,7 +1759,11 @@ class AegisOpsControlPlaneService:
         review_state: str,
         allow_unscoped_context: bool,
     ) -> dict[str, object] | None:
-        manual_fallback = reviewed_context.get("manual_fallback")
+        manual_fallback = AegisOpsControlPlaneService._action_review_visibility_entry(
+            reviewed_context=reviewed_context,
+            action_request_id=action_request.action_request_id,
+            context_key="manual_fallback",
+        )
         if not isinstance(manual_fallback, Mapping):
             return None
 
@@ -1814,7 +1818,11 @@ class AegisOpsControlPlaneService:
         allow_unscoped_context: bool,
     ) -> dict[str, object] | None:
         requested_payload = action_request.requested_payload
-        escalation_context = reviewed_context.get("escalation")
+        escalation_context = AegisOpsControlPlaneService._action_review_visibility_entry(
+            reviewed_context=reviewed_context,
+            action_request_id=action_request.action_request_id,
+            context_key="escalation",
+        )
         if not isinstance(escalation_context, Mapping):
             return None
 
@@ -1883,6 +1891,40 @@ class AegisOpsControlPlaneService:
                 and scoped_approval_decision_id == approval_decision_id
             )
         return True
+
+    @staticmethod
+    def _action_review_visibility_entry(
+        *,
+        reviewed_context: Mapping[str, object],
+        action_request_id: str,
+        context_key: str,
+    ) -> Mapping[str, object] | None:
+        action_review_visibility = reviewed_context.get("action_review_visibility")
+        if isinstance(action_review_visibility, Mapping):
+            scoped_visibility = action_review_visibility.get(action_request_id)
+            if isinstance(scoped_visibility, Mapping):
+                scoped_entry = scoped_visibility.get(context_key)
+                if isinstance(scoped_entry, Mapping):
+                    return scoped_entry
+        legacy_entry = reviewed_context.get(context_key)
+        if isinstance(legacy_entry, Mapping):
+            return legacy_entry
+        return None
+
+    @staticmethod
+    def _action_review_visibility_update(
+        *,
+        action_request_id: str,
+        context_key: str,
+        context_value: Mapping[str, object],
+    ) -> dict[str, object]:
+        return {
+            "action_review_visibility": {
+                action_request_id: {
+                    context_key: dict(context_value),
+                }
+            }
+        }
 
     def _case_has_single_review_bound_action_request(
         self,
@@ -3009,7 +3051,11 @@ class AegisOpsControlPlaneService:
                 )
             return self._persist_action_review_visibility_context_record(
                 context_record=context_record,
-                reviewed_context_update={"manual_fallback": manual_fallback_context},
+                reviewed_context_update=self._action_review_visibility_update(
+                    action_request_id=action_request.action_request_id,
+                    context_key="manual_fallback",
+                    context_value=manual_fallback_context,
+                ),
             )
 
     def record_action_review_escalation_note(
@@ -3057,7 +3103,11 @@ class AegisOpsControlPlaneService:
                 )
             return self._persist_action_review_visibility_context_record(
                 context_record=context_record,
-                reviewed_context_update={"escalation": escalation_context},
+                reviewed_context_update=self._action_review_visibility_update(
+                    action_request_id=action_request.action_request_id,
+                    context_key="escalation",
+                    context_value=escalation_context,
+                ),
             )
 
     def inspect_advisory_output(
