@@ -51,6 +51,13 @@ from .reviewed_slice_policy import (
 
 RecordT = TypeVar("RecordT", bound=ControlPlaneRecord)
 
+_AFTER_HOURS_HANDOFF_TRIAGE_DISPOSITIONS = frozenset(
+    {
+        "business_hours_handoff",
+        "awaiting_business_hours_review",
+    }
+)
+
 
 class ControlPlaneStore(Protocol):
     dsn: str
@@ -1701,7 +1708,11 @@ class AegisOpsControlPlaneService:
             return None
         handoff = reviewed_context.get("handoff")
         triage = reviewed_context.get("triage")
-        if not isinstance(handoff, Mapping) and not isinstance(triage, Mapping):
+        triage_disposition = triage.get("disposition") if isinstance(triage, Mapping) else None
+        if (
+            not isinstance(handoff, Mapping)
+            and triage_disposition not in _AFTER_HOURS_HANDOFF_TRIAGE_DISPOSITIONS
+        ):
             return None
 
         visibility: dict[str, object] = {}
@@ -1715,7 +1726,10 @@ class AegisOpsControlPlaneService:
                 value = handoff.get(source_key)
                 if value is not None:
                     visibility[target_key] = value
-        if isinstance(triage, Mapping):
+        if (
+            isinstance(triage, Mapping)
+            and triage_disposition in _AFTER_HOURS_HANDOFF_TRIAGE_DISPOSITIONS
+        ):
             for source_key, target_key in (
                 ("disposition", "disposition"),
                 ("recorded_at", "recorded_at"),
