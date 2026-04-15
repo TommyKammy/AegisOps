@@ -1653,15 +1653,8 @@ class AegisOpsControlPlaneService:
         review_state: str,
         record_index: _ActionReviewRecordIndex | None = None,
     ) -> dict[str, object] | None:
-        case = (
-            self._store.get(CaseRecord, action_request.case_id)
-            if action_request.case_id is not None
-            else None
-        )
-        if case is None:
-            return None
-        reviewed_context = case.reviewed_context
-        if not isinstance(reviewed_context, Mapping):
+        reviewed_context = self._action_review_visibility_context(action_request)
+        if reviewed_context is None:
             return None
 
         allow_unscoped_action_visibility = self._case_has_single_review_bound_action_request(
@@ -1671,6 +1664,7 @@ class AegisOpsControlPlaneService:
         visibility: dict[str, object] = {}
         after_hours_handoff = self._action_review_after_hours_handoff_visibility(
             reviewed_context=reviewed_context,
+            review_state=review_state,
         )
         if after_hours_handoff is not None:
             visibility["after_hours_handoff"] = after_hours_handoff
@@ -1700,7 +1694,10 @@ class AegisOpsControlPlaneService:
     def _action_review_after_hours_handoff_visibility(
         *,
         reviewed_context: Mapping[str, object],
+        review_state: str,
     ) -> dict[str, object] | None:
+        if review_state in {"completed", "failed", "expired", "rejected", "superseded", "canceled"}:
+            return None
         handoff = reviewed_context.get("handoff")
         triage = reviewed_context.get("triage")
         if not isinstance(handoff, Mapping) and not isinstance(triage, Mapping):
@@ -1731,6 +1728,26 @@ class AegisOpsControlPlaneService:
             if rationale is not None:
                 visibility["rationale"] = rationale
         return visibility or None
+
+    def _action_review_visibility_context(
+        self,
+        action_request: ActionRequestRecord,
+    ) -> Mapping[str, object] | None:
+        case = (
+            self._store.get(CaseRecord, action_request.case_id)
+            if action_request.case_id is not None
+            else None
+        )
+        alert = (
+            self._store.get(AlertRecord, action_request.alert_id)
+            if action_request.alert_id is not None
+            else None
+        )
+        if case is not None and isinstance(case.reviewed_context, Mapping):
+            return case.reviewed_context
+        if alert is not None and isinstance(alert.reviewed_context, Mapping):
+            return alert.reviewed_context
+        return None
 
     @staticmethod
     def _action_review_manual_fallback_visibility(
@@ -2897,6 +2914,107 @@ class AegisOpsControlPlaneService:
                         )
                     )
         return updated_case
+
+    def record_action_review_manual_fallback(
+        self,
+        *,
+        action_request_id: str,
+        fallback_at: datetime,
+        fallback_actor_identity: str,
+        authority_boundary: str,
+        reason: str,
+        action_taken: str,
+        verification_evidence_ids: tuple[str, ...] = (),
+        residual_uncertainty: str | None = None,
+    ) -> CaseRecord | AlertRecord:
+        fallback_at = self._require_aware_datetime(fallback_at, "fallback_at")
+        fallback_actor_identity = self._require_non_empty_string(
+            fallback_actor_identity,
+            "fallback_actor_identity",
+        )
+        authority_boundary = self._require_non_empty_string(
+            authority_boundary,
+            "authority_boundary",
+        )
+        reason = self._require_non_empty_string(reason, "reason")
+        action_taken = self._require_non_empty_string(action_taken, "action_taken")
+        normalized_evidence_ids = self._normalize_linked_record_ids(
+            verification_evidence_ids,
+            "verification_evidence_ids",
+        )
+        normalized_residual_uncertainty = self._normalize_optional_string(
+            residual_uncertainty,
+            "residual_uncertainty",
+        )
+        with self._store.transaction():
+            action_request = self._require_review_bound_action_request(action_request_id)
+            context_record = self._require_action_review_visibility_context_record(
+                action_request
+            )
+            if isinstance(context_record, CaseRecord):
+                self._validate_case_evidence_linkage(
+                    case=context_record,
+                    evidence_ids=normalized_evidence_ids,
+                    field_name="verification_evidence_ids",
+                )
+            else:
+                self._validate_alert_evidence_linkage(
+                    alert=context_record,
+                    evidence_ids=normalized_evidence_ids,
+                    field_name="verification_evidence_ids",
+                )
+            manual_fallback_context: dict[str, object] = {
+                "action_request_id": action_request.action_request_id,
+                "fallback_at": fallback_at.isoformat(),
+                "fallback_actor_identity": fallback_actor_identity,
+                "authority_boundary": authority_boundary,
+                "reason": reason,
+                "action_taken": action_taken,
+                "verification_evidence_ids": normalized_evidence_ids,
+            }
+            if action_request.approval_decision_id is not None:
+                manual_fallback_context["approval_decision_id"] = (
+                    action_request.approval_decision_id
+                )
+            if normalized_residual_uncertainty is not None:
+                manual_fallback_context["residual_uncertainty"] = (
+                    normalized_residual_uncertainty
+                )
+            return self._persist_action_review_visibility_context_record(
+                context_record=context_record,
+                reviewed_context_update={"manual_fallback": manual_fallback_context},
+            )
+
+    def record_action_review_escalation_note(
+        self,
+        *,
+        action_request_id: str,
+        escalated_at: datetime,
+        escalated_to: str,
+        note: str,
+    ) -> CaseRecord | AlertRecord:
+        escalated_at = self._require_aware_datetime(escalated_at, "escalated_at")
+        escalated_to = self._require_non_empty_string(escalated_to, "escalated_to")
+        note = self._require_non_empty_string(note, "note")
+        with self._store.transaction():
+            action_request = self._require_review_bound_action_request(action_request_id)
+            context_record = self._require_action_review_visibility_context_record(
+                action_request
+            )
+            escalation_context: dict[str, object] = {
+                "action_request_id": action_request.action_request_id,
+                "escalated_at": escalated_at.isoformat(),
+                "escalated_to": escalated_to,
+                "note": note,
+            }
+            if action_request.approval_decision_id is not None:
+                escalation_context["approval_decision_id"] = (
+                    action_request.approval_decision_id
+                )
+            return self._persist_action_review_visibility_context_record(
+                context_record=context_record,
+                reviewed_context_update={"escalation": escalation_context},
+            )
 
     def inspect_advisory_output(
         self,
@@ -4494,6 +4612,75 @@ class AegisOpsControlPlaneService:
             raise LookupError(f"Missing case {case_id!r}")
         return case
 
+    def _require_action_request_record(self, action_request_id: str) -> ActionRequestRecord:
+        action_request_id = self._require_non_empty_string(
+            action_request_id,
+            "action_request_id",
+        )
+        action_request = self._store.get(ActionRequestRecord, action_request_id)
+        if action_request is None:
+            raise LookupError(f"Missing action request {action_request_id!r}")
+        return action_request
+
+    def _require_review_bound_action_request(
+        self,
+        action_request_id: str,
+    ) -> ActionRequestRecord:
+        action_request = self._require_action_request_record(action_request_id)
+        if not self._action_request_is_review_bound(action_request):
+            raise ValueError(
+                "action_request_id must reference a reviewed action request"
+            )
+        return action_request
+
+    def _require_action_review_visibility_context_record(
+        self,
+        action_request: ActionRequestRecord,
+    ) -> CaseRecord | AlertRecord:
+        if action_request.case_id is not None:
+            return self._require_reviewed_operator_case(action_request.case_id)
+        if action_request.alert_id is None:
+            raise ValueError(
+                "reviewed action request must be linked to a case or alert before "
+                "recording runtime visibility"
+            )
+        alert = self._store.get(AlertRecord, action_request.alert_id)
+        if alert is None:
+            raise LookupError(f"Missing alert {action_request.alert_id!r}")
+        return alert
+
+    def _persist_action_review_visibility_context_record(
+        self,
+        *,
+        context_record: CaseRecord | AlertRecord,
+        reviewed_context_update: Mapping[str, object],
+    ) -> CaseRecord | AlertRecord:
+        updated_reviewed_context = _merge_reviewed_context(
+            context_record.reviewed_context,
+            reviewed_context_update,
+        )
+        if isinstance(context_record, CaseRecord):
+            return self.persist_record(
+                CaseRecord(
+                    case_id=context_record.case_id,
+                    alert_id=context_record.alert_id,
+                    finding_id=context_record.finding_id,
+                    evidence_ids=context_record.evidence_ids,
+                    lifecycle_state=context_record.lifecycle_state,
+                    reviewed_context=updated_reviewed_context,
+                )
+            )
+        return self.persist_record(
+            AlertRecord(
+                alert_id=context_record.alert_id,
+                finding_id=context_record.finding_id,
+                analytic_signal_id=context_record.analytic_signal_id,
+                case_id=context_record.case_id,
+                lifecycle_state=context_record.lifecycle_state,
+                reviewed_context=updated_reviewed_context,
+            )
+        )
+
     def _require_reviewed_operator_case(self, case_id: str) -> CaseRecord:
         return self._reviewed_slice_policy.require_operator_case(case_id)
 
@@ -4594,6 +4781,23 @@ class AegisOpsControlPlaneService:
                 raise ValueError(
                     f"{field_name} contains evidence {evidence_id!r} that is not "
                     f"linked to case {case.case_id!r} or its source alert"
+                )
+
+    def _validate_alert_evidence_linkage(
+        self,
+        *,
+        alert: AlertRecord,
+        evidence_ids: tuple[str, ...],
+        field_name: str,
+    ) -> None:
+        for evidence_id in evidence_ids:
+            evidence = self._store.get(EvidenceRecord, evidence_id)
+            if evidence is None:
+                raise LookupError(f"Missing evidence {evidence_id!r}")
+            if evidence.alert_id != alert.alert_id and evidence.case_id != alert.case_id:
+                raise ValueError(
+                    f"{field_name} contains evidence {evidence_id!r} that is not "
+                    f"linked to alert {alert.alert_id!r}"
                 )
 
     def _observations_for_case(self, case_id: str) -> tuple[ObservationRecord, ...]:

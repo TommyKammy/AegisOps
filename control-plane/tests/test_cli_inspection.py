@@ -3440,31 +3440,45 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             rationale="The reviewed action remains unresolved and must stay visible for the next analyst.",
             recorded_at=reviewed_at + timedelta(hours=8),
         )
-        service.persist_record(
-            replace(
-                promoted_case,
-                reviewed_context={
-                    **dict(promoted_case.reviewed_context),
-                    "manual_fallback": {
-                        "action_request_id": request.action_request_id,
-                        "approval_decision_id": approval.approval_decision_id,
-                        "fallback_at": (reviewed_at + timedelta(minutes=45)).isoformat(),
-                        "fallback_actor_identity": "analyst-003",
-                        "authority_boundary": "approved_human_fallback",
-                        "reason": "The reviewed automation path was unavailable after approval.",
-                        "action_taken": "Notified the accountable repository owner using the approved manual procedure.",
-                        "verification_evidence_ids": (evidence_id,),
-                        "residual_uncertainty": "Awaiting written owner acknowledgement in the next review window.",
-                    },
-                    "escalation": {
-                        "action_request_id": request.action_request_id,
-                        "approval_decision_id": approval.approval_decision_id,
-                        "escalated_at": (reviewed_at + timedelta(minutes=15)).isoformat(),
-                        "escalated_to": "on-call-manager-001",
-                        "note": "On-call manager notified because the open approval could not be left unattended.",
-                    },
-                },
-            )
+        fallback_stdout = io.StringIO()
+        main.main(
+            [
+                "record-action-review-manual-fallback",
+                "--action-request-id",
+                request.action_request_id,
+                "--fallback-at",
+                (reviewed_at + timedelta(minutes=45)).isoformat(),
+                "--fallback-actor-identity",
+                "analyst-003",
+                "--authority-boundary",
+                "approved_human_fallback",
+                "--reason",
+                "The reviewed automation path was unavailable after approval.",
+                "--action-taken",
+                "Notified the accountable repository owner using the approved manual procedure.",
+                "--verification-evidence-id",
+                evidence_id,
+                "--residual-uncertainty",
+                "Awaiting written owner acknowledgement in the next review window.",
+            ],
+            stdout=fallback_stdout,
+            service=service,
+        )
+        escalation_stdout = io.StringIO()
+        main.main(
+            [
+                "record-action-review-escalation-note",
+                "--action-request-id",
+                request.action_request_id,
+                "--escalated-at",
+                (reviewed_at + timedelta(minutes=15)).isoformat(),
+                "--escalated-to",
+                "on-call-manager-001",
+                "--note",
+                "On-call manager notified because the open approval could not be left unattended.",
+            ],
+            stdout=escalation_stdout,
+            service=service,
         )
 
         stdout = io.StringIO()
@@ -3594,31 +3608,43 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             rationale="Keep the unresolved action review explicit for the next analyst.",
             recorded_at=reviewed_at + timedelta(hours=8),
         )
-        service.persist_record(
-            replace(
-                promoted_case,
-                reviewed_context={
-                    **dict(promoted_case.reviewed_context),
-                    "manual_fallback": {
-                        "action_request_id": second_request.action_request_id,
-                        "approval_decision_id": second_approval.approval_decision_id,
-                        "fallback_at": (reviewed_at + timedelta(minutes=45)).isoformat(),
-                        "fallback_actor_identity": "analyst-003",
-                        "authority_boundary": "approved_human_fallback",
-                        "reason": "The reviewed automation path was unavailable after approval.",
-                        "action_taken": "Used the approved manual procedure for the second request only.",
-                        "verification_evidence_ids": (evidence_id,),
-                        "residual_uncertainty": "Awaiting written owner acknowledgement in the next review window.",
-                    },
-                    "escalation": {
-                        "action_request_id": second_request.action_request_id,
-                        "approval_decision_id": second_approval.approval_decision_id,
-                        "escalated_at": (reviewed_at + timedelta(minutes=15)).isoformat(),
-                        "escalated_to": "on-call-manager-001",
-                        "note": "On-call manager notified because the second open approval could not be left unattended.",
-                    },
-                },
-            )
+        main.main(
+            [
+                "record-action-review-manual-fallback",
+                "--action-request-id",
+                second_request.action_request_id,
+                "--fallback-at",
+                (reviewed_at + timedelta(minutes=45)).isoformat(),
+                "--fallback-actor-identity",
+                "analyst-003",
+                "--authority-boundary",
+                "approved_human_fallback",
+                "--reason",
+                "The reviewed automation path was unavailable after approval.",
+                "--action-taken",
+                "Used the approved manual procedure for the second request only.",
+                "--verification-evidence-id",
+                evidence_id,
+                "--residual-uncertainty",
+                "Awaiting written owner acknowledgement in the next review window.",
+            ],
+            stdout=io.StringIO(),
+            service=service,
+        )
+        main.main(
+            [
+                "record-action-review-escalation-note",
+                "--action-request-id",
+                second_request.action_request_id,
+                "--escalated-at",
+                (reviewed_at + timedelta(minutes=15)).isoformat(),
+                "--escalated-to",
+                "on-call-manager-001",
+                "--note",
+                "On-call manager notified because the second open approval could not be left unattended.",
+            ],
+            stdout=io.StringIO(),
+            service=service,
         )
 
         stdout = io.StringIO()
@@ -3662,6 +3688,159 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         )
         self.assertEqual(
             second_review["runtime_visibility"]["escalation_notes"]["escalated_to"],
+            "on-call-manager-001",
+        )
+
+    def test_cli_inspect_case_detail_hides_after_hours_handoff_for_completed_review_history(
+        self,
+    ) -> None:
+        _, service, promoted_case, evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep only live unresolved review chains marked as after-hours handoff.",
+        )
+        completed_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the completed reviewed change.",
+            escalation_reason="Completed reviewed request should not inherit the active handoff note.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-cli-handoff-history-001",
+        )
+        unresolved_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-002",
+            message_intent="Notify the accountable repository owner about the unresolved reviewed change.",
+            escalation_reason="Unresolved reviewed request should retain the active handoff note.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-cli-handoff-history-002",
+        )
+        service.persist_record(
+            replace(
+                completed_request,
+                lifecycle_state="completed",
+                requested_at=completed_request.requested_at - timedelta(minutes=10),
+            )
+        )
+        service.persist_record(replace(unresolved_request, lifecycle_state="unresolved"))
+        service.record_case_handoff(
+            case_id=promoted_case.case_id,
+            handoff_at=reviewed_at + timedelta(hours=8),
+            handoff_owner="analyst-002",
+            handoff_note="Resume the unresolved approval review at next business-hours open.",
+            follow_up_evidence_ids=(evidence_id,),
+        )
+        service.record_case_disposition(
+            case_id=promoted_case.case_id,
+            disposition="business_hours_handoff",
+            rationale="Keep only the unresolved reviewed action visible for the next analyst handoff.",
+            recorded_at=reviewed_at + timedelta(hours=8),
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-case-detail", "--case-id", promoted_case.case_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        reviews_by_id = {
+            review["action_request_id"]: review for review in payload["action_reviews"]
+        }
+        self.assertNotIn(
+            "after_hours_handoff",
+            reviews_by_id[completed_request.action_request_id]["runtime_visibility"],
+        )
+        self.assertEqual(
+            reviews_by_id[unresolved_request.action_request_id]["runtime_visibility"][
+                "after_hours_handoff"
+            ]["handoff_owner"],
+            "analyst-002",
+        )
+
+    def test_cli_inspect_alert_detail_renders_alert_scoped_runtime_visibility(
+        self,
+    ) -> None:
+        _, service, promoted_case, evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep alert-scoped follow-up explicit when case linkage is absent.",
+        )
+        request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="The alert-scoped reviewed request cannot wait for the next shift.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-cli-alert-visibility-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-cli-alert-visibility-001",
+                action_request_id=request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(request.target_scope),
+                payload_hash=request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=request.expires_at,
+            )
+        )
+        request = service.persist_record(
+            replace(
+                request,
+                approval_decision_id=approval.approval_decision_id,
+                case_id=None,
+                lifecycle_state="unresolved",
+            )
+        )
+        service.record_action_review_manual_fallback(
+            action_request_id=request.action_request_id,
+            fallback_at=reviewed_at + timedelta(minutes=45),
+            fallback_actor_identity="analyst-003",
+            authority_boundary="approved_human_fallback",
+            reason="The reviewed automation path was unavailable after approval.",
+            action_taken="Used the approved manual procedure while the alert remained unlinked to casework.",
+            verification_evidence_ids=(evidence_id,),
+            residual_uncertainty="Awaiting written owner acknowledgement in the next review window.",
+        )
+        service.record_action_review_escalation_note(
+            action_request_id=request.action_request_id,
+            escalated_at=reviewed_at + timedelta(minutes=15),
+            escalated_to="on-call-manager-001",
+            note="On-call manager notified because the alert-scoped approval could not be left unattended.",
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-alert-detail", "--alert-id", promoted_case.alert_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        review = payload["current_action_review"]
+        self.assertEqual(review["action_request_id"], request.action_request_id)
+        self.assertEqual(review["review_state"], "unresolved")
+        self.assertEqual(
+            review["runtime_visibility"]["manual_fallback"]["approval_decision_id"],
+            approval.approval_decision_id,
+        )
+        self.assertEqual(
+            review["runtime_visibility"]["manual_fallback"]["fallback_actor_identity"],
+            "analyst-003",
+        )
+        self.assertEqual(
+            review["runtime_visibility"]["escalation_notes"]["escalated_to"],
             "on-call-manager-001",
         )
 

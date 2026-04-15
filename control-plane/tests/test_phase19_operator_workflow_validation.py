@@ -580,6 +580,18 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                 self.assertTrue(servers, "expected test HTTP server to start")
                 base_url = f"http://127.0.0.1:{servers[0].server_port}"
 
+                def post_json(path: str, payload: dict[str, object]) -> dict[str, object]:
+                    response = request.urlopen(  # noqa: S310
+                        request.Request(  # noqa: S310
+                            f"{base_url}{path}",
+                            data=json.dumps(payload).encode("utf-8"),
+                            headers={"Content-Type": "application/json"},
+                            method="POST",
+                        ),
+                        timeout=2,
+                    )
+                    return json.loads(response.read().decode("utf-8"))
+
                 queue_payload = json.loads(
                     request.urlopen(  # noqa: S310
                         f"{base_url}/inspect-analyst-queue",
@@ -679,32 +691,6 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
             rationale="Keep the unresolved action visible for the next analyst handoff.",
             recorded_at=reviewed_at + timedelta(hours=8),
         )
-        service.persist_record(
-            replace(
-                promoted_case,
-                reviewed_context={
-                    **dict(promoted_case.reviewed_context),
-                    "manual_fallback": {
-                        "action_request_id": action_request.action_request_id,
-                        "approval_decision_id": approval.approval_decision_id,
-                        "fallback_at": (reviewed_at + timedelta(minutes=45)).isoformat(),
-                        "fallback_actor_identity": "analyst-003",
-                        "authority_boundary": "approved_human_fallback",
-                        "reason": "The reviewed automation path was unavailable after approval.",
-                        "action_taken": "Notified the accountable repository owner using the approved manual procedure.",
-                        "verification_evidence_ids": promoted_case.evidence_ids,
-                        "residual_uncertainty": "Awaiting written owner acknowledgement.",
-                    },
-                    "escalation": {
-                        "action_request_id": action_request.action_request_id,
-                        "approval_decision_id": approval.approval_decision_id,
-                        "escalated_at": (reviewed_at + timedelta(minutes=15)).isoformat(),
-                        "escalated_to": "on-call-manager-001",
-                        "note": "On-call manager notified because the unresolved action could not be left unattended.",
-                    },
-                },
-            )
-        )
 
         servers: list[main.ThreadingHTTPServer] = []
 
@@ -730,11 +716,45 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                 self.assertTrue(servers, "expected test HTTP server to start")
                 base_url = f"http://127.0.0.1:{servers[0].server_port}"
 
+                def post_json(path: str, payload: dict[str, object]) -> dict[str, object]:
+                    response = request.urlopen(  # noqa: S310
+                        request.Request(  # noqa: S310
+                            f"{base_url}{path}",
+                            data=json.dumps(payload).encode("utf-8"),
+                            headers={"Content-Type": "application/json"},
+                            method="POST",
+                        ),
+                        timeout=2,
+                    )
+                    return json.loads(response.read().decode("utf-8"))
+
                 queue_payload = json.loads(
                     request.urlopen(  # noqa: S310
                         f"{base_url}/inspect-analyst-queue",
                         timeout=2,
                     ).read().decode("utf-8")
+                )
+                post_json(
+                    "/operator/record-action-review-manual-fallback",
+                    {
+                        "action_request_id": action_request.action_request_id,
+                        "fallback_at": (reviewed_at + timedelta(minutes=45)).isoformat(),
+                        "fallback_actor_identity": "analyst-001",
+                        "authority_boundary": "approved_human_fallback",
+                        "reason": "The reviewed automation path was unavailable after approval.",
+                        "action_taken": "Notified the accountable repository owner using the approved manual procedure.",
+                        "verification_evidence_ids": list(promoted_case.evidence_ids),
+                        "residual_uncertainty": "Awaiting written owner acknowledgement.",
+                    },
+                )
+                post_json(
+                    "/operator/record-action-review-escalation-note",
+                    {
+                        "action_request_id": action_request.action_request_id,
+                        "escalated_at": (reviewed_at + timedelta(minutes=15)).isoformat(),
+                        "escalated_to": "on-call-manager-001",
+                        "note": "On-call manager notified because the unresolved action could not be left unattended.",
+                    },
                 )
                 case_payload = json.loads(
                     request.urlopen(  # noqa: S310
@@ -759,7 +779,7 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                     case_payload["current_action_review"]["runtime_visibility"][
                         "manual_fallback"
                     ]["fallback_actor_identity"],
-                    "analyst-003",
+                    "analyst-001",
                 )
                 self.assertEqual(
                     case_payload["current_action_review"]["runtime_visibility"][

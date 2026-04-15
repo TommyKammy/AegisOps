@@ -555,6 +555,74 @@ def build_handler_class(
                 self._write_json(HTTPStatus.OK, json_ready(case_record))
                 return
 
+            if request_path == "/operator/record-action-review-manual-fallback":
+                try:
+                    payload = read_json_request_body(self)
+                    if getattr(principal, "access_path", "") == "reviewed_reverse_proxy":
+                        self._require_matching_identity(
+                            principal.identity,
+                            require_json_string(payload, "fallback_actor_identity"),
+                        )
+                    context_record = service.record_action_review_manual_fallback(
+                        action_request_id=require_json_string(payload, "action_request_id"),
+                        fallback_at=require_json_datetime(payload, "fallback_at"),
+                        fallback_actor_identity=require_json_string(
+                            payload,
+                            "fallback_actor_identity",
+                        ),
+                        authority_boundary=require_json_string(
+                            payload,
+                            "authority_boundary",
+                        ),
+                        reason=require_json_string(payload, "reason"),
+                        action_taken=require_json_string(payload, "action_taken"),
+                        verification_evidence_ids=require_json_string_sequence(
+                            payload,
+                            "verification_evidence_ids",
+                        ),
+                        residual_uncertainty=normalize_optional_string(
+                            payload.get("residual_uncertainty")
+                        ),
+                    )
+                except RequestTooLargeError as exc:
+                    self._write_json(
+                        HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                        {
+                            "error": "request_too_large",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                except (LookupError, ValueError) as exc:
+                    self._write_lookup_or_bad_request(exc)
+                    return
+                self._write_json(HTTPStatus.OK, json_ready(context_record))
+                return
+
+            if request_path == "/operator/record-action-review-escalation-note":
+                try:
+                    payload = read_json_request_body(self)
+                    context_record = service.record_action_review_escalation_note(
+                        action_request_id=require_json_string(payload, "action_request_id"),
+                        escalated_at=require_json_datetime(payload, "escalated_at"),
+                        escalated_to=require_json_string(payload, "escalated_to"),
+                        note=require_json_string(payload, "note"),
+                    )
+                except RequestTooLargeError as exc:
+                    self._write_json(
+                        HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                        {
+                            "error": "request_too_large",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                except (LookupError, ValueError) as exc:
+                    self._write_lookup_or_bad_request(exc)
+                    return
+                self._write_json(HTTPStatus.OK, json_ready(context_record))
+                return
+
             if request_path == "/operator/create-reviewed-action-request":
                 try:
                     payload = read_json_request_body(self)

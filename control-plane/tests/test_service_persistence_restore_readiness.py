@@ -432,31 +432,21 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             rationale="Keep the unresolved action visible for the next analyst handoff.",
             recorded_at=reviewed_at + timedelta(hours=8),
         )
-        service.persist_record(
-            replace(
-                promoted_case,
-                reviewed_context={
-                    **dict(promoted_case.reviewed_context),
-                    "manual_fallback": {
-                        "action_request_id": action_request.action_request_id,
-                        "approval_decision_id": approval.approval_decision_id,
-                        "fallback_at": (reviewed_at + timedelta(minutes=45)).isoformat(),
-                        "fallback_actor_identity": "analyst-003",
-                        "authority_boundary": "approved_human_fallback",
-                        "reason": "The reviewed automation path was unavailable after approval.",
-                        "action_taken": "Notified the accountable repository owner using the approved manual procedure.",
-                        "verification_evidence_ids": (evidence_id,),
-                        "residual_uncertainty": "Awaiting written owner acknowledgement.",
-                    },
-                    "escalation": {
-                        "action_request_id": action_request.action_request_id,
-                        "approval_decision_id": approval.approval_decision_id,
-                        "escalated_at": (reviewed_at + timedelta(minutes=15)).isoformat(),
-                        "escalated_to": "on-call-manager-001",
-                        "note": "On-call manager notified because the unresolved action could not be left unattended.",
-                    },
-                },
-            )
+        service.record_action_review_manual_fallback(
+            action_request_id=action_request.action_request_id,
+            fallback_at=reviewed_at + timedelta(minutes=45),
+            fallback_actor_identity="analyst-003",
+            authority_boundary="approved_human_fallback",
+            reason="The reviewed automation path was unavailable after approval.",
+            action_taken="Notified the accountable repository owner using the approved manual procedure.",
+            verification_evidence_ids=(evidence_id,),
+            residual_uncertainty="Awaiting written owner acknowledgement.",
+        )
+        service.record_action_review_escalation_note(
+            action_request_id=action_request.action_request_id,
+            escalated_at=reviewed_at + timedelta(minutes=15),
+            escalated_to="on-call-manager-001",
+            note="On-call manager notified because the unresolved action could not be left unattended.",
         )
 
         backup = service.export_authoritative_record_chain_backup()
