@@ -166,6 +166,41 @@ def build_parser() -> argparse.ArgumentParser:
     record_case_disposition.add_argument("--disposition", required=True)
     record_case_disposition.add_argument("--rationale", required=True)
     record_case_disposition.add_argument("--recorded-at", required=True)
+    record_action_review_manual_fallback = subparsers.add_parser(
+        "record-action-review-manual-fallback",
+        help="Record reviewed manual-fallback runtime visibility for one action review.",
+    )
+    record_action_review_manual_fallback.add_argument("--action-request-id", required=True)
+    record_action_review_manual_fallback.add_argument("--fallback-at", required=True)
+    record_action_review_manual_fallback.add_argument(
+        "--fallback-actor-identity",
+        required=True,
+    )
+    record_action_review_manual_fallback.add_argument("--authority-boundary", required=True)
+    record_action_review_manual_fallback.add_argument("--reason", required=True)
+    record_action_review_manual_fallback.add_argument("--action-taken", required=True)
+    record_action_review_manual_fallback.add_argument(
+        "--verification-evidence-id",
+        action="append",
+        default=[],
+        help="Verification evidence identifier to link; may be repeated.",
+    )
+    record_action_review_manual_fallback.add_argument(
+        "--residual-uncertainty",
+        help="Optional unresolved follow-up or uncertainty note.",
+    )
+    record_action_review_escalation_note = subparsers.add_parser(
+        "record-action-review-escalation-note",
+        help="Record reviewed escalation-note visibility for one action review.",
+    )
+    record_action_review_escalation_note.add_argument("--action-request-id", required=True)
+    record_action_review_escalation_note.add_argument("--escalated-at", required=True)
+    record_action_review_escalation_note.add_argument(
+        "--escalated-by-identity",
+        required=True,
+    )
+    record_action_review_escalation_note.add_argument("--escalated-to", required=True)
+    record_action_review_escalation_note.add_argument("--note", required=True)
     create_reviewed_action_request = subparsers.add_parser(
         "create-reviewed-action-request",
         help="Create an approval-bound reviewed action request from cited advisory context.",
@@ -351,6 +386,44 @@ def run_command(
                     disposition=parsed.disposition.strip(),
                     rationale=parsed.rationale.strip(),
                     recorded_at=parse_datetime_arg(parsed.recorded_at, "recorded_at"),
+                )
+            )
+        except (LookupError, ValueError) as exc:
+            _usage_error(parser, str(exc))
+    if command == "record-action-review-manual-fallback":
+        action_request_id = parsed.action_request_id.strip()
+        if not action_request_id:
+            _usage_error(parser, "action_request_id must be a non-empty string")
+        try:
+            return json_ready(
+                service.record_action_review_manual_fallback(
+                    action_request_id=action_request_id,
+                    fallback_at=parse_datetime_arg(parsed.fallback_at, "fallback_at"),
+                    fallback_actor_identity=parsed.fallback_actor_identity.strip(),
+                    authority_boundary=parsed.authority_boundary.strip(),
+                    reason=parsed.reason.strip(),
+                    action_taken=parsed.action_taken.strip(),
+                    verification_evidence_ids=tuple(
+                        evidence_id.strip()
+                        for evidence_id in parsed.verification_evidence_id
+                    ),
+                    residual_uncertainty=normalize_optional_string(parsed.residual_uncertainty),
+                )
+            )
+        except (LookupError, ValueError) as exc:
+            _usage_error(parser, str(exc))
+    if command == "record-action-review-escalation-note":
+        action_request_id = parsed.action_request_id.strip()
+        if not action_request_id:
+            _usage_error(parser, "action_request_id must be a non-empty string")
+        try:
+            return json_ready(
+                service.record_action_review_escalation_note(
+                    action_request_id=action_request_id,
+                    escalated_at=parse_datetime_arg(parsed.escalated_at, "escalated_at"),
+                    escalated_by_identity=parsed.escalated_by_identity.strip(),
+                    escalated_to=parsed.escalated_to.strip(),
+                    note=parsed.note.strip(),
                 )
             )
         except (LookupError, ValueError) as exc:

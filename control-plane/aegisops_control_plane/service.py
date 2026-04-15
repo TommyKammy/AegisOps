@@ -51,6 +51,13 @@ from .reviewed_slice_policy import (
 
 RecordT = TypeVar("RecordT", bound=ControlPlaneRecord)
 
+_AFTER_HOURS_HANDOFF_TRIAGE_DISPOSITIONS = frozenset(
+    {
+        "business_hours_handoff",
+        "awaiting_business_hours_review",
+    }
+)
+
 
 class ControlPlaneStore(Protocol):
     dsn: str
@@ -1572,6 +1579,12 @@ class AegisOpsControlPlaneService:
             record_index=record_index,
         )
         requested_payload = dict(action_request.requested_payload)
+        runtime_visibility = self._action_review_runtime_visibility(
+            action_request=action_request,
+            approval_decision=approval_decision,
+            review_state=review_state,
+            record_index=record_index,
+        )
 
         return {
             "review_state": review_state,
@@ -1596,6 +1609,7 @@ class AegisOpsControlPlaneService:
             "recipient_identity": requested_payload.get("recipient_identity"),
             "message_intent": requested_payload.get("message_intent"),
             "escalation_reason": requested_payload.get("escalation_reason"),
+            "runtime_visibility": runtime_visibility,
             "execution_surface_type": (
                 action_execution.execution_surface_type
                 if action_execution is not None
@@ -1637,6 +1651,318 @@ class AegisOpsControlPlaneService:
                 else None
             ),
         }
+
+    def _action_review_runtime_visibility(
+        self,
+        *,
+        action_request: ActionRequestRecord,
+        approval_decision: ApprovalDecisionRecord | None,
+        review_state: str,
+        record_index: _ActionReviewRecordIndex | None = None,
+    ) -> dict[str, object] | None:
+        reviewed_context = self._action_review_visibility_context(action_request)
+        if reviewed_context is None:
+            return None
+
+        allow_unscoped_action_visibility = self._case_has_single_review_bound_action_request(
+            action_request.case_id,
+            record_index=record_index,
+        )
+        visibility: dict[str, object] = {}
+        after_hours_handoff = self._action_review_after_hours_handoff_visibility(
+            reviewed_context=reviewed_context,
+            review_state=review_state,
+        )
+        if after_hours_handoff is not None:
+            visibility["after_hours_handoff"] = after_hours_handoff
+
+        manual_fallback = self._action_review_manual_fallback_visibility(
+            reviewed_context=reviewed_context,
+            action_request=action_request,
+            approval_decision=approval_decision,
+            review_state=review_state,
+            allow_unscoped_context=allow_unscoped_action_visibility,
+        )
+        if manual_fallback is not None:
+            visibility["manual_fallback"] = manual_fallback
+
+        escalation_notes = self._action_review_escalation_visibility(
+            reviewed_context=reviewed_context,
+            action_request=action_request,
+            approval_decision=approval_decision,
+            review_state=review_state,
+            allow_unscoped_context=allow_unscoped_action_visibility,
+        )
+        if escalation_notes is not None:
+            visibility["escalation_notes"] = escalation_notes
+
+        return visibility or None
+
+    @staticmethod
+    def _action_review_after_hours_handoff_visibility(
+        *,
+        reviewed_context: Mapping[str, object],
+        review_state: str,
+    ) -> dict[str, object] | None:
+        if review_state in {"completed", "failed", "expired", "rejected", "superseded", "canceled"}:
+            return None
+        handoff = reviewed_context.get("handoff")
+        triage = reviewed_context.get("triage")
+        triage_disposition = triage.get("disposition") if isinstance(triage, Mapping) else None
+        if (
+            not isinstance(handoff, Mapping)
+            and triage_disposition not in _AFTER_HOURS_HANDOFF_TRIAGE_DISPOSITIONS
+        ):
+            return None
+
+        visibility: dict[str, object] = {}
+        if isinstance(handoff, Mapping):
+            for source_key, target_key in (
+                ("handoff_at", "handoff_at"),
+                ("handoff_owner", "handoff_owner"),
+                ("note", "note"),
+                ("follow_up_evidence_ids", "follow_up_evidence_ids"),
+            ):
+                value = handoff.get(source_key)
+                if value is not None:
+                    visibility[target_key] = value
+        if (
+            isinstance(triage, Mapping)
+            and triage_disposition in _AFTER_HOURS_HANDOFF_TRIAGE_DISPOSITIONS
+        ):
+            for source_key, target_key in (
+                ("disposition", "disposition"),
+                ("recorded_at", "recorded_at"),
+            ):
+                value = triage.get(source_key)
+                if value is not None:
+                    visibility[target_key] = value
+            rationale = triage.get("closure_rationale")
+            if rationale is None:
+                rationale = triage.get("rationale")
+            if rationale is not None:
+                visibility["rationale"] = rationale
+        return visibility or None
+
+    def _action_review_visibility_context(
+        self,
+        action_request: ActionRequestRecord,
+    ) -> Mapping[str, object] | None:
+        case = (
+            self._store.get(CaseRecord, action_request.case_id)
+            if action_request.case_id is not None
+            else None
+        )
+        alert = (
+            self._store.get(AlertRecord, action_request.alert_id)
+            if action_request.alert_id is not None
+            else None
+        )
+        if case is not None and isinstance(case.reviewed_context, Mapping):
+            return case.reviewed_context
+        if alert is not None and isinstance(alert.reviewed_context, Mapping):
+            return alert.reviewed_context
+        return None
+
+    @staticmethod
+    def _action_review_manual_fallback_visibility(
+        *,
+        reviewed_context: Mapping[str, object],
+        action_request: ActionRequestRecord,
+        approval_decision: ApprovalDecisionRecord | None,
+        review_state: str,
+        allow_unscoped_context: bool,
+    ) -> dict[str, object] | None:
+        manual_fallback = AegisOpsControlPlaneService._action_review_visibility_entry(
+            reviewed_context=reviewed_context,
+            action_request_id=action_request.action_request_id,
+            context_key="manual_fallback",
+        )
+        if not isinstance(manual_fallback, Mapping):
+            return None
+
+        approval_decision_id = (
+            approval_decision.approval_decision_id
+            if approval_decision is not None
+            else action_request.approval_decision_id
+        )
+        if (
+            approval_decision is None
+            or approval_decision.lifecycle_state != "approved"
+            or review_state in {"pending", "rejected", "expired", "superseded"}
+        ):
+            return None
+        if not AegisOpsControlPlaneService._action_review_context_matches_lineage(
+            visibility_context=manual_fallback,
+            action_request_id=action_request.action_request_id,
+            approval_decision_id=approval_decision_id,
+            allow_unscoped_context=allow_unscoped_context,
+        ):
+            return None
+
+        visibility: dict[str, object] = {}
+        for source_key in ("action_request_id", "approval_decision_id"):
+            value = manual_fallback.get(source_key)
+            if value is not None:
+                visibility[source_key] = value
+        for source_key, target_key in (
+            ("fallback_at", "fallback_at"),
+            ("performed_at", "fallback_at"),
+            ("fallback_actor_identity", "fallback_actor_identity"),
+            ("authority_boundary", "authority_boundary"),
+            ("reason", "reason"),
+            ("action_taken", "action_taken"),
+            ("verification_evidence_ids", "verification_evidence_ids"),
+            ("residual_uncertainty", "residual_uncertainty"),
+        ):
+            value = manual_fallback.get(source_key)
+            if value is None:
+                continue
+            if source_key == "performed_at" and target_key in visibility:
+                continue
+            visibility[target_key] = value
+        return visibility
+
+    @staticmethod
+    def _action_review_escalation_visibility(
+        *,
+        reviewed_context: Mapping[str, object],
+        action_request: ActionRequestRecord,
+        approval_decision: ApprovalDecisionRecord | None,
+        review_state: str,
+        allow_unscoped_context: bool,
+    ) -> dict[str, object] | None:
+        requested_payload = action_request.requested_payload
+        escalation_context = AegisOpsControlPlaneService._action_review_visibility_entry(
+            reviewed_context=reviewed_context,
+            action_request_id=action_request.action_request_id,
+            context_key="escalation",
+        )
+        if not isinstance(escalation_context, Mapping):
+            return None
+
+        approval_decision_id = (
+            approval_decision.approval_decision_id
+            if approval_decision is not None
+            else action_request.approval_decision_id
+        )
+        if not AegisOpsControlPlaneService._action_review_context_matches_lineage(
+            visibility_context=escalation_context,
+            action_request_id=action_request.action_request_id,
+            approval_decision_id=approval_decision_id,
+            allow_unscoped_context=allow_unscoped_context,
+        ):
+            return None
+
+        recorded_review_state = escalation_context.get("review_state")
+        visibility: dict[str, object] = {
+            "action_request_id": action_request.action_request_id,
+            "approval_decision_id": approval_decision_id,
+            "requester_identity": action_request.requester_identity,
+            "review_state": (
+                recorded_review_state
+                if isinstance(recorded_review_state, str) and recorded_review_state.strip()
+                else review_state
+            ),
+        }
+        escalation_reason = requested_payload.get("escalation_reason")
+        if escalation_reason is not None:
+            visibility["escalation_reason"] = escalation_reason
+        for source_key, target_key in (
+            ("escalated_at", "escalated_at"),
+            ("escalated_to", "escalated_to"),
+            ("escalated_by_identity", "escalated_by_identity"),
+            ("note", "note"),
+        ):
+            value = escalation_context.get(source_key)
+            if value is not None:
+                visibility[target_key] = value
+        return visibility
+
+    @staticmethod
+    def _action_review_context_matches_lineage(
+        *,
+        visibility_context: Mapping[str, object],
+        action_request_id: str,
+        approval_decision_id: str | None,
+        allow_unscoped_context: bool,
+    ) -> bool:
+        scoped_action_request_id = visibility_context.get("action_request_id")
+        scoped_approval_decision_id = visibility_context.get("approval_decision_id")
+
+        if scoped_action_request_id is None:
+            if scoped_approval_decision_id is not None:
+                return (
+                    approval_decision_id is not None
+                    and scoped_approval_decision_id == approval_decision_id
+                )
+            return allow_unscoped_context
+
+        if scoped_action_request_id != action_request_id:
+            return False
+        if scoped_approval_decision_id is not None:
+            return (
+                approval_decision_id is not None
+                and scoped_approval_decision_id == approval_decision_id
+            )
+        return True
+
+    @staticmethod
+    def _action_review_visibility_entry(
+        *,
+        reviewed_context: Mapping[str, object],
+        action_request_id: str,
+        context_key: str,
+    ) -> Mapping[str, object] | None:
+        action_review_visibility = reviewed_context.get("action_review_visibility")
+        if isinstance(action_review_visibility, Mapping):
+            scoped_visibility = action_review_visibility.get(action_request_id)
+            if isinstance(scoped_visibility, Mapping):
+                scoped_entry = scoped_visibility.get(context_key)
+                if isinstance(scoped_entry, Mapping):
+                    return scoped_entry
+        legacy_entry = reviewed_context.get(context_key)
+        if isinstance(legacy_entry, Mapping):
+            return legacy_entry
+        return None
+
+    @staticmethod
+    def _action_review_visibility_update(
+        *,
+        action_request_id: str,
+        context_key: str,
+        context_value: Mapping[str, object],
+    ) -> dict[str, object]:
+        return {
+            "action_review_visibility": {
+                action_request_id: {
+                    context_key: dict(context_value),
+                }
+            }
+        }
+
+    def _case_has_single_review_bound_action_request(
+        self,
+        case_id: str | None,
+        *,
+        record_index: _ActionReviewRecordIndex | None = None,
+    ) -> bool:
+        if case_id is None:
+            return False
+        if record_index is not None:
+            matching_requests = record_index.requests_by_case_id.get(case_id, ())
+        else:
+            matching_requests = tuple(
+                record
+                for record in self._store.list(ActionRequestRecord)
+                if record.case_id == case_id
+            )
+        review_bound_count = sum(
+            1
+            for record in matching_requests
+            if self._action_request_is_review_bound(record)
+        )
+        return review_bound_count == 1
 
     def _action_review_approval_decision(
         self,
@@ -2657,6 +2983,147 @@ class AegisOpsControlPlaneService:
                         )
                     )
         return updated_case
+
+    def record_action_review_manual_fallback(
+        self,
+        *,
+        action_request_id: str,
+        fallback_at: datetime,
+        fallback_actor_identity: str,
+        authority_boundary: str,
+        reason: str,
+        action_taken: str,
+        verification_evidence_ids: tuple[str, ...] = (),
+        residual_uncertainty: str | None = None,
+    ) -> CaseRecord | AlertRecord:
+        fallback_at = self._require_aware_datetime(fallback_at, "fallback_at")
+        fallback_actor_identity = self._require_non_empty_string(
+            fallback_actor_identity,
+            "fallback_actor_identity",
+        )
+        authority_boundary = self._require_non_empty_string(
+            authority_boundary,
+            "authority_boundary",
+        )
+        reason = self._require_non_empty_string(reason, "reason")
+        action_taken = self._require_non_empty_string(action_taken, "action_taken")
+        normalized_evidence_ids = self._normalize_linked_record_ids(
+            verification_evidence_ids,
+            "verification_evidence_ids",
+        )
+        normalized_residual_uncertainty = self._normalize_optional_string(
+            residual_uncertainty,
+            "residual_uncertainty",
+        )
+        with self._store.transaction():
+            action_request = self._require_review_bound_action_request(action_request_id)
+            approval_decision = self._action_review_approval_decision(action_request)
+            approval_state = self._action_review_approval_state(
+                action_request=action_request,
+                approval_decision=approval_decision,
+            )
+            review_state = self._action_review_state(
+                action_request=action_request,
+                approval_state=approval_state,
+                action_execution=self._action_review_execution(action_request),
+            )
+            if (
+                approval_decision is None
+                or approval_decision.lifecycle_state != "approved"
+                or review_state in {"pending", "rejected", "expired", "superseded"}
+            ):
+                raise ValueError(
+                    "manual fallback requires an approved action review in a live post-approval state"
+                )
+            context_record = self._require_action_review_visibility_context_record(
+                action_request
+            )
+            if isinstance(context_record, CaseRecord):
+                self._validate_case_evidence_linkage(
+                    case=context_record,
+                    evidence_ids=normalized_evidence_ids,
+                    field_name="verification_evidence_ids",
+                )
+            else:
+                self._validate_alert_evidence_linkage(
+                    alert=context_record,
+                    evidence_ids=normalized_evidence_ids,
+                    field_name="verification_evidence_ids",
+                )
+            manual_fallback_context: dict[str, object] = {
+                "action_request_id": action_request.action_request_id,
+                "approval_decision_id": approval_decision.approval_decision_id,
+                "fallback_at": fallback_at.isoformat(),
+                "fallback_actor_identity": fallback_actor_identity,
+                "authority_boundary": authority_boundary,
+                "reason": reason,
+                "action_taken": action_taken,
+                "verification_evidence_ids": normalized_evidence_ids,
+            }
+            if normalized_residual_uncertainty is not None:
+                manual_fallback_context["residual_uncertainty"] = (
+                    normalized_residual_uncertainty
+                )
+            return self._persist_action_review_visibility_context_record(
+                context_record=context_record,
+                reviewed_context_update=self._action_review_visibility_update(
+                    action_request_id=action_request.action_request_id,
+                    context_key="manual_fallback",
+                    context_value=manual_fallback_context,
+                ),
+            )
+
+    def record_action_review_escalation_note(
+        self,
+        *,
+        action_request_id: str,
+        escalated_at: datetime,
+        escalated_by_identity: str,
+        escalated_to: str,
+        note: str,
+    ) -> CaseRecord | AlertRecord:
+        escalated_at = self._require_aware_datetime(escalated_at, "escalated_at")
+        escalated_by_identity = self._require_non_empty_string(
+            escalated_by_identity,
+            "escalated_by_identity",
+        )
+        escalated_to = self._require_non_empty_string(escalated_to, "escalated_to")
+        note = self._require_non_empty_string(note, "note")
+        with self._store.transaction():
+            action_request = self._require_review_bound_action_request(action_request_id)
+            approval_decision = self._action_review_approval_decision(action_request)
+            approval_state = self._action_review_approval_state(
+                action_request=action_request,
+                approval_decision=approval_decision,
+            )
+            review_state = self._action_review_state(
+                action_request=action_request,
+                approval_state=approval_state,
+                action_execution=self._action_review_execution(action_request),
+            )
+            context_record = self._require_action_review_visibility_context_record(
+                action_request
+            )
+            escalation_context: dict[str, object] = {
+                "action_request_id": action_request.action_request_id,
+                "escalated_at": escalated_at.isoformat(),
+                "escalated_by_identity": escalated_by_identity,
+                "escalated_to": escalated_to,
+                "note": note,
+                "review_state": review_state,
+            }
+            if approval_decision is not None:
+                escalation_context["approval_decision_id"] = (
+                    approval_decision.approval_decision_id
+                )
+            return self._persist_action_review_visibility_context_record(
+                context_record=context_record,
+                reviewed_context_update=self._action_review_visibility_update(
+                    action_request_id=action_request.action_request_id,
+                    context_key="escalation",
+                    context_value=escalation_context,
+                ),
+            )
 
     def inspect_advisory_output(
         self,
@@ -4254,6 +4721,75 @@ class AegisOpsControlPlaneService:
             raise LookupError(f"Missing case {case_id!r}")
         return case
 
+    def _require_action_request_record(self, action_request_id: str) -> ActionRequestRecord:
+        action_request_id = self._require_non_empty_string(
+            action_request_id,
+            "action_request_id",
+        )
+        action_request = self._store.get(ActionRequestRecord, action_request_id)
+        if action_request is None:
+            raise LookupError(f"Missing action request {action_request_id!r}")
+        return action_request
+
+    def _require_review_bound_action_request(
+        self,
+        action_request_id: str,
+    ) -> ActionRequestRecord:
+        action_request = self._require_action_request_record(action_request_id)
+        if not self._action_request_is_review_bound(action_request):
+            raise ValueError(
+                "action_request_id must reference a reviewed action request"
+            )
+        return action_request
+
+    def _require_action_review_visibility_context_record(
+        self,
+        action_request: ActionRequestRecord,
+    ) -> CaseRecord | AlertRecord:
+        if action_request.case_id is not None:
+            return self._require_reviewed_operator_case(action_request.case_id)
+        if action_request.alert_id is None:
+            raise ValueError(
+                "reviewed action request must be linked to a case or alert before "
+                "recording runtime visibility"
+            )
+        alert = self._store.get(AlertRecord, action_request.alert_id)
+        if alert is None:
+            raise LookupError(f"Missing alert {action_request.alert_id!r}")
+        return alert
+
+    def _persist_action_review_visibility_context_record(
+        self,
+        *,
+        context_record: CaseRecord | AlertRecord,
+        reviewed_context_update: Mapping[str, object],
+    ) -> CaseRecord | AlertRecord:
+        updated_reviewed_context = _merge_reviewed_context(
+            context_record.reviewed_context,
+            reviewed_context_update,
+        )
+        if isinstance(context_record, CaseRecord):
+            return self.persist_record(
+                CaseRecord(
+                    case_id=context_record.case_id,
+                    alert_id=context_record.alert_id,
+                    finding_id=context_record.finding_id,
+                    evidence_ids=context_record.evidence_ids,
+                    lifecycle_state=context_record.lifecycle_state,
+                    reviewed_context=updated_reviewed_context,
+                )
+            )
+        return self.persist_record(
+            AlertRecord(
+                alert_id=context_record.alert_id,
+                finding_id=context_record.finding_id,
+                analytic_signal_id=context_record.analytic_signal_id,
+                case_id=context_record.case_id,
+                lifecycle_state=context_record.lifecycle_state,
+                reviewed_context=updated_reviewed_context,
+            )
+        )
+
     def _require_reviewed_operator_case(self, case_id: str) -> CaseRecord:
         return self._reviewed_slice_policy.require_operator_case(case_id)
 
@@ -4354,6 +4890,25 @@ class AegisOpsControlPlaneService:
                 raise ValueError(
                     f"{field_name} contains evidence {evidence_id!r} that is not "
                     f"linked to case {case.case_id!r} or its source alert"
+                )
+
+    def _validate_alert_evidence_linkage(
+        self,
+        *,
+        alert: AlertRecord,
+        evidence_ids: tuple[str, ...],
+        field_name: str,
+    ) -> None:
+        for evidence_id in evidence_ids:
+            evidence = self._store.get(EvidenceRecord, evidence_id)
+            if evidence is None:
+                raise LookupError(f"Missing evidence {evidence_id!r}")
+            shares_alert = evidence.alert_id == alert.alert_id
+            shares_case = alert.case_id is not None and evidence.case_id == alert.case_id
+            if not shares_alert and not shares_case:
+                raise ValueError(
+                    f"{field_name} contains evidence {evidence_id!r} that is not "
+                    f"linked to alert {alert.alert_id!r}"
                 )
 
     def _observations_for_case(self, case_id: str) -> tuple[ObservationRecord, ...]:
