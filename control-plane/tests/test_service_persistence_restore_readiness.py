@@ -379,6 +379,119 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             restored_approval_context.linked_reconciliation_ids,
         )
 
+    def test_service_phase21_restore_preserves_handoff_and_manual_fallback_runtime_visibility(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before any approval-bound response.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Waiting until the next business-hours cycle is unsafe for this repository owner change.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-phase21-restore-visibility-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase21-restore-visibility-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+        service.persist_record(
+            replace(
+                promoted_case,
+                reviewed_context={
+                    **dict(promoted_case.reviewed_context),
+                    "handoff": {
+                        "handoff_at": (reviewed_at + timedelta(hours=8)).isoformat(),
+                        "handoff_owner": "analyst-002",
+                        "note": "Resume the unresolved approval review at next business-hours open.",
+                        "follow_up_evidence_ids": (evidence_id,),
+                    },
+                    "triage": {
+                        "disposition": "business_hours_handoff",
+                        "rationale": "Keep the unresolved action visible for the next analyst handoff.",
+                        "recorded_at": (reviewed_at + timedelta(hours=8)).isoformat(),
+                    },
+                    "manual_fallback": {
+                        "fallback_at": (reviewed_at + timedelta(minutes=45)).isoformat(),
+                        "fallback_actor_identity": "analyst-003",
+                        "authority_boundary": "approved_human_fallback",
+                        "reason": "The reviewed automation path was unavailable after approval.",
+                        "action_taken": "Notified the accountable repository owner using the approved manual procedure.",
+                        "verification_evidence_ids": (evidence_id,),
+                        "residual_uncertainty": "Awaiting written owner acknowledgement.",
+                    },
+                    "escalation": {
+                        "escalated_at": (reviewed_at + timedelta(minutes=15)).isoformat(),
+                        "escalated_to": "on-call-manager-001",
+                        "note": "On-call manager notified because the unresolved action could not be left unattended.",
+                    },
+                },
+            )
+        )
+
+        backup = service.export_authoritative_record_chain_backup()
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+            ),
+            store=restored_store,
+        )
+
+        restored_service.restore_authoritative_record_chain_backup(backup)
+        restored_case_detail = restored_service.inspect_case_detail(promoted_case.case_id)
+        runtime_visibility = restored_case_detail.current_action_review["runtime_visibility"]
+
+        self.assertEqual(
+            runtime_visibility["after_hours_handoff"]["handoff_owner"],
+            "analyst-002",
+        )
+        self.assertEqual(
+            runtime_visibility["after_hours_handoff"]["recorded_at"],
+            (reviewed_at + timedelta(hours=8)).isoformat(),
+        )
+        self.assertEqual(
+            runtime_visibility["manual_fallback"]["approval_decision_id"],
+            approval.approval_decision_id,
+        )
+        self.assertEqual(
+            runtime_visibility["manual_fallback"]["fallback_actor_identity"],
+            "analyst-003",
+        )
+        self.assertEqual(
+            runtime_visibility["escalation_notes"]["escalated_to"],
+            "on-call-manager-001",
+        )
+
     def test_service_phase21_restore_drill_can_run_standalone_after_restore(
         self,
     ) -> None:

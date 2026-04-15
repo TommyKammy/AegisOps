@@ -1572,6 +1572,11 @@ class AegisOpsControlPlaneService:
             record_index=record_index,
         )
         requested_payload = dict(action_request.requested_payload)
+        runtime_visibility = self._action_review_runtime_visibility(
+            action_request=action_request,
+            approval_decision=approval_decision,
+            review_state=review_state,
+        )
 
         return {
             "review_state": review_state,
@@ -1596,6 +1601,7 @@ class AegisOpsControlPlaneService:
             "recipient_identity": requested_payload.get("recipient_identity"),
             "message_intent": requested_payload.get("message_intent"),
             "escalation_reason": requested_payload.get("escalation_reason"),
+            "runtime_visibility": runtime_visibility,
             "execution_surface_type": (
                 action_execution.execution_surface_type
                 if action_execution is not None
@@ -1637,6 +1643,157 @@ class AegisOpsControlPlaneService:
                 else None
             ),
         }
+
+    def _action_review_runtime_visibility(
+        self,
+        *,
+        action_request: ActionRequestRecord,
+        approval_decision: ApprovalDecisionRecord | None,
+        review_state: str,
+    ) -> dict[str, object] | None:
+        case = (
+            self._store.get(CaseRecord, action_request.case_id)
+            if action_request.case_id is not None
+            else None
+        )
+        if case is None:
+            return None
+        reviewed_context = case.reviewed_context
+        if not isinstance(reviewed_context, Mapping):
+            return None
+
+        visibility: dict[str, object] = {}
+        after_hours_handoff = self._action_review_after_hours_handoff_visibility(
+            reviewed_context=reviewed_context,
+        )
+        if after_hours_handoff is not None:
+            visibility["after_hours_handoff"] = after_hours_handoff
+
+        manual_fallback = self._action_review_manual_fallback_visibility(
+            reviewed_context=reviewed_context,
+            action_request=action_request,
+            approval_decision=approval_decision,
+        )
+        if manual_fallback is not None:
+            visibility["manual_fallback"] = manual_fallback
+
+        escalation_notes = self._action_review_escalation_visibility(
+            reviewed_context=reviewed_context,
+            action_request=action_request,
+            approval_decision=approval_decision,
+            review_state=review_state,
+        )
+        if escalation_notes is not None:
+            visibility["escalation_notes"] = escalation_notes
+
+        return visibility or None
+
+    @staticmethod
+    def _action_review_after_hours_handoff_visibility(
+        *,
+        reviewed_context: Mapping[str, object],
+    ) -> dict[str, object] | None:
+        handoff = reviewed_context.get("handoff")
+        triage = reviewed_context.get("triage")
+        if not isinstance(handoff, Mapping) and not isinstance(triage, Mapping):
+            return None
+
+        visibility: dict[str, object] = {}
+        if isinstance(handoff, Mapping):
+            for source_key, target_key in (
+                ("handoff_at", "handoff_at"),
+                ("handoff_owner", "handoff_owner"),
+                ("note", "note"),
+                ("follow_up_evidence_ids", "follow_up_evidence_ids"),
+            ):
+                value = handoff.get(source_key)
+                if value is not None:
+                    visibility[target_key] = value
+        if isinstance(triage, Mapping):
+            for source_key, target_key in (
+                ("disposition", "disposition"),
+                ("rationale", "rationale"),
+                ("recorded_at", "recorded_at"),
+            ):
+                value = triage.get(source_key)
+                if value is not None:
+                    visibility[target_key] = value
+        return visibility or None
+
+    @staticmethod
+    def _action_review_manual_fallback_visibility(
+        *,
+        reviewed_context: Mapping[str, object],
+        action_request: ActionRequestRecord,
+        approval_decision: ApprovalDecisionRecord | None,
+    ) -> dict[str, object] | None:
+        manual_fallback = reviewed_context.get("manual_fallback")
+        if not isinstance(manual_fallback, Mapping):
+            return None
+
+        visibility: dict[str, object] = {
+            "action_request_id": action_request.action_request_id,
+            "approval_decision_id": (
+                approval_decision.approval_decision_id
+                if approval_decision is not None
+                else action_request.approval_decision_id
+            ),
+        }
+        for source_key, target_key in (
+            ("fallback_at", "fallback_at"),
+            ("performed_at", "fallback_at"),
+            ("fallback_actor_identity", "fallback_actor_identity"),
+            ("authority_boundary", "authority_boundary"),
+            ("reason", "reason"),
+            ("action_taken", "action_taken"),
+            ("verification_evidence_ids", "verification_evidence_ids"),
+            ("residual_uncertainty", "residual_uncertainty"),
+        ):
+            value = manual_fallback.get(source_key)
+            if value is not None and target_key not in visibility:
+                visibility[target_key] = value
+            elif value is not None:
+                visibility[target_key] = value
+        return visibility
+
+    @staticmethod
+    def _action_review_escalation_visibility(
+        *,
+        reviewed_context: Mapping[str, object],
+        action_request: ActionRequestRecord,
+        approval_decision: ApprovalDecisionRecord | None,
+        review_state: str,
+    ) -> dict[str, object] | None:
+        requested_payload = action_request.requested_payload
+        escalation_context = reviewed_context.get("escalation")
+        if not isinstance(escalation_context, Mapping) and not requested_payload.get(
+            "escalation_reason"
+        ):
+            return None
+
+        visibility: dict[str, object] = {
+            "action_request_id": action_request.action_request_id,
+            "approval_decision_id": (
+                approval_decision.approval_decision_id
+                if approval_decision is not None
+                else action_request.approval_decision_id
+            ),
+            "requester_identity": action_request.requester_identity,
+            "review_state": review_state,
+        }
+        escalation_reason = requested_payload.get("escalation_reason")
+        if escalation_reason is not None:
+            visibility["escalation_reason"] = escalation_reason
+        if isinstance(escalation_context, Mapping):
+            for source_key, target_key in (
+                ("escalated_at", "escalated_at"),
+                ("escalated_to", "escalated_to"),
+                ("note", "note"),
+            ):
+                value = escalation_context.get(source_key)
+                if value is not None:
+                    visibility[target_key] = value
+        return visibility
 
     def _action_review_approval_decision(
         self,

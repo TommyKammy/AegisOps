@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 from copy import deepcopy
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import json
 import pathlib
@@ -22,7 +23,12 @@ if str(TESTS_ROOT) not in sys.path:
 import main
 from aegisops_control_plane.adapters.wazuh import WazuhAlertAdapter
 from aegisops_control_plane.config import RuntimeConfig
-from aegisops_control_plane.models import AITraceRecord, CaseRecord, RecommendationRecord
+from aegisops_control_plane.models import (
+    AITraceRecord,
+    ApprovalDecisionRecord,
+    CaseRecord,
+    RecommendationRecord,
+)
 from aegisops_control_plane.service import (
     AegisOpsControlPlaneService,
     AuthenticatedRuntimePrincipal,
@@ -596,6 +602,164 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                 self.assertEqual(
                     case_payload["reviewed_context"]["source"]["source_family"],
                     "entra_id",
+                )
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(timeout=2)
+
+    def test_reviewed_runtime_path_surfaces_handoff_and_manual_fallback_visibility(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret=REVIEWED_SHARED_SECRET,
+                wazuh_ingest_reverse_proxy_secret=REVIEWED_PROXY_SECRET,
+            ),
+            store=store,
+        )
+
+        admitted = service.ingest_wazuh_alert(
+            raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
+            authorization_header=f"Bearer {REVIEWED_SHARED_SECRET}",
+            forwarded_proto="https",
+            reverse_proxy_secret_header=REVIEWED_PROXY_SECRET,
+            peer_addr="127.0.0.1",
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before any approval-bound response.",
+        )
+        reviewed_at = admitted.reconciliation.compared_at
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Waiting until the next business-hours cycle is unsafe for this repository owner change.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-phase19-runtime-visibility-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase19-runtime-visibility-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+        service.persist_record(
+            replace(
+                promoted_case,
+                reviewed_context={
+                    **dict(promoted_case.reviewed_context),
+                    "handoff": {
+                        "handoff_at": (reviewed_at + timedelta(hours=8)).isoformat(),
+                        "handoff_owner": "analyst-002",
+                        "note": "Resume the unresolved approval review at next business-hours open.",
+                        "follow_up_evidence_ids": promoted_case.evidence_ids,
+                    },
+                    "triage": {
+                        "disposition": "business_hours_handoff",
+                        "rationale": "Keep the unresolved action visible for the next analyst handoff.",
+                        "recorded_at": (reviewed_at + timedelta(hours=8)).isoformat(),
+                    },
+                    "manual_fallback": {
+                        "fallback_at": (reviewed_at + timedelta(minutes=45)).isoformat(),
+                        "fallback_actor_identity": "analyst-003",
+                        "authority_boundary": "approved_human_fallback",
+                        "reason": "The reviewed automation path was unavailable after approval.",
+                        "action_taken": "Notified the accountable repository owner using the approved manual procedure.",
+                        "verification_evidence_ids": promoted_case.evidence_ids,
+                        "residual_uncertainty": "Awaiting written owner acknowledgement.",
+                    },
+                    "escalation": {
+                        "escalated_at": (reviewed_at + timedelta(minutes=15)).isoformat(),
+                        "escalated_to": "on-call-manager-001",
+                        "note": "On-call manager notified because the unresolved action could not be left unattended.",
+                    },
+                },
+            )
+        )
+
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service
+        ):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+                base_url = f"http://127.0.0.1:{servers[0].server_port}"
+
+                queue_payload = json.loads(
+                    request.urlopen(  # noqa: S310
+                        f"{base_url}/inspect-analyst-queue",
+                        timeout=2,
+                    ).read().decode("utf-8")
+                )
+                case_payload = json.loads(
+                    request.urlopen(  # noqa: S310
+                        f"{base_url}/inspect-case-detail?case_id={promoted_case.case_id}",
+                        timeout=2,
+                    ).read().decode("utf-8")
+                )
+
+                self.assertEqual(
+                    queue_payload["records"][0]["current_action_review"]["runtime_visibility"][
+                        "after_hours_handoff"
+                    ]["handoff_owner"],
+                    "analyst-002",
+                )
+                self.assertEqual(
+                    case_payload["current_action_review"]["runtime_visibility"][
+                        "manual_fallback"
+                    ]["fallback_actor_identity"],
+                    "analyst-003",
+                )
+                self.assertEqual(
+                    case_payload["current_action_review"]["runtime_visibility"][
+                        "manual_fallback"
+                    ]["fallback_at"],
+                    (reviewed_at + timedelta(minutes=45)).isoformat(),
+                )
+                self.assertEqual(
+                    case_payload["current_action_review"]["runtime_visibility"][
+                        "escalation_notes"
+                    ]["escalation_reason"],
+                    "Waiting until the next business-hours cycle is unsafe for this repository owner change.",
                 )
             finally:
                 if servers:

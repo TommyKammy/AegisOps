@@ -3389,6 +3389,121 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         review = payload["current_action_review"]
         self._assert_review_timeline_snapshot(review, seeded)
 
+    def test_cli_inspect_case_detail_renders_handoff_and_manual_fallback_visibility(
+        self,
+    ) -> None:
+        _, service, promoted_case, evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before any approval-bound response.",
+        )
+        request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Waiting until the next business-hours cycle is unsafe for this repository owner change.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-cli-visibility-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-cli-visibility-001",
+                action_request_id=request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(request.target_scope),
+                payload_hash=request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+        service.persist_record(
+            replace(
+                promoted_case,
+                reviewed_context={
+                    **dict(promoted_case.reviewed_context),
+                    "handoff": {
+                        "handoff_at": (reviewed_at + timedelta(hours=8)).isoformat(),
+                        "handoff_owner": "analyst-002",
+                        "note": "Resume the approval and fallback review at next business-hours open.",
+                        "follow_up_evidence_ids": (evidence_id,),
+                    },
+                    "triage": {
+                        "disposition": "business_hours_handoff",
+                        "rationale": "The reviewed action remains unresolved and must stay visible for the next analyst.",
+                        "recorded_at": (reviewed_at + timedelta(hours=8)).isoformat(),
+                    },
+                    "manual_fallback": {
+                        "fallback_at": (reviewed_at + timedelta(minutes=45)).isoformat(),
+                        "fallback_actor_identity": "analyst-003",
+                        "authority_boundary": "approved_human_fallback",
+                        "reason": "The reviewed automation path was unavailable after approval.",
+                        "action_taken": "Notified the accountable repository owner using the approved manual procedure.",
+                        "verification_evidence_ids": (evidence_id,),
+                        "residual_uncertainty": "Awaiting written owner acknowledgement in the next review window.",
+                    },
+                    "escalation": {
+                        "escalated_at": (reviewed_at + timedelta(minutes=15)).isoformat(),
+                        "escalated_to": "on-call-manager-001",
+                        "note": "On-call manager notified because the open approval could not be left unattended.",
+                    },
+                },
+            )
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-case-detail", "--case-id", promoted_case.case_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        review = payload["current_action_review"]
+        self.assertEqual(review["review_state"], "unresolved")
+        self.assertEqual(
+            review["runtime_visibility"]["after_hours_handoff"]["handoff_owner"],
+            "analyst-002",
+        )
+        self.assertEqual(
+            review["runtime_visibility"]["after_hours_handoff"]["disposition"],
+            "business_hours_handoff",
+        )
+        self.assertEqual(
+            review["runtime_visibility"]["manual_fallback"]["action_request_id"],
+            request.action_request_id,
+        )
+        self.assertEqual(
+            review["runtime_visibility"]["manual_fallback"]["approval_decision_id"],
+            approval.approval_decision_id,
+        )
+        self.assertEqual(
+            review["runtime_visibility"]["manual_fallback"]["fallback_actor_identity"],
+            "analyst-003",
+        )
+        self.assertEqual(
+            review["runtime_visibility"]["manual_fallback"]["fallback_at"],
+            (reviewed_at + timedelta(minutes=45)).isoformat(),
+        )
+        self.assertEqual(
+            review["runtime_visibility"]["escalation_notes"]["escalation_reason"],
+            "Waiting until the next business-hours cycle is unsafe for this repository owner change.",
+        )
+        self.assertEqual(
+            review["runtime_visibility"]["escalation_notes"]["escalated_to"],
+            "on-call-manager-001",
+        )
+
     def test_cli_inspect_case_detail_keeps_reconciliation_bound_to_selected_execution(
         self,
     ) -> None:
