@@ -690,20 +690,26 @@ class PostgresControlPlaneStore:
         placeholders = ", ".join(
             self._placeholder(table, field_name) for field_name in field_names
         )
-        assignments = ", ".join(
-            f"{field_name} = excluded.{field_name}"
-            for field_name in field_names
-            if field_name != table.identifier_field
-        )
         params = tuple(
             self._serialize_field(table, field_name, getattr(record, field_name))
             for field_name in field_names
         )
-        query = (
-            f"insert into aegisops_control.{table.table_name} "
-            f"({', '.join(field_names)}) values ({placeholders}) "
-            f"on conflict ({table.identifier_field}) do update set {assignments}"
-        )
+        if isinstance(record, LifecycleTransitionRecord):
+            query = (
+                f"insert into aegisops_control.{table.table_name} "
+                f"({', '.join(field_names)}) values ({placeholders})"
+            )
+        else:
+            assignments = ", ".join(
+                f"{field_name} = excluded.{field_name}"
+                for field_name in field_names
+                if field_name != table.identifier_field
+            )
+            query = (
+                f"insert into aegisops_control.{table.table_name} "
+                f"({', '.join(field_names)}) values ({placeholders}) "
+                f"on conflict ({table.identifier_field}) do update set {assignments}"
+            )
 
         with self._borrow_connection() as connection:
             cursor = connection.cursor()

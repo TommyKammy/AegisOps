@@ -13,6 +13,11 @@ _INSERT_RE = re.compile(
     r"on conflict \((?P<identifier>\w+)\) do update set (?P<assignments>.+)",
     re.IGNORECASE,
 )
+_INSERT_ONLY_RE = re.compile(
+    r"insert into aegisops_control\.(?P<table>\w+) "
+    r"\((?P<columns>[^)]+)\) values \((?P<placeholders>[^)]+)\)",
+    re.IGNORECASE,
+)
 _SELECT_ONE_RE = re.compile(
     r"select (?P<columns>.+) from aegisops_control\.(?P<table>\w+) "
     r"where (?P<identifier>\w+) = %s",
@@ -118,6 +123,14 @@ class FakePostgresCursor:
         if insert_match is not None:
             self._execute_insert(insert_match.group("table"), insert_match.group("columns"), params)
             return
+        insert_only_match = _INSERT_ONLY_RE.fullmatch(normalized)
+        if insert_only_match is not None:
+            self._execute_insert_only(
+                insert_only_match.group("table"),
+                insert_only_match.group("columns"),
+                params,
+            )
+            return
 
         select_one_match = _SELECT_ONE_RE.fullmatch(normalized)
         if select_one_match is not None:
@@ -190,6 +203,26 @@ class FakePostgresCursor:
         identifier_value = row[identifier_field]
         table_rows = self.tables.setdefault(table, {})
         table_rows[str(identifier_value)] = row
+        self.connection.dirty = True
+        self.description = None
+        self._rows = []
+
+    def _execute_insert_only(
+        self,
+        table: str,
+        columns: str,
+        params: tuple[object, ...] | None,
+    ) -> None:
+        column_names = [column.strip() for column in columns.split(",")]
+        row = dict(zip(column_names, params or ()))
+        identifier_field = column_names[0]
+        identifier_value = str(row[identifier_field])
+        table_rows = self.tables.setdefault(table, {})
+        if identifier_value in table_rows:
+            raise ValueError(
+                f"duplicate key value violates unique constraint {table}.{identifier_field}"
+            )
+        table_rows[identifier_value] = row
         self.connection.dirty = True
         self.description = None
         self._rows = []

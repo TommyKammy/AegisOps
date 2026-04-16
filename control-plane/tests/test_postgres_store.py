@@ -25,6 +25,7 @@ from aegisops_control_plane.models import (
     HuntRecord,
     HuntRunRecord,
     LeadRecord,
+    LifecycleTransitionRecord,
     ObservationRecord,
     ReconciliationRecord,
     RecommendationRecord,
@@ -212,6 +213,36 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         )
         self.assertIn("decision_rationale text", schema_sql)
         self.assertIn("decision_rationale text", bootstrap_sql)
+
+    def test_lifecycle_transition_schema_assets_exist(self) -> None:
+        schema_sql = (
+            CONTROL_PLANE_ROOT.parent / "postgres" / "control-plane" / "schema.sql"
+        ).read_text(encoding="utf-8").lower()
+        bootstrap_sql = (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0001_control_plane_schema_skeleton.sql"
+        ).read_text(encoding="utf-8").lower()
+
+        self.assertIn(
+            "create table if not exists aegisops_control.lifecycle_transition_records",
+            schema_sql,
+        )
+        self.assertIn("transition_id text primary key", schema_sql)
+        self.assertIn("previous_lifecycle_state text", schema_sql)
+        self.assertIn("attribution jsonb not null default '{}'::jsonb", schema_sql)
+        self.assertIn(
+            "create table if not exists aegisops_control.lifecycle_transition_records",
+            bootstrap_sql,
+        )
+        self.assertIn("transition_id text primary key", bootstrap_sql)
+        self.assertIn("previous_lifecycle_state text", bootstrap_sql)
+        self.assertIn(
+            "attribution jsonb not null default '{}'::jsonb",
+            bootstrap_sql,
+        )
 
     def test_store_round_trips_reviewed_record_families_by_aegisops_ids(self) -> None:
         store, _ = make_store()
@@ -559,6 +590,41 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
                 ai_trace.ai_trace_id,
             ).assistant_advisory_draft,
             ai_trace.assistant_advisory_draft,
+        )
+
+    def test_lifecycle_transition_records_are_insert_only(self) -> None:
+        store, _ = make_store()
+        transitioned_at = datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc)
+        original = LifecycleTransitionRecord(
+            transition_id="transition-001",
+            subject_record_family="case",
+            subject_record_id="case-001",
+            previous_lifecycle_state=None,
+            lifecycle_state="open",
+            transitioned_at=transitioned_at,
+            attribution={"actor_identity": "analyst-001"},
+        )
+        conflicting = LifecycleTransitionRecord(
+            transition_id="transition-001",
+            subject_record_family="case",
+            subject_record_id="case-001",
+            previous_lifecycle_state="open",
+            lifecycle_state="closed",
+            transitioned_at=transitioned_at,
+            attribution={"actor_identity": "analyst-002"},
+        )
+
+        store.save(original)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "duplicate key value violates unique constraint",
+        ):
+            store.save(conflicting)
+
+        self.assertEqual(
+            store.get(LifecycleTransitionRecord, "transition-001"),
+            original,
         )
 
     def test_store_copies_mapping_fields_before_persistence(self) -> None:

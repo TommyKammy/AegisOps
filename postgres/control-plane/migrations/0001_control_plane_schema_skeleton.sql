@@ -267,4 +267,15 @@ create table if not exists aegisops_control.reconciliation_records (
   check (lifecycle_state in ('pending','matched','mismatched','stale','resolved','superseded'))
 );
 
+create table if not exists aegisops_control.lifecycle_transition_records (
+  transition_id text primary key,
+  subject_record_family text not null,
+  subject_record_id text not null,
+  previous_lifecycle_state text,
+  lifecycle_state text not null,
+  transitioned_at timestamptz not null,
+  attribution jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
 commit;
