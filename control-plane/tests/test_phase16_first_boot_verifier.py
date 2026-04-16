@@ -16,6 +16,19 @@ class Phase16FirstBootVerifierTests(unittest.TestCase):
 
         self.assertTrue(verifier.exists(), f"expected Phase 16 verifier at {verifier}")
 
+    def test_ci_executes_phase16_first_boot_verifier_and_shell_regression(self) -> None:
+        workflow_path = REPO_ROOT / ".github" / "workflows" / "ci.yml"
+        workflow_yaml = workflow_path.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "bash scripts/verify-phase-16-first-boot-contract.sh",
+            workflow_yaml,
+        )
+        self.assertIn(
+            "bash scripts/test-verify-phase-16-first-boot-contract.sh",
+            workflow_yaml,
+        )
+
     def test_phase16_first_boot_verifier_fails_closed_on_release_state_and_bootstrap_drift(
         self,
     ) -> None:

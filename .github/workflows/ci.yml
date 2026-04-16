@@ -127,6 +127,11 @@ jobs:
       - name: Run Phase 15 workflow coverage guard
         run: bash scripts/test-verify-ci-phase-15-workflow-coverage.sh
 
+      - name: Run Phase 16 first-boot contract validation
+        run: |
+          bash scripts/verify-phase-16-first-boot-contract.sh
+          bash scripts/test-verify-phase-16-first-boot-contract.sh
+
       - name: Run Phase 19 thin operator surface validation
         run: |
           bash scripts/verify-phase-19-thin-operator-surface.sh

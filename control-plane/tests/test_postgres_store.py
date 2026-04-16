@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import pathlib
+import re
 import sys
 import unittest
 
@@ -11,7 +12,10 @@ CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
-from aegisops_control_plane.adapters.postgres import PostgresControlPlaneStore
+from aegisops_control_plane.adapters.postgres import (
+    PostgresControlPlaneStore,
+    _LIFECYCLE_STATES_BY_FAMILY,
+)
 from aegisops_control_plane.models import (
     AITraceRecord,
     ActionExecutionRecord,
@@ -373,6 +377,52 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             "create table if not exists aegisops_control.lifecycle_transition_records",
             bootstrap_sql,
         )
+
+    def test_lifecycle_transition_schema_assets_bind_states_to_subject_families(
+        self,
+    ) -> None:
+        migration_sql = (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0006_phase_23_lifecycle_transition_records.sql"
+        ).read_text(encoding="utf-8").lower()
+        schema_sql = (
+            CONTROL_PLANE_ROOT.parent / "postgres" / "control-plane" / "schema.sql"
+        ).read_text(encoding="utf-8").lower()
+        expected_states_by_family = {
+            family: states
+            for family, states in _LIFECYCLE_STATES_BY_FAMILY.items()
+            if family != LifecycleTransitionRecord.record_family
+        }
+
+        for sql_text in (migration_sql, schema_sql):
+            self.assertIn(
+                "constraint lifecycle_transition_records_state_matches_subject_family check (",
+                sql_text,
+            )
+            self.assertIn(
+                "constraint lifecycle_transition_records_previous_state_matches_subject_family check (",
+                sql_text,
+            )
+            for family, expected_states in expected_states_by_family.items():
+                self.assertEqual(
+                    self._extract_transition_state_set(
+                        sql_text,
+                        family,
+                        "lifecycle_state",
+                    ),
+                    expected_states,
+                )
+                self.assertEqual(
+                    self._extract_transition_state_set(
+                        sql_text,
+                        family,
+                        "previous_lifecycle_state",
+                    ),
+                    expected_states,
+                )
 
     def test_phase23_lifecycle_transition_migration_backfills_existing_authoritative_rows(
         self,
@@ -1323,6 +1373,23 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             ):
                 with store.transaction(isolation_level="SERIALIZABLE"):
                     pass
+
+    @staticmethod
+    def _extract_transition_state_set(
+        sql_text: str,
+        family: str,
+        state_field: str,
+    ) -> frozenset[str]:
+        match = re.search(
+            rf"\(subject_record_family = '{re.escape(family)}' and {state_field} in \((.*?)\)\)",
+            sql_text,
+            re.DOTALL,
+        )
+        if match is None:
+            raise AssertionError(
+                f"missing {state_field} compatibility clause for transition family {family!r}"
+            )
+        return frozenset(re.findall(r"'([^']+)'", match.group(1)))
 
 
 if __name__ == "__main__":

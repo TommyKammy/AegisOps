@@ -132,6 +132,244 @@ create table if not exists aegisops_control.lifecycle_transition_records (
       'stale',
       'resolved'
     )
+  ),
+  constraint lifecycle_transition_records_state_matches_subject_family check (
+    (subject_record_family = 'alert' and lifecycle_state in (
+      'new',
+      'triaged',
+      'investigating',
+      'escalated_to_case',
+      'closed',
+      'reopened',
+      'superseded'
+    ))
+    or (subject_record_family = 'analytic_signal' and lifecycle_state in (
+      'active',
+      'superseded',
+      'withdrawn'
+    ))
+    or (subject_record_family = 'case' and lifecycle_state in (
+      'open',
+      'investigating',
+      'pending_action',
+      'contained_pending_validation',
+      'closed',
+      'reopened',
+      'superseded'
+    ))
+    or (subject_record_family = 'evidence' and lifecycle_state in (
+      'collected',
+      'validated',
+      'linked',
+      'superseded',
+      'withdrawn'
+    ))
+    or (subject_record_family = 'observation' and lifecycle_state in (
+      'captured',
+      'confirmed',
+      'challenged',
+      'superseded',
+      'withdrawn'
+    ))
+    or (subject_record_family = 'lead' and lifecycle_state in (
+      'open',
+      'triaged',
+      'promoted_to_alert',
+      'promoted_to_case',
+      'closed',
+      'superseded'
+    ))
+    or (subject_record_family = 'recommendation' and lifecycle_state in (
+      'proposed',
+      'under_review',
+      'accepted',
+      'rejected',
+      'materialized',
+      'superseded',
+      'withdrawn'
+    ))
+    or (subject_record_family = 'approval_decision' and lifecycle_state in (
+      'pending',
+      'approved',
+      'rejected',
+      'expired',
+      'canceled',
+      'superseded'
+    ))
+    or (subject_record_family = 'action_request' and lifecycle_state in (
+      'draft',
+      'pending_approval',
+      'approved',
+      'rejected',
+      'expired',
+      'canceled',
+      'superseded',
+      'executing',
+      'completed',
+      'failed',
+      'unresolved'
+    ))
+    or (subject_record_family = 'action_execution' and lifecycle_state in (
+      'dispatching',
+      'queued',
+      'running',
+      'succeeded',
+      'failed',
+      'canceled',
+      'superseded'
+    ))
+    or (subject_record_family = 'hunt' and lifecycle_state in (
+      'draft',
+      'active',
+      'on_hold',
+      'concluded',
+      'closed',
+      'superseded'
+    ))
+    or (subject_record_family = 'hunt_run' and lifecycle_state in (
+      'planned',
+      'running',
+      'completed',
+      'canceled',
+      'superseded',
+      'unresolved'
+    ))
+    or (subject_record_family = 'ai_trace' and lifecycle_state in (
+      'generated',
+      'under_review',
+      'accepted_for_reference',
+      'rejected_for_reference',
+      'superseded',
+      'withdrawn'
+    ))
+    or (subject_record_family = 'reconciliation' and lifecycle_state in (
+      'pending',
+      'matched',
+      'mismatched',
+      'stale',
+      'resolved',
+      'superseded'
+    ))
+  ),
+  constraint lifecycle_transition_records_previous_state_matches_subject_family check (
+    previous_lifecycle_state is null or (
+      (subject_record_family = 'alert' and previous_lifecycle_state in (
+        'new',
+        'triaged',
+        'investigating',
+        'escalated_to_case',
+        'closed',
+        'reopened',
+        'superseded'
+      ))
+      or (subject_record_family = 'analytic_signal' and previous_lifecycle_state in (
+        'active',
+        'superseded',
+        'withdrawn'
+      ))
+      or (subject_record_family = 'case' and previous_lifecycle_state in (
+        'open',
+        'investigating',
+        'pending_action',
+        'contained_pending_validation',
+        'closed',
+        'reopened',
+        'superseded'
+      ))
+      or (subject_record_family = 'evidence' and previous_lifecycle_state in (
+        'collected',
+        'validated',
+        'linked',
+        'superseded',
+        'withdrawn'
+      ))
+      or (subject_record_family = 'observation' and previous_lifecycle_state in (
+        'captured',
+        'confirmed',
+        'challenged',
+        'superseded',
+        'withdrawn'
+      ))
+      or (subject_record_family = 'lead' and previous_lifecycle_state in (
+        'open',
+        'triaged',
+        'promoted_to_alert',
+        'promoted_to_case',
+        'closed',
+        'superseded'
+      ))
+      or (subject_record_family = 'recommendation' and previous_lifecycle_state in (
+        'proposed',
+        'under_review',
+        'accepted',
+        'rejected',
+        'materialized',
+        'superseded',
+        'withdrawn'
+      ))
+      or (subject_record_family = 'approval_decision' and previous_lifecycle_state in (
+        'pending',
+        'approved',
+        'rejected',
+        'expired',
+        'canceled',
+        'superseded'
+      ))
+      or (subject_record_family = 'action_request' and previous_lifecycle_state in (
+        'draft',
+        'pending_approval',
+        'approved',
+        'rejected',
+        'expired',
+        'canceled',
+        'superseded',
+        'executing',
+        'completed',
+        'failed',
+        'unresolved'
+      ))
+      or (subject_record_family = 'action_execution' and previous_lifecycle_state in (
+        'dispatching',
+        'queued',
+        'running',
+        'succeeded',
+        'failed',
+        'canceled',
+        'superseded'
+      ))
+      or (subject_record_family = 'hunt' and previous_lifecycle_state in (
+        'draft',
+        'active',
+        'on_hold',
+        'concluded',
+        'closed',
+        'superseded'
+      ))
+      or (subject_record_family = 'hunt_run' and previous_lifecycle_state in (
+        'planned',
+        'running',
+        'completed',
+        'canceled',
+        'superseded',
+        'unresolved'
+      ))
+      or (subject_record_family = 'ai_trace' and previous_lifecycle_state in (
+        'generated',
+        'under_review',
+        'accepted_for_reference',
+        'rejected_for_reference',
+        'superseded',
+        'withdrawn'
+      ))
+      or (subject_record_family = 'reconciliation' and previous_lifecycle_state in (
+        'pending',
+        'matched',
+        'mismatched',
+        'stale',
+        'resolved',
+        'superseded'
+      ))
+    )
   )
 );
 
