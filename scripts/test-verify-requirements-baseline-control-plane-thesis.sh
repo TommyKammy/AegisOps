@@ -118,10 +118,10 @@ create_repo "${missing_action_execution_summary_repo}"
 write_canonical_doc "${missing_action_execution_summary_repo}"
 replace_text_in_doc \
   "${missing_action_execution_summary_repo}" \
-  "| AegisOps control plane | Alert, case, evidence, observation, lead, recommendation, approval, action-request, action-execution, hunt, AI-trace, and reconciliation ownership |" \
-  "| AegisOps control plane | Alert, case, evidence, observation, lead, recommendation, approval, action-request, hunt, AI-trace, and reconciliation ownership |"
+  "| AegisOps control plane | Alert, case, evidence, observation, lead, recommendation, approval, action-request, action-execution, hunt, AI-trace, reconciliation, and append-only lifecycle-transition ownership |" \
+  "| AegisOps control plane | Alert, case, evidence, observation, lead, recommendation, approval, action-request, hunt, AI-trace, reconciliation, and append-only lifecycle-transition ownership |"
 commit_fixture "${missing_action_execution_summary_repo}"
-assert_fails_with "${missing_action_execution_summary_repo}" "action-request, action-execution, hunt, AI-trace, and reconciliation ownership"
+assert_fails_with "${missing_action_execution_summary_repo}" "action-request, action-execution, hunt, AI-trace, reconciliation, and append-only lifecycle-transition ownership"
 
 missing_non_goal_repo="${workdir}/missing-non-goal"
 create_repo "${missing_non_goal_repo}"
@@ -135,10 +135,10 @@ create_repo "${missing_action_execution_truth_repo}"
 write_canonical_doc "${missing_action_execution_truth_repo}"
 replace_text_in_doc \
   "${missing_action_execution_truth_repo}" \
-  "AegisOps owns approval decisions, action intent, action-execution truth, evidence linkage, and reconciliation" \
-  "AegisOps owns approval decisions, action intent, evidence linkage, and reconciliation"
+  "AegisOps owns approval decisions, action intent, action-execution truth, evidence linkage, reconciliation, and the append-only lifecycle transition history paired with reviewed current-state records" \
+  "AegisOps owns approval decisions, action intent, evidence linkage, reconciliation, and the append-only lifecycle transition history paired with reviewed current-state records"
 commit_fixture "${missing_action_execution_truth_repo}"
-assert_fails_with "${missing_action_execution_truth_repo}" "AegisOps owns approval decisions, action intent, action-execution truth, evidence linkage, and reconciliation"
+assert_fails_with "${missing_action_execution_truth_repo}" "AegisOps owns approval decisions, action intent, action-execution truth, evidence linkage, reconciliation, and the append-only lifecycle transition history paired with reviewed current-state records"
 
 legacy_phrase_repo="${workdir}/legacy-phrase"
 create_repo "${legacy_phrase_repo}"
