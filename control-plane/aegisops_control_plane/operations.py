@@ -688,15 +688,22 @@ class RestoreReadinessService:
         record_families: dict[str, list[dict[str, object]]] = {}
         record_counts: dict[str, int] = {}
         with self._store.transaction(isolation_level="REPEATABLE READ"):
-            for family, persisted_records in (
-                self._list_authoritative_record_chain_records().items()
-            ):
+            authoritative_records = self._list_authoritative_record_chain_records()
+            record_counts = {
+                family: len(persisted_records)
+                for family, persisted_records in authoritative_records.items()
+            }
+            self.validate_authoritative_record_chain_restore(
+                authoritative_records,
+                require_lifecycle_transition_history=True,
+                restored_record_counts=record_counts,
+            )
+            for family, persisted_records in authoritative_records.items():
                 records = [
                     self._json_ready(self._record_to_dict(record))
                     for record in persisted_records
                 ]
                 record_families[family] = records
-                record_counts[family] = len(records)
         return {
             "backup_schema_version": self._authoritative_record_chain_backup_schema_version,
             "created_at": datetime.now(timezone.utc).isoformat(),

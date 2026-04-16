@@ -1324,6 +1324,33 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
 
         self.assertIsNotNone(service.get_record(CaseRecord, promoted_case.case_id))
 
+    def test_service_phase21_backup_fails_closed_when_lifecycle_history_is_missing(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        legacy_alert = AlertRecord(
+            alert_id="alert-phase21-missing-history-export-001",
+            finding_id="finding-phase21-missing-history-export-001",
+            analytic_signal_id=None,
+            case_id=None,
+            lifecycle_state="new",
+        )
+
+        store.save(legacy_alert)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                r"missing lifecycle transition history for alert record "
+                r"'alert-phase21-missing-history-export-001'"
+            ),
+        ):
+            service.export_authoritative_record_chain_backup()
+
     def test_service_phase21_restore_drill_fails_closed_when_runtime_bindings_missing_after_restore(
         self,
     ) -> None:
