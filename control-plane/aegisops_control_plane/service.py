@@ -1603,6 +1603,11 @@ class AegisOpsControlPlaneService:
             "approver_identities": (
                 approval_decision.approver_identities if approval_decision is not None else ()
             ),
+            "decision_rationale": (
+                approval_decision.decision_rationale
+                if approval_decision is not None
+                else None
+            ),
             "requested_at": action_request.requested_at,
             "expires_at": action_request.expires_at,
             "target_scope": dict(action_request.target_scope),
@@ -2366,6 +2371,14 @@ class AegisOpsControlPlaneService:
                     ()
                     if approval_decision is None
                     else approval_decision.approver_identities
+                ),
+                details=(
+                    {}
+                    if approval_decision is None
+                    or approval_decision.decision_rationale is None
+                    else {
+                        "decision_rationale": approval_decision.decision_rationale,
+                    }
                 ),
             ),
             self._action_review_stage_snapshot(
@@ -3169,6 +3182,117 @@ class AegisOpsControlPlaneService:
             expires_at=expires_at,
             action_request_id=action_request_id,
         )
+
+    def record_action_approval_decision(
+        self,
+        *,
+        action_request_id: str,
+        approver_identity: str,
+        decision: str,
+        decision_rationale: str,
+        decided_at: datetime,
+        approval_decision_id: str | None = None,
+    ) -> ApprovalDecisionRecord:
+        approver_identity = self._require_non_empty_string(
+            approver_identity,
+            "approver_identity",
+        )
+        normalized_decision = self._require_non_empty_string(
+            decision,
+            "decision",
+        ).lower()
+        if normalized_decision not in {"grant", "reject"}:
+            raise ValueError("decision must be 'grant' or 'reject'")
+        decision_rationale = self._require_non_empty_string(
+            decision_rationale,
+            "decision_rationale",
+        )
+        decided_at = self._require_aware_datetime(decided_at, "decided_at")
+
+        with self._store.transaction():
+            action_request = self._require_review_bound_action_request(action_request_id)
+            if action_request.lifecycle_state != "pending_approval":
+                raise ValueError(
+                    "approval decisions can only be recorded for pending reviewed action requests"
+                )
+            if action_request.approval_decision_id is not None:
+                raise ValueError(
+                    f"action request {action_request.action_request_id!r} already has an approval decision"
+                )
+            if (
+                action_request.requester_identity is not None
+                and action_request.requester_identity == approver_identity
+            ):
+                raise PermissionError(
+                    "approver identity must be distinct from requester identity"
+                )
+            if decided_at < action_request.requested_at:
+                raise ValueError("decided_at must be on or after requested_at")
+
+            policy_evaluation = self._apply_action_policy_evaluation_overrides(
+                computed_policy_evaluation=self._determine_action_policy(
+                    self._normalize_action_policy_basis(action_request.policy_basis)
+                ),
+                persisted_policy_evaluation=action_request.policy_evaluation,
+            )
+            if policy_evaluation.get("approval_requirement") != "human_required":
+                raise PermissionError(
+                    "reviewed approval decisions require a human-required action policy"
+                )
+
+            now = datetime.now(timezone.utc)
+            if action_request.expires_at is not None and (
+                now > action_request.expires_at or decided_at > action_request.expires_at
+            ):
+                self.persist_record(replace(action_request, lifecycle_state="expired"))
+                raise ValueError(
+                    "reviewed action request expired before the approval decision was recorded"
+                )
+
+            resolved_approval_decision_id = self._resolve_new_record_identifier(
+                ApprovalDecisionRecord,
+                approval_decision_id,
+                "approval_decision_id",
+                "approval-decision",
+            )
+            decision_state = (
+                "approved" if normalized_decision == "grant" else "rejected"
+            )
+            approval_decision = self.persist_record(
+                ApprovalDecisionRecord(
+                    approval_decision_id=resolved_approval_decision_id,
+                    action_request_id=action_request.action_request_id,
+                    approver_identities=(approver_identity,),
+                    target_snapshot=dict(action_request.target_scope),
+                    payload_hash=action_request.payload_hash,
+                    decided_at=decided_at,
+                    lifecycle_state=decision_state,
+                    decision_rationale=decision_rationale,
+                    approved_expires_at=(
+                        action_request.expires_at
+                        if decision_state == "approved"
+                        else None
+                    ),
+                )
+            )
+            self.persist_record(
+                replace(
+                    action_request,
+                    approval_decision_id=approval_decision.approval_decision_id,
+                    lifecycle_state=decision_state,
+                    policy_evaluation=policy_evaluation,
+                )
+            )
+        self._emit_structured_event(
+            logging.INFO,
+            "action_approval_decision_recorded",
+            approval_decision_id=approval_decision.approval_decision_id,
+            action_request_id=approval_decision.action_request_id,
+            decision=normalized_decision,
+            approver_identity=approver_identity,
+            lifecycle_state=approval_decision.lifecycle_state,
+        )
+        return approval_decision
 
     def attach_assistant_advisory_draft(
         self,

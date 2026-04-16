@@ -200,6 +200,7 @@ class ApprovalDecisionRecord(ControlPlaneRecord):
     payload_hash: str
     decided_at: datetime | None
     lifecycle_state: str
+    decision_rationale: str | None = None
     approved_expires_at: datetime | None = None
 
     def __post_init__(self) -> None:
