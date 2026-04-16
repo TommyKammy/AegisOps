@@ -1741,6 +1741,62 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             restored_service.restore_authoritative_record_chain_backup(backup)
         self._assert_authoritative_store_empty(restored_store)
 
+    def test_service_phase21_restore_fails_closed_when_earliest_transition_anchor_is_missing(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        updated_case = replace(
+            promoted_case,
+            lifecycle_state=(
+                "closed"
+                if promoted_case.lifecycle_state != "closed"
+                else "reopened"
+            ),
+        )
+        service.persist_record(updated_case)
+        backup = service.export_authoritative_record_chain_backup()
+        ordered_case_transitions = sorted(
+            (
+                record
+                for record in backup["record_families"]["lifecycle_transition"]
+                if record["subject_record_family"] == "case"
+                and record["subject_record_id"] == promoted_case.case_id
+            ),
+            key=lambda record: (
+                record["transitioned_at"],
+                record["transition_id"],
+            ),
+        )
+        self.assertEqual(len(ordered_case_transitions), 2)
+        missing_anchor_transition = ordered_case_transitions[0]
+        backup["record_families"]["lifecycle_transition"] = [
+            record
+            for record in backup["record_families"]["lifecycle_transition"]
+            if record["transition_id"] != missing_anchor_transition["transition_id"]
+        ]
+        backup["record_counts"]["lifecycle_transition"] = len(
+            backup["record_families"]["lifecycle_transition"]
+        )
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                rf"lifecycle transition chain for case record '{promoted_case.case_id}' "
+                r"must start with a creation anchor: .* has previous_lifecycle_state "
+                rf"'{promoted_case.lifecycle_state}'"
+            ),
+        ):
+            restored_service.restore_authoritative_record_chain_backup(backup)
+        self._assert_authoritative_store_empty(restored_store)
+
     def test_service_phase21_restore_fails_closed_when_transition_chain_is_inconsistent(
         self,
     ) -> None:

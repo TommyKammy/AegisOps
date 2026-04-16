@@ -300,6 +300,37 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             bootstrap_sql,
         )
 
+    def test_phase23_lifecycle_transition_migration_backfills_existing_authoritative_rows(
+        self,
+    ) -> None:
+        migration_sql = (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0006_phase_23_lifecycle_transition_records.sql"
+        ).read_text(encoding="utf-8").lower()
+
+        self.assertIn(
+            "insert into aegisops_control.lifecycle_transition_records",
+            migration_sql,
+        )
+        self.assertIn("'phase23-migration-backfill'", migration_sql)
+        self.assertIn("where existing.transition_id is null", migration_sql)
+        self.assertIn("on conflict (transition_id) do nothing", migration_sql)
+        for table_name in (
+            "analytic_signal_records",
+            "alert_records",
+            "evidence_records",
+            "case_records",
+            "recommendation_records",
+            "approval_decision_records",
+            "action_request_records",
+            "action_execution_records",
+            "reconciliation_records",
+        ):
+            self.assertIn(f"aegisops_control.{table_name}", migration_sql)
+
     def test_store_round_trips_reviewed_record_families_by_aegisops_ids(self) -> None:
         store, _ = make_store()
         timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)

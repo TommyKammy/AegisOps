@@ -1372,8 +1372,20 @@ class RestoreReadinessService:
         ):
             ordered_transitions = sorted(
                 subject_transitions,
-                key=lambda transition: transition.transitioned_at,
+                key=lambda transition: (
+                    transition.transitioned_at,
+                    transition.transition_id,
+                ),
             )
+            first_transition = ordered_transitions[0]
+            if first_transition.previous_lifecycle_state is not None:
+                raise ValueError(
+                    "lifecycle transition chain for "
+                    f"{subject_family} record {subject_id!r} must start with a "
+                    "creation anchor: "
+                    f"{first_transition.transition_id!r} has previous_lifecycle_state "
+                    f"{first_transition.previous_lifecycle_state!r}"
+                )
             prior_transition: LifecycleTransitionRecord | None = None
             for transition in ordered_transitions:
                 if (
