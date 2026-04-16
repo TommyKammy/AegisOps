@@ -16,6 +16,36 @@ for name, value in vars(support).items():
 
 
 class Phase23TransitionLoggingValidationTests(ServicePersistenceTestBase):
+    def test_transition_logging_rolls_back_current_state_when_append_only_save_fails(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        failing_store = RecordTypeSaveFailingStore(
+            inner=store,
+            record_type=LifecycleTransitionRecord,
+            message="synthetic lifecycle transition save failure",
+        )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=failing_store,
+        )
+        alert = AlertRecord(
+            alert_id="alert-transition-atomicity-001",
+            finding_id="finding-transition-atomicity-001",
+            analytic_signal_id=None,
+            case_id=None,
+            lifecycle_state="new",
+        )
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "synthetic lifecycle transition save failure",
+        ):
+            service.persist_record(alert)
+
+        self.assertIsNone(service.get_record(AlertRecord, alert.alert_id))
+        self.assertEqual(service.list_lifecycle_transitions("alert", alert.alert_id), ())
+
     def test_case_and_alert_lifecycle_transitions_are_logged_append_only(self) -> None:
         store, service, promoted_case, _, reviewed_at = self._build_phase19_in_scope_case()
 

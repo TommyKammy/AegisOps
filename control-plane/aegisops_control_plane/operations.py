@@ -18,6 +18,7 @@ from .models import (
     CaseRecord,
     ControlPlaneRecord,
     EvidenceRecord,
+    LifecycleTransitionRecord,
     ReconciliationRecord,
 )
 
@@ -821,6 +822,11 @@ class RestoreReadinessService:
             for record in records_by_family.get("case", ())
             if isinstance(record, CaseRecord)
         )
+        lifecycle_transition_records = tuple(
+            record
+            for record in records_by_family.get("lifecycle_transition", ())
+            if isinstance(record, LifecycleTransitionRecord)
+        )
         approval_decision_records = tuple(
             record
             for record in records_by_family.get("approval_decision", ())
@@ -846,6 +852,7 @@ class RestoreReadinessService:
             ("alert", alert_records),
             ("evidence", evidence_record_family),
             ("case", case_records),
+            ("lifecycle_transition", lifecycle_transition_records),
             ("approval_decision", approval_decision_records),
             ("action_request", action_request_records),
             ("action_execution", action_execution_records),
@@ -899,6 +906,18 @@ class RestoreReadinessService:
             record.execution_run_id: record
             for record in action_execution_records
             if record.execution_run_id is not None
+        }
+        authoritative_subject_ids_by_family: dict[str, set[str]] = {
+            "analytic_signal": set(analytic_signals),
+            "alert": set(alerts),
+            "evidence": set(evidence_records),
+            "case": set(cases),
+            "approval_decision": set(approval_decisions),
+            "action_request": set(action_requests),
+            "action_execution": set(action_executions),
+            "reconciliation": {
+                record.reconciliation_id for record in reconciliations
+            },
         }
 
         for alert in alerts.values():
@@ -1194,3 +1213,16 @@ class RestoreReadinessService:
                             f"missing {singular_name} record {linked_id!r} required by reconciliation "
                             f"{reconciliation.reconciliation_id!r}"
                         )
+
+        for transition in lifecycle_transition_records:
+            subject_ids = authoritative_subject_ids_by_family.get(
+                transition.subject_record_family
+            )
+            if subject_ids is None:
+                continue
+            if transition.subject_record_id not in subject_ids:
+                raise ValueError(
+                    "missing "
+                    f"{transition.subject_record_family} record {transition.subject_record_id!r} "
+                    f"required by lifecycle transition {transition.transition_id!r}"
+                )

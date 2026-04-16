@@ -1014,15 +1014,16 @@ class AegisOpsControlPlaneService:
         return self._runtime_boundary_service.describe_runtime()
 
     def persist_record(self, record: RecordT) -> RecordT:
-        existing_record = self._store.get(type(record), record.record_id)
-        persisted_record = self._store.save(record)
-        transition_record = self._build_lifecycle_transition_record(
-            persisted_record,
-            existing_record=existing_record,
-        )
-        if transition_record is not None:
-            self._store.save(transition_record)
-        return persisted_record
+        with self._store.transaction():
+            existing_record = self._store.get(type(record), record.record_id)
+            persisted_record = self._store.save(record)
+            transition_record = self._build_lifecycle_transition_record(
+                persisted_record,
+                existing_record=existing_record,
+            )
+            if transition_record is not None:
+                self._store.save(transition_record)
+            return persisted_record
 
     def _build_lifecycle_transition_record(
         self,
