@@ -1204,6 +1204,55 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                     1,
                 )
                 self.assertEqual(
+                    diagnostics_payload["metrics"]["review_path_health"]["paths"],
+                    {
+                        "ingest": {
+                            "state": "healthy",
+                            "reason": "observations_current",
+                            "affected_reviews": 0,
+                            "by_state": {
+                                "healthy": 1,
+                                "delayed": 0,
+                                "degraded": 0,
+                                "failed": 0,
+                            },
+                        },
+                        "delegation": {
+                            "state": "healthy",
+                            "reason": "delegated",
+                            "affected_reviews": 0,
+                            "by_state": {
+                                "healthy": 1,
+                                "delayed": 0,
+                                "degraded": 0,
+                                "failed": 0,
+                            },
+                        },
+                        "provider": {
+                            "state": "healthy",
+                            "reason": "execution_succeeded",
+                            "affected_reviews": 0,
+                            "by_state": {
+                                "healthy": 1,
+                                "delayed": 0,
+                                "degraded": 0,
+                                "failed": 0,
+                            },
+                        },
+                        "persistence": {
+                            "state": "healthy",
+                            "reason": "reconciliation_matched",
+                            "affected_reviews": 0,
+                            "by_state": {
+                                "healthy": 1,
+                                "delayed": 0,
+                                "degraded": 0,
+                                "failed": 0,
+                            },
+                        },
+                    },
+                )
+                self.assertEqual(
                     diagnostics_payload["latest_reconciliation"]["reconciliation_id"],
                     reconciliation.reconciliation_id,
                 )
@@ -4254,7 +4303,9 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
     def test_cli_inspect_alert_detail_classifies_unresolved_review_without_execution(
         self,
     ) -> None:
-        _, service, promoted_case, evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        _, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
         recommendation = service.record_case_recommendation(
             case_id=promoted_case.case_id,
             review_owner="analyst-001",

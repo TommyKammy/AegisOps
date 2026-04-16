@@ -1719,6 +1719,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             review_owner="analyst-001",
             intended_outcome="Keep reviewed requests visible on readiness before delegation starts.",
         )
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=4)
         action_request = service.create_reviewed_action_request_from_advisory(
             record_family="recommendation",
             record_id=recommendation.recommendation_id,
@@ -1726,7 +1727,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             recipient_identity="repo-owner-001",
             message_intent="Notify the accountable repository owner about the reviewed permission change.",
             escalation_reason="The approved reviewed request must stay visible until delegation begins.",
-            expires_at=reviewed_at + timedelta(hours=4),
+            expires_at=expires_at,
             action_request_id="action-request-phase21-readiness-approved-path-health-001",
         )
         approval = service.persist_record(
@@ -1879,7 +1880,8 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         base_now = datetime.now(timezone.utc)
         requested_at = base_now - timedelta(hours=2)
         delegated_at = base_now - timedelta(hours=1, minutes=50)
-        expired_at = base_now - timedelta(hours=1)
+        approval_expired_at = base_now - timedelta(hours=1)
+        request_expires_at = base_now + timedelta(hours=4)
         action_request = service.persist_record(
             ActionRequestRecord(
                 action_request_id=(
@@ -1902,7 +1904,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
                 },
                 payload_hash="payload-hash-phase21-readiness-stale-executing-001",
                 requested_at=requested_at,
-                expires_at=expired_at,
+                expires_at=request_expires_at,
                 lifecycle_state="pending_approval",
                 requester_identity="analyst-001",
                 requested_payload={
@@ -1932,7 +1934,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
                 payload_hash=action_request.payload_hash,
                 decided_at=requested_at + timedelta(minutes=5),
                 lifecycle_state="approved",
-                approved_expires_at=expired_at,
+                approved_expires_at=approval_expired_at,
             )
         )
         service.persist_record(
@@ -1940,7 +1942,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
                 action_request,
                 approval_decision_id=approval.approval_decision_id,
                 requested_at=requested_at,
-                expires_at=expired_at,
+                expires_at=request_expires_at,
                 lifecycle_state="executing",
             )
         )
@@ -1960,7 +1962,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
                 approved_payload=dict(action_request.requested_payload),
                 payload_hash=action_request.payload_hash,
                 delegated_at=delegated_at,
-                expires_at=expired_at,
+                expires_at=request_expires_at,
                 provenance={"initiated_by": "operator-review"},
                 lifecycle_state="running",
             )
@@ -1995,6 +1997,149 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         self.assertEqual(
             review_path_health["paths"]["persistence"]["reason"],
             "reconciliation_timeout",
+        )
+
+    def test_service_phase21_readiness_marks_reconciliation_without_execution_lineage_degraded(
+        self,
+    ) -> None:
+        inner_store, _ = make_store()
+        store = _ListCountingStore(inner=inner_store)
+        _store, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case(store=store)
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Classify reconciliation-only reviewed visibility as degraded when execution lineage is missing.",
+        )
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=4)
+        action_request = service.persist_record(
+            ActionRequestRecord(
+                action_request_id=(
+                    "action-request-phase21-readiness-reconciliation-no-execution-001"
+                ),
+                approval_decision_id=None,
+                case_id=promoted_case.case_id,
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                idempotency_key=(
+                    "idempotency-phase21-readiness-reconciliation-no-execution-001"
+                ),
+                target_scope={
+                    "record_family": "recommendation",
+                    "record_id": recommendation.recommendation_id,
+                    "case_id": promoted_case.case_id,
+                    "alert_id": promoted_case.alert_id,
+                    "finding_id": promoted_case.finding_id,
+                    "recipient_identity": "repo-owner-001",
+                },
+                payload_hash=(
+                    "payload-hash-phase21-readiness-reconciliation-no-execution-001"
+                ),
+                requested_at=reviewed_at,
+                expires_at=expires_at,
+                lifecycle_state="approved",
+                requester_identity="analyst-001",
+                requested_payload={
+                    "action_type": "notify_identity_owner",
+                    "recipient_identity": "repo-owner-001",
+                    "message_intent": (
+                        "Keep reconciliation-only reviewed path anomalies visible on readiness."
+                    ),
+                    "escalation_reason": (
+                        "A persisted reconciliation without matching execution lineage must surface as degraded instead of awaiting."
+                    ),
+                    "source_record_family": "recommendation",
+                    "source_record_id": recommendation.recommendation_id,
+                    "recommendation_id": recommendation.recommendation_id,
+                    "case_id": promoted_case.case_id,
+                    "alert_id": promoted_case.alert_id,
+                    "finding_id": promoted_case.finding_id,
+                },
+            )
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id=(
+                    "approval-phase21-readiness-reconciliation-no-execution-001"
+                ),
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="approved",
+            )
+        )
+        service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id=(
+                    "reconciliation-phase21-readiness-reconciliation-no-execution-001"
+                ),
+                subject_linkage={
+                    "action_request_ids": [action_request.action_request_id],
+                    "approval_decision_ids": [approval.approval_decision_id],
+                },
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                analytic_signal_id=None,
+                execution_run_id=None,
+                linked_execution_run_ids=(),
+                correlation_key=(
+                    "reconciliation-no-execution:"
+                    f"{action_request.action_request_id}"
+                ),
+                first_seen_at=reviewed_at + timedelta(minutes=10),
+                last_seen_at=reviewed_at + timedelta(minutes=10),
+                ingest_disposition="matched",
+                mismatch_summary="reconciliation observed without persisted execution",
+                compared_at=reviewed_at + timedelta(minutes=11),
+                lifecycle_state="matched",
+            )
+        )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+            ),
+            store=store,
+        )
+
+        store.list_calls = 0
+        readiness = service.inspect_readiness_diagnostics()
+        review_path_health = readiness.metrics["review_path_health"]
+
+        self.assertEqual(store.list_calls, 0)
+        self.assertEqual(readiness.status, "degraded")
+        self.assertEqual(review_path_health["review_count"], 1)
+        self.assertEqual(review_path_health["overall_state"], "degraded")
+        self.assertEqual(
+            review_path_health["paths"]["ingest"]["reason"],
+            "observations_current",
+        )
+        self.assertEqual(
+            review_path_health["paths"]["delegation"]["reason"],
+            "reviewed_delegation_record_missing",
+        )
+        self.assertEqual(
+            review_path_health["paths"]["provider"]["reason"],
+            "provider_execution_record_missing",
+        )
+        self.assertEqual(
+            review_path_health["paths"]["persistence"]["reason"],
+            "reconciliation_execution_lineage_missing",
         )
 
     def test_service_phase21_readiness_promotes_expired_executing_review_without_execution_to_degraded(

@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextvars import ContextVar
 from contextlib import contextmanager
 from dataclasses import dataclass, field, fields
+from datetime import datetime
 import importlib
 import json
 from typing import Any, Callable, Iterator, Mapping, Protocol, Type, TypeVar
@@ -941,7 +942,7 @@ class PostgresControlPlaneStore:
             ),
             terminal_review_outcome_action_request_ids=self._list_identifier_values_by_lifecycle_states(
                 ActionRequestRecord,
-                ("completed", "failed"),
+                ("completed", "failed", "rejected", "expired", "superseded"),
             ),
             action_execution_total=sum(action_execution_lifecycle_counts.values()),
             action_execution_lifecycle_counts=action_execution_lifecycle_counts,
@@ -955,9 +956,6 @@ class PostgresControlPlaneStore:
                     "succeeded",
                     "failed",
                     "canceled",
-                    "unresolved",
-                    "expired",
-                    "rejected",
                     "superseded",
                 ),
             ),
@@ -1028,7 +1026,10 @@ class PostgresControlPlaneStore:
             sorted(
                 reconciliations_by_id.values(),
                 key=lambda record: (
-                    record.compared_at or record.last_seen_at or record.first_seen_at,
+                    record.compared_at
+                    or record.last_seen_at
+                    or record.first_seen_at
+                    or datetime.min,
                     record.reconciliation_id,
                 ),
                 reverse=True,

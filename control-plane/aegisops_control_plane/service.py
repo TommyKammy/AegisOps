@@ -2178,6 +2178,13 @@ class AegisOpsControlPlaneService:
                         reconciliation
                     ),
                 }
+        elif action_execution is None:
+            paths = self._action_review_reconciliation_without_execution_path_health(
+                action_request=action_request,
+                approval_decision=approval_decision,
+                reconciliation=reconciliation,
+                review_state=review_state,
+            )
         else:
             paths = {
                 "ingest": self._action_review_ingest_path_health(reconciliation),
@@ -2255,6 +2262,38 @@ class AegisOpsControlPlaneService:
             },
         }
 
+    def _action_review_reconciliation_without_execution_path_health(
+        self,
+        *,
+        action_request: ActionRequestRecord,
+        approval_decision: ApprovalDecisionRecord | None,
+        reconciliation: ReconciliationRecord,
+        review_state: str,
+    ) -> dict[str, dict[str, str]]:
+        delegation_path = self._action_review_delegation_path_health(
+            action_request=action_request,
+            approval_decision=approval_decision,
+            action_execution=None,
+            review_state=review_state,
+        )
+        if delegation_path["state"] != "healthy":
+            delegation_path = {
+                "state": "degraded",
+                "reason": "reviewed_delegation_record_missing",
+            }
+        return {
+            "ingest": self._action_review_ingest_path_health(reconciliation),
+            "delegation": delegation_path,
+            "provider": {
+                "state": "degraded",
+                "reason": "provider_execution_record_missing",
+            },
+            "persistence": {
+                "state": "degraded",
+                "reason": "reconciliation_execution_lineage_missing",
+            },
+        }
+
     @staticmethod
     def _action_review_visibility_deadline(
         *,
@@ -2262,18 +2301,22 @@ class AegisOpsControlPlaneService:
         approval_decision: ApprovalDecisionRecord | None,
         action_execution: ActionExecutionRecord | None,
     ) -> datetime | None:
-        for candidate in (
-            None if action_execution is None else action_execution.expires_at,
+        return min(
             (
-                None
-                if approval_decision is None
-                else approval_decision.approved_expires_at
+                candidate
+                for candidate in (
+                    None if action_execution is None else action_execution.expires_at,
+                    (
+                        None
+                        if approval_decision is None
+                        else approval_decision.approved_expires_at
+                    ),
+                    action_request.expires_at,
+                )
+                if candidate is not None
             ),
-            action_request.expires_at,
-        ):
-            if candidate is not None:
-                return candidate
-        return None
+            default=None,
+        )
 
     @classmethod
     def _action_review_overdue_path_health(

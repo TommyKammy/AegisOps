@@ -662,7 +662,8 @@ class RestoreReadinessService:
             terminal_review_outcome_action_request_ids=tuple(
                 record.action_request_id
                 for record in action_requests
-                if record.lifecycle_state in {"completed", "failed"}
+                if record.lifecycle_state
+                in {"completed", "failed", "rejected", "expired", "superseded"}
             ),
             action_execution_total=len(action_executions),
             action_execution_lifecycle_counts=dict(
@@ -681,9 +682,6 @@ class RestoreReadinessService:
                     "succeeded",
                     "failed",
                     "canceled",
-                    "unresolved",
-                    "expired",
-                    "rejected",
                     "superseded",
                 }
             ),
