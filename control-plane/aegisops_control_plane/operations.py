@@ -687,13 +687,6 @@ class RestoreReadinessService:
             if legacy_phase21_backup and record_type is LifecycleTransitionRecord:
                 raw_records = [] if raw_records is None else raw_records
                 expected_count = 0 if expected_count is None else expected_count
-            if (
-                record_type is RecommendationRecord
-                and raw_records is None
-                and expected_count is None
-            ):
-                raw_records = []
-                expected_count = 0
             if not isinstance(raw_records, list):
                 raise ValueError(
                     f"restore payload must contain a JSON array for record family {family!r}"

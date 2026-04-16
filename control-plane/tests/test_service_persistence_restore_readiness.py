@@ -476,7 +476,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         self.assertEqual(restore_summary.restored_record_counts["lifecycle_transition"], 0)
         self.assertEqual(restored_service._store.list(LifecycleTransitionRecord), ())
 
-    def test_service_phase21_restore_accepts_v2_backup_without_recommendation_family(
+    def test_service_phase21_restore_rejects_v2_backup_without_recommendation_family(
         self,
     ) -> None:
         _store, service, promoted_case, _evidence_id, _reviewed_at = (
@@ -492,13 +492,13 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             store=restored_store,
         )
 
-        restore_summary = restored_service.restore_authoritative_record_chain_backup(
-            backup
-        )
-
-        self.assertIn(promoted_case.case_id, restore_summary.restore_drill.verified_case_ids)
-        self.assertEqual(restore_summary.restored_record_counts["recommendation"], 0)
+        with self.assertRaisesRegex(
+            ValueError,
+            "restore payload must contain a JSON array for record family 'recommendation'",
+        ):
+            restored_service.restore_authoritative_record_chain_backup(backup)
         self.assertEqual(restored_service._store.list(RecommendationRecord), ())
+        self.assertEqual(restored_service._store.list(CaseRecord), ())
 
     def test_service_phase21_restore_preserves_handoff_and_manual_fallback_runtime_visibility(
         self,

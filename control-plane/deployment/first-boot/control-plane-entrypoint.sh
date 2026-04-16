@@ -209,10 +209,9 @@ SELECT CASE
         'hunt_records',
         'hunt_run_records',
         'ai_trace_records',
-        'reconciliation_records',
-        'lifecycle_transition_records'
+        'reconciliation_records'
       )
-  ) = 15
+  ) = 14
   THEN 'ready'
   ELSE 'not-ready'
 END;
