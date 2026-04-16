@@ -636,29 +636,13 @@ class RestoreReadinessService:
         record_families: dict[str, list[dict[str, object]]] = {}
         record_counts: dict[str, int] = {}
         with self._store.transaction(isolation_level="REPEATABLE READ"):
-            authoritative_subject_ids_by_family: dict[str, set[str]] = {}
-            for record_type in self._authoritative_record_chain_record_types:
-                family = record_type.record_family
-                persisted_records = tuple(self._store.list(record_type))
-                if record_type is LifecycleTransitionRecord:
-                    records = [
-                        self._json_ready(self._record_to_dict(record))
-                        for record in persisted_records
-                        if record.subject_record_id
-                        in authoritative_subject_ids_by_family.get(
-                            record.subject_record_family,
-                            set(),
-                        )
-                    ]
-                else:
-                    records = [
-                        self._json_ready(self._record_to_dict(record))
-                        for record in persisted_records
-                    ]
-                    authoritative_subject_ids_by_family[family] = {
-                        getattr(record, self._authoritative_primary_id_field_by_family[family])
-                        for record in persisted_records
-                    }
+            for family, persisted_records in (
+                self._list_authoritative_record_chain_records().items()
+            ):
+                records = [
+                    self._json_ready(self._record_to_dict(record))
+                    for record in persisted_records
+                ]
                 record_families[family] = records
                 record_counts[family] = len(records)
         return {
@@ -746,10 +730,7 @@ class RestoreReadinessService:
 
     def run_authoritative_restore_drill_snapshot(self) -> Any:
         self.validate_authoritative_record_chain_restore(
-            {
-                record_type.record_family: self._store.list(record_type)
-                for record_type in self._authoritative_record_chain_record_types
-            }
+            self._list_authoritative_record_chain_records()
         )
         verified_case_ids = tuple(
             record.case_id for record in self._store.list(CaseRecord)
@@ -791,6 +772,32 @@ class RestoreReadinessService:
             verified_action_execution_ids=verified_action_execution_ids,
             verified_reconciliation_ids=verified_reconciliation_ids,
         )
+
+    def _list_authoritative_record_chain_records(
+        self,
+    ) -> dict[str, tuple[ControlPlaneRecord, ...]]:
+        authoritative_records: dict[str, tuple[ControlPlaneRecord, ...]] = {}
+        authoritative_subject_ids_by_family: dict[str, set[str]] = {}
+        for record_type in self._authoritative_record_chain_record_types:
+            family = record_type.record_family
+            persisted_records = tuple(self._store.list(record_type))
+            if record_type is LifecycleTransitionRecord:
+                authoritative_records[family] = tuple(
+                    record
+                    for record in persisted_records
+                    if record.subject_record_id
+                    in authoritative_subject_ids_by_family.get(
+                        record.subject_record_family,
+                        set(),
+                    )
+                )
+                continue
+            authoritative_records[family] = persisted_records
+            authoritative_subject_ids_by_family[family] = {
+                getattr(record, self._authoritative_primary_id_field_by_family[family])
+                for record in persisted_records
+            }
+        return authoritative_records
 
     def require_empty_authoritative_restore_target(self) -> None:
         all_record_types = tuple(dict.fromkeys(self._record_types_by_family.values()))

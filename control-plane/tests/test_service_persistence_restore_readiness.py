@@ -880,6 +880,33 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         restored_case_detail = restored_service.inspect_case_detail(promoted_case.case_id)
         self.assertEqual(restored_case_detail.linked_evidence_ids, (evidence_id,))
 
+    def test_service_phase21_restore_drill_filters_non_authoritative_transition_subjects(
+        self,
+    ) -> None:
+        store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome=(
+                "Keep a reviewed recommendation transition in the live store while "
+                "the restore drill validates only the authoritative subset."
+            ),
+        )
+
+        self.assertIn(
+            ("recommendation", recommendation.recommendation_id),
+            {
+                (record.subject_record_family, record.subject_record_id)
+                for record in store.list(LifecycleTransitionRecord)
+            },
+        )
+
+        restore_drill = service.run_authoritative_restore_drill()
+
+        self.assertEqual(restore_drill.verified_case_ids, (promoted_case.case_id,))
+
     def test_service_phase21_restore_drill_fails_closed_when_runtime_bindings_missing_after_restore(
         self,
     ) -> None:
