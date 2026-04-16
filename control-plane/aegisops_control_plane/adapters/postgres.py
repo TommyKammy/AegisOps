@@ -968,22 +968,38 @@ class PostgresControlPlaneStore:
         *,
         action_request_ids: tuple[str, ...],
         approval_decision_ids: tuple[str, ...],
+        delegation_ids: tuple[str, ...] = (),
     ) -> ReadinessReviewPathRecords:
-        action_executions = self._list_action_executions_by_action_request_ids(
+        action_executions_by_id: dict[str, ActionExecutionRecord] = {}
+        for action_execution in self._list_action_executions_by_action_request_ids(
             action_request_ids
-        )
+        ):
+            action_executions_by_id[action_execution.action_execution_id] = action_execution
+        for action_execution in self._list_action_executions_by_delegation_ids(
+            delegation_ids
+        ):
+            action_executions_by_id[action_execution.action_execution_id] = action_execution
+        action_executions = tuple(action_executions_by_id.values())
         reconciliations_by_id: dict[str, ReconciliationRecord] = {}
         action_execution_ids = tuple(
             action_execution.action_execution_id for action_execution in action_executions
         )
-        delegation_ids = tuple(
-            action_execution.delegation_id for action_execution in action_executions
+        reconciliation_delegation_ids = tuple(
+            sorted(
+                {
+                    *delegation_ids,
+                    *(
+                        action_execution.delegation_id
+                        for action_execution in action_executions
+                    ),
+                }
+            )
         )
         for linkage_key, linkage_ids in (
             ("action_request_ids", action_request_ids),
             ("approval_decision_ids", approval_decision_ids),
             ("action_execution_ids", action_execution_ids),
-            ("delegation_ids", delegation_ids),
+            ("delegation_ids", reconciliation_delegation_ids),
         ):
             for reconciliation in self._list_reconciliations_by_subject_linkage_ids(
                 linkage_key=linkage_key,
@@ -1101,6 +1117,35 @@ class PostgresControlPlaneStore:
             cursor = connection.cursor()
             try:
                 cursor.execute(query, action_request_ids)
+                rows = cursor.fetchall()
+            finally:
+                cursor.close()
+
+        return tuple(
+            self._row_to_record(ActionExecutionRecord, _row_to_mapping(cursor, row))
+            for row in rows
+        )
+
+    def _list_action_executions_by_delegation_ids(
+        self,
+        delegation_ids: tuple[str, ...],
+    ) -> tuple[ActionExecutionRecord, ...]:
+        if not delegation_ids:
+            return ()
+
+        table = self._table_config(ActionExecutionRecord)
+        placeholders = ", ".join("%s" for _ in delegation_ids)
+        query = (
+            f"select {', '.join(table.record_fields)} "
+            f"from aegisops_control.{table.table_name} "
+            f"where delegation_id in ({placeholders}) "
+            "order by delegated_at desc, action_execution_id desc"
+        )
+
+        with self._borrow_connection() as connection:
+            cursor = connection.cursor()
+            try:
+                cursor.execute(query, delegation_ids)
                 rows = cursor.fetchall()
             finally:
                 cursor.close()

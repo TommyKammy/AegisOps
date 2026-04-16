@@ -68,10 +68,12 @@ class TransactionMutationStore:
         *,
         action_request_ids: tuple[str, ...],
         approval_decision_ids: tuple[str, ...],
+        delegation_ids: tuple[str, ...] = (),
     ) -> object:
         return self.inner.inspect_readiness_review_path_records(
             action_request_ids=action_request_ids,
             approval_decision_ids=approval_decision_ids,
+            delegation_ids=delegation_ids,
         )
 
     def _consume_mutation_token(self) -> bool:
@@ -162,10 +164,12 @@ class ConcurrentListMutationStore:
         *,
         action_request_ids: tuple[str, ...],
         approval_decision_ids: tuple[str, ...],
+        delegation_ids: tuple[str, ...] = (),
     ) -> object:
         records = self.inner.inspect_readiness_review_path_records(
             action_request_ids=action_request_ids,
             approval_decision_ids=approval_decision_ids,
+            delegation_ids=delegation_ids,
         )
         if self._consume_mutation_token():
             self.mutate_once()
@@ -225,10 +229,12 @@ class CommitFailingStore:
         *,
         action_request_ids: tuple[str, ...],
         approval_decision_ids: tuple[str, ...],
+        delegation_ids: tuple[str, ...] = (),
     ) -> object:
         return self.inner.inspect_readiness_review_path_records(
             action_request_ids=action_request_ids,
             approval_decision_ids=approval_decision_ids,
+            delegation_ids=delegation_ids,
         )
 
     @contextmanager
@@ -305,10 +311,12 @@ class RecordTypeSaveFailingStore:
         *,
         action_request_ids: tuple[str, ...],
         approval_decision_ids: tuple[str, ...],
+        delegation_ids: tuple[str, ...] = (),
     ) -> object:
         return self.inner.inspect_readiness_review_path_records(
             action_request_ids=action_request_ids,
             approval_decision_ids=approval_decision_ids,
+            delegation_ids=delegation_ids,
         )
 
     @contextmanager
@@ -394,10 +402,12 @@ class ListCountingStore:
         *,
         action_request_ids: tuple[str, ...],
         approval_decision_ids: tuple[str, ...],
+        delegation_ids: tuple[str, ...] = (),
     ) -> object:
         return self.inner.inspect_readiness_review_path_records(
             action_request_ids=action_request_ids,
             approval_decision_ids=approval_decision_ids,
+            delegation_ids=delegation_ids,
         )
 
     @contextmanager
@@ -460,10 +470,12 @@ class OutOfBandMutationStore:
         *,
         action_request_ids: tuple[str, ...],
         approval_decision_ids: tuple[str, ...],
+        delegation_ids: tuple[str, ...] = (),
     ) -> object:
         return self.inner.inspect_readiness_review_path_records(
             action_request_ids=action_request_ids,
             approval_decision_ids=approval_decision_ids,
+            delegation_ids=delegation_ids,
         )
 
     def _consume_mutation_token(self) -> bool:

@@ -2524,6 +2524,7 @@ class AegisOpsControlPlaneService:
     ) -> dict[str, object]:
         execution_ids = set(readiness_aggregates.active_action_execution_ids)
         candidate_action_request_ids: set[str] = set()
+        unresolved_delegation_ids: set[str] = set()
 
         for action_request_id in readiness_aggregates.active_action_request_ids:
             action_request = self._store.get(ActionRequestRecord, action_request_id)
@@ -2562,6 +2563,18 @@ class AegisOpsControlPlaneService:
                     "action_execution_ids",
                 )
             )
+            unresolved_delegation_ids.update(
+                self._assistant_ids_from_mapping(
+                    reconciliation.subject_linkage,
+                    "delegation_ids",
+                )
+            )
+
+        candidate_action_request_ids.update(
+            self._readiness_candidate_action_request_ids_for_delegations(
+                unresolved_delegation_ids
+            )
+        )
 
         executions_by_action_request_id: dict[str, ActionExecutionRecord] = {}
         for action_execution_id in execution_ids:
@@ -2778,6 +2791,36 @@ class AegisOpsControlPlaneService:
             ),
             "paths": paths,
         }
+
+    def _readiness_candidate_action_request_ids_for_delegations(
+        self,
+        delegation_ids: set[str],
+    ) -> set[str]:
+        if not delegation_ids:
+            return set()
+
+        record_reader = getattr(self._store, "inspect_readiness_review_path_records", None)
+        if callable(record_reader):
+            readiness_records: ReadinessReviewPathRecords = record_reader(
+                action_request_ids=(),
+                approval_decision_ids=(),
+                delegation_ids=tuple(sorted(delegation_ids)),
+            )
+            return {
+                action_execution.action_request_id
+                for action_execution in readiness_records.action_executions
+            }
+
+        pending_delegation_ids = set(delegation_ids)
+        candidate_action_request_ids: set[str] = set()
+        for action_execution in self._store.list(ActionExecutionRecord):
+            if action_execution.delegation_id not in pending_delegation_ids:
+                continue
+            candidate_action_request_ids.add(action_execution.action_request_id)
+            pending_delegation_ids.discard(action_execution.delegation_id)
+            if not pending_delegation_ids:
+                break
+        return candidate_action_request_ids
 
     def _build_readiness_review_record_index(
         self,

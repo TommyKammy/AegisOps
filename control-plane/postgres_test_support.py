@@ -67,6 +67,12 @@ _SELECT_EXECUTIONS_BY_ACTION_REQUEST_IDS_RE = re.compile(
     r"order by action_request_id asc, delegated_at desc, action_execution_id desc",
     re.IGNORECASE,
 )
+_SELECT_EXECUTIONS_BY_DELEGATION_IDS_RE = re.compile(
+    r"select (?P<columns>.+) from aegisops_control\.action_execution_records "
+    r"where delegation_id in \((?P<placeholders>.+)\) "
+    r"order by delegated_at desc, action_execution_id desc",
+    re.IGNORECASE,
+)
 _SELECT_RECONCILIATIONS_BY_SUBJECT_LINKAGE_IDS_RE = re.compile(
     r"select (?P<columns>.+) from aegisops_control\.reconciliation_records "
     r"where coalesce\(subject_linkage -> '(?P<linkage_key>\w+)', '\[\]'::jsonb\) "
@@ -235,6 +241,16 @@ class FakePostgresCursor:
         if select_executions_by_action_request_ids_match is not None:
             self._execute_select_executions_by_action_request_ids(
                 select_executions_by_action_request_ids_match.group("columns"),
+                params,
+            )
+            return
+
+        select_executions_by_delegation_ids_match = (
+            _SELECT_EXECUTIONS_BY_DELEGATION_IDS_RE.fullmatch(normalized)
+        )
+        if select_executions_by_delegation_ids_match is not None:
+            self._execute_select_executions_by_delegation_ids(
+                select_executions_by_delegation_ids_match.group("columns"),
                 params,
             )
             return
@@ -424,6 +440,25 @@ class FakePostgresCursor:
             reverse=True,
         )
         rows.sort(key=lambda row: str(row["action_request_id"]))
+        self.description = tuple((name,) for name in column_names)
+        self._rows = [self._project_row(row, column_names) for row in rows]
+
+    def _execute_select_executions_by_delegation_ids(
+        self,
+        columns: str,
+        params: tuple[object, ...] | None,
+    ) -> None:
+        column_names = [column.strip() for column in columns.split(",")]
+        delegation_ids = {str(value) for value in (params or ())}
+        rows = [
+            row
+            for row in self.tables.get("action_execution_records", {}).values()
+            if str(row.get("delegation_id")) in delegation_ids
+        ]
+        rows.sort(
+            key=lambda row: (row["delegated_at"], row["action_execution_id"]),
+            reverse=True,
+        )
         self.description = tuple((name,) for name in column_names)
         self._rows = [self._project_row(row, column_names) for row in rows]
 

@@ -2145,6 +2145,172 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             "reconciliation_matched",
         )
 
+    def test_service_phase21_readiness_keeps_delegation_only_stale_reconciliation_visible(
+        self,
+    ) -> None:
+        inner_store, _ = make_store()
+        store = _ListCountingStore(inner=inner_store)
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case(store=store)
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep delegation-linked unresolved reconciliation gaps visible after terminal execution.",
+        )
+        base_now = datetime.now(timezone.utc)
+        requested_at = base_now - timedelta(hours=2)
+        delegated_at = base_now - timedelta(hours=1, minutes=50)
+        expired_at = base_now - timedelta(hours=1)
+        action_request = service.persist_record(
+            ActionRequestRecord(
+                action_request_id=(
+                    "action-request-phase21-readiness-delegation-lineage-timeout-001"
+                ),
+                approval_decision_id=None,
+                case_id=promoted_case.case_id,
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                idempotency_key=(
+                    "idempotency-phase21-readiness-delegation-lineage-timeout-001"
+                ),
+                target_scope={
+                    "record_family": "recommendation",
+                    "record_id": recommendation.recommendation_id,
+                    "case_id": promoted_case.case_id,
+                    "alert_id": promoted_case.alert_id,
+                    "finding_id": promoted_case.finding_id,
+                    "recipient_identity": "repo-owner-001",
+                },
+                payload_hash=(
+                    "payload-hash-phase21-readiness-delegation-lineage-timeout-001"
+                ),
+                requested_at=requested_at,
+                expires_at=expired_at,
+                lifecycle_state="pending_approval",
+                requester_identity="analyst-001",
+                requested_payload={
+                    "action_type": "notify_identity_owner",
+                    "recipient_identity": "repo-owner-001",
+                    "message_intent": (
+                        "Keep delegation-only stale reconciliation visible."
+                    ),
+                    "escalation_reason": (
+                        "Delegation-linked persistence gaps must remain visible after execution leaves the active sets."
+                    ),
+                    "source_record_family": "recommendation",
+                    "source_record_id": recommendation.recommendation_id,
+                    "recommendation_id": recommendation.recommendation_id,
+                    "case_id": promoted_case.case_id,
+                    "alert_id": promoted_case.alert_id,
+                    "finding_id": promoted_case.finding_id,
+                },
+            )
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id=(
+                    "approval-phase21-readiness-delegation-lineage-timeout-001"
+                ),
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=requested_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=expired_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="completed",
+            )
+        )
+        action_execution = service.persist_record(
+            ActionExecutionRecord(
+                action_execution_id=(
+                    "action-execution-phase21-readiness-delegation-lineage-timeout-001"
+                ),
+                action_request_id=action_request.action_request_id,
+                approval_decision_id=approval.approval_decision_id,
+                delegation_id=(
+                    "delegation-phase21-readiness-delegation-lineage-timeout-001"
+                ),
+                execution_surface_type="automation_substrate",
+                execution_surface_id="shuffle",
+                execution_run_id=(
+                    "execution-run-phase21-readiness-delegation-lineage-timeout-001"
+                ),
+                idempotency_key=action_request.idempotency_key,
+                target_scope=dict(action_request.target_scope),
+                approved_payload=dict(action_request.requested_payload),
+                payload_hash=action_request.payload_hash,
+                delegated_at=delegated_at,
+                expires_at=expired_at,
+                provenance={"initiated_by": "operator-review"},
+                lifecycle_state="succeeded",
+            )
+        )
+        service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id=(
+                    "reconciliation-phase21-readiness-delegation-lineage-timeout-001"
+                ),
+                subject_linkage={
+                    "case_ids": (promoted_case.case_id,),
+                    "delegation_ids": (action_execution.delegation_id,),
+                },
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                analytic_signal_id=None,
+                execution_run_id=action_execution.execution_run_id,
+                linked_execution_run_ids=(action_execution.execution_run_id,),
+                correlation_key=(
+                    "phase21-readiness-delegation-lineage-timeout-001"
+                ),
+                first_seen_at=delegated_at + timedelta(minutes=1),
+                last_seen_at=delegated_at + timedelta(minutes=2),
+                ingest_disposition="matched",
+                mismatch_summary=(
+                    "delegation-only stale reconciliation should stay operator-visible"
+                ),
+                compared_at=delegated_at + timedelta(minutes=3),
+                lifecycle_state="stale",
+            )
+        )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+            ),
+            store=store,
+        )
+
+        store.list_calls = 0
+        readiness = service.inspect_readiness_diagnostics()
+        review_path_health = readiness.metrics["review_path_health"]
+
+        self.assertEqual(store.list_calls, 0)
+        self.assertEqual(readiness.status, "stale")
+        self.assertEqual(review_path_health["review_count"], 1)
+        self.assertEqual(review_path_health["overall_state"], "degraded")
+        self.assertEqual(review_path_health["paths"]["ingest"]["reason"], "observations_current")
+        self.assertEqual(review_path_health["paths"]["delegation"]["reason"], "delegated")
+        self.assertEqual(
+            review_path_health["paths"]["provider"]["reason"],
+            "execution_succeeded",
+        )
+        self.assertEqual(
+            review_path_health["paths"]["persistence"]["reason"],
+            "reconciliation_stale",
+        )
+
     def test_service_phase21_readiness_fallback_surfaces_terminal_executing_review_path_health(
         self,
     ) -> None:
