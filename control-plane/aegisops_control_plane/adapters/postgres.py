@@ -271,6 +271,18 @@ _RECONCILIATION_INGEST_DISPOSITIONS = frozenset(
     }
 )
 
+_LIFECYCLE_TRANSITION_SUBJECT_FAMILIES = frozenset(
+    family
+    for family in _LIFECYCLE_STATES_BY_FAMILY
+    if family != LifecycleTransitionRecord.record_family
+)
+_LIFECYCLE_TRANSITION_ALLOWED_STATES = frozenset(
+    state
+    for family, states in _LIFECYCLE_STATES_BY_FAMILY.items()
+    if family != LifecycleTransitionRecord.record_family
+    for state in states
+)
+
 _TABLES_BY_RECORD_TYPE: dict[Type[ControlPlaneRecord], TableConfig] = {
     AlertRecord: TableConfig(
         AlertRecord,
@@ -347,9 +359,39 @@ _TABLES_BY_RECORD_TYPE: dict[Type[ControlPlaneRecord], TableConfig] = {
 
 def _validate_lifecycle_state(record: ControlPlaneRecord) -> None:
     if isinstance(record, LifecycleTransitionRecord):
-        if not isinstance(record.lifecycle_state, str) or not record.lifecycle_state.strip():
+        allowed_states = _LIFECYCLE_STATES_BY_FAMILY.get(record.subject_record_family)
+        if (
+            record.subject_record_family
+            not in _LIFECYCLE_TRANSITION_SUBJECT_FAMILIES
+        ):
             raise ValueError(
-                f"lifecycle_transition record {record.record_id!r} requires non-blank lifecycle_state"
+                "lifecycle_transition record "
+                f"{record.record_id!r} has unsupported subject_record_family "
+                f"{record.subject_record_family!r}; expected one of "
+                f"{sorted(_LIFECYCLE_TRANSITION_SUBJECT_FAMILIES)!r}"
+            )
+        if allowed_states is None:
+            raise ValueError(
+                "lifecycle_transition record "
+                f"{record.record_id!r} has unsupported subject_record_family "
+                f"{record.subject_record_family!r}"
+            )
+        if record.lifecycle_state not in allowed_states:
+            raise ValueError(
+                "lifecycle_transition record "
+                f"{record.record_id!r} has invalid lifecycle_state {record.lifecycle_state!r} "
+                f"for subject_record_family {record.subject_record_family!r}; expected one of "
+                f"{sorted(allowed_states)!r}"
+            )
+        if (
+            record.previous_lifecycle_state is not None
+            and record.previous_lifecycle_state not in allowed_states
+        ):
+            raise ValueError(
+                "lifecycle_transition record "
+                f"{record.record_id!r} has invalid previous_lifecycle_state "
+                f"{record.previous_lifecycle_state!r} for subject_record_family "
+                f"{record.subject_record_family!r}; expected one of {sorted(allowed_states)!r}"
             )
         return
     allowed_states = _LIFECYCLE_STATES_BY_FAMILY.get(record.record_family)

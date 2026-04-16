@@ -636,12 +636,29 @@ class RestoreReadinessService:
         record_families: dict[str, list[dict[str, object]]] = {}
         record_counts: dict[str, int] = {}
         with self._store.transaction(isolation_level="REPEATABLE READ"):
+            authoritative_subject_ids_by_family: dict[str, set[str]] = {}
             for record_type in self._authoritative_record_chain_record_types:
                 family = record_type.record_family
-                records = [
-                    self._json_ready(self._record_to_dict(record))
-                    for record in self._store.list(record_type)
-                ]
+                persisted_records = tuple(self._store.list(record_type))
+                if record_type is LifecycleTransitionRecord:
+                    records = [
+                        self._json_ready(self._record_to_dict(record))
+                        for record in persisted_records
+                        if record.subject_record_id
+                        in authoritative_subject_ids_by_family.get(
+                            record.subject_record_family,
+                            set(),
+                        )
+                    ]
+                else:
+                    records = [
+                        self._json_ready(self._record_to_dict(record))
+                        for record in persisted_records
+                    ]
+                    authoritative_subject_ids_by_family[family] = {
+                        getattr(record, self._authoritative_primary_id_field_by_family[family])
+                        for record in persisted_records
+                    }
                 record_families[family] = records
                 record_counts[family] = len(records)
         return {
@@ -1219,7 +1236,11 @@ class RestoreReadinessService:
                 transition.subject_record_family
             )
             if subject_ids is None:
-                continue
+                raise ValueError(
+                    "lifecycle transition "
+                    f"{transition.transition_id!r} references unsupported subject_record_family "
+                    f"{transition.subject_record_family!r}"
+                )
             if transition.subject_record_id not in subject_ids:
                 raise ValueError(
                     "missing "

@@ -233,6 +233,8 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         self.assertIn("transition_id text primary key", schema_sql)
         self.assertIn("previous_lifecycle_state text", schema_sql)
         self.assertIn("attribution jsonb not null default '{}'::jsonb", schema_sql)
+        self.assertIn("subject_record_family in (", schema_sql)
+        self.assertIn("previous_lifecycle_state is null or previous_lifecycle_state in (", schema_sql)
         self.assertIn(
             "create table if not exists aegisops_control.lifecycle_transition_records",
             bootstrap_sql,
@@ -241,6 +243,11 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         self.assertIn("previous_lifecycle_state text", bootstrap_sql)
         self.assertIn(
             "attribution jsonb not null default '{}'::jsonb",
+            bootstrap_sql,
+        )
+        self.assertIn("subject_record_family in (", bootstrap_sql)
+        self.assertIn(
+            "previous_lifecycle_state is null or previous_lifecycle_state in (",
             bootstrap_sql,
         )
 
@@ -626,6 +633,50 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             store.get(LifecycleTransitionRecord, "transition-001"),
             original,
         )
+
+    def test_lifecycle_transition_records_require_supported_subject_family(self) -> None:
+        store, _ = make_store()
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                r"lifecycle_transition record 'transition-unsupported-family' has unsupported "
+                r"subject_record_family 'typo_family'"
+            ),
+        ):
+            store.save(
+                LifecycleTransitionRecord(
+                    transition_id="transition-unsupported-family",
+                    subject_record_family="typo_family",
+                    subject_record_id="record-001",
+                    previous_lifecycle_state=None,
+                    lifecycle_state="open",
+                    transitioned_at=datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc),
+                    attribution={},
+                )
+            )
+
+    def test_lifecycle_transition_records_require_valid_subject_lifecycle_states(self) -> None:
+        store, _ = make_store()
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                r"lifecycle_transition record 'transition-invalid-state' has invalid "
+                r"lifecycle_state 'closed' for subject_record_family 'recommendation'"
+            ),
+        ):
+            store.save(
+                LifecycleTransitionRecord(
+                    transition_id="transition-invalid-state",
+                    subject_record_family="recommendation",
+                    subject_record_id="recommendation-001",
+                    previous_lifecycle_state="proposed",
+                    lifecycle_state="closed",
+                    transitioned_at=datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc),
+                    attribution={},
+                )
+            )
 
     def test_store_copies_mapping_fields_before_persistence(self) -> None:
         timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)

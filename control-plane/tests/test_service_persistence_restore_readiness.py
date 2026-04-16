@@ -1537,6 +1537,69 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             restored_service.restore_authoritative_record_chain_backup(backup)
         self._assert_authoritative_store_empty(restored_store)
 
+    def test_service_phase21_backup_excludes_non_authoritative_transition_subjects(
+        self,
+    ) -> None:
+        store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep a reviewed recommendation outside the authoritative restore set.",
+        )
+
+        self.assertIn(
+            ("recommendation", recommendation.recommendation_id),
+            {
+                (record.subject_record_family, record.subject_record_id)
+                for record in store.list(LifecycleTransitionRecord)
+            },
+        )
+
+        backup = service.export_authoritative_record_chain_backup()
+
+        self.assertNotIn(
+            ("recommendation", recommendation.recommendation_id),
+            {
+                (record["subject_record_family"], record["subject_record_id"])
+                for record in backup["record_families"]["lifecycle_transition"]
+            },
+        )
+
+    def test_service_phase21_restore_rejects_unsupported_transition_subject_family(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Use a recommendation family to simulate an unsupported restore payload.",
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        mutated_transition = dict(backup["record_families"]["lifecycle_transition"][0])
+        mutated_transition["subject_record_family"] = "recommendation"
+        mutated_transition["subject_record_id"] = recommendation.recommendation_id
+        backup["record_families"]["lifecycle_transition"][0] = mutated_transition
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                r"lifecycle transition .* references unsupported "
+                r"subject_record_family 'recommendation'"
+            ),
+        ):
+            restored_service.restore_authoritative_record_chain_backup(backup)
+        self._assert_authoritative_store_empty(restored_store)
+
     def test_service_phase21_restore_fails_closed_on_duplicate_execution_run_ids(
         self,
     ) -> None:
