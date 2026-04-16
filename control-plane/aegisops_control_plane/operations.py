@@ -698,7 +698,10 @@ class RestoreReadinessService:
             family = record_type.record_family
             raw_records = record_families_payload.get(family)
             expected_count = record_counts_payload.get(family)
-            if legacy_phase21_backup and record_type is LifecycleTransitionRecord:
+            if legacy_phase21_backup and record_type in (
+                RecommendationRecord,
+                LifecycleTransitionRecord,
+            ):
                 raw_records = [] if raw_records is None else raw_records
                 expected_count = 0 if expected_count is None else expected_count
             if not isinstance(raw_records, list):

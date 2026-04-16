@@ -451,7 +451,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             restored_approval_context.linked_reconciliation_ids,
         )
 
-    def test_service_phase21_restore_accepts_legacy_backup_without_transition_family(
+    def test_service_phase21_restore_accepts_legacy_backup_without_recommendation_or_transition_family(
         self,
     ) -> None:
         _store, service, promoted_case, _evidence_id, _reviewed_at = (
@@ -459,6 +459,8 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         )
         backup = service.export_authoritative_record_chain_backup()
         backup["backup_schema_version"] = "phase21.authoritative-record-chain.v1"
+        del backup["record_families"]["recommendation"]
+        del backup["record_counts"]["recommendation"]
         del backup["record_families"]["lifecycle_transition"]
         del backup["record_counts"]["lifecycle_transition"]
 
@@ -510,6 +512,8 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         )
         backup = service.export_authoritative_record_chain_backup()
         backup["backup_schema_version"] = "phase21.authoritative-record-chain.v1"
+        del backup["record_families"]["recommendation"]
+        del backup["record_counts"]["recommendation"]
         del backup["record_families"]["lifecycle_transition"]
         del backup["record_counts"]["lifecycle_transition"]
 
