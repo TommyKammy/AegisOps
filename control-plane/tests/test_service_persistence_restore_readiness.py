@@ -1709,6 +1709,38 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             restored_service.restore_authoritative_record_chain_backup(backup)
         self._assert_authoritative_store_empty(restored_store)
 
+    def test_service_phase21_restore_fails_closed_when_authoritative_subject_loses_transition_history(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        backup["record_families"]["lifecycle_transition"] = [
+            record
+            for record in backup["record_families"]["lifecycle_transition"]
+            if not (
+                record["subject_record_family"] == "case"
+                and record["subject_record_id"] == promoted_case.case_id
+            )
+        ]
+        backup["record_counts"]["lifecycle_transition"] = len(
+            backup["record_families"]["lifecycle_transition"]
+        )
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            rf"missing lifecycle transition history for case record '{promoted_case.case_id}'",
+        ):
+            restored_service.restore_authoritative_record_chain_backup(backup)
+        self._assert_authoritative_store_empty(restored_store)
+
     def test_service_phase21_restore_fails_closed_when_transition_chain_is_inconsistent(
         self,
     ) -> None:

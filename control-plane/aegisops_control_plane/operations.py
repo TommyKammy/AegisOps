@@ -705,6 +705,7 @@ class RestoreReadinessService:
 
         self.validate_authoritative_record_chain_restore(
             parsed_records,
+            require_lifecycle_transition_history=not legacy_phase21_backup,
             restored_record_counts=restored_record_counts,
         )
         with self._store.transaction(isolation_level="SERIALIZABLE"):
@@ -712,7 +713,9 @@ class RestoreReadinessService:
             for record_type in self._authoritative_record_chain_record_types:
                 for record in parsed_records[record_type.record_family]:
                     self._store.save(record)
-            restore_drill = self.run_authoritative_restore_drill()
+            restore_drill = self.run_authoritative_restore_drill(
+                require_lifecycle_transition_history=not legacy_phase21_backup
+            )
         return self._restore_summary_snapshot_factory(
             read_only=True,
             restored_record_counts=restored_record_counts,
@@ -731,13 +734,24 @@ class RestoreReadinessService:
         with self._store.transaction():
             yield
 
-    def run_authoritative_restore_drill(self) -> Any:
+    def run_authoritative_restore_drill(
+        self,
+        *,
+        require_lifecycle_transition_history: bool = True,
+    ) -> Any:
         with self.restore_drill_snapshot_transaction():
-            return self.run_authoritative_restore_drill_snapshot()
+            return self.run_authoritative_restore_drill_snapshot(
+                require_lifecycle_transition_history=require_lifecycle_transition_history
+            )
 
-    def run_authoritative_restore_drill_snapshot(self) -> Any:
+    def run_authoritative_restore_drill_snapshot(
+        self,
+        *,
+        require_lifecycle_transition_history: bool = True,
+    ) -> Any:
         self.validate_authoritative_record_chain_restore(
-            self._list_authoritative_record_chain_records()
+            self._list_authoritative_record_chain_records(),
+            require_lifecycle_transition_history=require_lifecycle_transition_history,
         )
         verified_case_ids = tuple(
             record.case_id for record in self._store.list(CaseRecord)
@@ -848,6 +862,7 @@ class RestoreReadinessService:
         self,
         records_by_family: Mapping[str, tuple[ControlPlaneRecord, ...]],
         *,
+        require_lifecycle_transition_history: bool = True,
         restored_record_counts: Mapping[str, int] | None = None,
     ) -> None:
         def duplicate_restore_count_suffix(family: str) -> str:
@@ -1332,6 +1347,25 @@ class RestoreReadinessService:
                 ),
                 [],
             ).append(transition)
+
+        if require_lifecycle_transition_history:
+            for subject_family, subject_records in authoritative_subject_records_by_family.items():
+                for subject_id, subject_record in subject_records.items():
+                    subject_lifecycle_state = getattr(
+                        subject_record,
+                        "lifecycle_state",
+                        None,
+                    )
+                    if (
+                        not isinstance(subject_lifecycle_state, str)
+                        or not subject_lifecycle_state.strip()
+                    ):
+                        continue
+                    if (subject_family, subject_id) not in lifecycle_transitions_by_subject:
+                        raise ValueError(
+                            f"missing lifecycle transition history for {subject_family} "
+                            f"record {subject_id!r}"
+                        )
 
         for (subject_family, subject_id), subject_transitions in (
             lifecycle_transitions_by_subject.items()
