@@ -42,6 +42,7 @@ class ReadinessDiagnosticsAggregates:
     action_execution_total: int
     action_execution_lifecycle_counts: dict[str, int]
     active_action_execution_ids: tuple[str, ...]
+    terminal_action_execution_ids: tuple[str, ...]
     reconciliation_total: int
     reconciliation_lifecycle_counts: dict[str, int]
     reconciliation_ingest_disposition_counts: dict[str, int]
@@ -942,6 +943,18 @@ class PostgresControlPlaneStore:
             active_action_execution_ids=self._list_identifier_values_by_lifecycle_states(
                 ActionExecutionRecord,
                 ("dispatching", "queued", "running"),
+            ),
+            terminal_action_execution_ids=self._list_identifier_values_by_lifecycle_states(
+                ActionExecutionRecord,
+                (
+                    "succeeded",
+                    "failed",
+                    "canceled",
+                    "unresolved",
+                    "expired",
+                    "rejected",
+                    "superseded",
+                ),
             ),
             reconciliation_total=sum(reconciliation_lifecycle_counts.values()),
             reconciliation_lifecycle_counts=reconciliation_lifecycle_counts,

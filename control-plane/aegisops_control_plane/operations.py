@@ -668,6 +668,20 @@ class RestoreReadinessService:
                 for record in action_executions
                 if record.lifecycle_state in {"dispatching", "queued", "running"}
             ),
+            terminal_action_execution_ids=tuple(
+                record.action_execution_id
+                for record in action_executions
+                if record.lifecycle_state
+                in {
+                    "succeeded",
+                    "failed",
+                    "canceled",
+                    "unresolved",
+                    "expired",
+                    "rejected",
+                    "superseded",
+                }
+            ),
             reconciliation_total=len(reconciliations),
             reconciliation_lifecycle_counts=dict(
                 Counter(record.lifecycle_state for record in reconciliations)

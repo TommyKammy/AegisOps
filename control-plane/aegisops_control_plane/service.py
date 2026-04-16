@@ -2284,7 +2284,7 @@ class AegisOpsControlPlaneService:
         paths: Mapping[str, Mapping[str, str]],
     ) -> dict[str, dict[str, str]]:
         if action_execution is None:
-            if review_state == "approved":
+            if review_state in {"approved", "executing"}:
                 return cls._action_review_unresolved_without_execution_path_health()
             return {path_name: dict(path) for path_name, path in paths.items()}
 
@@ -2523,6 +2523,7 @@ class AegisOpsControlPlaneService:
         readiness_aggregates: ReadinessDiagnosticsAggregates,
     ) -> dict[str, object]:
         execution_ids = set(readiness_aggregates.active_action_execution_ids)
+        execution_ids.update(readiness_aggregates.terminal_action_execution_ids)
         candidate_action_request_ids: set[str] = set()
         unresolved_delegation_ids: set[str] = set()
 

@@ -1997,6 +1997,125 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             "reconciliation_timeout",
         )
 
+    def test_service_phase21_readiness_promotes_expired_executing_review_without_execution_to_degraded(
+        self,
+    ) -> None:
+        inner_store, _ = make_store()
+        store = _ListCountingStore(inner=inner_store)
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case(store=store)
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Promote overdue reviewed delegation gaps into degraded states even when execution persistence is missing.",
+        )
+        base_now = datetime.now(timezone.utc)
+        requested_at = base_now - timedelta(hours=2)
+        expired_at = base_now - timedelta(hours=1)
+        action_request = service.persist_record(
+            ActionRequestRecord(
+                action_request_id=(
+                    "action-request-phase21-readiness-stale-executing-no-execution-001"
+                ),
+                approval_decision_id=None,
+                case_id=promoted_case.case_id,
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                idempotency_key=(
+                    "idempotency-phase21-readiness-stale-executing-no-execution-001"
+                ),
+                target_scope={
+                    "record_family": "recommendation",
+                    "record_id": recommendation.recommendation_id,
+                    "case_id": promoted_case.case_id,
+                    "alert_id": promoted_case.alert_id,
+                    "finding_id": promoted_case.finding_id,
+                    "recipient_identity": "repo-owner-001",
+                },
+                payload_hash=(
+                    "payload-hash-phase21-readiness-stale-executing-no-execution-001"
+                ),
+                requested_at=requested_at,
+                expires_at=expired_at,
+                lifecycle_state="pending_approval",
+                requester_identity="analyst-001",
+                requested_payload={
+                    "action_type": "notify_identity_owner",
+                    "recipient_identity": "repo-owner-001",
+                    "message_intent": (
+                        "Keep overdue executing reviews without persisted executions explicit on readiness."
+                    ),
+                    "escalation_reason": (
+                        "Missing delegation persistence after approval must age into degraded silent-failure visibility."
+                    ),
+                    "source_record_family": "recommendation",
+                    "source_record_id": recommendation.recommendation_id,
+                    "recommendation_id": recommendation.recommendation_id,
+                    "case_id": promoted_case.case_id,
+                    "alert_id": promoted_case.alert_id,
+                    "finding_id": promoted_case.finding_id,
+                },
+            )
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id=(
+                    "approval-phase21-readiness-stale-executing-no-execution-001"
+                ),
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=requested_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=expired_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                requested_at=requested_at,
+                expires_at=expired_at,
+                lifecycle_state="executing",
+            )
+        )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+            ),
+            store=store,
+        )
+
+        readiness = service.inspect_readiness_diagnostics()
+        review_path_health = readiness.metrics["review_path_health"]
+
+        self.assertEqual(readiness.status, "degraded")
+        self.assertEqual(review_path_health["review_count"], 1)
+        self.assertEqual(review_path_health["overall_state"], "degraded")
+        self.assertEqual(
+            review_path_health["paths"]["ingest"]["reason"],
+            "ingest_signal_missing_after_approval",
+        )
+        self.assertEqual(
+            review_path_health["paths"]["delegation"]["reason"],
+            "reviewed_delegation_missing_after_approval",
+        )
+        self.assertEqual(
+            review_path_health["paths"]["provider"]["reason"],
+            "provider_signal_missing_after_approval",
+        )
+        self.assertEqual(
+            review_path_health["paths"]["persistence"]["reason"],
+            "reconciliation_missing_after_approval",
+        )
+
     def test_service_phase21_readiness_tracks_terminal_review_lineage_without_full_table_reads(
         self,
     ) -> None:
@@ -2143,6 +2262,105 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         self.assertEqual(
             review_path_health["paths"]["persistence"]["reason"],
             "reconciliation_matched",
+        )
+
+    def test_service_phase21_readiness_tracks_terminal_failed_review_after_request_completion_without_full_table_reads(
+        self,
+    ) -> None:
+        inner_store, _ = make_store()
+        store = _ListCountingStore(inner=inner_store)
+        _store, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case(store=store)
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep terminal reviewed provider failures visible after the request itself reaches a terminal state.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Keep terminal provider failures visible after request completion.",
+            escalation_reason="Readiness must not hide provider failures just because the request left the active set.",
+            expires_at=reviewed_at + timedelta(hours=4),
+            action_request_id="action-request-phase21-readiness-terminal-failed-completed-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id=(
+                    "approval-phase21-readiness-terminal-failed-completed-001"
+                ),
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="failed",
+            )
+        )
+        service.persist_record(
+            ActionExecutionRecord(
+                action_execution_id=(
+                    "action-execution-phase21-readiness-terminal-failed-completed-001"
+                ),
+                action_request_id=action_request.action_request_id,
+                approval_decision_id=approval.approval_decision_id,
+                delegation_id=(
+                    "delegation-phase21-readiness-terminal-failed-completed-001"
+                ),
+                execution_surface_type="automation_substrate",
+                execution_surface_id="shuffle",
+                execution_run_id=(
+                    "execution-run-phase21-readiness-terminal-failed-completed-001"
+                ),
+                idempotency_key=action_request.idempotency_key,
+                target_scope=dict(action_request.target_scope),
+                approved_payload=dict(action_request.requested_payload),
+                payload_hash=action_request.payload_hash,
+                delegated_at=reviewed_at + timedelta(minutes=10),
+                expires_at=action_request.expires_at,
+                provenance={"initiated_by": "operator-review"},
+                lifecycle_state="failed",
+            )
+        )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+            ),
+            store=store,
+        )
+
+        store.list_calls = 0
+        readiness = service.inspect_readiness_diagnostics()
+        review_path_health = readiness.metrics["review_path_health"]
+
+        self.assertEqual(store.list_calls, 0)
+        self.assertEqual(readiness.status, "degraded")
+        self.assertEqual(review_path_health["review_count"], 1)
+        self.assertEqual(review_path_health["overall_state"], "failed")
+        self.assertEqual(review_path_health["paths"]["delegation"]["reason"], "delegated")
+        self.assertEqual(
+            review_path_health["paths"]["provider"]["reason"],
+            "execution_failed",
+        )
+        self.assertEqual(
+            review_path_health["paths"]["persistence"]["reason"],
+            "awaiting_reconciliation",
         )
 
     def test_service_phase21_readiness_keeps_delegation_only_stale_reconciliation_visible(
