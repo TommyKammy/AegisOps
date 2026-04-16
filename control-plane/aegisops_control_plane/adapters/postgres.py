@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextvars import ContextVar
 from contextlib import contextmanager
 from dataclasses import dataclass, field, fields
-from datetime import datetime
+from datetime import datetime, timezone
 import importlib
 import json
 from typing import Any, Callable, Iterator, Mapping, Protocol, Type, TypeVar
@@ -29,6 +29,7 @@ from ..models import (
 
 
 RecordT = TypeVar("RecordT", bound=ControlPlaneRecord)
+_MISSING_SORT_TIMESTAMP = datetime.min.replace(tzinfo=timezone.utc)
 
 
 @dataclass(frozen=True)
@@ -86,6 +87,25 @@ class ConnectionProtocol(Protocol):
 
     def rollback(self) -> None:
         ...
+
+
+def _normalize_sort_datetime(value: datetime | None) -> datetime:
+    if value is None:
+        return _MISSING_SORT_TIMESTAMP
+    if value.tzinfo is None or value.tzinfo.utcoffset(value) is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _readiness_reconciliation_sort_key(
+    record: ReconciliationRecord,
+) -> tuple[datetime, datetime, datetime, str]:
+    return (
+        _normalize_sort_datetime(record.compared_at),
+        _normalize_sort_datetime(record.last_seen_at),
+        _normalize_sort_datetime(record.first_seen_at),
+        record.reconciliation_id,
+    )
 
     def close(self) -> None:
         ...
@@ -1025,13 +1045,7 @@ class PostgresControlPlaneStore:
         reconciliations = tuple(
             sorted(
                 reconciliations_by_id.values(),
-                key=lambda record: (
-                    record.compared_at
-                    or record.last_seen_at
-                    or record.first_seen_at
-                    or datetime.min,
-                    record.reconciliation_id,
-                ),
+                key=_readiness_reconciliation_sort_key,
                 reverse=True,
             )
         )

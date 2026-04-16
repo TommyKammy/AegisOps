@@ -1,10 +1,24 @@
 from __future__ import annotations
 
 import copy
+from datetime import datetime, timezone
 import json
 import re
 
 from aegisops_control_plane.adapters.postgres import PostgresControlPlaneStore
+
+
+_MISSING_SORT_TIMESTAMP = datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _normalize_sort_datetime(value: object) -> datetime:
+    if value is None:
+        return _MISSING_SORT_TIMESTAMP
+    if not isinstance(value, datetime):
+        raise TypeError(f"expected datetime-compatible sort value, got {type(value)!r}")
+    if value.tzinfo is None or value.tzinfo.utcoffset(value) is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 _INSERT_RE = re.compile(
@@ -479,7 +493,12 @@ class FakePostgresCursor:
             if any(str(value) in linkage_ids for value in linkage_values):
                 rows.append(row)
         rows.sort(
-            key=lambda row: (row["compared_at"], row["reconciliation_id"]),
+            key=lambda row: (
+                _normalize_sort_datetime(row.get("compared_at")),
+                _normalize_sort_datetime(row.get("last_seen_at")),
+                _normalize_sort_datetime(row.get("first_seen_at")),
+                str(row["reconciliation_id"]),
+            ),
             reverse=True,
         )
         self.description = tuple((name,) for name in column_names)

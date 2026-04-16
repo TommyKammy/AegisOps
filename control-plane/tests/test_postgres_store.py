@@ -1172,6 +1172,100 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             records[1],
         )
 
+    def test_store_readiness_review_path_records_use_timezone_safe_multi_field_sort_key(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        compared_at = datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc)
+        action_request_id = "action-request-readiness-review-path-001"
+        records = (
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-last-seen-wins",
+                subject_linkage={"action_request_ids": [action_request_id]},
+                alert_id=None,
+                finding_id="finding-readiness-001",
+                analytic_signal_id=None,
+                execution_run_id=None,
+                linked_execution_run_ids=(),
+                correlation_key=f"{action_request_id}:automation_substrate:n8n:001",
+                first_seen_at=datetime(2026, 4, 16, 7, 40, tzinfo=timezone.utc),
+                last_seen_at=datetime(2026, 4, 16, 7, 56, tzinfo=timezone.utc),
+                ingest_disposition="missing",
+                mismatch_summary="missing downstream execution",
+                compared_at=compared_at,
+                lifecycle_state="pending",
+            ),
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-first-seen-wins",
+                subject_linkage={"action_request_ids": [action_request_id]},
+                alert_id=None,
+                finding_id="finding-readiness-001",
+                analytic_signal_id=None,
+                execution_run_id=None,
+                linked_execution_run_ids=(),
+                correlation_key=f"{action_request_id}:automation_substrate:n8n:002",
+                first_seen_at=datetime(2026, 4, 16, 7, 50, tzinfo=timezone.utc),
+                last_seen_at=datetime(2026, 4, 16, 7, 55, tzinfo=timezone.utc),
+                ingest_disposition="missing",
+                mismatch_summary="missing downstream execution",
+                compared_at=compared_at,
+                lifecycle_state="pending",
+            ),
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-first-seen-loses",
+                subject_linkage={"action_request_ids": [action_request_id]},
+                alert_id=None,
+                finding_id="finding-readiness-001",
+                analytic_signal_id=None,
+                execution_run_id=None,
+                linked_execution_run_ids=(),
+                correlation_key=f"{action_request_id}:automation_substrate:n8n:003",
+                first_seen_at=datetime(2026, 4, 16, 7, 45, tzinfo=timezone.utc),
+                last_seen_at=datetime(2026, 4, 16, 7, 55, tzinfo=timezone.utc),
+                ingest_disposition="missing",
+                mismatch_summary="missing downstream execution",
+                compared_at=compared_at,
+                lifecycle_state="pending",
+            ),
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-naive-compared-at",
+                subject_linkage={"action_request_ids": [action_request_id]},
+                alert_id=None,
+                finding_id="finding-readiness-001",
+                analytic_signal_id=None,
+                execution_run_id=None,
+                linked_execution_run_ids=(),
+                correlation_key=f"{action_request_id}:automation_substrate:n8n:004",
+                first_seen_at=datetime(2026, 4, 16, 7, 35),
+                last_seen_at=datetime(2026, 4, 16, 7, 58),
+                ingest_disposition="missing",
+                mismatch_summary="missing downstream execution",
+                compared_at=datetime(2026, 4, 16, 7, 59),
+                lifecycle_state="pending",
+            ),
+        )
+
+        for record in records:
+            store.save(record)
+
+        readiness_records = store.inspect_readiness_review_path_records(
+            action_request_ids=(action_request_id,),
+            approval_decision_ids=(),
+        )
+
+        self.assertEqual(
+            tuple(
+                record.reconciliation_id
+                for record in readiness_records.reconciliations
+            ),
+            (
+                "reconciliation-last-seen-wins",
+                "reconciliation-first-seen-wins",
+                "reconciliation-first-seen-loses",
+                "reconciliation-naive-compared-at",
+            ),
+        )
+
     def test_store_rejects_schema_invalid_records_before_persistence(self) -> None:
         store, _ = make_store()
         timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
