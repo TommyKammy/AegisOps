@@ -15,6 +15,7 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 
 from aegisops_control_plane.models import ReconciliationRecord
+from aegisops_control_plane.models import LifecycleTransitionRecord
 
 
 @dataclass
@@ -44,6 +45,13 @@ class TransactionMutationStore:
 
     def list(self, record_type: object) -> tuple[object, ...]:
         return self.inner.list(record_type)
+
+    def latest_lifecycle_transition(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> LifecycleTransitionRecord | None:
+        return self.inner.latest_lifecycle_transition(record_family, record_id)
 
     def inspect_readiness_aggregates(self) -> object:
         return self.inner.inspect_readiness_aggregates()
@@ -105,6 +113,16 @@ class ConcurrentListMutationStore:
             self.mutate_once()
         return records
 
+    def latest_lifecycle_transition(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> LifecycleTransitionRecord | None:
+        transition = self.inner.latest_lifecycle_transition(record_family, record_id)
+        if self._consume_mutation_token():
+            self.mutate_once()
+        return transition
+
     def inspect_readiness_aggregates(self) -> object:
         aggregates = self.inner.inspect_readiness_aggregates()
         if self._consume_mutation_token():
@@ -142,6 +160,13 @@ class CommitFailingStore:
 
     def list(self, record_type: object) -> tuple[object, ...]:
         return self.inner.list(record_type)
+
+    def latest_lifecycle_transition(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> LifecycleTransitionRecord | None:
+        return self.inner.latest_lifecycle_transition(record_family, record_id)
 
     def inspect_readiness_aggregates(self) -> object:
         return self.inner.inspect_readiness_aggregates()
@@ -198,6 +223,13 @@ class RecordTypeSaveFailingStore:
     def list(self, record_type: object) -> tuple[object, ...]:
         return self.inner.list(record_type)
 
+    def latest_lifecycle_transition(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> LifecycleTransitionRecord | None:
+        return self.inner.latest_lifecycle_transition(record_family, record_id)
+
     def inspect_readiness_aggregates(self) -> object:
         return self.inner.inspect_readiness_aggregates()
 
@@ -234,6 +266,7 @@ class ListCountingStore:
     inner: object
     list_calls: int = 0
     reconciliation_list_calls: int = 0
+    latest_lifecycle_transition_calls: int = 0
 
     @property
     def dsn(self) -> str:
@@ -254,6 +287,14 @@ class ListCountingStore:
         if record_type is ReconciliationRecord:
             self.reconciliation_list_calls += 1
         return self.inner.list(record_type)
+
+    def latest_lifecycle_transition(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> LifecycleTransitionRecord | None:
+        self.latest_lifecycle_transition_calls += 1
+        return self.inner.latest_lifecycle_transition(record_family, record_id)
 
     def inspect_readiness_aggregates(self) -> object:
         return self.inner.inspect_readiness_aggregates()
@@ -295,6 +336,13 @@ class OutOfBandMutationStore:
 
     def list(self, record_type: object) -> tuple[object, ...]:
         return self.inner.list(record_type)
+
+    def latest_lifecycle_transition(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> LifecycleTransitionRecord | None:
+        return self.inner.latest_lifecycle_transition(record_family, record_id)
 
     def inspect_readiness_aggregates(self) -> object:
         return self.inner.inspect_readiness_aggregates()

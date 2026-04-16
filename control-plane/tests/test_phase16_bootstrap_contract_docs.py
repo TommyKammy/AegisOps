@@ -89,10 +89,12 @@ class Phase16BootstrapContractDocsTests(unittest.TestCase):
             "AEGISOPS_CONTROL_PLANE_LOG_LEVEL",
             "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN",
             "0006_phase_23_lifecycle_transition_records.sql",
+            "0007_phase_23_lifecycle_transition_subject_index.sql",
             "requester_identity",
             "requested_payload",
             "decision_rationale",
             "lifecycle_transition_records",
+            "lifecycle_transition_records_subject_latest_idx",
             "migration bootstrap",
             "readiness",
             "OpenSearch, n8n, the full analyst-assistant surface, and executor wiring remain deferred",
@@ -226,6 +228,7 @@ class Phase16BootstrapContractDocsTests(unittest.TestCase):
                 "0004_phase_20_action_request_binding_columns.sql",
                 "0005_phase_23_approval_decision_rationale.sql",
                 "0006_phase_23_lifecycle_transition_records.sql",
+                "0007_phase_23_lifecycle_transition_subject_index.sql",
             ):
                 shutil.copy2(
                     REPO_ROOT / "postgres" / "control-plane" / "migrations" / migration_name,
@@ -337,6 +340,10 @@ exit 1
                 f"migration:{migrations_dir / '0006_phase_23_lifecycle_transition_records.sql'}",
                 psql_log_text,
             )
+            self.assertIn(
+                f"migration:{migrations_dir / '0007_phase_23_lifecycle_transition_subject_index.sql'}",
+                psql_log_text,
+            )
             self.assertIn("readiness:SELECT CASE", psql_log_text)
 
     def test_first_boot_entrypoint_is_restart_safe_and_does_not_replay_applied_migrations(
@@ -353,6 +360,7 @@ exit 1
                 "0004_phase_20_action_request_binding_columns.sql",
                 "0005_phase_23_approval_decision_rationale.sql",
                 "0006_phase_23_lifecycle_transition_records.sql",
+                "0007_phase_23_lifecycle_transition_subject_index.sql",
             ):
                 shutil.copy2(
                     REPO_ROOT / "postgres" / "control-plane" / "migrations" / migration_name,
@@ -483,6 +491,9 @@ if __name__ == "__main__":
                     "readiness",
                     "migration:0006_phase_23_lifecycle_transition_records.sql",
                     "readiness",
+                    "migration:0007_phase_23_lifecycle_transition_subject_index.sql",
+                    "readiness",
+                    "readiness",
                     "readiness",
                     "readiness",
                     "readiness",
@@ -510,6 +521,7 @@ if __name__ == "__main__":
                 "0004_phase_20_action_request_binding_columns.sql",
                 "0005_phase_23_approval_decision_rationale.sql",
                 "0006_phase_23_lifecycle_transition_records.sql",
+                "0007_phase_23_lifecycle_transition_subject_index.sql",
             ):
                 source_path = REPO_ROOT / "postgres" / "control-plane" / "migrations" / migration_name
                 destination_path = migrations_dir / migration_name
@@ -548,6 +560,8 @@ import sys
 
 
 def classify_readiness_query(query_text: str) -> str:
+    if "lifecycle_transition_records_subject_latest_idx" in query_text:
+        return "0007_phase_23_lifecycle_transition_subject_index.sql"
     if "decision_rationale" in query_text:
         return "0005_phase_23_approval_decision_rationale.sql"
     if "requested_payload" in query_text or "requester_identity" in query_text:

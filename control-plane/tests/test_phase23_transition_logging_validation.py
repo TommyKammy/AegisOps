@@ -149,6 +149,29 @@ class Phase23TransitionLoggingValidationTests(ServicePersistenceTestBase):
             ["pending_approval"],
         )
 
+    def test_transition_logging_uses_targeted_latest_transition_lookup_on_persist(
+        self,
+    ) -> None:
+        inner_store, _ = make_store()
+        store = _ListCountingStore(inner=inner_store)
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        alert = AlertRecord(
+            alert_id="alert-transition-lookup-001",
+            finding_id="finding-transition-lookup-001",
+            analytic_signal_id=None,
+            case_id=None,
+            lifecycle_state="new",
+        )
+
+        service.persist_record(alert)
+        service.persist_record(replace(alert, lifecycle_state="triaged"))
+
+        self.assertEqual(store.list_calls, 0)
+        self.assertEqual(store.latest_lifecycle_transition_calls, 2)
+
     def test_transition_logging_uses_reviewed_event_timestamps(self) -> None:
         _store, service, promoted_case, _evidence_id, _reviewed_at = (
             self._build_phase19_in_scope_case()

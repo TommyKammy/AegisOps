@@ -250,6 +250,38 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         self.assertIn("'pending_approval'", schema_sql)
         self.assertIn("'pending_approval'", bootstrap_sql)
 
+    def test_phase23_lifecycle_transition_subject_index_migration_asset_exists(
+        self,
+    ) -> None:
+        migration_path = (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0007_phase_23_lifecycle_transition_subject_index.sql"
+        )
+
+        self.assertTrue(
+            migration_path.exists(),
+            f"Missing Phase 23 forward migration asset: {migration_path}",
+        )
+
+        migration_sql = migration_path.read_text(encoding="utf-8").lower()
+        schema_sql = (
+            CONTROL_PLANE_ROOT.parent / "postgres" / "control-plane" / "schema.sql"
+        ).read_text(encoding="utf-8").lower()
+
+        self.assertIn("begin;", migration_sql)
+        self.assertIn("commit;", migration_sql)
+        self.assertIn(
+            "create index if not exists lifecycle_transition_records_subject_latest_idx",
+            migration_sql,
+        )
+        self.assertIn(
+            "create index if not exists lifecycle_transition_records_subject_latest_idx",
+            schema_sql,
+        )
+
     def test_lifecycle_transition_schema_assets_exist(self) -> None:
         migration_sql = (
             CONTROL_PLANE_ROOT.parent
@@ -276,6 +308,10 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         self.assertIn("transition_id text primary key", schema_sql)
         self.assertIn("previous_lifecycle_state text", schema_sql)
         self.assertIn("attribution jsonb not null default '{}'::jsonb", schema_sql)
+        self.assertIn(
+            "create index if not exists lifecycle_transition_records_subject_latest_idx",
+            schema_sql,
+        )
         self.assertIn("subject_record_family in (", schema_sql)
         self.assertIn("previous_lifecycle_state is null or previous_lifecycle_state in (", schema_sql)
         self.assertIn("'pending_approval'", schema_sql)
@@ -782,6 +818,51 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         self.assertEqual(
             store.get(LifecycleTransitionRecord, transition.transition_id),
             transition,
+        )
+
+    def test_store_reads_latest_lifecycle_transition_by_subject(self) -> None:
+        store, _ = make_store()
+        first_transition = LifecycleTransitionRecord(
+            transition_id="transition-latest-001",
+            subject_record_family="case",
+            subject_record_id="case-latest-001",
+            previous_lifecycle_state=None,
+            lifecycle_state="open",
+            transitioned_at=datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc),
+            attribution={"source": "fixture", "actor_identities": ()},
+        )
+        latest_transition = LifecycleTransitionRecord(
+            transition_id="transition-latest-002",
+            subject_record_family="case",
+            subject_record_id="case-latest-001",
+            previous_lifecycle_state="open",
+            lifecycle_state="closed",
+            transitioned_at=datetime(2026, 4, 16, 8, 5, tzinfo=timezone.utc),
+            attribution={"source": "fixture", "actor_identities": ()},
+        )
+        unrelated_transition = LifecycleTransitionRecord(
+            transition_id="transition-latest-003",
+            subject_record_family="case",
+            subject_record_id="case-latest-002",
+            previous_lifecycle_state=None,
+            lifecycle_state="open",
+            transitioned_at=datetime(2026, 4, 16, 8, 10, tzinfo=timezone.utc),
+            attribution={"source": "fixture", "actor_identities": ()},
+        )
+
+        for transition in (
+            first_transition,
+            latest_transition,
+            unrelated_transition,
+        ):
+            store.save(transition)
+
+        self.assertEqual(
+            store.latest_lifecycle_transition("case", "case-latest-001"),
+            latest_transition,
+        )
+        self.assertIsNone(
+            store.latest_lifecycle_transition("alert", "alert-missing-001")
         )
 
     def test_store_copies_mapping_fields_before_persistence(self) -> None:

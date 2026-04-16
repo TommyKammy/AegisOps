@@ -119,6 +119,7 @@ class Phase16FirstBootVerifierTests(unittest.TestCase):
             "postgres/control-plane/migrations/0004_phase_20_action_request_binding_columns.sql",
             "postgres/control-plane/migrations/0005_phase_23_approval_decision_rationale.sql",
             "postgres/control-plane/migrations/0006_phase_23_lifecycle_transition_records.sql",
+            "postgres/control-plane/migrations/0007_phase_23_lifecycle_transition_subject_index.sql",
         )
 
         for relative_path in required_files:

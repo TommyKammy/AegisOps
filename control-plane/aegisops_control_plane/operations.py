@@ -40,6 +40,13 @@ class ControlPlaneStore(Protocol):
     def list(self, record_type: Type[ControlPlaneRecord]) -> tuple[ControlPlaneRecord, ...]:
         ...
 
+    def latest_lifecycle_transition(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> LifecycleTransitionRecord | None:
+        ...
+
     def transaction(
         self,
         *,

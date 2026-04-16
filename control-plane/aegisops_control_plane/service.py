@@ -73,6 +73,13 @@ class ControlPlaneStore(Protocol):
     def list(self, record_type: Type[RecordT]) -> tuple[RecordT, ...]:
         ...
 
+    def latest_lifecycle_transition(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> LifecycleTransitionRecord | None:
+        ...
+
     def transaction(
         self,
         *,
@@ -1176,10 +1183,7 @@ class AegisOpsControlPlaneService:
         record_family: str,
         record_id: str,
     ) -> LifecycleTransitionRecord | None:
-        transitions = self.list_lifecycle_transitions(record_family, record_id)
-        if not transitions:
-            return None
-        return transitions[-1]
+        return self._store.latest_lifecycle_transition(record_family, record_id)
 
     def _lifecycle_transition_attribution(
         self,

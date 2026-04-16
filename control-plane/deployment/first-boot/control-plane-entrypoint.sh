@@ -112,6 +112,7 @@ REQUIRED_MIGRATIONS="
 0004_phase_20_action_request_binding_columns.sql
 0005_phase_23_approval_decision_rationale.sql
 0006_phase_23_lifecycle_transition_records.sql
+0007_phase_23_lifecycle_transition_subject_index.sql
 "
 
 resolve_psql_bin() {
@@ -320,6 +321,21 @@ SELECT CASE
     FROM information_schema.tables
     WHERE table_schema = 'aegisops_control'
       AND table_name = 'lifecycle_transition_records'
+  )
+  THEN 'ready'
+  ELSE 'not-ready'
+END;
+EOF
+      ;;
+    0007_phase_23_lifecycle_transition_subject_index.sql)
+      cat <<'EOF'
+SELECT CASE
+  WHEN EXISTS (
+    SELECT 1
+    FROM pg_indexes
+    WHERE schemaname = 'aegisops_control'
+      AND tablename = 'lifecycle_transition_records'
+      AND indexname = 'lifecycle_transition_records_subject_latest_idx'
   )
   THEN 'ready'
   ELSE 'not-ready'

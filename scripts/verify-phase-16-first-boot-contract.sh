@@ -200,11 +200,13 @@ entrypoint_lines=(
   '0004_phase_20_action_request_binding_columns.sql'
   '0005_phase_23_approval_decision_rationale.sql'
   '0006_phase_23_lifecycle_transition_records.sql'
+  '0007_phase_23_lifecycle_transition_subject_index.sql'
   "        'approval_decision_records',"
   "        'action_request_records',"
   "        'action_execution_records',"
   "        'reconciliation_records',"
   "        'lifecycle_transition_records'"
+  "      AND indexname = 'lifecycle_transition_records_subject_latest_idx'"
   "      AND column_name = 'requester_identity'"
   "      AND column_name = 'requested_payload'"
   "      AND column_name = 'decision_rationale'"
@@ -234,7 +236,8 @@ for migration_file in \
   "0003_phase_15_assistant_advisory_draft_columns.sql" \
   "0004_phase_20_action_request_binding_columns.sql" \
   "0005_phase_23_approval_decision_rationale.sql" \
-  "0006_phase_23_lifecycle_transition_records.sql"; do
+  "0006_phase_23_lifecycle_transition_records.sql" \
+  "0007_phase_23_lifecycle_transition_subject_index.sql"; do
   require_file "${migration_home}/${migration_file}" "Missing reviewed control-plane migration asset"
 done
 
