@@ -315,6 +315,56 @@ class Phase23TransitionLoggingValidationTests(ServicePersistenceTestBase):
             )
         )
 
+    def test_transition_logging_only_uses_triage_timestamps_for_current_state(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        reviewed_at = datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc)
+        triage_context = {
+            "triage": {
+                "disposition": "pending_approval",
+                "closure_rationale": "Waiting on reviewed approval.",
+                "recorded_at": reviewed_at.isoformat(),
+            }
+        }
+        legacy_case = CaseRecord(
+            case_id="case-transition-triage-timestamp-001",
+            alert_id="alert-transition-triage-timestamp-001",
+            finding_id="finding-transition-triage-timestamp-001",
+            evidence_ids=(),
+            lifecycle_state="open",
+            reviewed_context=triage_context,
+        )
+        pending_action_case = replace(legacy_case, lifecycle_state="pending_action")
+        legacy_alert = AlertRecord(
+            alert_id="alert-transition-triage-timestamp-001",
+            finding_id="finding-transition-triage-timestamp-001",
+            analytic_signal_id=None,
+            case_id=legacy_case.case_id,
+            lifecycle_state="escalated_to_case",
+            reviewed_context={
+                "triage": {
+                    "disposition": "closed_resolved",
+                    "closure_rationale": "Containment completed.",
+                    "recorded_at": reviewed_at.isoformat(),
+                }
+            },
+        )
+        closed_alert = replace(legacy_alert, lifecycle_state="closed")
+
+        self.assertIsNone(service._reviewed_context_transitioned_at(legacy_case))
+        self.assertEqual(
+            service._reviewed_context_transitioned_at(pending_action_case),
+            reviewed_at,
+        )
+        self.assertIsNone(service._reviewed_context_transitioned_at(legacy_alert))
+        self.assertEqual(
+            service._reviewed_context_transitioned_at(closed_alert),
+            reviewed_at,
+        )
+
     def test_transition_logging_locks_subject_before_reading_existing_state(self) -> None:
         store, backend = make_store()
         service = AegisOpsControlPlaneService(

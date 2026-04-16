@@ -157,7 +157,14 @@ with baseline_transitions as (
     lifecycle_state,
     coalesce(
       case
-        when nullif(btrim(reviewed_context -> 'triage' ->> 'recorded_at'), '') ~* '^[0-9]{4}-[0-9]{2}-[0-9]{2}[ t][0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(z|[+-][0-9]{2}:[0-9]{2})$'
+        when lifecycle_state = 'closed'
+        and reviewed_context -> 'triage' ->> 'disposition' in (
+          'closed_benign',
+          'closed_duplicate',
+          'closed_resolved',
+          'closed_accepted_risk'
+        )
+        and nullif(btrim(reviewed_context -> 'triage' ->> 'recorded_at'), '') ~* '^[0-9]{4}-[0-9]{2}-[0-9]{2}[ t][0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(z|[+-][0-9]{2}:[0-9]{2})$'
         then (reviewed_context -> 'triage' ->> 'recorded_at')::timestamptz
       end,
       created_at,
@@ -224,7 +231,29 @@ with baseline_transitions as (
     lifecycle_state,
     coalesce(
       case
-        when nullif(btrim(reviewed_context -> 'triage' ->> 'recorded_at'), '') ~* '^[0-9]{4}-[0-9]{2}-[0-9]{2}[ t][0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(z|[+-][0-9]{2}:[0-9]{2})$'
+        when (
+          (
+            lifecycle_state = 'closed'
+            and reviewed_context -> 'triage' ->> 'disposition' in (
+              'closed_benign',
+              'closed_duplicate',
+              'closed_resolved',
+              'closed_accepted_risk'
+            )
+          ) or (
+            lifecycle_state = 'pending_action'
+            and reviewed_context -> 'triage' ->> 'disposition' in (
+              'business_hours_handoff',
+              'awaiting_business_hours_review',
+              'pending_external_validation',
+              'pending_approval'
+            )
+          ) or (
+            lifecycle_state = 'investigating'
+            and reviewed_context -> 'triage' ->> 'disposition' = 'investigating'
+          )
+        )
+        and nullif(btrim(reviewed_context -> 'triage' ->> 'recorded_at'), '') ~* '^[0-9]{4}-[0-9]{2}-[0-9]{2}[ t][0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(z|[+-][0-9]{2}:[0-9]{2})$'
         then (reviewed_context -> 'triage' ->> 'recorded_at')::timestamptz
       end,
       created_at,

@@ -399,6 +399,8 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             migration_sql,
         )
         self.assertIn("reviewed_context -> 'triage' ->> 'recorded_at'", migration_sql)
+        self.assertIn("reviewed_context -> 'triage' ->> 'disposition'", migration_sql)
+        self.assertIn("lifecycle_state = 'pending_action'", migration_sql)
         self.assertIn("::timestamptz", migration_sql)
         self.assertIn("where existing.transition_id is null", migration_sql)
         self.assertIn("on conflict (transition_id) do nothing", migration_sql)

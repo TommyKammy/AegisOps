@@ -610,6 +610,51 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             },
         )
 
+    def test_service_phase21_restore_ignores_triage_timestamp_when_case_state_mismatches(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        mismatched_triage_time = datetime(2031, 1, 2, 3, 4, tzinfo=timezone.utc)
+        for record in backup["record_families"]["case"]:
+            if record["case_id"] != promoted_case.case_id:
+                continue
+            record["reviewed_context"] = {
+                **dict(record["reviewed_context"]),
+                "triage": {
+                    "disposition": "pending_approval",
+                    "closure_rationale": "Reviewed approval still pending.",
+                    "recorded_at": mismatched_triage_time.isoformat(),
+                },
+            }
+
+        backup["backup_schema_version"] = "phase21.authoritative-record-chain.v1"
+        for family in _PHASE21_LEGACY_MISSING_AUTHORITATIVE_FAMILIES:
+            del backup["record_families"][family]
+            del backup["record_counts"][family]
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        restored_service.restore_authoritative_record_chain_backup(backup)
+
+        restored_case_transitions = restored_service.list_lifecycle_transitions(
+            "case",
+            promoted_case.case_id,
+        )
+
+        self.assertEqual(len(restored_case_transitions), 1)
+        self.assertEqual(restored_case_transitions[0].lifecycle_state, "open")
+        self.assertNotEqual(
+            restored_case_transitions[0].transitioned_at,
+            mismatched_triage_time,
+        )
+
     def test_service_phase21_genuine_legacy_restore_round_trips_into_v2_transition_history(
         self,
     ) -> None:

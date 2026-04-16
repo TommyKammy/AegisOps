@@ -58,6 +58,33 @@ _AFTER_HOURS_HANDOFF_TRIAGE_DISPOSITIONS = frozenset(
         "awaiting_business_hours_review",
     }
 )
+_CASE_CLOSED_TRIAGE_DISPOSITIONS = frozenset(
+    {
+        "closed_benign",
+        "closed_duplicate",
+        "closed_resolved",
+        "closed_accepted_risk",
+    }
+)
+_CASE_PENDING_ACTION_TRIAGE_DISPOSITIONS = frozenset(
+    {
+        "business_hours_handoff",
+        "awaiting_business_hours_review",
+        "pending_external_validation",
+        "pending_approval",
+    }
+)
+_CASE_LIFECYCLE_STATE_BY_TRIAGE_DISPOSITION = {
+    **{
+        disposition: "closed"
+        for disposition in _CASE_CLOSED_TRIAGE_DISPOSITIONS
+    },
+    **{
+        disposition: "pending_action"
+        for disposition in _CASE_PENDING_ACTION_TRIAGE_DISPOSITIONS
+    },
+    "investigating": "investigating",
+}
 
 _LATEST_LIFECYCLE_TRANSITION_UNSET = object()
 _LINKED_ALERT_CASE_LIFECYCLE_LOCK_FAMILY = "linked_alert_case_lifecycle"
@@ -1326,6 +1353,11 @@ class AegisOpsControlPlaneService:
         triage = reviewed_context.get("triage")
         if not isinstance(triage, Mapping):
             return None
+        if not AegisOpsControlPlaneService._triage_disposition_matches_current_state(
+            record,
+            triage.get("disposition"),
+        ):
+            return None
         raw_recorded_at = triage.get("recorded_at")
         if not isinstance(raw_recorded_at, str) or not raw_recorded_at.strip():
             return None
@@ -1336,6 +1368,30 @@ class AegisOpsControlPlaneService:
         if parsed.tzinfo is None or parsed.utcoffset() is None:
             return None
         return parsed
+
+    @staticmethod
+    def _triage_disposition_matches_current_state(
+        record: AlertRecord | CaseRecord,
+        disposition: object,
+    ) -> bool:
+        triage_lifecycle_state = (
+            AegisOpsControlPlaneService._case_lifecycle_state_for_triage_disposition(
+                disposition
+            )
+        )
+        if triage_lifecycle_state is None:
+            return False
+        if isinstance(record, AlertRecord):
+            return record.lifecycle_state == "closed" and triage_lifecycle_state == "closed"
+        return record.lifecycle_state == triage_lifecycle_state
+
+    @staticmethod
+    def _case_lifecycle_state_for_triage_disposition(
+        disposition: object,
+    ) -> str | None:
+        if not isinstance(disposition, str) or not disposition.strip():
+            return None
+        return _CASE_LIFECYCLE_STATE_BY_TRIAGE_DISPOSITION.get(disposition)
 
     def _latest_lifecycle_transition(
         self,
@@ -5551,22 +5607,13 @@ class AegisOpsControlPlaneService:
 
     @staticmethod
     def _case_lifecycle_for_disposition(disposition: str) -> str:
-        if disposition in {
-            "closed_benign",
-            "closed_duplicate",
-            "closed_resolved",
-            "closed_accepted_risk",
-        }:
-            return "closed"
-        if disposition in {
-            "business_hours_handoff",
-            "awaiting_business_hours_review",
-            "pending_external_validation",
-            "pending_approval",
-        }:
-            return "pending_action"
-        if disposition == "investigating":
-            return "investigating"
+        lifecycle_state = (
+            AegisOpsControlPlaneService._case_lifecycle_state_for_triage_disposition(
+                disposition
+            )
+        )
+        if lifecycle_state is not None:
+            return lifecycle_state
         raise ValueError(f"Unsupported case disposition {disposition!r}")
 
     @staticmethod
