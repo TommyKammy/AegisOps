@@ -6,49 +6,46 @@
 - Workspace: .
 - Journal: .codex-supervisor/issues/494/issue-journal.md
 - Current phase: local_review_fix
-- Attempt count: 32 (implementation=1, repair=1)
-- Last head SHA: 4d1dfb3c2cf6830dbec6cacb231e5c760cad410e
+- Attempt count: 33 (implementation=1, repair=1)
+- Last head SHA: bd2f544a9401d8e55c2114c455cfcb387cee5589
 - Blocked reason: none
-- Last failure signature: local-review:high:high:1:1:clean
+- Last failure signature: local-review:high:high:4:1:clean
 - Repeated failure signature count: 2
-- Updated at: 2026-04-16T13:42:35.520Z
+- Updated at: 2026-04-16T14:11:06.000Z
 
 ## Latest Codex Summary
-Updated [issue-journal.md](.codex-supervisor/issues/494/issue-journal.md:1) so `## Active Failure Context` now records `Category: review`, matching the rest of the local-review-fix handoff instead of leaving a contradictory blocked/unblocked supervisor snapshot on the branch.
+Committed `bd2f544` on `codex/issue-494` with the saved local-review repair set. The service now rejects explicit lifecycle timestamps that would backdate a transition behind newer history while preserving equal reviewed timestamps with deterministic same-time transition IDs, the PostgreSQL adapter maps lifecycle rows before cursor close, and the first-boot entrypoint normalizes CRLF/LF differences before recording reviewed migration checksums.
 
-Reran the focused lifecycle-transition and persistence suites after the journal-only follow-up:
-`python3 -m unittest control-plane.tests.test_phase23_transition_logging_validation`
-`python3 -m unittest control-plane.tests.test_service_persistence_restore_readiness`
-`python3 -m unittest control-plane.tests.test_postgres_store`
-All passed.
+I also added regression coverage for the timestamp, tuple-row cursor, and CRLF bootstrap cases, then reran the focused transition, restore, persistence, bootstrap, advisory, reconciliation, and CLI suites cleanly. The remaining step is to push the repaired head and refresh local review / PR `#501` on `bd2f544a9401d8e55c2114c455cfcb387cee5589`.
 
-Summary: Updated the tracked issue journal to remove the contradictory blocked state and reran focused verification.
+Summary: Committed `bd2f544` with the four saved local-review repairs plus regression coverage; a fresh local review is still pending.
 State hint: local_review_fix
 Blocked reason: none
-Tests: `git diff -- .codex-supervisor/issues/494/issue-journal.md`; `rg -n "Blocked reason: none|Category: review|Current blocker: none" .codex-supervisor/issues/494/issue-journal.md`; `python3 -m unittest control-plane.tests.test_phase23_transition_logging_validation`; `python3 -m unittest control-plane.tests.test_service_persistence_restore_readiness`; `python3 -m unittest control-plane.tests.test_postgres_store`
-Next action: Refresh local review and PR `#501` status on the updated branch head to confirm the saved workflow-state finding is cleared.
+Tests: `python3 -m unittest control-plane.tests.test_phase23_transition_logging_validation`; `python3 -m unittest control-plane.tests.test_service_persistence_restore_readiness`; `python3 -m unittest control-plane.tests.test_postgres_store`; `python3 -m unittest control-plane.tests.test_phase16_bootstrap_contract_docs`; `python3 -m unittest control-plane.tests.test_service_persistence_action_reconciliation`; `python3 -m unittest control-plane.tests.test_service_persistence_assistant_advisory`; `python3 -m unittest control-plane.tests.test_cli_inspection`
+Next action: Push `bd2f544a9401d8e55c2114c455cfcb387cee5589` to `codex/issue-494` and refresh local review / PR `#501` status on the repaired head.
 Failure signature: none
 
 ## Active Failure Context
 - Category: review
-- Summary: Local review found 1 actionable finding(s) across 1 root cause(s); max severity=high; verified high-severity findings=1; verified max severity=high.
+- Summary: Saved local-review repair pass completed on `bd2f544a9401d8e55c2114c455cfcb387cee5589`; all four recorded root causes were addressed locally and now need a fresh review verdict.
 - Details:
-  - findings=1
-  - root_causes=1
-  - summary=<redacted-local-path>
+  - repaired_findings=4
+  - repaired_root_causes=4
+  - reviewed_head_sha=bd2f544a9401d8e55c2114c455cfcb387cee5589
+  - prior_summary=<redacted-local-path>
 
 ## Codex Working Notes
 ### Current Handoff
-- Hypothesis: The only remaining must-fix residual was the contradictory workflow-state entry in this journal; with `## Active Failure Context` now aligned to `review`, a refreshed local review should clear the saved finding.
-- What changed: Updated `.codex-supervisor/issues/494/issue-journal.md` so `## Active Failure Context` now records `Category: review`, matching `Blocked reason: none`, `Current blocker: none`, and the prior handoff summary.
+- Hypothesis: The saved local-review findings should clear on a fresh pass because the repaired head now covers the explicit timestamp backfill bug, the cursor-close row-mapping bug, the CRLF-sensitive migration checksum bug, and the stale journal state mismatch.
+- What changed: `control-plane/aegisops_control_plane/service.py` now preserves equal explicit timestamps with ordered transition IDs and rejects explicit historical backfills; `control-plane/aegisops_control_plane/adapters/postgres.py` maps lifecycle rows before `close()`; `control-plane/deployment/first-boot/control-plane-entrypoint.sh` normalizes CRLF/LF before checksuming migrations; `control-plane/tests/support/service_persistence.py`, `control-plane/tests/test_cli_inspection.py`, `control-plane/tests/test_phase16_bootstrap_contract_docs.py`, `control-plane/tests/test_phase23_transition_logging_validation.py`, and `control-plane/tests/test_postgres_store.py` now cover the repaired behavior.
 - Current blocker: none.
-- Next exact step: Refresh local review and PR `#501` status on the current branch head to confirm the workflow-state finding is cleared.
-- Verification gap: Focused backend suites reran clean after the journal-only follow-up; the remaining gap is a fresh local review on the updated branch head to clear the saved workflow-state finding.
-- Files touched: `.codex-supervisor/issues/494/issue-journal.md`.
-- Rollback concern: Rolling back would restore the stale tracked supervisor snapshot and the contradictory blocked/unblocked failure classification.
-- Last focused command: `sed -n '1,220p' /Users/jp.infra/Dev/codex-supervisor/.local/memory/TommyKammy-AegisOps/issue-494/AGENTS.generated.md`, `sed -n '1,220p' /Users/jp.infra/Dev/codex-supervisor/.local/memory/TommyKammy-AegisOps/issue-494/context-index.md`, `sed -n '1,260p' .codex-supervisor/issues/494/issue-journal.md`, `git rev-parse HEAD`, `git status --short`, `sed -n '1,220p' /Users/jp.infra/Dev/codex-supervisor/.local/reviews/TommyKammy-AegisOps/issue-494/head-4d1dfb3c2cf6.md`, `git log --oneline -- .codex-supervisor/issues/494/issue-journal.md | head -n 5`, `nl -ba .codex-supervisor/issues/494/issue-journal.md | sed -n '1,120p'`, `git diff -- .codex-supervisor/issues/494/issue-journal.md`, `rg -n "Blocked reason: none|Category: review|Current blocker: none" .codex-supervisor/issues/494/issue-journal.md`, `nl -ba .codex-supervisor/issues/494/issue-journal.md | sed -n '16,50p'`, `python3 -m unittest control-plane.tests.test_phase23_transition_logging_validation`, `python3 -m unittest control-plane.tests.test_service_persistence_restore_readiness`, and `python3 -m unittest control-plane.tests.test_postgres_store`
+- Next exact step: Push `bd2f544a9401d8e55c2114c455cfcb387cee5589`, then rerun local review / inspect PR `#501` on that head.
+- Verification gap: No known failing local suites remain in the touched paths; the remaining gap is a fresh local review verdict on `bd2f544a9401d8e55c2114c455cfcb387cee5589`.
+- Files touched: `control-plane/aegisops_control_plane/service.py`, `control-plane/aegisops_control_plane/adapters/postgres.py`, `control-plane/deployment/first-boot/control-plane-entrypoint.sh`, `control-plane/tests/support/service_persistence.py`, `control-plane/tests/test_cli_inspection.py`, `control-plane/tests/test_phase16_bootstrap_contract_docs.py`, `control-plane/tests/test_phase23_transition_logging_validation.py`, `control-plane/tests/test_postgres_store.py`, and `.codex-supervisor/issues/494/issue-journal.md`.
+- Rollback concern: Rolling back would reintroduce silent lifecycle timestamp restamping, driver-dependent lifecycle reads after cursor close, and CRLF-sensitive reviewed migration checksum drift on first boot.
+- Last focused command: `python3 -m unittest control-plane.tests.test_phase23_transition_logging_validation`, `python3 -m unittest control-plane.tests.test_service_persistence_restore_readiness`, `python3 -m unittest control-plane.tests.test_postgres_store`, `python3 -m unittest control-plane.tests.test_phase16_bootstrap_contract_docs`, `python3 -m unittest control-plane.tests.test_service_persistence_action_reconciliation`, `python3 -m unittest control-plane.tests.test_service_persistence_assistant_advisory`, `python3 -m unittest control-plane.tests.test_cli_inspection`, `git commit -m "Fix lifecycle transition review defects"`, and `git rev-parse HEAD`
 ### Scratchpad
 - Keep this section short. The supervisor may compact older notes automatically.
-- Current local focus: confirm the saved workflow-state finding clears after this journal-only follow-up reaches the branch head.
-- New local regressions: none; this pass was journal-only.
-- Review baseline under repair: workflow-state contradiction in `.codex-supervisor/issues/494/issue-journal.md` lines 21-29.
+- Current local focus: push the repaired head and confirm the saved local-review findings clear on a fresh pass.
+- New local regressions: none observed in the touched suites after the repair set landed.
+- Review baseline under repair: the four saved findings in `service.py`, `adapters/postgres.py`, `control-plane-entrypoint.sh`, and the tracked supervisor journal state.
