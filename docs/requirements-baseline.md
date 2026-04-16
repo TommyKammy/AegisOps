@@ -27,6 +27,8 @@ This project aims to design and build **AegisOps** as an internally managed SecO
 
 AegisOps is a governed SecOps control plane.
 
+AegisOps is the reviewed control plane for approval, evidence, and reconciliation governance for a narrow SMB SecOps operating model.
+
 AegisOps owns the authoritative platform records and policy decisions for:
 
 - Alert
@@ -108,6 +110,10 @@ The following items are explicitly out of scope for the initial phases:
 ### 2.3 Initial Operating Model
 
 Initial phases assume a **business-hours-oriented security operations model**, not a 24/7 fully staffed SOC.
+
+The primary deployment target is a single-company or single-business-unit deployment with roughly 250 to 1,500 managed endpoints, 2 to 6 business-hours SecOps operators, and 1 to 3 designated approvers or escalation owners.
+
+The target operating assumption is business-hours review with explicit after-hours escalation, not a 24x7 staffed SOC.
 
 Escalation, notification, and approval design MUST reflect this assumption.
 

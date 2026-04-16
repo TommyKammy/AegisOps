@@ -3,9 +3,11 @@
 set -euo pipefail
 
 repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+repo_root="${repo_root//\\//}"
 readme_path="${repo_root}/README.md"
 architecture_path="${repo_root}/docs/architecture.md"
 roadmap_path="${repo_root}/docs/Revised Phase23-20 Epic Roadmap.md"
+requirements_path="${repo_root}/docs/requirements-baseline.md"
 
 require_file() {
   local path="$1"
@@ -42,6 +44,7 @@ forbid_phrase() {
 require_file "${readme_path}" "README"
 require_file "${architecture_path}" "architecture document"
 require_file "${roadmap_path}" "Phase 23 roadmap document"
+require_file "${requirements_path}" "requirements baseline document"
 
 positive_thesis="AegisOps is the reviewed control plane for approval, evidence, and reconciliation governance for a narrow SMB SecOps operating model."
 target_profile="The primary deployment target is a single-company or single-business-unit deployment with roughly 250 to 1,500 managed endpoints, 2 to 6 business-hours SecOps operators, and 1 to 3 designated approvers or escalation owners."
@@ -54,6 +57,10 @@ require_phrase "${readme_path}" "${business_hours}" "README business-hours targe
 require_phrase "${architecture_path}" "${positive_thesis}" "architecture SMB value proposition statement"
 require_phrase "${architecture_path}" "${target_profile}" "architecture deployment target profile"
 require_phrase "${architecture_path}" "${business_hours}" "architecture business-hours target statement"
+
+require_phrase "${requirements_path}" "${positive_thesis}" "requirements baseline SMB value proposition statement"
+require_phrase "${requirements_path}" "${target_profile}" "requirements baseline deployment target profile"
+require_phrase "${requirements_path}" "${business_hours}" "requirements baseline business-hours target statement"
 
 require_phrase "${roadmap_path}" "${positive_thesis}" "roadmap SMB value proposition statement"
 require_phrase "${roadmap_path}" "${target_profile}" "roadmap deployment target profile"

@@ -7,10 +7,12 @@ workflow_path="${repo_root}/.github/workflows/ci.yml"
 
 required_verifiers=(
   "bash scripts/verify-phase-10-thesis-consistency.sh"
+  "bash scripts/verify-positive-smb-value-proposition.sh"
 )
 
 required_tests=(
   "bash scripts/test-verify-phase-10-thesis-consistency.sh"
+  "bash scripts/test-verify-positive-smb-value-proposition.sh"
 )
 
 self_guard_step_name="Run Phase 10 workflow coverage guard"

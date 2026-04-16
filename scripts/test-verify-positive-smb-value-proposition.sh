@@ -113,12 +113,30 @@ assert_fails_with() {
 valid_repo="${workdir}/valid"
 create_repo "${valid_repo}"
 write_valid_docs "${valid_repo}"
+cp "${repo_root}/docs/requirements-baseline.md" "${valid_repo}/docs/requirements-baseline.md"
+git -C "${valid_repo}" add docs/requirements-baseline.md
 commit_fixture "${valid_repo}"
 assert_passes "${valid_repo}"
+
+windows_path_repo="${workdir}/windows-path"
+create_repo "${windows_path_repo}"
+write_valid_docs "${windows_path_repo}"
+cp "${repo_root}/docs/requirements-baseline.md" "${windows_path_repo}/docs/requirements-baseline.md"
+git -C "${windows_path_repo}" add docs/requirements-baseline.md
+commit_fixture "${windows_path_repo}"
+windows_style_path="${windows_path_repo//\//\\}"
+assert_passes "${windows_path_repo}"
+if ! bash "${verifier}" "${windows_style_path}" >"${pass_stdout}" 2>"${pass_stderr}"; then
+  echo "Expected verifier to normalize Windows-style repository roots: ${windows_style_path}" >&2
+  cat "${pass_stderr}" >&2
+  exit 1
+fi
 
 missing_roadmap_repo="${workdir}/missing-roadmap"
 create_repo "${missing_roadmap_repo}"
 write_valid_docs "${missing_roadmap_repo}"
+cp "${repo_root}/docs/requirements-baseline.md" "${missing_roadmap_repo}/docs/requirements-baseline.md"
+git -C "${missing_roadmap_repo}" add docs/requirements-baseline.md
 rm "${missing_roadmap_repo}/docs/Revised Phase23-20 Epic Roadmap.md"
 git -C "${missing_roadmap_repo}" add -u "docs/Revised Phase23-20 Epic Roadmap.md"
 commit_fixture "${missing_roadmap_repo}"
@@ -127,6 +145,8 @@ assert_fails_with "${missing_roadmap_repo}" "Missing Phase 23 roadmap document:"
 missing_target_profile_repo="${workdir}/missing-target-profile"
 create_repo "${missing_target_profile_repo}"
 write_valid_docs "${missing_target_profile_repo}"
+cp "${repo_root}/docs/requirements-baseline.md" "${missing_target_profile_repo}/docs/requirements-baseline.md"
+git -C "${missing_target_profile_repo}" add docs/requirements-baseline.md
 remove_text_from_doc "${missing_target_profile_repo}" "docs/architecture.md" "The primary deployment target is a single-company or single-business-unit deployment with roughly 250 to 1,500 managed endpoints, 2 to 6 business-hours SecOps operators, and 1 to 3 designated approvers or escalation owners."
 commit_fixture "${missing_target_profile_repo}"
 assert_fails_with "${missing_target_profile_repo}" "Missing architecture deployment target profile:"
@@ -134,6 +154,8 @@ assert_fails_with "${missing_target_profile_repo}" "Missing architecture deploym
 roadmap_contradiction_repo="${workdir}/roadmap-contradiction"
 create_repo "${roadmap_contradiction_repo}"
 write_valid_docs "${roadmap_contradiction_repo}"
+cp "${repo_root}/docs/requirements-baseline.md" "${roadmap_contradiction_repo}/docs/requirements-baseline.md"
+git -C "${roadmap_contradiction_repo}" add docs/requirements-baseline.md
 append_text_to_doc "${roadmap_contradiction_repo}" "docs/Revised Phase23-20 Epic Roadmap.md" "Multi-tenant packaging is in scope for this roadmap slice."
 commit_fixture "${roadmap_contradiction_repo}"
 assert_fails_with "${roadmap_contradiction_repo}" "Forbidden roadmap out-of-scope contradiction: Multi-tenant packaging is in scope for this roadmap slice."
