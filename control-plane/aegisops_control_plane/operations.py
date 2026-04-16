@@ -972,6 +972,9 @@ class RestoreReadinessService:
             for record in action_execution_records
             if record.execution_run_id is not None
         }
+        reconciliations_by_id = {
+            record.reconciliation_id: record for record in reconciliations
+        }
         authoritative_subject_ids_by_family: dict[str, set[str]] = {
             "analytic_signal": set(analytic_signals),
             "alert": set(alerts),
@@ -981,9 +984,18 @@ class RestoreReadinessService:
             "approval_decision": set(approval_decisions),
             "action_request": set(action_requests),
             "action_execution": set(action_executions),
-            "reconciliation": {
-                record.reconciliation_id for record in reconciliations
-            },
+            "reconciliation": set(reconciliations_by_id),
+        }
+        authoritative_subject_records_by_family: dict[str, Mapping[str, ControlPlaneRecord]] = {
+            "analytic_signal": analytic_signals,
+            "alert": alerts,
+            "evidence": evidence_records,
+            "case": cases,
+            "recommendation": recommendations,
+            "approval_decision": approval_decisions,
+            "action_request": action_requests,
+            "action_execution": action_executions,
+            "reconciliation": reconciliations_by_id,
         }
 
         for alert in alerts.values():
@@ -1294,6 +1306,9 @@ class RestoreReadinessService:
                             f"{reconciliation.reconciliation_id!r}"
                         )
 
+        lifecycle_transitions_by_subject: dict[
+            tuple[str, str], list[LifecycleTransitionRecord]
+        ] = {}
         for transition in lifecycle_transition_records:
             subject_ids = authoritative_subject_ids_by_family.get(
                 transition.subject_record_family
@@ -1309,4 +1324,47 @@ class RestoreReadinessService:
                     "missing "
                     f"{transition.subject_record_family} record {transition.subject_record_id!r} "
                     f"required by lifecycle transition {transition.transition_id!r}"
+                )
+            lifecycle_transitions_by_subject.setdefault(
+                (
+                    transition.subject_record_family,
+                    transition.subject_record_id,
+                ),
+                [],
+            ).append(transition)
+
+        for (subject_family, subject_id), subject_transitions in (
+            lifecycle_transitions_by_subject.items()
+        ):
+            ordered_transitions = sorted(
+                subject_transitions,
+                key=lambda transition: transition.transitioned_at,
+            )
+            prior_transition: LifecycleTransitionRecord | None = None
+            for transition in ordered_transitions:
+                if (
+                    prior_transition is not None
+                    and transition.previous_lifecycle_state
+                    != prior_transition.lifecycle_state
+                ):
+                    raise ValueError(
+                        "lifecycle transition chain for "
+                        f"{subject_family} record {subject_id!r} is inconsistent: "
+                        f"{transition.transition_id!r} previous_lifecycle_state "
+                        f"{transition.previous_lifecycle_state!r} does not match prior "
+                        f"lifecycle_state {prior_transition.lifecycle_state!r}"
+                    )
+                prior_transition = transition
+
+            latest_transition = ordered_transitions[-1]
+            subject_record = authoritative_subject_records_by_family[subject_family][
+                subject_id
+            ]
+            subject_lifecycle_state = getattr(subject_record, "lifecycle_state", None)
+            if subject_lifecycle_state != latest_transition.lifecycle_state:
+                raise ValueError(
+                    f"{subject_family} record {subject_id!r} lifecycle_state "
+                    f"{subject_lifecycle_state!r} does not match latest lifecycle transition "
+                    f"{latest_transition.transition_id!r} state "
+                    f"{latest_transition.lifecycle_state!r}"
                 )

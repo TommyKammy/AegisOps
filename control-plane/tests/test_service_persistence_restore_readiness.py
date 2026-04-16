@@ -1665,6 +1665,97 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             restored_service.restore_authoritative_record_chain_backup(backup)
         self._assert_authoritative_store_empty(restored_store)
 
+    def test_service_phase21_restore_fails_closed_when_latest_transition_disagrees_with_current_state(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        updated_case = replace(
+            promoted_case,
+            lifecycle_state=(
+                "closed"
+                if promoted_case.lifecycle_state != "closed"
+                else "reviewed"
+            ),
+        )
+        service.persist_record(updated_case)
+        backup = service.export_authoritative_record_chain_backup()
+        latest_transition = max(
+            (
+                record
+                for record in backup["record_families"]["lifecycle_transition"]
+                if record["subject_record_family"] == "case"
+                and record["subject_record_id"] == promoted_case.case_id
+            ),
+            key=lambda record: record["transitioned_at"],
+        )
+        latest_transition["lifecycle_state"] = "triaged"
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                rf"case record '{promoted_case.case_id}' lifecycle_state "
+                rf"'{updated_case.lifecycle_state}' does not match "
+                r"latest lifecycle transition .* state 'triaged'"
+            ),
+        ):
+            restored_service.restore_authoritative_record_chain_backup(backup)
+        self._assert_authoritative_store_empty(restored_store)
+
+    def test_service_phase21_restore_fails_closed_when_transition_chain_is_inconsistent(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        updated_case = replace(
+            promoted_case,
+            lifecycle_state=(
+                "closed"
+                if promoted_case.lifecycle_state != "closed"
+                else "reviewed"
+            ),
+        )
+        service.persist_record(updated_case)
+        backup = service.export_authoritative_record_chain_backup()
+        ordered_case_transitions = sorted(
+            (
+                record
+                for record in backup["record_families"]["lifecycle_transition"]
+                if record["subject_record_family"] == "case"
+                and record["subject_record_id"] == promoted_case.case_id
+            ),
+            key=lambda record: record["transitioned_at"],
+        )
+        self.assertEqual(len(ordered_case_transitions), 2)
+        prior_lifecycle_state = ordered_case_transitions[0]["lifecycle_state"]
+        ordered_case_transitions[1]["previous_lifecycle_state"] = "triaged"
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                rf"lifecycle transition chain for case record '{promoted_case.case_id}' "
+                r"is inconsistent: "
+                r".* previous_lifecycle_state 'triaged' does not match prior "
+                rf"lifecycle_state '{prior_lifecycle_state}'"
+            ),
+        ):
+            restored_service.restore_authoritative_record_chain_backup(backup)
+        self._assert_authoritative_store_empty(restored_store)
+
     def test_service_phase21_restore_fails_closed_on_orphan_authoritative_transition_rows(
         self,
     ) -> None:
