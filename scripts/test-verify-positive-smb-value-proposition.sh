@@ -46,7 +46,7 @@ The target operating assumption is business-hours review with explicit after-hou
 EOF
 
   cat <<'EOF' > "${target}/docs/Revised Phase23-20 Epic Roadmap.md"
-# Revised Phase23-20 Epic Roadmap
+# Revised Phase 23-20 Epic Roadmap
 
 AegisOps is the reviewed control plane for approval, evidence, and reconciliation governance for a narrow SMB SecOps operating model.
 
@@ -159,5 +159,23 @@ git -C "${roadmap_contradiction_repo}" add docs/requirements-baseline.md
 append_text_to_doc "${roadmap_contradiction_repo}" "docs/Revised Phase23-20 Epic Roadmap.md" "Multi-tenant packaging is in scope for this roadmap slice."
 commit_fixture "${roadmap_contradiction_repo}"
 assert_fails_with "${roadmap_contradiction_repo}" "Forbidden roadmap out-of-scope contradiction: Multi-tenant packaging is in scope for this roadmap slice."
+
+requirements_siem_contradiction_repo="${workdir}/requirements-siem-contradiction"
+create_repo "${requirements_siem_contradiction_repo}"
+write_valid_docs "${requirements_siem_contradiction_repo}"
+cp "${repo_root}/docs/requirements-baseline.md" "${requirements_siem_contradiction_repo}/docs/requirements-baseline.md"
+git -C "${requirements_siem_contradiction_repo}" add docs/requirements-baseline.md
+append_text_to_doc "${requirements_siem_contradiction_repo}" "docs/requirements-baseline.md" "AegisOps is a generic SIEM replacement for broad enterprise operations."
+commit_fixture "${requirements_siem_contradiction_repo}"
+assert_fails_with "${requirements_siem_contradiction_repo}" "Forbidden requirements baseline contradiction marker: AegisOps is a generic SIEM replacement for broad enterprise operations."
+
+requirements_scope_contradiction_repo="${workdir}/requirements-scope-contradiction"
+create_repo "${requirements_scope_contradiction_repo}"
+write_valid_docs "${requirements_scope_contradiction_repo}"
+cp "${repo_root}/docs/requirements-baseline.md" "${requirements_scope_contradiction_repo}/docs/requirements-baseline.md"
+git -C "${requirements_scope_contradiction_repo}" add docs/requirements-baseline.md
+append_text_to_doc "${requirements_scope_contradiction_repo}" "docs/requirements-baseline.md" "Multi-tenant packaging is in scope for this roadmap slice."
+commit_fixture "${requirements_scope_contradiction_repo}"
+assert_fails_with "${requirements_scope_contradiction_repo}" "Forbidden requirements baseline out-of-scope contradiction: Multi-tenant packaging is in scope for this roadmap slice."
 
 echo "Positive SMB value proposition verifier tests passed."

@@ -69,7 +69,9 @@ require_phrase "${roadmap_path}" "Phase 23 hardening and ergonomics work must be
 
 forbid_phrase "${readme_path}" "AegisOps is a generic SIEM replacement for broad enterprise operations." "README contradiction marker"
 forbid_phrase "${architecture_path}" "AegisOps is a generic SIEM replacement for broad enterprise operations." "architecture contradiction marker"
+forbid_phrase "${requirements_path}" "AegisOps is a generic SIEM replacement for broad enterprise operations." "requirements baseline contradiction marker"
 forbid_phrase "${roadmap_path}" "AegisOps is a generic SIEM replacement for broad enterprise operations." "roadmap contradiction marker"
+forbid_phrase "${requirements_path}" "Multi-tenant packaging is in scope for this roadmap slice." "requirements baseline out-of-scope contradiction"
 forbid_phrase "${roadmap_path}" "Multi-tenant packaging is in scope for this roadmap slice." "roadmap out-of-scope contradiction"
 
-echo "Positive SMB value proposition and deployment target profile are aligned across README, architecture, and roadmap."
+echo "Positive SMB value proposition and deployment target profile are aligned across README, architecture, requirements baseline, and roadmap."
