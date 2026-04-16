@@ -1638,7 +1638,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
     def test_service_phase21_readiness_surfaces_unresolved_review_path_health(
         self,
     ) -> None:
-        _store, service, promoted_case, _evidence_id, reviewed_at = (
+        store, service, promoted_case, _evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
         )
         recommendation = service.record_case_recommendation(
@@ -1675,10 +1675,22 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
                 lifecycle_state="unresolved",
             )
         )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+            ),
+            store=store,
+        )
 
         readiness = service.inspect_readiness_diagnostics()
         review_path_health = readiness.metrics["review_path_health"]
 
+        self.assertEqual(readiness.status, "degraded")
         self.assertEqual(review_path_health["review_count"], 1)
         self.assertEqual(review_path_health["overall_state"], "degraded")
         self.assertEqual(
@@ -1736,12 +1748,24 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
                 lifecycle_state="approved",
             )
         )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+            ),
+            store=store,
+        )
 
         store.list_calls = 0
         readiness = service.inspect_readiness_diagnostics()
         review_path_health = readiness.metrics["review_path_health"]
 
         self.assertEqual(store.list_calls, 0)
+        self.assertEqual(readiness.status, "ready")
         self.assertEqual(review_path_health["review_count"], 1)
         self.assertEqual(review_path_health["overall_state"], "delayed")
         self.assertEqual(
@@ -1875,12 +1899,24 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
                 lifecycle_state="matched",
             )
         )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+            ),
+            store=store,
+        )
 
         store.list_calls = 0
         readiness = service.inspect_readiness_diagnostics()
         review_path_health = readiness.metrics["review_path_health"]
 
         self.assertEqual(store.list_calls, 0)
+        self.assertEqual(readiness.status, "ready")
         self.assertEqual(review_path_health["review_count"], 1)
         self.assertEqual(review_path_health["overall_state"], "healthy")
         self.assertEqual(review_path_health["paths"]["delegation"]["reason"], "delegated")

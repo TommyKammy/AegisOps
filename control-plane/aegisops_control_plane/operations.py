@@ -509,6 +509,7 @@ class RestoreReadinessService:
         status = self._derive_readiness_status(
             startup_ready=startup.startup_ready,
             reconciliation_lifecycle_counts=readiness_aggregates.reconciliation_lifecycle_counts,
+            review_path_health_overall_state=review_path_health["overall_state"],
         )
 
         metrics = {
@@ -874,6 +875,9 @@ class RestoreReadinessService:
         readiness_status = self._derive_readiness_status(
             startup_ready=startup.startup_ready,
             reconciliation_lifecycle_counts=readiness_aggregates.reconciliation_lifecycle_counts,
+            review_path_health_overall_state=self._build_readiness_review_path_health(
+                readiness_aggregates
+            )["overall_state"],
         )
 
         return self._restore_drill_snapshot_factory(

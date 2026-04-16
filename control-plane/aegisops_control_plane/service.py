@@ -564,12 +564,15 @@ def _derive_readiness_status(
     *,
     startup_ready: bool,
     reconciliation_lifecycle_counts: Mapping[str, int],
+    review_path_health_overall_state: str | None = None,
 ) -> str:
     if not startup_ready:
         return "failing_closed"
     if reconciliation_lifecycle_counts.get("stale", 0):
         return "stale"
     if reconciliation_lifecycle_counts.get("mismatched", 0):
+        return "degraded"
+    if review_path_health_overall_state in {"degraded", "failed"}:
         return "degraded"
     return "ready"
 
