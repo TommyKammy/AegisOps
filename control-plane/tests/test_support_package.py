@@ -180,6 +180,22 @@ class _NoOpStore:
     def list(self, record_type: object) -> tuple[object, ...]:
         return ()
 
+    def latest_lifecycle_transition(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> None:
+        del record_family, record_id
+        return None
+
+    def list_lifecycle_transitions(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> tuple[object, ...]:
+        del record_family, record_id
+        return ()
+
     def inspect_readiness_aggregates(self) -> dict[str, object]:
         if self._readiness_started is not None:
             self._readiness_started.set()

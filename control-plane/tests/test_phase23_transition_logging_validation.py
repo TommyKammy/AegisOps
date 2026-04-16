@@ -1,0 +1,865 @@
+from __future__ import annotations
+
+import pathlib
+import sys
+from unittest import mock
+
+TESTS_ROOT = pathlib.Path(__file__).resolve().parent
+if str(TESTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TESTS_ROOT))
+
+from _service_persistence_support import (
+    AITraceRecord,
+    ActionRequestRecord,
+    AegisOpsControlPlaneService,
+    AlertRecord,
+    ApprovalDecisionRecord,
+    CaseRecord,
+    LifecycleTransitionRecord,
+    RecordTypeSaveFailingStore,
+    RuntimeConfig,
+    ServicePersistenceTestBase,
+    _ListCountingStore,
+    datetime,
+    make_store,
+    replace,
+    timedelta,
+    timezone,
+)
+from aegisops_control_plane.models import HuntRecord, HuntRunRecord
+
+
+class Phase23TransitionLoggingValidationTests(ServicePersistenceTestBase):
+    def test_transition_logging_rolls_back_current_state_when_append_only_save_fails(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        failing_store = RecordTypeSaveFailingStore(
+            inner=store,
+            record_type=LifecycleTransitionRecord,
+            message="synthetic lifecycle transition save failure",
+        )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=failing_store,
+        )
+        alert = AlertRecord(
+            alert_id="alert-transition-atomicity-001",
+            finding_id="finding-transition-atomicity-001",
+            analytic_signal_id=None,
+            case_id=None,
+            lifecycle_state="new",
+        )
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "synthetic lifecycle transition save failure",
+        ):
+            service.persist_record(alert)
+
+        self.assertIsNone(service.get_record(AlertRecord, alert.alert_id))
+        self.assertEqual(service.list_lifecycle_transitions("alert", alert.alert_id), ())
+
+    def test_case_and_alert_lifecycle_transitions_are_logged_append_only(self) -> None:
+        store, service, promoted_case, _, reviewed_at = self._build_phase19_in_scope_case()
+
+        closed_case = service.record_case_disposition(
+            case_id=promoted_case.case_id,
+            disposition="closed_resolved",
+            rationale="Containment completed and the reviewed follow-up is finished.",
+            recorded_at=reviewed_at + timedelta(minutes=30),
+        )
+
+        persisted_case = service.get_record(CaseRecord, promoted_case.case_id)
+        persisted_alert = service.get_record(AlertRecord, promoted_case.alert_id)
+        case_detail = service.inspect_case_detail(promoted_case.case_id)
+        alert_detail = service.inspect_alert_detail(promoted_case.alert_id)
+        transition_records = sorted(
+            store.list(LifecycleTransitionRecord),
+            key=lambda record: (record.transitioned_at, record.transition_id),
+        )
+
+        self.assertEqual(closed_case.lifecycle_state, "closed")
+        self.assertEqual(persisted_case.lifecycle_state, "closed")
+        self.assertEqual(persisted_alert.lifecycle_state, "closed")
+
+        self.assertCountEqual(
+            [
+                (
+                    record.subject_record_family,
+                    record.subject_record_id,
+                    record.lifecycle_state,
+                )
+                for record in transition_records
+                if record.subject_record_family in {"case", "alert"}
+                and record.subject_record_id in {promoted_case.case_id, promoted_case.alert_id}
+            ],
+            [
+                ("alert", promoted_case.alert_id, "new"),
+                ("case", promoted_case.case_id, "open"),
+                ("alert", promoted_case.alert_id, "escalated_to_case"),
+                ("case", promoted_case.case_id, "closed"),
+                ("alert", promoted_case.alert_id, "closed"),
+            ],
+        )
+        self.assertEqual(
+            [entry["lifecycle_state"] for entry in case_detail.lifecycle_transitions],
+            ["open", "closed"],
+        )
+        self.assertEqual(
+            [entry["lifecycle_state"] for entry in alert_detail.lifecycle_transitions],
+            ["new", "escalated_to_case", "closed"],
+        )
+
+    def test_action_request_pending_approval_transition_is_logged(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc)
+        action_request = ActionRequestRecord(
+            action_request_id="action-request-transition-001",
+            approval_decision_id="approval-transition-001",
+            case_id="case-transition-001",
+            alert_id="alert-transition-001",
+            finding_id="finding-transition-001",
+            idempotency_key="idempotency-transition-001",
+            target_scope={"asset_id": "asset-transition-001"},
+            requester_identity="analyst-001",
+            requested_payload={"action_type": "notify_identity_owner"},
+            policy_basis={"severity": "high"},
+            policy_evaluation={"approval_requirement": "human_required"},
+            payload_hash="payload-hash-transition-001",
+            requested_at=requested_at,
+            expires_at=None,
+            lifecycle_state="pending_approval",
+        )
+
+        service.persist_record(action_request)
+
+        self.assertEqual(
+            service.get_record(ActionRequestRecord, action_request.action_request_id),
+            action_request,
+        )
+        self.assertEqual(
+            [
+                transition.lifecycle_state
+                for transition in store.list(LifecycleTransitionRecord)
+                if transition.subject_record_family == "action_request"
+                and transition.subject_record_id == action_request.action_request_id
+            ],
+            ["pending_approval"],
+        )
+        self.assertEqual(
+            [
+                transition.lifecycle_state
+                for transition in service.list_lifecycle_transitions(
+                    "action_request",
+                    action_request.action_request_id,
+                )
+            ],
+            ["pending_approval"],
+        )
+
+    def test_transition_logging_uses_targeted_latest_transition_lookup_on_persist(
+        self,
+    ) -> None:
+        inner_store, _ = make_store()
+        store = _ListCountingStore(inner=inner_store)
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        alert = AlertRecord(
+            alert_id="alert-transition-lookup-001",
+            finding_id="finding-transition-lookup-001",
+            analytic_signal_id=None,
+            case_id=None,
+            lifecycle_state="new",
+        )
+
+        service.persist_record(alert)
+        service.persist_record(replace(alert, lifecycle_state="triaged"))
+
+        self.assertEqual(store.list_calls, 0)
+        self.assertEqual(store.latest_lifecycle_transition_calls, 2)
+
+    def test_transition_logging_rejects_current_state_drift_from_authoritative_history(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        transitioned_at = datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc)
+        alert = AlertRecord(
+            alert_id="alert-transition-drift-001",
+            finding_id="finding-transition-drift-001",
+            analytic_signal_id=None,
+            case_id=None,
+            lifecycle_state="new",
+        )
+
+        service.persist_record(alert, transitioned_at=transitioned_at)
+        store.save(replace(alert, lifecycle_state="triaged"))
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                rf"alert record '{alert.alert_id}' lifecycle_state 'triaged' does not "
+                r"match latest lifecycle transition .* state 'new'"
+            ),
+        ):
+            service.persist_record(
+                replace(alert, lifecycle_state="closed"),
+                transitioned_at=transitioned_at + timedelta(minutes=5),
+            )
+
+        persisted_alert = service.get_record(AlertRecord, alert.alert_id)
+        assert persisted_alert is not None
+        self.assertEqual(persisted_alert.lifecycle_state, "triaged")
+        self.assertEqual(
+            [
+                transition.lifecycle_state
+                for transition in service.list_lifecycle_transitions(
+                    "alert",
+                    alert.alert_id,
+                )
+            ],
+            ["new"],
+        )
+
+    def test_transition_logging_rejects_orphaned_history_without_current_state_record(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        orphan_transition = LifecycleTransitionRecord(
+            transition_id="transition-orphaned-history-alert-001",
+            subject_record_family="alert",
+            subject_record_id="alert-orphaned-history-001",
+            previous_lifecycle_state=None,
+            lifecycle_state="new",
+            transitioned_at=datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc),
+            attribution={"source": "test-fixture", "actor_identities": ("analyst-001",)},
+        )
+        store.save(orphan_transition)
+        recreated_alert = AlertRecord(
+            alert_id=orphan_transition.subject_record_id,
+            finding_id="finding-orphaned-history-001",
+            analytic_signal_id=None,
+            case_id=None,
+            lifecycle_state="new",
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                rf"alert record '{recreated_alert.alert_id}' has orphaned lifecycle "
+                r"transition history without a current-state record"
+            ),
+        ):
+            service.persist_record(recreated_alert)
+
+        self.assertIsNone(service.get_record(AlertRecord, recreated_alert.alert_id))
+        self.assertEqual(
+            service.list_lifecycle_transitions("alert", recreated_alert.alert_id),
+            (orphan_transition,),
+        )
+
+    def test_transition_logging_uses_targeted_history_lookup_on_inspection(self) -> None:
+        inner_store, _ = make_store()
+        store = _ListCountingStore(inner=inner_store)
+        _, service, promoted_case, _, _ = self._build_phase19_in_scope_case(
+            store=store,
+        )
+        baseline_history_calls = store.lifecycle_transition_history_calls
+
+        service.inspect_alert_detail(promoted_case.alert_id)
+        service.inspect_case_detail(promoted_case.case_id)
+
+        self.assertEqual(store.lifecycle_transition_record_list_calls, 0)
+        self.assertEqual(
+            store.lifecycle_transition_history_calls - baseline_history_calls,
+            2,
+        )
+
+    def test_transition_logging_backfills_legacy_creation_anchor_before_state_change(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        legacy_alert = AlertRecord(
+            alert_id="alert-transition-legacy-anchor-001",
+            finding_id="finding-transition-legacy-anchor-001",
+            analytic_signal_id=None,
+            case_id=None,
+            lifecycle_state="new",
+        )
+
+        store.save(legacy_alert)
+        service.persist_record(replace(legacy_alert, lifecycle_state="closed"))
+
+        self.assertEqual(
+            [
+                (
+                    transition.previous_lifecycle_state,
+                    transition.lifecycle_state,
+                )
+                for transition in service.list_lifecycle_transitions(
+                    "alert",
+                    legacy_alert.alert_id,
+                )
+            ],
+            [
+                (None, "new"),
+                ("new", "closed"),
+            ],
+        )
+
+        backup = service.export_authoritative_record_chain_backup()
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        restored_service.restore_authoritative_record_chain_backup(backup)
+
+        self.assertEqual(
+            [
+                (
+                    transition.previous_lifecycle_state,
+                    transition.lifecycle_state,
+                )
+                for transition in restored_service.list_lifecycle_transitions(
+                    "alert",
+                    legacy_alert.alert_id,
+                )
+            ],
+            [
+                (None, "new"),
+                ("new", "closed"),
+            ],
+        )
+
+    def test_transition_logging_preserves_explicit_time_during_legacy_backfill(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        legacy_alert = AlertRecord(
+            alert_id="alert-transition-legacy-explicit-time-001",
+            finding_id="finding-transition-legacy-explicit-time-001",
+            analytic_signal_id=None,
+            case_id=None,
+            lifecycle_state="new",
+        )
+        transitioned_at = datetime(
+            2026,
+            4,
+            16,
+            8,
+            0,
+            tzinfo=timezone(timedelta(hours=-5)),
+        )
+
+        store.save(legacy_alert)
+
+        with mock.patch.object(
+            service,
+            "_initial_lifecycle_transitioned_at",
+            return_value=transitioned_at + timedelta(minutes=5),
+        ):
+            service.persist_record(
+                replace(legacy_alert, lifecycle_state="closed"),
+                transitioned_at=transitioned_at,
+            )
+
+        transitions = service.list_lifecycle_transitions("alert", legacy_alert.alert_id)
+
+        self.assertEqual(
+            [transition.transitioned_at for transition in transitions],
+            [
+                transitioned_at - timedelta(microseconds=1),
+                transitioned_at,
+            ],
+        )
+        self.assertTrue(
+            transitions[1].transition_id.startswith(
+                transitioned_at.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+            )
+        )
+
+    def test_transition_logging_only_uses_triage_timestamps_for_current_state(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        reviewed_at = datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc)
+        triage_context = {
+            "triage": {
+                "disposition": "pending_approval",
+                "closure_rationale": "Waiting on reviewed approval.",
+                "recorded_at": reviewed_at.isoformat(),
+            }
+        }
+        legacy_case = CaseRecord(
+            case_id="case-transition-triage-timestamp-001",
+            alert_id="alert-transition-triage-timestamp-001",
+            finding_id="finding-transition-triage-timestamp-001",
+            evidence_ids=(),
+            lifecycle_state="open",
+            reviewed_context=triage_context,
+        )
+        pending_action_case = replace(legacy_case, lifecycle_state="pending_action")
+        legacy_alert = AlertRecord(
+            alert_id="alert-transition-triage-timestamp-001",
+            finding_id="finding-transition-triage-timestamp-001",
+            analytic_signal_id=None,
+            case_id=legacy_case.case_id,
+            lifecycle_state="escalated_to_case",
+            reviewed_context={
+                "triage": {
+                    "disposition": "closed_resolved",
+                    "closure_rationale": "Containment completed.",
+                    "recorded_at": reviewed_at.isoformat(),
+                }
+            },
+        )
+        closed_alert = replace(legacy_alert, lifecycle_state="closed")
+
+        self.assertIsNone(service._reviewed_context_transitioned_at(legacy_case))
+        self.assertEqual(
+            service._reviewed_context_transitioned_at(pending_action_case),
+            reviewed_at,
+        )
+        self.assertIsNone(service._reviewed_context_transitioned_at(legacy_alert))
+        self.assertEqual(
+            service._reviewed_context_transitioned_at(closed_alert),
+            reviewed_at,
+        )
+
+    def test_transition_logging_locks_subject_before_reading_existing_state(self) -> None:
+        store, backend = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        alert = AlertRecord(
+            alert_id="alert-transition-lock-001",
+            finding_id="finding-transition-lock-001",
+            analytic_signal_id=None,
+            case_id=None,
+            lifecycle_state="new",
+        )
+
+        statement_count_before_persist = len(backend.statements)
+        service.persist_record(alert)
+
+        persisted_statements = backend.statements[statement_count_before_persist:]
+        self.assertGreaterEqual(len(persisted_statements), 5)
+        self.assertEqual(
+            persisted_statements[0],
+            (
+                "select pg_advisory_xact_lock(hashtext(%s), hashtext(%s))",
+                ("alert", alert.alert_id),
+            ),
+        )
+        self.assertEqual(
+            persisted_statements[1][1],
+            (alert.alert_id,),
+        )
+        self.assertEqual(
+            persisted_statements[3][1],
+            ("alert", alert.alert_id),
+        )
+
+    def test_transition_logging_uses_reviewed_event_timestamps(self) -> None:
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep approval timing aligned with the reviewed workflow.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="owner-001",
+            message_intent="Notify the accountable owner.",
+            escalation_reason="Reviewed response requires prompt owner contact.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-transition-timestamp-001",
+        )
+        decided_at = action_request.requested_at + timedelta(minutes=5)
+        approval_decision = service.record_action_approval_decision(
+            action_request_id=action_request.action_request_id,
+            approver_identity="approver-001",
+            decision="grant",
+            decision_rationale="Reviewed and approved for operator follow-through.",
+            decided_at=decided_at,
+            approval_decision_id="approval-decision-transition-timestamp-001",
+        )
+        recorded_at = decided_at + timedelta(minutes=10)
+        service.record_case_disposition(
+            case_id=promoted_case.case_id,
+            disposition="closed_resolved",
+            rationale="Containment completed and reviewed follow-up is finished.",
+            recorded_at=recorded_at,
+        )
+
+        self.assertEqual(
+            service.list_lifecycle_transitions("approval_decision", approval_decision.approval_decision_id)[
+                -1
+            ].transitioned_at,
+            decided_at,
+        )
+        self.assertEqual(
+            service.list_lifecycle_transitions("action_request", action_request.action_request_id)[
+                -1
+            ].transitioned_at,
+            decided_at,
+        )
+        self.assertEqual(
+            service.list_lifecycle_transitions("case", promoted_case.case_id)[
+                -1
+            ].transitioned_at,
+            recorded_at,
+        )
+        self.assertEqual(
+            service.list_lifecycle_transitions("alert", promoted_case.alert_id)[
+                -1
+            ].transitioned_at,
+            recorded_at,
+        )
+
+    def test_transition_logging_preserves_equal_explicit_timestamps_with_ordered_ids(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        transitioned_at = datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc)
+        alert = AlertRecord(
+            alert_id="alert-transition-equal-time-001",
+            finding_id="finding-transition-equal-time-001",
+            analytic_signal_id=None,
+            case_id=None,
+            lifecycle_state="new",
+        )
+
+        service.persist_record(alert, transitioned_at=transitioned_at)
+        service.persist_record(
+            replace(alert, lifecycle_state="triaged"),
+            transitioned_at=transitioned_at,
+        )
+
+        transitions = service.list_lifecycle_transitions("alert", alert.alert_id)
+
+        self.assertEqual(
+            [transition.lifecycle_state for transition in transitions],
+            ["new", "triaged"],
+        )
+        self.assertEqual(
+            [transition.transitioned_at for transition in transitions],
+            [transitioned_at, transitioned_at],
+        )
+        self.assertTrue(
+            transitions[1].transition_id.startswith(
+                "~"
+                + transitioned_at.astimezone(timezone.utc).strftime(
+                    "%Y%m%dT%H%M%S.%fZ"
+                )
+                + ":000001:"
+            )
+        )
+
+    def test_transition_logging_rejects_explicit_historical_timestamp_after_newer_state(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        initial_transitioned_at = datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc)
+        latest_transitioned_at = initial_transitioned_at + timedelta(minutes=10)
+        alert = AlertRecord(
+            alert_id="alert-transition-historical-reject-001",
+            finding_id="finding-transition-historical-reject-001",
+            analytic_signal_id=None,
+            case_id=None,
+            lifecycle_state="new",
+        )
+
+        service.persist_record(alert, transitioned_at=initial_transitioned_at)
+        service.persist_record(
+            replace(alert, lifecycle_state="triaged"),
+            transitioned_at=latest_transitioned_at,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "transitioned_at must not precede the latest lifecycle transition",
+        ):
+            service.persist_record(
+                replace(alert, lifecycle_state="closed"),
+                transitioned_at=initial_transitioned_at + timedelta(minutes=5),
+            )
+
+        persisted_alert = service.get_record(AlertRecord, alert.alert_id)
+        assert persisted_alert is not None
+        self.assertEqual(persisted_alert.lifecycle_state, "triaged")
+        self.assertEqual(
+            [
+                transition.transitioned_at
+                for transition in service.list_lifecycle_transitions(
+                    "alert",
+                    alert.alert_id,
+                )
+            ],
+            [initial_transitioned_at, latest_transitioned_at],
+        )
+
+    def test_transition_logging_uses_shared_lineage_lock_for_linked_alert_case_records(
+        self,
+    ) -> None:
+        store, backend = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        alert = AlertRecord(
+            alert_id="alert-transition-lineage-lock-001",
+            finding_id="finding-transition-lineage-lock-001",
+            analytic_signal_id=None,
+            case_id="case-transition-lineage-lock-001",
+            lifecycle_state="escalated_to_case",
+        )
+        case = CaseRecord(
+            case_id="case-transition-lineage-lock-001",
+            alert_id=alert.alert_id,
+            finding_id=alert.finding_id,
+            evidence_ids=("evidence-transition-lineage-lock-001",),
+            lifecycle_state="open",
+        )
+        expected_lineage_lock = (
+            "select pg_advisory_xact_lock(hashtext(%s), hashtext(%s))",
+            (
+                "linked_alert_case_lifecycle",
+                f"alert:{alert.alert_id}|case:{case.case_id}",
+            ),
+        )
+
+        store.save(alert)
+        store.save(case)
+
+        case_statement_count_before = len(backend.statements)
+        service.persist_record(replace(case, lifecycle_state="closed"))
+        case_statements = backend.statements[case_statement_count_before:]
+
+        alert_statement_count_before = len(backend.statements)
+        service.persist_record(replace(alert, lifecycle_state="closed"))
+        alert_statements = backend.statements[alert_statement_count_before:]
+
+        self.assertGreaterEqual(len(case_statements), 6)
+        self.assertEqual(case_statements[0], expected_lineage_lock)
+        self.assertEqual(
+            case_statements[1],
+            (
+                "select pg_advisory_xact_lock(hashtext(%s), hashtext(%s))",
+                ("case", case.case_id),
+            ),
+        )
+        self.assertGreaterEqual(len(alert_statements), 6)
+        self.assertEqual(alert_statements[0], expected_lineage_lock)
+        self.assertEqual(
+            alert_statements[1],
+            (
+                "select pg_advisory_xact_lock(hashtext(%s), hashtext(%s))",
+                ("alert", alert.alert_id),
+            ),
+        )
+
+    def test_transition_logging_preserves_runtime_audit_metadata_for_reviewed_families(
+        self,
+    ) -> None:
+        store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-obs-001",
+            observed_at=reviewed_at + timedelta(minutes=2),
+            scope_statement="Observed endpoint behavior requires bounded follow-up.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            observation_id=observation.observation_id,
+            triage_owner="analyst-lead-001",
+            triage_rationale="Escalate the reviewed observation for tracked triage.",
+        )
+        hunt = service.persist_record(
+            HuntRecord(
+                hunt_id="hunt-transition-metadata-001",
+                hypothesis_statement="Validate whether the observed behavior extends beyond the single case.",
+                hypothesis_version="v1",
+                owner_identity="hunter-001",
+                scope_boundary="case-scoped",
+                opened_at=reviewed_at + timedelta(minutes=10),
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                lifecycle_state="draft",
+            )
+        )
+        hunt_run = service.persist_record(
+            HuntRunRecord(
+                hunt_run_id="hunt-run-transition-metadata-001",
+                hunt_id=hunt.hunt_id,
+                scope_snapshot={"case_id": promoted_case.case_id},
+                execution_plan_reference="plan-transition-metadata-001",
+                output_linkage={},
+                started_at=reviewed_at + timedelta(minutes=15),
+                completed_at=reviewed_at + timedelta(minutes=20),
+                lifecycle_state="planned",
+            )
+        )
+        ai_trace = service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-transition-metadata-001",
+                subject_linkage={"case_ids": (promoted_case.case_id,)},
+                model_identity="gpt-5.4",
+                prompt_version="prompt-transition-metadata-v1",
+                generated_at=reviewed_at + timedelta(minutes=25),
+                material_input_refs=(evidence_id,),
+                reviewer_identity="reviewer-001",
+                lifecycle_state="under_review",
+            )
+        )
+
+        transitions_by_subject = {
+            (record.subject_record_family, record.subject_record_id): record
+            for record in store.list(LifecycleTransitionRecord)
+        }
+
+        self.assertEqual(
+            transitions_by_subject[("observation", observation.observation_id)].transitioned_at,
+            observation.observed_at,
+        )
+        self.assertEqual(
+            transitions_by_subject[("observation", observation.observation_id)].attribution[
+                "actor_identities"
+            ],
+            ("analyst-obs-001",),
+        )
+        self.assertEqual(
+            transitions_by_subject[("lead", lead.lead_id)].attribution["actor_identities"],
+            ("analyst-lead-001",),
+        )
+        self.assertEqual(
+            transitions_by_subject[("hunt", hunt.hunt_id)].transitioned_at,
+            hunt.opened_at,
+        )
+        self.assertEqual(
+            transitions_by_subject[("hunt", hunt.hunt_id)].attribution["actor_identities"],
+            ("hunter-001",),
+        )
+        self.assertEqual(
+            transitions_by_subject[("hunt_run", hunt_run.hunt_run_id)].transitioned_at,
+            hunt_run.started_at,
+        )
+        self.assertEqual(
+            transitions_by_subject[("ai_trace", ai_trace.ai_trace_id)].transitioned_at,
+            ai_trace.generated_at,
+        )
+        self.assertEqual(
+            transitions_by_subject[("ai_trace", ai_trace.ai_trace_id)].attribution[
+                "actor_identities"
+            ],
+            ("reviewer-001",),
+        )
+
+    def test_transition_listing_orders_by_transitioned_at(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        alert = AlertRecord(
+            alert_id="alert-transition-ordering-001",
+            finding_id="finding-transition-ordering-001",
+            analytic_signal_id=None,
+            case_id=None,
+            lifecycle_state="closed",
+        )
+        first_transitioned_at = datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc)
+        second_transitioned_at = first_transitioned_at + timedelta(minutes=5)
+        third_transitioned_at = first_transitioned_at + timedelta(minutes=10)
+
+        store.save(alert)
+        store.save(
+            LifecycleTransitionRecord(
+                transition_id="transition-ordering-300",
+                subject_record_family="alert",
+                subject_record_id=alert.alert_id,
+                previous_lifecycle_state=None,
+                lifecycle_state="new",
+                transitioned_at=first_transitioned_at,
+                attribution={"source": "test-fixture", "actor_identities": ()},
+            )
+        )
+        store.save(
+            LifecycleTransitionRecord(
+                transition_id="transition-ordering-100",
+                subject_record_family="alert",
+                subject_record_id=alert.alert_id,
+                previous_lifecycle_state="new",
+                lifecycle_state="triaged",
+                transitioned_at=second_transitioned_at,
+                attribution={"source": "test-fixture", "actor_identities": ()},
+            )
+        )
+        store.save(
+            LifecycleTransitionRecord(
+                transition_id="transition-ordering-200",
+                subject_record_family="alert",
+                subject_record_id=alert.alert_id,
+                previous_lifecycle_state="triaged",
+                lifecycle_state="closed",
+                transitioned_at=third_transitioned_at,
+                attribution={"source": "test-fixture", "actor_identities": ()},
+            )
+        )
+
+        self.assertEqual(
+            [
+                transition.transition_id
+                for transition in service.list_lifecycle_transitions(
+                    "alert",
+                    alert.alert_id,
+                )
+            ],
+            [
+                "transition-ordering-300",
+                "transition-ordering-100",
+                "transition-ordering-200",
+            ],
+        )

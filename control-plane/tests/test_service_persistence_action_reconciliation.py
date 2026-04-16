@@ -1444,13 +1444,16 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
         )
         original_persist_record = service.persist_record
 
-        def persist_record_with_finalization_failure(record: object) -> object:
+        def persist_record_with_finalization_failure(
+            record: object,
+            **kwargs: object,
+        ) -> object:
             if (
-                isinstance(record, ActionExecutionRecord)
+                isinstance(record, support.ActionExecutionRecord)
                 and record.lifecycle_state == "queued"
             ):
                 raise RuntimeError("synthetic finalization failure")
-            return original_persist_record(record)
+            return original_persist_record(record, **kwargs)
 
         with mock.patch.object(
             service,

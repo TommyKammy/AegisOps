@@ -16,6 +16,19 @@ class Phase16FirstBootVerifierTests(unittest.TestCase):
 
         self.assertTrue(verifier.exists(), f"expected Phase 16 verifier at {verifier}")
 
+    def test_ci_executes_phase16_first_boot_verifier_and_shell_regression(self) -> None:
+        workflow_path = REPO_ROOT / ".github" / "workflows" / "ci.yml"
+        workflow_yaml = workflow_path.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "bash scripts/verify-phase-16-first-boot-contract.sh",
+            workflow_yaml,
+        )
+        self.assertIn(
+            "bash scripts/test-verify-phase-16-first-boot-contract.sh",
+            workflow_yaml,
+        )
+
     def test_phase16_first_boot_verifier_fails_closed_on_release_state_and_bootstrap_drift(
         self,
     ) -> None:
@@ -83,6 +96,20 @@ class Phase16FirstBootVerifierTests(unittest.TestCase):
                 'Missing required line in control-plane/deployment/first-boot/control-plane-entrypoint.sh: exec "$@"',
             )
 
+            self._create_repo_fixture(fixture_root)
+            (
+                fixture_root
+                / "postgres"
+                / "control-plane"
+                / "migrations"
+                / "0006_phase_23_lifecycle_transition_records.sql"
+            ).unlink()
+            self._assert_verifier_fails_with(
+                verifier,
+                fixture_root,
+                "Missing reviewed control-plane migration asset",
+            )
+
     @staticmethod
     def _create_repo_fixture(target: pathlib.Path) -> None:
         if target.exists():
@@ -102,6 +129,10 @@ class Phase16FirstBootVerifierTests(unittest.TestCase):
             "postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql",
             "postgres/control-plane/migrations/0002_phase_14_reviewed_context_columns.sql",
             "postgres/control-plane/migrations/0003_phase_15_assistant_advisory_draft_columns.sql",
+            "postgres/control-plane/migrations/0004_phase_20_action_request_binding_columns.sql",
+            "postgres/control-plane/migrations/0005_phase_23_approval_decision_rationale.sql",
+            "postgres/control-plane/migrations/0006_phase_23_lifecycle_transition_records.sql",
+            "postgres/control-plane/migrations/0007_phase_23_lifecycle_transition_subject_index.sql",
         )
 
         for relative_path in required_files:

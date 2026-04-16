@@ -1500,7 +1500,6 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
         _, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
         )
-        handoff_at = datetime(2026, 4, 7, 17, 45, tzinfo=timezone.utc)
 
         observation = service.record_case_observation(
             case_id=promoted_case.case_id,
@@ -1520,6 +1519,11 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             lead_id=lead.lead_id,
             review_owner="analyst-001",
             intended_outcome="Review repository owner change evidence before any approval-bound response.",
+        )
+        handoff_at = (
+            service.list_lifecycle_transitions("case", promoted_case.case_id)[-1]
+            .transitioned_at
+            + timedelta(minutes=5)
         )
         handed_off_case = service.record_case_handoff(
             case_id=promoted_case.case_id,

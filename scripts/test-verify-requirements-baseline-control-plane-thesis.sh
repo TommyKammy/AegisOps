@@ -30,12 +30,91 @@ write_canonical_doc() {
   git -C "${target}" add docs/requirements-baseline.md
 }
 
+remove_literal_text_from_doc() {
+  local doc_path="$1"
+  local expected_text="$2"
+  local temp_path="${doc_path}.tmp"
+
+  awk -v expected_text="${expected_text}" '
+    function replace_all_literal(text, from_text, to_text,    from_length, result, position) {
+      from_length = length(from_text)
+      if (from_length == 0) {
+        return text
+      }
+
+      result = ""
+      while ((position = index(text, from_text)) > 0) {
+        result = result substr(text, 1, position - 1) to_text
+        text = substr(text, position + from_length)
+      }
+
+      return result text
+    }
+
+    {
+      sub(/\r$/, "")
+      line = replace_all_literal($0, expected_text, "")
+      if (line != "") {
+        print line
+      }
+    }
+  ' "${doc_path}" > "${temp_path}"
+  mv "${temp_path}" "${doc_path}"
+}
+
+replace_literal_text_in_doc() {
+  local doc_path="$1"
+  local from_text="$2"
+  local to_text="$3"
+  local temp_path="${doc_path}.tmp"
+
+  awk -v from_text="${from_text}" -v to_text="${to_text}" '
+    function replace_all_literal(text, from_text, to_text,    from_length, result, position) {
+      from_length = length(from_text)
+      if (from_length == 0) {
+        return text
+      }
+
+      result = ""
+      while ((position = index(text, from_text)) > 0) {
+        result = result substr(text, 1, position - 1) to_text
+        text = substr(text, position + from_length)
+      }
+
+      return result text
+    }
+
+    BEGIN {
+      gsub(/\\n/, "\n", to_text)
+    }
+
+    {
+      sub(/\r$/, "")
+      print replace_all_literal($0, from_text, to_text)
+    }
+  ' "${doc_path}" > "${temp_path}"
+  mv "${temp_path}" "${doc_path}"
+}
+
+convert_doc_to_crlf() {
+  local doc_path="$1"
+  local temp_path="${doc_path}.tmp"
+
+  awk '
+    {
+      sub(/\r$/, "")
+      printf "%s\r\n", $0
+    }
+  ' "${doc_path}" > "${temp_path}"
+  mv "${temp_path}" "${doc_path}"
+}
+
 remove_text_from_doc() {
   local target="$1"
   local expected_text="$2"
   local doc_path="${target}/docs/requirements-baseline.md"
 
-  REMOVE_TEXT="${expected_text}" perl -0pi -e 's/\Q$ENV{REMOVE_TEXT}\E\n?//g' "${doc_path}"
+  remove_literal_text_from_doc "${doc_path}" "${expected_text}"
   git -C "${target}" add docs/requirements-baseline.md
 }
 
@@ -45,7 +124,7 @@ replace_text_in_doc() {
   local to_text="$3"
   local doc_path="${target}/docs/requirements-baseline.md"
 
-  FROM_TEXT="${from_text}" TO_TEXT="${to_text}" perl -0pi -e 's/\Q$ENV{FROM_TEXT}\E/$ENV{TO_TEXT}/g' "${doc_path}"
+  replace_literal_text_in_doc "${doc_path}" "${from_text}" "${to_text}"
   git -C "${target}" add docs/requirements-baseline.md
 }
 
@@ -87,6 +166,14 @@ write_canonical_doc "${valid_repo}"
 commit_fixture "${valid_repo}"
 assert_passes "${valid_repo}"
 
+crlf_repo="${workdir}/crlf"
+create_repo "${crlf_repo}"
+write_canonical_doc "${crlf_repo}"
+convert_doc_to_crlf "${crlf_repo}/docs/requirements-baseline.md"
+git -C "${crlf_repo}" add docs/requirements-baseline.md
+commit_fixture "${crlf_repo}"
+assert_passes "${crlf_repo}"
+
 missing_doc_repo="${workdir}/missing-doc"
 create_repo "${missing_doc_repo}"
 commit_fixture "${missing_doc_repo}"
@@ -118,10 +205,10 @@ create_repo "${missing_action_execution_summary_repo}"
 write_canonical_doc "${missing_action_execution_summary_repo}"
 replace_text_in_doc \
   "${missing_action_execution_summary_repo}" \
-  "| AegisOps control plane | Alert, case, evidence, observation, lead, recommendation, approval, action-request, action-execution, hunt, AI-trace, and reconciliation ownership |" \
-  "| AegisOps control plane | Alert, case, evidence, observation, lead, recommendation, approval, action-request, hunt, AI-trace, and reconciliation ownership |"
+  "| AegisOps control plane | Alert, case, evidence, observation, lead, recommendation, approval, action-request, action-execution, hunt, AI-trace, reconciliation, and append-only lifecycle-transition ownership |" \
+  "| AegisOps control plane | Alert, case, evidence, observation, lead, recommendation, approval, action-request, hunt, AI-trace, reconciliation, and append-only lifecycle-transition ownership |"
 commit_fixture "${missing_action_execution_summary_repo}"
-assert_fails_with "${missing_action_execution_summary_repo}" "action-request, action-execution, hunt, AI-trace, and reconciliation ownership"
+assert_fails_with "${missing_action_execution_summary_repo}" "action-request, action-execution, hunt, AI-trace, reconciliation, and append-only lifecycle-transition ownership"
 
 missing_non_goal_repo="${workdir}/missing-non-goal"
 create_repo "${missing_non_goal_repo}"
@@ -135,10 +222,10 @@ create_repo "${missing_action_execution_truth_repo}"
 write_canonical_doc "${missing_action_execution_truth_repo}"
 replace_text_in_doc \
   "${missing_action_execution_truth_repo}" \
-  "AegisOps owns approval decisions, action intent, action-execution truth, evidence linkage, and reconciliation" \
-  "AegisOps owns approval decisions, action intent, evidence linkage, and reconciliation"
+  "AegisOps owns approval decisions, action intent, action-execution truth, evidence linkage, reconciliation, and the append-only lifecycle transition history paired with reviewed current-state records" \
+  "AegisOps owns approval decisions, action intent, evidence linkage, reconciliation, and the append-only lifecycle transition history paired with reviewed current-state records"
 commit_fixture "${missing_action_execution_truth_repo}"
-assert_fails_with "${missing_action_execution_truth_repo}" "AegisOps owns approval decisions, action intent, action-execution truth, evidence linkage, and reconciliation"
+assert_fails_with "${missing_action_execution_truth_repo}" "AegisOps owns approval decisions, action intent, action-execution truth, evidence linkage, reconciliation, and the append-only lifecycle transition history paired with reviewed current-state records"
 
 legacy_phrase_repo="${workdir}/legacy-phrase"
 create_repo "${legacy_phrase_repo}"

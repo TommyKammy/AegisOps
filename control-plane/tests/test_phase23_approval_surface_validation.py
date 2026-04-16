@@ -573,12 +573,10 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
             service,
             action_request_id="action-request-phase23-expired-decision-001",
         )
-        requested_at = datetime.now(timezone.utc) - timedelta(minutes=10)
-        expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        expires_at = action_request.requested_at + timedelta(minutes=1)
         action_request = service.persist_record(
             replace(
                 action_request,
-                requested_at=requested_at,
                 expires_at=expires_at,
             )
         )
@@ -596,7 +594,7 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
                                 "approver_identity": "approver-001",
                                 "decision_rationale": "Expired requests must fail closed at decision time.",
                                 "decided_at": (
-                                    requested_at + timedelta(minutes=5)
+                                    action_request.requested_at + timedelta(minutes=5)
                                 ).isoformat(),
                             }
                         ).encode("utf-8"),

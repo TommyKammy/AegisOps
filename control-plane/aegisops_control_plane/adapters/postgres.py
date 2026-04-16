@@ -20,6 +20,7 @@ from ..models import (
     HuntRecord,
     HuntRunRecord,
     LeadRecord,
+    LifecycleTransitionRecord,
     ObservationRecord,
     ReconciliationRecord,
     RecommendationRecord,
@@ -143,6 +144,59 @@ _LIFECYCLE_STATES_BY_FAMILY: dict[str, frozenset[str]] = {
             "superseded",
         }
     ),
+    "lifecycle_transition": frozenset(
+        {
+            "new",
+            "triaged",
+            "investigating",
+            "escalated_to_case",
+            "closed",
+            "reopened",
+            "superseded",
+            "active",
+            "withdrawn",
+            "open",
+            "pending_action",
+            "contained_pending_validation",
+            "collected",
+            "validated",
+            "linked",
+            "captured",
+            "confirmed",
+            "challenged",
+            "promoted_to_alert",
+            "promoted_to_case",
+            "proposed",
+            "under_review",
+            "accepted",
+            "rejected",
+            "materialized",
+            "pending",
+            "approved",
+            "expired",
+            "canceled",
+            "draft",
+            "pending_approval",
+            "executing",
+            "completed",
+            "failed",
+            "unresolved",
+            "dispatching",
+            "queued",
+            "running",
+            "succeeded",
+            "on_hold",
+            "concluded",
+            "planned",
+            "generated",
+            "accepted_for_reference",
+            "rejected_for_reference",
+            "matched",
+            "mismatched",
+            "stale",
+            "resolved",
+        }
+    ),
     "recommendation": frozenset(
         {
             "proposed",
@@ -218,6 +272,18 @@ _RECONCILIATION_INGEST_DISPOSITIONS = frozenset(
     }
 )
 
+_LIFECYCLE_TRANSITION_SUBJECT_FAMILIES = frozenset(
+    family
+    for family in _LIFECYCLE_STATES_BY_FAMILY
+    if family != LifecycleTransitionRecord.record_family
+)
+_LIFECYCLE_TRANSITION_ALLOWED_STATES = frozenset(
+    state
+    for family, states in _LIFECYCLE_STATES_BY_FAMILY.items()
+    if family != LifecycleTransitionRecord.record_family
+    for state in states
+)
+
 _TABLES_BY_RECORD_TYPE: dict[Type[ControlPlaneRecord], TableConfig] = {
     AlertRecord: TableConfig(
         AlertRecord,
@@ -243,6 +309,11 @@ _TABLES_BY_RECORD_TYPE: dict[Type[ControlPlaneRecord], TableConfig] = {
         array_fields=frozenset({"supporting_evidence_ids"}),
     ),
     LeadRecord: TableConfig(LeadRecord, "lead_records"),
+    LifecycleTransitionRecord: TableConfig(
+        LifecycleTransitionRecord,
+        "lifecycle_transition_records",
+        json_fields=frozenset({"attribution"}),
+    ),
     RecommendationRecord: TableConfig(
         RecommendationRecord,
         "recommendation_records",
@@ -288,6 +359,42 @@ _TABLES_BY_RECORD_TYPE: dict[Type[ControlPlaneRecord], TableConfig] = {
 
 
 def _validate_lifecycle_state(record: ControlPlaneRecord) -> None:
+    if isinstance(record, LifecycleTransitionRecord):
+        allowed_states = _LIFECYCLE_STATES_BY_FAMILY.get(record.subject_record_family)
+        if (
+            record.subject_record_family
+            not in _LIFECYCLE_TRANSITION_SUBJECT_FAMILIES
+        ):
+            raise ValueError(
+                "lifecycle_transition record "
+                f"{record.record_id!r} has unsupported subject_record_family "
+                f"{record.subject_record_family!r}; expected one of "
+                f"{sorted(_LIFECYCLE_TRANSITION_SUBJECT_FAMILIES)!r}"
+            )
+        if allowed_states is None:
+            raise ValueError(
+                "lifecycle_transition record "
+                f"{record.record_id!r} has unsupported subject_record_family "
+                f"{record.subject_record_family!r}"
+            )
+        if record.lifecycle_state not in allowed_states:
+            raise ValueError(
+                "lifecycle_transition record "
+                f"{record.record_id!r} has invalid lifecycle_state {record.lifecycle_state!r} "
+                f"for subject_record_family {record.subject_record_family!r}; expected one of "
+                f"{sorted(allowed_states)!r}"
+            )
+        if (
+            record.previous_lifecycle_state is not None
+            and record.previous_lifecycle_state not in allowed_states
+        ):
+            raise ValueError(
+                "lifecycle_transition record "
+                f"{record.record_id!r} has invalid previous_lifecycle_state "
+                f"{record.previous_lifecycle_state!r} for subject_record_family "
+                f"{record.subject_record_family!r}; expected one of {sorted(allowed_states)!r}"
+            )
+        return
     allowed_states = _LIFECYCLE_STATES_BY_FAMILY.get(record.record_family)
     if allowed_states is None:
         raise TypeError(
@@ -375,6 +482,12 @@ def _validate_record(record: ControlPlaneRecord) -> None:
         return
     if isinstance(record, RecommendationRecord):
         _require_any_linkage(record, ("lead_id", "hunt_run_id", "alert_id", "case_id"))
+        return
+    if isinstance(record, LifecycleTransitionRecord):
+        _require_non_blank_fields(
+            record,
+            ("transition_id", "subject_record_family", "subject_record_id"),
+        )
         return
     if isinstance(record, ApprovalDecisionRecord):
         _require_non_empty_tuple(record, "approver_identities")
@@ -553,6 +666,26 @@ class PostgresControlPlaneStore:
             finally:
                 self._active_connection.reset(token)
 
+    def lock_lifecycle_transition_subject(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> None:
+        active_connection = self._active_connection.get()
+        if active_connection is None:
+            raise RuntimeError(
+                "lifecycle transition subject locks require an active transaction"
+            )
+
+        cursor = active_connection.cursor()
+        try:
+            cursor.execute(
+                "select pg_advisory_xact_lock(hashtext(%s), hashtext(%s))",
+                (record_family, record_id),
+            )
+        finally:
+            cursor.close()
+
     @contextmanager
     def _borrow_connection(self) -> Iterator[ConnectionProtocol]:
         active_connection = self._active_connection.get()
@@ -620,20 +753,26 @@ class PostgresControlPlaneStore:
         placeholders = ", ".join(
             self._placeholder(table, field_name) for field_name in field_names
         )
-        assignments = ", ".join(
-            f"{field_name} = excluded.{field_name}"
-            for field_name in field_names
-            if field_name != table.identifier_field
-        )
         params = tuple(
             self._serialize_field(table, field_name, getattr(record, field_name))
             for field_name in field_names
         )
-        query = (
-            f"insert into aegisops_control.{table.table_name} "
-            f"({', '.join(field_names)}) values ({placeholders}) "
-            f"on conflict ({table.identifier_field}) do update set {assignments}"
-        )
+        if isinstance(record, LifecycleTransitionRecord):
+            query = (
+                f"insert into aegisops_control.{table.table_name} "
+                f"({', '.join(field_names)}) values ({placeholders})"
+            )
+        else:
+            assignments = ", ".join(
+                f"{field_name} = excluded.{field_name}"
+                for field_name in field_names
+                if field_name != table.identifier_field
+            )
+            query = (
+                f"insert into aegisops_control.{table.table_name} "
+                f"({', '.join(field_names)}) values ({placeholders}) "
+                f"on conflict ({table.identifier_field}) do update set {assignments}"
+            )
 
         with self._borrow_connection() as connection:
             cursor = connection.cursor()
@@ -682,6 +821,65 @@ class PostgresControlPlaneStore:
         return tuple(
             self._row_to_record(record_type, _row_to_mapping(cursor, row))
             for row in rows
+        )
+
+    def latest_lifecycle_transition(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> LifecycleTransitionRecord | None:
+        table = self._table_config(LifecycleTransitionRecord)
+        query = (
+            f"select {', '.join(table.record_fields)} "
+            f"from aegisops_control.{table.table_name} "
+            "where subject_record_family = %s and subject_record_id = %s "
+            "order by transitioned_at desc, transition_id desc limit 1"
+        )
+
+        with self._borrow_connection() as connection:
+            cursor = connection.cursor()
+            try:
+                cursor.execute(query, (record_family, record_id))
+                row = cursor.fetchone()
+                mapping = None if row is None else _row_to_mapping(cursor, row)
+            finally:
+                cursor.close()
+
+        if mapping is None:
+            return None
+        return self._row_to_record(
+            LifecycleTransitionRecord,
+            mapping,
+        )
+
+    def list_lifecycle_transitions(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> tuple[LifecycleTransitionRecord, ...]:
+        table = self._table_config(LifecycleTransitionRecord)
+        query = (
+            f"select {', '.join(table.record_fields)} "
+            f"from aegisops_control.{table.table_name} "
+            "where subject_record_family = %s and subject_record_id = %s "
+            "order by transitioned_at asc, transition_id asc"
+        )
+
+        with self._borrow_connection() as connection:
+            cursor = connection.cursor()
+            try:
+                cursor.execute(query, (record_family, record_id))
+                rows = cursor.fetchall()
+                mappings = tuple(_row_to_mapping(cursor, row) for row in rows)
+            finally:
+                cursor.close()
+
+        return tuple(
+            self._row_to_record(
+                LifecycleTransitionRecord,
+                mapping,
+            )
+            for mapping in mappings
         )
 
     def inspect_readiness_aggregates(self) -> ReadinessDiagnosticsAggregates:

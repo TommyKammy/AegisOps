@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import AbstractContextManager, contextmanager
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, fields, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hmac
 import ipaddress
 import json
@@ -35,6 +35,7 @@ from .models import (
     HuntRecord,
     HuntRunRecord,
     LeadRecord,
+    LifecycleTransitionRecord,
     NativeDetectionRecord,
     ObservationRecord,
     ReconciliationRecord,
@@ -57,6 +58,37 @@ _AFTER_HOURS_HANDOFF_TRIAGE_DISPOSITIONS = frozenset(
         "awaiting_business_hours_review",
     }
 )
+_CASE_CLOSED_TRIAGE_DISPOSITIONS = frozenset(
+    {
+        "closed_benign",
+        "closed_duplicate",
+        "closed_resolved",
+        "closed_accepted_risk",
+    }
+)
+_CASE_PENDING_ACTION_TRIAGE_DISPOSITIONS = frozenset(
+    {
+        "business_hours_handoff",
+        "awaiting_business_hours_review",
+        "pending_external_validation",
+        "pending_approval",
+    }
+)
+_CASE_LIFECYCLE_STATE_BY_TRIAGE_DISPOSITION = {
+    **{
+        disposition: "closed"
+        for disposition in _CASE_CLOSED_TRIAGE_DISPOSITIONS
+    },
+    **{
+        disposition: "pending_action"
+        for disposition in _CASE_PENDING_ACTION_TRIAGE_DISPOSITIONS
+    },
+    "investigating": "investigating",
+}
+
+_LATEST_LIFECYCLE_TRANSITION_UNSET = object()
+_LINKED_ALERT_CASE_LIFECYCLE_LOCK_FAMILY = "linked_alert_case_lifecycle"
+_SAME_TIMESTAMP_LIFECYCLE_TRANSITION_ID_PREFIX = "~"
 
 
 class ControlPlaneStore(Protocol):
@@ -70,6 +102,20 @@ class ControlPlaneStore(Protocol):
         ...
 
     def list(self, record_type: Type[RecordT]) -> tuple[RecordT, ...]:
+        ...
+
+    def latest_lifecycle_transition(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> LifecycleTransitionRecord | None:
+        ...
+
+    def list_lifecycle_transitions(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> tuple[LifecycleTransitionRecord, ...]:
         ...
 
     def transaction(
@@ -199,6 +245,7 @@ class AlertDetailSnapshot:
     native_rule: dict[str, object] | None
     provenance: dict[str, str] | None
     lineage: dict[str, object]
+    lifecycle_transitions: tuple[dict[str, object], ...]
     current_action_review: dict[str, object] | None
     action_reviews: tuple[dict[str, object], ...]
 
@@ -219,6 +266,7 @@ class AlertDetailSnapshot:
                 "native_rule": self.native_rule,
                 "provenance": self.provenance,
                 "lineage": self.lineage,
+                "lifecycle_transitions": self.lifecycle_transitions,
                 "current_action_review": self.current_action_review,
                 "action_reviews": self.action_reviews,
             }
@@ -244,6 +292,7 @@ class CaseDetailSnapshot:
     linked_evidence_records: tuple[dict[str, object], ...]
     linked_recommendation_records: tuple[dict[str, object], ...]
     linked_reconciliation_records: tuple[dict[str, object], ...]
+    lifecycle_transitions: tuple[dict[str, object], ...]
     current_action_review: dict[str, object] | None
     action_reviews: tuple[dict[str, object], ...]
 
@@ -267,6 +316,7 @@ class CaseDetailSnapshot:
                 "linked_evidence_records": self.linked_evidence_records,
                 "linked_recommendation_records": self.linked_recommendation_records,
                 "linked_reconciliation_records": self.linked_reconciliation_records,
+                "lifecycle_transitions": self.lifecycle_transitions,
                 "current_action_review": self.current_action_review,
                 "action_reviews": self.action_reviews,
             }
@@ -291,6 +341,7 @@ class AnalystAssistantContextSnapshot:
     linked_evidence_records: tuple[dict[str, object], ...]
     linked_recommendation_records: tuple[dict[str, object], ...]
     linked_reconciliation_records: tuple[dict[str, object], ...]
+    lifecycle_transitions: tuple[dict[str, object], ...]
 
     def to_dict(self) -> dict[str, object]:
         return _json_ready(
@@ -311,6 +362,7 @@ class AnalystAssistantContextSnapshot:
                 "linked_evidence_records": self.linked_evidence_records,
                 "linked_recommendation_records": self.linked_recommendation_records,
                 "linked_reconciliation_records": self.linked_reconciliation_records,
+                "lifecycle_transitions": self.lifecycle_transitions,
             }
         )
 
@@ -421,6 +473,7 @@ class RestoreDrillSnapshot:
     read_only: bool
     drill_passed: bool
     verified_case_ids: tuple[str, ...]
+    verified_recommendation_ids: tuple[str, ...]
     verified_approval_decision_ids: tuple[str, ...]
     verified_action_execution_ids: tuple[str, ...]
     verified_reconciliation_ids: tuple[str, ...]
@@ -527,6 +580,7 @@ RECORD_TYPES_BY_FAMILY: dict[str, Type[ControlPlaneRecord]] = {
         AnalyticSignalRecord,
         CaseRecord,
         EvidenceRecord,
+        LifecycleTransitionRecord,
         ObservationRecord,
         LeadRecord,
         RecommendationRecord,
@@ -544,46 +598,69 @@ AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES: tuple[Type[ControlPlaneRecord], ...] = 
     AnalyticSignalRecord,
     AlertRecord,
     EvidenceRecord,
+    ObservationRecord,
+    LeadRecord,
     CaseRecord,
+    RecommendationRecord,
+    LifecycleTransitionRecord,
     ApprovalDecisionRecord,
     ActionRequestRecord,
     ActionExecutionRecord,
+    HuntRecord,
+    HuntRunRecord,
+    AITraceRecord,
     ReconciliationRecord,
 )
 AUTHORITATIVE_RECORD_CHAIN_FAMILIES: tuple[str, ...] = tuple(
     record_type.record_family for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES
 )
 AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION = (
-    "phase21.authoritative-record-chain.v1"
+    "phase23.authoritative-record-chain.v2"
 )
 _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY: dict[str, str] = {
     "analytic_signal": "analytic_signal_id",
     "alert": "alert_id",
     "evidence": "evidence_id",
+    "observation": "observation_id",
+    "lead": "lead_id",
     "case": "case_id",
+    "recommendation": "recommendation_id",
+    "lifecycle_transition": "transition_id",
     "approval_decision": "approval_decision_id",
     "action_request": "action_request_id",
     "action_execution": "action_execution_id",
+    "hunt": "hunt_id",
+    "hunt_run": "hunt_run_id",
+    "ai_trace": "ai_trace_id",
     "reconciliation": "reconciliation_id",
 }
 _BACKUP_DATETIME_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
     "analytic_signal": ("first_seen_at", "last_seen_at"),
     "evidence": ("acquired_at",),
+    "observation": ("observed_at",),
+    "lifecycle_transition": ("transitioned_at",),
     "approval_decision": ("decided_at", "approved_expires_at"),
     "action_request": ("requested_at", "expires_at"),
     "action_execution": ("delegated_at", "expires_at"),
+    "hunt": ("opened_at",),
+    "hunt_run": ("started_at", "completed_at"),
+    "ai_trace": ("generated_at",),
     "reconciliation": ("first_seen_at", "last_seen_at", "compared_at"),
 }
 _BACKUP_TUPLE_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
     "analytic_signal": ("alert_ids", "case_ids"),
     "case": ("evidence_ids",),
+    "observation": ("supporting_evidence_ids",),
     "approval_decision": ("approver_identities",),
+    "ai_trace": ("material_input_refs",),
     "reconciliation": ("linked_execution_run_ids",),
 }
 _BACKUP_MAPPING_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
     "analytic_signal": ("reviewed_context",),
     "alert": ("reviewed_context",),
     "case": ("reviewed_context",),
+    "recommendation": ("reviewed_context", "assistant_advisory_draft"),
+    "lifecycle_transition": ("attribution",),
     "approval_decision": ("target_snapshot",),
     "action_request": (
         "target_scope",
@@ -592,6 +669,8 @@ _BACKUP_MAPPING_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
         "policy_evaluation",
     ),
     "action_execution": ("target_scope", "approved_payload", "provenance"),
+    "hunt_run": ("scope_snapshot", "output_linkage"),
+    "ai_trace": ("subject_linkage", "assistant_advisory_draft"),
     "reconciliation": ("subject_linkage",),
 }
 
@@ -989,6 +1068,13 @@ class AegisOpsControlPlaneService:
             ),
             record_types_by_family=RECORD_TYPES_BY_FAMILY,
             find_duplicate_strings=_find_duplicate_strings,
+            synthesize_lifecycle_transition_record=(
+                lambda record, initial_transitioned_at_fallback=None: self._build_lifecycle_transition_record(
+                    record,
+                    existing_record=None,
+                    initial_transitioned_at_fallback=initial_transitioned_at_fallback,
+                )
+            ),
             assistant_ids_from_mapping=self._assistant_ids_from_mapping,
             inspect_case_detail=lambda case_id: self.inspect_case_detail(case_id),
             inspect_assistant_context=(
@@ -1003,8 +1089,394 @@ class AegisOpsControlPlaneService:
     def describe_runtime(self) -> RuntimeSnapshot:
         return self._runtime_boundary_service.describe_runtime()
 
-    def persist_record(self, record: RecordT) -> RecordT:
-        return self._store.save(record)
+    def persist_record(
+        self,
+        record: RecordT,
+        *,
+        transitioned_at: datetime | None = None,
+    ) -> RecordT:
+        if isinstance(record, LifecycleTransitionRecord):
+            raise ValueError(
+                "persist_record does not accept direct lifecycle transition records"
+            )
+        if transitioned_at is not None:
+            transitioned_at = self._require_aware_datetime(
+                transitioned_at,
+                "transitioned_at",
+            )
+        with self._store.transaction():
+            lineage_lock_subject = self._linked_alert_case_lifecycle_lock_subject(record)
+            if lineage_lock_subject is not None:
+                self._lock_lifecycle_transition_subject(*lineage_lock_subject)
+            self._lock_lifecycle_transition_subject(
+                record.record_family,
+                record.record_id,
+            )
+            existing_record = self._store.get(type(record), record.record_id)
+            persisted_record = self._store.save(record)
+            transition_records = self._build_lifecycle_transition_records(
+                persisted_record,
+                existing_record=existing_record,
+                transitioned_at=transitioned_at,
+            )
+            for transition_record in transition_records:
+                self._store.save(transition_record)
+            return persisted_record
+
+    def _lock_lifecycle_transition_subject(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> None:
+        lock_subject = getattr(self._store, "lock_lifecycle_transition_subject", None)
+        if callable(lock_subject):
+            lock_subject(record_family, record_id)
+
+    @staticmethod
+    def _linked_alert_case_lifecycle_lock_subject(
+        record: ControlPlaneRecord,
+    ) -> tuple[str, str] | None:
+        if isinstance(record, AlertRecord):
+            alert_id = record.alert_id
+            case_id = record.case_id
+        elif isinstance(record, CaseRecord):
+            alert_id = record.alert_id
+            case_id = record.case_id
+        else:
+            return None
+
+        if not isinstance(alert_id, str) or not alert_id.strip():
+            return None
+        if not isinstance(case_id, str) or not case_id.strip():
+            return None
+
+        # Serialize linked alert/case lifecycle mutations on one shared key so
+        # opposite record-specific update orders cannot deadlock.
+        return (
+            _LINKED_ALERT_CASE_LIFECYCLE_LOCK_FAMILY,
+            f"alert:{alert_id}|case:{case_id}",
+        )
+
+    def _build_lifecycle_transition_record(
+        self,
+        record: ControlPlaneRecord,
+        *,
+        existing_record: ControlPlaneRecord | None,
+        transitioned_at: datetime | None = None,
+        initial_transitioned_at_fallback: datetime | None = None,
+        must_precede_transitioned_at: datetime | None = None,
+        latest_transition: LifecycleTransitionRecord | None | object = (
+            _LATEST_LIFECYCLE_TRANSITION_UNSET
+        ),
+    ) -> LifecycleTransitionRecord | None:
+        if isinstance(record, LifecycleTransitionRecord):
+            return None
+        if not hasattr(record, "lifecycle_state"):
+            return None
+
+        existing_lifecycle_state = (
+            getattr(existing_record, "lifecycle_state", None)
+            if existing_record is not None
+            else None
+        )
+        next_lifecycle_state = getattr(record, "lifecycle_state", None)
+        if not isinstance(next_lifecycle_state, str) or not next_lifecycle_state.strip():
+            return None
+        if latest_transition is _LATEST_LIFECYCLE_TRANSITION_UNSET:
+            latest_transition = self._latest_lifecycle_transition(
+                record.record_family,
+                record.record_id,
+            )
+        previous_lifecycle_state = existing_lifecycle_state
+        if latest_transition is not None:
+            if existing_record is None:
+                raise ValueError(
+                    f"{record.record_family} record {record.record_id!r} has orphaned "
+                    "lifecycle transition history without a current-state record"
+                )
+            if (
+                existing_record is not None
+                and existing_lifecycle_state != latest_transition.lifecycle_state
+            ):
+                raise ValueError(
+                    f"{record.record_family} record {record.record_id!r} lifecycle_state "
+                    f"{existing_lifecycle_state!r} does not match latest lifecycle "
+                    f"transition {latest_transition.transition_id!r} state "
+                    f"{latest_transition.lifecycle_state!r}"
+                )
+            previous_lifecycle_state = latest_transition.lifecycle_state
+        if previous_lifecycle_state == next_lifecycle_state:
+            return None
+
+        explicit_transitioned_at = transitioned_at is not None
+        resolved_transitioned_at = (
+            transitioned_at
+            if transitioned_at is not None
+            else (
+                self._initial_lifecycle_transitioned_at(
+                    record,
+                    fallback=initial_transitioned_at_fallback,
+                )
+                if existing_record is None
+                else datetime.now(timezone.utc)
+            )
+        )
+        if (
+            must_precede_transitioned_at is not None
+            and resolved_transitioned_at >= must_precede_transitioned_at
+        ):
+            resolved_transitioned_at = must_precede_transitioned_at - timedelta(
+                microseconds=1
+            )
+        if (
+            latest_transition is not None
+            and resolved_transitioned_at < latest_transition.transitioned_at
+        ):
+            if explicit_transitioned_at:
+                raise ValueError(
+                    "transitioned_at must not precede the latest lifecycle transition "
+                    f"for {record.record_family} record {record.record_id!r}"
+                )
+            resolved_transitioned_at = latest_transition.transitioned_at + timedelta(
+                microseconds=1
+            )
+        transition_timestamp = resolved_transitioned_at.astimezone(
+            timezone.utc
+        ).strftime("%Y%m%dT%H%M%S.%fZ")
+        return LifecycleTransitionRecord(
+            transition_id=self._lifecycle_transition_id(
+                transition_timestamp=transition_timestamp,
+                transitioned_at=resolved_transitioned_at,
+                latest_transition=latest_transition,
+            ),
+            subject_record_family=record.record_family,
+            subject_record_id=record.record_id,
+            previous_lifecycle_state=(
+                previous_lifecycle_state
+                if isinstance(previous_lifecycle_state, str)
+                and previous_lifecycle_state.strip()
+                else None
+            ),
+            lifecycle_state=next_lifecycle_state,
+            transitioned_at=resolved_transitioned_at,
+            attribution=self._lifecycle_transition_attribution(record),
+        )
+
+    def _lifecycle_transition_id(
+        self,
+        *,
+        transition_timestamp: str,
+        transitioned_at: datetime,
+        latest_transition: LifecycleTransitionRecord | None,
+    ) -> str:
+        if (
+            latest_transition is None
+            or transitioned_at != latest_transition.transitioned_at
+        ):
+            return f"{transition_timestamp}:{uuid.uuid4()}"
+
+        sequence = 1
+        prefix = (
+            f"{_SAME_TIMESTAMP_LIFECYCLE_TRANSITION_ID_PREFIX}{transition_timestamp}:"
+        )
+        if latest_transition.transition_id.startswith(prefix):
+            sequence_text = latest_transition.transition_id[len(prefix) :].split(":", 1)[
+                0
+            ]
+            if sequence_text.isdigit():
+                sequence = int(sequence_text) + 1
+        return f"{prefix}{sequence:06d}:{uuid.uuid4()}"
+
+    def _build_lifecycle_transition_records(
+        self,
+        record: ControlPlaneRecord,
+        *,
+        existing_record: ControlPlaneRecord | None,
+        transitioned_at: datetime | None = None,
+    ) -> tuple[LifecycleTransitionRecord, ...]:
+        if isinstance(record, LifecycleTransitionRecord):
+            return ()
+        if not hasattr(record, "lifecycle_state"):
+            return ()
+
+        latest_transition = self._latest_lifecycle_transition(
+            record.record_family,
+            record.record_id,
+        )
+        transition_records: list[LifecycleTransitionRecord] = []
+        if latest_transition is None and existing_record is not None:
+            anchor_transition = self._build_lifecycle_transition_record(
+                existing_record,
+                existing_record=None,
+                must_precede_transitioned_at=transitioned_at,
+                latest_transition=None,
+            )
+            if anchor_transition is not None:
+                transition_records.append(anchor_transition)
+                latest_transition = anchor_transition
+
+        transition_record = self._build_lifecycle_transition_record(
+            record,
+            existing_record=existing_record,
+            transitioned_at=transitioned_at,
+            latest_transition=latest_transition,
+        )
+        if transition_record is not None:
+            transition_records.append(transition_record)
+        return tuple(transition_records)
+
+    def _initial_lifecycle_transitioned_at(
+        self,
+        record: ControlPlaneRecord,
+        *,
+        fallback: datetime | None = None,
+    ) -> datetime:
+        if isinstance(record, AnalyticSignalRecord):
+            if record.first_seen_at is not None:
+                return record.first_seen_at
+            if record.last_seen_at is not None:
+                return record.last_seen_at
+        elif isinstance(record, EvidenceRecord):
+            return record.acquired_at
+        elif isinstance(record, ObservationRecord):
+            return record.observed_at
+        elif isinstance(record, HuntRecord):
+            return record.opened_at
+        elif isinstance(record, HuntRunRecord):
+            for candidate in (record.started_at, record.completed_at):
+                if candidate is not None:
+                    return candidate
+        elif isinstance(record, (AlertRecord, CaseRecord)):
+            reviewed_transitioned_at = self._reviewed_context_transitioned_at(record)
+            if reviewed_transitioned_at is not None:
+                return reviewed_transitioned_at
+        elif isinstance(record, ApprovalDecisionRecord):
+            if record.decided_at is not None:
+                return record.decided_at
+        elif isinstance(record, ActionRequestRecord):
+            return record.requested_at
+        elif isinstance(record, ActionExecutionRecord):
+            return record.delegated_at
+        elif isinstance(record, AITraceRecord):
+            return record.generated_at
+        elif isinstance(record, ReconciliationRecord):
+            for candidate in (
+                record.first_seen_at,
+                record.last_seen_at,
+                record.compared_at,
+            ):
+                if candidate is not None:
+                    return candidate
+        return fallback if fallback is not None else datetime.now(timezone.utc)
+
+    @staticmethod
+    def _reviewed_context_transitioned_at(
+        record: AlertRecord | CaseRecord,
+    ) -> datetime | None:
+        reviewed_context = getattr(record, "reviewed_context", None)
+        if not isinstance(reviewed_context, Mapping):
+            return None
+        triage = reviewed_context.get("triage")
+        if not isinstance(triage, Mapping):
+            return None
+        if not AegisOpsControlPlaneService._triage_disposition_matches_current_state(
+            record,
+            triage.get("disposition"),
+        ):
+            return None
+        raw_recorded_at = triage.get("recorded_at")
+        if not isinstance(raw_recorded_at, str) or not raw_recorded_at.strip():
+            return None
+        try:
+            parsed = datetime.fromisoformat(raw_recorded_at)
+        except ValueError:
+            return None
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            return None
+        return parsed
+
+    @staticmethod
+    def _triage_disposition_matches_current_state(
+        record: AlertRecord | CaseRecord,
+        disposition: object,
+    ) -> bool:
+        triage_lifecycle_state = (
+            AegisOpsControlPlaneService._case_lifecycle_state_for_triage_disposition(
+                disposition
+            )
+        )
+        if triage_lifecycle_state is None:
+            return False
+        if isinstance(record, AlertRecord):
+            return record.lifecycle_state == "closed" and triage_lifecycle_state == "closed"
+        return record.lifecycle_state == triage_lifecycle_state
+
+    @staticmethod
+    def _case_lifecycle_state_for_triage_disposition(
+        disposition: object,
+    ) -> str | None:
+        if not isinstance(disposition, str) or not disposition.strip():
+            return None
+        return _CASE_LIFECYCLE_STATE_BY_TRIAGE_DISPOSITION.get(disposition)
+
+    def _latest_lifecycle_transition(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> LifecycleTransitionRecord | None:
+        return self._store.latest_lifecycle_transition(record_family, record_id)
+
+    def _lifecycle_transition_attribution(
+        self,
+        record: ControlPlaneRecord,
+    ) -> dict[str, object]:
+        actor_identities: tuple[str, ...] = ()
+        source = "aegisops-control-plane"
+
+        if isinstance(record, ObservationRecord):
+            actor_identities = self._merge_linked_ids((), record.author_identity)
+            source = "observation-author"
+        elif isinstance(record, LeadRecord):
+            actor_identities = self._merge_linked_ids((), record.triage_owner)
+            source = "lead-triage-owner"
+        elif isinstance(record, RecommendationRecord):
+            actor_identities = self._merge_linked_ids((), record.review_owner)
+            source = "recommendation-review-owner"
+        elif isinstance(record, ActionRequestRecord):
+            actor_identities = self._merge_linked_ids((), record.requester_identity)
+            source = "action-request"
+        elif isinstance(record, ApprovalDecisionRecord):
+            actor_identities = self._merge_linked_ids(
+                record.approver_identities,
+                None,
+            )
+            source = "approval-decision"
+        elif isinstance(record, HuntRecord):
+            actor_identities = self._merge_linked_ids((), record.owner_identity)
+            source = "hunt-owner"
+        elif isinstance(record, AITraceRecord):
+            actor_identities = self._merge_linked_ids((), record.reviewer_identity)
+            source = "ai-trace-reviewer"
+
+        return {
+            "source": source,
+            "actor_identities": actor_identities,
+        }
+
+    def list_lifecycle_transitions(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> tuple[LifecycleTransitionRecord, ...]:
+        normalized_record_family = self._require_non_empty_string(
+            record_family,
+            "record_family",
+        )
+        normalized_record_id = self._require_non_empty_string(record_id, "record_id")
+        return self._store.list_lifecycle_transitions(
+            normalized_record_family,
+            normalized_record_id,
+        )
 
     def _emit_structured_event(
         self,
@@ -2679,6 +3151,10 @@ class AegisOpsControlPlaneService:
                 reconciliation.subject_linkage.get("admission_provenance")
             ),
             lineage=lineage,
+            lifecycle_transitions=tuple(
+                _record_to_dict(transition)
+                for transition in self.list_lifecycle_transitions("alert", alert.alert_id)
+            ),
             current_action_review=dict(action_reviews[0]) if action_reviews else None,
             action_reviews=action_reviews,
         )
@@ -2730,6 +3206,7 @@ class AegisOpsControlPlaneService:
             linked_evidence_records=context_snapshot.linked_evidence_records,
             linked_recommendation_records=context_snapshot.linked_recommendation_records,
             linked_reconciliation_records=context_snapshot.linked_reconciliation_records,
+            lifecycle_transitions=context_snapshot.lifecycle_transitions,
             current_action_review=dict(action_reviews[0]) if action_reviews else None,
             action_reviews=action_reviews,
         )
@@ -2979,7 +3456,8 @@ class AegisOpsControlPlaneService:
                     evidence_ids=case.evidence_ids,
                     lifecycle_state=lifecycle_state,
                     reviewed_context=updated_reviewed_context,
-                )
+                ),
+                transitioned_at=recorded_at,
             )
             if case.alert_id is not None and lifecycle_state == "closed":
                 alert = self._store.get(AlertRecord, case.alert_id)
@@ -2995,7 +3473,8 @@ class AegisOpsControlPlaneService:
                                 alert.reviewed_context,
                                 {"triage": updated_reviewed_context.get("triage", {})},
                             ),
-                        )
+                        ),
+                        transitioned_at=recorded_at,
                     )
         return updated_case
 
@@ -3264,7 +3743,10 @@ class AegisOpsControlPlaneService:
             if action_request.expires_at is not None and (
                 now > action_request.expires_at or decided_at > action_request.expires_at
             ):
-                self.persist_record(replace(action_request, lifecycle_state="expired"))
+                self.persist_record(
+                    replace(action_request, lifecycle_state="expired"),
+                    transitioned_at=action_request.expires_at,
+                )
                 request_expired = True
             else:
                 resolved_approval_decision_id = self._resolve_new_record_identifier(
@@ -3291,7 +3773,8 @@ class AegisOpsControlPlaneService:
                             if decision_state == "approved"
                             else None
                         ),
-                    )
+                    ),
+                    transitioned_at=decided_at,
                 )
                 self.persist_record(
                     replace(
@@ -3299,7 +3782,8 @@ class AegisOpsControlPlaneService:
                         approval_decision_id=approval_decision.approval_decision_id,
                         lifecycle_state=decision_state,
                         policy_evaluation=policy_evaluation,
-                    )
+                    ),
+                    transitioned_at=decided_at,
                 )
         if request_expired:
             raise PermissionError(
@@ -5149,22 +5633,13 @@ class AegisOpsControlPlaneService:
 
     @staticmethod
     def _case_lifecycle_for_disposition(disposition: str) -> str:
-        if disposition in {
-            "closed_benign",
-            "closed_duplicate",
-            "closed_resolved",
-            "closed_accepted_risk",
-        }:
-            return "closed"
-        if disposition in {
-            "business_hours_handoff",
-            "awaiting_business_hours_review",
-            "pending_external_validation",
-            "pending_approval",
-        }:
-            return "pending_action"
-        if disposition == "investigating":
-            return "investigating"
+        lifecycle_state = (
+            AegisOpsControlPlaneService._case_lifecycle_state_for_triage_disposition(
+                disposition
+            )
+        )
+        if lifecycle_state is not None:
+            return lifecycle_state
         raise ValueError(f"Unsupported case disposition {disposition!r}")
 
     @staticmethod

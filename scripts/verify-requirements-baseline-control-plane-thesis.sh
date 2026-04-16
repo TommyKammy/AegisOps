@@ -19,8 +19,9 @@ required_phrases=(
   "- Action Request"
   "- Action Execution"
   "- Reconciliation"
-  "| AegisOps control plane | Alert, case, evidence, observation, lead, recommendation, approval, action-request, action-execution, hunt, AI-trace, and reconciliation ownership |"
-  "AegisOps owns approval decisions, action intent, action-execution truth, evidence linkage, and reconciliation"
+  "| AegisOps control plane | Alert, case, evidence, observation, lead, recommendation, approval, action-request, action-execution, hunt, AI-trace, reconciliation, and append-only lifecycle-transition ownership |"
+  "AegisOps owns approval decisions, action intent, action-execution truth, evidence linkage, reconciliation, and the append-only lifecycle transition history paired with reviewed current-state records"
+  "Authoritative backup and restore workflows MUST preserve the reviewed current-state record chain together with its append-only lifecycle transition history when that history is part of the reviewed control-plane surface"
   "Analytic Signals are upstream inputs to AegisOps, not the durable system of record for analyst workflow, approval state, evidence custody, action-execution state, or reconciliation."
   "Upstream detections, findings, correlations, and product-native alerting artifacts from external substrates are treated as **Analytic Signals**."
   "OpenSearch, Sigma, and n8n are **not** co-equal product cores for AegisOps."
@@ -48,15 +49,21 @@ if [[ ! -f "${doc_path}" ]]; then
   exit 1
 fi
 
+contains_phrase() {
+  local phrase="$1"
+
+  grep -Fq -- "${phrase}" < <(tr -d $'\r' < "${doc_path}")
+}
+
 for phrase in "${required_phrases[@]}"; do
-  if ! grep -Fq -- "${phrase}" "${doc_path}"; then
+  if ! contains_phrase "${phrase}"; then
     echo "Missing requirements baseline statement: ${phrase}" >&2
     exit 1
   fi
 done
 
 for phrase in "${forbidden_phrases[@]}"; do
-  if grep -Fq -- "${phrase}" "${doc_path}"; then
+  if contains_phrase "${phrase}"; then
     echo "Forbidden legacy requirements baseline statement present: ${phrase}" >&2
     exit 1
   fi

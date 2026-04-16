@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import pathlib
+import re
 import sys
 import unittest
 
@@ -11,7 +12,10 @@ CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
-from aegisops_control_plane.adapters.postgres import PostgresControlPlaneStore
+from aegisops_control_plane.adapters.postgres import (
+    PostgresControlPlaneStore,
+    _LIFECYCLE_STATES_BY_FAMILY,
+)
 from aegisops_control_plane.models import (
     AITraceRecord,
     ActionExecutionRecord,
@@ -25,11 +29,17 @@ from aegisops_control_plane.models import (
     HuntRecord,
     HuntRunRecord,
     LeadRecord,
+    LifecycleTransitionRecord,
     ObservationRecord,
     ReconciliationRecord,
     RecommendationRecord,
 )
-from postgres_test_support import FakePostgresBackend, make_store
+from postgres_test_support import (
+    FakePostgresBackend,
+    FakePostgresConnection,
+    FakePostgresCursor,
+    make_store,
+)
 
 
 @dataclass(frozen=True)
@@ -39,6 +49,39 @@ class UnsupportedRecord(ControlPlaneRecord):
 
     unsupported_id: str
     lifecycle_state: str
+
+
+class _TupleRowClosingBackend(FakePostgresBackend):
+    def connect(self, dsn: str) -> "_TupleRowClosingConnection":
+        return _TupleRowClosingConnection(self, dsn)
+
+
+class _TupleRowClosingConnection(FakePostgresConnection):
+    def cursor(self) -> "_TupleRowClosingCursor":
+        return _TupleRowClosingCursor(self.backend, self.tables, self)
+
+
+class _TupleRowClosingCursor(FakePostgresCursor):
+    def fetchone(self) -> tuple[object, ...] | None:
+        row = super().fetchone()
+        return self._tuple_row(row)
+
+    def fetchall(self) -> list[tuple[object, ...]]:
+        tuple_rows: list[tuple[object, ...]] = []
+        for row in super().fetchall():
+            tuple_row = self._tuple_row(row)
+            assert tuple_row is not None
+            tuple_rows.append(tuple_row)
+        return tuple_rows
+
+    def close(self) -> None:
+        self.description = None
+
+    def _tuple_row(self, row: dict[str, object] | None) -> tuple[object, ...] | None:
+        if row is None:
+            return None
+        assert self.description is not None
+        return tuple(row[column[0]] for column in self.description)
 
 
 class PostgresControlPlaneStoreTests(unittest.TestCase):
@@ -212,6 +255,222 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         )
         self.assertIn("decision_rationale text", schema_sql)
         self.assertIn("decision_rationale text", bootstrap_sql)
+
+    def test_phase23_lifecycle_transition_forward_migration_asset_exists(self) -> None:
+        migration_path = (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0006_phase_23_lifecycle_transition_records.sql"
+        )
+
+        self.assertTrue(
+            migration_path.exists(),
+            f"Missing Phase 23 forward migration asset: {migration_path}",
+        )
+
+        migration_sql = migration_path.read_text(encoding="utf-8").lower()
+        schema_sql = (
+            CONTROL_PLANE_ROOT.parent / "postgres" / "control-plane" / "schema.sql"
+        ).read_text(encoding="utf-8").lower()
+        bootstrap_sql = (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0001_control_plane_schema_skeleton.sql"
+        ).read_text(encoding="utf-8").lower()
+
+        self.assertIn("begin;", migration_sql)
+        self.assertIn("commit;", migration_sql)
+        self.assertIn(
+            "create table if not exists aegisops_control.lifecycle_transition_records",
+            migration_sql,
+        )
+        self.assertIn("'pending_approval'", migration_sql)
+        self.assertIn("'pending_approval'", schema_sql)
+        self.assertIn("'pending_approval'", bootstrap_sql)
+
+    def test_phase23_lifecycle_transition_subject_index_migration_asset_exists(
+        self,
+    ) -> None:
+        migration_path = (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0007_phase_23_lifecycle_transition_subject_index.sql"
+        )
+
+        self.assertTrue(
+            migration_path.exists(),
+            f"Missing Phase 23 forward migration asset: {migration_path}",
+        )
+
+        migration_sql = migration_path.read_text(encoding="utf-8").lower()
+        schema_sql = (
+            CONTROL_PLANE_ROOT.parent / "postgres" / "control-plane" / "schema.sql"
+        ).read_text(encoding="utf-8").lower()
+
+        self.assertIn("begin;", migration_sql)
+        self.assertIn("commit;", migration_sql)
+        self.assertIn(
+            "create index if not exists lifecycle_transition_records_subject_latest_idx",
+            migration_sql,
+        )
+        self.assertIn(
+            "create index if not exists lifecycle_transition_records_subject_latest_idx",
+            schema_sql,
+        )
+
+    def test_lifecycle_transition_schema_assets_exist(self) -> None:
+        migration_sql = (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0006_phase_23_lifecycle_transition_records.sql"
+        ).read_text(encoding="utf-8").lower()
+        schema_sql = (
+            CONTROL_PLANE_ROOT.parent / "postgres" / "control-plane" / "schema.sql"
+        ).read_text(encoding="utf-8").lower()
+        bootstrap_sql = (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0001_control_plane_schema_skeleton.sql"
+        ).read_text(encoding="utf-8").lower()
+
+        self.assertIn(
+            "create table if not exists aegisops_control.lifecycle_transition_records",
+            schema_sql,
+        )
+        self.assertIn("transition_id text primary key", schema_sql)
+        self.assertIn("previous_lifecycle_state text", schema_sql)
+        self.assertIn("attribution jsonb not null default '{}'::jsonb", schema_sql)
+        self.assertIn(
+            "create index if not exists lifecycle_transition_records_subject_latest_idx",
+            schema_sql,
+        )
+        self.assertIn("subject_record_family in (", schema_sql)
+        self.assertIn("previous_lifecycle_state is null or previous_lifecycle_state in (", schema_sql)
+        self.assertIn("'pending_approval'", schema_sql)
+        self.assertIn(
+            "create table if not exists aegisops_control.lifecycle_transition_records",
+            migration_sql,
+        )
+        self.assertIn("transition_id text primary key", migration_sql)
+        self.assertIn("previous_lifecycle_state text", migration_sql)
+        self.assertIn(
+            "attribution jsonb not null default '{}'::jsonb",
+            migration_sql,
+        )
+        self.assertIn("subject_record_family in (", migration_sql)
+        self.assertIn(
+            "previous_lifecycle_state is null or previous_lifecycle_state in (",
+            migration_sql,
+        )
+        self.assertIn("'pending_approval'", migration_sql)
+        self.assertNotIn(
+            "create table if not exists aegisops_control.lifecycle_transition_records",
+            bootstrap_sql,
+        )
+
+    def test_lifecycle_transition_schema_assets_bind_states_to_subject_families(
+        self,
+    ) -> None:
+        migration_sql = (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0006_phase_23_lifecycle_transition_records.sql"
+        ).read_text(encoding="utf-8").lower()
+        schema_sql = (
+            CONTROL_PLANE_ROOT.parent / "postgres" / "control-plane" / "schema.sql"
+        ).read_text(encoding="utf-8").lower()
+        expected_states_by_family = {
+            family: states
+            for family, states in _LIFECYCLE_STATES_BY_FAMILY.items()
+            if family != LifecycleTransitionRecord.record_family
+        }
+
+        for sql_text in (migration_sql, schema_sql):
+            self.assertIn(
+                "constraint lifecycle_transition_records_state_matches_subject_family check (",
+                sql_text,
+            )
+            self.assertIn(
+                "constraint lifecycle_transition_records_previous_state_matches_subject_family check (",
+                sql_text,
+            )
+            for family, expected_states in expected_states_by_family.items():
+                self.assertEqual(
+                    self._extract_transition_state_set(
+                        sql_text,
+                        family,
+                        "lifecycle_state",
+                    ),
+                    expected_states,
+                )
+                self.assertEqual(
+                    self._extract_transition_state_set(
+                        sql_text,
+                        family,
+                        "previous_lifecycle_state",
+                    ),
+                    expected_states,
+                )
+
+    def test_phase23_lifecycle_transition_migration_backfills_existing_authoritative_rows(
+        self,
+    ) -> None:
+        migration_sql = (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0006_phase_23_lifecycle_transition_records.sql"
+        ).read_text(encoding="utf-8").lower()
+
+        self.assertIn(
+            "insert into aegisops_control.lifecycle_transition_records",
+            migration_sql,
+        )
+        self.assertIn("'phase23-migration-backfill'", migration_sql)
+        self.assertIn(
+            "coalesce(first_seen_at, last_seen_at, created_at, updated_at)",
+            migration_sql,
+        )
+        self.assertIn(
+            "coalesce(first_seen_at, last_seen_at, compared_at, created_at, updated_at)",
+            migration_sql,
+        )
+        self.assertIn("reviewed_context -> 'triage' ->> 'recorded_at'", migration_sql)
+        self.assertIn("reviewed_context -> 'triage' ->> 'disposition'", migration_sql)
+        self.assertIn("lifecycle_state = 'pending_action'", migration_sql)
+        self.assertIn("::timestamptz", migration_sql)
+        self.assertIn("where existing.transition_id is null", migration_sql)
+        self.assertIn("on conflict (transition_id) do nothing", migration_sql)
+        for table_name in (
+            "analytic_signal_records",
+            "alert_records",
+            "evidence_records",
+            "observation_records",
+            "lead_records",
+            "case_records",
+            "recommendation_records",
+            "approval_decision_records",
+            "action_request_records",
+            "action_execution_records",
+            "hunt_records",
+            "hunt_run_records",
+            "ai_trace_records",
+            "reconciliation_records",
+        ):
+            self.assertIn(f"aegisops_control.{table_name}", migration_sql)
 
     def test_store_round_trips_reviewed_record_families_by_aegisops_ids(self) -> None:
         store, _ = make_store()
@@ -561,6 +820,232 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             ai_trace.assistant_advisory_draft,
         )
 
+    def test_lifecycle_transition_records_are_insert_only(self) -> None:
+        store, _ = make_store()
+        transitioned_at = datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc)
+        original = LifecycleTransitionRecord(
+            transition_id="transition-001",
+            subject_record_family="case",
+            subject_record_id="case-001",
+            previous_lifecycle_state=None,
+            lifecycle_state="open",
+            transitioned_at=transitioned_at,
+            attribution={"actor_identity": "analyst-001"},
+        )
+        conflicting = LifecycleTransitionRecord(
+            transition_id="transition-001",
+            subject_record_family="case",
+            subject_record_id="case-001",
+            previous_lifecycle_state="open",
+            lifecycle_state="closed",
+            transitioned_at=transitioned_at,
+            attribution={"actor_identity": "analyst-002"},
+        )
+
+        store.save(original)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "duplicate key value violates unique constraint",
+        ):
+            store.save(conflicting)
+
+        self.assertEqual(
+            store.get(LifecycleTransitionRecord, "transition-001"),
+            original,
+        )
+
+    def test_lifecycle_transition_records_require_supported_subject_family(self) -> None:
+        store, _ = make_store()
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                r"lifecycle_transition record 'transition-unsupported-family' has unsupported "
+                r"subject_record_family 'typo_family'"
+            ),
+        ):
+            store.save(
+                LifecycleTransitionRecord(
+                    transition_id="transition-unsupported-family",
+                    subject_record_family="typo_family",
+                    subject_record_id="record-001",
+                    previous_lifecycle_state=None,
+                    lifecycle_state="open",
+                    transitioned_at=datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc),
+                    attribution={},
+                )
+            )
+
+    def test_lifecycle_transition_records_require_valid_subject_lifecycle_states(self) -> None:
+        store, _ = make_store()
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                r"lifecycle_transition record 'transition-invalid-state' has invalid "
+                r"lifecycle_state 'closed' for subject_record_family 'recommendation'"
+            ),
+        ):
+            store.save(
+                LifecycleTransitionRecord(
+                    transition_id="transition-invalid-state",
+                    subject_record_family="recommendation",
+                    subject_record_id="recommendation-001",
+                    previous_lifecycle_state="proposed",
+                    lifecycle_state="closed",
+                    transitioned_at=datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc),
+                    attribution={},
+                )
+            )
+
+    def test_lifecycle_transition_records_allow_pending_approval_for_action_requests(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        transition = LifecycleTransitionRecord(
+            transition_id="transition-pending-approval",
+            subject_record_family="action_request",
+            subject_record_id="action-request-001",
+            previous_lifecycle_state="draft",
+            lifecycle_state="pending_approval",
+            transitioned_at=datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc),
+            attribution={"actor_identity": "reviewer-001"},
+        )
+
+        store.save(transition)
+
+        self.assertEqual(
+            store.get(LifecycleTransitionRecord, transition.transition_id),
+            transition,
+        )
+
+    def test_store_reads_latest_lifecycle_transition_by_subject(self) -> None:
+        store, _ = make_store()
+        first_transition = LifecycleTransitionRecord(
+            transition_id="transition-latest-001",
+            subject_record_family="case",
+            subject_record_id="case-latest-001",
+            previous_lifecycle_state=None,
+            lifecycle_state="open",
+            transitioned_at=datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc),
+            attribution={"source": "fixture", "actor_identities": ()},
+        )
+        latest_transition = LifecycleTransitionRecord(
+            transition_id="transition-latest-002",
+            subject_record_family="case",
+            subject_record_id="case-latest-001",
+            previous_lifecycle_state="open",
+            lifecycle_state="closed",
+            transitioned_at=datetime(2026, 4, 16, 8, 5, tzinfo=timezone.utc),
+            attribution={"source": "fixture", "actor_identities": ()},
+        )
+        unrelated_transition = LifecycleTransitionRecord(
+            transition_id="transition-latest-003",
+            subject_record_family="case",
+            subject_record_id="case-latest-002",
+            previous_lifecycle_state=None,
+            lifecycle_state="open",
+            transitioned_at=datetime(2026, 4, 16, 8, 10, tzinfo=timezone.utc),
+            attribution={"source": "fixture", "actor_identities": ()},
+        )
+
+        for transition in (
+            first_transition,
+            latest_transition,
+            unrelated_transition,
+        ):
+            store.save(transition)
+
+        self.assertEqual(
+            store.latest_lifecycle_transition("case", "case-latest-001"),
+            latest_transition,
+        )
+        self.assertIsNone(
+            store.latest_lifecycle_transition("alert", "alert-missing-001")
+        )
+
+    def test_store_lists_lifecycle_transitions_by_subject(self) -> None:
+        store, _ = make_store()
+        first_transition = LifecycleTransitionRecord(
+            transition_id="transition-history-001",
+            subject_record_family="case",
+            subject_record_id="case-history-001",
+            previous_lifecycle_state=None,
+            lifecycle_state="open",
+            transitioned_at=datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc),
+            attribution={"source": "fixture", "actor_identities": ()},
+        )
+        latest_transition = LifecycleTransitionRecord(
+            transition_id="transition-history-002",
+            subject_record_family="case",
+            subject_record_id="case-history-001",
+            previous_lifecycle_state="open",
+            lifecycle_state="closed",
+            transitioned_at=datetime(2026, 4, 16, 8, 5, tzinfo=timezone.utc),
+            attribution={"source": "fixture", "actor_identities": ()},
+        )
+        unrelated_transition = LifecycleTransitionRecord(
+            transition_id="transition-history-003",
+            subject_record_family="case",
+            subject_record_id="case-history-002",
+            previous_lifecycle_state=None,
+            lifecycle_state="open",
+            transitioned_at=datetime(2026, 4, 16, 8, 10, tzinfo=timezone.utc),
+            attribution={"source": "fixture", "actor_identities": ()},
+        )
+
+        for transition in (
+            latest_transition,
+            unrelated_transition,
+            first_transition,
+        ):
+            store.save(transition)
+
+        self.assertEqual(
+            store.list_lifecycle_transitions("case", "case-history-001"),
+            (first_transition, latest_transition),
+        )
+        self.assertEqual(
+            store.list_lifecycle_transitions("alert", "alert-missing-001"),
+            (),
+        )
+
+    def test_lifecycle_transition_queries_map_tuple_rows_before_cursor_close(
+        self,
+    ) -> None:
+        store, _ = make_store(_TupleRowClosingBackend())
+        first_transition = LifecycleTransitionRecord(
+            transition_id="transition-tuple-001",
+            subject_record_family="case",
+            subject_record_id="case-tuple-001",
+            previous_lifecycle_state=None,
+            lifecycle_state="open",
+            transitioned_at=datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc),
+            attribution={"source": "fixture", "actor_identities": ()},
+        )
+        latest_transition = LifecycleTransitionRecord(
+            transition_id="transition-tuple-002",
+            subject_record_family="case",
+            subject_record_id="case-tuple-001",
+            previous_lifecycle_state="open",
+            lifecycle_state="closed",
+            transitioned_at=datetime(2026, 4, 16, 8, 5, tzinfo=timezone.utc),
+            attribution={"source": "fixture", "actor_identities": ()},
+        )
+
+        for transition in (first_transition, latest_transition):
+            store.save(transition)
+
+        self.assertEqual(
+            store.latest_lifecycle_transition("case", "case-tuple-001"),
+            latest_transition,
+        )
+        self.assertEqual(
+            store.list_lifecycle_transitions("case", "case-tuple-001"),
+            (first_transition, latest_transition),
+        )
+
     def test_store_copies_mapping_fields_before_persistence(self) -> None:
         timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
         target_scope = {"asset_id": "asset-001"}
@@ -888,6 +1373,23 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             ):
                 with store.transaction(isolation_level="SERIALIZABLE"):
                     pass
+
+    @staticmethod
+    def _extract_transition_state_set(
+        sql_text: str,
+        family: str,
+        state_field: str,
+    ) -> frozenset[str]:
+        match = re.search(
+            rf"\(subject_record_family = '{re.escape(family)}' and {state_field} in \((.*?)\)\)",
+            sql_text,
+            re.DOTALL,
+        )
+        if match is None:
+            raise AssertionError(
+                f"missing {state_field} compatibility clause for transition family {family!r}"
+            )
+        return frozenset(re.findall(r"'([^']+)'", match.group(1)))
 
 
 if __name__ == "__main__":

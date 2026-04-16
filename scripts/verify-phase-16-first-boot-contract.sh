@@ -48,7 +48,7 @@ require_fixed_string() {
     relative_path="${file_path}"
   fi
 
-  if ! grep -Fqx -- "${expected}" "${file_path}" >/dev/null; then
+  if ! grep -Fqx -- "${expected}" < <(tr -d $'\r' < "${file_path}") >/dev/null; then
     echo "Missing required line in ${relative_path}: ${expected}" >&2
     exit 1
   fi
@@ -197,6 +197,19 @@ entrypoint_lines=(
   '    echo "AEGISOPS_CONTROL_PLANE_PORT must be an integer for the first-boot runtime." >&2'
   'MIGRATIONS_DIR="${AEGISOPS_FIRST_BOOT_MIGRATIONS_DIR:-/opt/aegisops/postgres-migrations}"'
   'PSQL_BIN="${AEGISOPS_FIRST_BOOT_PSQL_BIN:-psql}"'
+  '0004_phase_20_action_request_binding_columns.sql'
+  '0005_phase_23_approval_decision_rationale.sql'
+  '0006_phase_23_lifecycle_transition_records.sql'
+  '0007_phase_23_lifecycle_transition_subject_index.sql'
+  "        'approval_decision_records',"
+  "        'action_request_records',"
+  "        'action_execution_records',"
+  "        'reconciliation_records',"
+  "        'lifecycle_transition_records'"
+  "      AND indexname = 'lifecycle_transition_records_subject_latest_idx'"
+  "      AND column_name = 'requester_identity'"
+  "      AND column_name = 'requested_payload'"
+  "      AND column_name = 'decision_rationale'"
   '        fail_closed "First-boot migration bootstrap requires psql to prove PostgreSQL reachability and readiness."'
   '      fail_closed "First-boot migration bootstrap is missing reviewed migration asset: ${migration_name}"'
   '      fail_closed "First-boot migration bootstrap failed while applying ${migration_name}: ${migration_output}"'
@@ -220,7 +233,11 @@ done
 for migration_file in \
   "0001_control_plane_schema_skeleton.sql" \
   "0002_phase_14_reviewed_context_columns.sql" \
-  "0003_phase_15_assistant_advisory_draft_columns.sql"; do
+  "0003_phase_15_assistant_advisory_draft_columns.sql" \
+  "0004_phase_20_action_request_binding_columns.sql" \
+  "0005_phase_23_approval_decision_rationale.sql" \
+  "0006_phase_23_lifecycle_transition_records.sql" \
+  "0007_phase_23_lifecycle_transition_subject_index.sql"; do
   require_file "${migration_home}/${migration_file}" "Missing reviewed control-plane migration asset"
 done
 

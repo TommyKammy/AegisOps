@@ -13,6 +13,11 @@ _INSERT_RE = re.compile(
     r"on conflict \((?P<identifier>\w+)\) do update set (?P<assignments>.+)",
     re.IGNORECASE,
 )
+_INSERT_ONLY_RE = re.compile(
+    r"insert into aegisops_control\.(?P<table>\w+) "
+    r"\((?P<columns>[^)]+)\) values \((?P<placeholders>[^)]+)\)",
+    re.IGNORECASE,
+)
 _SELECT_ONE_RE = re.compile(
     r"select (?P<columns>.+) from aegisops_control\.(?P<table>\w+) "
     r"where (?P<identifier>\w+) = %s",
@@ -21,6 +26,22 @@ _SELECT_ONE_RE = re.compile(
 _SELECT_ALL_RE = re.compile(
     r"select (?P<columns>.+) from aegisops_control\.(?P<table>\w+) "
     r"order by (?P<identifier>\w+)",
+    re.IGNORECASE,
+)
+_SELECT_LATEST_LIFECYCLE_TRANSITION_RE = re.compile(
+    r"select (?P<columns>.+) from aegisops_control\.lifecycle_transition_records "
+    r"where subject_record_family = %s and subject_record_id = %s "
+    r"order by transitioned_at desc, transition_id desc limit 1",
+    re.IGNORECASE,
+)
+_SELECT_LIFECYCLE_TRANSITIONS_RE = re.compile(
+    r"select (?P<columns>.+) from aegisops_control\.lifecycle_transition_records "
+    r"where subject_record_family = %s and subject_record_id = %s "
+    r"order by transitioned_at asc, transition_id asc",
+    re.IGNORECASE,
+)
+_SELECT_ADVISORY_XACT_LOCK_RE = re.compile(
+    r"select pg_advisory_xact_lock\(hashtext\(%s\), hashtext\(%s\)\)",
     re.IGNORECASE,
 )
 _SELECT_GROUP_COUNT_RE = re.compile(
@@ -118,6 +139,14 @@ class FakePostgresCursor:
         if insert_match is not None:
             self._execute_insert(insert_match.group("table"), insert_match.group("columns"), params)
             return
+        insert_only_match = _INSERT_ONLY_RE.fullmatch(normalized)
+        if insert_only_match is not None:
+            self._execute_insert_only(
+                insert_only_match.group("table"),
+                insert_only_match.group("columns"),
+                params,
+            )
+            return
 
         select_one_match = _SELECT_ONE_RE.fullmatch(normalized)
         if select_one_match is not None:
@@ -134,6 +163,31 @@ class FakePostgresCursor:
                 select_all_match.group("table"),
                 select_all_match.group("columns"),
             )
+            return
+
+        select_latest_lifecycle_transition_match = (
+            _SELECT_LATEST_LIFECYCLE_TRANSITION_RE.fullmatch(normalized)
+        )
+        if select_latest_lifecycle_transition_match is not None:
+            self._execute_select_latest_lifecycle_transition(
+                select_latest_lifecycle_transition_match.group("columns"),
+                params,
+            )
+            return
+
+        select_lifecycle_transitions_match = _SELECT_LIFECYCLE_TRANSITIONS_RE.fullmatch(
+            normalized
+        )
+        if select_lifecycle_transitions_match is not None:
+            self._execute_select_lifecycle_transitions(
+                select_lifecycle_transitions_match.group("columns"),
+                params,
+            )
+            return
+
+        if _SELECT_ADVISORY_XACT_LOCK_RE.fullmatch(normalized) is not None:
+            self.description = None
+            self._rows = []
             return
 
         select_group_count_match = _SELECT_GROUP_COUNT_RE.fullmatch(normalized)
@@ -194,6 +248,26 @@ class FakePostgresCursor:
         self.description = None
         self._rows = []
 
+    def _execute_insert_only(
+        self,
+        table: str,
+        columns: str,
+        params: tuple[object, ...] | None,
+    ) -> None:
+        column_names = [column.strip() for column in columns.split(",")]
+        row = dict(zip(column_names, params or ()))
+        identifier_field = column_names[0]
+        identifier_value = str(row[identifier_field])
+        table_rows = self.tables.setdefault(table, {})
+        if identifier_value in table_rows:
+            raise ValueError(
+                f"duplicate key value violates unique constraint {table}.{identifier_field}"
+            )
+        table_rows[identifier_value] = row
+        self.connection.dirty = True
+        self.description = None
+        self._rows = []
+
     def _execute_select_one(
         self,
         table: str,
@@ -218,6 +292,48 @@ class FakePostgresCursor:
             self._project_row(rows[record_id], column_names)
             for record_id in sorted(rows)
         ]
+
+    def _execute_select_latest_lifecycle_transition(
+        self,
+        columns: str,
+        params: tuple[object, ...] | None,
+    ) -> None:
+        column_names = [column.strip() for column in columns.split(",")]
+        subject_record_family = str((params or ("", ""))[0])
+        subject_record_id = str((params or ("", ""))[1])
+        rows = [
+            row
+            for row in self.tables.get("lifecycle_transition_records", {}).values()
+            if row.get("subject_record_family") == subject_record_family
+            and row.get("subject_record_id") == subject_record_id
+        ]
+        rows.sort(
+            key=lambda row: (row["transitioned_at"], row["transition_id"]),
+            reverse=True,
+        )
+        self.description = tuple((name,) for name in column_names)
+        if not rows:
+            self._rows = []
+            return
+        self._rows = [self._project_row(rows[0], column_names)]
+
+    def _execute_select_lifecycle_transitions(
+        self,
+        columns: str,
+        params: tuple[object, ...] | None,
+    ) -> None:
+        column_names = [column.strip() for column in columns.split(",")]
+        subject_record_family = str((params or ("", ""))[0])
+        subject_record_id = str((params or ("", ""))[1])
+        rows = [
+            row
+            for row in self.tables.get("lifecycle_transition_records", {}).values()
+            if row.get("subject_record_family") == subject_record_family
+            and row.get("subject_record_id") == subject_record_id
+        ]
+        rows.sort(key=lambda row: (row["transitioned_at"], row["transition_id"]))
+        self.description = tuple((name,) for name in column_names)
+        self._rows = [self._project_row(row, column_names) for row in rows]
 
     def _execute_select_group_count(self, table: str, field_name: str) -> None:
         grouped_counts: dict[object, int] = {}

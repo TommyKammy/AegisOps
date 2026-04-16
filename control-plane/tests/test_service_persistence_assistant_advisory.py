@@ -28,6 +28,7 @@ from _service_persistence_support import (
     make_store,
     mock,
     replace,
+    timedelta,
     timezone,
 )
 
@@ -1606,6 +1607,88 @@ class AssistantAdvisoryPersistenceTests(ServicePersistenceTestBase):
             execution_snapshot.linked_reconciliation_ids,
         )
         self.assertEqual(reconciliation_snapshot.reviewed_context, reviewed_context)
+
+    def test_service_includes_lifecycle_transition_history_in_generic_assistant_context(
+        self,
+    ) -> None:
+        store, service, promoted_case, evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        alert = service.get_record(AlertRecord, promoted_case.alert_id)
+        self.assertIsNotNone(alert)
+
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep the reviewed workflow aligned with operator history.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="owner-001",
+            message_intent="Notify the accountable owner.",
+            escalation_reason="Reviewed response requires prompt owner contact.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-assistant-transitions-001",
+        )
+        approval_decision = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-decision-assistant-transitions-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=action_request.requested_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        approved_request = service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval_decision.approval_decision_id,
+                lifecycle_state="approved",
+            )
+        )
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id=approved_request.action_request_id,
+            approved_payload=dict(approved_request.requested_payload),
+            delegated_at=action_request.requested_at + timedelta(minutes=10),
+            delegation_issuer="control-plane-service",
+            evidence_ids=(evidence_id,),
+        )
+        reconciliation = next(
+            record
+            for record in store.list(ReconciliationRecord)
+            if record.alert_id == promoted_case.alert_id
+            and record.finding_id == alert.finding_id
+        )
+
+        subject_ids = {
+            "recommendation": recommendation.recommendation_id,
+            "action_request": approved_request.action_request_id,
+            "approval_decision": approval_decision.approval_decision_id,
+            "action_execution": execution.action_execution_id,
+            "reconciliation": reconciliation.reconciliation_id,
+        }
+
+        for family, record_id in subject_ids.items():
+            snapshot = service.inspect_assistant_context(family, record_id)
+            self.assertEqual(
+                [entry["lifecycle_state"] for entry in snapshot.lifecycle_transitions],
+                [
+                    transition.lifecycle_state
+                    for transition in service.list_lifecycle_transitions(
+                        family,
+                        record_id,
+                    )
+                ],
+            )
+            self.assertEqual(
+                snapshot.lifecycle_transitions[-1]["lifecycle_state"],
+                snapshot.record["lifecycle_state"],
+            )
 
     def test_service_matches_reconciliations_via_direct_action_linkage(self) -> None:
         store, _ = make_store()

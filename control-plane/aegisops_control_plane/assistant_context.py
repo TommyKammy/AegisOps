@@ -803,6 +803,13 @@ class AssistantContextAssembler:
                 self._record_to_dict(reconciliation)
                 for reconciliation in linked_reconciliation_records
             ),
+            lifecycle_transitions=tuple(
+                self._record_to_dict(transition)
+                for transition in self._service.list_lifecycle_transitions(
+                    record_family,
+                    record_id,
+                )
+            ),
         )
 
     def inspect_advisory_output(self, record_family: str, record_id: str) -> Any:

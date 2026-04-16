@@ -250,11 +250,16 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                         "lead_id": lead["lead_id"],
                     },
                 )
+                handoff_at = (
+                    service.list_lifecycle_transitions("case", case_id)[-1]
+                    .transitioned_at
+                    + timedelta(minutes=5)
+                ).isoformat()
                 handoff = post_json(
                     "/operator/record-case-handoff",
                     {
                         "case_id": case_id,
-                        "handoff_at": "2026-04-07T17:45:00+00:00",
+                        "handoff_at": handoff_at,
                         "handoff_owner": "analyst-001",
                         "handoff_note": "Recheck repository owner membership against approved change window at next business-hours review.",
                         "follow_up_evidence_ids": [evidence_id],
@@ -266,7 +271,7 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                         "case_id": case_id,
                         "disposition": "business_hours_handoff",
                         "rationale": "No same-day response required; preserve next-shift context and keep case open.",
-                        "recorded_at": "2026-04-07T17:45:00+00:00",
+                        "recorded_at": handoff_at,
                     },
                 )
 
@@ -477,13 +482,18 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                     recommendation["recommendation_id"],
                 )
 
+                closure_at = (
+                    service.list_lifecycle_transitions("case", case_id)[-1]
+                    .transitioned_at
+                    + timedelta(minutes=5)
+                ).isoformat()
                 closed_case = post_json(
                     "/operator/record-case-disposition",
                     {
                         "case_id": case_id,
                         "disposition": "closed_resolved",
                         "rationale": "Repository owner membership review completed and documented for this alert.",
-                        "recorded_at": "2026-04-08T09:15:00+00:00",
+                        "recorded_at": closure_at,
                     },
                 )
                 self.assertEqual(closed_case["lifecycle_state"], "closed")

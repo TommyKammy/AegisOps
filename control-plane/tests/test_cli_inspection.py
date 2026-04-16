@@ -96,6 +96,9 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             peer_addr="127.0.0.1",
         )
         promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        reviewed_at = service.list_lifecycle_transitions("case", promoted_case.case_id)[
+            -1
+        ].transitioned_at
         return store, service, promoted_case, promoted_case.evidence_ids[0], reviewed_at
 
     def _build_phase19_out_of_scope_case(
@@ -872,13 +875,17 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         drill_payload = json.loads(drill_stdout.getvalue())
         self.assertEqual(
             backup_payload["backup_schema_version"],
-            "phase21.authoritative-record-chain.v1",
+            "phase23.authoritative-record-chain.v2",
         )
         self.assertEqual(backup_payload["record_counts"]["action_execution"], 1)
         self.assertTrue(drill_payload["drill_passed"])
         self.assertIn(
             approval_decision.approval_decision_id,
             drill_payload["verified_approval_decision_ids"],
+        )
+        self.assertIn(
+            recommendation.recommendation_id,
+            drill_payload["verified_recommendation_ids"],
         )
 
     def test_backup_authoritative_record_chain_reports_usage_error_on_invalid_backup(
@@ -2413,7 +2420,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         _, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
         )
-        handoff_at = datetime(2026, 4, 7, 17, 45, tzinfo=timezone.utc)
+        handoff_at = reviewed_at + timedelta(hours=8)
 
         promote_stdout = io.StringIO()
         main.main(
@@ -2562,7 +2569,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         _, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case(host="127.0.0.1", port=0)
         )
-        handoff_at = datetime(2026, 4, 7, 17, 45, tzinfo=timezone.utc)
+        handoff_at = reviewed_at + timedelta(hours=8)
 
         servers: list[main.ThreadingHTTPServer] = []
 

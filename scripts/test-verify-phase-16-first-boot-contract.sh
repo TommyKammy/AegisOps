@@ -33,6 +33,10 @@ copy_fixture() {
   cp "${repo_root}/postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql" "${target}/postgres/control-plane/migrations/0001_control_plane_schema_skeleton.sql"
   cp "${repo_root}/postgres/control-plane/migrations/0002_phase_14_reviewed_context_columns.sql" "${target}/postgres/control-plane/migrations/0002_phase_14_reviewed_context_columns.sql"
   cp "${repo_root}/postgres/control-plane/migrations/0003_phase_15_assistant_advisory_draft_columns.sql" "${target}/postgres/control-plane/migrations/0003_phase_15_assistant_advisory_draft_columns.sql"
+  cp "${repo_root}/postgres/control-plane/migrations/0004_phase_20_action_request_binding_columns.sql" "${target}/postgres/control-plane/migrations/0004_phase_20_action_request_binding_columns.sql"
+  cp "${repo_root}/postgres/control-plane/migrations/0005_phase_23_approval_decision_rationale.sql" "${target}/postgres/control-plane/migrations/0005_phase_23_approval_decision_rationale.sql"
+  cp "${repo_root}/postgres/control-plane/migrations/0006_phase_23_lifecycle_transition_records.sql" "${target}/postgres/control-plane/migrations/0006_phase_23_lifecycle_transition_records.sql"
+  cp "${repo_root}/postgres/control-plane/migrations/0007_phase_23_lifecycle_transition_subject_index.sql" "${target}/postgres/control-plane/migrations/0007_phase_23_lifecycle_transition_subject_index.sql"
 }
 
 remove_text() {
@@ -95,5 +99,11 @@ copy_fixture "${entrypoint_drift_repo}"
 remove_text "${entrypoint_drift_repo}/control-plane/deployment/first-boot/control-plane-entrypoint.sh" \
   'exec "$@"'
 assert_fails_with "${entrypoint_drift_repo}" 'Missing required line in control-plane/deployment/first-boot/control-plane-entrypoint.sh: exec "$@"'
+
+missing_migration_repo="${workdir}/missing-migration"
+create_repo "${missing_migration_repo}"
+copy_fixture "${missing_migration_repo}"
+rm "${missing_migration_repo}/postgres/control-plane/migrations/0006_phase_23_lifecycle_transition_records.sql"
+assert_fails_with "${missing_migration_repo}" 'Missing reviewed control-plane migration asset'
 
 echo "Phase 16 first-boot verifier catches release-state drift and optional boot blockers."
