@@ -9,6 +9,23 @@ import unittest
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+_POSIX_CKSUM_POLYNOMIAL = 0x04C11DB7
+
+
+def _build_posix_cksum_table() -> tuple[int, ...]:
+    table: list[int] = []
+    for dividend in range(256):
+        remainder = dividend << 24
+        for _ in range(8):
+            if remainder & 0x80000000:
+                remainder = ((remainder << 1) ^ _POSIX_CKSUM_POLYNOMIAL) & 0xFFFFFFFF
+            else:
+                remainder = (remainder << 1) & 0xFFFFFFFF
+        table.append(remainder)
+    return tuple(table)
+
+
+_POSIX_CKSUM_TABLE = _build_posix_cksum_table()
 
 
 class Phase16BootstrapContractDocsTests(unittest.TestCase):
@@ -28,16 +45,30 @@ class Phase16BootstrapContractDocsTests(unittest.TestCase):
 
     @staticmethod
     def _normalized_migration_checksum(path: pathlib.Path) -> str:
-        checksum_parts = (
-            subprocess.check_output(
-                ["cksum"],
-                input=path.read_bytes().replace(b"\r", b""),
-            )
-            .decode()
-            .strip()
-            .split()[0:2]
-        )
-        return ":".join(checksum_parts)
+        data = path.read_bytes().replace(b"\r", b"")
+        checksum = 0
+        for byte in data:
+            checksum = ((checksum << 8) & 0xFFFFFFFF) ^ _POSIX_CKSUM_TABLE[
+                ((checksum >> 24) ^ byte) & 0xFF
+            ]
+
+        length = len(data)
+        remaining_length = length
+        while remaining_length:
+            byte = remaining_length & 0xFF
+            checksum = ((checksum << 8) & 0xFFFFFFFF) ^ _POSIX_CKSUM_TABLE[
+                ((checksum >> 24) ^ byte) & 0xFF
+            ]
+            remaining_length >>= 8
+
+        return f"{(~checksum) & 0xFFFFFFFF}:{length}"
+
+    def test_normalized_migration_checksum_matches_posix_cksum_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = pathlib.Path(tmpdir) / "migration.sql"
+            path.write_bytes(b"alpha\r\nbeta\r\n")
+
+            self.assertEqual(self._normalized_migration_checksum(path), "1603717150:11")
 
     def test_phase16_scope_doc_exists(self) -> None:
         design_doc = self._scope_doc()
