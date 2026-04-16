@@ -1449,7 +1449,7 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
             **kwargs: object,
         ) -> object:
             if (
-                isinstance(record, ActionExecutionRecord)
+                isinstance(record, support.ActionExecutionRecord)
                 and record.lifecycle_state == "queued"
             ):
                 raise RuntimeError("synthetic finalization failure")

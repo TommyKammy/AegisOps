@@ -2,18 +2,31 @@ from __future__ import annotations
 
 import pathlib
 import sys
+from unittest import mock
 
 TESTS_ROOT = pathlib.Path(__file__).resolve().parent
 if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
-import _service_persistence_support as support
-from _service_persistence_support import ServicePersistenceTestBase
+from _service_persistence_support import (
+    AITraceRecord,
+    ActionRequestRecord,
+    AegisOpsControlPlaneService,
+    AlertRecord,
+    ApprovalDecisionRecord,
+    CaseRecord,
+    LifecycleTransitionRecord,
+    RecordTypeSaveFailingStore,
+    RuntimeConfig,
+    ServicePersistenceTestBase,
+    _ListCountingStore,
+    datetime,
+    make_store,
+    replace,
+    timedelta,
+    timezone,
+)
 from aegisops_control_plane.models import HuntRecord, HuntRunRecord
-
-for name, value in vars(support).items():
-    if not (name.startswith("__") and name.endswith("__")):
-        globals()[name] = value
 
 
 class Phase23TransitionLoggingValidationTests(ServicePersistenceTestBase):
@@ -245,6 +258,57 @@ class Phase23TransitionLoggingValidationTests(ServicePersistenceTestBase):
                 (None, "new"),
                 ("new", "closed"),
             ],
+        )
+
+    def test_transition_logging_preserves_explicit_time_during_legacy_backfill(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        legacy_alert = AlertRecord(
+            alert_id="alert-transition-legacy-explicit-time-001",
+            finding_id="finding-transition-legacy-explicit-time-001",
+            analytic_signal_id=None,
+            case_id=None,
+            lifecycle_state="new",
+        )
+        transitioned_at = datetime(
+            2026,
+            4,
+            16,
+            8,
+            0,
+            tzinfo=timezone(timedelta(hours=-5)),
+        )
+
+        store.save(legacy_alert)
+
+        with mock.patch.object(
+            service,
+            "_initial_lifecycle_transitioned_at",
+            return_value=transitioned_at + timedelta(minutes=5),
+        ):
+            service.persist_record(
+                replace(legacy_alert, lifecycle_state="closed"),
+                transitioned_at=transitioned_at,
+            )
+
+        transitions = service.list_lifecycle_transitions("alert", legacy_alert.alert_id)
+
+        self.assertEqual(
+            [transition.transitioned_at for transition in transitions],
+            [
+                transitioned_at - timedelta(microseconds=1),
+                transitioned_at,
+            ],
+        )
+        self.assertTrue(
+            transitions[1].transition_id.startswith(
+                transitioned_at.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+            )
         )
 
     def test_transition_logging_locks_subject_before_reading_existing_state(self) -> None:

@@ -1133,6 +1133,7 @@ class AegisOpsControlPlaneService:
         *,
         existing_record: ControlPlaneRecord | None,
         transitioned_at: datetime | None = None,
+        must_precede_transitioned_at: datetime | None = None,
         latest_transition: LifecycleTransitionRecord | None | object = (
             _LATEST_LIFECYCLE_TRANSITION_UNSET
         ),
@@ -1162,6 +1163,13 @@ class AegisOpsControlPlaneService:
                 else datetime.now(timezone.utc)
             )
         )
+        if (
+            must_precede_transitioned_at is not None
+            and resolved_transitioned_at >= must_precede_transitioned_at
+        ):
+            resolved_transitioned_at = must_precede_transitioned_at - timedelta(
+                microseconds=1
+            )
         if latest_transition is _LATEST_LIFECYCLE_TRANSITION_UNSET:
             latest_transition = self._latest_lifecycle_transition(
                 record.record_family,
@@ -1174,7 +1182,9 @@ class AegisOpsControlPlaneService:
             resolved_transitioned_at = latest_transition.transitioned_at + timedelta(
                 microseconds=1
             )
-        transition_timestamp = resolved_transitioned_at.strftime("%Y%m%dT%H%M%S.%fZ")
+        transition_timestamp = resolved_transitioned_at.astimezone(
+            timezone.utc
+        ).strftime("%Y%m%dT%H%M%S.%fZ")
         return LifecycleTransitionRecord(
             transition_id=f"{transition_timestamp}:{uuid.uuid4()}",
             subject_record_family=record.record_family,
@@ -1211,6 +1221,7 @@ class AegisOpsControlPlaneService:
             anchor_transition = self._build_lifecycle_transition_record(
                 existing_record,
                 existing_record=None,
+                must_precede_transitioned_at=transitioned_at,
                 latest_transition=None,
             )
             if anchor_transition is not None:

@@ -1611,7 +1611,7 @@ class AssistantAdvisoryPersistenceTests(ServicePersistenceTestBase):
     def test_service_includes_lifecycle_transition_history_in_generic_assistant_context(
         self,
     ) -> None:
-        store, service, promoted_case, evidence_id, reviewed_at = (
+        store, service, promoted_case, evidence_id, _reviewed_at = (
             self._build_phase19_in_scope_case()
         )
         alert = service.get_record(AlertRecord, promoted_case.alert_id)
