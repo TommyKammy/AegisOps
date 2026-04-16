@@ -28,6 +28,18 @@ from .models import (
     RecommendationRecord,
 )
 
+_LEGACY_PHASE21_MISSING_RECORD_FAMILIES = frozenset(
+    {
+        ObservationRecord.record_family,
+        LeadRecord.record_family,
+        RecommendationRecord.record_family,
+        LifecycleTransitionRecord.record_family,
+        HuntRecord.record_family,
+        HuntRunRecord.record_family,
+        AITraceRecord.record_family,
+    }
+)
+
 
 def _is_missing_runtime_binding(value: object) -> bool:
     if value is None:
@@ -703,9 +715,9 @@ class RestoreReadinessService:
             family = record_type.record_family
             raw_records = record_families_payload.get(family)
             expected_count = record_counts_payload.get(family)
-            if legacy_phase21_backup and record_type in (
-                RecommendationRecord,
-                LifecycleTransitionRecord,
+            if (
+                legacy_phase21_backup
+                and family in _LEGACY_PHASE21_MISSING_RECORD_FAMILIES
             ):
                 raw_records = [] if raw_records is None else raw_records
                 expected_count = 0 if expected_count is None else expected_count

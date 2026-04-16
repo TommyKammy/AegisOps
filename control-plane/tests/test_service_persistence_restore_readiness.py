@@ -14,6 +14,16 @@ for name, value in vars(support).items():
     if not (name.startswith("__") and name.endswith("__")):
         globals()[name] = value
 
+_PHASE21_LEGACY_MISSING_AUTHORITATIVE_FAMILIES = (
+    "observation",
+    "lead",
+    "recommendation",
+    "lifecycle_transition",
+    "hunt",
+    "hunt_run",
+    "ai_trace",
+)
+
 
 class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
     def test_runtime_snapshot_reports_postgresql_authoritative_persistence_mode(self) -> None:
@@ -544,7 +554,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             restored_approval_context.linked_reconciliation_ids,
         )
 
-    def test_service_phase21_restore_accepts_legacy_backup_without_recommendation_or_transition_family(
+    def test_service_phase21_restore_accepts_genuine_legacy_backup_shape(
         self,
     ) -> None:
         _store, service, promoted_case, _evidence_id, _reviewed_at = (
@@ -552,10 +562,9 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         )
         backup = service.export_authoritative_record_chain_backup()
         backup["backup_schema_version"] = "phase21.authoritative-record-chain.v1"
-        del backup["record_families"]["recommendation"]
-        del backup["record_counts"]["recommendation"]
-        del backup["record_families"]["lifecycle_transition"]
-        del backup["record_counts"]["lifecycle_transition"]
+        for family in _PHASE21_LEGACY_MISSING_AUTHORITATIVE_FAMILIES:
+            del backup["record_families"][family]
+            del backup["record_counts"][family]
 
         restored_store, _ = make_store()
         restored_service = AegisOpsControlPlaneService(
@@ -579,6 +588,10 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             expected_transition_count,
         )
         self.assertEqual(len(restored_transitions), expected_transition_count)
+        for family in _PHASE21_LEGACY_MISSING_AUTHORITATIVE_FAMILIES:
+            if family == "lifecycle_transition":
+                continue
+            self.assertEqual(restore_summary.restored_record_counts[family], 0)
         self.assertIn(
             (
                 "case",
@@ -597,7 +610,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             },
         )
 
-    def test_service_phase21_legacy_restore_round_trips_into_v2_transition_history(
+    def test_service_phase21_genuine_legacy_restore_round_trips_into_v2_transition_history(
         self,
     ) -> None:
         _store, service, promoted_case, _evidence_id, _reviewed_at = (
@@ -605,10 +618,9 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         )
         backup = service.export_authoritative_record_chain_backup()
         backup["backup_schema_version"] = "phase21.authoritative-record-chain.v1"
-        del backup["record_families"]["recommendation"]
-        del backup["record_counts"]["recommendation"]
-        del backup["record_families"]["lifecycle_transition"]
-        del backup["record_counts"]["lifecycle_transition"]
+        for family in _PHASE21_LEGACY_MISSING_AUTHORITATIVE_FAMILIES:
+            del backup["record_families"][family]
+            del backup["record_counts"][family]
 
         restored_store, _ = make_store()
         restored_service = AegisOpsControlPlaneService(
@@ -625,6 +637,9 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             round_trip_backup["backup_schema_version"],
             "phase23.authoritative-record-chain.v2",
         )
+        for family in _PHASE21_LEGACY_MISSING_AUTHORITATIVE_FAMILIES:
+            self.assertIn(family, round_trip_backup["record_families"])
+            self.assertIn(family, round_trip_backup["record_counts"])
         self.assertEqual(
             round_trip_backup["record_counts"]["lifecycle_transition"],
             restored_summary.restored_record_counts["lifecycle_transition"],
