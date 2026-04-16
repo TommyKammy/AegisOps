@@ -214,6 +214,42 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         self.assertIn("decision_rationale text", schema_sql)
         self.assertIn("decision_rationale text", bootstrap_sql)
 
+    def test_phase23_lifecycle_transition_forward_migration_asset_exists(self) -> None:
+        migration_path = (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0006_phase_23_lifecycle_transition_records.sql"
+        )
+
+        self.assertTrue(
+            migration_path.exists(),
+            f"Missing Phase 23 forward migration asset: {migration_path}",
+        )
+
+        migration_sql = migration_path.read_text(encoding="utf-8").lower()
+        schema_sql = (
+            CONTROL_PLANE_ROOT.parent / "postgres" / "control-plane" / "schema.sql"
+        ).read_text(encoding="utf-8").lower()
+        bootstrap_sql = (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0001_control_plane_schema_skeleton.sql"
+        ).read_text(encoding="utf-8").lower()
+
+        self.assertIn("begin;", migration_sql)
+        self.assertIn("commit;", migration_sql)
+        self.assertIn(
+            "create table if not exists aegisops_control.lifecycle_transition_records",
+            migration_sql,
+        )
+        self.assertIn("'pending_approval'", migration_sql)
+        self.assertIn("'pending_approval'", schema_sql)
+        self.assertIn("'pending_approval'", bootstrap_sql)
+
     def test_lifecycle_transition_schema_assets_exist(self) -> None:
         schema_sql = (
             CONTROL_PLANE_ROOT.parent / "postgres" / "control-plane" / "schema.sql"
@@ -235,6 +271,7 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         self.assertIn("attribution jsonb not null default '{}'::jsonb", schema_sql)
         self.assertIn("subject_record_family in (", schema_sql)
         self.assertIn("previous_lifecycle_state is null or previous_lifecycle_state in (", schema_sql)
+        self.assertIn("'pending_approval'", schema_sql)
         self.assertIn(
             "create table if not exists aegisops_control.lifecycle_transition_records",
             bootstrap_sql,
@@ -250,6 +287,7 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             "previous_lifecycle_state is null or previous_lifecycle_state in (",
             bootstrap_sql,
         )
+        self.assertIn("'pending_approval'", bootstrap_sql)
 
     def test_store_round_trips_reviewed_record_families_by_aegisops_ids(self) -> None:
         store, _ = make_store()
@@ -677,6 +715,27 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
                     attribution={},
                 )
             )
+
+    def test_lifecycle_transition_records_allow_pending_approval_for_action_requests(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        transition = LifecycleTransitionRecord(
+            transition_id="transition-pending-approval",
+            subject_record_family="action_request",
+            subject_record_id="action-request-001",
+            previous_lifecycle_state="draft",
+            lifecycle_state="pending_approval",
+            transitioned_at=datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc),
+            attribution={"actor_identity": "reviewer-001"},
+        )
+
+        store.save(transition)
+
+        self.assertEqual(
+            store.get(LifecycleTransitionRecord, transition.transition_id),
+            transition,
+        )
 
     def test_store_copies_mapping_fields_before_persistence(self) -> None:
         timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)

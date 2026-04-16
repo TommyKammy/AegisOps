@@ -93,3 +93,54 @@ class Phase23TransitionLoggingValidationTests(ServicePersistenceTestBase):
             [entry["lifecycle_state"] for entry in alert_detail.lifecycle_transitions],
             ["new", "escalated_to_case", "closed"],
         )
+
+    def test_action_request_pending_approval_transition_is_logged(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc)
+        action_request = ActionRequestRecord(
+            action_request_id="action-request-transition-001",
+            approval_decision_id="approval-transition-001",
+            case_id="case-transition-001",
+            alert_id="alert-transition-001",
+            finding_id="finding-transition-001",
+            idempotency_key="idempotency-transition-001",
+            target_scope={"asset_id": "asset-transition-001"},
+            requester_identity="analyst-001",
+            requested_payload={"action_type": "notify_identity_owner"},
+            policy_basis={"severity": "high"},
+            policy_evaluation={"approval_requirement": "human_required"},
+            payload_hash="payload-hash-transition-001",
+            requested_at=requested_at,
+            expires_at=None,
+            lifecycle_state="pending_approval",
+        )
+
+        service.persist_record(action_request)
+
+        self.assertEqual(
+            service.get_record(ActionRequestRecord, action_request.action_request_id),
+            action_request,
+        )
+        self.assertEqual(
+            [
+                transition.lifecycle_state
+                for transition in store.list(LifecycleTransitionRecord)
+                if transition.subject_record_family == "action_request"
+                and transition.subject_record_id == action_request.action_request_id
+            ],
+            ["pending_approval"],
+        )
+        self.assertEqual(
+            [
+                transition.lifecycle_state
+                for transition in service.list_lifecycle_transitions(
+                    "action_request",
+                    action_request.action_request_id,
+                )
+            ],
+            ["pending_approval"],
+        )

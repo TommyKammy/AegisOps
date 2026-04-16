@@ -176,6 +176,7 @@ _LIFECYCLE_STATES_BY_FAMILY: dict[str, frozenset[str]] = {
             "expired",
             "canceled",
             "draft",
+            "pending_approval",
             "executing",
             "completed",
             "failed",
