@@ -22,6 +22,12 @@ It defines:
 
 AegisOps is a governed SecOps control plane above external detection and automation substrates.
 
+AegisOps is the reviewed control plane for approval, evidence, and reconciliation governance for a narrow SMB SecOps operating model.
+
+The primary deployment target is a single-company or single-business-unit deployment with roughly 250 to 1,500 managed endpoints, 2 to 6 business-hours SecOps operators, and 1 to 3 designated approvers or escalation owners.
+
+The target operating assumption is business-hours review with explicit after-hours escalation, not a 24x7 staffed SOC.
+
 The approved baseline is organized around four roles:
 
 - the detection substrate,

@@ -11,6 +11,8 @@ from unittest import mock
 
 CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 REPO_ROOT = CONTROL_PLANE_ROOT.parent
+DOCKER_COMPOSE_RENDER_TIMEOUT_SECONDS = 30
+DOCKER_COMPOSE_DRY_RUN_TIMEOUT_SECONDS = 120
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
@@ -148,6 +150,20 @@ class Phase17BootPathValidationTests(unittest.TestCase):
                     )
                 )
             )
+
+    def test_first_boot_compose_timeout_policy_allows_more_time_for_dry_run(self) -> None:
+        self.assertEqual(
+            self._docker_compose_timeout_seconds("config", "--services"),
+            DOCKER_COMPOSE_RENDER_TIMEOUT_SECONDS,
+        )
+        self.assertEqual(
+            self._docker_compose_timeout_seconds("config"),
+            DOCKER_COMPOSE_RENDER_TIMEOUT_SECONDS,
+        )
+        self.assertEqual(
+            self._docker_compose_timeout_seconds("up", "--dry-run"),
+            DOCKER_COMPOSE_DRY_RUN_TIMEOUT_SECONDS,
+        )
 
     def test_postgresql_runtime_persists_records_across_service_restart(self) -> None:
         backend = FakePostgresBackend()
@@ -338,6 +354,11 @@ class Phase17BootPathValidationTests(unittest.TestCase):
             stderr=stderr,
         )
 
+    def _docker_compose_timeout_seconds(self, *compose_args: str) -> int:
+        if compose_args[:2] == ("up", "--dry-run"):
+            return DOCKER_COMPOSE_DRY_RUN_TIMEOUT_SECONDS
+        return DOCKER_COMPOSE_RENDER_TIMEOUT_SECONDS
+
     def _run_docker_compose(
         self,
         docker_bin: str,
@@ -345,6 +366,7 @@ class Phase17BootPathValidationTests(unittest.TestCase):
         env_path: pathlib.Path,
         *compose_args: str,
     ) -> subprocess.CompletedProcess[str]:
+        timeout_seconds = self._docker_compose_timeout_seconds(*compose_args)
         try:
             return subprocess.run(
                 [
@@ -360,11 +382,11 @@ class Phase17BootPathValidationTests(unittest.TestCase):
                 capture_output=True,
                 text=True,
                 cwd=REPO_ROOT,
-                timeout=30,
+                timeout=timeout_seconds,
             )
         except subprocess.TimeoutExpired as exc:
             self.fail(
-                "docker compose command timed out after 30 seconds:"
+                f"docker compose command timed out after {timeout_seconds} seconds:"
                 f" {' '.join(exc.cmd)}"
             )
 

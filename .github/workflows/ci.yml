@@ -52,6 +52,7 @@ jobs:
           bash scripts/verify-phase-8-control-plane-foundation-validation.sh
           bash scripts/verify-phase-9-control-plane-runtime-boundary-validation.sh
           bash scripts/verify-phase-10-thesis-consistency.sh
+          bash scripts/verify-positive-smb-value-proposition.sh
           bash scripts/verify-phase-6-initial-telemetry-slice-doc.sh
           bash scripts/verify-phase-6-opensearch-detector-artifacts.sh
           bash scripts/verify-phase-6-replay-to-notify-validation.sh
@@ -194,6 +195,7 @@ jobs:
           bash scripts/test-verify-phase-8-control-plane-foundation-validation.sh
           bash scripts/test-verify-phase-9-control-plane-runtime-boundary-validation.sh
           bash scripts/test-verify-phase-10-thesis-consistency.sh
+          bash scripts/test-verify-positive-smb-value-proposition.sh
           bash scripts/test-verify-phase-11-control-plane-ci-validation.sh
           bash scripts/test-verify-phase-12-wazuh-ci-validation.sh
           bash scripts/test-verify-phase-13-guarded-automation-ci-validation.sh

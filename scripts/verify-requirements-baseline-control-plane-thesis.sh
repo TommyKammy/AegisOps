@@ -10,6 +10,7 @@ required_phrases=(
   "## Platform Requirements Baseline"
   "This document defines the **non-negotiable implementation baseline** for **AegisOps** as a **governed control plane above commodity detection and automation substrates**."
   "AegisOps is a governed SecOps control plane."
+  "AegisOps is the reviewed control plane for approval, evidence, and reconciliation governance for a narrow SMB SecOps operating model."
   "AegisOps owns the authoritative platform records and policy decisions for:"
   "- Alert"
   "- Case"
@@ -28,6 +29,8 @@ required_phrases=(
   "n8n MAY be used as an optional, transitional, or experimental execution substrate."
   "AegisOps will **not** rebuild Wazuh-class detection breadth in-house."
   "AegisOps will **not** rebuild Shuffle-class routine automation breadth in-house."
+  "The primary deployment target is a single-company or single-business-unit deployment with roughly 250 to 1,500 managed endpoints, 2 to 6 business-hours SecOps operators, and 1 to 3 designated approvers or escalation owners."
+  "The target operating assumption is business-hours review with explicit after-hours escalation, not a 24x7 staffed SOC."
   "The repository structure and approval boundary in this document remain reviewable baseline constraints."
   "This rebaseline does **not** by itself approve runtime implementation changes, new adapters, or repository-structure expansion."
 )
