@@ -63,6 +63,17 @@ class TransactionMutationStore:
     def inspect_readiness_aggregates(self) -> object:
         return self.inner.inspect_readiness_aggregates()
 
+    def inspect_readiness_review_path_records(
+        self,
+        *,
+        action_request_ids: tuple[str, ...],
+        approval_decision_ids: tuple[str, ...],
+    ) -> object:
+        return self.inner.inspect_readiness_review_path_records(
+            action_request_ids=action_request_ids,
+            approval_decision_ids=approval_decision_ids,
+        )
+
     def _consume_mutation_token(self) -> bool:
         with self._mutate_lock:
             if self._mutated:
@@ -146,6 +157,20 @@ class ConcurrentListMutationStore:
             self.mutate_once()
         return aggregates
 
+    def inspect_readiness_review_path_records(
+        self,
+        *,
+        action_request_ids: tuple[str, ...],
+        approval_decision_ids: tuple[str, ...],
+    ) -> object:
+        records = self.inner.inspect_readiness_review_path_records(
+            action_request_ids=action_request_ids,
+            approval_decision_ids=approval_decision_ids,
+        )
+        if self._consume_mutation_token():
+            self.mutate_once()
+        return records
+
     @contextmanager
     def transaction(
         self,
@@ -194,6 +219,17 @@ class CommitFailingStore:
 
     def inspect_readiness_aggregates(self) -> object:
         return self.inner.inspect_readiness_aggregates()
+
+    def inspect_readiness_review_path_records(
+        self,
+        *,
+        action_request_ids: tuple[str, ...],
+        approval_decision_ids: tuple[str, ...],
+    ) -> object:
+        return self.inner.inspect_readiness_review_path_records(
+            action_request_ids=action_request_ids,
+            approval_decision_ids=approval_decision_ids,
+        )
 
     @contextmanager
     def transaction(
@@ -263,6 +299,17 @@ class RecordTypeSaveFailingStore:
 
     def inspect_readiness_aggregates(self) -> object:
         return self.inner.inspect_readiness_aggregates()
+
+    def inspect_readiness_review_path_records(
+        self,
+        *,
+        action_request_ids: tuple[str, ...],
+        approval_decision_ids: tuple[str, ...],
+    ) -> object:
+        return self.inner.inspect_readiness_review_path_records(
+            action_request_ids=action_request_ids,
+            approval_decision_ids=approval_decision_ids,
+        )
 
     @contextmanager
     def transaction(
@@ -342,6 +389,17 @@ class ListCountingStore:
     def inspect_readiness_aggregates(self) -> object:
         return self.inner.inspect_readiness_aggregates()
 
+    def inspect_readiness_review_path_records(
+        self,
+        *,
+        action_request_ids: tuple[str, ...],
+        approval_decision_ids: tuple[str, ...],
+    ) -> object:
+        return self.inner.inspect_readiness_review_path_records(
+            action_request_ids=action_request_ids,
+            approval_decision_ids=approval_decision_ids,
+        )
+
     @contextmanager
     def transaction(
         self,
@@ -396,6 +454,17 @@ class OutOfBandMutationStore:
 
     def inspect_readiness_aggregates(self) -> object:
         return self.inner.inspect_readiness_aggregates()
+
+    def inspect_readiness_review_path_records(
+        self,
+        *,
+        action_request_ids: tuple[str, ...],
+        approval_decision_ids: tuple[str, ...],
+    ) -> object:
+        return self.inner.inspect_readiness_review_path_records(
+            action_request_ids=action_request_ids,
+            approval_decision_ids=approval_decision_ids,
+        )
 
     def _consume_mutation_token(self) -> bool:
         with self._mutate_lock:

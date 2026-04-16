@@ -16,6 +16,7 @@ from .adapters.n8n import N8NReconciliationAdapter
 from .adapters.postgres import (
     PostgresControlPlaneStore,
     ReadinessDiagnosticsAggregates,
+    ReadinessReviewPathRecords,
 )
 from .adapters.shuffle import ShuffleActionAdapter
 from .adapters.wazuh import WazuhAlertAdapter
@@ -2446,7 +2447,6 @@ class AegisOpsControlPlaneService:
         self,
         readiness_aggregates: ReadinessDiagnosticsAggregates,
     ) -> dict[str, object]:
-        reconciliations_by_action_request_id: dict[str, ReconciliationRecord] = {}
         execution_ids = set(readiness_aggregates.active_action_execution_ids)
         candidate_action_request_ids: set[str] = set()
         approved_action_request_ids: set[str] = set()
@@ -2464,28 +2464,28 @@ class AegisOpsControlPlaneService:
             reconciliation = self._store.get(ReconciliationRecord, reconciliation_id)
             if reconciliation is None:
                 continue
-            action_request_ids = self._assistant_ids_from_mapping(
-                reconciliation.subject_linkage,
-                "action_request_ids",
-            )
-            action_execution_ids = self._assistant_ids_from_mapping(
-                reconciliation.subject_linkage,
-                "action_execution_ids",
-            )
-            execution_ids.update(action_execution_ids)
-            for action_request_id in action_request_ids:
-                candidate_action_request_ids.add(action_request_id)
-                existing_reconciliation = reconciliations_by_action_request_id.get(
-                    action_request_id
+            candidate_action_request_ids.update(
+                self._assistant_ids_from_mapping(
+                    reconciliation.subject_linkage,
+                    "action_request_ids",
                 )
-                if existing_reconciliation is None or (
-                    reconciliation.compared_at,
-                    reconciliation.reconciliation_id,
-                ) > (
-                    existing_reconciliation.compared_at,
-                    existing_reconciliation.reconciliation_id,
-                ):
-                    reconciliations_by_action_request_id[action_request_id] = reconciliation
+            )
+            for approval_decision_id in self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "approval_decision_ids",
+            ):
+                approval_decision = self._store.get(
+                    ApprovalDecisionRecord,
+                    approval_decision_id,
+                )
+                if approval_decision is not None:
+                    candidate_action_request_ids.add(approval_decision.action_request_id)
+            execution_ids.update(
+                self._assistant_ids_from_mapping(
+                    reconciliation.subject_linkage,
+                    "action_execution_ids",
+                )
+            )
 
         executions_by_action_request_id: dict[str, ActionExecutionRecord] = {}
         for action_execution_id in execution_ids:
@@ -2507,7 +2507,58 @@ class AegisOpsControlPlaneService:
                     action_execution
                 )
 
-        if approved_action_request_ids:
+        candidate_action_requests: dict[str, ActionRequestRecord] = {}
+        approval_decisions_by_action_request_id: dict[str, ApprovalDecisionRecord] = {}
+        for action_request_id in sorted(candidate_action_request_ids):
+            action_request = self._store.get(ActionRequestRecord, action_request_id)
+            if action_request is None or not self._action_request_is_review_bound(
+                action_request
+            ):
+                continue
+            candidate_action_requests[action_request_id] = action_request
+            if action_request.approval_decision_id is None:
+                continue
+            approval_decision = self._store.get(
+                ApprovalDecisionRecord,
+                action_request.approval_decision_id,
+            )
+            if approval_decision is not None:
+                approval_decisions_by_action_request_id[action_request_id] = (
+                    approval_decision
+                )
+
+        targeted_record_index = self._build_readiness_review_record_index(
+            action_requests=tuple(candidate_action_requests.values()),
+            approval_decisions=tuple(approval_decisions_by_action_request_id.values()),
+        )
+        reconciliations_by_action_request_id: dict[str, ReconciliationRecord] = {}
+        if targeted_record_index is not None:
+            executions_by_action_request_id = {}
+            for action_request_id, execution_records in (
+                targeted_record_index.executions_by_action_request_id.items()
+            ):
+                executions_by_action_request_id[action_request_id] = max(
+                    execution_records,
+                    key=lambda record: (
+                        record.delegated_at,
+                        record.action_execution_id,
+                    ),
+                )
+            for action_request_id, action_request in candidate_action_requests.items():
+                approval_decision = approval_decisions_by_action_request_id.get(
+                    action_request_id
+                )
+                action_execution = executions_by_action_request_id.get(action_request_id)
+                reconciliation = self._latest_action_review_reconciliation(
+                    action_request=action_request,
+                    approval_decision=approval_decision,
+                    action_execution=action_execution,
+                    record_index=targeted_record_index,
+                )
+                if reconciliation is not None:
+                    reconciliations_by_action_request_id[action_request_id] = reconciliation
+
+        if targeted_record_index is None and approved_action_request_ids:
             for action_execution in self._store.list(ActionExecutionRecord):
                 if action_execution.action_request_id not in approved_action_request_ids:
                     continue
@@ -2548,17 +2599,8 @@ class AegisOpsControlPlaneService:
                         )
 
         review_path_health: list[dict[str, object]] = []
-        for action_request_id in sorted(candidate_action_request_ids):
-            action_request = self._store.get(ActionRequestRecord, action_request_id)
-            if action_request is None or not self._action_request_is_review_bound(
-                action_request
-            ):
-                continue
-            approval_decision = (
-                self._store.get(ApprovalDecisionRecord, action_request.approval_decision_id)
-                if action_request.approval_decision_id is not None
-                else None
-            )
+        for action_request_id, action_request in sorted(candidate_action_requests.items()):
+            approval_decision = approval_decisions_by_action_request_id.get(action_request_id)
             action_execution = executions_by_action_request_id.get(action_request_id)
             reconciliation = reconciliations_by_action_request_id.get(action_request_id)
             approval_state = self._action_review_approval_state(
@@ -2618,6 +2660,119 @@ class AegisOpsControlPlaneService:
             ),
             "paths": paths,
         }
+
+    def _build_readiness_review_record_index(
+        self,
+        *,
+        action_requests: tuple[ActionRequestRecord, ...],
+        approval_decisions: tuple[ApprovalDecisionRecord, ...],
+    ) -> _ActionReviewRecordIndex | None:
+        if not action_requests:
+            return None
+        record_reader = getattr(self._store, "inspect_readiness_review_path_records", None)
+        if not callable(record_reader):
+            return None
+        readiness_records: ReadinessReviewPathRecords = record_reader(
+            action_request_ids=tuple(
+                sorted(
+                    {
+                        action_request.action_request_id
+                        for action_request in action_requests
+                    }
+                )
+            ),
+            approval_decision_ids=tuple(
+                sorted(
+                    {
+                        approval_decision.approval_decision_id
+                        for approval_decision in approval_decisions
+                    }
+                )
+            ),
+        )
+        executions_by_action_request_id: defaultdict[
+            str,
+            list[ActionExecutionRecord],
+        ] = defaultdict(list)
+        for action_execution in readiness_records.action_executions:
+            executions_by_action_request_id[action_execution.action_request_id].append(
+                action_execution
+            )
+
+        reconciliations_by_action_request_id: defaultdict[
+            str,
+            list[ReconciliationRecord],
+        ] = defaultdict(list)
+        reconciliations_by_approval_decision_id: defaultdict[
+            str,
+            list[ReconciliationRecord],
+        ] = defaultdict(list)
+        reconciliations_by_action_execution_id: defaultdict[
+            str,
+            list[ReconciliationRecord],
+        ] = defaultdict(list)
+        reconciliations_by_delegation_id: defaultdict[
+            str,
+            list[ReconciliationRecord],
+        ] = defaultdict(list)
+        for reconciliation in readiness_records.reconciliations:
+            for action_request_id in self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "action_request_ids",
+            ):
+                reconciliations_by_action_request_id[action_request_id].append(
+                    reconciliation
+                )
+            for approval_decision_id in self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "approval_decision_ids",
+            ):
+                reconciliations_by_approval_decision_id[approval_decision_id].append(
+                    reconciliation
+                )
+            for action_execution_id in self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "action_execution_ids",
+            ):
+                reconciliations_by_action_execution_id[action_execution_id].append(
+                    reconciliation
+                )
+            for delegation_id in self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "delegation_ids",
+            ):
+                reconciliations_by_delegation_id[delegation_id].append(reconciliation)
+
+        return _ActionReviewRecordIndex(
+            requests_by_case_id={},
+            requests_by_alert_id={},
+            requests_by_scope={},
+            approvals_by_id={
+                approval_decision.approval_decision_id: approval_decision
+                for approval_decision in approval_decisions
+            },
+            approvals_by_action_request_id={},
+            executions_by_action_request_id={
+                key: tuple(records)
+                for key, records in executions_by_action_request_id.items()
+            },
+            reconciliations_by_action_request_id={
+                key: tuple(records)
+                for key, records in reconciliations_by_action_request_id.items()
+            },
+            reconciliations_by_approval_decision_id={
+                key: tuple(records)
+                for key, records in reconciliations_by_approval_decision_id.items()
+            },
+            reconciliations_by_action_execution_id={
+                key: tuple(records)
+                for key, records in reconciliations_by_action_execution_id.items()
+            },
+            reconciliations_by_delegation_id={
+                key: tuple(records)
+                for key, records in reconciliations_by_delegation_id.items()
+            },
+        )
 
     def _aggregate_readiness_path_health(
         self,
