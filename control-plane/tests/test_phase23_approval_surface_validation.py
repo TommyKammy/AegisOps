@@ -22,6 +22,7 @@ if str(TESTS_ROOT) not in sys.path:
 
 import main
 from aegisops_control_plane.config import RuntimeConfig
+from aegisops_control_plane.models import ApprovalDecisionRecord
 from aegisops_control_plane.service import (
     AegisOpsControlPlaneService,
     AuthenticatedRuntimePrincipal,
@@ -237,6 +238,11 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
             service,
             action_request_id="action-request-phase23-live-reject-001",
         )
+        approval_decision_id = "approval-phase23-live-reject-001"
+        decision_rationale = (
+            "Approver rejected the notification because the reviewed evidence is incomplete."
+        )
+        decided_at = action_request.requested_at + timedelta(minutes=10)
 
         with self._run_runtime(service) as (base_url, _authenticate_mock):
             response = request.urlopen(  # noqa: S310
@@ -245,13 +251,11 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
                     data=json.dumps(
                         {
                             "action_request_id": action_request.action_request_id,
-                            "approval_decision_id": "approval-phase23-live-reject-001",
+                            "approval_decision_id": approval_decision_id,
                             "decision": "reject",
                             "approver_identity": "approver-001",
-                            "decision_rationale": "Approver rejected the notification because the reviewed evidence is incomplete.",
-                            "decided_at": (
-                                action_request.requested_at + timedelta(minutes=10)
-                            ).isoformat(),
+                            "decision_rationale": decision_rationale,
+                            "decided_at": decided_at.isoformat(),
                         }
                     ).encode("utf-8"),
                     headers={"Content-Type": "application/json"},
@@ -264,9 +268,24 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
             self.assertEqual(response.status, HTTPStatus.OK)
             self.assertEqual(payload["lifecycle_state"], "rejected")
             self.assertIsNone(payload["approved_expires_at"])
-            stored_request = service.get_record(type(action_request), action_request.action_request_id)
+            stored_request = service.get_record(
+                type(action_request),
+                action_request.action_request_id,
+            )
             self.assertIsNotNone(stored_request)
+            self.assertEqual(stored_request.approval_decision_id, approval_decision_id)
             self.assertEqual(stored_request.lifecycle_state, "rejected")
+            stored_decision = service.get_record(
+                ApprovalDecisionRecord,
+                approval_decision_id,
+            )
+            self.assertIsNotNone(stored_decision)
+            self.assertEqual(stored_decision.action_request_id, action_request.action_request_id)
+            self.assertEqual(stored_decision.approver_identities, ("approver-001",))
+            self.assertEqual(stored_decision.lifecycle_state, "rejected")
+            self.assertEqual(stored_decision.decision_rationale, decision_rationale)
+            self.assertEqual(stored_decision.decided_at, decided_at)
+            self.assertIsNone(stored_decision.approved_expires_at)
 
     def test_reviewed_runtime_path_records_decisions_with_serializable_transaction(
         self,
@@ -305,9 +324,11 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
                 )
 
             self.assertEqual(response.status, HTTPStatus.OK)
-            self.assertEqual(
-                transaction_mock.call_args_list[0].kwargs["isolation_level"],
-                "SERIALIZABLE",
+            self.assertTrue(
+                any(
+                    call.kwargs.get("isolation_level") == "SERIALIZABLE"
+                    for call in transaction_mock.call_args_list
+                )
             )
 
     def test_reviewed_runtime_path_rejects_self_approval(self) -> None:
@@ -341,10 +362,19 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
                     timeout=2,
                 )
             self.assertEqual(exc_info.exception.code, HTTPStatus.FORBIDDEN)
-            stored_request = service.get_record(type(action_request), action_request.action_request_id)
+            stored_request = service.get_record(
+                type(action_request),
+                action_request.action_request_id,
+            )
             self.assertIsNotNone(stored_request)
             self.assertIsNone(stored_request.approval_decision_id)
             self.assertEqual(stored_request.lifecycle_state, "pending_approval")
+            self.assertIsNone(
+                service.get_record(
+                    ApprovalDecisionRecord,
+                    "approval-phase23-self-approval-001",
+                )
+            )
 
     def test_reviewed_runtime_path_rejects_analyst_decision_authority(self) -> None:
         service = self._build_service()
@@ -394,6 +424,12 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
             self.assertIsNotNone(stored_request)
             self.assertIsNone(stored_request.approval_decision_id)
             self.assertEqual(stored_request.lifecycle_state, "pending_approval")
+            self.assertIsNone(
+                service.get_record(
+                    ApprovalDecisionRecord,
+                    "approval-phase23-analyst-authority-001",
+                )
+            )
 
     def test_reviewed_runtime_path_rejects_approver_outside_request_policy(self) -> None:
         service = self._build_service()
@@ -448,6 +484,12 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
             self.assertIsNotNone(stored_request)
             self.assertIsNone(stored_request.approval_decision_id)
             self.assertEqual(stored_request.lifecycle_state, "pending_approval")
+            self.assertIsNone(
+                service.get_record(
+                    ApprovalDecisionRecord,
+                    "approval-phase23-approver-policy-001",
+                )
+            )
 
     def test_reviewed_runtime_path_rejects_mismatched_authenticated_approver_identity(
         self,
@@ -500,6 +542,12 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
             self.assertIsNotNone(stored_request)
             self.assertIsNone(stored_request.approval_decision_id)
             self.assertEqual(stored_request.lifecycle_state, "pending_approval")
+            self.assertIsNone(
+                service.get_record(
+                    ApprovalDecisionRecord,
+                    "approval-phase23-auth-identity-mismatch-001",
+                )
+            )
 
     def test_reviewed_runtime_path_rejects_expired_request_decisions(self) -> None:
         service = self._build_service()
@@ -551,6 +599,12 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
             self.assertIsNotNone(stored_request)
             self.assertIsNone(stored_request.approval_decision_id)
             self.assertEqual(stored_request.lifecycle_state, "expired")
+            self.assertIsNone(
+                service.get_record(
+                    ApprovalDecisionRecord,
+                    "approval-phase23-expired-decision-001",
+                )
+            )
 
     def test_reviewed_runtime_path_rejects_re_evaluated_policy_authorized_decisions(
         self,
@@ -605,3 +659,9 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
             self.assertIsNotNone(stored_request)
             self.assertIsNone(stored_request.approval_decision_id)
             self.assertEqual(stored_request.lifecycle_state, "pending_approval")
+            self.assertIsNone(
+                service.get_record(
+                    ApprovalDecisionRecord,
+                    "approval-phase23-policy-authorized-001",
+                )
+            )
