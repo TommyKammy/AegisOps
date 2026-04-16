@@ -9,7 +9,7 @@ import ipaddress
 import json
 import logging
 import uuid
-from typing import Iterator, Mapping, Protocol, Type, TypeVar
+from typing import Iterable, Iterator, Mapping, Protocol, Type, TypeVar
 
 from .adapters.executor import IsolatedExecutorAdapter
 from .adapters.n8n import N8NReconciliationAdapter
@@ -2059,6 +2059,13 @@ class AegisOpsControlPlaneService:
             review_state=review_state,
             record_index=record_index,
         )
+        path_health = self._action_review_path_health(
+            action_request=action_request,
+            approval_decision=approval_decision,
+            action_execution=action_execution,
+            reconciliation=reconciliation,
+            review_state=review_state,
+        )
 
         return {
             "review_state": review_state,
@@ -2089,6 +2096,7 @@ class AegisOpsControlPlaneService:
             "message_intent": requested_payload.get("message_intent"),
             "escalation_reason": requested_payload.get("escalation_reason"),
             "runtime_visibility": runtime_visibility,
+            "path_health": path_health,
             "execution_surface_type": (
                 action_execution.execution_surface_type
                 if action_execution is not None
@@ -2130,6 +2138,238 @@ class AegisOpsControlPlaneService:
                 else None
             ),
         }
+
+    def _action_review_path_health(
+        self,
+        *,
+        action_request: ActionRequestRecord,
+        approval_decision: ApprovalDecisionRecord | None,
+        action_execution: ActionExecutionRecord | None,
+        reconciliation: ReconciliationRecord | None,
+        review_state: str,
+    ) -> dict[str, object]:
+        paths = {
+            "ingest": self._action_review_ingest_path_health(reconciliation),
+            "delegation": self._action_review_delegation_path_health(
+                action_request=action_request,
+                approval_decision=approval_decision,
+                action_execution=action_execution,
+                review_state=review_state,
+            ),
+            "provider": self._action_review_provider_path_health(action_execution),
+            "persistence": self._action_review_persistence_path_health(reconciliation),
+        }
+        overall_state = self._action_review_overall_path_state(paths.values())
+        return {
+            "overall_state": overall_state,
+            "summary": self._action_review_path_health_summary(
+                overall_state=overall_state,
+                paths=paths,
+            ),
+            "paths": paths,
+        }
+
+    @staticmethod
+    def _action_review_ingest_path_health(
+        reconciliation: ReconciliationRecord | None,
+    ) -> dict[str, str]:
+        if reconciliation is None:
+            return {
+                "state": "delayed",
+                "reason": "awaiting_ingest_signal",
+            }
+        return {
+            "matched": {
+                "state": "healthy",
+                "reason": "observations_current",
+            },
+            "missing": {
+                "state": "delayed",
+                "reason": "observation_missing",
+            },
+            "stale": {
+                "state": "degraded",
+                "reason": "stale_observation",
+            },
+            "duplicate": {
+                "state": "degraded",
+                "reason": "duplicate_observations",
+            },
+            "mismatch": {
+                "state": "degraded",
+                "reason": "mismatch_detected",
+            },
+        }.get(
+            reconciliation.ingest_disposition,
+            {
+                "state": "degraded",
+                "reason": "ingest_anomaly",
+            },
+        )
+
+    @staticmethod
+    def _action_review_delegation_path_health(
+        *,
+        action_request: ActionRequestRecord,
+        approval_decision: ApprovalDecisionRecord | None,
+        action_execution: ActionExecutionRecord | None,
+        review_state: str,
+    ) -> dict[str, str]:
+        if action_execution is not None:
+            if action_execution.lifecycle_state == "dispatching":
+                return {
+                    "state": "delayed",
+                    "reason": "awaiting_receipt",
+                }
+            return {
+                "state": "healthy",
+                "reason": "delegated",
+            }
+        if approval_decision is not None and approval_decision.lifecycle_state == "approved":
+            return {
+                "state": "delayed",
+                "reason": "awaiting_reviewed_delegation",
+            }
+        if review_state == "approved" or action_request.lifecycle_state == "approved":
+            return {
+                "state": "delayed",
+                "reason": "awaiting_reviewed_delegation",
+            }
+        return {
+            "state": "delayed",
+            "reason": "awaiting_approval",
+        }
+
+    @staticmethod
+    def _action_review_provider_path_health(
+        action_execution: ActionExecutionRecord | None,
+    ) -> dict[str, str]:
+        if action_execution is None:
+            return {
+                "state": "delayed",
+                "reason": "awaiting_delegation",
+            }
+        return {
+            "dispatching": {
+                "state": "delayed",
+                "reason": "awaiting_provider_receipt",
+            },
+            "queued": {
+                "state": "delayed",
+                "reason": "awaiting_authoritative_outcome",
+            },
+            "running": {
+                "state": "delayed",
+                "reason": "awaiting_authoritative_outcome",
+            },
+            "succeeded": {
+                "state": "healthy",
+                "reason": "execution_succeeded",
+            },
+            "failed": {
+                "state": "failed",
+                "reason": "execution_failed",
+            },
+            "canceled": {
+                "state": "failed",
+                "reason": "execution_canceled",
+            },
+            "unresolved": {
+                "state": "degraded",
+                "reason": "execution_unresolved",
+            },
+            "expired": {
+                "state": "failed",
+                "reason": "execution_expired",
+            },
+            "rejected": {
+                "state": "failed",
+                "reason": "execution_rejected",
+            },
+            "superseded": {
+                "state": "degraded",
+                "reason": "execution_superseded",
+            },
+        }.get(
+            action_execution.lifecycle_state,
+            {
+                "state": "degraded",
+                "reason": "provider_anomaly",
+            },
+        )
+
+    @staticmethod
+    def _action_review_persistence_path_health(
+        reconciliation: ReconciliationRecord | None,
+    ) -> dict[str, str]:
+        if reconciliation is None:
+            return {
+                "state": "delayed",
+                "reason": "awaiting_reconciliation",
+            }
+        return {
+            "matched": {
+                "state": "healthy",
+                "reason": "reconciliation_matched",
+            },
+            "pending": {
+                "state": "delayed",
+                "reason": "reconciliation_pending",
+            },
+            "mismatched": {
+                "state": "degraded",
+                "reason": "reconciliation_mismatched",
+            },
+            "stale": {
+                "state": "degraded",
+                "reason": "reconciliation_stale",
+            },
+        }.get(
+            reconciliation.lifecycle_state,
+            {
+                "state": "degraded",
+                "reason": "persistence_anomaly",
+            },
+        )
+
+    @staticmethod
+    def _action_review_overall_path_state(
+        paths: Iterable[Mapping[str, str]],
+    ) -> str:
+        severity = {
+            "healthy": 0,
+            "delayed": 1,
+            "degraded": 2,
+            "failed": 3,
+        }
+        highest = max(
+            (
+                severity.get(path.get("state", "degraded"), severity["degraded"])
+                for path in paths
+            ),
+            default=severity["healthy"],
+        )
+        for state, rank in severity.items():
+            if rank == highest:
+                return state
+        return "degraded"
+
+    @staticmethod
+    def _action_review_path_health_summary(
+        *,
+        overall_state: str,
+        paths: Mapping[str, Mapping[str, str]],
+    ) -> str:
+        active_paths = [
+            f"{path_name} {path['reason'].replace('_', ' ')}"
+            for path_name, path in paths.items()
+            if path.get("state") != "healthy"
+        ]
+        if not active_paths:
+            return "all reviewed execution visibility paths are healthy"
+        primary = active_paths[:2]
+        joined = "; ".join(primary)
+        return f"{overall_state} path visibility: {joined}"
 
     def _action_review_runtime_visibility(
         self,

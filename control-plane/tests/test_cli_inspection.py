@@ -4150,6 +4150,50 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         self._assert_review_timeline_snapshot(payload["current_action_review"], seeded)
 
+    def test_cli_inspect_alert_detail_classifies_path_health_for_mismatched_review(
+        self,
+    ) -> None:
+        _, service, promoted_case, evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        self._seed_action_review_timeline_mismatch_for_case(
+            service,
+            promoted_case,
+            reviewed_at,
+            evidence_id,
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-alert-detail", "--alert-id", promoted_case.alert_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        review = payload["current_action_review"]
+        self.assertEqual(review["path_health"]["overall_state"], "degraded")
+        self.assertTrue(review["path_health"]["summary"])
+        self.assertEqual(
+            review["path_health"]["paths"],
+            {
+                "ingest": {
+                    "state": "degraded",
+                    "reason": "mismatch_detected",
+                },
+                "delegation": {
+                    "state": "healthy",
+                    "reason": "delegated",
+                },
+                "provider": {
+                    "state": "delayed",
+                    "reason": "awaiting_authoritative_outcome",
+                },
+                "persistence": {
+                    "state": "degraded",
+                    "reason": "reconciliation_mismatched",
+                },
+            },
+        )
+
     def test_cli_inspect_analyst_queue_renders_review_timeline_and_mismatch_details(
         self,
     ) -> None:
