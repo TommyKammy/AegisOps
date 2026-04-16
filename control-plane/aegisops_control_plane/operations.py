@@ -359,6 +359,9 @@ class RestoreReadinessService:
         record_to_dict: Callable[[ControlPlaneRecord], dict[str, object]],
         json_ready: Callable[[object], object],
         redacted_reconciliation_payload: Callable[[ReconciliationRecord], dict[str, object]],
+        build_readiness_review_path_health: Callable[
+            [ReadinessDiagnosticsAggregates], dict[str, object]
+        ],
         build_shutdown_status_snapshot: Callable[..., Any],
         derive_readiness_status: Callable[..., str],
         record_from_backup_payload: Callable[[Type[ControlPlaneRecord], Mapping[str, object]], ControlPlaneRecord],
@@ -388,6 +391,9 @@ class RestoreReadinessService:
         self._record_to_dict = record_to_dict
         self._json_ready = json_ready
         self._redacted_reconciliation_payload = redacted_reconciliation_payload
+        self._build_readiness_review_path_health = (
+            build_readiness_review_path_health
+        )
         self._build_shutdown_status_snapshot = build_shutdown_status_snapshot
         self._derive_readiness_status = derive_readiness_status
         self._record_from_backup_payload = record_from_backup_payload
@@ -489,6 +495,9 @@ class RestoreReadinessService:
         with self._store.transaction(isolation_level="REPEATABLE READ"):
             startup = self.describe_startup_status()
             readiness_aggregates = self.inspect_readiness_aggregates()
+            review_path_health = self._build_readiness_review_path_health(
+                readiness_aggregates
+            )
 
         shutdown = self._build_shutdown_status_snapshot(
             open_case_ids=readiness_aggregates.open_case_ids,
@@ -570,6 +579,7 @@ class RestoreReadinessService:
                 "approved_action_requests": readiness_aggregates.phase20_approved_action_requests,
                 "reconciled_executions": readiness_aggregates.phase20_reconciled_executions,
             },
+            "review_path_health": review_path_health,
         }
 
         return self._readiness_diagnostics_snapshot_factory(

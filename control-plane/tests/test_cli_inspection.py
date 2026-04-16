@@ -1195,6 +1195,14 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                     1,
                 )
                 self.assertEqual(
+                    diagnostics_payload["metrics"]["review_path_health"]["overall_state"],
+                    "healthy",
+                )
+                self.assertEqual(
+                    diagnostics_payload["metrics"]["review_path_health"]["review_count"],
+                    0,
+                )
+                self.assertEqual(
                     diagnostics_payload["latest_reconciliation"]["reconciliation_id"],
                     reconciliation.reconciliation_id,
                 )
@@ -3388,6 +3396,56 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             seeded["replacement_request"].action_request_id,
         )
 
+    def test_cli_inspect_case_detail_classifies_terminal_non_delegated_review_path_health(
+        self,
+    ) -> None:
+        _, service, promoted_case, evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        seeded = self._seed_action_review_states_for_case(
+            service,
+            promoted_case,
+            reviewed_at,
+            evidence_id,
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-case-detail", "--case-id", promoted_case.case_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        action_reviews_by_id = {
+            record["action_request_id"]: record for record in payload["action_reviews"]
+        }
+        expected_paths = {
+            "ingest": {
+                "state": "healthy",
+                "reason": "review_closed_before_ingest",
+            },
+            "delegation": {
+                "state": "healthy",
+                "reason": "review_closed_without_delegation",
+            },
+            "provider": {
+                "state": "healthy",
+                "reason": "review_closed_before_provider",
+            },
+            "persistence": {
+                "state": "healthy",
+                "reason": "review_closed_before_reconciliation",
+            },
+        }
+
+        for action_request in (
+            seeded["rejected_request"],
+            seeded["expired_request"],
+            seeded["superseded_request"],
+        ):
+            review = action_reviews_by_id[action_request.action_request_id]
+            self.assertEqual(review["path_health"]["overall_state"], "healthy")
+            self.assertEqual(review["path_health"]["paths"], expected_paths)
+
     def test_cli_inspect_case_detail_renders_review_timeline_and_mismatch_details(
         self,
     ) -> None:
@@ -4033,6 +4091,79 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertEqual(
             review["runtime_visibility"]["escalation_notes"]["escalated_by_identity"],
             "analyst-004",
+        )
+
+    def test_cli_inspect_alert_detail_classifies_unresolved_review_without_execution(
+        self,
+    ) -> None:
+        _, service, promoted_case, evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep post-approval silent failures visible on the reviewed action path.",
+        )
+        request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="The alert-scoped reviewed request cannot stay implicit after approval.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-cli-alert-unresolved-path-health-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-cli-alert-unresolved-path-health-001",
+                action_request_id=request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(request.target_scope),
+                payload_hash=request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                request,
+                approval_decision_id=approval.approval_decision_id,
+                case_id=None,
+                lifecycle_state="unresolved",
+            )
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-alert-detail", "--alert-id", promoted_case.alert_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        review = payload["current_action_review"]
+        self.assertEqual(review["review_state"], "unresolved")
+        self.assertEqual(review["path_health"]["overall_state"], "degraded")
+        self.assertEqual(
+            review["path_health"]["paths"],
+            {
+                "ingest": {
+                    "state": "degraded",
+                    "reason": "ingest_signal_missing_after_approval",
+                },
+                "delegation": {
+                    "state": "degraded",
+                    "reason": "reviewed_delegation_missing_after_approval",
+                },
+                "provider": {
+                    "state": "degraded",
+                    "reason": "provider_signal_missing_after_approval",
+                },
+                "persistence": {
+                    "state": "degraded",
+                    "reason": "reconciliation_missing_after_approval",
+                },
+            },
         )
 
     def test_cli_inspect_case_detail_keeps_reconciliation_bound_to_selected_execution(

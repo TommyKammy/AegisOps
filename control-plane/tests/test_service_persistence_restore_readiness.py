@@ -1635,6 +1635,65 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         self.assertEqual(readiness.status, "ready")
         self.assertEqual(store.list_calls, 0)
 
+    def test_service_phase21_readiness_surfaces_unresolved_review_path_health(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep silent failures visible on readiness without leaving AegisOps.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="The reviewed action path needs explicit degraded visibility after approval.",
+            expires_at=reviewed_at + timedelta(hours=4),
+            action_request_id="action-request-phase21-readiness-path-health-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase21-readiness-path-health-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+
+        readiness = service.inspect_readiness_diagnostics()
+        review_path_health = readiness.metrics["review_path_health"]
+
+        self.assertEqual(review_path_health["review_count"], 1)
+        self.assertEqual(review_path_health["overall_state"], "degraded")
+        self.assertEqual(
+            review_path_health["paths"]["delegation"]["reason"],
+            "reviewed_delegation_missing_after_approval",
+        )
+        self.assertEqual(
+            review_path_health["paths"]["provider"]["reason"],
+            "provider_signal_missing_after_approval",
+        )
+        self.assertEqual(
+            review_path_health["paths"]["persistence"]["reason"],
+            "reconciliation_missing_after_approval",
+        )
+
     def test_service_phase21_readiness_counts_distinct_execution_runs_and_redacts_payload(
         self,
     ) -> None:
