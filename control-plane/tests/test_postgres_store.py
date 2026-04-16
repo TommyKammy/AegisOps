@@ -251,6 +251,13 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         self.assertIn("'pending_approval'", bootstrap_sql)
 
     def test_lifecycle_transition_schema_assets_exist(self) -> None:
+        migration_sql = (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0006_phase_23_lifecycle_transition_records.sql"
+        ).read_text(encoding="utf-8").lower()
         schema_sql = (
             CONTROL_PLANE_ROOT.parent / "postgres" / "control-plane" / "schema.sql"
         ).read_text(encoding="utf-8").lower()
@@ -274,20 +281,24 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         self.assertIn("'pending_approval'", schema_sql)
         self.assertIn(
             "create table if not exists aegisops_control.lifecycle_transition_records",
-            bootstrap_sql,
+            migration_sql,
         )
-        self.assertIn("transition_id text primary key", bootstrap_sql)
-        self.assertIn("previous_lifecycle_state text", bootstrap_sql)
+        self.assertIn("transition_id text primary key", migration_sql)
+        self.assertIn("previous_lifecycle_state text", migration_sql)
         self.assertIn(
             "attribution jsonb not null default '{}'::jsonb",
-            bootstrap_sql,
+            migration_sql,
         )
-        self.assertIn("subject_record_family in (", bootstrap_sql)
+        self.assertIn("subject_record_family in (", migration_sql)
         self.assertIn(
             "previous_lifecycle_state is null or previous_lifecycle_state in (",
+            migration_sql,
+        )
+        self.assertIn("'pending_approval'", migration_sql)
+        self.assertNotIn(
+            "create table if not exists aegisops_control.lifecycle_transition_records",
             bootstrap_sql,
         )
-        self.assertIn("'pending_approval'", bootstrap_sql)
 
     def test_store_round_trips_reviewed_record_families_by_aegisops_ids(self) -> None:
         store, _ = make_store()
