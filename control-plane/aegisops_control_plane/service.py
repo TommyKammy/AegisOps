@@ -2154,7 +2154,11 @@ class AegisOpsControlPlaneService:
         if action_execution is None and reconciliation is None:
             if review_state in {"rejected", "expired", "superseded", "canceled"}:
                 paths = self._action_review_terminal_non_delegated_path_health()
-            elif review_state == "unresolved":
+            elif (
+                review_state == "unresolved"
+                and approval_decision is not None
+                and approval_decision.lifecycle_state == "approved"
+            ):
                 paths = self._action_review_unresolved_without_execution_path_health()
             else:
                 paths = {
@@ -2445,13 +2449,16 @@ class AegisOpsControlPlaneService:
         reconciliations_by_action_request_id: dict[str, ReconciliationRecord] = {}
         execution_ids = set(readiness_aggregates.active_action_execution_ids)
         candidate_action_request_ids: set[str] = set()
+        approved_action_request_ids: set[str] = set()
 
         for action_request_id in readiness_aggregates.active_action_request_ids:
             action_request = self._store.get(ActionRequestRecord, action_request_id)
             if action_request is None:
                 continue
-            if action_request.lifecycle_state == "unresolved":
+            if action_request.lifecycle_state in {"approved", "unresolved"}:
                 candidate_action_request_ids.add(action_request_id)
+                if action_request.lifecycle_state == "approved":
+                    approved_action_request_ids.add(action_request_id)
 
         for reconciliation_id in readiness_aggregates.unresolved_reconciliation_ids:
             reconciliation = self._store.get(ReconciliationRecord, reconciliation_id)
@@ -2499,6 +2506,46 @@ class AegisOpsControlPlaneService:
                 executions_by_action_request_id[action_execution.action_request_id] = (
                     action_execution
                 )
+
+        if approved_action_request_ids:
+            for action_execution in self._store.list(ActionExecutionRecord):
+                if action_execution.action_request_id not in approved_action_request_ids:
+                    continue
+                existing_execution = executions_by_action_request_id.get(
+                    action_execution.action_request_id
+                )
+                if existing_execution is None or (
+                    action_execution.delegated_at,
+                    action_execution.action_execution_id,
+                ) > (
+                    existing_execution.delegated_at,
+                    existing_execution.action_execution_id,
+                ):
+                    executions_by_action_request_id[action_execution.action_request_id] = (
+                        action_execution
+                    )
+
+            for reconciliation in self._store.list(ReconciliationRecord):
+                action_request_ids = self._assistant_ids_from_mapping(
+                    reconciliation.subject_linkage,
+                    "action_request_ids",
+                )
+                for action_request_id in action_request_ids:
+                    if action_request_id not in approved_action_request_ids:
+                        continue
+                    existing_reconciliation = reconciliations_by_action_request_id.get(
+                        action_request_id
+                    )
+                    if existing_reconciliation is None or (
+                        reconciliation.compared_at,
+                        reconciliation.reconciliation_id,
+                    ) > (
+                        existing_reconciliation.compared_at,
+                        existing_reconciliation.reconciliation_id,
+                    ):
+                        reconciliations_by_action_request_id[action_request_id] = (
+                            reconciliation
+                        )
 
         review_path_health: list[dict[str, object]] = []
         for action_request_id in sorted(candidate_action_request_ids):

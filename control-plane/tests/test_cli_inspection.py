@@ -1200,7 +1200,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     diagnostics_payload["metrics"]["review_path_health"]["review_count"],
-                    0,
+                    1,
                 )
                 self.assertEqual(
                     diagnostics_payload["latest_reconciliation"]["reconciliation_id"],
@@ -3950,6 +3950,61 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         self.assertIsNone(case_payload["current_action_review"]["runtime_visibility"])
         self.assertEqual(queue_payload["total_records"], 1)
         self.assertIsNone(queue_payload["records"][0]["current_action_review"]["runtime_visibility"])
+
+    def test_cli_inspect_case_detail_keeps_preapproval_unresolved_review_path_health_delayed(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, _reviewed_at = self._build_phase19_in_scope_case()
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep pre-approval follow-up visible without overstating it as a post-approval silent failure.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Approval follow-up remains open.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-cli-preapproval-unresolved-path-health-001",
+        )
+        service.persist_record(replace(action_request, lifecycle_state="unresolved"))
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-case-detail", "--case-id", promoted_case.case_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        review = payload["current_action_review"]
+
+        self.assertEqual(review["review_state"], "unresolved")
+        self.assertEqual(review["path_health"]["overall_state"], "delayed")
+        self.assertEqual(
+            review["path_health"]["paths"],
+            {
+                "ingest": {
+                    "state": "delayed",
+                    "reason": "awaiting_ingest_signal",
+                },
+                "delegation": {
+                    "state": "delayed",
+                    "reason": "awaiting_approval",
+                },
+                "provider": {
+                    "state": "delayed",
+                    "reason": "awaiting_delegation",
+                },
+                "persistence": {
+                    "state": "delayed",
+                    "reason": "awaiting_reconciliation",
+                },
+            },
+        )
 
     def test_cli_inspect_case_detail_keeps_after_hours_handoff_visible_for_non_executed_review_states(
         self,

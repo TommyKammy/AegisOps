@@ -1694,6 +1694,65 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             "reconciliation_missing_after_approval",
         )
 
+    def test_service_phase21_readiness_tracks_approved_review_awaiting_delegation(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep reviewed requests visible on readiness before delegation starts.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="The approved reviewed request must stay visible until delegation begins.",
+            expires_at=reviewed_at + timedelta(hours=4),
+            action_request_id="action-request-phase21-readiness-approved-path-health-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase21-readiness-approved-path-health-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="approved",
+            )
+        )
+
+        readiness = service.inspect_readiness_diagnostics()
+        review_path_health = readiness.metrics["review_path_health"]
+
+        self.assertEqual(review_path_health["review_count"], 1)
+        self.assertEqual(review_path_health["overall_state"], "delayed")
+        self.assertEqual(
+            review_path_health["paths"]["delegation"]["reason"],
+            "awaiting_reviewed_delegation",
+        )
+        self.assertEqual(
+            review_path_health["paths"]["provider"]["reason"],
+            "awaiting_delegation",
+        )
+        self.assertEqual(
+            review_path_health["paths"]["persistence"]["reason"],
+            "awaiting_reconciliation",
+        )
+
     def test_service_phase21_readiness_counts_distinct_execution_runs_and_redacts_payload(
         self,
     ) -> None:
