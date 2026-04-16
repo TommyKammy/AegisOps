@@ -169,6 +169,7 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
     def test_reviewed_runtime_path_records_live_grant_decision(self) -> None:
         service = self._build_service()
         action_request = self._build_pending_action_request(service)
+        decided_at = action_request.requested_at + timedelta(minutes=10)
         with self._run_runtime(service) as (base_url, _authenticate_mock):
             response = request.urlopen(  # noqa: S310
                 request.Request(  # noqa: S310
@@ -180,9 +181,7 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
                             "decision": "grant",
                             "approver_identity": "approver-001",
                             "decision_rationale": "Approver validated the reviewed owner notification scope.",
-                            "decided_at": (
-                                action_request.requested_at + timedelta(minutes=10)
-                            ).isoformat(),
+                            "decided_at": decided_at.isoformat(),
                         }
                     ).encode("utf-8"),
                     headers={"Content-Type": "application/json"},
@@ -215,6 +214,24 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
             self.assertIsNotNone(stored_request)
             self.assertEqual(stored_request.approval_decision_id, payload["approval_decision_id"])
             self.assertEqual(stored_request.lifecycle_state, "approved")
+            stored_decision = service.get_record(
+                ApprovalDecisionRecord,
+                payload["approval_decision_id"],
+            )
+            self.assertIsNotNone(stored_decision)
+            self.assertEqual(
+                stored_decision.approval_decision_id,
+                payload["approval_decision_id"],
+            )
+            self.assertEqual(stored_decision.action_request_id, action_request.action_request_id)
+            self.assertEqual(stored_decision.approver_identities, ("approver-001",))
+            self.assertEqual(stored_decision.lifecycle_state, "approved")
+            self.assertEqual(
+                stored_decision.decision_rationale,
+                "Approver validated the reviewed owner notification scope.",
+            )
+            self.assertEqual(stored_decision.decided_at, decided_at)
+            self.assertEqual(stored_decision.approved_expires_at, action_request.expires_at)
 
             case_detail = json.loads(
                 request.urlopen(  # noqa: S310
