@@ -343,6 +343,66 @@ class Phase23TransitionLoggingValidationTests(ServicePersistenceTestBase):
             recorded_at,
         )
 
+    def test_transition_logging_uses_shared_lineage_lock_for_linked_alert_case_records(
+        self,
+    ) -> None:
+        store, backend = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        alert = AlertRecord(
+            alert_id="alert-transition-lineage-lock-001",
+            finding_id="finding-transition-lineage-lock-001",
+            analytic_signal_id=None,
+            case_id="case-transition-lineage-lock-001",
+            lifecycle_state="escalated_to_case",
+        )
+        case = CaseRecord(
+            case_id="case-transition-lineage-lock-001",
+            alert_id=alert.alert_id,
+            finding_id=alert.finding_id,
+            evidence_ids=("evidence-transition-lineage-lock-001",),
+            lifecycle_state="open",
+        )
+        expected_lineage_lock = (
+            "select pg_advisory_xact_lock(hashtext(%s), hashtext(%s))",
+            (
+                "linked_alert_case_lifecycle",
+                f"alert:{alert.alert_id}|case:{case.case_id}",
+            ),
+        )
+
+        store.save(alert)
+        store.save(case)
+
+        case_statement_count_before = len(backend.statements)
+        service.persist_record(replace(case, lifecycle_state="closed"))
+        case_statements = backend.statements[case_statement_count_before:]
+
+        alert_statement_count_before = len(backend.statements)
+        service.persist_record(replace(alert, lifecycle_state="closed"))
+        alert_statements = backend.statements[alert_statement_count_before:]
+
+        self.assertGreaterEqual(len(case_statements), 6)
+        self.assertEqual(case_statements[0], expected_lineage_lock)
+        self.assertEqual(
+            case_statements[1],
+            (
+                "select pg_advisory_xact_lock(hashtext(%s), hashtext(%s))",
+                ("case", case.case_id),
+            ),
+        )
+        self.assertGreaterEqual(len(alert_statements), 6)
+        self.assertEqual(alert_statements[0], expected_lineage_lock)
+        self.assertEqual(
+            alert_statements[1],
+            (
+                "select pg_advisory_xact_lock(hashtext(%s), hashtext(%s))",
+                ("alert", alert.alert_id),
+            ),
+        )
+
     def test_transition_logging_preserves_runtime_audit_metadata_for_reviewed_families(
         self,
     ) -> None:

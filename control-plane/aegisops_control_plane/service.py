@@ -60,6 +60,7 @@ _AFTER_HOURS_HANDOFF_TRIAGE_DISPOSITIONS = frozenset(
 )
 
 _LATEST_LIFECYCLE_TRANSITION_UNSET = object()
+_LINKED_ALERT_CASE_LIFECYCLE_LOCK_FAMILY = "linked_alert_case_lifecycle"
 
 
 class ControlPlaneStore(Protocol):
@@ -1074,6 +1075,9 @@ class AegisOpsControlPlaneService:
                 "transitioned_at",
             )
         with self._store.transaction():
+            lineage_lock_subject = self._linked_alert_case_lifecycle_lock_subject(record)
+            if lineage_lock_subject is not None:
+                self._lock_lifecycle_transition_subject(*lineage_lock_subject)
             self._lock_lifecycle_transition_subject(
                 record.record_family,
                 record.record_id,
@@ -1097,6 +1101,31 @@ class AegisOpsControlPlaneService:
         lock_subject = getattr(self._store, "lock_lifecycle_transition_subject", None)
         if callable(lock_subject):
             lock_subject(record_family, record_id)
+
+    @staticmethod
+    def _linked_alert_case_lifecycle_lock_subject(
+        record: ControlPlaneRecord,
+    ) -> tuple[str, str] | None:
+        if isinstance(record, AlertRecord):
+            alert_id = record.alert_id
+            case_id = record.case_id
+        elif isinstance(record, CaseRecord):
+            alert_id = record.alert_id
+            case_id = record.case_id
+        else:
+            return None
+
+        if not isinstance(alert_id, str) or not alert_id.strip():
+            return None
+        if not isinstance(case_id, str) or not case_id.strip():
+            return None
+
+        # Serialize linked alert/case lifecycle mutations on one shared key so
+        # opposite record-specific update orders cannot deadlock.
+        return (
+            _LINKED_ALERT_CASE_LIFECYCLE_LOCK_FAMILY,
+            f"alert:{alert_id}|case:{case_id}",
+        )
 
     def _build_lifecycle_transition_record(
         self,
