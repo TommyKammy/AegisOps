@@ -48,7 +48,7 @@ require_fixed_string() {
     relative_path="${file_path}"
   fi
 
-  if ! grep -Fqx -- "${expected}" "${file_path}" >/dev/null; then
+  if ! grep -Fqx -- "${expected}" < <(tr -d $'\r' < "${file_path}") >/dev/null; then
     echo "Missing required line in ${relative_path}: ${expected}" >&2
     exit 1
   fi
