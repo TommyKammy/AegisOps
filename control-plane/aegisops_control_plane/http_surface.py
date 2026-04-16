@@ -638,6 +638,62 @@ def build_handler_class(
                 self._write_json(HTTPStatus.OK, json_ready(context_record))
                 return
 
+            if request_path == "/operator/record-action-approval-decision":
+                try:
+                    if getattr(principal, "role", None) != "approver":
+                        raise PermissionError(
+                            "approval decisions require approver role authority"
+                        )
+                    payload = read_json_request_body(self)
+                    approver_identity = require_json_string(
+                        payload,
+                        "approver_identity",
+                    )
+                    authenticated_approver_identity = getattr(
+                        principal,
+                        "identity",
+                        None,
+                    )
+                    if authenticated_approver_identity is None:
+                        raise PermissionError(
+                            "approval decisions require an authenticated approver identity"
+                        )
+                    self._require_matching_identity(
+                        authenticated_approver_identity,
+                        approver_identity,
+                    )
+                    approval_decision = service.record_action_approval_decision(
+                        action_request_id=require_json_string(payload, "action_request_id"),
+                        approver_identity=authenticated_approver_identity,
+                        authenticated_approver_identity=authenticated_approver_identity,
+                        decision=require_json_string(payload, "decision"),
+                        decision_rationale=require_json_string(
+                            payload,
+                            "decision_rationale",
+                        ),
+                        decided_at=require_json_datetime(payload, "decided_at"),
+                        approval_decision_id=normalize_optional_string(
+                            payload.get("approval_decision_id")
+                        ),
+                    )
+                except RequestTooLargeError as exc:
+                    self._write_json(
+                        HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                        {
+                            "error": "request_too_large",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                except PermissionError as exc:
+                    self._write_permission_or_bad_request(exc)
+                    return
+                except (LookupError, ValueError) as exc:
+                    self._write_lookup_or_bad_request(exc)
+                    return
+                self._write_json(HTTPStatus.OK, json_ready(approval_decision))
+                return
+
             if request_path == "/operator/create-reviewed-action-request":
                 try:
                     payload = read_json_request_body(self)

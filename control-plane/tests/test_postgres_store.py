@@ -174,6 +174,45 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             schema_sql,
         )
 
+    def test_phase23_approval_decision_rationale_forward_migration_asset_exists(self) -> None:
+        migration_path = (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0005_phase_23_approval_decision_rationale.sql"
+        )
+
+        self.assertTrue(
+            migration_path.exists(),
+            f"Missing Phase 23 forward migration asset: {migration_path}",
+        )
+
+        migration_sql = migration_path.read_text(encoding="utf-8").lower()
+        schema_sql = (
+            CONTROL_PLANE_ROOT.parent / "postgres" / "control-plane" / "schema.sql"
+        ).read_text(encoding="utf-8").lower()
+        bootstrap_sql = (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0001_control_plane_schema_skeleton.sql"
+        ).read_text(encoding="utf-8").lower()
+
+        self.assertIn("begin;", migration_sql)
+        self.assertIn("commit;", migration_sql)
+        self.assertIn(
+            "alter table if exists aegisops_control.approval_decision_records",
+            migration_sql,
+        )
+        self.assertIn(
+            "add column if not exists decision_rationale text;",
+            migration_sql,
+        )
+        self.assertIn("decision_rationale text", schema_sql)
+        self.assertIn("decision_rationale text", bootstrap_sql)
+
     def test_store_round_trips_reviewed_record_families_by_aegisops_ids(self) -> None:
         store, _ = make_store()
         timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
