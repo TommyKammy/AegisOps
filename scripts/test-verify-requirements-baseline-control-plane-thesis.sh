@@ -87,6 +87,14 @@ write_canonical_doc "${valid_repo}"
 commit_fixture "${valid_repo}"
 assert_passes "${valid_repo}"
 
+crlf_repo="${workdir}/crlf"
+create_repo "${crlf_repo}"
+write_canonical_doc "${crlf_repo}"
+perl -0pi -e 's/\n/\r\n/g' "${crlf_repo}/docs/requirements-baseline.md"
+git -C "${crlf_repo}" add docs/requirements-baseline.md
+commit_fixture "${crlf_repo}"
+assert_passes "${crlf_repo}"
+
 missing_doc_repo="${workdir}/missing-doc"
 create_repo "${missing_doc_repo}"
 commit_fixture "${missing_doc_repo}"

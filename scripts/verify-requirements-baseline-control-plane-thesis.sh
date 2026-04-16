@@ -49,15 +49,21 @@ if [[ ! -f "${doc_path}" ]]; then
   exit 1
 fi
 
+contains_phrase() {
+  local phrase="$1"
+
+  grep -Fq -- "${phrase}" < <(tr -d $'\r' < "${doc_path}")
+}
+
 for phrase in "${required_phrases[@]}"; do
-  if ! grep -Fq -- "${phrase}" "${doc_path}"; then
+  if ! contains_phrase "${phrase}"; then
     echo "Missing requirements baseline statement: ${phrase}" >&2
     exit 1
   fi
 done
 
 for phrase in "${forbidden_phrases[@]}"; do
-  if grep -Fq -- "${phrase}" "${doc_path}"; then
+  if contains_phrase "${phrase}"; then
     echo "Forbidden legacy requirements baseline statement present: ${phrase}" >&2
     exit 1
   fi

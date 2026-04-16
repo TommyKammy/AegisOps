@@ -322,6 +322,86 @@ SELECT CASE
     WHERE table_schema = 'aegisops_control'
       AND table_name = 'lifecycle_transition_records'
   )
+  AND NOT EXISTS (
+    WITH required_subjects AS (
+      SELECT 'analytic_signal'::text AS subject_record_family, analytic_signal_id AS subject_record_id
+      FROM aegisops_control.analytic_signal_records
+
+      UNION ALL
+
+      SELECT 'alert'::text, alert_id
+      FROM aegisops_control.alert_records
+
+      UNION ALL
+
+      SELECT 'evidence'::text, evidence_id
+      FROM aegisops_control.evidence_records
+
+      UNION ALL
+
+      SELECT 'observation'::text, observation_id
+      FROM aegisops_control.observation_records
+
+      UNION ALL
+
+      SELECT 'lead'::text, lead_id
+      FROM aegisops_control.lead_records
+
+      UNION ALL
+
+      SELECT 'case'::text, case_id
+      FROM aegisops_control.case_records
+
+      UNION ALL
+
+      SELECT 'recommendation'::text, recommendation_id
+      FROM aegisops_control.recommendation_records
+
+      UNION ALL
+
+      SELECT 'approval_decision'::text, approval_decision_id
+      FROM aegisops_control.approval_decision_records
+
+      UNION ALL
+
+      SELECT 'action_request'::text, action_request_id
+      FROM aegisops_control.action_request_records
+
+      UNION ALL
+
+      SELECT 'action_execution'::text, action_execution_id
+      FROM aegisops_control.action_execution_records
+
+      UNION ALL
+
+      SELECT 'hunt'::text, hunt_id
+      FROM aegisops_control.hunt_records
+
+      UNION ALL
+
+      SELECT 'hunt_run'::text, hunt_run_id
+      FROM aegisops_control.hunt_run_records
+
+      UNION ALL
+
+      SELECT 'ai_trace'::text, ai_trace_id
+      FROM aegisops_control.ai_trace_records
+
+      UNION ALL
+
+      SELECT 'reconciliation'::text, reconciliation_id
+      FROM aegisops_control.reconciliation_records
+    ),
+    missing_subjects AS (
+      SELECT subject_record_family, subject_record_id
+      FROM required_subjects
+      EXCEPT
+      SELECT subject_record_family, subject_record_id
+      FROM aegisops_control.lifecycle_transition_records
+    )
+    SELECT 1
+    FROM missing_subjects
+  )
   THEN 'ready'
   ELSE 'not-ready'
 END;
