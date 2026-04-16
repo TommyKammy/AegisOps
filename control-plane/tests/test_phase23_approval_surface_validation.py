@@ -491,7 +491,7 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
                 )
             )
 
-    def test_reviewed_runtime_path_rejects_mismatched_authenticated_approver_identity(
+    def test_reviewed_runtime_path_rejects_mismatched_approver_identity_assertion(
         self,
     ) -> None:
         service = self._build_service()
@@ -534,7 +534,7 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
             self.assertEqual(exc_info.exception.code, HTTPStatus.FORBIDDEN)
             error_payload = json.loads(exc_info.exception.read().decode("utf-8"))
             self.assertEqual(error_payload["error"], "forbidden")
-            self.assertIn("authenticated approver identity", error_payload["message"])
+            self.assertIn("authenticated identity", error_payload["message"])
             stored_request = service.get_record(
                 type(action_request),
                 action_request.action_request_id,
