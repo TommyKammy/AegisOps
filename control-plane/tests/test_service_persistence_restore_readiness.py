@@ -1181,6 +1181,34 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
 
         self.assertEqual(restore_drill.verified_case_ids, (promoted_case.case_id,))
 
+    def test_service_phase21_backup_and_restore_drill_fail_closed_on_orphan_transition(
+        self,
+    ) -> None:
+        store, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        orphan_transition = LifecycleTransitionRecord(
+            transition_id="transition-phase21-orphan-export-001",
+            subject_record_family="alert",
+            subject_record_id="alert-phase21-orphan-export-001",
+            previous_lifecycle_state=None,
+            lifecycle_state="new",
+            transitioned_at=reviewed_at + timedelta(minutes=1),
+            attribution={"source": "test-fixture", "actor_identities": ()},
+        )
+        store.save(orphan_transition)
+
+        error_pattern = (
+            r"missing alert record 'alert-phase21-orphan-export-001' required by "
+            r"lifecycle transition 'transition-phase21-orphan-export-001'"
+        )
+        with self.assertRaisesRegex(ValueError, error_pattern):
+            service.export_authoritative_record_chain_backup()
+        with self.assertRaisesRegex(ValueError, error_pattern):
+            service.run_authoritative_restore_drill()
+
+        self.assertIsNotNone(service.get_record(CaseRecord, promoted_case.case_id))
+
     def test_service_phase21_restore_drill_fails_closed_when_runtime_bindings_missing_after_restore(
         self,
     ) -> None:

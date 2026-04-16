@@ -850,15 +850,24 @@ class RestoreReadinessService:
             family = record_type.record_family
             persisted_records = persisted_records_by_family[family]
             if record_type is LifecycleTransitionRecord:
-                authoritative_records[family] = tuple(
-                    record
-                    for record in persisted_records
-                    if record.subject_record_id
-                    in authoritative_subject_ids_by_family.get(
-                        record.subject_record_family,
-                        set(),
+                for record in persisted_records:
+                    subject_ids = authoritative_subject_ids_by_family.get(
+                        record.subject_record_family
                     )
-                )
+                    if subject_ids is None:
+                        raise ValueError(
+                            "lifecycle transition "
+                            f"{record.transition_id!r} references unsupported "
+                            f"subject_record_family {record.subject_record_family!r}"
+                        )
+                    if record.subject_record_id not in subject_ids:
+                        raise ValueError(
+                            "missing "
+                            f"{record.subject_record_family} record "
+                            f"{record.subject_record_id!r} required by lifecycle "
+                            f"transition {record.transition_id!r}"
+                        )
+                authoritative_records[family] = persisted_records
                 continue
             authoritative_records[family] = persisted_records
         return authoritative_records

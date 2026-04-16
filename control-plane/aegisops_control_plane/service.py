@@ -1063,6 +1063,10 @@ class AegisOpsControlPlaneService:
                 "transitioned_at",
             )
         with self._store.transaction():
+            self._lock_lifecycle_transition_subject(
+                record.record_family,
+                record.record_id,
+            )
             existing_record = self._store.get(type(record), record.record_id)
             persisted_record = self._store.save(record)
             transition_record = self._build_lifecycle_transition_record(
@@ -1073,6 +1077,15 @@ class AegisOpsControlPlaneService:
             if transition_record is not None:
                 self._store.save(transition_record)
             return persisted_record
+
+    def _lock_lifecycle_transition_subject(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> None:
+        lock_subject = getattr(self._store, "lock_lifecycle_transition_subject", None)
+        if callable(lock_subject):
+            lock_subject(record_family, record_id)
 
     def _build_lifecycle_transition_record(
         self,

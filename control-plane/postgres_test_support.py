@@ -34,6 +34,10 @@ _SELECT_LATEST_LIFECYCLE_TRANSITION_RE = re.compile(
     r"order by transitioned_at desc, transition_id desc limit 1",
     re.IGNORECASE,
 )
+_SELECT_ADVISORY_XACT_LOCK_RE = re.compile(
+    r"select pg_advisory_xact_lock\(hashtext\(%s\), hashtext\(%s\)\)",
+    re.IGNORECASE,
+)
 _SELECT_GROUP_COUNT_RE = re.compile(
     r"select (?P<field>\w+) as group_value, count\(\*\) as record_count "
     r"from aegisops_control\.(?P<table>\w+) "
@@ -163,6 +167,11 @@ class FakePostgresCursor:
                 select_latest_lifecycle_transition_match.group("columns"),
                 params,
             )
+            return
+
+        if _SELECT_ADVISORY_XACT_LOCK_RE.fullmatch(normalized) is not None:
+            self.description = None
+            self._rows = []
             return
 
         select_group_count_match = _SELECT_GROUP_COUNT_RE.fullmatch(normalized)

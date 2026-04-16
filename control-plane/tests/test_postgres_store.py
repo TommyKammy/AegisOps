@@ -352,6 +352,14 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             migration_sql,
         )
         self.assertIn("'phase23-migration-backfill'", migration_sql)
+        self.assertIn(
+            "coalesce(first_seen_at, last_seen_at, created_at, updated_at)",
+            migration_sql,
+        )
+        self.assertIn(
+            "coalesce(first_seen_at, last_seen_at, compared_at, created_at, updated_at)",
+            migration_sql,
+        )
         self.assertIn("reviewed_context -> 'triage' ->> 'recorded_at'", migration_sql)
         self.assertIn("::timestamptz", migration_sql)
         self.assertIn("where existing.transition_id is null", migration_sql)

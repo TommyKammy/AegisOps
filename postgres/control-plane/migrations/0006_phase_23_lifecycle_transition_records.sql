@@ -140,7 +140,7 @@ with baseline_transitions as (
     'analytic_signal'::text as subject_record_family,
     analytic_signal_id as subject_record_id,
     lifecycle_state,
-    coalesce(first_seen_at, created_at, updated_at) as transitioned_at,
+    coalesce(first_seen_at, last_seen_at, created_at, updated_at) as transitioned_at,
     jsonb_build_object(
       'source',
       'phase23-migration-backfill',
@@ -355,7 +355,7 @@ with baseline_transitions as (
     'reconciliation'::text,
     reconciliation_id,
     lifecycle_state,
-    coalesce(first_seen_at, compared_at, created_at, updated_at),
+    coalesce(first_seen_at, last_seen_at, compared_at, created_at, updated_at),
     jsonb_build_object(
       'source',
       'phase23-migration-backfill',

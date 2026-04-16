@@ -666,6 +666,26 @@ class PostgresControlPlaneStore:
             finally:
                 self._active_connection.reset(token)
 
+    def lock_lifecycle_transition_subject(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> None:
+        active_connection = self._active_connection.get()
+        if active_connection is None:
+            raise RuntimeError(
+                "lifecycle transition subject locks require an active transaction"
+            )
+
+        cursor = active_connection.cursor()
+        try:
+            cursor.execute(
+                "select pg_advisory_xact_lock(hashtext(%s), hashtext(%s))",
+                (record_family, record_id),
+            )
+        finally:
+            cursor.close()
+
     @contextmanager
     def _borrow_connection(self) -> Iterator[ConnectionProtocol]:
         active_connection = self._active_connection.get()

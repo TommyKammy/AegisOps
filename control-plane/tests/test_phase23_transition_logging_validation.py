@@ -172,6 +172,41 @@ class Phase23TransitionLoggingValidationTests(ServicePersistenceTestBase):
         self.assertEqual(store.list_calls, 0)
         self.assertEqual(store.latest_lifecycle_transition_calls, 2)
 
+    def test_transition_logging_locks_subject_before_reading_existing_state(self) -> None:
+        store, backend = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        alert = AlertRecord(
+            alert_id="alert-transition-lock-001",
+            finding_id="finding-transition-lock-001",
+            analytic_signal_id=None,
+            case_id=None,
+            lifecycle_state="new",
+        )
+
+        statement_count_before_persist = len(backend.statements)
+        service.persist_record(alert)
+
+        persisted_statements = backend.statements[statement_count_before_persist:]
+        self.assertGreaterEqual(len(persisted_statements), 5)
+        self.assertEqual(
+            persisted_statements[0],
+            (
+                "select pg_advisory_xact_lock(hashtext(%s), hashtext(%s))",
+                ("alert", alert.alert_id),
+            ),
+        )
+        self.assertEqual(
+            persisted_statements[1][1],
+            (alert.alert_id,),
+        )
+        self.assertEqual(
+            persisted_statements[3][1],
+            ("alert", alert.alert_id),
+        )
+
     def test_transition_logging_uses_reviewed_event_timestamps(self) -> None:
         _store, service, promoted_case, _evidence_id, _reviewed_at = (
             self._build_phase19_in_scope_case()
