@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 import json
@@ -41,6 +42,12 @@ REVIEWED_APPROVER_PRINCIPAL = AuthenticatedRuntimePrincipal(
 REVIEWED_ANALYST_PRINCIPAL = AuthenticatedRuntimePrincipal(
     identity="analyst-002",
     role="analyst",
+    access_path="reviewed_reverse_proxy",
+    proxy_service_account=REVIEWED_PROXY_SERVICE_ACCOUNT,
+)
+REVIEWED_SECONDARY_APPROVER_PRINCIPAL = AuthenticatedRuntimePrincipal(
+    identity="approver-002",
+    role="approver",
     access_path="reviewed_reverse_proxy",
     proxy_service_account=REVIEWED_PROXY_SERVICE_ACCOUNT,
 )
@@ -319,6 +326,60 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
             error_payload = json.loads(exc_info.exception.read().decode("utf-8"))
             self.assertEqual(error_payload["error"], "forbidden")
             self.assertIn("approver role authority", error_payload["message"])
+            stored_request = service.get_record(
+                type(action_request),
+                action_request.action_request_id,
+            )
+            self.assertIsNotNone(stored_request)
+            self.assertIsNone(stored_request.approval_decision_id)
+            self.assertEqual(stored_request.lifecycle_state, "pending_approval")
+
+    def test_reviewed_runtime_path_rejects_approver_outside_request_policy(self) -> None:
+        service = self._build_service()
+        action_request = self._build_pending_action_request(
+            service,
+            action_request_id="action-request-phase23-approver-policy-001",
+        )
+        action_request = service.persist_record(
+            replace(
+                action_request,
+                policy_evaluation={
+                    **dict(action_request.policy_evaluation),
+                    "authorized_approver_identities": ("approver-001",),
+                },
+            )
+        )
+
+        with self._run_runtime(
+            service,
+            principal=REVIEWED_SECONDARY_APPROVER_PRINCIPAL,
+        ) as base_url:
+            with self.assertRaises(error.HTTPError) as exc_info:
+                request.urlopen(  # noqa: S310
+                    request.Request(  # noqa: S310
+                        f"{base_url}/operator/record-action-approval-decision",
+                        data=json.dumps(
+                            {
+                                "action_request_id": action_request.action_request_id,
+                                "approval_decision_id": "approval-phase23-approver-policy-001",
+                                "decision": "grant",
+                                "approver_identity": "approver-002",
+                                "decision_rationale": "Approver must be denied outside the request policy.",
+                                "decided_at": (
+                                    action_request.requested_at + timedelta(minutes=10)
+                                ).isoformat(),
+                            }
+                        ).encode("utf-8"),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    ),
+                    timeout=2,
+                )
+
+            self.assertEqual(exc_info.exception.code, HTTPStatus.FORBIDDEN)
+            error_payload = json.loads(exc_info.exception.read().decode("utf-8"))
+            self.assertEqual(error_payload["error"], "forbidden")
+            self.assertIn("not authorized", error_payload["message"])
             stored_request = service.get_record(
                 type(action_request),
                 action_request.action_request_id,

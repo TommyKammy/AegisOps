@@ -3239,6 +3239,10 @@ class AegisOpsControlPlaneService:
                 raise PermissionError(
                     "reviewed approval decisions require a human-required action policy"
                 )
+            self._require_reviewed_action_approver_policy(
+                action_request=action_request,
+                approver_identity=approver_identity,
+            )
 
             now = datetime.now(timezone.utc)
             if action_request.expires_at is not None and (
@@ -3293,6 +3297,66 @@ class AegisOpsControlPlaneService:
             lifecycle_state=approval_decision.lifecycle_state,
         )
         return approval_decision
+
+    def _require_reviewed_action_approver_policy(
+        self,
+        *,
+        action_request: ActionRequestRecord,
+        approver_identity: str,
+    ) -> None:
+        action_class = self._reviewed_action_class_for_request(action_request)
+        if action_class != "notify":
+            raise PermissionError(
+                "approval decisions are not authorized for the reviewed action class"
+            )
+
+        authorized_approver_identities = self._authorized_approver_identities_for_request(
+            action_request
+        )
+        if (
+            authorized_approver_identities is not None
+            and approver_identity not in authorized_approver_identities
+        ):
+            raise PermissionError(
+                "approver identity is not authorized by the reviewed action approver policy"
+            )
+
+    @staticmethod
+    def _reviewed_action_class_for_request(action_request: ActionRequestRecord) -> str:
+        action_type = action_request.requested_payload.get("action_type")
+        if action_type == "notify_identity_owner":
+            return "notify"
+        raise PermissionError(
+            "approval decisions are not authorized for the reviewed action class"
+        )
+
+    def _authorized_approver_identities_for_request(
+        self,
+        action_request: ActionRequestRecord,
+    ) -> tuple[str, ...] | None:
+        configured_identities = action_request.policy_evaluation.get(
+            "authorized_approver_identities"
+        )
+        if configured_identities is None:
+            return None
+        if not isinstance(configured_identities, (list, tuple)):
+            raise ValueError(
+                "policy_evaluation.authorized_approver_identities must be a sequence of identities"
+            )
+
+        normalized_identities: list[str] = []
+        for index, identity in enumerate(configured_identities):
+            normalized_identity = self._require_non_empty_string(
+                identity,
+                f"policy_evaluation.authorized_approver_identities[{index}]",
+            )
+            if normalized_identity not in normalized_identities:
+                normalized_identities.append(normalized_identity)
+        if not normalized_identities:
+            raise ValueError(
+                "policy_evaluation.authorized_approver_identities must contain at least one identity"
+            )
+        return tuple(normalized_identities)
 
     def attach_assistant_advisory_draft(
         self,

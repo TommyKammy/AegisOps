@@ -124,6 +124,7 @@ create table if not exists aegisops_control.approval_decision_records (
   target_snapshot jsonb not null,
   payload_hash text not null,
   decided_at timestamptz,
+  decision_rationale text,
   approved_expires_at timestamptz,
   lifecycle_state text not null,
   created_at timestamptz not null default timezone('utc', now()),
