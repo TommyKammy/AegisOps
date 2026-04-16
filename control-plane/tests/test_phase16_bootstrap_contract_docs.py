@@ -88,6 +88,11 @@ class Phase16BootstrapContractDocsTests(unittest.TestCase):
             "AEGISOPS_CONTROL_PLANE_BOOT_MODE",
             "AEGISOPS_CONTROL_PLANE_LOG_LEVEL",
             "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN",
+            "0006_phase_23_lifecycle_transition_records.sql",
+            "requester_identity",
+            "requested_payload",
+            "decision_rationale",
+            "lifecycle_transition_records",
             "migration bootstrap",
             "readiness",
             "OpenSearch, n8n, the full analyst-assistant surface, and executor wiring remain deferred",
@@ -218,6 +223,9 @@ class Phase16BootstrapContractDocsTests(unittest.TestCase):
                 "0001_control_plane_schema_skeleton.sql",
                 "0002_phase_14_reviewed_context_columns.sql",
                 "0003_phase_15_assistant_advisory_draft_columns.sql",
+                "0004_phase_20_action_request_binding_columns.sql",
+                "0005_phase_23_approval_decision_rationale.sql",
+                "0006_phase_23_lifecycle_transition_records.sql",
             ):
                 shutil.copy2(
                     REPO_ROOT / "postgres" / "control-plane" / "migrations" / migration_name,
@@ -317,6 +325,18 @@ exit 1
                 f"migration:{migrations_dir / '0003_phase_15_assistant_advisory_draft_columns.sql'}",
                 psql_log_text,
             )
+            self.assertIn(
+                f"migration:{migrations_dir / '0004_phase_20_action_request_binding_columns.sql'}",
+                psql_log_text,
+            )
+            self.assertIn(
+                f"migration:{migrations_dir / '0005_phase_23_approval_decision_rationale.sql'}",
+                psql_log_text,
+            )
+            self.assertIn(
+                f"migration:{migrations_dir / '0006_phase_23_lifecycle_transition_records.sql'}",
+                psql_log_text,
+            )
             self.assertIn("readiness:SELECT CASE", psql_log_text)
 
     def test_first_boot_entrypoint_is_restart_safe_and_does_not_replay_applied_migrations(
@@ -330,6 +350,9 @@ exit 1
                 "0001_control_plane_schema_skeleton.sql",
                 "0002_phase_14_reviewed_context_columns.sql",
                 "0003_phase_15_assistant_advisory_draft_columns.sql",
+                "0004_phase_20_action_request_binding_columns.sql",
+                "0005_phase_23_approval_decision_rationale.sql",
+                "0006_phase_23_lifecycle_transition_records.sql",
             ):
                 shutil.copy2(
                     REPO_ROOT / "postgres" / "control-plane" / "migrations" / migration_name,
@@ -454,6 +477,15 @@ if __name__ == "__main__":
                     "readiness",
                     "migration:0003_phase_15_assistant_advisory_draft_columns.sql",
                     "readiness",
+                    "migration:0004_phase_20_action_request_binding_columns.sql",
+                    "readiness",
+                    "migration:0005_phase_23_approval_decision_rationale.sql",
+                    "readiness",
+                    "migration:0006_phase_23_lifecycle_transition_records.sql",
+                    "readiness",
+                    "readiness",
+                    "readiness",
+                    "readiness",
                     "readiness",
                     "readiness",
                     "readiness",
@@ -475,6 +507,9 @@ if __name__ == "__main__":
                 "0001_control_plane_schema_skeleton.sql",
                 "0002_phase_14_reviewed_context_columns.sql",
                 "0003_phase_15_assistant_advisory_draft_columns.sql",
+                "0004_phase_20_action_request_binding_columns.sql",
+                "0005_phase_23_approval_decision_rationale.sql",
+                "0006_phase_23_lifecycle_transition_records.sql",
             ):
                 source_path = REPO_ROOT / "postgres" / "control-plane" / "migrations" / migration_name
                 destination_path = migrations_dir / migration_name
@@ -513,10 +548,23 @@ import sys
 
 
 def classify_readiness_query(query_text: str) -> str:
+    if "decision_rationale" in query_text:
+        return "0005_phase_23_approval_decision_rationale.sql"
+    if "requested_payload" in query_text or "requester_identity" in query_text:
+        return "0004_phase_20_action_request_binding_columns.sql"
     if "assistant_advisory_draft" in query_text:
         return "0003_phase_15_assistant_advisory_draft_columns.sql"
-    if "analytic_signal_records" in query_text:
+    if "reviewed_context" in query_text:
         return "0002_phase_14_reviewed_context_columns.sql"
+    if (
+        "approval_decision_records" in query_text
+        or "action_execution_records" in query_text
+        or "reconciliation_records" in query_text
+        or "hunt_run_records" in query_text
+    ):
+        return "0001_control_plane_schema_skeleton.sql"
+    if "lifecycle_transition_records" in query_text:
+        return "0006_phase_23_lifecycle_transition_records.sql"
     return "0001_control_plane_schema_skeleton.sql"
 
 

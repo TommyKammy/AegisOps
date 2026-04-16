@@ -109,6 +109,9 @@ REQUIRED_MIGRATIONS="
 0001_control_plane_schema_skeleton.sql
 0002_phase_14_reviewed_context_columns.sql
 0003_phase_15_assistant_advisory_draft_columns.sql
+0004_phase_20_action_request_binding_columns.sql
+0005_phase_23_approval_decision_rationale.sql
+0006_phase_23_lifecycle_transition_records.sql
 "
 
 resolve_psql_bin() {
@@ -188,24 +191,28 @@ migration_readiness_query() {
     0001_control_plane_schema_skeleton.sql)
       cat <<'EOF'
 SELECT CASE
-  WHEN EXISTS (
-    SELECT 1
+  WHEN (
+    SELECT COUNT(*)
     FROM information_schema.tables
     WHERE table_schema = 'aegisops_control'
-      AND table_name = 'alert_records'
-  )
-  AND EXISTS (
-    SELECT 1
-    FROM information_schema.tables
-    WHERE table_schema = 'aegisops_control'
-      AND table_name = 'recommendation_records'
-  )
-  AND EXISTS (
-    SELECT 1
-    FROM information_schema.tables
-    WHERE table_schema = 'aegisops_control'
-      AND table_name = 'ai_trace_records'
-  )
+      AND table_name IN (
+        'alert_records',
+        'analytic_signal_records',
+        'case_records',
+        'evidence_records',
+        'observation_records',
+        'lead_records',
+        'recommendation_records',
+        'approval_decision_records',
+        'action_request_records',
+        'action_execution_records',
+        'hunt_records',
+        'hunt_run_records',
+        'ai_trace_records',
+        'reconciliation_records',
+        'lifecycle_transition_records'
+      )
+  ) = 15
   THEN 'ready'
   ELSE 'not-ready'
 END;
@@ -269,6 +276,57 @@ SELECT CASE
 END;
 EOF
       ;;
+    0004_phase_20_action_request_binding_columns.sql)
+      cat <<'EOF'
+SELECT CASE
+  WHEN EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'aegisops_control'
+      AND table_name = 'action_request_records'
+      AND column_name = 'requester_identity'
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'aegisops_control'
+      AND table_name = 'action_request_records'
+      AND column_name = 'requested_payload'
+  )
+  THEN 'ready'
+  ELSE 'not-ready'
+END;
+EOF
+      ;;
+    0005_phase_23_approval_decision_rationale.sql)
+      cat <<'EOF'
+SELECT CASE
+  WHEN EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'aegisops_control'
+      AND table_name = 'approval_decision_records'
+      AND column_name = 'decision_rationale'
+  )
+  THEN 'ready'
+  ELSE 'not-ready'
+END;
+EOF
+      ;;
+    0006_phase_23_lifecycle_transition_records.sql)
+      cat <<'EOF'
+SELECT CASE
+  WHEN EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'aegisops_control'
+      AND table_name = 'lifecycle_transition_records'
+  )
+  THEN 'ready'
+  ELSE 'not-ready'
+END;
+EOF
+      ;;
     *)
       fail_closed "First-boot migration bootstrap does not recognize reviewed migration asset: $1"
       ;;
@@ -324,11 +382,55 @@ apply_migration_bootstrap() {
 verify_readiness_proof() {
   readiness_query=$(cat <<'EOF'
 SELECT CASE
-  WHEN EXISTS (
-    SELECT 1
+  WHEN (
+    SELECT COUNT(*)
     FROM information_schema.tables
     WHERE table_schema = 'aegisops_control'
+      AND table_name IN (
+        'alert_records',
+        'analytic_signal_records',
+        'case_records',
+        'evidence_records',
+        'observation_records',
+        'lead_records',
+        'recommendation_records',
+        'approval_decision_records',
+        'action_request_records',
+        'action_execution_records',
+        'hunt_records',
+        'hunt_run_records',
+        'ai_trace_records',
+        'reconciliation_records',
+        'lifecycle_transition_records'
+      )
+  ) = 15
+  AND EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'aegisops_control'
       AND table_name = 'alert_records'
+      AND column_name = 'reviewed_context'
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'aegisops_control'
+      AND table_name = 'analytic_signal_records'
+      AND column_name = 'reviewed_context'
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'aegisops_control'
+      AND table_name = 'case_records'
+      AND column_name = 'reviewed_context'
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'aegisops_control'
+      AND table_name = 'recommendation_records'
+      AND column_name = 'reviewed_context'
   )
   AND EXISTS (
     SELECT 1
@@ -343,6 +445,27 @@ SELECT CASE
     WHERE table_schema = 'aegisops_control'
       AND table_name = 'ai_trace_records'
       AND column_name = 'assistant_advisory_draft'
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'aegisops_control'
+      AND table_name = 'action_request_records'
+      AND column_name = 'requester_identity'
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'aegisops_control'
+      AND table_name = 'action_request_records'
+      AND column_name = 'requested_payload'
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'aegisops_control'
+      AND table_name = 'approval_decision_records'
+      AND column_name = 'decision_rationale'
   )
   THEN 'ready'
   ELSE 'not-ready'
