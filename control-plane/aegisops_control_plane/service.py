@@ -1188,6 +1188,11 @@ class AegisOpsControlPlaneService:
             )
         previous_lifecycle_state = existing_lifecycle_state
         if latest_transition is not None:
+            if existing_record is None:
+                raise ValueError(
+                    f"{record.record_family} record {record.record_id!r} has orphaned "
+                    "lifecycle transition history without a current-state record"
+                )
             if (
                 existing_record is not None
                 and existing_lifecycle_state != latest_transition.lifecycle_state

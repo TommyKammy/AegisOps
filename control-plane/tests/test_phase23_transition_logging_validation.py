@@ -231,6 +231,47 @@ class Phase23TransitionLoggingValidationTests(ServicePersistenceTestBase):
             ["new"],
         )
 
+    def test_transition_logging_rejects_orphaned_history_without_current_state_record(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        orphan_transition = LifecycleTransitionRecord(
+            transition_id="transition-orphaned-history-alert-001",
+            subject_record_family="alert",
+            subject_record_id="alert-orphaned-history-001",
+            previous_lifecycle_state=None,
+            lifecycle_state="new",
+            transitioned_at=datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc),
+            attribution={"source": "test-fixture", "actor_identities": ("analyst-001",)},
+        )
+        store.save(orphan_transition)
+        recreated_alert = AlertRecord(
+            alert_id=orphan_transition.subject_record_id,
+            finding_id="finding-orphaned-history-001",
+            analytic_signal_id=None,
+            case_id=None,
+            lifecycle_state="new",
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                rf"alert record '{recreated_alert.alert_id}' has orphaned lifecycle "
+                r"transition history without a current-state record"
+            ),
+        ):
+            service.persist_record(recreated_alert)
+
+        self.assertIsNone(service.get_record(AlertRecord, recreated_alert.alert_id))
+        self.assertEqual(
+            service.list_lifecycle_transitions("alert", recreated_alert.alert_id),
+            (orphan_transition,),
+        )
+
     def test_transition_logging_uses_targeted_history_lookup_on_inspection(self) -> None:
         inner_store, _ = make_store()
         store = _ListCountingStore(inner=inner_store)

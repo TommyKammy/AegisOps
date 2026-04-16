@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import pathlib
 import sys
 
@@ -2114,6 +2115,103 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         ):
             restored_service.restore_authoritative_record_chain_backup(backup)
         self._assert_authoritative_store_empty(restored_store)
+
+    def test_service_phase21_restore_rejects_invalid_new_family_record_shapes(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Keep reviewed observation linkage in the authoritative restore set.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            triage_owner="analyst-001",
+            triage_rationale="Keep reviewed lead linkage in the authoritative restore set.",
+            observation_id=observation.observation_id,
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep reviewed recommendation linkage in the authoritative restore set.",
+            lead_id=lead.lead_id,
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        mutated_families = (
+            (
+                "observation",
+                observation.observation_id,
+                "observation_id",
+                lambda record: record.update({"supporting_evidence_ids": []}),
+                (
+                    rf"observation record '{observation.observation_id}' requires "
+                    r"non-empty supporting_evidence_ids"
+                ),
+            ),
+            (
+                "lead",
+                lead.lead_id,
+                "lead_id",
+                lambda record: record.update(
+                    {
+                        "observation_id": None,
+                        "finding_id": None,
+                        "hunt_run_id": None,
+                    }
+                ),
+                (
+                    rf"lead record '{lead.lead_id}' requires at least one linkage "
+                    r"field: observation_id, finding_id, hunt_run_id"
+                ),
+            ),
+            (
+                "recommendation",
+                recommendation.recommendation_id,
+                "recommendation_id",
+                lambda record: record.update(
+                    {
+                        "lead_id": None,
+                        "hunt_run_id": None,
+                        "alert_id": None,
+                        "case_id": None,
+                    }
+                ),
+                (
+                    rf"recommendation record '{recommendation.recommendation_id}' "
+                    r"requires at least one linkage field: lead_id, hunt_run_id, "
+                    r"alert_id, case_id"
+                ),
+            ),
+        )
+
+        for family, record_id, id_field, mutate_record, error_pattern in mutated_families:
+            with self.subTest(family=family):
+                invalid_backup = copy.deepcopy(backup)
+                mutated_record = next(
+                    record
+                    for record in invalid_backup["record_families"][family]
+                    if record[id_field] == record_id
+                )
+                mutate_record(mutated_record)
+
+                restored_store, _ = make_store()
+                restored_service = AegisOpsControlPlaneService(
+                    RuntimeConfig(
+                        postgres_dsn="postgresql://control-plane.local/aegisops"
+                    ),
+                    store=restored_store,
+                )
+
+                with self.assertRaisesRegex(ValueError, error_pattern):
+                    restored_service.restore_authoritative_record_chain_backup(
+                        invalid_backup
+                    )
+                self._assert_authoritative_store_empty(restored_store)
 
     def test_service_phase21_restore_fails_closed_when_earliest_transition_anchor_is_missing(
         self,

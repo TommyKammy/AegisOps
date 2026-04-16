@@ -7,7 +7,11 @@ import hmac
 import ipaddress
 from typing import Any, Callable, Iterator, Mapping, Protocol, Type
 
-from .adapters.postgres import ReadinessDiagnosticsAggregates, _validate_lifecycle_state
+from .adapters.postgres import (
+    ReadinessDiagnosticsAggregates,
+    _validate_lifecycle_state,
+    _validate_record,
+)
 from .config import RuntimeConfig
 from .models import (
     AITraceRecord,
@@ -1108,6 +1112,13 @@ class RestoreReadinessService:
                     f"{family} identifiers {duplicates!r}"
                     f"{duplicate_restore_count_suffix(family)}"
                 )
+
+        for record in (
+            *observation_records,
+            *lead_records,
+            *recommendation_records,
+        ):
+            _validate_record(record)
         duplicate_execution_run_ids = self._find_duplicate_strings(
             tuple(
                 record.execution_run_id
