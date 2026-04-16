@@ -331,6 +331,10 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             backup_transition_subjects,
         )
         self.assertIn(
+            ("recommendation", recommendation.recommendation_id),
+            backup_transition_subjects,
+        )
+        self.assertIn(
             ("reconciliation", reconciliation.reconciliation_id),
             backup_transition_subjects,
         )
@@ -366,6 +370,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             "phase23.authoritative-record-chain.v2",
         )
         self.assertEqual(backup["record_counts"]["action_execution"], 1)
+        self.assertEqual(backup["record_counts"]["recommendation"], 1)
         self.assertEqual(restore_summary.restored_record_counts["reconciliation"], 2)
         self.assertTrue(restore_summary.restore_drill.drill_passed)
         self.assertEqual(
@@ -401,8 +406,18 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             restored_transition_subjects,
         )
         self.assertIn(
+            ("recommendation", recommendation.recommendation_id),
+            restored_transition_subjects,
+        )
+        self.assertIn(
             ("reconciliation", reconciliation.reconciliation_id),
             restored_transition_subjects,
+        )
+        self.assertIsNotNone(
+            restored_service.get_record(
+                RecommendationRecord,
+                recommendation.recommendation_id,
+            )
         )
         self.assertCountEqual(
             restore_summary.restore_drill.verified_reconciliation_ids,
@@ -460,6 +475,30 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         self.assertIn(promoted_case.case_id, restore_summary.restore_drill.verified_case_ids)
         self.assertEqual(restore_summary.restored_record_counts["lifecycle_transition"], 0)
         self.assertEqual(restored_service._store.list(LifecycleTransitionRecord), ())
+
+    def test_service_phase21_restore_accepts_v2_backup_without_recommendation_family(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        del backup["record_families"]["recommendation"]
+        del backup["record_counts"]["recommendation"]
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        restore_summary = restored_service.restore_authoritative_record_chain_backup(
+            backup
+        )
+
+        self.assertIn(promoted_case.case_id, restore_summary.restore_drill.verified_case_ids)
+        self.assertEqual(restore_summary.restored_record_counts["recommendation"], 0)
+        self.assertEqual(restored_service._store.list(RecommendationRecord), ())
 
     def test_service_phase21_restore_preserves_handoff_and_manual_fallback_runtime_visibility(
         self,
@@ -943,20 +982,22 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
     def test_service_phase21_restore_drill_filters_non_authoritative_transition_subjects(
         self,
     ) -> None:
-        store, service, promoted_case, _evidence_id, _reviewed_at = (
+        store, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
         )
-        recommendation = service.record_case_recommendation(
+        observation = service.record_case_observation(
             case_id=promoted_case.case_id,
-            review_owner="analyst-001",
-            intended_outcome=(
-                "Keep a reviewed recommendation transition in the live store while "
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement=(
+                "Keep a reviewed observation transition in the live store while "
                 "the restore drill validates only the authoritative subset."
             ),
+            supporting_evidence_ids=(evidence_id,),
         )
 
         self.assertIn(
-            ("recommendation", recommendation.recommendation_id),
+            ("observation", observation.observation_id),
             {
                 (record.subject_record_family, record.subject_record_id)
                 for record in store.list(LifecycleTransitionRecord)
@@ -1624,16 +1665,62 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             restored_service.restore_authoritative_record_chain_backup(backup)
         self._assert_authoritative_store_empty(restored_store)
 
-    def test_service_phase21_backup_excludes_non_authoritative_transition_subjects(
+    def test_service_phase21_restore_fails_closed_on_orphan_authoritative_transition_rows(
         self,
     ) -> None:
-        store, service, promoted_case, _evidence_id, _reviewed_at = (
+        _store, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+        orphan_transition = LifecycleTransitionRecord(
+            transition_id="transition-phase21-orphan-alert-001",
+            subject_record_family="alert",
+            subject_record_id=promoted_case.alert_id,
+            previous_lifecycle_state="new",
+            lifecycle_state="closed",
+            transitioned_at=reviewed_at + timedelta(minutes=5),
+            attribution={"source": "test-fixture", "actor_identities": ("analyst-001",)},
+        )
+        restored_service.persist_record(orphan_transition)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                r"authoritative restore target must be empty before restore; "
+                r"found existing records for .*lifecycle_transition"
+            ),
+        ):
+            restored_service.restore_authoritative_record_chain_backup(backup)
+
+        self.assertIsNone(restored_service.get_record(CaseRecord, promoted_case.case_id))
+        self.assertEqual(
+            restored_store.list(LifecycleTransitionRecord),
+            (orphan_transition,),
+        )
+
+    def test_service_phase21_backup_preserves_recommendation_transitions_and_excludes_non_authoritative_subjects(
+        self,
+    ) -> None:
+        store, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
         )
         recommendation = service.record_case_recommendation(
             case_id=promoted_case.case_id,
             review_owner="analyst-001",
-            intended_outcome="Keep a reviewed recommendation outside the authoritative restore set.",
+            intended_outcome="Keep a reviewed recommendation in the authoritative restore set.",
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Keep observation transitions outside the authoritative restore set.",
+            supporting_evidence_ids=(evidence_id,),
         )
 
         self.assertIn(
@@ -1646,8 +1733,22 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
 
         backup = service.export_authoritative_record_chain_backup()
 
-        self.assertNotIn(
+        self.assertIn(
             ("recommendation", recommendation.recommendation_id),
+            {
+                (record["subject_record_family"], record["subject_record_id"])
+                for record in backup["record_families"]["lifecycle_transition"]
+            },
+        )
+        self.assertIn(
+            recommendation.recommendation_id,
+            {
+                record["recommendation_id"]
+                for record in backup["record_families"]["recommendation"]
+            },
+        )
+        self.assertNotIn(
+            ("observation", observation.observation_id),
             {
                 (record["subject_record_family"], record["subject_record_id"])
                 for record in backup["record_families"]["lifecycle_transition"]
@@ -1657,18 +1758,20 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
     def test_service_phase21_restore_rejects_unsupported_transition_subject_family(
         self,
     ) -> None:
-        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+        _store, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
         )
-        recommendation = service.record_case_recommendation(
+        observation = service.record_case_observation(
             case_id=promoted_case.case_id,
-            review_owner="analyst-001",
-            intended_outcome="Use a recommendation family to simulate an unsupported restore payload.",
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Use an observation family to simulate an unsupported restore payload.",
+            supporting_evidence_ids=(evidence_id,),
         )
         backup = service.export_authoritative_record_chain_backup()
         mutated_transition = dict(backup["record_families"]["lifecycle_transition"][0])
-        mutated_transition["subject_record_family"] = "recommendation"
-        mutated_transition["subject_record_id"] = recommendation.recommendation_id
+        mutated_transition["subject_record_family"] = "observation"
+        mutated_transition["subject_record_id"] = observation.observation_id
         backup["record_families"]["lifecycle_transition"][0] = mutated_transition
 
         restored_store, _ = make_store()
@@ -1681,7 +1784,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             ValueError,
             (
                 r"lifecycle transition .* references unsupported "
-                r"subject_record_family 'recommendation'"
+                r"subject_record_family 'observation'"
             ),
         ):
             restored_service.restore_authoritative_record_chain_backup(backup)
@@ -1877,10 +1980,10 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             restored_service.get_record(ActionExecutionRecord, execution.action_execution_id)
         )
 
-    def test_service_phase21_restore_allows_existing_non_authoritative_recommendation(
+    def test_service_phase21_restore_fails_closed_on_existing_recommendation(
         self,
     ) -> None:
-        _store, service, _promoted_case, _evidence_id, reviewed_at = (
+        _store, service, promoted_case, _evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
         )
         backup = service.export_authoritative_record_chain_backup()
@@ -1905,12 +2008,16 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             )
         )
 
-        restore_summary = restored_service.restore_authoritative_record_chain_backup(
-            backup
-        )
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                r"authoritative restore target must be empty before restore; "
+                r"found existing records for .*recommendation"
+            ),
+        ):
+            restored_service.restore_authoritative_record_chain_backup(backup)
 
-        self.assertTrue(restore_summary.restored_record_counts["case"] > 0)
-        self.assertGreaterEqual(len(restore_summary.restore_drill.verified_case_ids), 1)
+        self.assertIsNone(restored_service.get_record(CaseRecord, promoted_case.case_id))
         self.assertIsNotNone(
             restored_service.get_record(
                 RecommendationRecord, "recommendation-existing-001"

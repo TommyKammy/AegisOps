@@ -144,3 +144,70 @@ class Phase23TransitionLoggingValidationTests(ServicePersistenceTestBase):
             ],
             ["pending_approval"],
         )
+
+    def test_transition_listing_orders_by_transitioned_at(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        alert = AlertRecord(
+            alert_id="alert-transition-ordering-001",
+            finding_id="finding-transition-ordering-001",
+            analytic_signal_id=None,
+            case_id=None,
+            lifecycle_state="closed",
+        )
+        first_transitioned_at = datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc)
+        second_transitioned_at = first_transitioned_at + timedelta(minutes=5)
+        third_transitioned_at = first_transitioned_at + timedelta(minutes=10)
+
+        store.save(alert)
+        store.save(
+            LifecycleTransitionRecord(
+                transition_id="transition-ordering-300",
+                subject_record_family="alert",
+                subject_record_id=alert.alert_id,
+                previous_lifecycle_state=None,
+                lifecycle_state="new",
+                transitioned_at=first_transitioned_at,
+                attribution={"source": "test-fixture", "actor_identities": ()},
+            )
+        )
+        store.save(
+            LifecycleTransitionRecord(
+                transition_id="transition-ordering-100",
+                subject_record_family="alert",
+                subject_record_id=alert.alert_id,
+                previous_lifecycle_state="new",
+                lifecycle_state="triaged",
+                transitioned_at=second_transitioned_at,
+                attribution={"source": "test-fixture", "actor_identities": ()},
+            )
+        )
+        store.save(
+            LifecycleTransitionRecord(
+                transition_id="transition-ordering-200",
+                subject_record_family="alert",
+                subject_record_id=alert.alert_id,
+                previous_lifecycle_state="triaged",
+                lifecycle_state="closed",
+                transitioned_at=third_transitioned_at,
+                attribution={"source": "test-fixture", "actor_identities": ()},
+            )
+        )
+
+        self.assertEqual(
+            [
+                transition.transition_id
+                for transition in service.list_lifecycle_transitions(
+                    "alert",
+                    alert.alert_id,
+                )
+            ],
+            [
+                "transition-ordering-300",
+                "transition-ordering-100",
+                "transition-ordering-200",
+            ],
+        )

@@ -551,6 +551,7 @@ AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES: tuple[Type[ControlPlaneRecord], ...] = 
     AlertRecord,
     EvidenceRecord,
     CaseRecord,
+    RecommendationRecord,
     LifecycleTransitionRecord,
     ApprovalDecisionRecord,
     ActionRequestRecord,
@@ -568,6 +569,7 @@ _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY: dict[str, str] = {
     "alert": "alert_id",
     "evidence": "evidence_id",
     "case": "case_id",
+    "recommendation": "recommendation_id",
     "lifecycle_transition": "transition_id",
     "approval_decision": "approval_decision_id",
     "action_request": "action_request_id",
@@ -593,6 +595,7 @@ _BACKUP_MAPPING_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
     "analytic_signal": ("reviewed_context",),
     "alert": ("reviewed_context",),
     "case": ("reviewed_context",),
+    "recommendation": ("reviewed_context", "assistant_advisory_draft"),
     "lifecycle_transition": ("attribution",),
     "approval_decision": ("target_snapshot",),
     "action_request": (
@@ -1099,11 +1102,20 @@ class AegisOpsControlPlaneService:
             "record_family",
         )
         normalized_record_id = self._require_non_empty_string(record_id, "record_id")
-        return tuple(
+        matching_transitions = tuple(
             transition
             for transition in self._store.list(LifecycleTransitionRecord)
             if transition.subject_record_family == normalized_record_family
             and transition.subject_record_id == normalized_record_id
+        )
+        return tuple(
+            sorted(
+                matching_transitions,
+                key=lambda transition: (
+                    transition.transitioned_at,
+                    transition.transition_id,
+                ),
+            )
         )
 
     def _emit_structured_event(

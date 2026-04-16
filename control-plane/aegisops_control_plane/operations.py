@@ -20,6 +20,7 @@ from .models import (
     EvidenceRecord,
     LifecycleTransitionRecord,
     ReconciliationRecord,
+    RecommendationRecord,
 )
 
 
@@ -682,15 +683,21 @@ class RestoreReadinessService:
         for record_type in self._authoritative_record_chain_record_types:
             family = record_type.record_family
             raw_records = record_families_payload.get(family)
+            expected_count = record_counts_payload.get(family)
             if legacy_phase21_backup and record_type is LifecycleTransitionRecord:
                 raw_records = [] if raw_records is None else raw_records
+                expected_count = 0 if expected_count is None else expected_count
+            if (
+                record_type is RecommendationRecord
+                and raw_records is None
+                and expected_count is None
+            ):
+                raw_records = []
+                expected_count = 0
             if not isinstance(raw_records, list):
                 raise ValueError(
                     f"restore payload must contain a JSON array for record family {family!r}"
                 )
-            expected_count = record_counts_payload.get(family)
-            if legacy_phase21_backup and record_type is LifecycleTransitionRecord:
-                expected_count = 0 if expected_count is None else expected_count
             if expected_count != len(raw_records):
                 raise ValueError(
                     f"restore payload record count mismatch for {family!r}: "
@@ -742,6 +749,9 @@ class RestoreReadinessService:
         verified_case_ids = tuple(
             record.case_id for record in self._store.list(CaseRecord)
         )
+        verified_recommendation_ids = tuple(
+            record.recommendation_id for record in self._store.list(RecommendationRecord)
+        )
         verified_approval_decision_ids = tuple(
             record.approval_decision_id
             for record in self._store.list(ApprovalDecisionRecord)
@@ -757,6 +767,8 @@ class RestoreReadinessService:
 
         for case_id in verified_case_ids:
             self._inspect_case_detail(case_id)
+        for recommendation_id in verified_recommendation_ids:
+            self._inspect_assistant_context("recommendation", recommendation_id)
         for approval_decision_id in verified_approval_decision_ids:
             self._inspect_assistant_context("approval_decision", approval_decision_id)
         for action_execution_id in verified_action_execution_ids:
@@ -816,13 +828,23 @@ class RestoreReadinessService:
         return authoritative_records
 
     def require_empty_authoritative_restore_target(self) -> None:
-        populated_families = [
-            family
-            for family, persisted_records in (
-                self._list_authoritative_record_chain_records().items()
-            )
-            if persisted_records
-        ]
+        authoritative_subject_families = {
+            record_type.record_family
+            for record_type in self._authoritative_record_chain_record_types
+            if record_type is not LifecycleTransitionRecord
+        }
+        populated_families: list[str] = []
+        for record_type in self._authoritative_record_chain_record_types:
+            family = record_type.record_family
+            persisted_records = tuple(self._store.list(record_type))
+            if record_type is LifecycleTransitionRecord:
+                persisted_records = tuple(
+                    record
+                    for record in persisted_records
+                    if record.subject_record_family in authoritative_subject_families
+                )
+            if persisted_records:
+                populated_families.append(family)
         if populated_families:
             raise ValueError(
                 "authoritative restore target must be empty before restore; found existing "
@@ -863,6 +885,11 @@ class RestoreReadinessService:
             for record in records_by_family.get("case", ())
             if isinstance(record, CaseRecord)
         )
+        recommendation_records = tuple(
+            record
+            for record in records_by_family.get("recommendation", ())
+            if isinstance(record, RecommendationRecord)
+        )
         lifecycle_transition_records = tuple(
             record
             for record in records_by_family.get("lifecycle_transition", ())
@@ -893,6 +920,7 @@ class RestoreReadinessService:
             ("alert", alert_records),
             ("evidence", evidence_record_family),
             ("case", case_records),
+            ("recommendation", recommendation_records),
             ("lifecycle_transition", lifecycle_transition_records),
             ("approval_decision", approval_decision_records),
             ("action_request", action_request_records),
@@ -933,6 +961,9 @@ class RestoreReadinessService:
             record.evidence_id: record for record in evidence_record_family
         }
         cases = {record.case_id: record for record in case_records}
+        recommendations = {
+            record.recommendation_id: record for record in recommendation_records
+        }
         approval_decisions = {
             record.approval_decision_id: record
             for record in approval_decision_records
@@ -953,6 +984,7 @@ class RestoreReadinessService:
             "alert": set(alerts),
             "evidence": set(evidence_records),
             "case": set(cases),
+            "recommendation": set(recommendations),
             "approval_decision": set(approval_decisions),
             "action_request": set(action_requests),
             "action_execution": set(action_executions),
@@ -1030,6 +1062,20 @@ class RestoreReadinessService:
                     raise ValueError(
                         f"missing evidence record {evidence_id!r} required by case {case.case_id!r}"
                     )
+
+        for recommendation in recommendations.values():
+            if recommendation.alert_id and recommendation.alert_id not in alerts:
+                raise ValueError(
+                    "missing alert record "
+                    f"{recommendation.alert_id!r} required by recommendation "
+                    f"{recommendation.recommendation_id!r}"
+                )
+            if recommendation.case_id and recommendation.case_id not in cases:
+                raise ValueError(
+                    "missing case record "
+                    f"{recommendation.case_id!r} required by recommendation "
+                    f"{recommendation.recommendation_id!r}"
+                )
 
         for approval_decision in approval_decisions.values():
             action_request = action_requests.get(approval_decision.action_request_id)
