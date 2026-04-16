@@ -155,7 +155,14 @@ with baseline_transitions as (
     'alert'::text,
     alert_id,
     lifecycle_state,
-    coalesce(created_at, updated_at),
+    coalesce(
+      case
+        when nullif(btrim(reviewed_context -> 'triage' ->> 'recorded_at'), '') ~* '^[0-9]{4}-[0-9]{2}-[0-9]{2}[ t][0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(z|[+-][0-9]{2}:[0-9]{2})$'
+        then (reviewed_context -> 'triage' ->> 'recorded_at')::timestamptz
+      end,
+      created_at,
+      updated_at
+    ),
     jsonb_build_object(
       'source',
       'phase23-migration-backfill',
@@ -215,7 +222,14 @@ with baseline_transitions as (
     'case'::text,
     case_id,
     lifecycle_state,
-    coalesce(created_at, updated_at),
+    coalesce(
+      case
+        when nullif(btrim(reviewed_context -> 'triage' ->> 'recorded_at'), '') ~* '^[0-9]{4}-[0-9]{2}-[0-9]{2}[ t][0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(z|[+-][0-9]{2}:[0-9]{2})$'
+        then (reviewed_context -> 'triage' ->> 'recorded_at')::timestamptz
+      end,
+      created_at,
+      updated_at
+    ),
     jsonb_build_object(
       'source',
       'phase23-migration-backfill',

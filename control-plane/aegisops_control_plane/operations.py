@@ -10,6 +10,7 @@ from typing import Any, Callable, Iterator, Mapping, Protocol, Type
 from .adapters.postgres import ReadinessDiagnosticsAggregates, _validate_lifecycle_state
 from .config import RuntimeConfig
 from .models import (
+    AITraceRecord,
     ActionExecutionRecord,
     ActionRequestRecord,
     AlertRecord,
@@ -18,7 +19,11 @@ from .models import (
     CaseRecord,
     ControlPlaneRecord,
     EvidenceRecord,
+    HuntRecord,
+    HuntRunRecord,
+    LeadRecord,
     LifecycleTransitionRecord,
+    ObservationRecord,
     ReconciliationRecord,
     RecommendationRecord,
 )
@@ -947,6 +952,16 @@ class RestoreReadinessService:
             for record in records_by_family.get("evidence", ())
             if isinstance(record, EvidenceRecord)
         )
+        observation_records = tuple(
+            record
+            for record in records_by_family.get("observation", ())
+            if isinstance(record, ObservationRecord)
+        )
+        lead_records = tuple(
+            record
+            for record in records_by_family.get("lead", ())
+            if isinstance(record, LeadRecord)
+        )
         case_records = tuple(
             record
             for record in records_by_family.get("case", ())
@@ -977,6 +992,21 @@ class RestoreReadinessService:
             for record in records_by_family.get("action_execution", ())
             if isinstance(record, ActionExecutionRecord)
         )
+        hunt_records = tuple(
+            record
+            for record in records_by_family.get("hunt", ())
+            if isinstance(record, HuntRecord)
+        )
+        hunt_run_records = tuple(
+            record
+            for record in records_by_family.get("hunt_run", ())
+            if isinstance(record, HuntRunRecord)
+        )
+        ai_trace_records = tuple(
+            record
+            for record in records_by_family.get("ai_trace", ())
+            if isinstance(record, AITraceRecord)
+        )
         reconciliations = tuple(
             record
             for record in records_by_family.get("reconciliation", ())
@@ -986,12 +1016,17 @@ class RestoreReadinessService:
             ("analytic_signal", analytic_signal_records),
             ("alert", alert_records),
             ("evidence", evidence_record_family),
+            ("observation", observation_records),
+            ("lead", lead_records),
             ("case", case_records),
             ("recommendation", recommendation_records),
             ("lifecycle_transition", lifecycle_transition_records),
             ("approval_decision", approval_decision_records),
             ("action_request", action_request_records),
             ("action_execution", action_execution_records),
+            ("hunt", hunt_records),
+            ("hunt_run", hunt_run_records),
+            ("ai_trace", ai_trace_records),
             ("reconciliation", reconciliations),
         ):
             duplicates = self._find_duplicate_strings(
@@ -1027,6 +1062,10 @@ class RestoreReadinessService:
         evidence_records = {
             record.evidence_id: record for record in evidence_record_family
         }
+        observations = {
+            record.observation_id: record for record in observation_records
+        }
+        leads = {record.lead_id: record for record in lead_records}
         cases = {record.case_id: record for record in case_records}
         recommendations = {
             record.recommendation_id: record for record in recommendation_records
@@ -1041,6 +1080,9 @@ class RestoreReadinessService:
         action_executions = {
             record.action_execution_id: record for record in action_execution_records
         }
+        hunts = {record.hunt_id: record for record in hunt_records}
+        hunt_runs = {record.hunt_run_id: record for record in hunt_run_records}
+        ai_traces = {record.ai_trace_id: record for record in ai_trace_records}
         action_executions_by_run_id = {
             record.execution_run_id: record
             for record in action_execution_records
@@ -1053,22 +1095,32 @@ class RestoreReadinessService:
             "analytic_signal": set(analytic_signals),
             "alert": set(alerts),
             "evidence": set(evidence_records),
+            "observation": set(observations),
+            "lead": set(leads),
             "case": set(cases),
             "recommendation": set(recommendations),
             "approval_decision": set(approval_decisions),
             "action_request": set(action_requests),
             "action_execution": set(action_executions),
+            "hunt": set(hunts),
+            "hunt_run": set(hunt_runs),
+            "ai_trace": set(ai_traces),
             "reconciliation": set(reconciliations_by_id),
         }
         authoritative_subject_records_by_family: dict[str, Mapping[str, ControlPlaneRecord]] = {
             "analytic_signal": analytic_signals,
             "alert": alerts,
             "evidence": evidence_records,
+            "observation": observations,
+            "lead": leads,
             "case": cases,
             "recommendation": recommendations,
             "approval_decision": approval_decisions,
             "action_request": action_requests,
             "action_execution": action_executions,
+            "hunt": hunts,
+            "hunt_run": hunt_runs,
+            "ai_trace": ai_traces,
             "reconciliation": reconciliations_by_id,
         }
 
@@ -1127,6 +1179,54 @@ class RestoreReadinessService:
                     f"{evidence.evidence_id!r}"
                 )
 
+        for observation in observations.values():
+            if observation.hunt_id and observation.hunt_id not in hunts:
+                raise ValueError(
+                    f"missing hunt record {observation.hunt_id!r} required by observation "
+                    f"{observation.observation_id!r}"
+                )
+            if observation.hunt_run_id and observation.hunt_run_id not in hunt_runs:
+                raise ValueError(
+                    f"missing hunt_run record {observation.hunt_run_id!r} required by observation "
+                    f"{observation.observation_id!r}"
+                )
+            if observation.alert_id and observation.alert_id not in alerts:
+                raise ValueError(
+                    f"missing alert record {observation.alert_id!r} required by observation "
+                    f"{observation.observation_id!r}"
+                )
+            if observation.case_id and observation.case_id not in cases:
+                raise ValueError(
+                    f"missing case record {observation.case_id!r} required by observation "
+                    f"{observation.observation_id!r}"
+                )
+            for evidence_id in observation.supporting_evidence_ids:
+                if evidence_id not in evidence_records:
+                    raise ValueError(
+                        f"missing evidence record {evidence_id!r} required by observation "
+                        f"{observation.observation_id!r}"
+                    )
+
+        for lead in leads.values():
+            if lead.observation_id and lead.observation_id not in observations:
+                raise ValueError(
+                    f"missing observation record {lead.observation_id!r} required by lead "
+                    f"{lead.lead_id!r}"
+                )
+            if lead.hunt_run_id and lead.hunt_run_id not in hunt_runs:
+                raise ValueError(
+                    f"missing hunt_run record {lead.hunt_run_id!r} required by lead "
+                    f"{lead.lead_id!r}"
+                )
+            if lead.alert_id and lead.alert_id not in alerts:
+                raise ValueError(
+                    f"missing alert record {lead.alert_id!r} required by lead {lead.lead_id!r}"
+                )
+            if lead.case_id and lead.case_id not in cases:
+                raise ValueError(
+                    f"missing case record {lead.case_id!r} required by lead {lead.lead_id!r}"
+                )
+
         for case in cases.values():
             if case.alert_id and case.alert_id not in alerts:
                 raise ValueError(
@@ -1143,6 +1243,18 @@ class RestoreReadinessService:
                     )
 
         for recommendation in recommendations.values():
+            if recommendation.lead_id and recommendation.lead_id not in leads:
+                raise ValueError(
+                    "missing lead record "
+                    f"{recommendation.lead_id!r} required by recommendation "
+                    f"{recommendation.recommendation_id!r}"
+                )
+            if recommendation.hunt_run_id and recommendation.hunt_run_id not in hunt_runs:
+                raise ValueError(
+                    "missing hunt_run record "
+                    f"{recommendation.hunt_run_id!r} required by recommendation "
+                    f"{recommendation.recommendation_id!r}"
+                )
             if recommendation.alert_id and recommendation.alert_id not in alerts:
                 raise ValueError(
                     "missing alert record "
@@ -1154,6 +1266,29 @@ class RestoreReadinessService:
                     "missing case record "
                     f"{recommendation.case_id!r} required by recommendation "
                     f"{recommendation.recommendation_id!r}"
+                )
+            if recommendation.ai_trace_id and recommendation.ai_trace_id not in ai_traces:
+                raise ValueError(
+                    "missing ai_trace record "
+                    f"{recommendation.ai_trace_id!r} required by recommendation "
+                    f"{recommendation.recommendation_id!r}"
+                )
+
+        for hunt in hunts.values():
+            if hunt.alert_id and hunt.alert_id not in alerts:
+                raise ValueError(
+                    f"missing alert record {hunt.alert_id!r} required by hunt {hunt.hunt_id!r}"
+                )
+            if hunt.case_id and hunt.case_id not in cases:
+                raise ValueError(
+                    f"missing case record {hunt.case_id!r} required by hunt {hunt.hunt_id!r}"
+                )
+
+        for hunt_run in hunt_runs.values():
+            if hunt_run.hunt_id not in hunts:
+                raise ValueError(
+                    f"missing hunt record {hunt_run.hunt_id!r} required by hunt_run "
+                    f"{hunt_run.hunt_run_id!r}"
                 )
 
         for approval_decision in approval_decisions.values():

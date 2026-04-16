@@ -557,12 +557,17 @@ AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES: tuple[Type[ControlPlaneRecord], ...] = 
     AnalyticSignalRecord,
     AlertRecord,
     EvidenceRecord,
+    ObservationRecord,
+    LeadRecord,
     CaseRecord,
     RecommendationRecord,
     LifecycleTransitionRecord,
     ApprovalDecisionRecord,
     ActionRequestRecord,
     ActionExecutionRecord,
+    HuntRecord,
+    HuntRunRecord,
+    AITraceRecord,
     ReconciliationRecord,
 )
 AUTHORITATIVE_RECORD_CHAIN_FAMILIES: tuple[str, ...] = tuple(
@@ -575,27 +580,38 @@ _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY: dict[str, str] = {
     "analytic_signal": "analytic_signal_id",
     "alert": "alert_id",
     "evidence": "evidence_id",
+    "observation": "observation_id",
+    "lead": "lead_id",
     "case": "case_id",
     "recommendation": "recommendation_id",
     "lifecycle_transition": "transition_id",
     "approval_decision": "approval_decision_id",
     "action_request": "action_request_id",
     "action_execution": "action_execution_id",
+    "hunt": "hunt_id",
+    "hunt_run": "hunt_run_id",
+    "ai_trace": "ai_trace_id",
     "reconciliation": "reconciliation_id",
 }
 _BACKUP_DATETIME_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
     "analytic_signal": ("first_seen_at", "last_seen_at"),
     "evidence": ("acquired_at",),
+    "observation": ("observed_at",),
     "lifecycle_transition": ("transitioned_at",),
     "approval_decision": ("decided_at", "approved_expires_at"),
     "action_request": ("requested_at", "expires_at"),
     "action_execution": ("delegated_at", "expires_at"),
+    "hunt": ("opened_at",),
+    "hunt_run": ("started_at", "completed_at"),
+    "ai_trace": ("generated_at",),
     "reconciliation": ("first_seen_at", "last_seen_at", "compared_at"),
 }
 _BACKUP_TUPLE_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
     "analytic_signal": ("alert_ids", "case_ids"),
     "case": ("evidence_ids",),
+    "observation": ("supporting_evidence_ids",),
     "approval_decision": ("approver_identities",),
+    "ai_trace": ("material_input_refs",),
     "reconciliation": ("linked_execution_run_ids",),
 }
 _BACKUP_MAPPING_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
@@ -612,6 +628,8 @@ _BACKUP_MAPPING_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
         "policy_evaluation",
     ),
     "action_execution": ("target_scope", "approved_payload", "provenance"),
+    "hunt_run": ("scope_snapshot", "output_linkage"),
+    "ai_trace": ("subject_linkage", "assistant_advisory_draft"),
     "reconciliation": ("subject_linkage",),
 }
 

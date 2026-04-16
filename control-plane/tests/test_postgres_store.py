@@ -352,6 +352,8 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             migration_sql,
         )
         self.assertIn("'phase23-migration-backfill'", migration_sql)
+        self.assertIn("reviewed_context -> 'triage' ->> 'recorded_at'", migration_sql)
+        self.assertIn("::timestamptz", migration_sql)
         self.assertIn("where existing.transition_id is null", migration_sql)
         self.assertIn("on conflict (transition_id) do nothing", migration_sql)
         for table_name in (

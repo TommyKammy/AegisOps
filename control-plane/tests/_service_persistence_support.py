@@ -30,6 +30,8 @@ from aegisops_control_plane.models import (
     ApprovalDecisionRecord,
     CaseRecord,
     EvidenceRecord,
+    HuntRecord,
+    HuntRunRecord,
     LeadRecord,
     LifecycleTransitionRecord,
     NativeDetectionRecord,

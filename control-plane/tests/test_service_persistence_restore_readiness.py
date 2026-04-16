@@ -251,6 +251,43 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             intended_outcome="Review repository owner change evidence before any approval-bound response.",
             lead_id=lead.lead_id,
         )
+        hunt = service.persist_record(
+            HuntRecord(
+                hunt_id="hunt-phase21-restore-001",
+                hypothesis_statement="Determine whether the reviewed repository change affected additional assets.",
+                hypothesis_version="v1",
+                owner_identity="hunter-001",
+                scope_boundary="case-scoped",
+                opened_at=reviewed_at + timedelta(minutes=20),
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                lifecycle_state="draft",
+            )
+        )
+        hunt_run = service.persist_record(
+            HuntRunRecord(
+                hunt_run_id="hunt-run-phase21-restore-001",
+                hunt_id=hunt.hunt_id,
+                scope_snapshot={"case_id": promoted_case.case_id},
+                execution_plan_reference="hunt-plan-phase21-restore-001",
+                output_linkage={"recommendation_ids": (recommendation.recommendation_id,)},
+                started_at=reviewed_at + timedelta(minutes=25),
+                completed_at=reviewed_at + timedelta(minutes=35),
+                lifecycle_state="planned",
+            )
+        )
+        ai_trace = service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-phase21-restore-001",
+                subject_linkage={"recommendation_ids": (recommendation.recommendation_id,)},
+                model_identity="gpt-5.4",
+                prompt_version="prompt-phase21-restore-v1",
+                generated_at=reviewed_at + timedelta(minutes=40),
+                material_input_refs=(evidence_id,),
+                reviewer_identity="reviewer-001",
+                lifecycle_state="under_review",
+            )
+        )
         expires_at = datetime.now(timezone.utc) + timedelta(hours=4)
         action_request = service.create_reviewed_action_request_from_advisory(
             record_family="recommendation",
@@ -335,6 +372,26 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             backup_transition_subjects,
         )
         self.assertIn(
+            ("observation", observation.observation_id),
+            backup_transition_subjects,
+        )
+        self.assertIn(
+            ("lead", lead.lead_id),
+            backup_transition_subjects,
+        )
+        self.assertIn(
+            ("hunt", hunt.hunt_id),
+            backup_transition_subjects,
+        )
+        self.assertIn(
+            ("hunt_run", hunt_run.hunt_run_id),
+            backup_transition_subjects,
+        )
+        self.assertIn(
+            ("ai_trace", ai_trace.ai_trace_id),
+            backup_transition_subjects,
+        )
+        self.assertIn(
             ("reconciliation", reconciliation.reconciliation_id),
             backup_transition_subjects,
         )
@@ -370,7 +427,12 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             "phase23.authoritative-record-chain.v2",
         )
         self.assertEqual(backup["record_counts"]["action_execution"], 1)
+        self.assertEqual(backup["record_counts"]["observation"], 1)
+        self.assertEqual(backup["record_counts"]["lead"], 1)
         self.assertEqual(backup["record_counts"]["recommendation"], 1)
+        self.assertEqual(backup["record_counts"]["hunt"], 1)
+        self.assertEqual(backup["record_counts"]["hunt_run"], 1)
+        self.assertEqual(backup["record_counts"]["ai_trace"], 1)
         self.assertEqual(restore_summary.restored_record_counts["reconciliation"], 2)
         self.assertTrue(restore_summary.restore_drill.drill_passed)
         self.assertEqual(
@@ -410,8 +472,39 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             restored_transition_subjects,
         )
         self.assertIn(
+            ("observation", observation.observation_id),
+            restored_transition_subjects,
+        )
+        self.assertIn(
+            ("lead", lead.lead_id),
+            restored_transition_subjects,
+        )
+        self.assertIn(
+            ("hunt", hunt.hunt_id),
+            restored_transition_subjects,
+        )
+        self.assertIn(
+            ("hunt_run", hunt_run.hunt_run_id),
+            restored_transition_subjects,
+        )
+        self.assertIn(
+            ("ai_trace", ai_trace.ai_trace_id),
+            restored_transition_subjects,
+        )
+        self.assertIn(
             ("reconciliation", reconciliation.reconciliation_id),
             restored_transition_subjects,
+        )
+        self.assertIsNotNone(
+            restored_service.get_record(ObservationRecord, observation.observation_id)
+        )
+        self.assertIsNotNone(restored_service.get_record(LeadRecord, lead.lead_id))
+        self.assertIsNotNone(restored_service.get_record(HuntRecord, hunt.hunt_id))
+        self.assertIsNotNone(
+            restored_service.get_record(HuntRunRecord, hunt_run.hunt_run_id)
+        )
+        self.assertIsNotNone(
+            restored_service.get_record(AITraceRecord, ai_trace.ai_trace_id)
         )
         self.assertIsNotNone(
             restored_service.get_record(
@@ -2033,7 +2126,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
 
         self.assertEqual(store.list(LifecycleTransitionRecord), ())
 
-    def test_service_phase21_backup_preserves_recommendation_transitions_and_excludes_non_authoritative_subjects(
+    def test_service_phase21_backup_preserves_reviewed_lifecycle_families_and_transition_subjects(
         self,
     ) -> None:
         store, service, promoted_case, evidence_id, reviewed_at = (
@@ -2048,8 +2141,51 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             case_id=promoted_case.case_id,
             author_identity="analyst-001",
             observed_at=reviewed_at,
-            scope_statement="Keep observation transitions outside the authoritative restore set.",
+            scope_statement="Keep reviewed observation transitions in the authoritative restore set.",
             supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            triage_owner="analyst-001",
+            triage_rationale="Keep reviewed lead linkage in the authoritative restore set.",
+            observation_id=observation.observation_id,
+        )
+        hunt = service.persist_record(
+            HuntRecord(
+                hunt_id="hunt-phase21-authoritative-001",
+                hypothesis_statement="Validate whether the reviewed observation affects additional repositories.",
+                hypothesis_version="v1",
+                owner_identity="hunter-001",
+                scope_boundary="case-scoped",
+                opened_at=reviewed_at + timedelta(minutes=3),
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                lifecycle_state="draft",
+            )
+        )
+        hunt_run = service.persist_record(
+            HuntRunRecord(
+                hunt_run_id="hunt-run-phase21-authoritative-001",
+                hunt_id=hunt.hunt_id,
+                scope_snapshot={"case_id": promoted_case.case_id},
+                execution_plan_reference="hunt-plan-phase21-authoritative-001",
+                output_linkage={},
+                started_at=reviewed_at + timedelta(minutes=4),
+                completed_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="planned",
+            )
+        )
+        ai_trace = service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-phase21-authoritative-001",
+                subject_linkage={"case_ids": (promoted_case.case_id,)},
+                model_identity="gpt-5.4",
+                prompt_version="prompt-phase21-authoritative-v1",
+                generated_at=reviewed_at + timedelta(minutes=6),
+                material_input_refs=(evidence_id,),
+                reviewer_identity="reviewer-001",
+                lifecycle_state="under_review",
+            )
         )
 
         self.assertIn(
@@ -2076,12 +2212,38 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
                 for record in backup["record_families"]["recommendation"]
             },
         )
-        self.assertNotIn(
+        self.assertIn(
             ("observation", observation.observation_id),
             {
                 (record["subject_record_family"], record["subject_record_id"])
                 for record in backup["record_families"]["lifecycle_transition"]
             },
+        )
+        self.assertIn(
+            observation.observation_id,
+            {
+                record["observation_id"]
+                for record in backup["record_families"]["observation"]
+            },
+        )
+        self.assertIn(
+            lead.lead_id,
+            {record["lead_id"] for record in backup["record_families"]["lead"]},
+        )
+        self.assertIn(
+            hunt.hunt_id,
+            {record["hunt_id"] for record in backup["record_families"]["hunt"]},
+        )
+        self.assertIn(
+            hunt_run.hunt_run_id,
+            {
+                record["hunt_run_id"]
+                for record in backup["record_families"]["hunt_run"]
+            },
+        )
+        self.assertIn(
+            ai_trace.ai_trace_id,
+            {record["ai_trace_id"] for record in backup["record_families"]["ai_trace"]},
         )
 
     def test_service_phase21_restore_rejects_unsupported_transition_subject_family(
@@ -2090,17 +2252,10 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         _store, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
         )
-        observation = service.record_case_observation(
-            case_id=promoted_case.case_id,
-            author_identity="analyst-001",
-            observed_at=reviewed_at,
-            scope_statement="Use an observation family to simulate an unsupported restore payload.",
-            supporting_evidence_ids=(evidence_id,),
-        )
         backup = service.export_authoritative_record_chain_backup()
         mutated_transition = dict(backup["record_families"]["lifecycle_transition"][0])
-        mutated_transition["subject_record_family"] = "observation"
-        mutated_transition["subject_record_id"] = observation.observation_id
+        mutated_transition["subject_record_family"] = "unsupported_family"
+        mutated_transition["subject_record_id"] = "unsupported-subject-001"
         backup["record_families"]["lifecycle_transition"][0] = mutated_transition
 
         restored_store, _ = make_store()
@@ -2113,7 +2268,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             ValueError,
             (
                 r"lifecycle transition .* references unsupported "
-                r"subject_record_family 'observation'"
+                r"subject_record_family 'unsupported_family'"
             ),
         ):
             restored_service.restore_authoritative_record_chain_backup(backup)
