@@ -80,6 +80,13 @@ class ControlPlaneStore(Protocol):
     ) -> LifecycleTransitionRecord | None:
         ...
 
+    def list_lifecycle_transitions(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> tuple[LifecycleTransitionRecord, ...]:
+        ...
+
     def transaction(
         self,
         *,
@@ -1263,20 +1270,9 @@ class AegisOpsControlPlaneService:
             "record_family",
         )
         normalized_record_id = self._require_non_empty_string(record_id, "record_id")
-        matching_transitions = tuple(
-            transition
-            for transition in self._store.list(LifecycleTransitionRecord)
-            if transition.subject_record_family == normalized_record_family
-            and transition.subject_record_id == normalized_record_id
-        )
-        return tuple(
-            sorted(
-                matching_transitions,
-                key=lambda transition: (
-                    transition.transitioned_at,
-                    transition.transition_id,
-                ),
-            )
+        return self._store.list_lifecycle_transitions(
+            normalized_record_family,
+            normalized_record_id,
         )
 
     def _emit_structured_event(

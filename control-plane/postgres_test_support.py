@@ -34,6 +34,12 @@ _SELECT_LATEST_LIFECYCLE_TRANSITION_RE = re.compile(
     r"order by transitioned_at desc, transition_id desc limit 1",
     re.IGNORECASE,
 )
+_SELECT_LIFECYCLE_TRANSITIONS_RE = re.compile(
+    r"select (?P<columns>.+) from aegisops_control\.lifecycle_transition_records "
+    r"where subject_record_family = %s and subject_record_id = %s "
+    r"order by transitioned_at asc, transition_id asc",
+    re.IGNORECASE,
+)
 _SELECT_ADVISORY_XACT_LOCK_RE = re.compile(
     r"select pg_advisory_xact_lock\(hashtext\(%s\), hashtext\(%s\)\)",
     re.IGNORECASE,
@@ -169,6 +175,16 @@ class FakePostgresCursor:
             )
             return
 
+        select_lifecycle_transitions_match = _SELECT_LIFECYCLE_TRANSITIONS_RE.fullmatch(
+            normalized
+        )
+        if select_lifecycle_transitions_match is not None:
+            self._execute_select_lifecycle_transitions(
+                select_lifecycle_transitions_match.group("columns"),
+                params,
+            )
+            return
+
         if _SELECT_ADVISORY_XACT_LOCK_RE.fullmatch(normalized) is not None:
             self.description = None
             self._rows = []
@@ -300,6 +316,24 @@ class FakePostgresCursor:
             self._rows = []
             return
         self._rows = [self._project_row(rows[0], column_names)]
+
+    def _execute_select_lifecycle_transitions(
+        self,
+        columns: str,
+        params: tuple[object, ...] | None,
+    ) -> None:
+        column_names = [column.strip() for column in columns.split(",")]
+        subject_record_family = str((params or ("", ""))[0])
+        subject_record_id = str((params or ("", ""))[1])
+        rows = [
+            row
+            for row in self.tables.get("lifecycle_transition_records", {}).values()
+            if row.get("subject_record_family") == subject_record_family
+            and row.get("subject_record_id") == subject_record_id
+        ]
+        rows.sort(key=lambda row: (row["transitioned_at"], row["transition_id"]))
+        self.description = tuple((name,) for name in column_names)
+        self._rows = [self._project_row(row, column_names) for row in rows]
 
     def _execute_select_group_count(self, table: str, field_name: str) -> None:
         grouped_counts: dict[object, int] = {}

@@ -875,6 +875,52 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             store.latest_lifecycle_transition("alert", "alert-missing-001")
         )
 
+    def test_store_lists_lifecycle_transitions_by_subject(self) -> None:
+        store, _ = make_store()
+        first_transition = LifecycleTransitionRecord(
+            transition_id="transition-history-001",
+            subject_record_family="case",
+            subject_record_id="case-history-001",
+            previous_lifecycle_state=None,
+            lifecycle_state="open",
+            transitioned_at=datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc),
+            attribution={"source": "fixture", "actor_identities": ()},
+        )
+        latest_transition = LifecycleTransitionRecord(
+            transition_id="transition-history-002",
+            subject_record_family="case",
+            subject_record_id="case-history-001",
+            previous_lifecycle_state="open",
+            lifecycle_state="closed",
+            transitioned_at=datetime(2026, 4, 16, 8, 5, tzinfo=timezone.utc),
+            attribution={"source": "fixture", "actor_identities": ()},
+        )
+        unrelated_transition = LifecycleTransitionRecord(
+            transition_id="transition-history-003",
+            subject_record_family="case",
+            subject_record_id="case-history-002",
+            previous_lifecycle_state=None,
+            lifecycle_state="open",
+            transitioned_at=datetime(2026, 4, 16, 8, 10, tzinfo=timezone.utc),
+            attribution={"source": "fixture", "actor_identities": ()},
+        )
+
+        for transition in (
+            latest_transition,
+            unrelated_transition,
+            first_transition,
+        ):
+            store.save(transition)
+
+        self.assertEqual(
+            store.list_lifecycle_transitions("case", "case-history-001"),
+            (first_transition, latest_transition),
+        )
+        self.assertEqual(
+            store.list_lifecycle_transitions("alert", "alert-missing-001"),
+            (),
+        )
+
     def test_store_copies_mapping_fields_before_persistence(self) -> None:
         timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
         target_scope = {"asset_id": "asset-001"}

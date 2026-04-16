@@ -172,6 +172,19 @@ class Phase23TransitionLoggingValidationTests(ServicePersistenceTestBase):
         self.assertEqual(store.list_calls, 0)
         self.assertEqual(store.latest_lifecycle_transition_calls, 2)
 
+    def test_transition_logging_uses_targeted_history_lookup_on_inspection(self) -> None:
+        inner_store, _ = make_store()
+        store = _ListCountingStore(inner=inner_store)
+        _, service, promoted_case, _, _ = self._build_phase19_in_scope_case(
+            store=store,
+        )
+
+        service.inspect_alert_detail(promoted_case.alert_id)
+        service.inspect_case_detail(promoted_case.case_id)
+
+        self.assertEqual(store.lifecycle_transition_record_list_calls, 0)
+        self.assertEqual(store.lifecycle_transition_history_calls, 2)
+
     def test_transition_logging_locks_subject_before_reading_existing_state(self) -> None:
         store, backend = make_store()
         service = AegisOpsControlPlaneService(

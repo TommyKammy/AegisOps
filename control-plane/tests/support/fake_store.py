@@ -53,6 +53,13 @@ class TransactionMutationStore:
     ) -> LifecycleTransitionRecord | None:
         return self.inner.latest_lifecycle_transition(record_family, record_id)
 
+    def list_lifecycle_transitions(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> tuple[LifecycleTransitionRecord, ...]:
+        return self.inner.list_lifecycle_transitions(record_family, record_id)
+
     def inspect_readiness_aggregates(self) -> object:
         return self.inner.inspect_readiness_aggregates()
 
@@ -123,6 +130,16 @@ class ConcurrentListMutationStore:
             self.mutate_once()
         return transition
 
+    def list_lifecycle_transitions(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> tuple[LifecycleTransitionRecord, ...]:
+        transitions = self.inner.list_lifecycle_transitions(record_family, record_id)
+        if self._consume_mutation_token():
+            self.mutate_once()
+        return transitions
+
     def inspect_readiness_aggregates(self) -> object:
         aggregates = self.inner.inspect_readiness_aggregates()
         if self._consume_mutation_token():
@@ -167,6 +184,13 @@ class CommitFailingStore:
         record_id: str,
     ) -> LifecycleTransitionRecord | None:
         return self.inner.latest_lifecycle_transition(record_family, record_id)
+
+    def list_lifecycle_transitions(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> tuple[LifecycleTransitionRecord, ...]:
+        return self.inner.list_lifecycle_transitions(record_family, record_id)
 
     def inspect_readiness_aggregates(self) -> object:
         return self.inner.inspect_readiness_aggregates()
@@ -230,6 +254,13 @@ class RecordTypeSaveFailingStore:
     ) -> LifecycleTransitionRecord | None:
         return self.inner.latest_lifecycle_transition(record_family, record_id)
 
+    def list_lifecycle_transitions(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> tuple[LifecycleTransitionRecord, ...]:
+        return self.inner.list_lifecycle_transitions(record_family, record_id)
+
     def inspect_readiness_aggregates(self) -> object:
         return self.inner.inspect_readiness_aggregates()
 
@@ -266,7 +297,9 @@ class ListCountingStore:
     inner: object
     list_calls: int = 0
     reconciliation_list_calls: int = 0
+    lifecycle_transition_record_list_calls: int = 0
     latest_lifecycle_transition_calls: int = 0
+    lifecycle_transition_history_calls: int = 0
 
     @property
     def dsn(self) -> str:
@@ -286,6 +319,8 @@ class ListCountingStore:
         self.list_calls += 1
         if record_type is ReconciliationRecord:
             self.reconciliation_list_calls += 1
+        if record_type is LifecycleTransitionRecord:
+            self.lifecycle_transition_record_list_calls += 1
         return self.inner.list(record_type)
 
     def latest_lifecycle_transition(
@@ -295,6 +330,14 @@ class ListCountingStore:
     ) -> LifecycleTransitionRecord | None:
         self.latest_lifecycle_transition_calls += 1
         return self.inner.latest_lifecycle_transition(record_family, record_id)
+
+    def list_lifecycle_transitions(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> tuple[LifecycleTransitionRecord, ...]:
+        self.lifecycle_transition_history_calls += 1
+        return self.inner.list_lifecycle_transitions(record_family, record_id)
 
     def inspect_readiness_aggregates(self) -> object:
         return self.inner.inspect_readiness_aggregates()
@@ -343,6 +386,13 @@ class OutOfBandMutationStore:
         record_id: str,
     ) -> LifecycleTransitionRecord | None:
         return self.inner.latest_lifecycle_transition(record_family, record_id)
+
+    def list_lifecycle_transitions(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> tuple[LifecycleTransitionRecord, ...]:
+        return self.inner.list_lifecycle_transitions(record_family, record_id)
 
     def inspect_readiness_aggregates(self) -> object:
         return self.inner.inspect_readiness_aggregates()

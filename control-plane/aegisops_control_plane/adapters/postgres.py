@@ -851,6 +851,35 @@ class PostgresControlPlaneStore:
             _row_to_mapping(cursor, row),
         )
 
+    def list_lifecycle_transitions(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> tuple[LifecycleTransitionRecord, ...]:
+        table = self._table_config(LifecycleTransitionRecord)
+        query = (
+            f"select {', '.join(table.record_fields)} "
+            f"from aegisops_control.{table.table_name} "
+            "where subject_record_family = %s and subject_record_id = %s "
+            "order by transitioned_at asc, transition_id asc"
+        )
+
+        with self._borrow_connection() as connection:
+            cursor = connection.cursor()
+            try:
+                cursor.execute(query, (record_family, record_id))
+                rows = cursor.fetchall()
+            finally:
+                cursor.close()
+
+        return tuple(
+            self._row_to_record(
+                LifecycleTransitionRecord,
+                _row_to_mapping(cursor, row),
+            )
+            for row in rows
+        )
+
     def inspect_readiness_aggregates(self) -> ReadinessDiagnosticsAggregates:
         if self._active_connection.get() is None:
             with self.transaction(isolation_level="REPEATABLE READ"):
