@@ -2452,16 +2452,17 @@ class AegisOpsControlPlaneService:
     ) -> dict[str, object]:
         execution_ids = set(readiness_aggregates.active_action_execution_ids)
         candidate_action_request_ids: set[str] = set()
-        approved_action_request_ids: set[str] = set()
 
         for action_request_id in readiness_aggregates.active_action_request_ids:
             action_request = self._store.get(ActionRequestRecord, action_request_id)
             if action_request is None:
                 continue
-            if action_request.lifecycle_state in {"approved", "unresolved"}:
+            if action_request.lifecycle_state in {
+                "approved",
+                "executing",
+                "unresolved",
+            }:
                 candidate_action_request_ids.add(action_request_id)
-                if action_request.lifecycle_state == "approved":
-                    approved_action_request_ids.add(action_request_id)
 
         for reconciliation_id in readiness_aggregates.unresolved_reconciliation_ids:
             reconciliation = self._store.get(ReconciliationRecord, reconciliation_id)
@@ -2561,9 +2562,17 @@ class AegisOpsControlPlaneService:
                 if reconciliation is not None:
                     reconciliations_by_action_request_id[action_request_id] = reconciliation
 
-        if targeted_record_index is None and approved_action_request_ids:
+        if targeted_record_index is None and candidate_action_requests:
+            current_execution_request_ids_by_execution_id: dict[str, str] = {}
+            current_execution_request_ids_by_delegation_id: dict[str, str] = {}
+            approval_action_request_ids_by_id = {
+                approval_decision.approval_decision_id: action_request_id
+                for action_request_id, approval_decision in (
+                    approval_decisions_by_action_request_id.items()
+                )
+            }
             for action_execution in self._store.list(ActionExecutionRecord):
-                if action_execution.action_request_id not in approved_action_request_ids:
+                if action_execution.action_request_id not in candidate_action_requests:
                     continue
                 existing_execution = executions_by_action_request_id.get(
                     action_execution.action_request_id
@@ -2579,14 +2588,48 @@ class AegisOpsControlPlaneService:
                         action_execution
                     )
 
+            for action_request_id, action_execution in executions_by_action_request_id.items():
+                current_execution_request_ids_by_execution_id[
+                    action_execution.action_execution_id
+                ] = action_request_id
+                current_execution_request_ids_by_delegation_id[
+                    action_execution.delegation_id
+                ] = action_request_id
+
             for reconciliation in self._store.list(ReconciliationRecord):
-                action_request_ids = self._assistant_ids_from_mapping(
-                    reconciliation.subject_linkage,
-                    "action_request_ids",
+                matched_action_request_ids = {
+                    action_request_id
+                    for action_request_id in self._assistant_ids_from_mapping(
+                        reconciliation.subject_linkage,
+                        "action_request_ids",
+                    )
+                    if action_request_id in candidate_action_requests
+                }
+                matched_action_request_ids.update(
+                    approval_action_request_ids_by_id[approval_decision_id]
+                    for approval_decision_id in self._assistant_ids_from_mapping(
+                        reconciliation.subject_linkage,
+                        "approval_decision_ids",
+                    )
+                    if approval_decision_id in approval_action_request_ids_by_id
                 )
-                for action_request_id in action_request_ids:
-                    if action_request_id not in approved_action_request_ids:
-                        continue
+                matched_action_request_ids.update(
+                    current_execution_request_ids_by_execution_id[action_execution_id]
+                    for action_execution_id in self._assistant_ids_from_mapping(
+                        reconciliation.subject_linkage,
+                        "action_execution_ids",
+                    )
+                    if action_execution_id in current_execution_request_ids_by_execution_id
+                )
+                matched_action_request_ids.update(
+                    current_execution_request_ids_by_delegation_id[delegation_id]
+                    for delegation_id in self._assistant_ids_from_mapping(
+                        reconciliation.subject_linkage,
+                        "delegation_ids",
+                    )
+                    if delegation_id in current_execution_request_ids_by_delegation_id
+                )
+                for action_request_id in matched_action_request_ids:
                     existing_reconciliation = reconciliations_by_action_request_id.get(
                         action_request_id
                     )

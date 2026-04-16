@@ -1929,6 +1929,222 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             "reconciliation_matched",
         )
 
+    def test_service_phase21_readiness_fallback_surfaces_terminal_executing_review_path_health(
+        self,
+    ) -> None:
+        inner_store, _ = make_store()
+        store = _ListCountingStore(inner=inner_store)
+        _store, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case(store=store)
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep terminal reviewed failures visible when readiness falls back to full scans.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Keep terminal provider failures visible on readiness.",
+            escalation_reason="Fallback readiness must not hide terminal execution failures for active reviewed requests.",
+            expires_at=reviewed_at + timedelta(hours=4),
+            action_request_id="action-request-phase21-readiness-fallback-terminal-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id=(
+                    "approval-phase21-readiness-fallback-terminal-001"
+                ),
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="executing",
+            )
+        )
+        service.persist_record(
+            ActionExecutionRecord(
+                action_execution_id=(
+                    "action-execution-phase21-readiness-fallback-terminal-001"
+                ),
+                action_request_id=action_request.action_request_id,
+                approval_decision_id=approval.approval_decision_id,
+                delegation_id="delegation-phase21-readiness-fallback-terminal-001",
+                execution_surface_type="automation_substrate",
+                execution_surface_id="shuffle",
+                execution_run_id="execution-run-phase21-readiness-fallback-terminal-001",
+                idempotency_key=action_request.idempotency_key,
+                target_scope=dict(action_request.target_scope),
+                approved_payload=dict(action_request.requested_payload),
+                payload_hash=action_request.payload_hash,
+                delegated_at=reviewed_at + timedelta(minutes=10),
+                expires_at=action_request.expires_at,
+                provenance={"initiated_by": "operator-review"},
+                lifecycle_state="failed",
+            )
+        )
+        setattr(store, "inspect_readiness_review_path_records", None)
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+            ),
+            store=store,
+        )
+
+        store.list_calls = 0
+        readiness = service.inspect_readiness_diagnostics()
+        review_path_health = readiness.metrics["review_path_health"]
+
+        self.assertGreater(store.list_calls, 0)
+        self.assertEqual(readiness.status, "degraded")
+        self.assertEqual(review_path_health["review_count"], 1)
+        self.assertEqual(review_path_health["overall_state"], "failed")
+        self.assertEqual(review_path_health["paths"]["delegation"]["reason"], "delegated")
+        self.assertEqual(
+            review_path_health["paths"]["provider"]["reason"],
+            "execution_failed",
+        )
+        self.assertEqual(
+            review_path_health["paths"]["persistence"]["reason"],
+            "awaiting_reconciliation",
+        )
+
+    def test_service_phase21_readiness_fallback_matches_execution_lineage_reconciliation(
+        self,
+    ) -> None:
+        inner_store, _ = make_store()
+        store = _ListCountingStore(inner=inner_store)
+        _store, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case(store=store)
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep fallback readiness aligned with matched reviewed lineage.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Keep execution-linked reconciliation visible on readiness.",
+            escalation_reason="Fallback readiness must match reconciliation lineage through execution identifiers.",
+            expires_at=reviewed_at + timedelta(hours=4),
+            action_request_id="action-request-phase21-readiness-fallback-lineage-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase21-readiness-fallback-lineage-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+        action_execution = service.persist_record(
+            ActionExecutionRecord(
+                action_execution_id=(
+                    "action-execution-phase21-readiness-fallback-lineage-001"
+                ),
+                action_request_id=action_request.action_request_id,
+                approval_decision_id=approval.approval_decision_id,
+                delegation_id="delegation-phase21-readiness-fallback-lineage-001",
+                execution_surface_type="automation_substrate",
+                execution_surface_id="shuffle",
+                execution_run_id="execution-run-phase21-readiness-fallback-lineage-001",
+                idempotency_key=action_request.idempotency_key,
+                target_scope=dict(action_request.target_scope),
+                approved_payload=dict(action_request.requested_payload),
+                payload_hash=action_request.payload_hash,
+                delegated_at=reviewed_at + timedelta(minutes=10),
+                expires_at=action_request.expires_at,
+                provenance={"initiated_by": "operator-review"},
+                lifecycle_state="succeeded",
+            )
+        )
+        service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id=(
+                    "reconciliation-phase21-readiness-fallback-lineage-001"
+                ),
+                subject_linkage={
+                    "case_ids": (promoted_case.case_id,),
+                    "action_execution_ids": (action_execution.action_execution_id,),
+                    "delegation_ids": (action_execution.delegation_id,),
+                },
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                analytic_signal_id=None,
+                execution_run_id=action_execution.execution_run_id,
+                linked_execution_run_ids=(action_execution.execution_run_id,),
+                correlation_key="phase21-readiness-fallback-lineage-001",
+                first_seen_at=action_execution.delegated_at + timedelta(minutes=1),
+                last_seen_at=action_execution.delegated_at + timedelta(minutes=2),
+                ingest_disposition="matched",
+                mismatch_summary=(
+                    "fallback readiness matched reconciliation through execution lineage"
+                ),
+                compared_at=action_execution.delegated_at + timedelta(minutes=3),
+                lifecycle_state="matched",
+            )
+        )
+        setattr(store, "inspect_readiness_review_path_records", None)
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+            ),
+            store=store,
+        )
+
+        store.list_calls = 0
+        readiness = service.inspect_readiness_diagnostics()
+        review_path_health = readiness.metrics["review_path_health"]
+
+        self.assertGreater(store.list_calls, 0)
+        self.assertEqual(readiness.status, "ready")
+        self.assertEqual(review_path_health["review_count"], 1)
+        self.assertEqual(review_path_health["overall_state"], "healthy")
+        self.assertEqual(review_path_health["paths"]["delegation"]["reason"], "delegated")
+        self.assertEqual(
+            review_path_health["paths"]["provider"]["reason"],
+            "execution_succeeded",
+        )
+        self.assertEqual(
+            review_path_health["paths"]["persistence"]["reason"],
+            "reconciliation_matched",
+        )
+
     def test_service_phase21_readiness_counts_distinct_execution_runs_and_redacts_payload(
         self,
     ) -> None:
