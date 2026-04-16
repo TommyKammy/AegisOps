@@ -473,6 +473,7 @@ class RestoreDrillSnapshot:
     read_only: bool
     drill_passed: bool
     verified_case_ids: tuple[str, ...]
+    verified_recommendation_ids: tuple[str, ...]
     verified_approval_decision_ids: tuple[str, ...]
     verified_action_execution_ids: tuple[str, ...]
     verified_reconciliation_ids: tuple[str, ...]

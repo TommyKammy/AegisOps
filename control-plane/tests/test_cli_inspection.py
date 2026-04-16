@@ -883,6 +883,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             approval_decision.approval_decision_id,
             drill_payload["verified_approval_decision_ids"],
         )
+        self.assertIn(
+            recommendation.recommendation_id,
+            drill_payload["verified_recommendation_ids"],
+        )
 
     def test_backup_authoritative_record_chain_reports_usage_error_on_invalid_backup(
         self,

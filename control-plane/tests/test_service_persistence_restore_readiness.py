@@ -454,6 +454,10 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             restore_summary.restore_drill.verified_approval_decision_ids,
             (approval_decision.approval_decision_id,),
         )
+        self.assertEqual(
+            restore_summary.restore_drill.verified_recommendation_ids,
+            (recommendation.recommendation_id,),
+        )
         self.assertIn(
             promoted_case.case_id,
             restore_summary.restore_drill.verified_case_ids,

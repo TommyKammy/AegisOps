@@ -870,6 +870,7 @@ class RestoreReadinessService:
             read_only=True,
             drill_passed=readiness_status == "ready",
             verified_case_ids=verified_case_ids,
+            verified_recommendation_ids=verified_recommendation_ids,
             verified_approval_decision_ids=verified_approval_decision_ids,
             verified_action_execution_ids=verified_action_execution_ids,
             verified_reconciliation_ids=verified_reconciliation_ids,
