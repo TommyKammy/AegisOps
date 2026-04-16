@@ -6,42 +6,43 @@
 - Workspace: .
 - Journal: .codex-supervisor/issues/494/issue-journal.md
 - Current phase: local_review_fix
-- Attempt count: 2 (implementation=1, repair=1)
-- Last head SHA: 2a55f4ab2692896b68a1a9bcecd7a2a86a6deb3c
+- Attempt count: 29 (implementation=1, repair=1)
+- Last head SHA: b25cc712113d32b08202ed5bc875e6c39e902d4a
 - Blocked reason: none
-- Last failure signature: local-review:high:high:3:3:clean
+- Last failure signature: local-review:medium:none:1:0:clean
 - Repeated failure signature count: 2
-- Updated at: 2026-04-16T06:01:02.540Z
+- Updated at: 2026-04-16T13:05:24.608Z
 
 ## Latest Codex Summary
-Implemented append-only lifecycle transition logging beside the existing mutable current-state records. The change adds a new `LifecycleTransitionRecord`, logs immutable transitions from `persist_record` on create/state change, includes transition history in alert/case detail inspection, and carries the transition family through authoritative backup/restore as schema `phase23.authoritative-record-chain.v2`.
+The remaining local-review failure was not in the lifecycle-transition implementation itself; it was that `.codex-supervisor/issues/494/issue-journal.md` had been corrected only in the live worktree while the tracked path still carried the stale `2a55f4ab2692896b68a1a9bcecd7a2a86a6deb3c` snapshot. I confirmed `HEAD` still contained the old journal content, found the path was hidden from Git by `skip-worktree`, cleared that flag, and refreshed the tracked journal so the branch now records the repaired implementation handoff for head `b25cc712113d32b08202ed5bc875e6c39e902d4a`.
 
-A focused reproducer was added in [control-plane/tests/test_phase23_transition_logging_validation.py](control-plane/tests/test_phase23_transition_logging_validation.py), and the slice is checkpointed in commit `2a55f4a` (`Add append-only lifecycle transition logging`). I also updated the issue journal working notes in `.codex-supervisor/issues/494/issue-journal.md`.
-
-Summary: Added append-only lifecycle transition logging with alert/case inspection visibility and authoritative backup/restore support; committed as `2a55f4a`.
-State hint: implementing
+Summary: Synced the committed issue journal to the repaired PR state and cleared the hidden `skip-worktree` bit that had kept the stale `2a55f4a` snapshot in the branch.
+State hint: local_review_fix
 Blocked reason: none
-Tests: `python3 -m unittest control-plane.tests.test_phase23_transition_logging_validation`; `python3 -m unittest control-plane.tests.test_service_persistence_restore_readiness`
-Next action: Open a draft PR for `codex/issue-494` from checkpoint `2a55f4a`, then extend or review transition-history coverage for the remaining reviewed lifecycle families if needed.
-Failure signature: local-review:high:high:3:3:clean
+Tests: `python3 -m unittest control-plane.tests.test_phase23_transition_logging_validation`; `python3 -m unittest control-plane.tests.test_service_persistence_restore_readiness`; manual alert/case inspection via `python3 - <<'PY' ...`
+Next action: Commit and push the journal-sync repair, then refresh local review or PR state on the updated branch head to confirm the stale-snapshot finding is gone.
+Failure signature: local-review:medium:none:1:0:clean
 
 ## Active Failure Context
 - Category: blocked
-- Summary: Local review found 4 actionable finding(s) across 3 root cause(s); max severity=high; verified high-severity findings=3; verified max severity=high.
+- Summary: Local review found 1 actionable finding(s) across 1 root cause(s); max severity=medium; verified high-severity findings=0; verified max severity=none.
 - Details:
-  - findings=4
-  - root_causes=3
+  - findings=1
+  - root_causes=1
   - summary=<redacted-local-path>
 
 ## Codex Working Notes
 ### Current Handoff
-- Hypothesis: The remaining blockers were transactional and restore-validation gaps in the new lifecycle transition path, not missing transition logging itself.
-- What changed: Wrapped `persist_record()` in `self._store.transaction()` so current-state and append-only transition writes commit or roll back together, extended authoritative restore validation to load `lifecycle_transition` records and reject duplicate transition IDs plus missing authoritative subjects, and added focused regressions for transition-save rollback and duplicate/orphan transition restore payloads.
+- Hypothesis: No new lifecycle-transition implementation defects remain on head `b25cc71`; the only residual review problem was that the committed issue journal still pointed reviewers at the superseded `2a55f4a` checkpoint because the corrected file had been left under `skip-worktree`.
+- What changed: Confirmed `git show HEAD:.codex-supervisor/issues/494/issue-journal.md` still exposed the old `2a55f4ab2692896b68a1a9bcecd7a2a86a6deb3c` snapshot, cleared `skip-worktree` on `.codex-supervisor/issues/494/issue-journal.md`, and refreshed the tracked journal so the committed branch state now reflects the repaired `b25cc71` handoff and the resolved blocker contradiction.
 - Current blocker: none.
-- Next exact step: Rerun local review on the updated head to confirm the three must-fix findings are cleared, then commit this repair slice on `codex/issue-494`.
-- Verification gap: Required targeted suites passed; broader non-required suites were not rerun this turn.
-- Files touched: `control-plane/aegisops_control_plane/service.py`, `control-plane/aegisops_control_plane/operations.py`, `control-plane/tests/test_phase23_transition_logging_validation.py`, `control-plane/tests/test_service_persistence_restore_readiness.py`.
-- Rollback concern: Backup schema version advanced to `phase23.authoritative-record-chain.v2`, so any consumer pinned to the old `v1` payload name would need coordinated update or compatibility shims.
-- Last focused command: `python3 -m unittest control-plane.tests.test_phase23_transition_logging_validation` and `python3 -m unittest control-plane.tests.test_service_persistence_restore_readiness`
+- Next exact step: Commit and push this journal-only repair, then rerun or refresh local review on the new branch head.
+- Verification gap: No repository code changed in this repair slice; the targeted lifecycle-transition and restore-readiness suites passed, and a manual alert/case inspection confirmed both current-state fields and append-only lifecycle history remain visible.
+- Files touched: `.codex-supervisor/issues/494/issue-journal.md`.
+- Rollback concern: Rolling back would restore stale supervisor context and can send the next review pass back to the superseded `2a55f4a` snapshot.
+- Last focused command: `git show HEAD:.codex-supervisor/issues/494/issue-journal.md | sed -n '1,220p'`, `git ls-files -v .codex-supervisor/issues/494/issue-journal.md`, `git update-index --no-skip-worktree .codex-supervisor/issues/494/issue-journal.md`, `python3 -m unittest control-plane.tests.test_phase23_transition_logging_validation`, `python3 -m unittest control-plane.tests.test_service_persistence_restore_readiness`, and `python3 - <<'PY' ...`
 ### Scratchpad
 - Keep this section short. The supervisor may compact older notes automatically.
+- Current local focus: land the journal-sync repair that clears the stale committed snapshot on PR `#501`.
+- New local regressions: none; code and targeted verification remain green.
+- Current local head: `b25cc712113d32b08202ed5bc875e6c39e902d4a`.
