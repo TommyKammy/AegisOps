@@ -640,6 +640,10 @@ def build_handler_class(
 
             if request_path == "/operator/record-action-approval-decision":
                 try:
+                    if getattr(principal, "role", None) != "approver":
+                        raise PermissionError(
+                            "approval decisions require approver role authority"
+                        )
                     payload = read_json_request_body(self)
                     if getattr(principal, "access_path", "") == "reviewed_reverse_proxy":
                         self._require_matching_identity(

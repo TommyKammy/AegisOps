@@ -38,6 +38,12 @@ REVIEWED_APPROVER_PRINCIPAL = AuthenticatedRuntimePrincipal(
     access_path="reviewed_reverse_proxy",
     proxy_service_account=REVIEWED_PROXY_SERVICE_ACCOUNT,
 )
+REVIEWED_ANALYST_PRINCIPAL = AuthenticatedRuntimePrincipal(
+    identity="analyst-002",
+    role="analyst",
+    access_path="reviewed_reverse_proxy",
+    proxy_service_account=REVIEWED_PROXY_SERVICE_ACCOUNT,
+)
 
 
 class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
@@ -45,11 +51,13 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
     @contextlib.contextmanager
     def _mock_authenticated_surface_access(
         service: AegisOpsControlPlaneService,
+        *,
+        principal: AuthenticatedRuntimePrincipal = REVIEWED_APPROVER_PRINCIPAL,
     ) -> object:
         with mock.patch.object(
             service,
             "authenticate_protected_surface_request",
-            return_value=REVIEWED_APPROVER_PRINCIPAL,
+            return_value=principal,
         ):
             yield
 
@@ -101,6 +109,8 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
     def _run_runtime(
         self,
         service: AegisOpsControlPlaneService,
+        *,
+        principal: AuthenticatedRuntimePrincipal = REVIEWED_APPROVER_PRINCIPAL,
     ) -> object:
         servers: list[main.ThreadingHTTPServer] = []
 
@@ -109,8 +119,13 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
                 super().__init__(server_address, handler_class)
                 servers.append(self)
 
-        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
-            service
+        with mock.patch.object(
+            main,
+            "ThreadingHTTPServer",
+            RecordingServer,
+        ), self._mock_authenticated_surface_access(
+            service,
+            principal=principal,
         ):
             thread = threading.Thread(
                 target=main.run_control_plane_service,
@@ -266,6 +281,48 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
                 )
             self.assertEqual(exc_info.exception.code, HTTPStatus.FORBIDDEN)
             stored_request = service.get_record(type(action_request), action_request.action_request_id)
+            self.assertIsNotNone(stored_request)
+            self.assertIsNone(stored_request.approval_decision_id)
+            self.assertEqual(stored_request.lifecycle_state, "pending_approval")
+
+    def test_reviewed_runtime_path_rejects_analyst_decision_authority(self) -> None:
+        service = self._build_service()
+        action_request = self._build_pending_action_request(
+            service,
+            action_request_id="action-request-phase23-analyst-authority-001",
+        )
+
+        with self._run_runtime(service, principal=REVIEWED_ANALYST_PRINCIPAL) as base_url:
+            with self.assertRaises(error.HTTPError) as exc_info:
+                request.urlopen(  # noqa: S310
+                    request.Request(  # noqa: S310
+                        f"{base_url}/operator/record-action-approval-decision",
+                        data=json.dumps(
+                            {
+                                "action_request_id": action_request.action_request_id,
+                                "approval_decision_id": "approval-phase23-analyst-authority-001",
+                                "decision": "grant",
+                                "approver_identity": "analyst-002",
+                                "decision_rationale": "Analysts must not record approval decisions.",
+                                "decided_at": (
+                                    action_request.requested_at + timedelta(minutes=10)
+                                ).isoformat(),
+                            }
+                        ).encode("utf-8"),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    ),
+                    timeout=2,
+                )
+
+            self.assertEqual(exc_info.exception.code, HTTPStatus.FORBIDDEN)
+            error_payload = json.loads(exc_info.exception.read().decode("utf-8"))
+            self.assertEqual(error_payload["error"], "forbidden")
+            self.assertIn("approver role authority", error_payload["message"])
+            stored_request = service.get_record(
+                type(action_request),
+                action_request.action_request_id,
+            )
             self.assertIsNotNone(stored_request)
             self.assertIsNone(stored_request.approval_decision_id)
             self.assertEqual(stored_request.lifecycle_state, "pending_approval")
