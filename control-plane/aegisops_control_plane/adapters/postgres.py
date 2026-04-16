@@ -88,6 +88,9 @@ class ConnectionProtocol(Protocol):
     def rollback(self) -> None:
         ...
 
+    def close(self) -> None:
+        ...
+
 
 def _normalize_sort_datetime(value: datetime | None) -> datetime:
     if value is None:
@@ -106,9 +109,6 @@ def _readiness_reconciliation_sort_key(
         _normalize_sort_datetime(record.first_seen_at),
         record.reconciliation_id,
     )
-
-    def close(self) -> None:
-        ...
 
 
 ConnectionFactory = Callable[[str], ConnectionProtocol]
