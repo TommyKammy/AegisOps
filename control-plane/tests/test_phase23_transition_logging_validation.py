@@ -185,6 +185,52 @@ class Phase23TransitionLoggingValidationTests(ServicePersistenceTestBase):
         self.assertEqual(store.list_calls, 0)
         self.assertEqual(store.latest_lifecycle_transition_calls, 2)
 
+    def test_transition_logging_rejects_current_state_drift_from_authoritative_history(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        transitioned_at = datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc)
+        alert = AlertRecord(
+            alert_id="alert-transition-drift-001",
+            finding_id="finding-transition-drift-001",
+            analytic_signal_id=None,
+            case_id=None,
+            lifecycle_state="new",
+        )
+
+        service.persist_record(alert, transitioned_at=transitioned_at)
+        store.save(replace(alert, lifecycle_state="triaged"))
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                rf"alert record '{alert.alert_id}' lifecycle_state 'triaged' does not "
+                r"match latest lifecycle transition .* state 'new'"
+            ),
+        ):
+            service.persist_record(
+                replace(alert, lifecycle_state="closed"),
+                transitioned_at=transitioned_at + timedelta(minutes=5),
+            )
+
+        persisted_alert = service.get_record(AlertRecord, alert.alert_id)
+        assert persisted_alert is not None
+        self.assertEqual(persisted_alert.lifecycle_state, "triaged")
+        self.assertEqual(
+            [
+                transition.lifecycle_state
+                for transition in service.list_lifecycle_transitions(
+                    "alert",
+                    alert.alert_id,
+                )
+            ],
+            ["new"],
+        )
+
     def test_transition_logging_uses_targeted_history_lookup_on_inspection(self) -> None:
         inner_store, _ = make_store()
         store = _ListCountingStore(inner=inner_store)

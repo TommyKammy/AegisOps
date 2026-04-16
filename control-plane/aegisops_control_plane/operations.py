@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from contextlib import AbstractContextManager, contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hmac
 import ipaddress
 from typing import Any, Callable, Iterator, Mapping, Protocol, Type
@@ -39,6 +39,26 @@ _LEGACY_PHASE21_MISSING_RECORD_FAMILIES = frozenset(
         AITraceRecord.record_family,
     }
 )
+_LEGACY_RESTORE_FALLBACK_TRANSITION_ANCHOR = datetime(
+    2000,
+    1,
+    1,
+    tzinfo=timezone.utc,
+)
+
+
+def _parse_optional_backup_created_at(value: object) -> datetime | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed
 
 
 def _is_missing_runtime_binding(value: object) -> bool:
@@ -344,7 +364,7 @@ class RestoreReadinessService:
         record_types_by_family: Mapping[str, Type[ControlPlaneRecord]],
         find_duplicate_strings: Callable[[tuple[str, ...]], tuple[str, ...]],
         synthesize_lifecycle_transition_record: Callable[
-            [ControlPlaneRecord],
+            [ControlPlaneRecord, datetime | None],
             LifecycleTransitionRecord | None,
         ],
         assistant_ids_from_mapping: Callable[[Mapping[str, object] | None, str], tuple[str, ...]],
@@ -708,6 +728,9 @@ class RestoreReadinessService:
         record_counts_payload = backup_payload.get("record_counts")
         if not isinstance(record_counts_payload, Mapping):
             raise ValueError("restore payload must contain record_counts")
+        backup_created_at = _parse_optional_backup_created_at(
+            backup_payload.get("created_at")
+        )
 
         parsed_records: dict[str, tuple[ControlPlaneRecord, ...]] = {}
         restored_record_counts: dict[str, int] = {}
@@ -739,7 +762,8 @@ class RestoreReadinessService:
 
         if legacy_phase21_backup:
             synthesized_transitions = self._synthesize_missing_lifecycle_transition_records(
-                parsed_records
+                parsed_records,
+                backup_created_at=backup_created_at,
             )
             parsed_records["lifecycle_transition"] = synthesized_transitions
             restored_record_counts["lifecycle_transition"] = len(synthesized_transitions)
@@ -887,6 +911,8 @@ class RestoreReadinessService:
     def _synthesize_missing_lifecycle_transition_records(
         self,
         records_by_family: Mapping[str, tuple[ControlPlaneRecord, ...]],
+        *,
+        backup_created_at: datetime | None,
     ) -> tuple[LifecycleTransitionRecord, ...]:
         synthesized_transitions = list(
             record
@@ -897,6 +923,7 @@ class RestoreReadinessService:
             (record.subject_record_family, record.subject_record_id)
             for record in synthesized_transitions
         }
+        pending_subject_records: list[ControlPlaneRecord] = []
         for record_type in self._authoritative_record_chain_record_types:
             if record_type is LifecycleTransitionRecord:
                 continue
@@ -904,13 +931,25 @@ class RestoreReadinessService:
                 subject_key = (record.record_family, record.record_id)
                 if subject_key in covered_subjects:
                     continue
-                synthesized_transition = self._synthesize_lifecycle_transition_record(
-                    record
-                )
-                if synthesized_transition is None:
-                    continue
-                synthesized_transitions.append(synthesized_transition)
+                pending_subject_records.append(record)
                 covered_subjects.add(subject_key)
+        fallback_anchor = (
+            backup_created_at
+            if backup_created_at is not None
+            else _LEGACY_RESTORE_FALLBACK_TRANSITION_ANCHOR
+        )
+        pending_count = len(pending_subject_records)
+        for index, record in enumerate(pending_subject_records):
+            fallback_transitioned_at = fallback_anchor - timedelta(
+                microseconds=pending_count - index
+            )
+            synthesized_transition = self._synthesize_lifecycle_transition_record(
+                record,
+                fallback_transitioned_at,
+            )
+            if synthesized_transition is None:
+                continue
+            synthesized_transitions.append(synthesized_transition)
         synthesized_transitions.sort(
             key=lambda transition: (
                 transition.transitioned_at,

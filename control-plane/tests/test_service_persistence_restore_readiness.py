@@ -610,6 +610,61 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             },
         )
 
+    def test_service_phase21_restore_uses_deterministic_backup_anchors_for_missing_history(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        backup_created_at = reviewed_at + timedelta(hours=1)
+        backup["created_at"] = backup_created_at.isoformat()
+        backup["backup_schema_version"] = "phase21.authoritative-record-chain.v1"
+        for family in _PHASE21_LEGACY_MISSING_AUTHORITATIVE_FAMILIES:
+            del backup["record_families"][family]
+            del backup["record_counts"][family]
+
+        def restore_transition_times(
+            restored_now: datetime,
+        ) -> tuple[datetime, datetime]:
+            restored_store, _ = make_store()
+            restored_service = AegisOpsControlPlaneService(
+                RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+                store=restored_store,
+            )
+            with mock.patch(
+                "aegisops_control_plane.service.datetime",
+                wraps=datetime,
+            ) as mocked_datetime:
+                mocked_datetime.now.return_value = restored_now
+                restored_service.restore_authoritative_record_chain_backup(backup)
+            case_transitions = restored_service.list_lifecycle_transitions(
+                "case",
+                promoted_case.case_id,
+            )
+            alert_transitions = restored_service.list_lifecycle_transitions(
+                "alert",
+                promoted_case.alert_id,
+            )
+            self.assertEqual(len(case_transitions), 1)
+            self.assertEqual(len(alert_transitions), 1)
+            return (
+                case_transitions[0].transitioned_at,
+                alert_transitions[0].transitioned_at,
+            )
+
+        first_case_at, first_alert_at = restore_transition_times(
+            datetime(2035, 1, 2, 3, 4, tzinfo=timezone.utc)
+        )
+        second_case_at, second_alert_at = restore_transition_times(
+            datetime(2036, 2, 3, 4, 5, tzinfo=timezone.utc)
+        )
+
+        self.assertEqual(first_case_at, second_case_at)
+        self.assertEqual(first_alert_at, second_alert_at)
+        self.assertLessEqual(first_case_at, backup_created_at)
+        self.assertLessEqual(first_alert_at, backup_created_at)
+
     def test_service_phase21_restore_ignores_triage_timestamp_when_case_state_mismatches(
         self,
     ) -> None:

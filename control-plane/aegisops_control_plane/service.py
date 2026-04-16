@@ -1068,9 +1068,10 @@ class AegisOpsControlPlaneService:
             record_types_by_family=RECORD_TYPES_BY_FAMILY,
             find_duplicate_strings=_find_duplicate_strings,
             synthesize_lifecycle_transition_record=(
-                lambda record: self._build_lifecycle_transition_record(
+                lambda record, initial_transitioned_at_fallback=None: self._build_lifecycle_transition_record(
                     record,
                     existing_record=None,
+                    initial_transitioned_at_fallback=initial_transitioned_at_fallback,
                 )
             ),
             assistant_ids_from_mapping=self._assistant_ids_from_mapping,
@@ -1161,6 +1162,7 @@ class AegisOpsControlPlaneService:
         *,
         existing_record: ControlPlaneRecord | None,
         transitioned_at: datetime | None = None,
+        initial_transitioned_at_fallback: datetime | None = None,
         must_precede_transitioned_at: datetime | None = None,
         latest_transition: LifecycleTransitionRecord | None | object = (
             _LATEST_LIFECYCLE_TRANSITION_UNSET
@@ -1171,7 +1173,7 @@ class AegisOpsControlPlaneService:
         if not hasattr(record, "lifecycle_state"):
             return None
 
-        previous_lifecycle_state = (
+        existing_lifecycle_state = (
             getattr(existing_record, "lifecycle_state", None)
             if existing_record is not None
             else None
@@ -1179,6 +1181,24 @@ class AegisOpsControlPlaneService:
         next_lifecycle_state = getattr(record, "lifecycle_state", None)
         if not isinstance(next_lifecycle_state, str) or not next_lifecycle_state.strip():
             return None
+        if latest_transition is _LATEST_LIFECYCLE_TRANSITION_UNSET:
+            latest_transition = self._latest_lifecycle_transition(
+                record.record_family,
+                record.record_id,
+            )
+        previous_lifecycle_state = existing_lifecycle_state
+        if latest_transition is not None:
+            if (
+                existing_record is not None
+                and existing_lifecycle_state != latest_transition.lifecycle_state
+            ):
+                raise ValueError(
+                    f"{record.record_family} record {record.record_id!r} lifecycle_state "
+                    f"{existing_lifecycle_state!r} does not match latest lifecycle "
+                    f"transition {latest_transition.transition_id!r} state "
+                    f"{latest_transition.lifecycle_state!r}"
+                )
+            previous_lifecycle_state = latest_transition.lifecycle_state
         if previous_lifecycle_state == next_lifecycle_state:
             return None
 
@@ -1187,7 +1207,10 @@ class AegisOpsControlPlaneService:
             transitioned_at
             if transitioned_at is not None
             else (
-                self._initial_lifecycle_transitioned_at(record)
+                self._initial_lifecycle_transitioned_at(
+                    record,
+                    fallback=initial_transitioned_at_fallback,
+                )
                 if existing_record is None
                 else datetime.now(timezone.utc)
             )
@@ -1198,11 +1221,6 @@ class AegisOpsControlPlaneService:
         ):
             resolved_transitioned_at = must_precede_transitioned_at - timedelta(
                 microseconds=1
-            )
-        if latest_transition is _LATEST_LIFECYCLE_TRANSITION_UNSET:
-            latest_transition = self._latest_lifecycle_transition(
-                record.record_family,
-                record.record_id,
             )
         if (
             latest_transition is not None
@@ -1304,6 +1322,8 @@ class AegisOpsControlPlaneService:
     def _initial_lifecycle_transitioned_at(
         self,
         record: ControlPlaneRecord,
+        *,
+        fallback: datetime | None = None,
     ) -> datetime:
         if isinstance(record, AnalyticSignalRecord):
             if record.first_seen_at is not None:
@@ -1341,7 +1361,7 @@ class AegisOpsControlPlaneService:
             ):
                 if candidate is not None:
                     return candidate
-        return datetime.now(timezone.utc)
+        return fallback if fallback is not None else datetime.now(timezone.utc)
 
     @staticmethod
     def _reviewed_context_transitioned_at(
