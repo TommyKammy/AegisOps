@@ -31,6 +31,7 @@ from aegisops_control_plane.models import (
     CaseRecord,
     EvidenceRecord,
     LeadRecord,
+    LifecycleTransitionRecord,
     NativeDetectionRecord,
     ObservationRecord,
     ReconciliationRecord,

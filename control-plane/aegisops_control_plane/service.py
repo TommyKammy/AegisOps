@@ -35,6 +35,7 @@ from .models import (
     HuntRecord,
     HuntRunRecord,
     LeadRecord,
+    LifecycleTransitionRecord,
     NativeDetectionRecord,
     ObservationRecord,
     ReconciliationRecord,
@@ -199,6 +200,7 @@ class AlertDetailSnapshot:
     native_rule: dict[str, object] | None
     provenance: dict[str, str] | None
     lineage: dict[str, object]
+    lifecycle_transitions: tuple[dict[str, object], ...]
     current_action_review: dict[str, object] | None
     action_reviews: tuple[dict[str, object], ...]
 
@@ -219,6 +221,7 @@ class AlertDetailSnapshot:
                 "native_rule": self.native_rule,
                 "provenance": self.provenance,
                 "lineage": self.lineage,
+                "lifecycle_transitions": self.lifecycle_transitions,
                 "current_action_review": self.current_action_review,
                 "action_reviews": self.action_reviews,
             }
@@ -244,6 +247,7 @@ class CaseDetailSnapshot:
     linked_evidence_records: tuple[dict[str, object], ...]
     linked_recommendation_records: tuple[dict[str, object], ...]
     linked_reconciliation_records: tuple[dict[str, object], ...]
+    lifecycle_transitions: tuple[dict[str, object], ...]
     current_action_review: dict[str, object] | None
     action_reviews: tuple[dict[str, object], ...]
 
@@ -267,6 +271,7 @@ class CaseDetailSnapshot:
                 "linked_evidence_records": self.linked_evidence_records,
                 "linked_recommendation_records": self.linked_recommendation_records,
                 "linked_reconciliation_records": self.linked_reconciliation_records,
+                "lifecycle_transitions": self.lifecycle_transitions,
                 "current_action_review": self.current_action_review,
                 "action_reviews": self.action_reviews,
             }
@@ -527,6 +532,7 @@ RECORD_TYPES_BY_FAMILY: dict[str, Type[ControlPlaneRecord]] = {
         AnalyticSignalRecord,
         CaseRecord,
         EvidenceRecord,
+        LifecycleTransitionRecord,
         ObservationRecord,
         LeadRecord,
         RecommendationRecord,
@@ -545,6 +551,7 @@ AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES: tuple[Type[ControlPlaneRecord], ...] = 
     AlertRecord,
     EvidenceRecord,
     CaseRecord,
+    LifecycleTransitionRecord,
     ApprovalDecisionRecord,
     ActionRequestRecord,
     ActionExecutionRecord,
@@ -554,13 +561,14 @@ AUTHORITATIVE_RECORD_CHAIN_FAMILIES: tuple[str, ...] = tuple(
     record_type.record_family for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES
 )
 AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION = (
-    "phase21.authoritative-record-chain.v1"
+    "phase23.authoritative-record-chain.v2"
 )
 _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY: dict[str, str] = {
     "analytic_signal": "analytic_signal_id",
     "alert": "alert_id",
     "evidence": "evidence_id",
     "case": "case_id",
+    "lifecycle_transition": "transition_id",
     "approval_decision": "approval_decision_id",
     "action_request": "action_request_id",
     "action_execution": "action_execution_id",
@@ -569,6 +577,7 @@ _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY: dict[str, str] = {
 _BACKUP_DATETIME_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
     "analytic_signal": ("first_seen_at", "last_seen_at"),
     "evidence": ("acquired_at",),
+    "lifecycle_transition": ("transitioned_at",),
     "approval_decision": ("decided_at", "approved_expires_at"),
     "action_request": ("requested_at", "expires_at"),
     "action_execution": ("delegated_at", "expires_at"),
@@ -584,6 +593,7 @@ _BACKUP_MAPPING_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
     "analytic_signal": ("reviewed_context",),
     "alert": ("reviewed_context",),
     "case": ("reviewed_context",),
+    "lifecycle_transition": ("attribution",),
     "approval_decision": ("target_snapshot",),
     "action_request": (
         "target_scope",
@@ -1004,7 +1014,96 @@ class AegisOpsControlPlaneService:
         return self._runtime_boundary_service.describe_runtime()
 
     def persist_record(self, record: RecordT) -> RecordT:
-        return self._store.save(record)
+        existing_record = self._store.get(type(record), record.record_id)
+        persisted_record = self._store.save(record)
+        transition_record = self._build_lifecycle_transition_record(
+            persisted_record,
+            existing_record=existing_record,
+        )
+        if transition_record is not None:
+            self._store.save(transition_record)
+        return persisted_record
+
+    def _build_lifecycle_transition_record(
+        self,
+        record: ControlPlaneRecord,
+        *,
+        existing_record: ControlPlaneRecord | None,
+    ) -> LifecycleTransitionRecord | None:
+        if isinstance(record, LifecycleTransitionRecord):
+            return None
+        if not hasattr(record, "lifecycle_state"):
+            return None
+
+        previous_lifecycle_state = (
+            getattr(existing_record, "lifecycle_state", None)
+            if existing_record is not None
+            else None
+        )
+        next_lifecycle_state = getattr(record, "lifecycle_state", None)
+        if not isinstance(next_lifecycle_state, str) or not next_lifecycle_state.strip():
+            return None
+        if previous_lifecycle_state == next_lifecycle_state:
+            return None
+
+        transitioned_at = datetime.now(timezone.utc)
+        transition_timestamp = transitioned_at.strftime("%Y%m%dT%H%M%S.%fZ")
+        return LifecycleTransitionRecord(
+            transition_id=f"{transition_timestamp}:{uuid.uuid4()}",
+            subject_record_family=record.record_family,
+            subject_record_id=record.record_id,
+            previous_lifecycle_state=(
+                previous_lifecycle_state
+                if isinstance(previous_lifecycle_state, str)
+                and previous_lifecycle_state.strip()
+                else None
+            ),
+            lifecycle_state=next_lifecycle_state,
+            transitioned_at=transitioned_at,
+            attribution=self._lifecycle_transition_attribution(record),
+        )
+
+    def _lifecycle_transition_attribution(
+        self,
+        record: ControlPlaneRecord,
+    ) -> dict[str, object]:
+        actor_identities: tuple[str, ...] = ()
+        source = "aegisops-control-plane"
+
+        if isinstance(record, RecommendationRecord):
+            actor_identities = self._merge_linked_ids((), record.review_owner)
+            source = "recommendation-review-owner"
+        elif isinstance(record, ActionRequestRecord):
+            actor_identities = self._merge_linked_ids((), record.requester_identity)
+            source = "action-request"
+        elif isinstance(record, ApprovalDecisionRecord):
+            actor_identities = self._merge_linked_ids(
+                record.approver_identities,
+                None,
+            )
+            source = "approval-decision"
+
+        return {
+            "source": source,
+            "actor_identities": actor_identities,
+        }
+
+    def list_lifecycle_transitions(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> tuple[LifecycleTransitionRecord, ...]:
+        normalized_record_family = self._require_non_empty_string(
+            record_family,
+            "record_family",
+        )
+        normalized_record_id = self._require_non_empty_string(record_id, "record_id")
+        return tuple(
+            transition
+            for transition in self._store.list(LifecycleTransitionRecord)
+            if transition.subject_record_family == normalized_record_family
+            and transition.subject_record_id == normalized_record_id
+        )
 
     def _emit_structured_event(
         self,
@@ -2679,6 +2778,10 @@ class AegisOpsControlPlaneService:
                 reconciliation.subject_linkage.get("admission_provenance")
             ),
             lineage=lineage,
+            lifecycle_transitions=tuple(
+                _record_to_dict(transition)
+                for transition in self.list_lifecycle_transitions("alert", alert.alert_id)
+            ),
             current_action_review=dict(action_reviews[0]) if action_reviews else None,
             action_reviews=action_reviews,
         )
@@ -2730,6 +2833,10 @@ class AegisOpsControlPlaneService:
             linked_evidence_records=context_snapshot.linked_evidence_records,
             linked_recommendation_records=context_snapshot.linked_recommendation_records,
             linked_reconciliation_records=context_snapshot.linked_reconciliation_records,
+            lifecycle_transitions=tuple(
+                _record_to_dict(transition)
+                for transition in self.list_lifecycle_transitions("case", case_id)
+            ),
             current_action_review=dict(action_reviews[0]) if action_reviews else None,
             action_reviews=action_reviews,
         )

@@ -189,6 +189,23 @@ class RecommendationRecord(ControlPlaneRecord):
 
 
 @dataclass(frozen=True)
+class LifecycleTransitionRecord(ControlPlaneRecord):
+    record_family: ClassVar[str] = "lifecycle_transition"
+    identifier_field: ClassVar[str] = "transition_id"
+
+    transition_id: str
+    subject_record_family: str
+    subject_record_id: str
+    previous_lifecycle_state: str | None
+    lifecycle_state: str
+    transitioned_at: datetime
+    attribution: Mapping[str, object] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "attribution", _freeze_mapping(self.attribution))
+
+
+@dataclass(frozen=True)
 class ApprovalDecisionRecord(ControlPlaneRecord):
     record_family: ClassVar[str] = "approval_decision"
     identifier_field: ClassVar[str] = "approval_decision_id"
@@ -364,6 +381,7 @@ AnyControlPlaneRecord = Union[
     EvidenceRecord,
     ObservationRecord,
     LeadRecord,
+    LifecycleTransitionRecord,
     RecommendationRecord,
     ApprovalDecisionRecord,
     ActionRequestRecord,

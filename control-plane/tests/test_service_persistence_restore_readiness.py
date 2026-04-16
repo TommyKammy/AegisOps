@@ -342,7 +342,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
 
         self.assertEqual(
             backup["backup_schema_version"],
-            "phase21.authoritative-record-chain.v1",
+            "phase23.authoritative-record-chain.v2",
         )
         self.assertEqual(backup["record_counts"]["action_execution"], 1)
         self.assertEqual(restore_summary.restored_record_counts["reconciliation"], 2)
@@ -1694,7 +1694,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "authoritative restore target must be empty before restore; found existing records for recommendation",
+            "authoritative restore target must be empty before restore; found existing records for lifecycle_transition, recommendation",
         ):
             restored_service.restore_authoritative_record_chain_backup(backup)
 

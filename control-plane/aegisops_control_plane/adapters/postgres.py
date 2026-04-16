@@ -20,6 +20,7 @@ from ..models import (
     HuntRecord,
     HuntRunRecord,
     LeadRecord,
+    LifecycleTransitionRecord,
     ObservationRecord,
     ReconciliationRecord,
     RecommendationRecord,
@@ -143,6 +144,58 @@ _LIFECYCLE_STATES_BY_FAMILY: dict[str, frozenset[str]] = {
             "superseded",
         }
     ),
+    "lifecycle_transition": frozenset(
+        {
+            "new",
+            "triaged",
+            "investigating",
+            "escalated_to_case",
+            "closed",
+            "reopened",
+            "superseded",
+            "active",
+            "withdrawn",
+            "open",
+            "pending_action",
+            "contained_pending_validation",
+            "collected",
+            "validated",
+            "linked",
+            "captured",
+            "confirmed",
+            "challenged",
+            "promoted_to_alert",
+            "promoted_to_case",
+            "proposed",
+            "under_review",
+            "accepted",
+            "rejected",
+            "materialized",
+            "pending",
+            "approved",
+            "expired",
+            "canceled",
+            "draft",
+            "executing",
+            "completed",
+            "failed",
+            "unresolved",
+            "dispatching",
+            "queued",
+            "running",
+            "succeeded",
+            "on_hold",
+            "concluded",
+            "planned",
+            "generated",
+            "accepted_for_reference",
+            "rejected_for_reference",
+            "matched",
+            "mismatched",
+            "stale",
+            "resolved",
+        }
+    ),
     "recommendation": frozenset(
         {
             "proposed",
@@ -243,6 +296,11 @@ _TABLES_BY_RECORD_TYPE: dict[Type[ControlPlaneRecord], TableConfig] = {
         array_fields=frozenset({"supporting_evidence_ids"}),
     ),
     LeadRecord: TableConfig(LeadRecord, "lead_records"),
+    LifecycleTransitionRecord: TableConfig(
+        LifecycleTransitionRecord,
+        "lifecycle_transition_records",
+        json_fields=frozenset({"attribution"}),
+    ),
     RecommendationRecord: TableConfig(
         RecommendationRecord,
         "recommendation_records",
@@ -288,6 +346,12 @@ _TABLES_BY_RECORD_TYPE: dict[Type[ControlPlaneRecord], TableConfig] = {
 
 
 def _validate_lifecycle_state(record: ControlPlaneRecord) -> None:
+    if isinstance(record, LifecycleTransitionRecord):
+        if not isinstance(record.lifecycle_state, str) or not record.lifecycle_state.strip():
+            raise ValueError(
+                f"lifecycle_transition record {record.record_id!r} requires non-blank lifecycle_state"
+            )
+        return
     allowed_states = _LIFECYCLE_STATES_BY_FAMILY.get(record.record_family)
     if allowed_states is None:
         raise TypeError(
@@ -375,6 +439,12 @@ def _validate_record(record: ControlPlaneRecord) -> None:
         return
     if isinstance(record, RecommendationRecord):
         _require_any_linkage(record, ("lead_id", "hunt_run_id", "alert_id", "case_id"))
+        return
+    if isinstance(record, LifecycleTransitionRecord):
+        _require_non_blank_fields(
+            record,
+            ("transition_id", "subject_record_family", "subject_record_id"),
+        )
         return
     if isinstance(record, ApprovalDecisionRecord):
         _require_non_empty_tuple(record, "approver_identities")
