@@ -35,6 +35,9 @@ tmp/
 temp/
 build/
 dist/
+.codex-supervisor/pre-merge/
+.codex-supervisor/replay/
+.codex-supervisor/turn-in-progress.json
 
 # Editor and OS noise
 .DS_Store
