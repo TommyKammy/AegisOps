@@ -62,6 +62,9 @@ class ServicePersistenceTestBase(unittest.TestCase):
             peer_addr="127.0.0.1",
         )
         promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        reviewed_at = service.list_lifecycle_transitions("case", promoted_case.case_id)[
+            -1
+        ].transitioned_at
         return store, service, promoted_case, promoted_case.evidence_ids[0], reviewed_at
 
     def _build_phase19_out_of_scope_case(
@@ -94,6 +97,9 @@ class ServicePersistenceTestBase(unittest.TestCase):
             )
         )
         promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        reviewed_at = service.list_lifecycle_transitions("case", promoted_case.case_id)[
+            -1
+        ].transitioned_at
         return service, promoted_case, admitted.alert.alert_id, reviewed_at
 
     def _build_phase19_synthetic_out_of_scope_case(
@@ -135,6 +141,9 @@ class ServicePersistenceTestBase(unittest.TestCase):
             )
         )
         promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        reviewed_at = service.list_lifecycle_transitions("case", promoted_case.case_id)[
+            -1
+        ].transitioned_at
         return service, promoted_case, reviewed_at
 
     def _build_case_scoped_advisory_records_without_case_lineage(

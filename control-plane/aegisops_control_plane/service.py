@@ -61,6 +61,7 @@ _AFTER_HOURS_HANDOFF_TRIAGE_DISPOSITIONS = frozenset(
 
 _LATEST_LIFECYCLE_TRANSITION_UNSET = object()
 _LINKED_ALERT_CASE_LIFECYCLE_LOCK_FAMILY = "linked_alert_case_lifecycle"
+_SAME_TIMESTAMP_LIFECYCLE_TRANSITION_ID_PREFIX = "~"
 
 
 class ControlPlaneStore(Protocol):
@@ -1154,6 +1155,7 @@ class AegisOpsControlPlaneService:
         if previous_lifecycle_state == next_lifecycle_state:
             return None
 
+        explicit_transitioned_at = transitioned_at is not None
         resolved_transitioned_at = (
             transitioned_at
             if transitioned_at is not None
@@ -1177,8 +1179,13 @@ class AegisOpsControlPlaneService:
             )
         if (
             latest_transition is not None
-            and resolved_transitioned_at <= latest_transition.transitioned_at
+            and resolved_transitioned_at < latest_transition.transitioned_at
         ):
+            if explicit_transitioned_at:
+                raise ValueError(
+                    "transitioned_at must not precede the latest lifecycle transition "
+                    f"for {record.record_family} record {record.record_id!r}"
+                )
             resolved_transitioned_at = latest_transition.transitioned_at + timedelta(
                 microseconds=1
             )
@@ -1186,7 +1193,11 @@ class AegisOpsControlPlaneService:
             timezone.utc
         ).strftime("%Y%m%dT%H%M%S.%fZ")
         return LifecycleTransitionRecord(
-            transition_id=f"{transition_timestamp}:{uuid.uuid4()}",
+            transition_id=self._lifecycle_transition_id(
+                transition_timestamp=transition_timestamp,
+                transitioned_at=resolved_transitioned_at,
+                latest_transition=latest_transition,
+            ),
             subject_record_family=record.record_family,
             subject_record_id=record.record_id,
             previous_lifecycle_state=(
@@ -1199,6 +1210,31 @@ class AegisOpsControlPlaneService:
             transitioned_at=resolved_transitioned_at,
             attribution=self._lifecycle_transition_attribution(record),
         )
+
+    def _lifecycle_transition_id(
+        self,
+        *,
+        transition_timestamp: str,
+        transitioned_at: datetime,
+        latest_transition: LifecycleTransitionRecord | None,
+    ) -> str:
+        if (
+            latest_transition is None
+            or transitioned_at != latest_transition.transitioned_at
+        ):
+            return f"{transition_timestamp}:{uuid.uuid4()}"
+
+        sequence = 1
+        prefix = (
+            f"{_SAME_TIMESTAMP_LIFECYCLE_TRANSITION_ID_PREFIX}{transition_timestamp}:"
+        )
+        if latest_transition.transition_id.startswith(prefix):
+            sequence_text = latest_transition.transition_id[len(prefix) :].split(":", 1)[
+                0
+            ]
+            if sequence_text.isdigit():
+                sequence = int(sequence_text) + 1
+        return f"{prefix}{sequence:06d}:{uuid.uuid4()}"
 
     def _build_lifecycle_transition_records(
         self,

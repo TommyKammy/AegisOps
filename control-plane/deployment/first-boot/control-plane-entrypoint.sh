@@ -169,7 +169,7 @@ ensure_bootstrap_metadata_store() {
 }
 
 migration_checksum() {
-  cksum < "$1" | awk '{print $1 ":" $2}'
+  tr -d '\r' < "$1" | cksum | awk '{print $1 ":" $2}'
 }
 
 sql_literal() {

@@ -30,7 +30,12 @@ from aegisops_control_plane.models import (
     ReconciliationRecord,
     RecommendationRecord,
 )
-from postgres_test_support import FakePostgresBackend, make_store
+from postgres_test_support import (
+    FakePostgresBackend,
+    FakePostgresConnection,
+    FakePostgresCursor,
+    make_store,
+)
 
 
 @dataclass(frozen=True)
@@ -40,6 +45,39 @@ class UnsupportedRecord(ControlPlaneRecord):
 
     unsupported_id: str
     lifecycle_state: str
+
+
+class _TupleRowClosingBackend(FakePostgresBackend):
+    def connect(self, dsn: str) -> "_TupleRowClosingConnection":
+        return _TupleRowClosingConnection(self, dsn)
+
+
+class _TupleRowClosingConnection(FakePostgresConnection):
+    def cursor(self) -> "_TupleRowClosingCursor":
+        return _TupleRowClosingCursor(self.backend, self.tables, self)
+
+
+class _TupleRowClosingCursor(FakePostgresCursor):
+    def fetchone(self) -> tuple[object, ...] | None:
+        row = super().fetchone()
+        return self._tuple_row(row)
+
+    def fetchall(self) -> list[tuple[object, ...]]:
+        tuple_rows: list[tuple[object, ...]] = []
+        for row in super().fetchall():
+            tuple_row = self._tuple_row(row)
+            assert tuple_row is not None
+            tuple_rows.append(tuple_row)
+        return tuple_rows
+
+    def close(self) -> None:
+        self.description = None
+
+    def _tuple_row(self, row: dict[str, object] | None) -> tuple[object, ...] | None:
+        if row is None:
+            return None
+        assert self.description is not None
+        return tuple(row[column[0]] for column in self.description)
 
 
 class PostgresControlPlaneStoreTests(unittest.TestCase):
@@ -919,6 +957,41 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         self.assertEqual(
             store.list_lifecycle_transitions("alert", "alert-missing-001"),
             (),
+        )
+
+    def test_lifecycle_transition_queries_map_tuple_rows_before_cursor_close(
+        self,
+    ) -> None:
+        store, _ = make_store(_TupleRowClosingBackend())
+        first_transition = LifecycleTransitionRecord(
+            transition_id="transition-tuple-001",
+            subject_record_family="case",
+            subject_record_id="case-tuple-001",
+            previous_lifecycle_state=None,
+            lifecycle_state="open",
+            transitioned_at=datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc),
+            attribution={"source": "fixture", "actor_identities": ()},
+        )
+        latest_transition = LifecycleTransitionRecord(
+            transition_id="transition-tuple-002",
+            subject_record_family="case",
+            subject_record_id="case-tuple-001",
+            previous_lifecycle_state="open",
+            lifecycle_state="closed",
+            transitioned_at=datetime(2026, 4, 16, 8, 5, tzinfo=timezone.utc),
+            attribution={"source": "fixture", "actor_identities": ()},
+        )
+
+        for transition in (first_transition, latest_transition):
+            store.save(transition)
+
+        self.assertEqual(
+            store.latest_lifecycle_transition("case", "case-tuple-001"),
+            latest_transition,
+        )
+        self.assertEqual(
+            store.list_lifecycle_transitions("case", "case-tuple-001"),
+            (first_transition, latest_transition),
         )
 
     def test_store_copies_mapping_fields_before_persistence(self) -> None:

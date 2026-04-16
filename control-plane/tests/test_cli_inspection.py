@@ -96,6 +96,9 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             peer_addr="127.0.0.1",
         )
         promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        reviewed_at = service.list_lifecycle_transitions("case", promoted_case.case_id)[
+            -1
+        ].transitioned_at
         return store, service, promoted_case, promoted_case.evidence_ids[0], reviewed_at
 
     def _build_phase19_out_of_scope_case(
@@ -2413,7 +2416,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         _, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
         )
-        handoff_at = datetime(2026, 4, 7, 17, 45, tzinfo=timezone.utc)
+        handoff_at = reviewed_at + timedelta(hours=8)
 
         promote_stdout = io.StringIO()
         main.main(
@@ -2562,7 +2565,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         _, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case(host="127.0.0.1", port=0)
         )
-        handoff_at = datetime(2026, 4, 7, 17, 45, tzinfo=timezone.utc)
+        handoff_at = reviewed_at + timedelta(hours=8)
 
         servers: list[main.ThreadingHTTPServer] = []
 

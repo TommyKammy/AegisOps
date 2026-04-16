@@ -191,12 +191,16 @@ class Phase23TransitionLoggingValidationTests(ServicePersistenceTestBase):
         _, service, promoted_case, _, _ = self._build_phase19_in_scope_case(
             store=store,
         )
+        baseline_history_calls = store.lifecycle_transition_history_calls
 
         service.inspect_alert_detail(promoted_case.alert_id)
         service.inspect_case_detail(promoted_case.case_id)
 
         self.assertEqual(store.lifecycle_transition_record_list_calls, 0)
-        self.assertEqual(store.lifecycle_transition_history_calls, 2)
+        self.assertEqual(
+            store.lifecycle_transition_history_calls - baseline_history_calls,
+            2,
+        )
 
     def test_transition_logging_backfills_legacy_creation_anchor_before_state_change(
         self,
@@ -405,6 +409,96 @@ class Phase23TransitionLoggingValidationTests(ServicePersistenceTestBase):
                 -1
             ].transitioned_at,
             recorded_at,
+        )
+
+    def test_transition_logging_preserves_equal_explicit_timestamps_with_ordered_ids(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        transitioned_at = datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc)
+        alert = AlertRecord(
+            alert_id="alert-transition-equal-time-001",
+            finding_id="finding-transition-equal-time-001",
+            analytic_signal_id=None,
+            case_id=None,
+            lifecycle_state="new",
+        )
+
+        service.persist_record(alert, transitioned_at=transitioned_at)
+        service.persist_record(
+            replace(alert, lifecycle_state="triaged"),
+            transitioned_at=transitioned_at,
+        )
+
+        transitions = service.list_lifecycle_transitions("alert", alert.alert_id)
+
+        self.assertEqual(
+            [transition.lifecycle_state for transition in transitions],
+            ["new", "triaged"],
+        )
+        self.assertEqual(
+            [transition.transitioned_at for transition in transitions],
+            [transitioned_at, transitioned_at],
+        )
+        self.assertTrue(
+            transitions[1].transition_id.startswith(
+                "~"
+                + transitioned_at.astimezone(timezone.utc).strftime(
+                    "%Y%m%dT%H%M%S.%fZ"
+                )
+                + ":000001:"
+            )
+        )
+
+    def test_transition_logging_rejects_explicit_historical_timestamp_after_newer_state(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        initial_transitioned_at = datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc)
+        latest_transitioned_at = initial_transitioned_at + timedelta(minutes=10)
+        alert = AlertRecord(
+            alert_id="alert-transition-historical-reject-001",
+            finding_id="finding-transition-historical-reject-001",
+            analytic_signal_id=None,
+            case_id=None,
+            lifecycle_state="new",
+        )
+
+        service.persist_record(alert, transitioned_at=initial_transitioned_at)
+        service.persist_record(
+            replace(alert, lifecycle_state="triaged"),
+            transitioned_at=latest_transitioned_at,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "transitioned_at must not precede the latest lifecycle transition",
+        ):
+            service.persist_record(
+                replace(alert, lifecycle_state="closed"),
+                transitioned_at=initial_transitioned_at + timedelta(minutes=5),
+            )
+
+        persisted_alert = service.get_record(AlertRecord, alert.alert_id)
+        assert persisted_alert is not None
+        self.assertEqual(persisted_alert.lifecycle_state, "triaged")
+        self.assertEqual(
+            [
+                transition.transitioned_at
+                for transition in service.list_lifecycle_transitions(
+                    "alert",
+                    alert.alert_id,
+                )
+            ],
+            [initial_transitioned_at, latest_transitioned_at],
         )
 
     def test_transition_logging_uses_shared_lineage_lock_for_linked_alert_case_records(

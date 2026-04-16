@@ -841,14 +841,15 @@ class PostgresControlPlaneStore:
             try:
                 cursor.execute(query, (record_family, record_id))
                 row = cursor.fetchone()
+                mapping = None if row is None else _row_to_mapping(cursor, row)
             finally:
                 cursor.close()
 
-        if row is None:
+        if mapping is None:
             return None
         return self._row_to_record(
             LifecycleTransitionRecord,
-            _row_to_mapping(cursor, row),
+            mapping,
         )
 
     def list_lifecycle_transitions(
@@ -869,15 +870,16 @@ class PostgresControlPlaneStore:
             try:
                 cursor.execute(query, (record_family, record_id))
                 rows = cursor.fetchall()
+                mappings = tuple(_row_to_mapping(cursor, row) for row in rows)
             finally:
                 cursor.close()
 
         return tuple(
             self._row_to_record(
                 LifecycleTransitionRecord,
-                _row_to_mapping(cursor, row),
+                mapping,
             )
-            for row in rows
+            for mapping in mappings
         )
 
     def inspect_readiness_aggregates(self) -> ReadinessDiagnosticsAggregates:
