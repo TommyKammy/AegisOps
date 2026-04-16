@@ -59,6 +59,8 @@ _AFTER_HOURS_HANDOFF_TRIAGE_DISPOSITIONS = frozenset(
     }
 )
 
+_LATEST_LIFECYCLE_TRANSITION_UNSET = object()
+
 
 class ControlPlaneStore(Protocol):
     dsn: str
@@ -310,6 +312,7 @@ class AnalystAssistantContextSnapshot:
     linked_evidence_records: tuple[dict[str, object], ...]
     linked_recommendation_records: tuple[dict[str, object], ...]
     linked_reconciliation_records: tuple[dict[str, object], ...]
+    lifecycle_transitions: tuple[dict[str, object], ...]
 
     def to_dict(self) -> dict[str, object]:
         return _json_ready(
@@ -330,6 +333,7 @@ class AnalystAssistantContextSnapshot:
                 "linked_evidence_records": self.linked_evidence_records,
                 "linked_recommendation_records": self.linked_recommendation_records,
                 "linked_reconciliation_records": self.linked_reconciliation_records,
+                "lifecycle_transitions": self.lifecycle_transitions,
             }
         )
 
@@ -1076,12 +1080,12 @@ class AegisOpsControlPlaneService:
             )
             existing_record = self._store.get(type(record), record.record_id)
             persisted_record = self._store.save(record)
-            transition_record = self._build_lifecycle_transition_record(
+            transition_records = self._build_lifecycle_transition_records(
                 persisted_record,
                 existing_record=existing_record,
                 transitioned_at=transitioned_at,
             )
-            if transition_record is not None:
+            for transition_record in transition_records:
                 self._store.save(transition_record)
             return persisted_record
 
@@ -1100,6 +1104,9 @@ class AegisOpsControlPlaneService:
         *,
         existing_record: ControlPlaneRecord | None,
         transitioned_at: datetime | None = None,
+        latest_transition: LifecycleTransitionRecord | None | object = (
+            _LATEST_LIFECYCLE_TRANSITION_UNSET
+        ),
     ) -> LifecycleTransitionRecord | None:
         if isinstance(record, LifecycleTransitionRecord):
             return None
@@ -1126,10 +1133,11 @@ class AegisOpsControlPlaneService:
                 else datetime.now(timezone.utc)
             )
         )
-        latest_transition = self._latest_lifecycle_transition(
-            record.record_family,
-            record.record_id,
-        )
+        if latest_transition is _LATEST_LIFECYCLE_TRANSITION_UNSET:
+            latest_transition = self._latest_lifecycle_transition(
+                record.record_family,
+                record.record_id,
+            )
         if (
             latest_transition is not None
             and resolved_transitioned_at <= latest_transition.transitioned_at
@@ -1152,6 +1160,43 @@ class AegisOpsControlPlaneService:
             transitioned_at=resolved_transitioned_at,
             attribution=self._lifecycle_transition_attribution(record),
         )
+
+    def _build_lifecycle_transition_records(
+        self,
+        record: ControlPlaneRecord,
+        *,
+        existing_record: ControlPlaneRecord | None,
+        transitioned_at: datetime | None = None,
+    ) -> tuple[LifecycleTransitionRecord, ...]:
+        if isinstance(record, LifecycleTransitionRecord):
+            return ()
+        if not hasattr(record, "lifecycle_state"):
+            return ()
+
+        latest_transition = self._latest_lifecycle_transition(
+            record.record_family,
+            record.record_id,
+        )
+        transition_records: list[LifecycleTransitionRecord] = []
+        if latest_transition is None and existing_record is not None:
+            anchor_transition = self._build_lifecycle_transition_record(
+                existing_record,
+                existing_record=None,
+                latest_transition=None,
+            )
+            if anchor_transition is not None:
+                transition_records.append(anchor_transition)
+                latest_transition = anchor_transition
+
+        transition_record = self._build_lifecycle_transition_record(
+            record,
+            existing_record=existing_record,
+            transitioned_at=transitioned_at,
+            latest_transition=latest_transition,
+        )
+        if transition_record is not None:
+            transition_records.append(transition_record)
+        return tuple(transition_records)
 
     def _initial_lifecycle_transitioned_at(
         self,
@@ -3003,10 +3048,7 @@ class AegisOpsControlPlaneService:
             linked_evidence_records=context_snapshot.linked_evidence_records,
             linked_recommendation_records=context_snapshot.linked_recommendation_records,
             linked_reconciliation_records=context_snapshot.linked_reconciliation_records,
-            lifecycle_transitions=tuple(
-                _record_to_dict(transition)
-                for transition in self.list_lifecycle_transitions("case", case_id)
-            ),
+            lifecycle_transitions=context_snapshot.lifecycle_transitions,
             current_action_review=dict(action_reviews[0]) if action_reviews else None,
             action_reviews=action_reviews,
         )

@@ -185,6 +185,68 @@ class Phase23TransitionLoggingValidationTests(ServicePersistenceTestBase):
         self.assertEqual(store.lifecycle_transition_record_list_calls, 0)
         self.assertEqual(store.lifecycle_transition_history_calls, 2)
 
+    def test_transition_logging_backfills_legacy_creation_anchor_before_state_change(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        legacy_alert = AlertRecord(
+            alert_id="alert-transition-legacy-anchor-001",
+            finding_id="finding-transition-legacy-anchor-001",
+            analytic_signal_id=None,
+            case_id=None,
+            lifecycle_state="new",
+        )
+
+        store.save(legacy_alert)
+        service.persist_record(replace(legacy_alert, lifecycle_state="closed"))
+
+        self.assertEqual(
+            [
+                (
+                    transition.previous_lifecycle_state,
+                    transition.lifecycle_state,
+                )
+                for transition in service.list_lifecycle_transitions(
+                    "alert",
+                    legacy_alert.alert_id,
+                )
+            ],
+            [
+                (None, "new"),
+                ("new", "closed"),
+            ],
+        )
+
+        backup = service.export_authoritative_record_chain_backup()
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        restored_service.restore_authoritative_record_chain_backup(backup)
+
+        self.assertEqual(
+            [
+                (
+                    transition.previous_lifecycle_state,
+                    transition.lifecycle_state,
+                )
+                for transition in restored_service.list_lifecycle_transitions(
+                    "alert",
+                    legacy_alert.alert_id,
+                )
+            ],
+            [
+                (None, "new"),
+                ("new", "closed"),
+            ],
+        )
+
     def test_transition_logging_locks_subject_before_reading_existing_state(self) -> None:
         store, backend = make_store()
         service = AegisOpsControlPlaneService(
