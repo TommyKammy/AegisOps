@@ -35,6 +35,7 @@ collect_active_run_commands() {
         if (current_indent > block_indent) {
           line = $0
           sub(/^[[:space:]]+/, "", line)
+          sub(/\r$/, "", line)
           if (line != "" && line !~ /^#/) {
             print line
           }
@@ -53,6 +54,7 @@ collect_active_run_commands() {
       if ($0 ~ /^[[:space:]]*run:[[:space:]]*[^|>]/) {
         line = $0
         sub(/^[[:space:]]*run:[[:space:]]*/, "", line)
+        sub(/\r$/, "", line)
         if (line != "" && line !~ /^#/) {
           print line
         }
@@ -81,6 +83,7 @@ extract_self_guard_step_run_command() {
         if ($0 ~ /^[[:space:]]*run:[[:space:]]*/) {
           line = $0
           sub(/^[[:space:]]*run:[[:space:]]*/, "", line)
+          sub(/\r$/, "", line)
           print line
           exit 0
         }
@@ -88,6 +91,7 @@ extract_self_guard_step_run_command() {
 
       line = $0
       sub(/^[[:space:]]+/, "", line)
+      sub(/\r$/, "", line)
       if (line == "- name: " step_name) {
         in_step = 1
         step_indent = line_indent($0)

@@ -30,12 +30,91 @@ write_canonical_doc() {
   git -C "${target}" add docs/requirements-baseline.md
 }
 
+remove_literal_text_from_doc() {
+  local doc_path="$1"
+  local expected_text="$2"
+  local temp_path="${doc_path}.tmp"
+
+  awk -v expected_text="${expected_text}" '
+    function replace_all_literal(text, from_text, to_text,    from_length, result, position) {
+      from_length = length(from_text)
+      if (from_length == 0) {
+        return text
+      }
+
+      result = ""
+      while ((position = index(text, from_text)) > 0) {
+        result = result substr(text, 1, position - 1) to_text
+        text = substr(text, position + from_length)
+      }
+
+      return result text
+    }
+
+    {
+      sub(/\r$/, "")
+      line = replace_all_literal($0, expected_text, "")
+      if (line != "") {
+        print line
+      }
+    }
+  ' "${doc_path}" > "${temp_path}"
+  mv "${temp_path}" "${doc_path}"
+}
+
+replace_literal_text_in_doc() {
+  local doc_path="$1"
+  local from_text="$2"
+  local to_text="$3"
+  local temp_path="${doc_path}.tmp"
+
+  awk -v from_text="${from_text}" -v to_text="${to_text}" '
+    function replace_all_literal(text, from_text, to_text,    from_length, result, position) {
+      from_length = length(from_text)
+      if (from_length == 0) {
+        return text
+      }
+
+      result = ""
+      while ((position = index(text, from_text)) > 0) {
+        result = result substr(text, 1, position - 1) to_text
+        text = substr(text, position + from_length)
+      }
+
+      return result text
+    }
+
+    BEGIN {
+      gsub(/\\n/, "\n", to_text)
+    }
+
+    {
+      sub(/\r$/, "")
+      print replace_all_literal($0, from_text, to_text)
+    }
+  ' "${doc_path}" > "${temp_path}"
+  mv "${temp_path}" "${doc_path}"
+}
+
+convert_doc_to_crlf() {
+  local doc_path="$1"
+  local temp_path="${doc_path}.tmp"
+
+  awk '
+    {
+      sub(/\r$/, "")
+      printf "%s\r\n", $0
+    }
+  ' "${doc_path}" > "${temp_path}"
+  mv "${temp_path}" "${doc_path}"
+}
+
 remove_text_from_doc() {
   local target="$1"
   local expected_text="$2"
   local doc_path="${target}/docs/requirements-baseline.md"
 
-  REMOVE_TEXT="${expected_text}" perl -0pi -e 's/\Q$ENV{REMOVE_TEXT}\E\n?//g' "${doc_path}"
+  remove_literal_text_from_doc "${doc_path}" "${expected_text}"
   git -C "${target}" add docs/requirements-baseline.md
 }
 
@@ -45,7 +124,7 @@ replace_text_in_doc() {
   local to_text="$3"
   local doc_path="${target}/docs/requirements-baseline.md"
 
-  FROM_TEXT="${from_text}" TO_TEXT="${to_text}" perl -0pi -e 's/\Q$ENV{FROM_TEXT}\E/$ENV{TO_TEXT}/g' "${doc_path}"
+  replace_literal_text_in_doc "${doc_path}" "${from_text}" "${to_text}"
   git -C "${target}" add docs/requirements-baseline.md
 }
 
@@ -90,7 +169,7 @@ assert_passes "${valid_repo}"
 crlf_repo="${workdir}/crlf"
 create_repo "${crlf_repo}"
 write_canonical_doc "${crlf_repo}"
-perl -0pi -e 's/\n/\r\n/g' "${crlf_repo}/docs/requirements-baseline.md"
+convert_doc_to_crlf "${crlf_repo}/docs/requirements-baseline.md"
 git -C "${crlf_repo}" add docs/requirements-baseline.md
 commit_fixture "${crlf_repo}"
 assert_passes "${crlf_repo}"
