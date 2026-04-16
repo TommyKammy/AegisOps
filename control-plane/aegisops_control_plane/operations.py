@@ -659,6 +659,11 @@ class RestoreReadinessService:
                 if record.lifecycle_state
                 in {"pending_approval", "approved", "executing", "unresolved"}
             ),
+            terminal_review_outcome_action_request_ids=tuple(
+                record.action_request_id
+                for record in action_requests
+                if record.lifecycle_state in {"completed", "failed"}
+            ),
             action_execution_total=len(action_executions),
             action_execution_lifecycle_counts=dict(
                 Counter(record.lifecycle_state for record in action_executions)

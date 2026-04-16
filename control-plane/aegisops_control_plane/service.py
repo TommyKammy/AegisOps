@@ -2538,6 +2538,17 @@ class AegisOpsControlPlaneService:
             }:
                 candidate_action_request_ids.add(action_request_id)
 
+        for action_request_id in (
+            readiness_aggregates.terminal_review_outcome_action_request_ids
+        ):
+            action_request = self._store.get(ActionRequestRecord, action_request_id)
+            if (
+                action_request is not None
+                and action_request.approval_decision_id is not None
+                and self._action_request_is_review_bound(action_request)
+            ):
+                candidate_action_request_ids.add(action_request_id)
+
         for reconciliation_id in readiness_aggregates.unresolved_reconciliation_ids:
             reconciliation = self._store.get(ReconciliationRecord, reconciliation_id)
             if reconciliation is None:

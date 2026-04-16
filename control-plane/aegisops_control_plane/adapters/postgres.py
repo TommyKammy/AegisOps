@@ -39,6 +39,7 @@ class ReadinessDiagnosticsAggregates:
     action_request_total: int
     action_request_lifecycle_counts: dict[str, int]
     active_action_request_ids: tuple[str, ...]
+    terminal_review_outcome_action_request_ids: tuple[str, ...]
     action_execution_total: int
     action_execution_lifecycle_counts: dict[str, int]
     active_action_execution_ids: tuple[str, ...]
@@ -937,6 +938,10 @@ class PostgresControlPlaneStore:
             active_action_request_ids=self._list_identifier_values_by_lifecycle_states(
                 ActionRequestRecord,
                 ("pending_approval", "approved", "executing", "unresolved"),
+            ),
+            terminal_review_outcome_action_request_ids=self._list_identifier_values_by_lifecycle_states(
+                ActionRequestRecord,
+                ("completed", "failed"),
             ),
             action_execution_total=sum(action_execution_lifecycle_counts.values()),
             action_execution_lifecycle_counts=action_execution_lifecycle_counts,
