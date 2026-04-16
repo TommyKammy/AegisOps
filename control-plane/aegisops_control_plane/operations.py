@@ -1460,6 +1460,14 @@ class RestoreReadinessService:
                         f"{transition.previous_lifecycle_state!r} does not match prior "
                         f"lifecycle_state {prior_transition.lifecycle_state!r}"
                     )
+                if transition.previous_lifecycle_state == transition.lifecycle_state:
+                    raise ValueError(
+                        "lifecycle transition chain for "
+                        f"{subject_family} record {subject_id!r} contains no-op transition: "
+                        f"{transition.transition_id!r} previous_lifecycle_state "
+                        f"{transition.previous_lifecycle_state!r} matches lifecycle_state "
+                        f"{transition.lifecycle_state!r}"
+                    )
                 prior_transition = transition
 
             latest_transition = ordered_transitions[-1]

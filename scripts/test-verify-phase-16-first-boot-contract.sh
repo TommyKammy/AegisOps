@@ -36,6 +36,7 @@ copy_fixture() {
   cp "${repo_root}/postgres/control-plane/migrations/0004_phase_20_action_request_binding_columns.sql" "${target}/postgres/control-plane/migrations/0004_phase_20_action_request_binding_columns.sql"
   cp "${repo_root}/postgres/control-plane/migrations/0005_phase_23_approval_decision_rationale.sql" "${target}/postgres/control-plane/migrations/0005_phase_23_approval_decision_rationale.sql"
   cp "${repo_root}/postgres/control-plane/migrations/0006_phase_23_lifecycle_transition_records.sql" "${target}/postgres/control-plane/migrations/0006_phase_23_lifecycle_transition_records.sql"
+  cp "${repo_root}/postgres/control-plane/migrations/0007_phase_23_lifecycle_transition_subject_index.sql" "${target}/postgres/control-plane/migrations/0007_phase_23_lifecycle_transition_subject_index.sql"
 }
 
 remove_text() {
