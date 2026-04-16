@@ -1006,6 +1006,14 @@ class PostgresControlPlaneStore:
         approval_decision_ids: tuple[str, ...],
         delegation_ids: tuple[str, ...] = (),
     ) -> ReadinessReviewPathRecords:
+        if self._active_connection.get() is None:
+            with self.transaction(isolation_level="REPEATABLE READ"):
+                return self.inspect_readiness_review_path_records(
+                    action_request_ids=action_request_ids,
+                    approval_decision_ids=approval_decision_ids,
+                    delegation_ids=delegation_ids,
+                )
+
         action_executions_by_id: dict[str, ActionExecutionRecord] = {}
         for action_execution in self._list_action_executions_by_action_request_ids(
             action_request_ids
@@ -1151,12 +1159,12 @@ class PostgresControlPlaneStore:
             try:
                 cursor.execute(query, action_request_ids)
                 rows = cursor.fetchall()
+                mappings = tuple(_row_to_mapping(cursor, row) for row in rows)
             finally:
                 cursor.close()
 
         return tuple(
-            self._row_to_record(ActionExecutionRecord, _row_to_mapping(cursor, row))
-            for row in rows
+            self._row_to_record(ActionExecutionRecord, mapping) for mapping in mappings
         )
 
     def _list_action_executions_by_delegation_ids(
@@ -1180,12 +1188,12 @@ class PostgresControlPlaneStore:
             try:
                 cursor.execute(query, delegation_ids)
                 rows = cursor.fetchall()
+                mappings = tuple(_row_to_mapping(cursor, row) for row in rows)
             finally:
                 cursor.close()
 
         return tuple(
-            self._row_to_record(ActionExecutionRecord, _row_to_mapping(cursor, row))
-            for row in rows
+            self._row_to_record(ActionExecutionRecord, mapping) for mapping in mappings
         )
 
     def _list_reconciliations_by_subject_linkage_ids(
@@ -1212,12 +1220,12 @@ class PostgresControlPlaneStore:
             try:
                 cursor.execute(query, linkage_ids)
                 rows = cursor.fetchall()
+                mappings = tuple(_row_to_mapping(cursor, row) for row in rows)
             finally:
                 cursor.close()
 
         return tuple(
-            self._row_to_record(ReconciliationRecord, _row_to_mapping(cursor, row))
-            for row in rows
+            self._row_to_record(ReconciliationRecord, mapping) for mapping in mappings
         )
 
     def _count_action_requests_by_action_type(
