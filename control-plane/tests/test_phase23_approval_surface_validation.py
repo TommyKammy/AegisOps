@@ -163,6 +163,7 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
             finally:
                 if servers:
                     servers[0].shutdown()
+                    servers[0].server_close()
                 thread.join(timeout=2)
 
     def test_reviewed_runtime_path_records_live_grant_decision(self) -> None:
