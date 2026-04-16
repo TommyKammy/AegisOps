@@ -3188,6 +3188,7 @@ class AegisOpsControlPlaneService:
         *,
         action_request_id: str,
         approver_identity: str,
+        authenticated_approver_identity: str | None = None,
         decision: str,
         decision_rationale: str,
         decided_at: datetime,
@@ -3208,8 +3209,19 @@ class AegisOpsControlPlaneService:
             "decision_rationale",
         )
         decided_at = self._require_aware_datetime(decided_at, "decided_at")
+        if authenticated_approver_identity is not None:
+            authenticated_approver_identity = self._require_non_empty_string(
+                authenticated_approver_identity,
+                "authenticated_approver_identity",
+            )
+            if authenticated_approver_identity != approver_identity:
+                raise PermissionError(
+                    "authenticated approver identity must match the asserted control-plane approver identity"
+                )
 
-        with self._store.transaction():
+        approval_decision: ApprovalDecisionRecord | None = None
+        request_expired = False
+        with self._store.transaction(isolation_level="SERIALIZABLE"):
             action_request = self._require_review_bound_action_request(action_request_id)
             if action_request.lifecycle_state != "pending_approval":
                 raise ValueError(
@@ -3235,6 +3247,10 @@ class AegisOpsControlPlaneService:
                 ),
                 persisted_policy_evaluation=action_request.policy_evaluation,
             )
+            if policy_evaluation.get("approval_requirement") == "policy_authorized":
+                raise PermissionError(
+                    "reviewed approval decisions are not authorized when the re-evaluated action policy is policy_authorized"
+                )
             if policy_evaluation.get("approval_requirement") != "human_required":
                 raise PermissionError(
                     "reviewed approval decisions require a human-required action policy"
@@ -3249,43 +3265,49 @@ class AegisOpsControlPlaneService:
                 now > action_request.expires_at or decided_at > action_request.expires_at
             ):
                 self.persist_record(replace(action_request, lifecycle_state="expired"))
-                raise ValueError(
-                    "reviewed action request expired before the approval decision was recorded"
+                request_expired = True
+            else:
+                resolved_approval_decision_id = self._resolve_new_record_identifier(
+                    ApprovalDecisionRecord,
+                    approval_decision_id,
+                    "approval_decision_id",
+                    "approval-decision",
                 )
-
-            resolved_approval_decision_id = self._resolve_new_record_identifier(
-                ApprovalDecisionRecord,
-                approval_decision_id,
-                "approval_decision_id",
-                "approval-decision",
-            )
-            decision_state = (
-                "approved" if normalized_decision == "grant" else "rejected"
-            )
-            approval_decision = self.persist_record(
-                ApprovalDecisionRecord(
-                    approval_decision_id=resolved_approval_decision_id,
-                    action_request_id=action_request.action_request_id,
-                    approver_identities=(approver_identity,),
-                    target_snapshot=dict(action_request.target_scope),
-                    payload_hash=action_request.payload_hash,
-                    decided_at=decided_at,
-                    lifecycle_state=decision_state,
-                    decision_rationale=decision_rationale,
-                    approved_expires_at=(
-                        action_request.expires_at
-                        if decision_state == "approved"
-                        else None
-                    ),
+                decision_state = (
+                    "approved" if normalized_decision == "grant" else "rejected"
                 )
-            )
-            self.persist_record(
-                replace(
-                    action_request,
-                    approval_decision_id=approval_decision.approval_decision_id,
-                    lifecycle_state=decision_state,
-                    policy_evaluation=policy_evaluation,
+                approval_decision = self.persist_record(
+                    ApprovalDecisionRecord(
+                        approval_decision_id=resolved_approval_decision_id,
+                        action_request_id=action_request.action_request_id,
+                        approver_identities=(approver_identity,),
+                        target_snapshot=dict(action_request.target_scope),
+                        payload_hash=action_request.payload_hash,
+                        decided_at=decided_at,
+                        lifecycle_state=decision_state,
+                        decision_rationale=decision_rationale,
+                        approved_expires_at=(
+                            action_request.expires_at
+                            if decision_state == "approved"
+                            else None
+                        ),
+                    )
                 )
+                self.persist_record(
+                    replace(
+                        action_request,
+                        approval_decision_id=approval_decision.approval_decision_id,
+                        lifecycle_state=decision_state,
+                        policy_evaluation=policy_evaluation,
+                    )
+                )
+        if request_expired:
+            raise PermissionError(
+                "reviewed action request expired before the approval decision was recorded"
+            )
+        if approval_decision is None:
+            raise RuntimeError(
+                "approval decision transaction completed without recording a decision"
             )
         self._emit_structured_event(
             logging.INFO,

@@ -645,16 +645,16 @@ def build_handler_class(
                             "approval decisions require approver role authority"
                         )
                     payload = read_json_request_body(self)
-                    if getattr(principal, "access_path", "") == "reviewed_reverse_proxy":
-                        self._require_matching_identity(
-                            principal.identity,
-                            require_json_string(payload, "approver_identity"),
-                        )
                     approval_decision = service.record_action_approval_decision(
                         action_request_id=require_json_string(payload, "action_request_id"),
                         approver_identity=require_json_string(
                             payload,
                             "approver_identity",
+                        ),
+                        authenticated_approver_identity=getattr(
+                            principal,
+                            "identity",
+                            None,
                         ),
                         decision=require_json_string(payload, "decision"),
                         decision_rationale=require_json_string(

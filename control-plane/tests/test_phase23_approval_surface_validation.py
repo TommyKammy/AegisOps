@@ -61,12 +61,24 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
         *,
         principal: AuthenticatedRuntimePrincipal = REVIEWED_APPROVER_PRINCIPAL,
     ) -> object:
+        def _authenticate_surface_access(**kwargs: object) -> AuthenticatedRuntimePrincipal:
+            allowed_roles = kwargs.get("allowed_roles")
+            if not isinstance(allowed_roles, tuple):
+                raise AssertionError("expected authenticate_protected_surface_request to receive allowed_roles")
+            if principal.role not in allowed_roles:
+                joined_roles = ", ".join(sorted(allowed_roles))
+                raise PermissionError(
+                    "protected control-plane surface role is not authorized for this endpoint; "
+                    f"expected one of: {joined_roles}"
+                )
+            return principal
+
         with mock.patch.object(
             service,
             "authenticate_protected_surface_request",
-            return_value=principal,
-        ):
-            yield
+            side_effect=_authenticate_surface_access,
+        ) as authenticate_mock:
+            yield authenticate_mock
 
     def _build_service(self) -> AegisOpsControlPlaneService:
         store, _ = make_store()
@@ -133,7 +145,7 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
         ), self._mock_authenticated_surface_access(
             service,
             principal=principal,
-        ):
+        ) as authenticate_mock:
             thread = threading.Thread(
                 target=main.run_control_plane_service,
                 args=(service,),
@@ -146,7 +158,7 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
                         break
                     thread.join(0.01)
                 self.assertTrue(servers, "expected test HTTP server to start")
-                yield f"http://127.0.0.1:{servers[0].server_port}"
+                yield f"http://127.0.0.1:{servers[0].server_port}", authenticate_mock
             finally:
                 if servers:
                     servers[0].shutdown()
@@ -155,69 +167,69 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
     def test_reviewed_runtime_path_records_live_grant_decision(self) -> None:
         service = self._build_service()
         action_request = self._build_pending_action_request(service)
-        with self._run_runtime(service) as base_url:
-                response = request.urlopen(  # noqa: S310
-                    request.Request(  # noqa: S310
-                        f"{base_url}/operator/record-action-approval-decision",
-                        data=json.dumps(
-                            {
-                                "action_request_id": action_request.action_request_id,
-                                "approval_decision_id": "approval-phase23-live-grant-001",
-                                "decision": "grant",
-                                "approver_identity": "approver-001",
-                                "decision_rationale": "Approver validated the reviewed owner notification scope.",
-                                "decided_at": (
-                                    action_request.requested_at + timedelta(minutes=10)
-                                ).isoformat(),
-                            }
-                        ).encode("utf-8"),
-                        headers={"Content-Type": "application/json"},
-                        method="POST",
-                    ),
+        with self._run_runtime(service) as (base_url, _authenticate_mock):
+            response = request.urlopen(  # noqa: S310
+                request.Request(  # noqa: S310
+                    f"{base_url}/operator/record-action-approval-decision",
+                    data=json.dumps(
+                        {
+                            "action_request_id": action_request.action_request_id,
+                            "approval_decision_id": "approval-phase23-live-grant-001",
+                            "decision": "grant",
+                            "approver_identity": "approver-001",
+                            "decision_rationale": "Approver validated the reviewed owner notification scope.",
+                            "decided_at": (
+                                action_request.requested_at + timedelta(minutes=10)
+                            ).isoformat(),
+                        }
+                    ).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                ),
+                timeout=2,
+            )
+            payload = json.loads(response.read().decode("utf-8"))
+
+            self.assertEqual(response.status, HTTPStatus.OK)
+            self.assertEqual(
+                payload["approval_decision_id"],
+                "approval-phase23-live-grant-001",
+            )
+            self.assertEqual(payload["action_request_id"], action_request.action_request_id)
+            self.assertEqual(payload["lifecycle_state"], "approved")
+            self.assertEqual(payload["approver_identities"], ["approver-001"])
+            self.assertEqual(
+                payload["decision_rationale"],
+                "Approver validated the reviewed owner notification scope.",
+            )
+            self.assertEqual(
+                payload["approved_expires_at"],
+                action_request.expires_at.isoformat(),
+            )
+            stored_request = service.get_record(
+                type(action_request),
+                action_request.action_request_id,
+            )
+            self.assertIsNotNone(stored_request)
+            self.assertEqual(stored_request.approval_decision_id, payload["approval_decision_id"])
+            self.assertEqual(stored_request.lifecycle_state, "approved")
+
+            case_detail = json.loads(
+                request.urlopen(  # noqa: S310
+                    f"{base_url}/inspect-case-detail?case_id={stored_request.case_id}",
                     timeout=2,
-                )
-                payload = json.loads(response.read().decode("utf-8"))
-
-                self.assertEqual(response.status, HTTPStatus.OK)
-                self.assertEqual(
-                    payload["approval_decision_id"],
-                    "approval-phase23-live-grant-001",
-                )
-                self.assertEqual(payload["action_request_id"], action_request.action_request_id)
-                self.assertEqual(payload["lifecycle_state"], "approved")
-                self.assertEqual(payload["approver_identities"], ["approver-001"])
-                self.assertEqual(
-                    payload["decision_rationale"],
-                    "Approver validated the reviewed owner notification scope.",
-                )
-                self.assertEqual(
-                    payload["approved_expires_at"],
-                    action_request.expires_at.isoformat(),
-                )
-                stored_request = service.get_record(
-                    type(action_request),
-                    action_request.action_request_id,
-                )
-                self.assertIsNotNone(stored_request)
-                self.assertEqual(stored_request.approval_decision_id, payload["approval_decision_id"])
-                self.assertEqual(stored_request.lifecycle_state, "approved")
-
-                case_detail = json.loads(
-                    request.urlopen(  # noqa: S310
-                        f"{base_url}/inspect-case-detail?case_id={stored_request.case_id}",
-                        timeout=2,
-                    ).read().decode("utf-8")
-                )
-                self.assertEqual(
-                    case_detail["current_action_review"]["decision_rationale"],
-                    "Approver validated the reviewed owner notification scope.",
-                )
-                self.assertEqual(
-                    case_detail["current_action_review"]["timeline"][1]["details"][
-                        "decision_rationale"
-                    ],
-                    "Approver validated the reviewed owner notification scope.",
-                )
+                ).read().decode("utf-8")
+            )
+            self.assertEqual(
+                case_detail["current_action_review"]["decision_rationale"],
+                "Approver validated the reviewed owner notification scope.",
+            )
+            self.assertEqual(
+                case_detail["current_action_review"]["timeline"][1]["details"][
+                    "decision_rationale"
+                ],
+                "Approver validated the reviewed owner notification scope.",
+            )
 
     def test_reviewed_runtime_path_records_live_reject_decision(self) -> None:
         service = self._build_service()
@@ -226,7 +238,7 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
             action_request_id="action-request-phase23-live-reject-001",
         )
 
-        with self._run_runtime(service) as base_url:
+        with self._run_runtime(service) as (base_url, _authenticate_mock):
             response = request.urlopen(  # noqa: S310
                 request.Request(  # noqa: S310
                     f"{base_url}/operator/record-action-approval-decision",
@@ -256,6 +268,48 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
             self.assertIsNotNone(stored_request)
             self.assertEqual(stored_request.lifecycle_state, "rejected")
 
+    def test_reviewed_runtime_path_records_decisions_with_serializable_transaction(
+        self,
+    ) -> None:
+        service = self._build_service()
+        action_request = self._build_pending_action_request(
+            service,
+            action_request_id="action-request-phase23-serializable-001",
+        )
+
+        with mock.patch.object(
+            service._store,
+            "transaction",
+            wraps=service._store.transaction,
+        ) as transaction_mock:
+            with self._run_runtime(service) as (base_url, _authenticate_mock):
+                response = request.urlopen(  # noqa: S310
+                    request.Request(  # noqa: S310
+                        f"{base_url}/operator/record-action-approval-decision",
+                        data=json.dumps(
+                            {
+                                "action_request_id": action_request.action_request_id,
+                                "approval_decision_id": "approval-phase23-serializable-001",
+                                "decision": "grant",
+                                "approver_identity": "approver-001",
+                                "decision_rationale": "Decision writes must hold the strongest transaction boundary in this path.",
+                                "decided_at": (
+                                    action_request.requested_at + timedelta(minutes=10)
+                                ).isoformat(),
+                            }
+                        ).encode("utf-8"),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    ),
+                    timeout=2,
+                )
+
+            self.assertEqual(response.status, HTTPStatus.OK)
+            self.assertEqual(
+                transaction_mock.call_args_list[0].kwargs["isolation_level"],
+                "SERIALIZABLE",
+            )
+
     def test_reviewed_runtime_path_rejects_self_approval(self) -> None:
         service = self._build_service()
         action_request = self._build_pending_action_request(
@@ -264,7 +318,7 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
             action_request_id="action-request-phase23-self-approval-001",
         )
 
-        with self._run_runtime(service) as base_url:
+        with self._run_runtime(service) as (base_url, _authenticate_mock):
             with self.assertRaises(error.HTTPError) as exc_info:
                 request.urlopen(  # noqa: S310
                     request.Request(  # noqa: S310
@@ -299,7 +353,10 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
             action_request_id="action-request-phase23-analyst-authority-001",
         )
 
-        with self._run_runtime(service, principal=REVIEWED_ANALYST_PRINCIPAL) as base_url:
+        with self._run_runtime(
+            service,
+            principal=REVIEWED_ANALYST_PRINCIPAL,
+        ) as (base_url, authenticate_mock):
             with self.assertRaises(error.HTTPError) as exc_info:
                 request.urlopen(  # noqa: S310
                     request.Request(  # noqa: S310
@@ -326,6 +383,10 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
             error_payload = json.loads(exc_info.exception.read().decode("utf-8"))
             self.assertEqual(error_payload["error"], "forbidden")
             self.assertIn("approver role authority", error_payload["message"])
+            self.assertEqual(
+                authenticate_mock.call_args_list[0].kwargs["allowed_roles"],
+                ("analyst", "approver", "platform_admin"),
+            )
             stored_request = service.get_record(
                 type(action_request),
                 action_request.action_request_id,
@@ -353,7 +414,7 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
         with self._run_runtime(
             service,
             principal=REVIEWED_SECONDARY_APPROVER_PRINCIPAL,
-        ) as base_url:
+        ) as (base_url, _authenticate_mock):
             with self.assertRaises(error.HTTPError) as exc_info:
                 request.urlopen(  # noqa: S310
                     request.Request(  # noqa: S310
@@ -380,6 +441,163 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
             error_payload = json.loads(exc_info.exception.read().decode("utf-8"))
             self.assertEqual(error_payload["error"], "forbidden")
             self.assertIn("not authorized", error_payload["message"])
+            stored_request = service.get_record(
+                type(action_request),
+                action_request.action_request_id,
+            )
+            self.assertIsNotNone(stored_request)
+            self.assertIsNone(stored_request.approval_decision_id)
+            self.assertEqual(stored_request.lifecycle_state, "pending_approval")
+
+    def test_reviewed_runtime_path_rejects_mismatched_authenticated_approver_identity(
+        self,
+    ) -> None:
+        service = self._build_service()
+        action_request = self._build_pending_action_request(
+            service,
+            action_request_id="action-request-phase23-auth-identity-mismatch-001",
+        )
+        direct_approver_principal = AuthenticatedRuntimePrincipal(
+            identity="approver-001",
+            role="approver",
+            access_path="loopback_direct",
+        )
+
+        with self._run_runtime(
+            service,
+            principal=direct_approver_principal,
+        ) as (base_url, _authenticate_mock):
+            with self.assertRaises(error.HTTPError) as exc_info:
+                request.urlopen(  # noqa: S310
+                    request.Request(  # noqa: S310
+                        f"{base_url}/operator/record-action-approval-decision",
+                        data=json.dumps(
+                            {
+                                "action_request_id": action_request.action_request_id,
+                                "approval_decision_id": "approval-phase23-auth-identity-mismatch-001",
+                                "decision": "grant",
+                                "approver_identity": "approver-002",
+                                "decision_rationale": "Authenticated approvers must not impersonate other approvers.",
+                                "decided_at": (
+                                    action_request.requested_at + timedelta(minutes=10)
+                                ).isoformat(),
+                            }
+                        ).encode("utf-8"),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    ),
+                    timeout=2,
+                )
+
+            self.assertEqual(exc_info.exception.code, HTTPStatus.FORBIDDEN)
+            error_payload = json.loads(exc_info.exception.read().decode("utf-8"))
+            self.assertEqual(error_payload["error"], "forbidden")
+            self.assertIn("authenticated approver identity", error_payload["message"])
+            stored_request = service.get_record(
+                type(action_request),
+                action_request.action_request_id,
+            )
+            self.assertIsNotNone(stored_request)
+            self.assertIsNone(stored_request.approval_decision_id)
+            self.assertEqual(stored_request.lifecycle_state, "pending_approval")
+
+    def test_reviewed_runtime_path_rejects_expired_request_decisions(self) -> None:
+        service = self._build_service()
+        action_request = self._build_pending_action_request(
+            service,
+            action_request_id="action-request-phase23-expired-decision-001",
+        )
+        requested_at = datetime.now(timezone.utc) - timedelta(minutes=10)
+        expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        action_request = service.persist_record(
+            replace(
+                action_request,
+                requested_at=requested_at,
+                expires_at=expires_at,
+            )
+        )
+
+        with self._run_runtime(service) as (base_url, _authenticate_mock):
+            with self.assertRaises(error.HTTPError) as exc_info:
+                request.urlopen(  # noqa: S310
+                    request.Request(  # noqa: S310
+                        f"{base_url}/operator/record-action-approval-decision",
+                        data=json.dumps(
+                            {
+                                "action_request_id": action_request.action_request_id,
+                                "approval_decision_id": "approval-phase23-expired-decision-001",
+                                "decision": "grant",
+                                "approver_identity": "approver-001",
+                                "decision_rationale": "Expired requests must fail closed at decision time.",
+                                "decided_at": (
+                                    requested_at + timedelta(minutes=5)
+                                ).isoformat(),
+                            }
+                        ).encode("utf-8"),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    ),
+                    timeout=2,
+                )
+
+            self.assertEqual(exc_info.exception.code, HTTPStatus.FORBIDDEN)
+            error_payload = json.loads(exc_info.exception.read().decode("utf-8"))
+            self.assertEqual(error_payload["error"], "forbidden")
+            self.assertIn("expired", error_payload["message"])
+            stored_request = service.get_record(
+                type(action_request),
+                action_request.action_request_id,
+            )
+            self.assertIsNotNone(stored_request)
+            self.assertIsNone(stored_request.approval_decision_id)
+            self.assertEqual(stored_request.lifecycle_state, "expired")
+
+    def test_reviewed_runtime_path_rejects_re_evaluated_policy_authorized_decisions(
+        self,
+    ) -> None:
+        service = self._build_service()
+        action_request = self._build_pending_action_request(
+            service,
+            action_request_id="action-request-phase23-policy-authorized-001",
+        )
+        action_request = service.persist_record(
+            replace(
+                action_request,
+                policy_evaluation={
+                    key: value
+                    for key, value in dict(action_request.policy_evaluation).items()
+                    if key != "approval_requirement_override"
+                },
+            )
+        )
+
+        with self._run_runtime(service) as (base_url, _authenticate_mock):
+            with self.assertRaises(error.HTTPError) as exc_info:
+                request.urlopen(  # noqa: S310
+                    request.Request(  # noqa: S310
+                        f"{base_url}/operator/record-action-approval-decision",
+                        data=json.dumps(
+                            {
+                                "action_request_id": action_request.action_request_id,
+                                "approval_decision_id": "approval-phase23-policy-authorized-001",
+                                "decision": "grant",
+                                "approver_identity": "approver-001",
+                                "decision_rationale": "Policy-authorized requests must reject redundant approval decisions.",
+                                "decided_at": (
+                                    action_request.requested_at + timedelta(minutes=10)
+                                ).isoformat(),
+                            }
+                        ).encode("utf-8"),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    ),
+                    timeout=2,
+                )
+
+            self.assertEqual(exc_info.exception.code, HTTPStatus.FORBIDDEN)
+            error_payload = json.loads(exc_info.exception.read().decode("utf-8"))
+            self.assertEqual(error_payload["error"], "forbidden")
+            self.assertIn("policy_authorized", error_payload["message"])
             stored_request = service.get_record(
                 type(action_request),
                 action_request.action_request_id,
