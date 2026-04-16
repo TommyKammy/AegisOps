@@ -1119,6 +1119,14 @@ class AegisOpsControlPlaneService:
                 return record.last_seen_at
         elif isinstance(record, EvidenceRecord):
             return record.acquired_at
+        elif isinstance(record, ObservationRecord):
+            return record.observed_at
+        elif isinstance(record, HuntRecord):
+            return record.opened_at
+        elif isinstance(record, HuntRunRecord):
+            for candidate in (record.started_at, record.completed_at):
+                if candidate is not None:
+                    return candidate
         elif isinstance(record, (AlertRecord, CaseRecord)):
             reviewed_transitioned_at = self._reviewed_context_transitioned_at(record)
             if reviewed_transitioned_at is not None:
@@ -1130,6 +1138,8 @@ class AegisOpsControlPlaneService:
             return record.requested_at
         elif isinstance(record, ActionExecutionRecord):
             return record.delegated_at
+        elif isinstance(record, AITraceRecord):
+            return record.generated_at
         elif isinstance(record, ReconciliationRecord):
             for candidate in (
                 record.first_seen_at,
@@ -1178,7 +1188,13 @@ class AegisOpsControlPlaneService:
         actor_identities: tuple[str, ...] = ()
         source = "aegisops-control-plane"
 
-        if isinstance(record, RecommendationRecord):
+        if isinstance(record, ObservationRecord):
+            actor_identities = self._merge_linked_ids((), record.author_identity)
+            source = "observation-author"
+        elif isinstance(record, LeadRecord):
+            actor_identities = self._merge_linked_ids((), record.triage_owner)
+            source = "lead-triage-owner"
+        elif isinstance(record, RecommendationRecord):
             actor_identities = self._merge_linked_ids((), record.review_owner)
             source = "recommendation-review-owner"
         elif isinstance(record, ActionRequestRecord):
@@ -1190,6 +1206,12 @@ class AegisOpsControlPlaneService:
                 None,
             )
             source = "approval-decision"
+        elif isinstance(record, HuntRecord):
+            actor_identities = self._merge_linked_ids((), record.owner_identity)
+            source = "hunt-owner"
+        elif isinstance(record, AITraceRecord):
+            actor_identities = self._merge_linked_ids((), record.reviewer_identity)
+            source = "ai-trace-reviewer"
 
         return {
             "source": source,

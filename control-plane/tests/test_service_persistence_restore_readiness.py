@@ -1741,6 +1741,37 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             restored_service.restore_authoritative_record_chain_backup(backup)
         self._assert_authoritative_store_empty(restored_store)
 
+    def test_service_phase21_restore_rejects_invalid_subject_lifecycle_transition_state(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        mutated_transition = next(
+            record
+            for record in backup["record_families"]["lifecycle_transition"]
+            if record["subject_record_family"] == "case"
+            and record["subject_record_id"] == promoted_case.case_id
+        )
+        mutated_transition["lifecycle_state"] = "generated"
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                r"lifecycle_transition record .* has invalid lifecycle_state 'generated' "
+                r"for subject_record_family 'case'"
+            ),
+        ):
+            restored_service.restore_authoritative_record_chain_backup(backup)
+        self._assert_authoritative_store_empty(restored_store)
+
     def test_service_phase21_restore_fails_closed_when_latest_transition_disagrees_with_current_state(
         self,
     ) -> None:
@@ -1766,7 +1797,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             ),
             key=lambda record: record["transitioned_at"],
         )
-        latest_transition["lifecycle_state"] = "triaged"
+        latest_transition["lifecycle_state"] = "reopened"
 
         restored_store, _ = make_store()
         restored_service = AegisOpsControlPlaneService(
@@ -1779,7 +1810,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             (
                 rf"case record '{promoted_case.case_id}' lifecycle_state "
                 rf"'{updated_case.lifecycle_state}' does not match "
-                r"latest lifecycle transition .* state 'triaged'"
+                r"latest lifecycle transition .* state 'reopened'"
             ),
         ):
             restored_service.restore_authoritative_record_chain_backup(backup)
@@ -1900,7 +1931,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         )
         self.assertEqual(len(ordered_case_transitions), 2)
         prior_lifecycle_state = ordered_case_transitions[0]["lifecycle_state"]
-        ordered_case_transitions[1]["previous_lifecycle_state"] = "triaged"
+        ordered_case_transitions[1]["previous_lifecycle_state"] = "closed"
 
         restored_store, _ = make_store()
         restored_service = AegisOpsControlPlaneService(
@@ -1913,7 +1944,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             (
                 rf"lifecycle transition chain for case record '{promoted_case.case_id}' "
                 r"is inconsistent: "
-                r".* previous_lifecycle_state 'triaged' does not match prior "
+                r".* previous_lifecycle_state 'closed' does not match prior "
                 rf"lifecycle_state '{prior_lifecycle_state}'"
             ),
         ):

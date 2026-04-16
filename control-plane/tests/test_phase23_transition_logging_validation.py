@@ -9,6 +9,7 @@ if str(TESTS_ROOT) not in sys.path:
 
 import _service_persistence_support as support
 from _service_persistence_support import ServicePersistenceTestBase
+from aegisops_control_plane.models import HuntRecord, HuntRunRecord
 
 for name, value in vars(support).items():
     if not (name.startswith("__") and name.endswith("__")):
@@ -207,6 +208,105 @@ class Phase23TransitionLoggingValidationTests(ServicePersistenceTestBase):
                 -1
             ].transitioned_at,
             recorded_at,
+        )
+
+    def test_transition_logging_preserves_runtime_audit_metadata_for_reviewed_families(
+        self,
+    ) -> None:
+        store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-obs-001",
+            observed_at=reviewed_at + timedelta(minutes=2),
+            scope_statement="Observed endpoint behavior requires bounded follow-up.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            observation_id=observation.observation_id,
+            triage_owner="analyst-lead-001",
+            triage_rationale="Escalate the reviewed observation for tracked triage.",
+        )
+        hunt = service.persist_record(
+            HuntRecord(
+                hunt_id="hunt-transition-metadata-001",
+                hypothesis_statement="Validate whether the observed behavior extends beyond the single case.",
+                hypothesis_version="v1",
+                owner_identity="hunter-001",
+                scope_boundary="case-scoped",
+                opened_at=reviewed_at + timedelta(minutes=10),
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                lifecycle_state="draft",
+            )
+        )
+        hunt_run = service.persist_record(
+            HuntRunRecord(
+                hunt_run_id="hunt-run-transition-metadata-001",
+                hunt_id=hunt.hunt_id,
+                scope_snapshot={"case_id": promoted_case.case_id},
+                execution_plan_reference="plan-transition-metadata-001",
+                output_linkage={},
+                started_at=reviewed_at + timedelta(minutes=15),
+                completed_at=reviewed_at + timedelta(minutes=20),
+                lifecycle_state="planned",
+            )
+        )
+        ai_trace = service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-transition-metadata-001",
+                subject_linkage={"case_ids": (promoted_case.case_id,)},
+                model_identity="gpt-5.4",
+                prompt_version="prompt-transition-metadata-v1",
+                generated_at=reviewed_at + timedelta(minutes=25),
+                material_input_refs=(evidence_id,),
+                reviewer_identity="reviewer-001",
+                lifecycle_state="under_review",
+            )
+        )
+
+        transitions_by_subject = {
+            (record.subject_record_family, record.subject_record_id): record
+            for record in store.list(LifecycleTransitionRecord)
+        }
+
+        self.assertEqual(
+            transitions_by_subject[("observation", observation.observation_id)].transitioned_at,
+            observation.observed_at,
+        )
+        self.assertEqual(
+            transitions_by_subject[("observation", observation.observation_id)].attribution[
+                "actor_identities"
+            ],
+            ("analyst-obs-001",),
+        )
+        self.assertEqual(
+            transitions_by_subject[("lead", lead.lead_id)].attribution["actor_identities"],
+            ("analyst-lead-001",),
+        )
+        self.assertEqual(
+            transitions_by_subject[("hunt", hunt.hunt_id)].transitioned_at,
+            hunt.opened_at,
+        )
+        self.assertEqual(
+            transitions_by_subject[("hunt", hunt.hunt_id)].attribution["actor_identities"],
+            ("hunter-001",),
+        )
+        self.assertEqual(
+            transitions_by_subject[("hunt_run", hunt_run.hunt_run_id)].transitioned_at,
+            hunt_run.started_at,
+        )
+        self.assertEqual(
+            transitions_by_subject[("ai_trace", ai_trace.ai_trace_id)].transitioned_at,
+            ai_trace.generated_at,
+        )
+        self.assertEqual(
+            transitions_by_subject[("ai_trace", ai_trace.ai_trace_id)].attribution[
+                "actor_identities"
+            ],
+            ("reviewer-001",),
         )
 
     def test_transition_listing_orders_by_transitioned_at(self) -> None:

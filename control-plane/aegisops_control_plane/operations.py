@@ -7,7 +7,7 @@ import hmac
 import ipaddress
 from typing import Any, Callable, Iterator, Mapping, Protocol, Type
 
-from .adapters.postgres import ReadinessDiagnosticsAggregates
+from .adapters.postgres import ReadinessDiagnosticsAggregates, _validate_lifecycle_state
 from .config import RuntimeConfig
 from .models import (
     ActionExecutionRecord,
@@ -1389,6 +1389,7 @@ class RestoreReadinessService:
                     f"{transition.subject_record_family} record {transition.subject_record_id!r} "
                     f"required by lifecycle transition {transition.transition_id!r}"
                 )
+            _validate_lifecycle_state(transition)
             lifecycle_transitions_by_subject.setdefault(
                 (
                     transition.subject_record_family,

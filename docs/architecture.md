@@ -77,7 +77,7 @@ Those tools remain subordinate to the approved control-plane boundary and must n
 
 The AegisOps control plane is the authoritative decision and execution governance layer.
 
-It owns the platform records and policy decisions for alerts, cases, evidence, observations, leads, recommendations, approval decisions, action requests, hunts, hunt runs, AI traces, and reconciliation. The reviewed current-state families that currently carry append-only lifecycle transition history are alerts, cases, recommendations, approval decisions, action requests, action executions, and reconciliation.
+It owns the platform records and policy decisions for analytic signals, alerts, cases, evidence, observations, leads, recommendations, approval decisions, action requests, action executions, hunts, hunt runs, AI traces, and reconciliation. The reviewed lifecycle-bearing current-state families currently carry append-only lifecycle transition history across that same control-plane surface.
 
 Its approved boundary includes policy evaluation, approval handling, evidence linkage, execution delegation, and cross-substrate reconciliation.
 
