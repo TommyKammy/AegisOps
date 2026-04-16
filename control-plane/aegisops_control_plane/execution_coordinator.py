@@ -26,7 +26,12 @@ class ExecutionCoordinatorServiceDependencies(Protocol):
     def render_recommendation_draft(self, record_family: str, record_id: str) -> object:
         ...
 
-    def persist_record(self, record: object) -> object:
+    def persist_record(
+        self,
+        record: object,
+        *,
+        transitioned_at: datetime | None = None,
+    ) -> object:
         ...
 
     def _emit_structured_event(
@@ -287,7 +292,8 @@ class ExecutionCoordinator:
                         "execution_surface_type": "automation_substrate",
                         "execution_surface_id": "shuffle",
                     },
-                )
+                ),
+                transitioned_at=requested_at,
             )
         self._service._emit_structured_event(
             logging.INFO,
@@ -547,7 +553,8 @@ class ExecutionCoordinator:
                         replace(
                             authoritative_execution,
                             lifecycle_state=reconciled_lifecycle_state,
-                        )
+                        ),
+                        transitioned_at=latest_execution["observed_at"],
                     )
 
             reconciliation = self._service.persist_record(
@@ -571,7 +578,8 @@ class ExecutionCoordinator:
                     mismatch_summary=mismatch_summary,
                     compared_at=compared_at,
                     lifecycle_state=lifecycle_state,
-                )
+                ),
+                transitioned_at=compared_at,
             )
         self._service._emit_structured_event(
             logging.INFO,
@@ -676,7 +684,8 @@ class ExecutionCoordinator:
                         "evidence_ids": evidence_ids,
                     },
                     lifecycle_state="dispatching",
-                )
+                ),
+                transitioned_at=delegated_at,
             )
         receipt = None
         execution_run_id: str
@@ -730,7 +739,8 @@ class ExecutionCoordinator:
                             execution_surface_id=execution_surface_id,
                         ),
                         lifecycle_state="queued",
-                    )
+                    ),
+                    transitioned_at=delegated_at,
                 )
         except Exception as exc:
             self._mark_dispatch_failure(
@@ -862,6 +872,7 @@ class ExecutionCoordinator:
                 dispatch_failure["observed_execution_surface_id"] = observed_surface_id
 
         failure_provenance["dispatch_failure"] = dispatch_failure
+        failure_at = datetime.now(timezone.utc)
         with self._service._store.transaction():
             current_execution = self._service._store.get(
                 ActionExecutionRecord,
@@ -874,7 +885,8 @@ class ExecutionCoordinator:
                     current_execution,
                     provenance=failure_provenance,
                     lifecycle_state="failed",
-                )
+                ),
+                transitioned_at=failure_at,
             )
 
     @staticmethod

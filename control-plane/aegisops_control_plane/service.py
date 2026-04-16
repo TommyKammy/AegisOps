@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import AbstractContextManager, contextmanager
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, fields, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hmac
 import ipaddress
 import json
@@ -1002,6 +1002,12 @@ class AegisOpsControlPlaneService:
             ),
             record_types_by_family=RECORD_TYPES_BY_FAMILY,
             find_duplicate_strings=_find_duplicate_strings,
+            synthesize_lifecycle_transition_record=(
+                lambda record: self._build_lifecycle_transition_record(
+                    record,
+                    existing_record=None,
+                )
+            ),
             assistant_ids_from_mapping=self._assistant_ids_from_mapping,
             inspect_case_detail=lambda case_id: self.inspect_case_detail(case_id),
             inspect_assistant_context=(
@@ -1016,13 +1022,28 @@ class AegisOpsControlPlaneService:
     def describe_runtime(self) -> RuntimeSnapshot:
         return self._runtime_boundary_service.describe_runtime()
 
-    def persist_record(self, record: RecordT) -> RecordT:
+    def persist_record(
+        self,
+        record: RecordT,
+        *,
+        transitioned_at: datetime | None = None,
+    ) -> RecordT:
+        if isinstance(record, LifecycleTransitionRecord):
+            raise ValueError(
+                "persist_record does not accept direct lifecycle transition records"
+            )
+        if transitioned_at is not None:
+            transitioned_at = self._require_aware_datetime(
+                transitioned_at,
+                "transitioned_at",
+            )
         with self._store.transaction():
             existing_record = self._store.get(type(record), record.record_id)
             persisted_record = self._store.save(record)
             transition_record = self._build_lifecycle_transition_record(
                 persisted_record,
                 existing_record=existing_record,
+                transitioned_at=transitioned_at,
             )
             if transition_record is not None:
                 self._store.save(transition_record)
@@ -1033,6 +1054,7 @@ class AegisOpsControlPlaneService:
         record: ControlPlaneRecord,
         *,
         existing_record: ControlPlaneRecord | None,
+        transitioned_at: datetime | None = None,
     ) -> LifecycleTransitionRecord | None:
         if isinstance(record, LifecycleTransitionRecord):
             return None
@@ -1050,8 +1072,27 @@ class AegisOpsControlPlaneService:
         if previous_lifecycle_state == next_lifecycle_state:
             return None
 
-        transitioned_at = datetime.now(timezone.utc)
-        transition_timestamp = transitioned_at.strftime("%Y%m%dT%H%M%S.%fZ")
+        resolved_transitioned_at = (
+            transitioned_at
+            if transitioned_at is not None
+            else (
+                self._initial_lifecycle_transitioned_at(record)
+                if existing_record is None
+                else datetime.now(timezone.utc)
+            )
+        )
+        latest_transition = self._latest_lifecycle_transition(
+            record.record_family,
+            record.record_id,
+        )
+        if (
+            latest_transition is not None
+            and resolved_transitioned_at <= latest_transition.transitioned_at
+        ):
+            resolved_transitioned_at = latest_transition.transitioned_at + timedelta(
+                microseconds=1
+            )
+        transition_timestamp = resolved_transitioned_at.strftime("%Y%m%dT%H%M%S.%fZ")
         return LifecycleTransitionRecord(
             transition_id=f"{transition_timestamp}:{uuid.uuid4()}",
             subject_record_family=record.record_family,
@@ -1063,9 +1104,72 @@ class AegisOpsControlPlaneService:
                 else None
             ),
             lifecycle_state=next_lifecycle_state,
-            transitioned_at=transitioned_at,
+            transitioned_at=resolved_transitioned_at,
             attribution=self._lifecycle_transition_attribution(record),
         )
+
+    def _initial_lifecycle_transitioned_at(
+        self,
+        record: ControlPlaneRecord,
+    ) -> datetime:
+        if isinstance(record, AnalyticSignalRecord):
+            if record.first_seen_at is not None:
+                return record.first_seen_at
+            if record.last_seen_at is not None:
+                return record.last_seen_at
+        elif isinstance(record, EvidenceRecord):
+            return record.acquired_at
+        elif isinstance(record, (AlertRecord, CaseRecord)):
+            reviewed_transitioned_at = self._reviewed_context_transitioned_at(record)
+            if reviewed_transitioned_at is not None:
+                return reviewed_transitioned_at
+        elif isinstance(record, ApprovalDecisionRecord):
+            if record.decided_at is not None:
+                return record.decided_at
+        elif isinstance(record, ActionRequestRecord):
+            return record.requested_at
+        elif isinstance(record, ActionExecutionRecord):
+            return record.delegated_at
+        elif isinstance(record, ReconciliationRecord):
+            for candidate in (
+                record.first_seen_at,
+                record.last_seen_at,
+                record.compared_at,
+            ):
+                if candidate is not None:
+                    return candidate
+        return datetime.now(timezone.utc)
+
+    @staticmethod
+    def _reviewed_context_transitioned_at(
+        record: AlertRecord | CaseRecord,
+    ) -> datetime | None:
+        reviewed_context = getattr(record, "reviewed_context", None)
+        if not isinstance(reviewed_context, Mapping):
+            return None
+        triage = reviewed_context.get("triage")
+        if not isinstance(triage, Mapping):
+            return None
+        raw_recorded_at = triage.get("recorded_at")
+        if not isinstance(raw_recorded_at, str) or not raw_recorded_at.strip():
+            return None
+        try:
+            parsed = datetime.fromisoformat(raw_recorded_at)
+        except ValueError:
+            return None
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            return None
+        return parsed
+
+    def _latest_lifecycle_transition(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> LifecycleTransitionRecord | None:
+        transitions = self.list_lifecycle_transitions(record_family, record_id)
+        if not transitions:
+            return None
+        return transitions[-1]
 
     def _lifecycle_transition_attribution(
         self,
@@ -3099,7 +3203,8 @@ class AegisOpsControlPlaneService:
                     evidence_ids=case.evidence_ids,
                     lifecycle_state=lifecycle_state,
                     reviewed_context=updated_reviewed_context,
-                )
+                ),
+                transitioned_at=recorded_at,
             )
             if case.alert_id is not None and lifecycle_state == "closed":
                 alert = self._store.get(AlertRecord, case.alert_id)
@@ -3115,7 +3220,8 @@ class AegisOpsControlPlaneService:
                                 alert.reviewed_context,
                                 {"triage": updated_reviewed_context.get("triage", {})},
                             ),
-                        )
+                        ),
+                        transitioned_at=recorded_at,
                     )
         return updated_case
 
@@ -3384,7 +3490,10 @@ class AegisOpsControlPlaneService:
             if action_request.expires_at is not None and (
                 now > action_request.expires_at or decided_at > action_request.expires_at
             ):
-                self.persist_record(replace(action_request, lifecycle_state="expired"))
+                self.persist_record(
+                    replace(action_request, lifecycle_state="expired"),
+                    transitioned_at=action_request.expires_at,
+                )
                 request_expired = True
             else:
                 resolved_approval_decision_id = self._resolve_new_record_identifier(
@@ -3411,7 +3520,8 @@ class AegisOpsControlPlaneService:
                             if decision_state == "approved"
                             else None
                         ),
-                    )
+                    ),
+                    transitioned_at=decided_at,
                 )
                 self.persist_record(
                     replace(
@@ -3419,7 +3529,8 @@ class AegisOpsControlPlaneService:
                         approval_decision_id=approval_decision.approval_decision_id,
                         lifecycle_state=decision_state,
                         policy_evaluation=policy_evaluation,
-                    )
+                    ),
+                    transitioned_at=decided_at,
                 )
         if request_expired:
             raise PermissionError(

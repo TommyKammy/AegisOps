@@ -60,13 +60,16 @@ class Phase23TransitionLoggingValidationTests(ServicePersistenceTestBase):
         persisted_alert = service.get_record(AlertRecord, promoted_case.alert_id)
         case_detail = service.inspect_case_detail(promoted_case.case_id)
         alert_detail = service.inspect_alert_detail(promoted_case.alert_id)
-        transition_records = store.list(LifecycleTransitionRecord)
+        transition_records = sorted(
+            store.list(LifecycleTransitionRecord),
+            key=lambda record: (record.transitioned_at, record.transition_id),
+        )
 
         self.assertEqual(closed_case.lifecycle_state, "closed")
         self.assertEqual(persisted_case.lifecycle_state, "closed")
         self.assertEqual(persisted_alert.lifecycle_state, "closed")
 
-        self.assertEqual(
+        self.assertCountEqual(
             [
                 (
                     record.subject_record_family,
@@ -143,6 +146,67 @@ class Phase23TransitionLoggingValidationTests(ServicePersistenceTestBase):
                 )
             ],
             ["pending_approval"],
+        )
+
+    def test_transition_logging_uses_reviewed_event_timestamps(self) -> None:
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep approval timing aligned with the reviewed workflow.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="owner-001",
+            message_intent="Notify the accountable owner.",
+            escalation_reason="Reviewed response requires prompt owner contact.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-transition-timestamp-001",
+        )
+        decided_at = action_request.requested_at + timedelta(minutes=5)
+        approval_decision = service.record_action_approval_decision(
+            action_request_id=action_request.action_request_id,
+            approver_identity="approver-001",
+            decision="grant",
+            decision_rationale="Reviewed and approved for operator follow-through.",
+            decided_at=decided_at,
+            approval_decision_id="approval-decision-transition-timestamp-001",
+        )
+        recorded_at = decided_at + timedelta(minutes=10)
+        service.record_case_disposition(
+            case_id=promoted_case.case_id,
+            disposition="closed_resolved",
+            rationale="Containment completed and reviewed follow-up is finished.",
+            recorded_at=recorded_at,
+        )
+
+        self.assertEqual(
+            service.list_lifecycle_transitions("approval_decision", approval_decision.approval_decision_id)[
+                -1
+            ].transitioned_at,
+            decided_at,
+        )
+        self.assertEqual(
+            service.list_lifecycle_transitions("action_request", action_request.action_request_id)[
+                -1
+            ].transitioned_at,
+            decided_at,
+        )
+        self.assertEqual(
+            service.list_lifecycle_transitions("case", promoted_case.case_id)[
+                -1
+            ].transitioned_at,
+            recorded_at,
+        )
+        self.assertEqual(
+            service.list_lifecycle_transitions("alert", promoted_case.alert_id)[
+                -1
+            ].transitioned_at,
+            recorded_at,
         )
 
     def test_transition_listing_orders_by_transitioned_at(self) -> None:

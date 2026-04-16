@@ -319,6 +319,10 @@ class RestoreReadinessService:
         authoritative_primary_id_field_by_family: Mapping[str, str],
         record_types_by_family: Mapping[str, Type[ControlPlaneRecord]],
         find_duplicate_strings: Callable[[tuple[str, ...]], tuple[str, ...]],
+        synthesize_lifecycle_transition_record: Callable[
+            [ControlPlaneRecord],
+            LifecycleTransitionRecord | None,
+        ],
         assistant_ids_from_mapping: Callable[[Mapping[str, object] | None, str], tuple[str, ...]],
         inspect_case_detail: Callable[[str], Any],
         inspect_assistant_context: Callable[[str, str], Any],
@@ -350,6 +354,9 @@ class RestoreReadinessService:
         )
         self._record_types_by_family = record_types_by_family
         self._find_duplicate_strings = find_duplicate_strings
+        self._synthesize_lifecycle_transition_record = (
+            synthesize_lifecycle_transition_record
+        )
         self._assistant_ids_from_mapping = assistant_ids_from_mapping
         self._inspect_case_detail = inspect_case_detail
         self._inspect_assistant_context = inspect_assistant_context
@@ -703,9 +710,16 @@ class RestoreReadinessService:
             parsed_records[family] = parsed
             restored_record_counts[family] = len(parsed)
 
+        if legacy_phase21_backup:
+            synthesized_transitions = self._synthesize_missing_lifecycle_transition_records(
+                parsed_records
+            )
+            parsed_records["lifecycle_transition"] = synthesized_transitions
+            restored_record_counts["lifecycle_transition"] = len(synthesized_transitions)
+
         self.validate_authoritative_record_chain_restore(
             parsed_records,
-            require_lifecycle_transition_history=not legacy_phase21_backup,
+            require_lifecycle_transition_history=True,
             restored_record_counts=restored_record_counts,
         )
         with self._store.transaction(isolation_level="SERIALIZABLE"):
@@ -714,7 +728,7 @@ class RestoreReadinessService:
                 for record in parsed_records[record_type.record_family]:
                     self._store.save(record)
             restore_drill = self.run_authoritative_restore_drill(
-                require_lifecycle_transition_history=not legacy_phase21_backup
+                require_lifecycle_transition_history=True
             )
         return self._restore_summary_snapshot_factory(
             read_only=True,
@@ -833,6 +847,41 @@ class RestoreReadinessService:
                 continue
             authoritative_records[family] = persisted_records
         return authoritative_records
+
+    def _synthesize_missing_lifecycle_transition_records(
+        self,
+        records_by_family: Mapping[str, tuple[ControlPlaneRecord, ...]],
+    ) -> tuple[LifecycleTransitionRecord, ...]:
+        synthesized_transitions = list(
+            record
+            for record in records_by_family.get("lifecycle_transition", ())
+            if isinstance(record, LifecycleTransitionRecord)
+        )
+        covered_subjects = {
+            (record.subject_record_family, record.subject_record_id)
+            for record in synthesized_transitions
+        }
+        for record_type in self._authoritative_record_chain_record_types:
+            if record_type is LifecycleTransitionRecord:
+                continue
+            for record in records_by_family.get(record_type.record_family, ()):
+                subject_key = (record.record_family, record.record_id)
+                if subject_key in covered_subjects:
+                    continue
+                synthesized_transition = self._synthesize_lifecycle_transition_record(
+                    record
+                )
+                if synthesized_transition is None:
+                    continue
+                synthesized_transitions.append(synthesized_transition)
+                covered_subjects.add(subject_key)
+        synthesized_transitions.sort(
+            key=lambda transition: (
+                transition.transitioned_at,
+                transition.transition_id,
+            )
+        )
+        return tuple(synthesized_transitions)
 
     def require_empty_authoritative_restore_target(self) -> None:
         authoritative_subject_families = {

@@ -471,10 +471,86 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         restore_summary = restored_service.restore_authoritative_record_chain_backup(
             backup
         )
+        expected_transition_count = sum(
+            count
+            for family, count in restore_summary.restored_record_counts.items()
+            if family != "lifecycle_transition"
+        )
+        restored_transitions = restored_service._store.list(LifecycleTransitionRecord)
 
         self.assertIn(promoted_case.case_id, restore_summary.restore_drill.verified_case_ids)
-        self.assertEqual(restore_summary.restored_record_counts["lifecycle_transition"], 0)
-        self.assertEqual(restored_service._store.list(LifecycleTransitionRecord), ())
+        self.assertEqual(
+            restore_summary.restored_record_counts["lifecycle_transition"],
+            expected_transition_count,
+        )
+        self.assertEqual(len(restored_transitions), expected_transition_count)
+        self.assertIn(
+            (
+                "case",
+                promoted_case.case_id,
+                None,
+                promoted_case.lifecycle_state,
+            ),
+            {
+                (
+                    transition.subject_record_family,
+                    transition.subject_record_id,
+                    transition.previous_lifecycle_state,
+                    transition.lifecycle_state,
+                )
+                for transition in restored_transitions
+            },
+        )
+
+    def test_service_phase21_legacy_restore_round_trips_into_v2_transition_history(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        backup["backup_schema_version"] = "phase21.authoritative-record-chain.v1"
+        del backup["record_families"]["lifecycle_transition"]
+        del backup["record_counts"]["lifecycle_transition"]
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        restored_summary = restored_service.restore_authoritative_record_chain_backup(
+            backup
+        )
+        round_trip_backup = restored_service.export_authoritative_record_chain_backup()
+
+        self.assertEqual(
+            round_trip_backup["backup_schema_version"],
+            "phase23.authoritative-record-chain.v2",
+        )
+        self.assertEqual(
+            round_trip_backup["record_counts"]["lifecycle_transition"],
+            restored_summary.restored_record_counts["lifecycle_transition"],
+        )
+        self.assertGreater(round_trip_backup["record_counts"]["lifecycle_transition"], 0)
+
+        round_trip_store, _ = make_store()
+        round_trip_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=round_trip_store,
+        )
+        round_trip_summary = round_trip_service.restore_authoritative_record_chain_backup(
+            round_trip_backup
+        )
+
+        self.assertIn(
+            promoted_case.case_id,
+            round_trip_summary.restore_drill.verified_case_ids,
+        )
+        self.assertEqual(
+            round_trip_backup["record_counts"]["lifecycle_transition"],
+            len(round_trip_store.list(LifecycleTransitionRecord)),
+        )
 
     def test_service_phase21_restore_rejects_v2_backup_without_recommendation_family(
         self,
@@ -1844,44 +1920,31 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             restored_service.restore_authoritative_record_chain_backup(backup)
         self._assert_authoritative_store_empty(restored_store)
 
-    def test_service_phase21_restore_fails_closed_on_orphan_authoritative_transition_rows(
+    def test_service_phase21_persist_record_rejects_direct_authoritative_transition_rows(
         self,
     ) -> None:
-        _store, service, promoted_case, _evidence_id, reviewed_at = (
-            self._build_phase19_in_scope_case()
-        )
-        backup = service.export_authoritative_record_chain_backup()
-
-        restored_store, _ = make_store()
-        restored_service = AegisOpsControlPlaneService(
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
-            store=restored_store,
+            store=store,
         )
         orphan_transition = LifecycleTransitionRecord(
             transition_id="transition-phase21-orphan-alert-001",
             subject_record_family="alert",
-            subject_record_id=promoted_case.alert_id,
+            subject_record_id="alert-phase21-orphan-001",
             previous_lifecycle_state="new",
             lifecycle_state="closed",
-            transitioned_at=reviewed_at + timedelta(minutes=5),
+            transitioned_at=datetime(2026, 4, 16, 0, 5, tzinfo=timezone.utc),
             attribution={"source": "test-fixture", "actor_identities": ("analyst-001",)},
         )
-        restored_service.persist_record(orphan_transition)
 
         with self.assertRaisesRegex(
             ValueError,
-            (
-                r"authoritative restore target must be empty before restore; "
-                r"found existing records for .*lifecycle_transition"
-            ),
+            "persist_record does not accept direct lifecycle transition records",
         ):
-            restored_service.restore_authoritative_record_chain_backup(backup)
+            service.persist_record(orphan_transition)
 
-        self.assertIsNone(restored_service.get_record(CaseRecord, promoted_case.case_id))
-        self.assertEqual(
-            restored_store.list(LifecycleTransitionRecord),
-            (orphan_transition,),
-        )
+        self.assertEqual(store.list(LifecycleTransitionRecord), ())
 
     def test_service_phase21_backup_preserves_recommendation_transitions_and_excludes_non_authoritative_subjects(
         self,
