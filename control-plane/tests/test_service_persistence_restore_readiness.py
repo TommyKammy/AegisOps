@@ -313,6 +313,27 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         )
 
         backup = service.export_authoritative_record_chain_backup()
+        backup_transition_subjects = {
+            (record["subject_record_family"], record["subject_record_id"])
+            for record in backup["record_families"]["lifecycle_transition"]
+        }
+
+        self.assertIn(
+            ("approval_decision", approval_decision.approval_decision_id),
+            backup_transition_subjects,
+        )
+        self.assertIn(
+            ("action_request", approved_request.action_request_id),
+            backup_transition_subjects,
+        )
+        self.assertIn(
+            ("action_execution", execution.action_execution_id),
+            backup_transition_subjects,
+        )
+        self.assertIn(
+            ("reconciliation", reconciliation.reconciliation_id),
+            backup_transition_subjects,
+        )
 
         restored_store, restored_backend = make_store()
         restored_service = AegisOpsControlPlaneService(
@@ -363,6 +384,26 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             reconciliation.reconciliation_id,
             restore_summary.restore_drill.verified_reconciliation_ids,
         )
+        restored_transition_subjects = {
+            (record.subject_record_family, record.subject_record_id)
+            for record in restored_service._store.list(LifecycleTransitionRecord)
+        }
+        self.assertIn(
+            ("approval_decision", approval_decision.approval_decision_id),
+            restored_transition_subjects,
+        )
+        self.assertIn(
+            ("action_request", approved_request.action_request_id),
+            restored_transition_subjects,
+        )
+        self.assertIn(
+            ("action_execution", execution.action_execution_id),
+            restored_transition_subjects,
+        )
+        self.assertIn(
+            ("reconciliation", reconciliation.reconciliation_id),
+            restored_transition_subjects,
+        )
         self.assertCountEqual(
             restore_summary.restore_drill.verified_reconciliation_ids,
             tuple(
@@ -394,6 +435,31 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             reconciliation.reconciliation_id,
             restored_approval_context.linked_reconciliation_ids,
         )
+
+    def test_service_phase21_restore_accepts_legacy_backup_without_transition_family(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        backup["backup_schema_version"] = "phase21.authoritative-record-chain.v1"
+        del backup["record_families"]["lifecycle_transition"]
+        del backup["record_counts"]["lifecycle_transition"]
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        restore_summary = restored_service.restore_authoritative_record_chain_backup(
+            backup
+        )
+
+        self.assertIn(promoted_case.case_id, restore_summary.restore_drill.verified_case_ids)
+        self.assertEqual(restore_summary.restored_record_counts["lifecycle_transition"], 0)
+        self.assertEqual(restored_service._store.list(LifecycleTransitionRecord), ())
 
     def test_service_phase21_restore_preserves_handoff_and_manual_fallback_runtime_visibility(
         self,
@@ -470,13 +536,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
 
         restored_store, _ = make_store()
         restored_service = AegisOpsControlPlaneService(
-            RuntimeConfig(
-                postgres_dsn="postgresql://control-plane.local/aegisops",
-                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
-                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
-                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
-                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
-            ),
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
             store=restored_store,
         )
 
@@ -1817,7 +1877,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             restored_service.get_record(ActionExecutionRecord, execution.action_execution_id)
         )
 
-    def test_service_phase21_restore_fails_closed_when_target_contains_recommendation(
+    def test_service_phase21_restore_allows_existing_non_authoritative_recommendation(
         self,
     ) -> None:
         _store, service, _promoted_case, _evidence_id, reviewed_at = (
@@ -1845,11 +1905,17 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             )
         )
 
-        with self.assertRaisesRegex(
-            ValueError,
-            "authoritative restore target must be empty before restore; found existing records for lifecycle_transition, recommendation",
-        ):
-            restored_service.restore_authoritative_record_chain_backup(backup)
+        restore_summary = restored_service.restore_authoritative_record_chain_backup(
+            backup
+        )
+
+        self.assertTrue(restore_summary.restored_record_counts["case"] > 0)
+        self.assertGreaterEqual(len(restore_summary.restore_drill.verified_case_ids), 1)
+        self.assertIsNotNone(
+            restored_service.get_record(
+                RecommendationRecord, "recommendation-existing-001"
+            )
+        )
 
     def test_service_phase21_restore_fails_closed_when_analytic_signal_links_missing_alert(
         self,

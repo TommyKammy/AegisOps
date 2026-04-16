@@ -660,7 +660,10 @@ class RestoreReadinessService:
         if not isinstance(backup_payload, Mapping):
             raise ValueError("restore payload must be a JSON object")
         backup_schema_version = backup_payload.get("backup_schema_version")
-        if (
+        legacy_phase21_backup = (
+            backup_schema_version == "phase21.authoritative-record-chain.v1"
+        )
+        if not legacy_phase21_backup and (
             backup_schema_version
             != self._authoritative_record_chain_backup_schema_version
         ):
@@ -679,11 +682,15 @@ class RestoreReadinessService:
         for record_type in self._authoritative_record_chain_record_types:
             family = record_type.record_family
             raw_records = record_families_payload.get(family)
+            if legacy_phase21_backup and record_type is LifecycleTransitionRecord:
+                raw_records = [] if raw_records is None else raw_records
             if not isinstance(raw_records, list):
                 raise ValueError(
                     f"restore payload must contain a JSON array for record family {family!r}"
                 )
             expected_count = record_counts_payload.get(family)
+            if legacy_phase21_backup and record_type is LifecycleTransitionRecord:
+                expected_count = 0 if expected_count is None else expected_count
             if expected_count != len(raw_records):
                 raise ValueError(
                     f"restore payload record count mismatch for {family!r}: "
@@ -778,9 +785,22 @@ class RestoreReadinessService:
     ) -> dict[str, tuple[ControlPlaneRecord, ...]]:
         authoritative_records: dict[str, tuple[ControlPlaneRecord, ...]] = {}
         authoritative_subject_ids_by_family: dict[str, set[str]] = {}
+        persisted_records_by_family: dict[str, tuple[ControlPlaneRecord, ...]] = {}
         for record_type in self._authoritative_record_chain_record_types:
             family = record_type.record_family
-            persisted_records = tuple(self._store.list(record_type))
+            persisted_records_by_family[family] = tuple(self._store.list(record_type))
+        for record_type in self._authoritative_record_chain_record_types:
+            family = record_type.record_family
+            persisted_records = persisted_records_by_family[family]
+            if record_type is LifecycleTransitionRecord:
+                continue
+            authoritative_subject_ids_by_family[family] = {
+                getattr(record, self._authoritative_primary_id_field_by_family[family])
+                for record in persisted_records
+            }
+        for record_type in self._authoritative_record_chain_record_types:
+            family = record_type.record_family
+            persisted_records = persisted_records_by_family[family]
             if record_type is LifecycleTransitionRecord:
                 authoritative_records[family] = tuple(
                     record
@@ -793,18 +813,15 @@ class RestoreReadinessService:
                 )
                 continue
             authoritative_records[family] = persisted_records
-            authoritative_subject_ids_by_family[family] = {
-                getattr(record, self._authoritative_primary_id_field_by_family[family])
-                for record in persisted_records
-            }
         return authoritative_records
 
     def require_empty_authoritative_restore_target(self) -> None:
-        all_record_types = tuple(dict.fromkeys(self._record_types_by_family.values()))
         populated_families = [
-            record_type.record_family
-            for record_type in all_record_types
-            if self._store.list(record_type)
+            family
+            for family, persisted_records in (
+                self._list_authoritative_record_chain_records().items()
+            )
+            if persisted_records
         ]
         if populated_families:
             raise ValueError(

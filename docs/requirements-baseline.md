@@ -154,7 +154,7 @@ The following constraints are **mandatory** and non-negotiable.
 
 | Component / Boundary | Responsibility |
 | -------------------- | -------------- |
-| AegisOps control plane | Alert, case, evidence, observation, lead, recommendation, approval, action-request, action-execution, hunt, AI-trace, and reconciliation ownership |
+| AegisOps control plane | Alert, case, evidence, observation, lead, recommendation, approval, action-request, action-execution, hunt, AI-trace, reconciliation, and append-only lifecycle-transition ownership |
 | Upstream Analytic Signal substrates | Detection, correlation, and substrate-native alerting artifacts that feed AegisOps without becoming downstream workflow truth |
 | Downstream execution substrates | Approved automation execution within the scope delegated by AegisOps |
 | PostgreSQL | n8n metadata and execution state, plus the future control-plane persistence boundary under separate governance |
@@ -168,11 +168,12 @@ No component should silently absorb another component’s responsibility without
 
 - **Detection, control, and execution MUST remain explicitly separated**
 - Upstream Analytic Signal substrates perform detection or correlation only and MUST NOT directly define AegisOps-owned approval, case, or reconciliation truth
-- AegisOps owns approval decisions, action intent, action-execution truth, evidence linkage, and reconciliation
+- AegisOps owns approval decisions, action intent, action-execution truth, evidence linkage, reconciliation, and the append-only lifecycle transition history paired with reviewed current-state records
 - Optional execution substrates execute approved workflows only after validation and approval requirements are satisfied
 - External systems MUST NOT directly trigger unrestricted execution logic
 - High-risk response actions are prohibited without human oversight
 - Automation MUST remain explainable and auditable
+- Authoritative backup and restore workflows MUST preserve the reviewed current-state record chain together with its append-only lifecycle transition history when that history is part of the reviewed control-plane surface
 
 ### 4.3 Incremental Maturity
 
