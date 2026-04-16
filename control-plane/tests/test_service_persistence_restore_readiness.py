@@ -2508,6 +2508,88 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             "awaiting_reconciliation",
         )
 
+    def test_service_phase21_readiness_fallback_keeps_canceled_terminal_reviews_visible(
+        self,
+    ) -> None:
+        inner_store, _ = make_store()
+        store = _ListCountingStore(inner=inner_store)
+        _store, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case(store=store)
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep canceled reviewed requests visible even when readiness falls back to full-table aggregate scans.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Keep canceled reviewed requests operator-visible during readiness fallback.",
+            escalation_reason="Fallback readiness must classify canceled requests as terminal instead of dropping them from review-path visibility.",
+            expires_at=reviewed_at + timedelta(hours=4),
+            action_request_id="action-request-phase21-readiness-fallback-canceled-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id=(
+                    "approval-phase21-readiness-fallback-canceled-001"
+                ),
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="canceled",
+            )
+        )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+            ),
+            store=store,
+        )
+        setattr(store, "inspect_readiness_aggregates", None)
+
+        store.list_calls = 0
+        readiness = service.inspect_readiness_diagnostics()
+        review_path_health = readiness.metrics["review_path_health"]
+
+        self.assertGreater(store.list_calls, 0)
+        self.assertEqual(readiness.status, "ready")
+        self.assertEqual(review_path_health["review_count"], 1)
+        self.assertEqual(review_path_health["overall_state"], "healthy")
+        self.assertEqual(
+            review_path_health["paths"]["ingest"]["reason"],
+            "review_closed_before_ingest",
+        )
+        self.assertEqual(
+            review_path_health["paths"]["delegation"]["reason"],
+            "review_closed_without_delegation",
+        )
+        self.assertEqual(
+            review_path_health["paths"]["provider"]["reason"],
+            "review_closed_before_provider",
+        )
+        self.assertEqual(
+            review_path_health["paths"]["persistence"]["reason"],
+            "review_closed_before_reconciliation",
+        )
+
     def test_service_phase21_readiness_tracks_terminal_review_without_execution_lineage_without_full_table_reads(
         self,
     ) -> None:

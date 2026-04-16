@@ -663,7 +663,14 @@ class RestoreReadinessService:
                 record.action_request_id
                 for record in action_requests
                 if record.lifecycle_state
-                in {"completed", "failed", "rejected", "expired", "superseded"}
+                in {
+                    "completed",
+                    "failed",
+                    "rejected",
+                    "expired",
+                    "canceled",
+                    "superseded",
+                }
             ),
             action_execution_total=len(action_executions),
             action_execution_lifecycle_counts=dict(

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import pathlib
 import re
 import sys
@@ -1437,6 +1437,38 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
                 "reconciliation-readiness-tuple-003",
                 "reconciliation-readiness-tuple-004",
             ),
+        )
+
+    def test_readiness_aggregates_treat_canceled_action_requests_as_terminal(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        requested_at = datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc)
+        action_request = ActionRequestRecord(
+            action_request_id="action-request-readiness-canceled-001",
+            approval_decision_id="approval-readiness-canceled-001",
+            case_id="case-readiness-canceled-001",
+            alert_id="alert-readiness-canceled-001",
+            finding_id="finding-readiness-canceled-001",
+            idempotency_key="idempotency-readiness-canceled-001",
+            target_scope={"record_family": "recommendation"},
+            payload_hash="payload-hash-readiness-canceled-001",
+            requested_at=requested_at,
+            expires_at=requested_at + timedelta(hours=4),
+            lifecycle_state="canceled",
+            requester_identity="analyst-001",
+            requested_payload={"action_type": "notify_identity_owner"},
+        )
+
+        store.save(action_request)
+
+        aggregates = store.inspect_readiness_aggregates()
+
+        self.assertEqual(aggregates.action_request_total, 1)
+        self.assertEqual(aggregates.active_action_request_ids, ())
+        self.assertEqual(
+            aggregates.terminal_review_outcome_action_request_ids,
+            (action_request.action_request_id,),
         )
 
     def test_store_rejects_schema_invalid_records_before_persistence(self) -> None:

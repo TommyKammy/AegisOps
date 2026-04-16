@@ -962,7 +962,14 @@ class PostgresControlPlaneStore:
             ),
             terminal_review_outcome_action_request_ids=self._list_identifier_values_by_lifecycle_states(
                 ActionRequestRecord,
-                ("completed", "failed", "rejected", "expired", "superseded"),
+                (
+                    "completed",
+                    "failed",
+                    "rejected",
+                    "expired",
+                    "canceled",
+                    "superseded",
+                ),
             ),
             action_execution_total=sum(action_execution_lifecycle_counts.values()),
             action_execution_lifecycle_counts=action_execution_lifecycle_counts,
