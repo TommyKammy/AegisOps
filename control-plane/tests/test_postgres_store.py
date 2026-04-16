@@ -322,11 +322,16 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             "analytic_signal_records",
             "alert_records",
             "evidence_records",
+            "observation_records",
+            "lead_records",
             "case_records",
             "recommendation_records",
             "approval_decision_records",
             "action_request_records",
             "action_execution_records",
+            "hunt_records",
+            "hunt_run_records",
+            "ai_trace_records",
             "reconciliation_records",
         ):
             self.assertIn(f"aegisops_control.{table_name}", migration_sql)

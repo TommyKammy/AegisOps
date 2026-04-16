@@ -182,6 +182,36 @@ with baseline_transitions as (
   union all
 
   select
+    'observation'::text,
+    observation_id,
+    lifecycle_state,
+    coalesce(observed_at, created_at, updated_at),
+    jsonb_build_object(
+      'source',
+      'phase23-migration-backfill',
+      'actor_identities',
+      jsonb_build_array(author_identity)
+    )
+  from aegisops_control.observation_records
+
+  union all
+
+  select
+    'lead'::text,
+    lead_id,
+    lifecycle_state,
+    coalesce(created_at, updated_at),
+    jsonb_build_object(
+      'source',
+      'phase23-migration-backfill',
+      'actor_identities',
+      jsonb_build_array(triage_owner)
+    )
+  from aegisops_control.lead_records
+
+  union all
+
+  select
     'case'::text,
     case_id,
     lifecycle_state,
@@ -259,6 +289,51 @@ with baseline_transitions as (
       jsonb_build_array()
     )
   from aegisops_control.action_execution_records
+
+  union all
+
+  select
+    'hunt'::text,
+    hunt_id,
+    lifecycle_state,
+    coalesce(opened_at, created_at, updated_at),
+    jsonb_build_object(
+      'source',
+      'phase23-migration-backfill',
+      'actor_identities',
+      jsonb_build_array(owner_identity)
+    )
+  from aegisops_control.hunt_records
+
+  union all
+
+  select
+    'hunt_run'::text,
+    hunt_run_id,
+    lifecycle_state,
+    coalesce(started_at, completed_at, created_at, updated_at),
+    jsonb_build_object(
+      'source',
+      'phase23-migration-backfill',
+      'actor_identities',
+      jsonb_build_array()
+    )
+  from aegisops_control.hunt_run_records
+
+  union all
+
+  select
+    'ai_trace'::text,
+    ai_trace_id,
+    lifecycle_state,
+    coalesce(generated_at, created_at, updated_at),
+    jsonb_build_object(
+      'source',
+      'phase23-migration-backfill',
+      'actor_identities',
+      jsonb_build_array(reviewer_identity)
+    )
+  from aegisops_control.ai_trace_records
 
   union all
 
