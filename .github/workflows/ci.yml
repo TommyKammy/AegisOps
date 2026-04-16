@@ -132,6 +132,9 @@ jobs:
           bash scripts/verify-phase-16-first-boot-contract.sh
           bash scripts/test-verify-phase-16-first-boot-contract.sh
 
+      - name: Run Phase 16 workflow coverage guard
+        run: bash scripts/test-verify-ci-phase-16-workflow-coverage.sh
+
       - name: Run Phase 19 thin operator surface validation
         run: |
           bash scripts/verify-phase-19-thin-operator-surface.sh
@@ -207,6 +210,7 @@ jobs:
           bash scripts/test-verify-phase-14-identity-rich-source-family-design.sh
           bash scripts/test-verify-phase-14-identity-rich-source-expansion-ci-validation.sh
           bash scripts/test-verify-phase-15-identity-grounded-analyst-assistant-boundary.sh
+          bash scripts/test-verify-ci-phase-16-workflow-coverage.sh
           bash scripts/test-verify-phase-19-thin-operator-surface.sh
           bash scripts/test-verify-phase-20-low-risk-action-boundary.sh
           bash scripts/test-verify-phase-21-production-like-hardening-boundary.sh
