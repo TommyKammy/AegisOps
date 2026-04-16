@@ -2190,6 +2190,17 @@ class AegisOpsControlPlaneService:
                 "provider": self._action_review_provider_path_health(action_execution),
                 "persistence": self._action_review_persistence_path_health(reconciliation),
             }
+        deadline = self._action_review_visibility_deadline(
+            action_request=action_request,
+            approval_decision=approval_decision,
+            action_execution=action_execution,
+        )
+        if deadline is not None and deadline <= datetime.now(timezone.utc):
+            paths = self._action_review_overdue_path_health(
+                review_state=review_state,
+                action_execution=action_execution,
+                paths=paths,
+            )
         overall_state = self._action_review_overall_path_state(paths.values())
         return {
             "overall_state": overall_state,
@@ -2243,6 +2254,67 @@ class AegisOpsControlPlaneService:
                 "reason": "reconciliation_missing_after_approval",
             },
         }
+
+    @staticmethod
+    def _action_review_visibility_deadline(
+        *,
+        action_request: ActionRequestRecord,
+        approval_decision: ApprovalDecisionRecord | None,
+        action_execution: ActionExecutionRecord | None,
+    ) -> datetime | None:
+        for candidate in (
+            None if action_execution is None else action_execution.expires_at,
+            (
+                None
+                if approval_decision is None
+                else approval_decision.approved_expires_at
+            ),
+            action_request.expires_at,
+        ):
+            if candidate is not None:
+                return candidate
+        return None
+
+    @classmethod
+    def _action_review_overdue_path_health(
+        cls,
+        *,
+        review_state: str,
+        action_execution: ActionExecutionRecord | None,
+        paths: Mapping[str, Mapping[str, str]],
+    ) -> dict[str, dict[str, str]]:
+        if action_execution is None:
+            if review_state == "approved":
+                return cls._action_review_unresolved_without_execution_path_health()
+            return {path_name: dict(path) for path_name, path in paths.items()}
+
+        overdue_paths = {path_name: dict(path) for path_name, path in paths.items()}
+        if overdue_paths["ingest"].get("reason") == "awaiting_ingest_signal":
+            overdue_paths["ingest"] = {
+                "state": "degraded",
+                "reason": "ingest_signal_timeout",
+            }
+        if overdue_paths["delegation"].get("reason") == "awaiting_receipt":
+            overdue_paths["delegation"] = {
+                "state": "degraded",
+                "reason": "delegation_receipt_timeout",
+            }
+        if overdue_paths["provider"].get("reason") == "awaiting_provider_receipt":
+            overdue_paths["provider"] = {
+                "state": "degraded",
+                "reason": "provider_receipt_timeout",
+            }
+        elif overdue_paths["provider"].get("reason") == "awaiting_authoritative_outcome":
+            overdue_paths["provider"] = {
+                "state": "degraded",
+                "reason": "authoritative_outcome_timeout",
+            }
+        if overdue_paths["persistence"].get("reason") == "awaiting_reconciliation":
+            overdue_paths["persistence"] = {
+                "state": "degraded",
+                "reason": "reconciliation_timeout",
+            }
+        return overdue_paths
 
     @staticmethod
     def _action_review_ingest_path_health(

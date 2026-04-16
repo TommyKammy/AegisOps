@@ -26,6 +26,7 @@ from aegisops_control_plane.config import RuntimeConfig
 from aegisops_control_plane.adapters.wazuh import WazuhAlertAdapter
 from aegisops_control_plane.models import (
     AITraceRecord,
+    ActionExecutionRecord,
     ActionRequestRecord,
     AlertRecord,
     AnalyticSignalRecord,
@@ -4002,6 +4003,108 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 "persistence": {
                     "state": "delayed",
                     "reason": "awaiting_reconciliation",
+                },
+            },
+        )
+
+    def test_cli_inspect_case_detail_classifies_stale_delegation_receipt_timeout(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Show overdue delegation receipt gaps as degraded path-health signals.",
+        )
+        base_now = datetime.now(timezone.utc)
+        requested_at = base_now - timedelta(hours=2)
+        delegated_at = base_now - timedelta(hours=1, minutes=50)
+        expired_at = base_now - timedelta(hours=1)
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Keep overdue delegation receipt gaps explicit in operator inspection.",
+            escalation_reason="Delegation receipt timeouts must be visible without external dashboards.",
+            expires_at=base_now + timedelta(hours=4),
+            action_request_id="action-request-cli-stale-dispatching-path-health-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-cli-stale-dispatching-path-health-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=requested_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=expired_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                requested_at=requested_at,
+                expires_at=expired_at,
+                lifecycle_state="executing",
+            )
+        )
+        service.persist_record(
+            ActionExecutionRecord(
+                action_execution_id=(
+                    "action-execution-cli-stale-dispatching-path-health-001"
+                ),
+                action_request_id=action_request.action_request_id,
+                approval_decision_id=approval.approval_decision_id,
+                delegation_id="delegation-cli-stale-dispatching-path-health-001",
+                execution_surface_type="automation_substrate",
+                execution_surface_id="shuffle",
+                execution_run_id="execution-run-cli-stale-dispatching-path-health-001",
+                idempotency_key=action_request.idempotency_key,
+                target_scope=dict(action_request.target_scope),
+                approved_payload=dict(action_request.requested_payload),
+                payload_hash=action_request.payload_hash,
+                delegated_at=delegated_at,
+                expires_at=expired_at,
+                provenance={"initiated_by": "operator-review"},
+                lifecycle_state="dispatching",
+            )
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-case-detail", "--case-id", promoted_case.case_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        review = payload["current_action_review"]
+
+        self.assertEqual(review["review_state"], "executing")
+        self.assertEqual(review["path_health"]["overall_state"], "degraded")
+        self.assertEqual(
+            review["path_health"]["paths"],
+            {
+                "ingest": {
+                    "state": "degraded",
+                    "reason": "ingest_signal_timeout",
+                },
+                "delegation": {
+                    "state": "degraded",
+                    "reason": "delegation_receipt_timeout",
+                },
+                "provider": {
+                    "state": "degraded",
+                    "reason": "provider_receipt_timeout",
+                },
+                "persistence": {
+                    "state": "degraded",
+                    "reason": "reconciliation_timeout",
                 },
             },
         )
