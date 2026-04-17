@@ -320,6 +320,8 @@ The primary deployment target is a single-company or single-business-unit deploy
 
 The target operating assumption is business-hours review with explicit after-hours escalation, not a 24x7 staffed SOC.
 
+The reviewed footprint and deployment-profile baseline for that target lives in `docs/smb-footprint-and-deployment-profile-baseline.md`.
+
 AegisOps is best suited for:
 
 - small SecOps teams
@@ -337,6 +339,7 @@ It is trying to be a safer way to operate a narrow but trustworthy SecOps contro
 Recommended starting points for a new reader:
 
 - `docs/requirements-baseline.md`
+- `docs/smb-footprint-and-deployment-profile-baseline.md`
 - `docs/control-plane-state-model.md`
 - `docs/automation-substrate-contract.md`
 - `docs/response-action-safety-model.md`
