@@ -35,6 +35,8 @@ tmp/
 temp/
 build/
 dist/
+.codex-supervisor/execution-metrics/
+.codex-supervisor/issues/
 .codex-supervisor/pre-merge/
 .codex-supervisor/replay/
 .codex-supervisor/turn-in-progress.json
