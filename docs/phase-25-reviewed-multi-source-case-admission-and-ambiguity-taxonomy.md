@@ -81,8 +81,7 @@ The taxonomy must be used consistently across case detail, case timeline, eviden
 
 Required support for `same-entity`:
 
-- stable identifiers match across the compared records; or
-- one reviewed record explicitly binds the two identifiers as the same subject; and
+- either stable identifiers match across the compared records, or one reviewed record explicitly binds the two identifiers as the same subject; and
 - provenance remains visible enough for an operator to inspect the supporting reviewed records.
 
 `same-entity` must not be inferred from alias-style similarity, nearby metadata, or operator expectation.
