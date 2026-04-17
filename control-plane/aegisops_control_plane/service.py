@@ -4900,7 +4900,6 @@ class AegisOpsControlPlaneService:
                 _advisory_text_claims_authority_or_scope_expansion(candidate_summary)
             )
         )
-        summary = trusted_summary if unresolved_reasons else candidate_summary
         if not citations:
             unresolved_reasons.extend(
                 _phase24_live_assistant_unresolved_reasons(
@@ -4908,6 +4907,7 @@ class AegisOpsControlPlaneService:
                 )
             )
         unresolved_reasons = _dedupe_strings(tuple(unresolved_reasons))
+        summary = trusted_summary if unresolved_reasons else candidate_summary
         snapshot = _phase24_live_assistant_snapshot(
             workflow_task=workflow_task,
             summary=summary,

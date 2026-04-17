@@ -231,6 +231,70 @@ class Phase24LiveAssistantSurfaceValidationTests(ServicePersistenceTestBase):
             ],
         )
 
+    def test_cli_returns_reviewed_summary_when_citations_are_missing(self) -> None:
+        _, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        expected_summary = service.inspect_assistant_context(
+            "case",
+            promoted_case.case_id,
+        ).advisory_output["cited_summary"]["text"]
+        service._assistant_provider_adapter = mock.Mock()
+        service._assistant_provider_adapter.generate.return_value = AssistantProviderResult(
+            status="ready",
+            provider_identity="openai",
+            model_identity="gpt-5.4",
+            prompt_version="phase24-case-summary-v1",
+            workflow_family="first_live_assistant_summary_family",
+            workflow_task="case_summary",
+            generated_at=reviewed_at,
+            reviewed_input_refs=(promoted_case.case_id, promoted_case.alert_id, evidence_id),
+            output_text="Reviewed case scope remains bounded to the cited evidence.",
+            attempt_count=1,
+            request_provenance={
+                "memory_policy": "no_memory",
+                "request_metadata": {
+                    "record_family": "case",
+                    "record_id": promoted_case.case_id,
+                },
+            },
+            response_provenance={
+                "provider_response_id": "provider-response-003",
+                "provider_transcript_id": "provider-transcript-003",
+                "model_version": "model-version-2026-04-17",
+            },
+            failures=(),
+            failure_summary=None,
+        )
+
+        stdout = io.StringIO()
+        with mock.patch(
+            "aegisops_control_plane.service._phase24_live_assistant_citations_from_context",
+            return_value=(),
+        ):
+            main.main(
+                [
+                    "run-live-assistant-workflow",
+                    "--workflow-task",
+                    "case_summary",
+                    "--family",
+                    "case",
+                    "--record-id",
+                    promoted_case.case_id,
+                ],
+                stdout=stdout,
+                service=service,
+            )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["status"], "unresolved")
+        self.assertEqual(payload["summary"], expected_summary)
+        self.assertEqual(
+            payload["unresolved_reasons"],
+            ["required citations are missing"],
+        )
+        service._assistant_provider_adapter.generate.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()
