@@ -56,6 +56,17 @@ remove_text_from_file() {
   git -C "${target}" add "${path}"
 }
 
+replace_text_in_file() {
+  local target="$1"
+  local path="$2"
+  local original_text="$3"
+  local replacement_text="$4"
+
+  ORIGINAL_TEXT="${original_text}" REPLACEMENT_TEXT="${replacement_text}" \
+    perl -0pi -e 's/\Q$ENV{ORIGINAL_TEXT}\E/$ENV{REPLACEMENT_TEXT}/g' "${target}/${path}"
+  git -C "${target}" add "${path}"
+}
+
 commit_fixture() {
   local target="$1"
 
@@ -118,8 +129,19 @@ write_required_artifacts "${missing_ci_repo}"
 remove_text_from_file \
   "${missing_ci_repo}" \
   ".github/workflows/ci.yml" \
-  "      - name: Run Phase 24 workflow coverage guard"
+  "        run: bash scripts/test-verify-ci-phase-24-workflow-coverage.sh"
 commit_fixture "${missing_ci_repo}"
-assert_fails_with "${missing_ci_repo}" "Missing required text in ${missing_ci_repo}/.github/workflows/ci.yml:       - name: Run Phase 24 workflow coverage guard"
+assert_fails_with "${missing_ci_repo}" "Missing active command in CI step \"Run Phase 24 workflow coverage guard\": bash scripts/test-verify-ci-phase-24-workflow-coverage.sh"
+
+commented_validation_command_repo="${workdir}/commented-validation-command"
+create_repo "${commented_validation_command_repo}"
+write_required_artifacts "${commented_validation_command_repo}"
+replace_text_in_file \
+  "${commented_validation_command_repo}" \
+  ".github/workflows/ci.yml" \
+  "          bash scripts/verify-phase-24-live-assistant-workflow-contract.sh" \
+  "          # bash scripts/verify-phase-24-live-assistant-workflow-contract.sh"
+commit_fixture "${commented_validation_command_repo}"
+assert_fails_with "${commented_validation_command_repo}" "Missing active command in CI step \"Run Phase 24 live assistant workflow contract validation\": bash scripts/verify-phase-24-live-assistant-workflow-contract.sh"
 
 echo "Phase 24 workflow contract verifier fails closed for missing docs, README alignment, and CI wiring."

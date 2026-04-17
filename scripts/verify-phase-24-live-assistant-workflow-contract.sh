@@ -32,6 +32,88 @@ require_contains() {
   fi
 }
 
+collect_active_step_run_commands() {
+  awk '
+    {
+      if (in_block) {
+        if ($0 ~ /^[[:space:]]*$/) {
+          next
+        }
+
+        current_indent = match($0, /[^ ]/) - 1
+        if (current_indent > block_indent) {
+          line = $0
+          sub(/^[[:space:]]+/, "", line)
+          if (line != "" && line !~ /^#/) {
+            print current_step "\t" line
+          }
+          next
+        }
+
+        in_block = 0
+      }
+
+      if ($0 ~ /^[[:space:]]*-[[:space:]]name:[[:space:]]+/) {
+        current_step = $0
+        sub(/^[[:space:]]*-[[:space:]]name:[[:space:]]+/, "", current_step)
+        next
+      }
+
+      if ($0 ~ /^[[:space:]]*run:[[:space:]]*[|>]-?[[:space:]]*$/) {
+        block_indent = match($0, /[^ ]/) - 1
+        in_block = 1
+        next
+      }
+
+      if ($0 ~ /^[[:space:]]*run:[[:space:]]*[^|>]/) {
+        line = $0
+        sub(/^[[:space:]]*run:[[:space:]]*/, "", line)
+        if (line != "" && line !~ /^#/) {
+          print current_step "\t" line
+        }
+      }
+    }
+  ' "${workflow_path}"
+}
+
+collect_active_run_commands() {
+  collect_active_step_run_commands | cut -f2-
+}
+
+collect_active_step_commands() {
+  local step_name="$1"
+
+  collect_active_step_run_commands |
+    awk -F $'\t' -v step_name="${step_name}" '$1 == step_name { print $2 }'
+}
+
+require_active_run_command() {
+  local active_commands="$1"
+  local expected="$2"
+
+  if ! grep -Fqx -- "${expected}" <<<"${active_commands}" >/dev/null; then
+    echo "Missing active CI command in ${workflow_path}: ${expected}" >&2
+    exit 1
+  fi
+}
+
+require_active_step_command() {
+  local step_name="$1"
+  local expected="$2"
+  local step_commands=""
+
+  step_commands="$(collect_active_step_commands "${step_name}")"
+  if [[ -z "${step_commands}" ]]; then
+    echo "Missing active command in CI step \"${step_name}\": ${expected}" >&2
+    exit 1
+  fi
+
+  if ! grep -Fqx -- "${expected}" <<<"${step_commands}" >/dev/null; then
+    echo "Missing active command in CI step \"${step_name}\": ${expected}" >&2
+    exit 1
+  fi
+}
+
 require_file "${design_doc}" "Missing Phase 24 workflow contract design document"
 require_file "${validation_doc}" "Missing Phase 24 workflow contract validation note"
 require_file "${readme_doc}" "Missing README"
@@ -72,11 +154,19 @@ require_contains "${readme_doc}" "bounded live assistant workflow family"
 require_contains "${readme_doc}" "queue triage summary and case summary"
 require_contains "${readme_doc}" "The assistant remains advisory-only"
 
-require_contains "${workflow_path}" "      - name: Run Phase 24 live assistant workflow contract validation"
-require_contains "${workflow_path}" "          bash scripts/verify-phase-24-live-assistant-workflow-contract.sh"
-require_contains "${workflow_path}" "          python3 -m unittest control-plane.tests.test_phase24_live_assistant_workflow_docs"
-require_contains "${workflow_path}" "      - name: Run Phase 24 workflow coverage guard"
-require_contains "${workflow_path}" "        run: bash scripts/test-verify-ci-phase-24-workflow-coverage.sh"
-require_contains "${workflow_path}" "          bash scripts/test-verify-phase-24-live-assistant-workflow-contract.sh"
+active_run_commands="$(collect_active_run_commands)"
+
+require_active_step_command \
+  "Run Phase 24 live assistant workflow contract validation" \
+  "bash scripts/verify-phase-24-live-assistant-workflow-contract.sh"
+require_active_step_command \
+  "Run Phase 24 live assistant workflow contract validation" \
+  "python3 -m unittest control-plane.tests.test_phase24_live_assistant_workflow_docs"
+require_active_step_command \
+  "Run Phase 24 workflow coverage guard" \
+  "bash scripts/test-verify-ci-phase-24-workflow-coverage.sh"
+require_active_run_command \
+  "${active_run_commands}" \
+  "bash scripts/test-verify-phase-24-live-assistant-workflow-contract.sh"
 
 echo "Phase 24 live assistant workflow family remains bounded, cited, and advisory-only."
