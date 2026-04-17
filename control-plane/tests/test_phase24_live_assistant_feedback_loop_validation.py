@@ -229,3 +229,170 @@ class Phase24LiveAssistantFeedbackLoopValidationTests(ServicePersistenceTestBase
             recommendation.assistant_advisory_draft["unresolved_reasons"],
             ("required citations are missing",),
         )
+
+    def test_live_assistant_workflow_uses_task_specific_adapter_for_unresolved_queue_triage_feedback_loop(
+        self,
+    ) -> None:
+        store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        alert_id = promoted_case.alert_id
+        context_snapshot = service.inspect_assistant_context("alert", alert_id)
+        unresolved_context = replace(
+            context_snapshot,
+            linked_alert_ids=(),
+            advisory_output={
+                **dict(context_snapshot.advisory_output),
+                "status": "unresolved",
+                "cited_summary": {
+                    "text": "Reviewed queue triage remains unresolved pending cited alert context.",
+                    "citations": (alert_id,),
+                },
+                "uncertainty_flags": ("missing_supporting_citations",),
+            },
+        )
+        service._assistant_provider_adapter = AssistantProviderAdapter(
+            provider_identity="openai",
+            model_identity="gpt-5.4",
+            prompt_version="phase24-case-summary-v1",
+            request_timeout_seconds=5.0,
+            max_attempts=1,
+            transport=mock.Mock(),
+        )
+
+        with mock.patch.object(
+            service,
+            "inspect_assistant_context",
+            return_value=unresolved_context,
+        ):
+            snapshot = service.run_live_assistant_workflow(
+                workflow_task="queue_triage_summary",
+                record_family="alert",
+                record_id=alert_id,
+            )
+
+        self.assertEqual(snapshot.status, "unresolved")
+
+        ai_traces = store.list(AITraceRecord)
+        self.assertEqual(len(ai_traces), 1)
+        self.assertEqual(ai_traces[0].prompt_version, "phase24-queue-summary-v1")
+
+        recommendations = store.list(RecommendationRecord)
+        self.assertEqual(len(recommendations), 1)
+        self.assertEqual(recommendations[0].alert_id, alert_id)
+        self.assertEqual(
+            recommendations[0].assistant_advisory_draft["source_record_id"],
+            alert_id,
+        )
+
+    def test_live_assistant_workflow_canonicalizes_provider_trace_linkage_and_case_binding(
+        self,
+    ) -> None:
+        store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        context_snapshot = service.inspect_assistant_context(
+            "case",
+            promoted_case.case_id,
+        )
+        linked_context = replace(
+            context_snapshot,
+            linked_case_ids=(),
+        )
+        service._assistant_provider_adapter = mock.Mock()
+        service._assistant_provider_adapter.generate.return_value = AssistantProviderResult(
+            status="ready",
+            provider_identity="openai",
+            model_identity="gpt-5.4",
+            prompt_version="phase24-case-summary-v1",
+            workflow_family="first_live_assistant_summary_family",
+            workflow_task="case_summary",
+            generated_at=reviewed_at,
+            reviewed_input_refs=(promoted_case.case_id, promoted_case.alert_id, evidence_id),
+            output_text="Reviewed case scope remains bounded to the cited evidence.",
+            attempt_count=1,
+            request_provenance={
+                "memory_policy": "no_memory",
+                "request_metadata": {
+                    "record_family": "case",
+                    "record_id": promoted_case.case_id,
+                },
+            },
+            response_provenance={
+                "provider_response_id": "provider-response-feedback-loop-002",
+                "provider_transcript_id": "provider-transcript-feedback-loop-002",
+                "model_version": "model-version-2026-04-18",
+            },
+            failures=(),
+            failure_summary=None,
+        )
+        service._assistant_provider_adapter.build_ai_trace_record.return_value = (
+            AITraceRecord(
+                ai_trace_id="ai-trace-provider-stale-001",
+                subject_linkage={
+                    "source_record_family": "case",
+                    "source_record_id": "case-stale-001",
+                    "alert_ids": ("alert-stale-001",),
+                    "case_ids": ("case-stale-001",),
+                    "evidence_ids": (),
+                    "recommendation_ids": (),
+                    "reconciliation_ids": (),
+                    "output_contract": {
+                        "workflow_family": "stale-family",
+                        "workflow_task": "stale-task",
+                        "status": "ready",
+                    },
+                },
+                model_identity="openai/gpt-5.4",
+                prompt_version="phase24-case-summary-v1",
+                generated_at=reviewed_at,
+                material_input_refs=("stale-ref-001",),
+                reviewer_identity="system://bounded-live-assistant",
+                lifecycle_state="ready",
+                assistant_advisory_draft={
+                    "subject_linkage": {
+                        "source_record_family": "case",
+                        "source_record_id": "case-stale-001",
+                    },
+                    "reviewed_input_refs": ("stale-ref-001",),
+                },
+            )
+        )
+
+        with mock.patch.object(
+            service,
+            "inspect_assistant_context",
+            return_value=linked_context,
+        ):
+            snapshot = service.run_live_assistant_workflow(
+                workflow_task="case_summary",
+                record_family="case",
+                record_id=promoted_case.case_id,
+            )
+
+        self.assertEqual(snapshot.status, "ready")
+
+        ai_traces = store.list(AITraceRecord)
+        self.assertEqual(len(ai_traces), 1)
+        ai_trace = ai_traces[0]
+        self.assertEqual(
+            ai_trace.subject_linkage["source_record_id"],
+            promoted_case.case_id,
+        )
+        self.assertEqual(
+            ai_trace.subject_linkage["output_contract"]["workflow_task"],
+            "case_summary",
+        )
+        self.assertNotIn("stale-ref-001", ai_trace.material_input_refs)
+        self.assertEqual(
+            ai_trace.assistant_advisory_draft["subject_linkage"]["source_record_id"],
+            promoted_case.case_id,
+        )
+        self.assertEqual(
+            ai_trace.assistant_advisory_draft["reviewed_input_refs"],
+            ai_trace.material_input_refs,
+        )
+
+        recommendations = store.list(RecommendationRecord)
+        self.assertEqual(len(recommendations), 1)
+        self.assertEqual(recommendations[0].case_id, promoted_case.case_id)
