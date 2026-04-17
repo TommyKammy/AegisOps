@@ -10,6 +10,7 @@ roadmap_doc="${repo_root}/docs/Revised Phase23-20 Epic Roadmap.md"
 phase15_doc="${repo_root}/docs/phase-15-identity-grounded-analyst-assistant-boundary.md"
 state_model_doc="${repo_root}/docs/control-plane-state-model.md"
 phase24_tests="${repo_root}/control-plane/tests/test_phase24_live_assistant_workflow_docs.py"
+phase24_runtime_tests="${repo_root}/control-plane/tests/test_phase24_live_assistant_validation.py"
 workflow_path="${repo_root}/.github/workflows/ci.yml"
 
 require_file() {
@@ -121,6 +122,7 @@ require_file "${roadmap_doc}" "Missing revised roadmap"
 require_file "${phase15_doc}" "Missing Phase 15 assistant boundary doc"
 require_file "${state_model_doc}" "Missing control-plane state model"
 require_file "${phase24_tests}" "Missing Phase 24 workflow contract doc tests"
+require_file "${phase24_runtime_tests}" "Missing Phase 24 live assistant runtime validation tests"
 require_file "${workflow_path}" "Missing CI workflow"
 
 require_contains "${design_doc}" "# AegisOps Phase 24 First Live Assistant Workflow Family and Trusted Output Contract"
@@ -162,6 +164,9 @@ require_active_step_command \
 require_active_step_command \
   "Run Phase 24 live assistant workflow contract validation" \
   "python3 -m unittest control-plane.tests.test_phase24_live_assistant_workflow_docs"
+require_active_step_command \
+  "Run Phase 24 live assistant workflow contract validation" \
+  "python3 -m unittest control-plane.tests.test_phase24_live_assistant_validation"
 require_active_step_command \
   "Run Phase 24 workflow coverage guard" \
   "bash scripts/test-verify-ci-phase-24-workflow-coverage.sh"

@@ -15,6 +15,7 @@ required_tests=(
 
 required_runtime_commands=(
   "python3 -m unittest control-plane.tests.test_phase24_live_assistant_workflow_docs"
+  "python3 -m unittest control-plane.tests.test_phase24_live_assistant_validation"
 )
 
 self_guard_step_name="Run Phase 24 workflow coverage guard"

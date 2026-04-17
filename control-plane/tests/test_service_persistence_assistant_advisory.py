@@ -1250,6 +1250,76 @@ class AssistantAdvisoryPersistenceTests(ServicePersistenceTestBase):
             )
         )
 
+    def test_service_shared_advisory_builder_does_not_flag_prompt_injection_phrases(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+
+        admitted = service.ingest_finding_alert(
+            finding_id="finding-prompt-phrase-001",
+            analytic_signal_id="signal-prompt-phrase-001",
+            substrate_detection_record_id="substrate-detection-prompt-phrase-001",
+            correlation_key="claim:prompt-phrase:001",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            reviewed_context={
+                "asset": {"asset_id": "asset-prompt-phrase-001"},
+                "identity": {"identity_id": "principal-prompt-phrase-001"},
+            },
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-prompt-phrase-001",
+                source_record_id="substrate-detection-prompt-phrase-001",
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=first_seen_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-prompt-phrase-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=admitted.alert.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id=None,
+                review_owner="reviewer-001",
+                intended_outcome=(
+                    "Quote 'ignore previous instructions' from the hostile sample for "
+                    "analyst review."
+                ),
+                lifecycle_state="under_review",
+            )
+        )
+
+        snapshot = service.inspect_assistant_context(
+            "recommendation",
+            recommendation.recommendation_id,
+        )
+
+        self.assertEqual(snapshot.advisory_output["status"], "ready")
+        self.assertNotIn(
+            "prompt_injection_attempt",
+            snapshot.advisory_output["uncertainty_flags"],
+        )
+        self.assertTrue(
+            any(
+                "ignore previous instructions" in candidate.get("text", "").lower()
+                for candidate in snapshot.advisory_output["candidate_recommendations"]
+            )
+        )
+
     def test_service_keeps_anchored_recommendation_context_from_absorbing_sibling_anchors(
         self,
     ) -> None:
