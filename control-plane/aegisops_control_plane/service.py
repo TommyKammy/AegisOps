@@ -4844,46 +4844,63 @@ class AegisOpsControlPlaneService:
                 "advisory_output": advisory_output,
             }
         )
-        provider_result = adapter.generate(
-            workflow_family=_PHASE24_WORKFLOW_FAMILY,
-            workflow_task=workflow_task,
-            transcript=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Return a concise reviewed-only summary. Do not add approval, delegation, execution, or policy language."
-                    ),
+        trusted_summary = str(advisory_output["cited_summary"]["text"])
+        provider_result = None
+        unresolved_reasons: list[str] = []
+        try:
+            provider_result = adapter.generate(
+                workflow_family=_PHASE24_WORKFLOW_FAMILY,
+                workflow_task=workflow_task,
+                transcript=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "Return a concise reviewed-only summary. Do not add approval, delegation, execution, or policy language."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": json.dumps(transcript_payload, sort_keys=True),
+                    },
+                ],
+                reviewed_input_refs=reviewed_input_refs,
+                metadata={
+                    "record_family": record_family,
+                    "record_id": record_id,
+                    "bounded_summary_text": trusted_summary,
                 },
-                {
-                    "role": "user",
-                    "content": json.dumps(transcript_payload, sort_keys=True),
-                },
-            ],
-            reviewed_input_refs=reviewed_input_refs,
-            metadata={
-                "record_family": record_family,
-                "record_id": record_id,
-                "bounded_summary_text": str(advisory_output["cited_summary"]["text"]),
-            },
-        )
-        unresolved_reasons = []
-        if provider_result.status != "ready":
+            )
+        except Exception:  # noqa: BLE001
             unresolved_reasons.extend(
                 _phase24_live_assistant_unresolved_reasons(
                     ("provider_generation_failed",)
                 )
             )
-        summary = (
-            provider_result.output_text.strip()
-            if isinstance(provider_result.output_text, str)
-            and provider_result.output_text.strip()
-            else str(advisory_output["cited_summary"]["text"])
-        )
+        candidate_summary = trusted_summary
+        if provider_result is not None:
+            if provider_result.status != "ready":
+                unresolved_reasons.extend(
+                    _phase24_live_assistant_unresolved_reasons(
+                        ("provider_generation_failed",)
+                    )
+                )
+            elif (
+                isinstance(provider_result.output_text, str)
+                and provider_result.output_text.strip()
+            ):
+                candidate_summary = provider_result.output_text.strip()
+            else:
+                unresolved_reasons.extend(
+                    _phase24_live_assistant_unresolved_reasons(
+                        ("provider_generation_failed",)
+                    )
+                )
         unresolved_reasons.extend(
             _phase24_live_assistant_unresolved_reasons(
-                _advisory_text_claims_authority_or_scope_expansion(summary)
+                _advisory_text_claims_authority_or_scope_expansion(candidate_summary)
             )
         )
+        summary = trusted_summary if unresolved_reasons else candidate_summary
         if not citations:
             unresolved_reasons.extend(
                 _phase24_live_assistant_unresolved_reasons(
@@ -4899,7 +4916,7 @@ class AegisOpsControlPlaneService:
         )
 
         build_ai_trace_record = getattr(adapter, "build_ai_trace_record", None)
-        if callable(build_ai_trace_record):
+        if provider_result is not None and callable(build_ai_trace_record):
             ai_trace_record = build_ai_trace_record(
                 ai_trace_id=self._resolve_new_record_identifier(
                     AITraceRecord,
