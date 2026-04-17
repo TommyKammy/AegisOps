@@ -66,7 +66,7 @@ assert_fails_with() {
 approved_repo="${workdir}/approved-license"
 create_repo \
   "${approved_repo}" \
-  ".codex-supervisor/issues/94/issue-journal.md" \
+  ".codex-supervisor/README.md" \
   ".env.sample" \
   ".github/workflows/ci.yml" \
   ".gitignore" \
@@ -84,11 +84,33 @@ create_repo \
   "sigma/"
 assert_passes "${approved_repo}"
 
+tracked_supervisor_journal_repo="${workdir}/tracked-supervisor-journal"
+create_repo \
+  "${tracked_supervisor_journal_repo}" \
+  ".codex-supervisor/README.md" \
+  ".codex-supervisor/issues/94/issue-journal.md" \
+  ".env.sample" \
+  ".github/workflows/ci.yml" \
+  ".gitignore" \
+  "LICENSE.txt" \
+  "README.md" \
+  "config/" \
+  "control-plane/" \
+  "docs/" \
+  "ingest/" \
+  "n8n/" \
+  "opensearch/" \
+  "postgres/" \
+  "proxy/" \
+  "scripts/" \
+  "sigma/"
+assert_fails_with "${tracked_supervisor_journal_repo}" "Tracked supervisor-local journal is not allowed"
+
 unexpected_hidden_repo="${workdir}/unexpected-hidden-dir"
 create_repo \
   "${unexpected_hidden_repo}" \
   ".cache/" \
-  ".codex-supervisor/issues/94/issue-journal.md" \
+  ".codex-supervisor/README.md" \
   ".env.sample" \
   ".github/workflows/ci.yml" \
   ".gitignore" \
