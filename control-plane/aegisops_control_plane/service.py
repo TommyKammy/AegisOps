@@ -20,7 +20,12 @@ from .adapters.postgres import (
 )
 from .adapters.shuffle import ShuffleActionAdapter
 from .adapters.wazuh import WazuhAlertAdapter
-from .assistant_provider import AssistantProviderAdapter, AssistantProviderTransport
+from .assistant_provider import (
+    AssistantProviderAdapter,
+    AssistantProviderFailure,
+    AssistantProviderResult,
+    AssistantProviderTransport,
+)
 from .config import RuntimeConfig
 from .execution_coordinator import ExecutionCoordinator
 from .models import (
@@ -4780,45 +4785,6 @@ class AegisOpsControlPlaneService:
         self._require_reviewed_case_scoped_advisory_read(context_snapshot)
 
         advisory_output = dict(context_snapshot.advisory_output)
-        citations = _phase24_live_assistant_citations_from_context(context_snapshot)
-        trusted_summary = str(
-            advisory_output.get("cited_summary", {}).get("text")
-            or f"Reviewed {workflow_task.replace('_', ' ')} for {record_id} remains unresolved."
-        )
-        if advisory_output.get("status") != "ready":
-            unresolved_reasons = _phase24_live_assistant_unresolved_reasons(
-                advisory_output.get("uncertainty_flags", ())
-            )
-            if not unresolved_reasons:
-                unresolved_reasons = ("required citations are missing",)
-            return _phase24_live_assistant_snapshot(
-                workflow_task=workflow_task,
-                summary=trusted_summary,
-                citations=citations,
-                unresolved_reasons=unresolved_reasons,
-            )
-
-        adapter = self._assistant_provider_adapter
-        if adapter is None:
-            raise ValueError("live assistant provider is not configured")
-        adapter_prompt_version = _PHASE24_WORKFLOW_PROMPT_VERSIONS[workflow_task]
-        if (
-            isinstance(adapter, AssistantProviderAdapter)
-            and getattr(adapter, "_prompt_version", None) != adapter_prompt_version
-        ):
-            adapter = AssistantProviderAdapter(
-                provider_identity=getattr(adapter, "_provider_identity", "reviewed_local"),
-                model_identity=getattr(
-                    adapter, "_model_identity", "bounded_reviewed_summary"
-                ),
-                prompt_version=adapter_prompt_version,
-                request_timeout_seconds=float(
-                    getattr(adapter, "_request_timeout_seconds", 5.0)
-                ),
-                max_attempts=int(getattr(adapter, "_max_attempts", 1)),
-                transport=getattr(adapter, "_transport"),
-            )
-
         reviewed_input_refs = _dedupe_strings(
             (
                 record_id,
@@ -4829,6 +4795,38 @@ class AegisOpsControlPlaneService:
                 *context_snapshot.linked_reconciliation_ids,
             )
         )
+        citations = _phase24_live_assistant_citations_from_context(context_snapshot)
+        trusted_summary = str(
+            advisory_output.get("cited_summary", {}).get("text")
+            or f"Reviewed {workflow_task.replace('_', ' ')} for {record_id} remains unresolved."
+        )
+        adapter = self._live_assistant_adapter_for_workflow_task(workflow_task)
+        if advisory_output.get("status") != "ready":
+            unresolved_reasons = _phase24_live_assistant_unresolved_reasons(
+                advisory_output.get("uncertainty_flags", ())
+            )
+            if not unresolved_reasons:
+                unresolved_reasons = ("required citations are missing",)
+            snapshot = _phase24_live_assistant_snapshot(
+                workflow_task=workflow_task,
+                summary=trusted_summary,
+                citations=citations,
+                unresolved_reasons=unresolved_reasons,
+            )
+            self._persist_live_assistant_feedback_loop(
+                record_family=record_family,
+                record_id=record_id,
+                context_snapshot=context_snapshot,
+                workflow_snapshot=snapshot,
+                provider_result=None,
+                reviewed_input_refs=reviewed_input_refs,
+                adapter=adapter,
+            )
+            return snapshot
+
+        if adapter is None:
+            raise ValueError("live assistant provider is not configured")
+
         transcript_payload = _json_ready(
             {
                 "record_family": record_family,
@@ -4911,10 +4909,119 @@ class AegisOpsControlPlaneService:
             citations=citations,
             unresolved_reasons=unresolved_reasons,
         )
+        self._persist_live_assistant_feedback_loop(
+            record_family=record_family,
+            record_id=record_id,
+            context_snapshot=context_snapshot,
+            workflow_snapshot=snapshot,
+            provider_result=provider_result,
+            reviewed_input_refs=reviewed_input_refs,
+            adapter=adapter,
+        )
+        return snapshot
 
+    def _live_assistant_adapter_for_workflow_task(
+        self,
+        workflow_task: str,
+    ) -> object | None:
+        adapter = self._assistant_provider_adapter
+        if adapter is None:
+            return None
+        adapter_prompt_version = _PHASE24_WORKFLOW_PROMPT_VERSIONS[workflow_task]
+        if (
+            isinstance(adapter, AssistantProviderAdapter)
+            and getattr(adapter, "_prompt_version", None) != adapter_prompt_version
+        ):
+            return AssistantProviderAdapter(
+                provider_identity=getattr(adapter, "_provider_identity", "reviewed_local"),
+                model_identity=getattr(
+                    adapter, "_model_identity", "bounded_reviewed_summary"
+                ),
+                prompt_version=adapter_prompt_version,
+                request_timeout_seconds=float(
+                    getattr(adapter, "_request_timeout_seconds", 5.0)
+                ),
+                max_attempts=int(getattr(adapter, "_max_attempts", 1)),
+                transport=getattr(adapter, "_transport"),
+            )
+        return adapter
+
+    def _persist_live_assistant_feedback_loop(
+        self,
+        *,
+        record_family: str,
+        record_id: str,
+        context_snapshot: AnalystAssistantContextSnapshot,
+        workflow_snapshot: LiveAssistantWorkflowSnapshot,
+        provider_result: AssistantProviderResult | AssistantProviderFailure | None,
+        reviewed_input_refs: tuple[str, ...],
+        adapter: object,
+    ) -> None:
+        with self._store.transaction():
+            ai_trace_record = self._build_live_assistant_ai_trace_record(
+                record_family=record_family,
+                record_id=record_id,
+                context_snapshot=context_snapshot,
+                workflow_snapshot=workflow_snapshot,
+                provider_result=provider_result,
+                reviewed_input_refs=reviewed_input_refs,
+                adapter=adapter,
+            )
+            persisted_ai_trace = self.persist_record(ai_trace_record)
+            recommendation_record = self._build_live_assistant_recommendation_record(
+                context_snapshot=context_snapshot,
+                workflow_snapshot=workflow_snapshot,
+                ai_trace_record=persisted_ai_trace,
+            )
+            persisted_recommendation = self.persist_record(recommendation_record)
+
+            updated_subject_linkage = dict(persisted_ai_trace.subject_linkage)
+            updated_subject_linkage["recommendation_ids"] = self._assistant_merge_ids(
+                self._assistant_ids_from_mapping(
+                    persisted_ai_trace.subject_linkage,
+                    "recommendation_ids",
+                ),
+                persisted_recommendation.recommendation_id,
+            )
+            updated_advisory_draft = dict(persisted_ai_trace.assistant_advisory_draft)
+            updated_advisory_draft["subject_linkage"] = updated_subject_linkage
+            self.persist_record(
+                replace(
+                    persisted_ai_trace,
+                    subject_linkage=updated_subject_linkage,
+                    assistant_advisory_draft=updated_advisory_draft,
+                )
+            )
+
+    def _build_live_assistant_ai_trace_record(
+        self,
+        *,
+        record_family: str,
+        record_id: str,
+        context_snapshot: AnalystAssistantContextSnapshot,
+        workflow_snapshot: LiveAssistantWorkflowSnapshot,
+        provider_result: AssistantProviderResult | AssistantProviderFailure | None,
+        reviewed_input_refs: tuple[str, ...],
+        adapter: object,
+    ) -> AITraceRecord:
+        subject_linkage = {
+            "source_record_family": record_family,
+            "source_record_id": record_id,
+            "alert_ids": context_snapshot.linked_alert_ids,
+            "case_ids": context_snapshot.linked_case_ids,
+            "evidence_ids": context_snapshot.linked_evidence_ids,
+            "recommendation_ids": context_snapshot.linked_recommendation_ids,
+            "reconciliation_ids": context_snapshot.linked_reconciliation_ids,
+            "output_contract": {
+                "workflow_family": workflow_snapshot.workflow_family,
+                "workflow_task": workflow_snapshot.workflow_task,
+                "status": workflow_snapshot.status,
+            },
+        }
         build_ai_trace_record = getattr(adapter, "build_ai_trace_record", None)
+        ai_trace_record: AITraceRecord | None = None
         if provider_result is not None and callable(build_ai_trace_record):
-            ai_trace_record = build_ai_trace_record(
+            candidate_record = build_ai_trace_record(
                 ai_trace_id=self._resolve_new_record_identifier(
                     AITraceRecord,
                     None,
@@ -4924,24 +5031,129 @@ class AegisOpsControlPlaneService:
                 reviewer_identity="system://bounded-live-assistant",
                 generated_at=provider_result.generated_at,
                 result=provider_result,
-                subject_linkage={
-                    "source_record_family": record_family,
-                    "source_record_id": record_id,
-                    "alert_ids": context_snapshot.linked_alert_ids,
-                    "case_ids": context_snapshot.linked_case_ids,
-                    "evidence_ids": context_snapshot.linked_evidence_ids,
-                    "recommendation_ids": context_snapshot.linked_recommendation_ids,
-                    "reconciliation_ids": context_snapshot.linked_reconciliation_ids,
-                },
+                subject_linkage=subject_linkage,
             )
-            if isinstance(ai_trace_record, AITraceRecord):
-                self.persist_record(
-                    replace(
-                        ai_trace_record,
-                        assistant_advisory_draft=snapshot.to_dict(),
+            if isinstance(candidate_record, AITraceRecord):
+                ai_trace_record = candidate_record
+
+        if ai_trace_record is None:
+            generated_at = (
+                provider_result.generated_at
+                if provider_result is not None
+                else datetime.now(timezone.utc)
+            )
+            ai_trace_record = AITraceRecord(
+                ai_trace_id=self._resolve_new_record_identifier(
+                    AITraceRecord,
+                    None,
+                    "ai_trace_id",
+                    "ai-trace",
+                ),
+                subject_linkage=subject_linkage,
+                model_identity=(
+                    (
+                        f"{provider_result.provider_identity}/"
+                        f"{provider_result.model_identity}"
                     )
-                )
-        return snapshot
+                    if provider_result is not None
+                    else (
+                        f"{getattr(adapter, '_provider_identity', 'reviewed_local')}/"
+                        f"{getattr(adapter, '_model_identity', 'bounded_reviewed_summary')}"
+                    )
+                ),
+                prompt_version=(
+                    provider_result.prompt_version
+                    if provider_result is not None
+                    else str(
+                        getattr(
+                            adapter,
+                            "_prompt_version",
+                            _PHASE24_WORKFLOW_PROMPT_VERSIONS[
+                                workflow_snapshot.workflow_task
+                            ],
+                        )
+                    )
+                ),
+                generated_at=generated_at,
+                material_input_refs=reviewed_input_refs,
+                reviewer_identity="system://bounded-live-assistant",
+                lifecycle_state="under_review",
+            )
+
+        canonical_subject_linkage = dict(ai_trace_record.subject_linkage)
+        canonical_subject_linkage.update(subject_linkage)
+
+        return replace(
+            ai_trace_record,
+            subject_linkage=canonical_subject_linkage,
+            material_input_refs=reviewed_input_refs,
+            lifecycle_state="under_review",
+            assistant_advisory_draft={
+                **workflow_snapshot.to_dict(),
+                "source_record_family": record_family,
+                "source_record_id": record_id,
+                "review_lifecycle_state": "under_review",
+                "subject_linkage": canonical_subject_linkage,
+                "reviewed_input_refs": reviewed_input_refs,
+            },
+        )
+
+    def _build_live_assistant_recommendation_record(
+        self,
+        *,
+        context_snapshot: AnalystAssistantContextSnapshot,
+        workflow_snapshot: LiveAssistantWorkflowSnapshot,
+        ai_trace_record: AITraceRecord,
+    ) -> RecommendationRecord:
+        source_alert_id = (
+            context_snapshot.record_id
+            if context_snapshot.record_family == "alert"
+            else self._assistant_primary_linked_id(context_snapshot.linked_alert_ids)
+        )
+        source_case_id = (
+            context_snapshot.record_id
+            if context_snapshot.record_family == "case"
+            else self._assistant_primary_linked_id(context_snapshot.linked_case_ids)
+        )
+        return RecommendationRecord(
+            recommendation_id=self._resolve_new_record_identifier(
+                RecommendationRecord,
+                None,
+                "recommendation_id",
+                "recommendation",
+            ),
+            lead_id=None,
+            hunt_run_id=None,
+            alert_id=source_alert_id,
+            case_id=source_case_id,
+            ai_trace_id=ai_trace_record.ai_trace_id,
+            review_owner="system://bounded-live-assistant",
+            intended_outcome=workflow_snapshot.summary,
+            lifecycle_state="under_review",
+            reviewed_context=context_snapshot.reviewed_context,
+            assistant_advisory_draft={
+                "workflow_family": workflow_snapshot.workflow_family,
+                "workflow_task": workflow_snapshot.workflow_task,
+                "status": workflow_snapshot.status,
+                "cited_summary": {"text": workflow_snapshot.summary},
+                "citations": workflow_snapshot.citations,
+                "unresolved_reasons": workflow_snapshot.unresolved_reasons,
+                "operator_follow_up": workflow_snapshot.operator_follow_up,
+                "source_record_family": context_snapshot.record_family,
+                "source_record_id": context_snapshot.record_id,
+                "source_ai_trace_id": ai_trace_record.ai_trace_id,
+                "review_lifecycle_state": "under_review",
+                "linked_alert_ids": context_snapshot.linked_alert_ids,
+                "linked_case_ids": context_snapshot.linked_case_ids,
+                "linked_evidence_ids": context_snapshot.linked_evidence_ids,
+                "linked_recommendation_ids": context_snapshot.linked_recommendation_ids,
+                "linked_reconciliation_ids": context_snapshot.linked_reconciliation_ids,
+            },
+        )
+
+    @staticmethod
+    def _assistant_primary_linked_id(linked_ids: tuple[str, ...]) -> str | None:
+        return linked_ids[0] if linked_ids else None
 
     def create_reviewed_action_request_from_advisory(
         self,
