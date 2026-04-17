@@ -1,10 +1,24 @@
 from __future__ import annotations
 
 import copy
+from datetime import datetime, timezone
 import json
 import re
 
 from aegisops_control_plane.adapters.postgres import PostgresControlPlaneStore
+
+
+_MISSING_SORT_TIMESTAMP = datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _normalize_sort_datetime(value: object) -> datetime:
+    if value is None:
+        return _MISSING_SORT_TIMESTAMP
+    if not isinstance(value, datetime):
+        raise TypeError(f"expected datetime-compatible sort value, got {type(value)!r}")
+    if value.tzinfo is None or value.tzinfo.utcoffset(value) is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 _INSERT_RE = re.compile(
@@ -59,6 +73,25 @@ _SELECT_IDS_BY_STATES_RE = re.compile(
 _SELECT_LATEST_RECONCILIATION_RE = re.compile(
     r"select (?P<columns>.+) from aegisops_control\.reconciliation_records "
     r"order by compared_at desc, reconciliation_id desc limit 1",
+    re.IGNORECASE,
+)
+_SELECT_EXECUTIONS_BY_ACTION_REQUEST_IDS_RE = re.compile(
+    r"select (?P<columns>.+) from aegisops_control\.action_execution_records "
+    r"where action_request_id in \((?P<placeholders>.+)\) "
+    r"order by action_request_id asc, delegated_at desc, action_execution_id desc",
+    re.IGNORECASE,
+)
+_SELECT_EXECUTIONS_BY_DELEGATION_IDS_RE = re.compile(
+    r"select (?P<columns>.+) from aegisops_control\.action_execution_records "
+    r"where delegation_id in \((?P<placeholders>.+)\) "
+    r"order by delegated_at desc, action_execution_id desc",
+    re.IGNORECASE,
+)
+_SELECT_RECONCILIATIONS_BY_SUBJECT_LINKAGE_IDS_RE = re.compile(
+    r"select (?P<columns>.+) from aegisops_control\.reconciliation_records "
+    r"where coalesce\(subject_linkage -> '(?P<linkage_key>\w+)', '\[\]'::jsonb\) "
+    r"\?\| array\[(?P<placeholders>.+)\] "
+    r"order by compared_at desc, reconciliation_id desc",
     re.IGNORECASE,
 )
 _COUNT_ACTION_REQUESTS_BY_TYPE_RE = re.compile(
@@ -213,6 +246,37 @@ class FakePostgresCursor:
         if select_latest_reconciliation_match is not None:
             self._execute_select_latest_reconciliation(
                 select_latest_reconciliation_match.group("columns")
+            )
+            return
+
+        select_executions_by_action_request_ids_match = (
+            _SELECT_EXECUTIONS_BY_ACTION_REQUEST_IDS_RE.fullmatch(normalized)
+        )
+        if select_executions_by_action_request_ids_match is not None:
+            self._execute_select_executions_by_action_request_ids(
+                select_executions_by_action_request_ids_match.group("columns"),
+                params,
+            )
+            return
+
+        select_executions_by_delegation_ids_match = (
+            _SELECT_EXECUTIONS_BY_DELEGATION_IDS_RE.fullmatch(normalized)
+        )
+        if select_executions_by_delegation_ids_match is not None:
+            self._execute_select_executions_by_delegation_ids(
+                select_executions_by_delegation_ids_match.group("columns"),
+                params,
+            )
+            return
+
+        select_reconciliations_by_subject_linkage_ids_match = (
+            _SELECT_RECONCILIATIONS_BY_SUBJECT_LINKAGE_IDS_RE.fullmatch(normalized)
+        )
+        if select_reconciliations_by_subject_linkage_ids_match is not None:
+            self._execute_select_reconciliations_by_subject_linkage_ids(
+                select_reconciliations_by_subject_linkage_ids_match.group("columns"),
+                select_reconciliations_by_subject_linkage_ids_match.group("linkage_key"),
+                params,
             )
             return
 
@@ -372,6 +436,73 @@ class FakePostgresCursor:
             self._rows = []
             return
         self._rows = [self._project_row(rows[0], column_names)]
+
+    def _execute_select_executions_by_action_request_ids(
+        self,
+        columns: str,
+        params: tuple[object, ...] | None,
+    ) -> None:
+        column_names = [column.strip() for column in columns.split(",")]
+        action_request_ids = {str(value) for value in (params or ())}
+        rows = [
+            row
+            for row in self.tables.get("action_execution_records", {}).values()
+            if str(row.get("action_request_id")) in action_request_ids
+        ]
+        rows.sort(
+            key=lambda row: (row["delegated_at"], row["action_execution_id"]),
+            reverse=True,
+        )
+        rows.sort(key=lambda row: str(row["action_request_id"]))
+        self.description = tuple((name,) for name in column_names)
+        self._rows = [self._project_row(row, column_names) for row in rows]
+
+    def _execute_select_executions_by_delegation_ids(
+        self,
+        columns: str,
+        params: tuple[object, ...] | None,
+    ) -> None:
+        column_names = [column.strip() for column in columns.split(",")]
+        delegation_ids = {str(value) for value in (params or ())}
+        rows = [
+            row
+            for row in self.tables.get("action_execution_records", {}).values()
+            if str(row.get("delegation_id")) in delegation_ids
+        ]
+        rows.sort(
+            key=lambda row: (row["delegated_at"], row["action_execution_id"]),
+            reverse=True,
+        )
+        self.description = tuple((name,) for name in column_names)
+        self._rows = [self._project_row(row, column_names) for row in rows]
+
+    def _execute_select_reconciliations_by_subject_linkage_ids(
+        self,
+        columns: str,
+        linkage_key: str,
+        params: tuple[object, ...] | None,
+    ) -> None:
+        column_names = [column.strip() for column in columns.split(",")]
+        linkage_ids = {str(value) for value in (params or ())}
+        rows = []
+        for row in self.tables.get("reconciliation_records", {}).values():
+            subject_linkage = row.get("subject_linkage") or {}
+            if isinstance(subject_linkage, str):
+                subject_linkage = json.loads(subject_linkage)
+            linkage_values = subject_linkage.get(linkage_key) or ()
+            if any(str(value) in linkage_ids for value in linkage_values):
+                rows.append(row)
+        rows.sort(
+            key=lambda row: (
+                _normalize_sort_datetime(row.get("compared_at")),
+                _normalize_sort_datetime(row.get("last_seen_at")),
+                _normalize_sort_datetime(row.get("first_seen_at")),
+                str(row["reconciliation_id"]),
+            ),
+            reverse=True,
+        )
+        self.description = tuple((name,) for name in column_names)
+        self._rows = [self._project_row(row, column_names) for row in rows]
 
     def _execute_count_action_requests_by_type(
         self,

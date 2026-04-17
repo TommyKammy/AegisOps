@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextvars import ContextVar
 from contextlib import contextmanager
 from dataclasses import dataclass, field, fields
+from datetime import datetime, timezone
 import importlib
 import json
 from typing import Any, Callable, Iterator, Mapping, Protocol, Type, TypeVar
@@ -28,6 +29,7 @@ from ..models import (
 
 
 RecordT = TypeVar("RecordT", bound=ControlPlaneRecord)
+_MISSING_SORT_TIMESTAMP = datetime.min.replace(tzinfo=timezone.utc)
 
 
 @dataclass(frozen=True)
@@ -39,9 +41,11 @@ class ReadinessDiagnosticsAggregates:
     action_request_total: int
     action_request_lifecycle_counts: dict[str, int]
     active_action_request_ids: tuple[str, ...]
+    terminal_review_outcome_action_request_ids: tuple[str, ...]
     action_execution_total: int
     action_execution_lifecycle_counts: dict[str, int]
     active_action_execution_ids: tuple[str, ...]
+    terminal_action_execution_ids: tuple[str, ...]
     reconciliation_total: int
     reconciliation_lifecycle_counts: dict[str, int]
     reconciliation_ingest_disposition_counts: dict[str, int]
@@ -50,6 +54,12 @@ class ReadinessDiagnosticsAggregates:
     phase20_requested_action_requests: int
     phase20_approved_action_requests: int
     phase20_reconciled_executions: int
+
+
+@dataclass(frozen=True)
+class ReadinessReviewPathRecords:
+    action_executions: tuple[ActionExecutionRecord, ...]
+    reconciliations: tuple[ReconciliationRecord, ...]
 
 
 class CursorProtocol(Protocol):
@@ -80,6 +90,25 @@ class ConnectionProtocol(Protocol):
 
     def close(self) -> None:
         ...
+
+
+def _normalize_sort_datetime(value: datetime | None) -> datetime:
+    if value is None:
+        return _MISSING_SORT_TIMESTAMP
+    if value.tzinfo is None or value.tzinfo.utcoffset(value) is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _readiness_reconciliation_sort_key(
+    record: ReconciliationRecord,
+) -> tuple[datetime, datetime, datetime, str]:
+    return (
+        _normalize_sort_datetime(record.compared_at),
+        _normalize_sort_datetime(record.last_seen_at),
+        _normalize_sort_datetime(record.first_seen_at),
+        record.reconciliation_id,
+    )
 
 
 ConnectionFactory = Callable[[str], ConnectionProtocol]
@@ -931,11 +960,31 @@ class PostgresControlPlaneStore:
                 ActionRequestRecord,
                 ("pending_approval", "approved", "executing", "unresolved"),
             ),
+            terminal_review_outcome_action_request_ids=self._list_identifier_values_by_lifecycle_states(
+                ActionRequestRecord,
+                (
+                    "completed",
+                    "failed",
+                    "rejected",
+                    "expired",
+                    "canceled",
+                    "superseded",
+                ),
+            ),
             action_execution_total=sum(action_execution_lifecycle_counts.values()),
             action_execution_lifecycle_counts=action_execution_lifecycle_counts,
             active_action_execution_ids=self._list_identifier_values_by_lifecycle_states(
                 ActionExecutionRecord,
                 ("dispatching", "queued", "running"),
+            ),
+            terminal_action_execution_ids=self._list_identifier_values_by_lifecycle_states(
+                ActionExecutionRecord,
+                (
+                    "succeeded",
+                    "failed",
+                    "canceled",
+                    "superseded",
+                ),
             ),
             reconciliation_total=sum(reconciliation_lifecycle_counts.values()),
             reconciliation_lifecycle_counts=reconciliation_lifecycle_counts,
@@ -955,6 +1004,69 @@ class PostgresControlPlaneStore:
             phase20_reconciled_executions=self._count_distinct_matched_execution_runs_for_action_type(
                 "notify_identity_owner"
             ),
+        )
+
+    def inspect_readiness_review_path_records(
+        self,
+        *,
+        action_request_ids: tuple[str, ...],
+        approval_decision_ids: tuple[str, ...],
+        delegation_ids: tuple[str, ...] = (),
+    ) -> ReadinessReviewPathRecords:
+        if self._active_connection.get() is None:
+            with self.transaction(isolation_level="REPEATABLE READ"):
+                return self.inspect_readiness_review_path_records(
+                    action_request_ids=action_request_ids,
+                    approval_decision_ids=approval_decision_ids,
+                    delegation_ids=delegation_ids,
+                )
+
+        action_executions_by_id: dict[str, ActionExecutionRecord] = {}
+        for action_execution in self._list_action_executions_by_action_request_ids(
+            action_request_ids
+        ):
+            action_executions_by_id[action_execution.action_execution_id] = action_execution
+        for action_execution in self._list_action_executions_by_delegation_ids(
+            delegation_ids
+        ):
+            action_executions_by_id[action_execution.action_execution_id] = action_execution
+        action_executions = tuple(action_executions_by_id.values())
+        reconciliations_by_id: dict[str, ReconciliationRecord] = {}
+        action_execution_ids = tuple(
+            action_execution.action_execution_id for action_execution in action_executions
+        )
+        reconciliation_delegation_ids = tuple(
+            sorted(
+                {
+                    *delegation_ids,
+                    *(
+                        action_execution.delegation_id
+                        for action_execution in action_executions
+                    ),
+                }
+            )
+        )
+        for linkage_key, linkage_ids in (
+            ("action_request_ids", action_request_ids),
+            ("approval_decision_ids", approval_decision_ids),
+            ("action_execution_ids", action_execution_ids),
+            ("delegation_ids", reconciliation_delegation_ids),
+        ):
+            for reconciliation in self._list_reconciliations_by_subject_linkage_ids(
+                linkage_key=linkage_key,
+                linkage_ids=linkage_ids,
+            ):
+                reconciliations_by_id[reconciliation.reconciliation_id] = reconciliation
+        reconciliations = tuple(
+            sorted(
+                reconciliations_by_id.values(),
+                key=_readiness_reconciliation_sort_key,
+                reverse=True,
+            )
+        )
+        return ReadinessReviewPathRecords(
+            action_executions=action_executions,
+            reconciliations=reconciliations,
         )
 
     def _count_grouped_by_field(
@@ -1032,6 +1144,96 @@ class PostgresControlPlaneStore:
         if row is None:
             return None
         return self._row_to_record(ReconciliationRecord, _row_to_mapping(cursor, row))
+
+    def _list_action_executions_by_action_request_ids(
+        self,
+        action_request_ids: tuple[str, ...],
+    ) -> tuple[ActionExecutionRecord, ...]:
+        if not action_request_ids:
+            return ()
+
+        table = self._table_config(ActionExecutionRecord)
+        placeholders = ", ".join("%s" for _ in action_request_ids)
+        query = (
+            f"select {', '.join(table.record_fields)} "
+            f"from aegisops_control.{table.table_name} "
+            f"where action_request_id in ({placeholders}) "
+            "order by action_request_id asc, delegated_at desc, action_execution_id desc"
+        )
+
+        with self._borrow_connection() as connection:
+            cursor = connection.cursor()
+            try:
+                cursor.execute(query, action_request_ids)
+                rows = cursor.fetchall()
+                mappings = tuple(_row_to_mapping(cursor, row) for row in rows)
+            finally:
+                cursor.close()
+
+        return tuple(
+            self._row_to_record(ActionExecutionRecord, mapping) for mapping in mappings
+        )
+
+    def _list_action_executions_by_delegation_ids(
+        self,
+        delegation_ids: tuple[str, ...],
+    ) -> tuple[ActionExecutionRecord, ...]:
+        if not delegation_ids:
+            return ()
+
+        table = self._table_config(ActionExecutionRecord)
+        placeholders = ", ".join("%s" for _ in delegation_ids)
+        query = (
+            f"select {', '.join(table.record_fields)} "
+            f"from aegisops_control.{table.table_name} "
+            f"where delegation_id in ({placeholders}) "
+            "order by delegated_at desc, action_execution_id desc"
+        )
+
+        with self._borrow_connection() as connection:
+            cursor = connection.cursor()
+            try:
+                cursor.execute(query, delegation_ids)
+                rows = cursor.fetchall()
+                mappings = tuple(_row_to_mapping(cursor, row) for row in rows)
+            finally:
+                cursor.close()
+
+        return tuple(
+            self._row_to_record(ActionExecutionRecord, mapping) for mapping in mappings
+        )
+
+    def _list_reconciliations_by_subject_linkage_ids(
+        self,
+        *,
+        linkage_key: str,
+        linkage_ids: tuple[str, ...],
+    ) -> tuple[ReconciliationRecord, ...]:
+        if not linkage_ids:
+            return ()
+
+        table = self._table_config(ReconciliationRecord)
+        placeholders = ", ".join("%s" for _ in linkage_ids)
+        query = (
+            f"select {', '.join(table.record_fields)} "
+            f"from aegisops_control.{table.table_name} "
+            f"where coalesce(subject_linkage -> '{linkage_key}', '[]'::jsonb) "
+            f"?| array[{placeholders}] "
+            "order by compared_at desc, reconciliation_id desc"
+        )
+
+        with self._borrow_connection() as connection:
+            cursor = connection.cursor()
+            try:
+                cursor.execute(query, linkage_ids)
+                rows = cursor.fetchall()
+                mappings = tuple(_row_to_mapping(cursor, row) for row in rows)
+            finally:
+                cursor.close()
+
+        return tuple(
+            self._row_to_record(ReconciliationRecord, mapping) for mapping in mappings
+        )
 
     def _count_action_requests_by_action_type(
         self,

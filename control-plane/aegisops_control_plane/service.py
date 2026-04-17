@@ -9,13 +9,14 @@ import ipaddress
 import json
 import logging
 import uuid
-from typing import Iterator, Mapping, Protocol, Type, TypeVar
+from typing import Iterable, Iterator, Mapping, Protocol, Type, TypeVar
 
 from .adapters.executor import IsolatedExecutorAdapter
 from .adapters.n8n import N8NReconciliationAdapter
 from .adapters.postgres import (
     PostgresControlPlaneStore,
     ReadinessDiagnosticsAggregates,
+    ReadinessReviewPathRecords,
 )
 from .adapters.shuffle import ShuffleActionAdapter
 from .adapters.wazuh import WazuhAlertAdapter
@@ -563,12 +564,15 @@ def _derive_readiness_status(
     *,
     startup_ready: bool,
     reconciliation_lifecycle_counts: Mapping[str, int],
+    review_path_health_overall_state: str | None = None,
 ) -> str:
     if not startup_ready:
         return "failing_closed"
     if reconciliation_lifecycle_counts.get("stale", 0):
         return "stale"
     if reconciliation_lifecycle_counts.get("mismatched", 0):
+        return "degraded"
+    if review_path_health_overall_state in {"degraded", "failed"}:
         return "degraded"
     return "ready"
 
@@ -1054,6 +1058,9 @@ class AegisOpsControlPlaneService:
             record_to_dict=_record_to_dict,
             json_ready=_json_ready,
             redacted_reconciliation_payload=_redacted_reconciliation_payload,
+            build_readiness_review_path_health=(
+                lambda aggregates: self._build_readiness_review_path_health(aggregates)
+            ),
             build_shutdown_status_snapshot=_build_shutdown_status_snapshot,
             derive_readiness_status=_derive_readiness_status,
             record_from_backup_payload=_record_from_backup_payload,
@@ -2059,6 +2066,13 @@ class AegisOpsControlPlaneService:
             review_state=review_state,
             record_index=record_index,
         )
+        path_health = self._action_review_path_health(
+            action_request=action_request,
+            approval_decision=approval_decision,
+            action_execution=action_execution,
+            reconciliation=reconciliation,
+            review_state=review_state,
+        )
 
         return {
             "review_state": review_state,
@@ -2089,6 +2103,7 @@ class AegisOpsControlPlaneService:
             "message_intent": requested_payload.get("message_intent"),
             "escalation_reason": requested_payload.get("escalation_reason"),
             "runtime_visibility": runtime_visibility,
+            "path_health": path_health,
             "execution_surface_type": (
                 action_execution.execution_surface_type
                 if action_execution is not None
@@ -2129,6 +2144,887 @@ class AegisOpsControlPlaneService:
                 if replacement_action_request is not None
                 else None
             ),
+        }
+
+    def _action_review_path_health(
+        self,
+        *,
+        action_request: ActionRequestRecord,
+        approval_decision: ApprovalDecisionRecord | None,
+        action_execution: ActionExecutionRecord | None,
+        reconciliation: ReconciliationRecord | None,
+        review_state: str,
+    ) -> dict[str, object]:
+        if action_execution is None and reconciliation is None:
+            if review_state in {"rejected", "expired", "superseded", "canceled"}:
+                paths = self._action_review_terminal_non_delegated_path_health()
+            elif (
+                review_state == "unresolved"
+                and approval_decision is not None
+                and approval_decision.lifecycle_state == "approved"
+            ):
+                paths = self._action_review_unresolved_without_execution_path_health()
+            else:
+                paths = {
+                    "ingest": self._action_review_ingest_path_health(reconciliation),
+                    "delegation": self._action_review_delegation_path_health(
+                        action_request=action_request,
+                        approval_decision=approval_decision,
+                        action_execution=action_execution,
+                        review_state=review_state,
+                    ),
+                    "provider": self._action_review_provider_path_health(action_execution),
+                    "persistence": self._action_review_persistence_path_health(
+                        reconciliation
+                    ),
+                }
+        elif action_execution is None:
+            paths = self._action_review_reconciliation_without_execution_path_health(
+                action_request=action_request,
+                approval_decision=approval_decision,
+                reconciliation=reconciliation,
+                review_state=review_state,
+            )
+        else:
+            paths = {
+                "ingest": self._action_review_ingest_path_health(reconciliation),
+                "delegation": self._action_review_delegation_path_health(
+                    action_request=action_request,
+                    approval_decision=approval_decision,
+                    action_execution=action_execution,
+                    review_state=review_state,
+                ),
+                "provider": self._action_review_provider_path_health(action_execution),
+                "persistence": self._action_review_persistence_path_health(reconciliation),
+            }
+        deadline = self._action_review_visibility_deadline(
+            action_request=action_request,
+            approval_decision=approval_decision,
+            action_execution=action_execution,
+        )
+        if deadline is not None and deadline <= datetime.now(timezone.utc):
+            paths = self._action_review_overdue_path_health(
+                review_state=review_state,
+                action_execution=action_execution,
+                paths=paths,
+            )
+        overall_state = self._action_review_overall_path_state(paths.values())
+        return {
+            "overall_state": overall_state,
+            "summary": self._action_review_path_health_summary(
+                overall_state=overall_state,
+                paths=paths,
+            ),
+            "paths": paths,
+        }
+
+    @staticmethod
+    def _action_review_terminal_non_delegated_path_health() -> dict[str, dict[str, str]]:
+        return {
+            "ingest": {
+                "state": "healthy",
+                "reason": "review_closed_before_ingest",
+            },
+            "delegation": {
+                "state": "healthy",
+                "reason": "review_closed_without_delegation",
+            },
+            "provider": {
+                "state": "healthy",
+                "reason": "review_closed_before_provider",
+            },
+            "persistence": {
+                "state": "healthy",
+                "reason": "review_closed_before_reconciliation",
+            },
+        }
+
+    @staticmethod
+    def _action_review_unresolved_without_execution_path_health() -> (
+        dict[str, dict[str, str]]
+    ):
+        return {
+            "ingest": {
+                "state": "degraded",
+                "reason": "ingest_signal_missing_after_approval",
+            },
+            "delegation": {
+                "state": "degraded",
+                "reason": "reviewed_delegation_missing_after_approval",
+            },
+            "provider": {
+                "state": "degraded",
+                "reason": "provider_signal_missing_after_approval",
+            },
+            "persistence": {
+                "state": "degraded",
+                "reason": "reconciliation_missing_after_approval",
+            },
+        }
+
+    def _action_review_reconciliation_without_execution_path_health(
+        self,
+        *,
+        action_request: ActionRequestRecord,
+        approval_decision: ApprovalDecisionRecord | None,
+        reconciliation: ReconciliationRecord,
+        review_state: str,
+    ) -> dict[str, dict[str, str]]:
+        delegation_path = self._action_review_delegation_path_health(
+            action_request=action_request,
+            approval_decision=approval_decision,
+            action_execution=None,
+            review_state=review_state,
+        )
+        if delegation_path["state"] != "healthy":
+            delegation_path = {
+                "state": "degraded",
+                "reason": "reviewed_delegation_record_missing",
+            }
+        return {
+            "ingest": self._action_review_ingest_path_health(reconciliation),
+            "delegation": delegation_path,
+            "provider": {
+                "state": "degraded",
+                "reason": "provider_execution_record_missing",
+            },
+            "persistence": {
+                "state": "degraded",
+                "reason": "reconciliation_execution_lineage_missing",
+            },
+        }
+
+    @staticmethod
+    def _action_review_visibility_deadline(
+        *,
+        action_request: ActionRequestRecord,
+        approval_decision: ApprovalDecisionRecord | None,
+        action_execution: ActionExecutionRecord | None,
+    ) -> datetime | None:
+        return min(
+            (
+                candidate
+                for candidate in (
+                    None if action_execution is None else action_execution.expires_at,
+                    (
+                        None
+                        if approval_decision is None
+                        else approval_decision.approved_expires_at
+                    ),
+                    action_request.expires_at,
+                )
+                if candidate is not None
+            ),
+            default=None,
+        )
+
+    @classmethod
+    def _action_review_overdue_path_health(
+        cls,
+        *,
+        review_state: str,
+        action_execution: ActionExecutionRecord | None,
+        paths: Mapping[str, Mapping[str, str]],
+    ) -> dict[str, dict[str, str]]:
+        if action_execution is None:
+            if review_state in {"approved", "executing"}:
+                return cls._action_review_unresolved_without_execution_path_health()
+            return {path_name: dict(path) for path_name, path in paths.items()}
+
+        overdue_paths = {path_name: dict(path) for path_name, path in paths.items()}
+        if overdue_paths["ingest"].get("reason") == "awaiting_ingest_signal":
+            overdue_paths["ingest"] = {
+                "state": "degraded",
+                "reason": "ingest_signal_timeout",
+            }
+        if overdue_paths["delegation"].get("reason") == "awaiting_receipt":
+            overdue_paths["delegation"] = {
+                "state": "degraded",
+                "reason": "delegation_receipt_timeout",
+            }
+        if overdue_paths["provider"].get("reason") == "awaiting_provider_receipt":
+            overdue_paths["provider"] = {
+                "state": "degraded",
+                "reason": "provider_receipt_timeout",
+            }
+        elif overdue_paths["provider"].get("reason") == "awaiting_authoritative_outcome":
+            overdue_paths["provider"] = {
+                "state": "degraded",
+                "reason": "authoritative_outcome_timeout",
+            }
+        if overdue_paths["persistence"].get("reason") == "awaiting_reconciliation":
+            overdue_paths["persistence"] = {
+                "state": "degraded",
+                "reason": "reconciliation_timeout",
+            }
+        return overdue_paths
+
+    @staticmethod
+    def _action_review_ingest_path_health(
+        reconciliation: ReconciliationRecord | None,
+    ) -> dict[str, str]:
+        if reconciliation is None:
+            return {
+                "state": "delayed",
+                "reason": "awaiting_ingest_signal",
+            }
+        return {
+            "matched": {
+                "state": "healthy",
+                "reason": "observations_current",
+            },
+            "missing": {
+                "state": "delayed",
+                "reason": "observation_missing",
+            },
+            "stale": {
+                "state": "degraded",
+                "reason": "stale_observation",
+            },
+            "duplicate": {
+                "state": "degraded",
+                "reason": "duplicate_observations",
+            },
+            "mismatch": {
+                "state": "degraded",
+                "reason": "mismatch_detected",
+            },
+        }.get(
+            reconciliation.ingest_disposition,
+            {
+                "state": "degraded",
+                "reason": "ingest_anomaly",
+            },
+        )
+
+    @staticmethod
+    def _action_review_delegation_path_health(
+        *,
+        action_request: ActionRequestRecord,
+        approval_decision: ApprovalDecisionRecord | None,
+        action_execution: ActionExecutionRecord | None,
+        review_state: str,
+    ) -> dict[str, str]:
+        if action_execution is not None:
+            if action_execution.lifecycle_state == "dispatching":
+                return {
+                    "state": "delayed",
+                    "reason": "awaiting_receipt",
+                }
+            return {
+                "state": "healthy",
+                "reason": "delegated",
+            }
+        if approval_decision is not None and approval_decision.lifecycle_state == "approved":
+            return {
+                "state": "delayed",
+                "reason": "awaiting_reviewed_delegation",
+            }
+        if review_state == "approved" or action_request.lifecycle_state == "approved":
+            return {
+                "state": "delayed",
+                "reason": "awaiting_reviewed_delegation",
+            }
+        return {
+            "state": "delayed",
+            "reason": "awaiting_approval",
+        }
+
+    @staticmethod
+    def _action_review_provider_path_health(
+        action_execution: ActionExecutionRecord | None,
+    ) -> dict[str, str]:
+        if action_execution is None:
+            return {
+                "state": "delayed",
+                "reason": "awaiting_delegation",
+            }
+        return {
+            "dispatching": {
+                "state": "delayed",
+                "reason": "awaiting_provider_receipt",
+            },
+            "queued": {
+                "state": "delayed",
+                "reason": "awaiting_authoritative_outcome",
+            },
+            "running": {
+                "state": "delayed",
+                "reason": "awaiting_authoritative_outcome",
+            },
+            "succeeded": {
+                "state": "healthy",
+                "reason": "execution_succeeded",
+            },
+            "failed": {
+                "state": "failed",
+                "reason": "execution_failed",
+            },
+            "canceled": {
+                "state": "failed",
+                "reason": "execution_canceled",
+            },
+            "unresolved": {
+                "state": "degraded",
+                "reason": "execution_unresolved",
+            },
+            "expired": {
+                "state": "failed",
+                "reason": "execution_expired",
+            },
+            "rejected": {
+                "state": "failed",
+                "reason": "execution_rejected",
+            },
+            "superseded": {
+                "state": "degraded",
+                "reason": "execution_superseded",
+            },
+        }.get(
+            action_execution.lifecycle_state,
+            {
+                "state": "degraded",
+                "reason": "provider_anomaly",
+            },
+        )
+
+    @staticmethod
+    def _action_review_persistence_path_health(
+        reconciliation: ReconciliationRecord | None,
+    ) -> dict[str, str]:
+        if reconciliation is None:
+            return {
+                "state": "delayed",
+                "reason": "awaiting_reconciliation",
+            }
+        return {
+            "matched": {
+                "state": "healthy",
+                "reason": "reconciliation_matched",
+            },
+            "pending": {
+                "state": "delayed",
+                "reason": "reconciliation_pending",
+            },
+            "mismatched": {
+                "state": "degraded",
+                "reason": "reconciliation_mismatched",
+            },
+            "stale": {
+                "state": "degraded",
+                "reason": "reconciliation_stale",
+            },
+        }.get(
+            reconciliation.lifecycle_state,
+            {
+                "state": "degraded",
+                "reason": "persistence_anomaly",
+            },
+        )
+
+    @staticmethod
+    def _action_review_overall_path_state(
+        paths: Iterable[Mapping[str, str]],
+    ) -> str:
+        severity = {
+            "healthy": 0,
+            "delayed": 1,
+            "degraded": 2,
+            "failed": 3,
+        }
+        highest = max(
+            (
+                severity.get(path.get("state", "degraded"), severity["degraded"])
+                for path in paths
+            ),
+            default=severity["healthy"],
+        )
+        for state, rank in severity.items():
+            if rank == highest:
+                return state
+        return "degraded"
+
+    @staticmethod
+    def _action_review_path_health_summary(
+        *,
+        overall_state: str,
+        paths: Mapping[str, Mapping[str, str]],
+    ) -> str:
+        active_paths = [
+            f"{path_name} {path['reason'].replace('_', ' ')}"
+            for path_name, path in paths.items()
+            if path.get("state") != "healthy"
+        ]
+        if not active_paths:
+            return "all reviewed execution visibility paths are healthy"
+        primary = active_paths[:2]
+        joined = "; ".join(primary)
+        return f"{overall_state} path visibility: {joined}"
+
+    def _build_readiness_review_path_health(
+        self,
+        readiness_aggregates: ReadinessDiagnosticsAggregates,
+    ) -> dict[str, object]:
+        execution_ids = set(readiness_aggregates.active_action_execution_ids)
+        execution_ids.update(readiness_aggregates.terminal_action_execution_ids)
+        candidate_action_request_ids: set[str] = set()
+        unresolved_delegation_ids: set[str] = set()
+
+        for action_request_id in readiness_aggregates.active_action_request_ids:
+            action_request = self._store.get(ActionRequestRecord, action_request_id)
+            if action_request is None:
+                continue
+            if action_request.lifecycle_state in {
+                "approved",
+                "executing",
+                "unresolved",
+            }:
+                candidate_action_request_ids.add(action_request_id)
+
+        for action_request_id in (
+            readiness_aggregates.terminal_review_outcome_action_request_ids
+        ):
+            action_request = self._store.get(ActionRequestRecord, action_request_id)
+            if (
+                action_request is not None
+                and action_request.approval_decision_id is not None
+                and self._action_request_is_review_bound(action_request)
+            ):
+                candidate_action_request_ids.add(action_request_id)
+
+        for reconciliation_id in readiness_aggregates.unresolved_reconciliation_ids:
+            reconciliation = self._store.get(ReconciliationRecord, reconciliation_id)
+            if reconciliation is None:
+                continue
+            candidate_action_request_ids.update(
+                self._assistant_ids_from_mapping(
+                    reconciliation.subject_linkage,
+                    "action_request_ids",
+                )
+            )
+            for approval_decision_id in self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "approval_decision_ids",
+            ):
+                approval_decision = self._store.get(
+                    ApprovalDecisionRecord,
+                    approval_decision_id,
+                )
+                if approval_decision is not None:
+                    candidate_action_request_ids.add(approval_decision.action_request_id)
+            execution_ids.update(
+                self._assistant_ids_from_mapping(
+                    reconciliation.subject_linkage,
+                    "action_execution_ids",
+                )
+            )
+            unresolved_delegation_ids.update(
+                self._assistant_ids_from_mapping(
+                    reconciliation.subject_linkage,
+                    "delegation_ids",
+                )
+            )
+
+        candidate_action_request_ids.update(
+            self._readiness_candidate_action_request_ids_for_delegations(
+                unresolved_delegation_ids
+            )
+        )
+
+        executions_by_action_request_id: dict[str, ActionExecutionRecord] = {}
+        for action_execution_id in execution_ids:
+            action_execution = self._store.get(ActionExecutionRecord, action_execution_id)
+            if action_execution is None:
+                continue
+            candidate_action_request_ids.add(action_execution.action_request_id)
+            existing_execution = executions_by_action_request_id.get(
+                action_execution.action_request_id
+            )
+            if existing_execution is None or (
+                action_execution.delegated_at,
+                action_execution.action_execution_id,
+            ) > (
+                existing_execution.delegated_at,
+                existing_execution.action_execution_id,
+            ):
+                executions_by_action_request_id[action_execution.action_request_id] = (
+                    action_execution
+                )
+
+        candidate_action_requests: dict[str, ActionRequestRecord] = {}
+        approval_decisions_by_action_request_id: dict[str, ApprovalDecisionRecord] = {}
+        for action_request_id in sorted(candidate_action_request_ids):
+            action_request = self._store.get(ActionRequestRecord, action_request_id)
+            if action_request is None or not self._action_request_is_review_bound(
+                action_request
+            ):
+                continue
+            candidate_action_requests[action_request_id] = action_request
+            if action_request.approval_decision_id is None:
+                continue
+            approval_decision = self._store.get(
+                ApprovalDecisionRecord,
+                action_request.approval_decision_id,
+            )
+            if approval_decision is not None:
+                approval_decisions_by_action_request_id[action_request_id] = (
+                    approval_decision
+                )
+
+        targeted_record_index = self._build_readiness_review_record_index(
+            action_requests=tuple(candidate_action_requests.values()),
+            approval_decisions=tuple(approval_decisions_by_action_request_id.values()),
+        )
+        reconciliations_by_action_request_id: dict[str, ReconciliationRecord] = {}
+        if targeted_record_index is not None:
+            executions_by_action_request_id = {}
+            for action_request_id, execution_records in (
+                targeted_record_index.executions_by_action_request_id.items()
+            ):
+                executions_by_action_request_id[action_request_id] = max(
+                    execution_records,
+                    key=lambda record: (
+                        record.delegated_at,
+                        record.action_execution_id,
+                    ),
+                )
+            for action_request_id, action_request in candidate_action_requests.items():
+                approval_decision = approval_decisions_by_action_request_id.get(
+                    action_request_id
+                )
+                action_execution = executions_by_action_request_id.get(action_request_id)
+                reconciliation = self._latest_action_review_reconciliation(
+                    action_request=action_request,
+                    approval_decision=approval_decision,
+                    action_execution=action_execution,
+                    record_index=targeted_record_index,
+                )
+                if reconciliation is not None:
+                    reconciliations_by_action_request_id[action_request_id] = reconciliation
+
+        if targeted_record_index is None and candidate_action_requests:
+            current_execution_request_ids_by_execution_id: dict[str, str] = {}
+            current_execution_request_ids_by_delegation_id: dict[str, str] = {}
+            approval_action_request_ids_by_id = {
+                approval_decision.approval_decision_id: action_request_id
+                for action_request_id, approval_decision in (
+                    approval_decisions_by_action_request_id.items()
+                )
+            }
+            for action_execution in self._store.list(ActionExecutionRecord):
+                if action_execution.action_request_id not in candidate_action_requests:
+                    continue
+                existing_execution = executions_by_action_request_id.get(
+                    action_execution.action_request_id
+                )
+                if existing_execution is None or (
+                    action_execution.delegated_at,
+                    action_execution.action_execution_id,
+                ) > (
+                    existing_execution.delegated_at,
+                    existing_execution.action_execution_id,
+                ):
+                    executions_by_action_request_id[action_execution.action_request_id] = (
+                        action_execution
+                    )
+
+            for action_request_id, action_execution in executions_by_action_request_id.items():
+                current_execution_request_ids_by_execution_id[
+                    action_execution.action_execution_id
+                ] = action_request_id
+                current_execution_request_ids_by_delegation_id[
+                    action_execution.delegation_id
+                ] = action_request_id
+
+            for reconciliation in self._store.list(ReconciliationRecord):
+                matched_action_request_ids = {
+                    action_request_id
+                    for action_request_id in self._assistant_ids_from_mapping(
+                        reconciliation.subject_linkage,
+                        "action_request_ids",
+                    )
+                    if action_request_id in candidate_action_requests
+                }
+                matched_action_request_ids.update(
+                    approval_action_request_ids_by_id[approval_decision_id]
+                    for approval_decision_id in self._assistant_ids_from_mapping(
+                        reconciliation.subject_linkage,
+                        "approval_decision_ids",
+                    )
+                    if approval_decision_id in approval_action_request_ids_by_id
+                )
+                matched_action_request_ids.update(
+                    current_execution_request_ids_by_execution_id[action_execution_id]
+                    for action_execution_id in self._assistant_ids_from_mapping(
+                        reconciliation.subject_linkage,
+                        "action_execution_ids",
+                    )
+                    if action_execution_id in current_execution_request_ids_by_execution_id
+                )
+                matched_action_request_ids.update(
+                    current_execution_request_ids_by_delegation_id[delegation_id]
+                    for delegation_id in self._assistant_ids_from_mapping(
+                        reconciliation.subject_linkage,
+                        "delegation_ids",
+                    )
+                    if delegation_id in current_execution_request_ids_by_delegation_id
+                )
+                for action_request_id in matched_action_request_ids:
+                    existing_reconciliation = reconciliations_by_action_request_id.get(
+                        action_request_id
+                    )
+                    if existing_reconciliation is None or (
+                        reconciliation.compared_at,
+                        reconciliation.reconciliation_id,
+                    ) > (
+                        existing_reconciliation.compared_at,
+                        existing_reconciliation.reconciliation_id,
+                    ):
+                        reconciliations_by_action_request_id[action_request_id] = (
+                            reconciliation
+                        )
+
+        review_path_health: list[dict[str, object]] = []
+        for action_request_id, action_request in sorted(candidate_action_requests.items()):
+            approval_decision = approval_decisions_by_action_request_id.get(action_request_id)
+            action_execution = executions_by_action_request_id.get(action_request_id)
+            reconciliation = reconciliations_by_action_request_id.get(action_request_id)
+            approval_state = self._action_review_approval_state(
+                action_request=action_request,
+                approval_decision=approval_decision,
+            )
+            review_state = self._action_review_state(
+                action_request=action_request,
+                approval_state=approval_state,
+                action_execution=action_execution,
+            )
+            review_path_health.append(
+                self._action_review_path_health(
+                    action_request=action_request,
+                    approval_decision=approval_decision,
+                    action_execution=action_execution,
+                    reconciliation=reconciliation,
+                    review_state=review_state,
+                )
+            )
+
+        if not review_path_health:
+            return {
+                "review_count": 0,
+                "overall_state": "healthy",
+                "summary": "no active reviewed execution visibility gaps",
+                "paths": {
+                    path_name: {
+                        "state": "healthy",
+                        "reason": "no_reviewed_paths_tracked",
+                        "affected_reviews": 0,
+                        "by_state": {
+                            "healthy": 0,
+                            "delayed": 0,
+                            "degraded": 0,
+                            "failed": 0,
+                        },
+                    }
+                    for path_name in ("ingest", "delegation", "provider", "persistence")
+                },
+            }
+
+        paths = {
+            path_name: self._aggregate_readiness_path_health(
+                path_name=path_name,
+                review_path_health=review_path_health,
+            )
+            for path_name in ("ingest", "delegation", "provider", "persistence")
+        }
+        overall_state = self._action_review_overall_path_state(paths.values())
+        return {
+            "review_count": len(review_path_health),
+            "overall_state": overall_state,
+            "summary": self._action_review_path_health_summary(
+                overall_state=overall_state,
+                paths=paths,
+            ),
+            "paths": paths,
+        }
+
+    def _readiness_candidate_action_request_ids_for_delegations(
+        self,
+        delegation_ids: set[str],
+    ) -> set[str]:
+        if not delegation_ids:
+            return set()
+
+        record_reader = getattr(self._store, "inspect_readiness_review_path_records", None)
+        if callable(record_reader):
+            readiness_records: ReadinessReviewPathRecords = record_reader(
+                action_request_ids=(),
+                approval_decision_ids=(),
+                delegation_ids=tuple(sorted(delegation_ids)),
+            )
+            return {
+                action_execution.action_request_id
+                for action_execution in readiness_records.action_executions
+            }
+
+        pending_delegation_ids = set(delegation_ids)
+        candidate_action_request_ids: set[str] = set()
+        for action_execution in self._store.list(ActionExecutionRecord):
+            if action_execution.delegation_id not in pending_delegation_ids:
+                continue
+            candidate_action_request_ids.add(action_execution.action_request_id)
+            pending_delegation_ids.discard(action_execution.delegation_id)
+            if not pending_delegation_ids:
+                break
+        return candidate_action_request_ids
+
+    def _build_readiness_review_record_index(
+        self,
+        *,
+        action_requests: tuple[ActionRequestRecord, ...],
+        approval_decisions: tuple[ApprovalDecisionRecord, ...],
+    ) -> _ActionReviewRecordIndex | None:
+        if not action_requests:
+            return None
+        record_reader = getattr(self._store, "inspect_readiness_review_path_records", None)
+        if not callable(record_reader):
+            return None
+        readiness_records: ReadinessReviewPathRecords = record_reader(
+            action_request_ids=tuple(
+                sorted(
+                    {
+                        action_request.action_request_id
+                        for action_request in action_requests
+                    }
+                )
+            ),
+            approval_decision_ids=tuple(
+                sorted(
+                    {
+                        approval_decision.approval_decision_id
+                        for approval_decision in approval_decisions
+                    }
+                )
+            ),
+        )
+        executions_by_action_request_id: defaultdict[
+            str,
+            list[ActionExecutionRecord],
+        ] = defaultdict(list)
+        for action_execution in readiness_records.action_executions:
+            executions_by_action_request_id[action_execution.action_request_id].append(
+                action_execution
+            )
+
+        reconciliations_by_action_request_id: defaultdict[
+            str,
+            list[ReconciliationRecord],
+        ] = defaultdict(list)
+        reconciliations_by_approval_decision_id: defaultdict[
+            str,
+            list[ReconciliationRecord],
+        ] = defaultdict(list)
+        reconciliations_by_action_execution_id: defaultdict[
+            str,
+            list[ReconciliationRecord],
+        ] = defaultdict(list)
+        reconciliations_by_delegation_id: defaultdict[
+            str,
+            list[ReconciliationRecord],
+        ] = defaultdict(list)
+        for reconciliation in readiness_records.reconciliations:
+            for action_request_id in self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "action_request_ids",
+            ):
+                reconciliations_by_action_request_id[action_request_id].append(
+                    reconciliation
+                )
+            for approval_decision_id in self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "approval_decision_ids",
+            ):
+                reconciliations_by_approval_decision_id[approval_decision_id].append(
+                    reconciliation
+                )
+            for action_execution_id in self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "action_execution_ids",
+            ):
+                reconciliations_by_action_execution_id[action_execution_id].append(
+                    reconciliation
+                )
+            for delegation_id in self._assistant_ids_from_mapping(
+                reconciliation.subject_linkage,
+                "delegation_ids",
+            ):
+                reconciliations_by_delegation_id[delegation_id].append(reconciliation)
+
+        return _ActionReviewRecordIndex(
+            requests_by_case_id={},
+            requests_by_alert_id={},
+            requests_by_scope={},
+            approvals_by_id={
+                approval_decision.approval_decision_id: approval_decision
+                for approval_decision in approval_decisions
+            },
+            approvals_by_action_request_id={},
+            executions_by_action_request_id={
+                key: tuple(records)
+                for key, records in executions_by_action_request_id.items()
+            },
+            reconciliations_by_action_request_id={
+                key: tuple(records)
+                for key, records in reconciliations_by_action_request_id.items()
+            },
+            reconciliations_by_approval_decision_id={
+                key: tuple(records)
+                for key, records in reconciliations_by_approval_decision_id.items()
+            },
+            reconciliations_by_action_execution_id={
+                key: tuple(records)
+                for key, records in reconciliations_by_action_execution_id.items()
+            },
+            reconciliations_by_delegation_id={
+                key: tuple(records)
+                for key, records in reconciliations_by_delegation_id.items()
+            },
+        )
+
+    def _aggregate_readiness_path_health(
+        self,
+        *,
+        path_name: str,
+        review_path_health: Iterable[Mapping[str, object]],
+    ) -> dict[str, object]:
+        path_snapshots = [
+            path_health["paths"][path_name]
+            for path_health in review_path_health
+        ]
+        state_counts = Counter(
+            str(path_snapshot["state"]) for path_snapshot in path_snapshots
+        )
+        overall_state = self._action_review_overall_path_state(path_snapshots)
+        reason_counts = Counter(
+            str(path_snapshot["reason"])
+            for path_snapshot in path_snapshots
+            if path_snapshot["state"] == overall_state
+        )
+        reason = sorted(
+            reason_counts.items(),
+            key=lambda item: (-item[1], item[0]),
+        )[0][0]
+        return {
+            "state": overall_state,
+            "reason": reason,
+            "affected_reviews": sum(
+                count for state, count in state_counts.items() if state != "healthy"
+            ),
+            "by_state": {
+                "healthy": state_counts.get("healthy", 0),
+                "delayed": state_counts.get("delayed", 0),
+                "degraded": state_counts.get("degraded", 0),
+                "failed": state_counts.get("failed", 0),
+            },
         }
 
     def _action_review_runtime_visibility(

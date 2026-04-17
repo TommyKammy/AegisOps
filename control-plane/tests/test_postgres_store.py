@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import pathlib
 import re
 import sys
@@ -1170,6 +1170,305 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         self.assertEqual(
             store.get(ReconciliationRecord, "reconciliation-002"),
             records[1],
+        )
+
+    def test_store_readiness_review_path_records_use_timezone_safe_multi_field_sort_key(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        compared_at = datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc)
+        action_request_id = "action-request-readiness-review-path-001"
+        records = (
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-last-seen-wins",
+                subject_linkage={"action_request_ids": [action_request_id]},
+                alert_id=None,
+                finding_id="finding-readiness-001",
+                analytic_signal_id=None,
+                execution_run_id=None,
+                linked_execution_run_ids=(),
+                correlation_key=f"{action_request_id}:automation_substrate:n8n:001",
+                first_seen_at=datetime(2026, 4, 16, 7, 40, tzinfo=timezone.utc),
+                last_seen_at=datetime(2026, 4, 16, 7, 56, tzinfo=timezone.utc),
+                ingest_disposition="missing",
+                mismatch_summary="missing downstream execution",
+                compared_at=compared_at,
+                lifecycle_state="pending",
+            ),
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-first-seen-wins",
+                subject_linkage={"action_request_ids": [action_request_id]},
+                alert_id=None,
+                finding_id="finding-readiness-001",
+                analytic_signal_id=None,
+                execution_run_id=None,
+                linked_execution_run_ids=(),
+                correlation_key=f"{action_request_id}:automation_substrate:n8n:002",
+                first_seen_at=datetime(2026, 4, 16, 7, 50, tzinfo=timezone.utc),
+                last_seen_at=datetime(2026, 4, 16, 7, 55, tzinfo=timezone.utc),
+                ingest_disposition="missing",
+                mismatch_summary="missing downstream execution",
+                compared_at=compared_at,
+                lifecycle_state="pending",
+            ),
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-first-seen-loses",
+                subject_linkage={"action_request_ids": [action_request_id]},
+                alert_id=None,
+                finding_id="finding-readiness-001",
+                analytic_signal_id=None,
+                execution_run_id=None,
+                linked_execution_run_ids=(),
+                correlation_key=f"{action_request_id}:automation_substrate:n8n:003",
+                first_seen_at=datetime(2026, 4, 16, 7, 45, tzinfo=timezone.utc),
+                last_seen_at=datetime(2026, 4, 16, 7, 55, tzinfo=timezone.utc),
+                ingest_disposition="missing",
+                mismatch_summary="missing downstream execution",
+                compared_at=compared_at,
+                lifecycle_state="pending",
+            ),
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-naive-compared-at",
+                subject_linkage={"action_request_ids": [action_request_id]},
+                alert_id=None,
+                finding_id="finding-readiness-001",
+                analytic_signal_id=None,
+                execution_run_id=None,
+                linked_execution_run_ids=(),
+                correlation_key=f"{action_request_id}:automation_substrate:n8n:004",
+                first_seen_at=datetime(2026, 4, 16, 7, 35),
+                last_seen_at=datetime(2026, 4, 16, 7, 58),
+                ingest_disposition="missing",
+                mismatch_summary="missing downstream execution",
+                compared_at=datetime(2026, 4, 16, 7, 59),
+                lifecycle_state="pending",
+            ),
+        )
+
+        for record in records:
+            store.save(record)
+
+        readiness_records = store.inspect_readiness_review_path_records(
+            action_request_ids=(action_request_id,),
+            approval_decision_ids=(),
+        )
+
+        self.assertEqual(
+            tuple(
+                record.reconciliation_id
+                for record in readiness_records.reconciliations
+            ),
+            (
+                "reconciliation-last-seen-wins",
+                "reconciliation-first-seen-wins",
+                "reconciliation-first-seen-loses",
+                "reconciliation-naive-compared-at",
+            ),
+        )
+
+    def test_readiness_review_path_records_use_repeatable_read_snapshot(self) -> None:
+        store, backend = make_store()
+        action_request_id = "action-request-readiness-snapshot-001"
+        approval_decision_id = "approval-readiness-snapshot-001"
+        delegation_id = "delegation-readiness-snapshot-001"
+        action_execution = ActionExecutionRecord(
+            action_execution_id="action-execution-readiness-snapshot-001",
+            action_request_id=action_request_id,
+            approval_decision_id=approval_decision_id,
+            delegation_id=delegation_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="n8n",
+            execution_run_id="execution-run-readiness-snapshot-001",
+            idempotency_key="idempotency-readiness-snapshot-001",
+            target_scope={"asset_id": "asset-readiness-snapshot-001"},
+            approved_payload={"action_type": "notify_identity_owner"},
+            payload_hash="payload-hash-readiness-snapshot-001",
+            delegated_at=datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc),
+            expires_at=None,
+            provenance={"source": "fixture"},
+            lifecycle_state="succeeded",
+        )
+        reconciliation = ReconciliationRecord(
+            reconciliation_id="reconciliation-readiness-snapshot-001",
+            subject_linkage={"action_request_ids": [action_request_id]},
+            alert_id=None,
+            finding_id="finding-readiness-snapshot-001",
+            analytic_signal_id=None,
+            execution_run_id=action_execution.execution_run_id,
+            linked_execution_run_ids=(action_execution.execution_run_id,),
+            correlation_key=f"{action_request_id}:automation_substrate:n8n:001",
+            first_seen_at=datetime(2026, 4, 16, 8, 1, tzinfo=timezone.utc),
+            last_seen_at=datetime(2026, 4, 16, 8, 2, tzinfo=timezone.utc),
+            ingest_disposition="matched",
+            mismatch_summary="",
+            compared_at=datetime(2026, 4, 16, 8, 3, tzinfo=timezone.utc),
+            lifecycle_state="matched",
+        )
+
+        store.save(action_execution)
+        store.save(reconciliation)
+
+        statement_count_before = len(backend.statements)
+        readiness_records = store.inspect_readiness_review_path_records(
+            action_request_ids=(action_request_id,),
+            approval_decision_ids=(approval_decision_id,),
+            delegation_ids=(delegation_id,),
+        )
+
+        self.assertEqual(readiness_records.action_executions, (action_execution,))
+        self.assertEqual(readiness_records.reconciliations, (reconciliation,))
+        self.assertEqual(
+            backend.statements[statement_count_before][0],
+            "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+        )
+
+    def test_readiness_review_path_queries_map_tuple_rows_before_cursor_close(
+        self,
+    ) -> None:
+        store, _ = make_store(_TupleRowClosingBackend())
+        action_request_id = "action-request-readiness-tuple-001"
+        approval_decision_id = "approval-readiness-tuple-001"
+        delegation_id = "delegation-readiness-tuple-001"
+        action_execution = ActionExecutionRecord(
+            action_execution_id="action-execution-readiness-tuple-001",
+            action_request_id=action_request_id,
+            approval_decision_id=approval_decision_id,
+            delegation_id=delegation_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="n8n",
+            execution_run_id="execution-run-readiness-tuple-001",
+            idempotency_key="idempotency-readiness-tuple-001",
+            target_scope={"asset_id": "asset-readiness-tuple-001"},
+            approved_payload={"action_type": "notify_identity_owner"},
+            payload_hash="payload-hash-readiness-tuple-001",
+            delegated_at=datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc),
+            expires_at=None,
+            provenance={"source": "fixture"},
+            lifecycle_state="succeeded",
+        )
+        reconciliations = (
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-readiness-tuple-001",
+                subject_linkage={"action_request_ids": [action_request_id]},
+                alert_id=None,
+                finding_id="finding-readiness-tuple-001",
+                analytic_signal_id=None,
+                execution_run_id=action_execution.execution_run_id,
+                linked_execution_run_ids=(action_execution.execution_run_id,),
+                correlation_key=f"{action_request_id}:automation_substrate:n8n:001",
+                first_seen_at=datetime(2026, 4, 16, 8, 1, tzinfo=timezone.utc),
+                last_seen_at=datetime(2026, 4, 16, 8, 2, tzinfo=timezone.utc),
+                ingest_disposition="matched",
+                mismatch_summary="",
+                compared_at=datetime(2026, 4, 16, 8, 7, tzinfo=timezone.utc),
+                lifecycle_state="matched",
+            ),
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-readiness-tuple-002",
+                subject_linkage={"approval_decision_ids": [approval_decision_id]},
+                alert_id=None,
+                finding_id="finding-readiness-tuple-001",
+                analytic_signal_id=None,
+                execution_run_id=action_execution.execution_run_id,
+                linked_execution_run_ids=(action_execution.execution_run_id,),
+                correlation_key=f"{action_request_id}:automation_substrate:n8n:002",
+                first_seen_at=datetime(2026, 4, 16, 8, 1, tzinfo=timezone.utc),
+                last_seen_at=datetime(2026, 4, 16, 8, 3, tzinfo=timezone.utc),
+                ingest_disposition="matched",
+                mismatch_summary="",
+                compared_at=datetime(2026, 4, 16, 8, 6, tzinfo=timezone.utc),
+                lifecycle_state="matched",
+            ),
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-readiness-tuple-003",
+                subject_linkage={
+                    "action_execution_ids": [action_execution.action_execution_id]
+                },
+                alert_id=None,
+                finding_id="finding-readiness-tuple-001",
+                analytic_signal_id=None,
+                execution_run_id=action_execution.execution_run_id,
+                linked_execution_run_ids=(action_execution.execution_run_id,),
+                correlation_key=f"{action_request_id}:automation_substrate:n8n:003",
+                first_seen_at=datetime(2026, 4, 16, 8, 1, tzinfo=timezone.utc),
+                last_seen_at=datetime(2026, 4, 16, 8, 4, tzinfo=timezone.utc),
+                ingest_disposition="matched",
+                mismatch_summary="",
+                compared_at=datetime(2026, 4, 16, 8, 5, tzinfo=timezone.utc),
+                lifecycle_state="matched",
+            ),
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-readiness-tuple-004",
+                subject_linkage={"delegation_ids": [delegation_id]},
+                alert_id=None,
+                finding_id="finding-readiness-tuple-001",
+                analytic_signal_id=None,
+                execution_run_id=action_execution.execution_run_id,
+                linked_execution_run_ids=(action_execution.execution_run_id,),
+                correlation_key=f"{action_request_id}:automation_substrate:n8n:004",
+                first_seen_at=datetime(2026, 4, 16, 8, 1, tzinfo=timezone.utc),
+                last_seen_at=datetime(2026, 4, 16, 8, 5, tzinfo=timezone.utc),
+                ingest_disposition="matched",
+                mismatch_summary="",
+                compared_at=datetime(2026, 4, 16, 8, 4, tzinfo=timezone.utc),
+                lifecycle_state="matched",
+            ),
+        )
+
+        store.save(action_execution)
+        for reconciliation in reconciliations:
+            store.save(reconciliation)
+
+        readiness_records = store.inspect_readiness_review_path_records(
+            action_request_ids=(action_request_id,),
+            approval_decision_ids=(approval_decision_id,),
+            delegation_ids=(delegation_id,),
+        )
+
+        self.assertEqual(readiness_records.action_executions, (action_execution,))
+        self.assertEqual(
+            tuple(
+                reconciliation.reconciliation_id
+                for reconciliation in readiness_records.reconciliations
+            ),
+            (
+                "reconciliation-readiness-tuple-001",
+                "reconciliation-readiness-tuple-002",
+                "reconciliation-readiness-tuple-003",
+                "reconciliation-readiness-tuple-004",
+            ),
+        )
+
+    def test_readiness_aggregates_treat_canceled_action_requests_as_terminal(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        requested_at = datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc)
+        action_request = ActionRequestRecord(
+            action_request_id="action-request-readiness-canceled-001",
+            approval_decision_id="approval-readiness-canceled-001",
+            case_id="case-readiness-canceled-001",
+            alert_id="alert-readiness-canceled-001",
+            finding_id="finding-readiness-canceled-001",
+            idempotency_key="idempotency-readiness-canceled-001",
+            target_scope={"record_family": "recommendation"},
+            payload_hash="payload-hash-readiness-canceled-001",
+            requested_at=requested_at,
+            expires_at=requested_at + timedelta(hours=4),
+            lifecycle_state="canceled",
+            requester_identity="analyst-001",
+            requested_payload={"action_type": "notify_identity_owner"},
+        )
+
+        store.save(action_request)
+
+        aggregates = store.inspect_readiness_aggregates()
+
+        self.assertEqual(aggregates.action_request_total, 1)
+        self.assertEqual(aggregates.active_action_request_ids, ())
+        self.assertEqual(
+            aggregates.terminal_review_outcome_action_request_ids,
+            (action_request.action_request_id,),
         )
 
     def test_store_rejects_schema_invalid_records_before_persistence(self) -> None:

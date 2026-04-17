@@ -359,6 +359,9 @@ class RestoreReadinessService:
         record_to_dict: Callable[[ControlPlaneRecord], dict[str, object]],
         json_ready: Callable[[object], object],
         redacted_reconciliation_payload: Callable[[ReconciliationRecord], dict[str, object]],
+        build_readiness_review_path_health: Callable[
+            [ReadinessDiagnosticsAggregates], dict[str, object]
+        ],
         build_shutdown_status_snapshot: Callable[..., Any],
         derive_readiness_status: Callable[..., str],
         record_from_backup_payload: Callable[[Type[ControlPlaneRecord], Mapping[str, object]], ControlPlaneRecord],
@@ -388,6 +391,9 @@ class RestoreReadinessService:
         self._record_to_dict = record_to_dict
         self._json_ready = json_ready
         self._redacted_reconciliation_payload = redacted_reconciliation_payload
+        self._build_readiness_review_path_health = (
+            build_readiness_review_path_health
+        )
         self._build_shutdown_status_snapshot = build_shutdown_status_snapshot
         self._derive_readiness_status = derive_readiness_status
         self._record_from_backup_payload = record_from_backup_payload
@@ -489,6 +495,9 @@ class RestoreReadinessService:
         with self._store.transaction(isolation_level="REPEATABLE READ"):
             startup = self.describe_startup_status()
             readiness_aggregates = self.inspect_readiness_aggregates()
+            review_path_health = self._build_readiness_review_path_health(
+                readiness_aggregates
+            )
 
         shutdown = self._build_shutdown_status_snapshot(
             open_case_ids=readiness_aggregates.open_case_ids,
@@ -500,6 +509,7 @@ class RestoreReadinessService:
         status = self._derive_readiness_status(
             startup_ready=startup.startup_ready,
             reconciliation_lifecycle_counts=readiness_aggregates.reconciliation_lifecycle_counts,
+            review_path_health_overall_state=review_path_health["overall_state"],
         )
 
         metrics = {
@@ -570,6 +580,7 @@ class RestoreReadinessService:
                 "approved_action_requests": readiness_aggregates.phase20_approved_action_requests,
                 "reconciled_executions": readiness_aggregates.phase20_reconciled_executions,
             },
+            "review_path_health": review_path_health,
         }
 
         return self._readiness_diagnostics_snapshot_factory(
@@ -648,6 +659,19 @@ class RestoreReadinessService:
                 if record.lifecycle_state
                 in {"pending_approval", "approved", "executing", "unresolved"}
             ),
+            terminal_review_outcome_action_request_ids=tuple(
+                record.action_request_id
+                for record in action_requests
+                if record.lifecycle_state
+                in {
+                    "completed",
+                    "failed",
+                    "rejected",
+                    "expired",
+                    "canceled",
+                    "superseded",
+                }
+            ),
             action_execution_total=len(action_executions),
             action_execution_lifecycle_counts=dict(
                 Counter(record.lifecycle_state for record in action_executions)
@@ -656,6 +680,17 @@ class RestoreReadinessService:
                 record.action_execution_id
                 for record in action_executions
                 if record.lifecycle_state in {"dispatching", "queued", "running"}
+            ),
+            terminal_action_execution_ids=tuple(
+                record.action_execution_id
+                for record in action_executions
+                if record.lifecycle_state
+                in {
+                    "succeeded",
+                    "failed",
+                    "canceled",
+                    "superseded",
+                }
             ),
             reconciliation_total=len(reconciliations),
             reconciliation_lifecycle_counts=dict(
@@ -864,6 +899,9 @@ class RestoreReadinessService:
         readiness_status = self._derive_readiness_status(
             startup_ready=startup.startup_ready,
             reconciliation_lifecycle_counts=readiness_aggregates.reconciliation_lifecycle_counts,
+            review_path_health_overall_state=self._build_readiness_review_path_health(
+                readiness_aggregates
+            )["overall_state"],
         )
 
         return self._restore_drill_snapshot_factory(
