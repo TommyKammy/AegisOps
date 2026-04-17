@@ -1,0 +1,226 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Mapping, Protocol
+
+from .models import AITraceRecord
+
+
+class AssistantProviderTransport(Protocol):
+    def send_request(self, *, request: Mapping[str, object]) -> Mapping[str, object]:
+        """Send a provider request and return the provider response payload."""
+
+
+class AssistantProviderTimeout(RuntimeError):
+    """Raised when the provider transport exceeds the reviewed timeout budget."""
+
+
+@dataclass(frozen=True)
+class AssistantProviderAttemptFailure:
+    attempt_number: int
+    failure_kind: str
+    detail: str
+
+
+@dataclass(frozen=True)
+class AssistantProviderResult:
+    status: str
+    provider_identity: str
+    model_identity: str
+    prompt_version: str
+    workflow_family: str
+    workflow_task: str
+    generated_at: datetime
+    reviewed_input_refs: tuple[str, ...]
+    output_text: str | None
+    attempt_count: int
+    request_provenance: Mapping[str, object]
+    response_provenance: Mapping[str, object]
+    failures: tuple[AssistantProviderAttemptFailure, ...]
+    failure_summary: str | None
+
+
+@dataclass(frozen=True)
+class AssistantProviderFailure(AssistantProviderResult):
+    pass
+
+
+class AssistantProviderAdapter:
+    def __init__(
+        self,
+        *,
+        provider_identity: str,
+        model_identity: str,
+        prompt_version: str,
+        request_timeout_seconds: float,
+        max_attempts: int,
+        transport: AssistantProviderTransport,
+    ) -> None:
+        if request_timeout_seconds <= 0:
+            raise ValueError("request_timeout_seconds must be greater than zero")
+        if max_attempts < 1:
+            raise ValueError("max_attempts must be at least one")
+        self._provider_identity = provider_identity
+        self._model_identity = model_identity
+        self._prompt_version = prompt_version
+        self._request_timeout_seconds = float(request_timeout_seconds)
+        self._max_attempts = max_attempts
+        self._transport = transport
+
+    def generate(
+        self,
+        *,
+        workflow_family: str,
+        workflow_task: str,
+        transcript: list[Mapping[str, object]],
+        reviewed_input_refs: tuple[str, ...],
+        metadata: Mapping[str, object],
+    ) -> AssistantProviderResult:
+        generated_at = datetime.now(timezone.utc)
+        failures: list[AssistantProviderAttemptFailure] = []
+        request_provenance = {
+            "provider_identity": self._provider_identity,
+            "model_identity": self._model_identity,
+            "prompt_version": self._prompt_version,
+            "workflow_family": workflow_family,
+            "workflow_task": workflow_task,
+            "memory_policy": "no_memory",
+            "allow_provider_memory": False,
+            "timeout_seconds": self._request_timeout_seconds,
+            "max_attempts": self._max_attempts,
+            "transcript_messages": len(transcript),
+            "reviewed_input_refs": tuple(reviewed_input_refs),
+            "request_metadata": dict(metadata),
+        }
+        request = {
+            **request_provenance,
+            "transcript": tuple(dict(message) for message in transcript),
+        }
+
+        for attempt_number in range(1, self._max_attempts + 1):
+            try:
+                response = self._transport.send_request(request=request)
+                output_text = self._require_non_empty_string(
+                    response.get("output_text"),
+                    "provider response output_text",
+                )
+                response_provenance = {
+                    "provider_request_id": self._string_or_none(
+                        response.get("provider_request_id")
+                    ),
+                    "provider_response_id": self._string_or_none(
+                        response.get("provider_response_id")
+                    ),
+                    "provider_transcript_id": self._string_or_none(
+                        response.get("provider_transcript_id")
+                    ),
+                    "model_version": self._string_or_none(response.get("model_version"))
+                    or self._model_identity,
+                }
+                return AssistantProviderResult(
+                    status="ready",
+                    provider_identity=self._provider_identity,
+                    model_identity=self._model_identity,
+                    prompt_version=self._prompt_version,
+                    workflow_family=workflow_family,
+                    workflow_task=workflow_task,
+                    generated_at=generated_at,
+                    reviewed_input_refs=tuple(reviewed_input_refs),
+                    output_text=output_text,
+                    attempt_count=attempt_number,
+                    request_provenance=request_provenance,
+                    response_provenance=response_provenance,
+                    failures=tuple(failures),
+                    failure_summary=None,
+                )
+            except AssistantProviderTimeout as exc:
+                failures.append(
+                    AssistantProviderAttemptFailure(
+                        attempt_number=attempt_number,
+                        failure_kind="timeout",
+                        detail=str(exc),
+                    )
+                )
+            except Exception as exc:  # noqa: BLE001
+                failures.append(
+                    AssistantProviderAttemptFailure(
+                        attempt_number=attempt_number,
+                        failure_kind="provider_error",
+                        detail=str(exc),
+                    )
+                )
+
+        failure_summary = "; ".join(
+            f"attempt {failure.attempt_number}: {failure.failure_kind}: {failure.detail}"
+            for failure in failures
+        )
+        return AssistantProviderFailure(
+            status="failed",
+            provider_identity=self._provider_identity,
+            model_identity=self._model_identity,
+            prompt_version=self._prompt_version,
+            workflow_family=workflow_family,
+            workflow_task=workflow_task,
+            generated_at=generated_at,
+            reviewed_input_refs=tuple(reviewed_input_refs),
+            output_text=None,
+            attempt_count=self._max_attempts,
+            request_provenance=request_provenance,
+            response_provenance={},
+            failures=tuple(failures),
+            failure_summary=failure_summary,
+        )
+
+    def build_ai_trace_record(
+        self,
+        *,
+        ai_trace_id: str,
+        reviewer_identity: str,
+        generated_at: datetime,
+        result: AssistantProviderResult,
+        subject_linkage: Mapping[str, object],
+    ) -> AITraceRecord:
+        linked_subjects = dict(subject_linkage)
+        linked_subjects.update(
+            {
+                "provider_identity": result.provider_identity,
+                "provider_model_identity": result.model_identity,
+                "provider_request_provenance": dict(result.request_provenance),
+                "provider_response_provenance": dict(result.response_provenance),
+                "provider_failures": tuple(
+                    {
+                        "attempt_number": failure.attempt_number,
+                        "failure_kind": failure.failure_kind,
+                        "detail": failure.detail,
+                    }
+                    for failure in result.failures
+                ),
+                "provider_failure_summary": result.failure_summary,
+                "provider_status": result.status,
+                "provider_workflow_family": result.workflow_family,
+                "provider_workflow_task": result.workflow_task,
+            }
+        )
+        return AITraceRecord(
+            ai_trace_id=ai_trace_id,
+            subject_linkage=linked_subjects,
+            model_identity=f"{result.provider_identity}/{result.model_identity}",
+            prompt_version=result.prompt_version,
+            generated_at=generated_at,
+            material_input_refs=result.reviewed_input_refs,
+            reviewer_identity=reviewer_identity,
+            lifecycle_state="generated" if result.status == "ready" else "failed",
+        )
+
+    @staticmethod
+    def _require_non_empty_string(value: object, field_name: str) -> str:
+        if not isinstance(value, str) or value.strip() == "":
+            raise ValueError(f"{field_name} must be a non-empty string")
+        return value
+
+    @staticmethod
+    def _string_or_none(value: object) -> str | None:
+        if isinstance(value, str) and value.strip():
+            return value
+        return None
