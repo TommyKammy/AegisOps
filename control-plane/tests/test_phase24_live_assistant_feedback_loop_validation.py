@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import pathlib
 import sys
 from unittest import mock
@@ -18,6 +19,7 @@ from aegisops_control_plane.assistant_provider import (
     AssistantProviderAdapter,
     AssistantProviderResult,
 )
+from aegisops_control_plane.service import _phase24_live_assistant_citations_from_context
 
 
 class Phase24LiveAssistantFeedbackLoopValidationTests(ServicePersistenceTestBase):
@@ -146,4 +148,84 @@ class Phase24LiveAssistantFeedbackLoopValidationTests(ServicePersistenceTestBase
         self.assertIn(
             "reviewed retry budget",
             recommendation.assistant_advisory_draft["unresolved_reasons"][0],
+        )
+
+    def test_live_assistant_workflow_persists_already_unresolved_advisory_feedback_loop(
+        self,
+    ) -> None:
+        store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        context_snapshot = service.inspect_assistant_context(
+            "case",
+            promoted_case.case_id,
+        )
+        expected_summary = (
+            "Reviewed case summary remains unresolved until cited evidence is expanded."
+        )
+        unresolved_context = replace(
+            context_snapshot,
+            advisory_output={
+                **dict(context_snapshot.advisory_output),
+                "status": "unresolved",
+                "cited_summary": {
+                    "text": expected_summary,
+                    "citations": (promoted_case.case_id,),
+                },
+                "uncertainty_flags": ("missing_supporting_citations",),
+            },
+        )
+        expected_citations = _phase24_live_assistant_citations_from_context(
+            unresolved_context
+        )
+        service._assistant_provider_adapter = mock.Mock()
+
+        with mock.patch.object(
+            service,
+            "inspect_assistant_context",
+            return_value=unresolved_context,
+        ):
+            snapshot = service.run_live_assistant_workflow(
+                workflow_task="case_summary",
+                record_family="case",
+                record_id=promoted_case.case_id,
+            )
+
+        self.assertEqual(snapshot.status, "unresolved")
+        self.assertEqual(snapshot.summary, expected_summary)
+        service._assistant_provider_adapter.generate.assert_not_called()
+
+        ai_traces = store.list(AITraceRecord)
+        self.assertEqual(len(ai_traces), 1)
+        ai_trace = ai_traces[0]
+        self.assertEqual(ai_trace.lifecycle_state, "under_review")
+        self.assertEqual(
+            ai_trace.assistant_advisory_draft["status"],
+            "unresolved",
+        )
+        self.assertEqual(
+            ai_trace.assistant_advisory_draft["summary"],
+            expected_summary,
+        )
+
+        recommendations = store.list(RecommendationRecord)
+        self.assertEqual(len(recommendations), 1)
+        recommendation = recommendations[0]
+        self.assertEqual(recommendation.ai_trace_id, ai_trace.ai_trace_id)
+        self.assertEqual(recommendation.lifecycle_state, "under_review")
+        self.assertEqual(
+            recommendation.assistant_advisory_draft["status"],
+            "unresolved",
+        )
+        self.assertEqual(
+            recommendation.assistant_advisory_draft["cited_summary"]["text"],
+            expected_summary,
+        )
+        self.assertEqual(
+            recommendation.assistant_advisory_draft["citations"],
+            expected_citations,
+        )
+        self.assertEqual(
+            recommendation.assistant_advisory_draft["unresolved_reasons"],
+            ("required citations are missing",),
         )

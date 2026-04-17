@@ -20,7 +20,12 @@ from .adapters.postgres import (
 )
 from .adapters.shuffle import ShuffleActionAdapter
 from .adapters.wazuh import WazuhAlertAdapter
-from .assistant_provider import AssistantProviderAdapter, AssistantProviderTransport
+from .assistant_provider import (
+    AssistantProviderAdapter,
+    AssistantProviderFailure,
+    AssistantProviderResult,
+    AssistantProviderTransport,
+)
 from .config import RuntimeConfig
 from .execution_coordinator import ExecutionCoordinator
 from .models import (
@@ -4780,6 +4785,16 @@ class AegisOpsControlPlaneService:
         self._require_reviewed_case_scoped_advisory_read(context_snapshot)
 
         advisory_output = dict(context_snapshot.advisory_output)
+        reviewed_input_refs = _dedupe_strings(
+            (
+                record_id,
+                *context_snapshot.linked_alert_ids,
+                *context_snapshot.linked_case_ids,
+                *context_snapshot.linked_evidence_ids,
+                *context_snapshot.linked_recommendation_ids,
+                *context_snapshot.linked_reconciliation_ids,
+            )
+        )
         citations = _phase24_live_assistant_citations_from_context(context_snapshot)
         trusted_summary = str(
             advisory_output.get("cited_summary", {}).get("text")
@@ -4791,12 +4806,22 @@ class AegisOpsControlPlaneService:
             )
             if not unresolved_reasons:
                 unresolved_reasons = ("required citations are missing",)
-            return _phase24_live_assistant_snapshot(
+            snapshot = _phase24_live_assistant_snapshot(
                 workflow_task=workflow_task,
                 summary=trusted_summary,
                 citations=citations,
                 unresolved_reasons=unresolved_reasons,
             )
+            self._persist_live_assistant_feedback_loop(
+                record_family=record_family,
+                record_id=record_id,
+                context_snapshot=context_snapshot,
+                workflow_snapshot=snapshot,
+                provider_result=None,
+                reviewed_input_refs=reviewed_input_refs,
+                adapter=self._assistant_provider_adapter,
+            )
+            return snapshot
 
         adapter = self._assistant_provider_adapter
         if adapter is None:
@@ -4819,16 +4844,6 @@ class AegisOpsControlPlaneService:
                 transport=getattr(adapter, "_transport"),
             )
 
-        reviewed_input_refs = _dedupe_strings(
-            (
-                record_id,
-                *context_snapshot.linked_alert_ids,
-                *context_snapshot.linked_case_ids,
-                *context_snapshot.linked_evidence_ids,
-                *context_snapshot.linked_recommendation_ids,
-                *context_snapshot.linked_reconciliation_ids,
-            )
-        )
         transcript_payload = _json_ready(
             {
                 "record_family": record_family,
