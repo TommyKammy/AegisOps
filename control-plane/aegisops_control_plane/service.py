@@ -1110,9 +1110,7 @@ def _phase24_live_assistant_citations_from_context(
             record_id=snapshot.record_id,
             claim="Reviewed case lifecycle and scope remain anchored on the case record.",
             evidence_id=None,
-            reviewed_context_field=(
-                "lifecycle_state" if isinstance(lifecycle_state, str) else None
-            ),
+            reviewed_context_field=None,
         )
     elif snapshot.record_family == "alert":
         append_citation(
@@ -1120,9 +1118,7 @@ def _phase24_live_assistant_citations_from_context(
             record_id=snapshot.record_id,
             claim="Reviewed alert lifecycle remains anchored on the alert record.",
             evidence_id=None,
-            reviewed_context_field=(
-                "lifecycle_state" if isinstance(lifecycle_state, str) else None
-            ),
+            reviewed_context_field=None,
         )
 
     for alert_id in snapshot.linked_alert_ids:

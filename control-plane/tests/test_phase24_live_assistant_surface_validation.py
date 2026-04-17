@@ -116,7 +116,7 @@ class Phase24LiveAssistantSurfaceValidationTests(ServicePersistenceTestBase):
                 "record_id": promoted_case.case_id,
                 "claim": "Reviewed case lifecycle and scope remain anchored on the case record.",
                 "evidence_id": None,
-                "reviewed_context_field": "lifecycle_state",
+                "reviewed_context_field": None,
             },
             payload["citations"],
         )
@@ -167,6 +167,7 @@ class Phase24LiveAssistantSurfaceValidationTests(ServicePersistenceTestBase):
                 "the bounded live assistant did not return a trusted summary within the reviewed retry budget"
             ],
         )
+        service._assistant_provider_adapter.generate.assert_called_once()
 
     def test_cli_discards_untrusted_provider_text_and_returns_reviewed_summary(
         self,
@@ -230,6 +231,7 @@ class Phase24LiveAssistantSurfaceValidationTests(ServicePersistenceTestBase):
                 "the requested summary would widen into approval, delegation, execution, or policy interpretation"
             ],
         )
+        service._assistant_provider_adapter.generate.assert_called_once()
 
     def test_cli_returns_reviewed_summary_when_citations_are_missing(self) -> None:
         _, service, promoted_case, evidence_id, reviewed_at = (
