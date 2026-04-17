@@ -56,6 +56,14 @@ class ReviewedSlicePolicy:
         case = self._service._require_case_record(case_id)
         return self.require_operator_case_record(case)
 
+    def require_operator_alert_record(self, alert: AlertRecord) -> AlertRecord:
+        if not self.alert_is_in_operator_slice(alert):
+            raise ValueError(
+                f"alert {alert.alert_id!r} is outside the approved "
+                f"{REVIEWED_LIVE_SLICE_LABEL}"
+            )
+        return alert
+
     def require_case_scoped_advisory_read(self, context_snapshot: object) -> None:
         record_family = str(getattr(context_snapshot, "record_family"))
         record_id = str(getattr(context_snapshot, "record_id"))
@@ -97,6 +105,17 @@ class ReviewedSlicePolicy:
                     approved_cases=approved_cases,
                     error_message=error_message,
                 )
+
+    def require_alert_scoped_queue_summary_read(self, context_snapshot: object) -> None:
+        record_family = str(getattr(context_snapshot, "record_family"))
+        record_id = str(getattr(context_snapshot, "record_id"))
+        if record_family != "alert":
+            raise ValueError(self.case_scoped_read_error(record_family, record_id))
+
+        alert = self._service._store.get(AlertRecord, record_id)
+        if alert is None:
+            raise LookupError(f"Missing alert record {record_id!r} for reviewed slice validation")
+        self.require_operator_alert_record(alert)
 
     @staticmethod
     def case_scoped_read_error(record_family: str, record_id: str) -> str:
@@ -188,6 +207,37 @@ class ReviewedSlicePolicy:
         return (
             self.source_family(case.reviewed_context)
             or self.source_family(alert.reviewed_context)
+            or self.source_family(reconciliation.subject_linkage.get("reviewed_source_profile"))
+        ) in REVIEWED_LIVE_SOURCE_FAMILIES
+
+    def alert_is_in_operator_slice(self, alert: AlertRecord) -> bool:
+        reconciliation = self._service._latest_detection_reconciliation_for_alert(
+            alert.alert_id
+        )
+        if reconciliation is None or not self._service._reconciliation_is_wazuh_origin(
+            reconciliation
+        ):
+            return False
+        if not self._service._linked_id_exists(
+            reconciliation.subject_linkage.get("alert_ids"),
+            alert.alert_id,
+        ):
+            return False
+
+        admission_provenance = (
+            self._normalize_admission_provenance(
+                reconciliation.subject_linkage.get("admission_provenance")
+            )
+            or self._normalize_admission_provenance(alert.reviewed_context.get("provenance"))
+        )
+        if admission_provenance != {
+            "admission_kind": "live",
+            "admission_channel": "live_wazuh_webhook",
+        }:
+            return False
+
+        return (
+            self.source_family(alert.reviewed_context)
             or self.source_family(reconciliation.subject_linkage.get("reviewed_source_profile"))
         ) in REVIEWED_LIVE_SOURCE_FAMILIES
 

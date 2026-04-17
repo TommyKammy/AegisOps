@@ -67,6 +67,43 @@ class ServicePersistenceTestBase(unittest.TestCase):
         ].transitioned_at
         return store, service, promoted_case, promoted_case.evidence_ids[0], reviewed_at
 
+    def _build_phase19_in_scope_alert_without_case(
+        self,
+        *,
+        store: object | None = None,
+    ) -> tuple[object, AegisOpsControlPlaneService, object, str, datetime]:
+        if store is None:
+            store, _ = make_store()
+        shared_secret = secrets.token_urlsafe(24)
+        reverse_proxy_secret = secrets.token_urlsafe(24)
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret=shared_secret,
+                wazuh_ingest_reverse_proxy_secret=reverse_proxy_secret,
+            ),
+            store=store,
+        )
+        admitted = service.ingest_wazuh_alert(
+            raw_alert=load_wazuh_fixture("github-audit-alert.json"),
+            authorization_header=f"Bearer {shared_secret}",
+            forwarded_proto="https",
+            reverse_proxy_secret_header=reverse_proxy_secret,
+            peer_addr="127.0.0.1",
+        )
+        alert = admitted.alert
+        evidence_records = tuple(
+            evidence
+            for evidence in store.list(EvidenceRecord)
+            if evidence.alert_id == alert.alert_id
+        )
+        if not evidence_records:
+            raise AssertionError("expected reviewed alert fixture to persist linked evidence")
+        reviewed_at = service.list_lifecycle_transitions("alert", alert.alert_id)[
+            -1
+        ].transitioned_at
+        return store, service, alert, evidence_records[0].evidence_id, reviewed_at
+
     def _build_phase19_out_of_scope_case(
         self,
         *,
@@ -101,6 +138,40 @@ class ServicePersistenceTestBase(unittest.TestCase):
             -1
         ].transitioned_at
         return service, promoted_case, admitted.alert.alert_id, reviewed_at
+
+    def _build_phase19_out_of_scope_alert_without_case(
+        self,
+        *,
+        fixture_name: str,
+    ) -> tuple[AegisOpsControlPlaneService, object, str, datetime]:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
+        adapter = WazuhAlertAdapter()
+        admitted = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(load_wazuh_fixture(fixture_name)),
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id=f"evidence-{fixture_name}",
+                source_record_id=admitted.alert.finding_id,
+                alert_id=admitted.alert.alert_id,
+                case_id=None,
+                source_system="wazuh",
+                collector_identity="collector://wazuh/replay",
+                acquired_at=reviewed_at,
+                derivation_relationship="native_detection_record",
+                lifecycle_state="collected",
+            )
+        )
+        reviewed_at = service.list_lifecycle_transitions("alert", admitted.alert.alert_id)[
+            -1
+        ].transitioned_at
+        return service, admitted.alert, f"evidence-{fixture_name}", reviewed_at
 
     def _build_phase19_synthetic_out_of_scope_case(
         self,

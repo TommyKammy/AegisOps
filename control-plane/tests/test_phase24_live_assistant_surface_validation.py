@@ -22,6 +22,110 @@ from aegisops_control_plane.assistant_provider import AssistantProviderResult
 
 
 class Phase24LiveAssistantSurfaceValidationTests(ServicePersistenceTestBase):
+    def test_cli_runs_queue_triage_summary_for_reviewed_in_scope_alert_without_case_linkage(
+        self,
+    ) -> None:
+        _, service, alert, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_alert_without_case()
+        )
+        self.assertEqual(alert.case_id, None)
+        service._assistant_provider_adapter = mock.Mock()
+        service._assistant_provider_adapter.generate.return_value = AssistantProviderResult(
+            status="ready",
+            provider_identity="openai",
+            model_identity="gpt-5.4",
+            prompt_version="phase24-queue-summary-v1",
+            workflow_family="first_live_assistant_summary_family",
+            workflow_task="queue_triage_summary",
+            generated_at=reviewed_at,
+            reviewed_input_refs=(alert.alert_id, evidence_id),
+            output_text="Reviewed queue alert scope remains bounded to the cited evidence.",
+            attempt_count=1,
+            request_provenance={
+                "memory_policy": "no_memory",
+                "request_metadata": {
+                    "record_family": "alert",
+                    "record_id": alert.alert_id,
+                },
+            },
+            response_provenance={
+                "provider_response_id": "provider-response-queue-001",
+                "provider_transcript_id": "provider-transcript-queue-001",
+                "model_version": "model-version-2026-04-18",
+            },
+            failures=(),
+            failure_summary=None,
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            [
+                "run-live-assistant-workflow",
+                "--workflow-task",
+                "queue_triage_summary",
+                "--family",
+                "alert",
+                "--record-id",
+                alert.alert_id,
+            ],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["workflow_task"], "queue_triage_summary")
+        self.assertEqual(payload["status"], "ready")
+        self.assertEqual(
+            payload["summary"],
+            "Reviewed queue alert scope remains bounded to the cited evidence.",
+        )
+        self.assertEqual(payload["unresolved_reasons"], [])
+        self.assertTrue(payload["operator_follow_up"])
+        self.assertIn(
+            {
+                "record_family": "alert",
+                "record_id": alert.alert_id,
+                "claim": "Reviewed alert lifecycle remains anchored on the alert record.",
+                "evidence_id": None,
+                "reviewed_context_field": None,
+            },
+            payload["citations"],
+        )
+        self.assertIn(
+            {
+                "record_family": "evidence",
+                "record_id": evidence_id,
+                "claim": "Linked reviewed evidence supports the live assistant summary.",
+                "evidence_id": evidence_id,
+                "reviewed_context_field": None,
+            },
+            payload["citations"],
+        )
+        self.assertFalse(
+            any(citation["record_family"] == "case" for citation in payload["citations"])
+        )
+        service._assistant_provider_adapter.generate.assert_called_once()
+
+    def test_queue_triage_summary_rejects_out_of_scope_alert_without_case_linkage(
+        self,
+    ) -> None:
+        service, alert, _, _ = self._build_phase19_out_of_scope_alert_without_case(
+            fixture_name="agent-origin-alert.json"
+        )
+        service._assistant_provider_adapter = mock.Mock()
+
+        with self.assertRaisesRegex(
+            ValueError,
+            rf"alert {alert.alert_id!r} is outside the approved .* live slice",
+        ):
+            service.run_live_assistant_workflow(
+                workflow_task="queue_triage_summary",
+                record_family="alert",
+                record_id=alert.alert_id,
+            )
+
+        service._assistant_provider_adapter.generate.assert_not_called()
+
     def test_cli_runs_case_summary_workflow_with_phase24_trusted_output_contract(
         self,
     ) -> None:

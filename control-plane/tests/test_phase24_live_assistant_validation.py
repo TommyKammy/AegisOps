@@ -5,6 +5,7 @@ import unittest
 
 
 _PHASE24_RUNTIME_MODULES = (
+    # Surface validation includes both case-scoped and alert-only queue summary coverage.
     "control-plane.tests.test_phase24_live_assistant_surface_validation",
     "control-plane.tests.test_phase24_live_assistant_fallback_validation",
     "control-plane.tests.test_phase24_live_assistant_provider_validation",
