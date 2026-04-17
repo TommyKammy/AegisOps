@@ -89,6 +89,14 @@ class Phase24LiveAssistantFeedbackLoopValidationTests(ServicePersistenceTestBase
         recommendations = store.list(RecommendationRecord)
         self.assertEqual(len(recommendations), 1)
         recommendation = recommendations[0]
+        self.assertEqual(
+            ai_trace.subject_linkage["recommendation_ids"],
+            (recommendation.recommendation_id,),
+        )
+        self.assertEqual(
+            ai_trace.assistant_advisory_draft["subject_linkage"]["recommendation_ids"],
+            (recommendation.recommendation_id,),
+        )
         self.assertEqual(recommendation.ai_trace_id, ai_trace.ai_trace_id)
         self.assertEqual(recommendation.case_id, promoted_case.case_id)
         self.assertEqual(recommendation.alert_id, promoted_case.alert_id)
@@ -342,6 +350,10 @@ class Phase24LiveAssistantFeedbackLoopValidationTests(ServicePersistenceTestBase
                         "workflow_task": "stale-task",
                         "status": "ready",
                     },
+                    "provider_identity": "openai",
+                    "provider_response_provenance": {
+                        "provider_response_id": "provider-response-feedback-loop-002",
+                    },
                 },
                 model_identity="openai/gpt-5.4",
                 prompt_version="phase24-case-summary-v1",
@@ -383,10 +395,24 @@ class Phase24LiveAssistantFeedbackLoopValidationTests(ServicePersistenceTestBase
             ai_trace.subject_linkage["output_contract"]["workflow_task"],
             "case_summary",
         )
+        self.assertEqual(
+            ai_trace.subject_linkage["provider_identity"],
+            "openai",
+        )
+        self.assertEqual(
+            ai_trace.subject_linkage["provider_response_provenance"][
+                "provider_response_id"
+            ],
+            "provider-response-feedback-loop-002",
+        )
         self.assertNotIn("stale-ref-001", ai_trace.material_input_refs)
         self.assertEqual(
             ai_trace.assistant_advisory_draft["subject_linkage"]["source_record_id"],
             promoted_case.case_id,
+        )
+        self.assertEqual(
+            ai_trace.assistant_advisory_draft["subject_linkage"]["provider_identity"],
+            "openai",
         )
         self.assertEqual(
             ai_trace.assistant_advisory_draft["reviewed_input_refs"],

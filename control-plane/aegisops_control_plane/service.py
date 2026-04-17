@@ -4983,10 +4983,13 @@ class AegisOpsControlPlaneService:
                 ),
                 persisted_recommendation.recommendation_id,
             )
+            updated_advisory_draft = dict(persisted_ai_trace.assistant_advisory_draft)
+            updated_advisory_draft["subject_linkage"] = updated_subject_linkage
             self.persist_record(
                 replace(
                     persisted_ai_trace,
                     subject_linkage=updated_subject_linkage,
+                    assistant_advisory_draft=updated_advisory_draft,
                 )
             )
 
@@ -5077,9 +5080,12 @@ class AegisOpsControlPlaneService:
                 lifecycle_state="under_review",
             )
 
+        canonical_subject_linkage = dict(ai_trace_record.subject_linkage)
+        canonical_subject_linkage.update(subject_linkage)
+
         return replace(
             ai_trace_record,
-            subject_linkage=subject_linkage,
+            subject_linkage=canonical_subject_linkage,
             material_input_refs=reviewed_input_refs,
             lifecycle_state="under_review",
             assistant_advisory_draft={
@@ -5087,7 +5093,7 @@ class AegisOpsControlPlaneService:
                 "source_record_family": record_family,
                 "source_record_id": record_id,
                 "review_lifecycle_state": "under_review",
-                "subject_linkage": subject_linkage,
+                "subject_linkage": canonical_subject_linkage,
                 "reviewed_input_refs": reviewed_input_refs,
             },
         )
