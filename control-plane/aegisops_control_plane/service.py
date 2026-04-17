@@ -20,6 +20,7 @@ from .adapters.postgres import (
 )
 from .adapters.shuffle import ShuffleActionAdapter
 from .adapters.wazuh import WazuhAlertAdapter
+from .assistant_provider import AssistantProviderAdapter, AssistantProviderTransport
 from .config import RuntimeConfig
 from .execution_coordinator import ExecutionCoordinator
 from .models import (
@@ -43,7 +44,10 @@ from .models import (
     RecommendationRecord,
 )
 from .operations import RestoreReadinessService, RuntimeBoundaryService
-from .assistant_context import AssistantContextAssembler
+from .assistant_context import (
+    AssistantContextAssembler,
+    _advisory_text_claims_authority_or_scope_expansion,
+)
 from .reviewed_slice_policy import (
     REVIEWED_LIVE_SLICE_LABEL,
     REVIEWED_LIVE_SOURCE_FAMILIES,
@@ -90,6 +94,34 @@ _CASE_LIFECYCLE_STATE_BY_TRIAGE_DISPOSITION = {
 _LATEST_LIFECYCLE_TRANSITION_UNSET = object()
 _LINKED_ALERT_CASE_LIFECYCLE_LOCK_FAMILY = "linked_alert_case_lifecycle"
 _SAME_TIMESTAMP_LIFECYCLE_TRANSITION_ID_PREFIX = "~"
+_PHASE24_WORKFLOW_FAMILY = "first_live_assistant_summary_family"
+_PHASE24_WORKFLOW_PROMPT_VERSIONS = {
+    "case_summary": "phase24-case-summary-v1",
+    "queue_triage_summary": "phase24-queue-summary-v1",
+}
+
+
+class _ReviewedSummaryTransport(AssistantProviderTransport):
+    """Deterministic reviewed-only transport for the first live workflow family."""
+
+    def send_request(self, *, request: Mapping[str, object]) -> Mapping[str, object]:
+        metadata = request.get("request_metadata")
+        if not isinstance(metadata, Mapping):
+            raise ValueError("provider request metadata must be a mapping")
+        output_text = metadata.get("bounded_summary_text")
+        if not isinstance(output_text, str) or output_text.strip() == "":
+            raise ValueError("provider request metadata must include bounded_summary_text")
+        workflow_task = str(request.get("workflow_task") or "summary")
+        request_id = f"reviewed-provider-request:{uuid.uuid4()}"
+        response_id = f"reviewed-provider-response:{uuid.uuid4()}"
+        transcript_id = f"reviewed-provider-transcript:{uuid.uuid4()}"
+        return {
+            "provider_request_id": request_id,
+            "provider_response_id": response_id,
+            "provider_transcript_id": transcript_id,
+            "model_version": f"reviewed-local-{workflow_task}-v1",
+            "output_text": output_text.strip(),
+        }
 
 
 class ControlPlaneStore(Protocol):
@@ -438,6 +470,30 @@ class RecommendationDraftSnapshot:
                 "linked_evidence_ids": self.linked_evidence_ids,
                 "linked_recommendation_ids": self.linked_recommendation_ids,
                 "linked_reconciliation_ids": self.linked_reconciliation_ids,
+            }
+        )
+
+
+@dataclass(frozen=True)
+class LiveAssistantWorkflowSnapshot:
+    workflow_family: str
+    workflow_task: str
+    status: str
+    summary: str
+    citations: tuple[dict[str, object], ...]
+    unresolved_reasons: tuple[str, ...]
+    operator_follow_up: str | None
+
+    def to_dict(self) -> dict[str, object]:
+        return _json_ready(
+            {
+                "workflow_family": self.workflow_family,
+                "workflow_task": self.workflow_task,
+                "status": self.status,
+                "summary": self.summary,
+                "citations": self.citations,
+                "unresolved_reasons": self.unresolved_reasons,
+                "operator_follow_up": self.operator_follow_up,
             }
         )
 
@@ -912,6 +968,14 @@ def _find_duplicate_strings(values: tuple[str, ...]) -> tuple[str, ...]:
     )
 
 
+def _dedupe_strings(values: Iterable[str]) -> tuple[str, ...]:
+    deduped: list[str] = []
+    for value in values:
+        if value not in deduped:
+            deduped.append(value)
+    return tuple(deduped)
+
+
 def _normalize_admission_provenance(
     value: object,
 ) -> dict[str, str] | None:
@@ -981,6 +1045,155 @@ def _recommendation_draft_snapshot_from_context(
     )
 
 
+def _phase24_live_assistant_unresolved_reasons(
+    uncertainty_flags: Iterable[str],
+) -> tuple[str, ...]:
+    mapping = {
+        "missing_supporting_citations": "required citations are missing",
+        "missing_evidence_citation": "linked evidence required for the summary is missing",
+        "conflicting_reviewed_context": (
+            "reviewed records conflict on lifecycle state, ownership, scope, or evidence-backed facts"
+        ),
+        "ambiguous_identity_alias_only": (
+            "the requested summary would require the assistant to collapse identity ambiguity"
+        ),
+        "authority_overreach": (
+            "the requested summary would widen into approval, delegation, execution, or policy interpretation"
+        ),
+        "scope_expansion_attempt": (
+            "the requested summary would widen beyond the reviewed record chain"
+        ),
+        "provider_generation_failed": (
+            "the bounded live assistant did not return a trusted summary within the reviewed retry budget"
+        ),
+    }
+    reasons: list[str] = []
+    for flag in uncertainty_flags:
+        reason = mapping.get(str(flag))
+        if reason is not None and reason not in reasons:
+            reasons.append(reason)
+    return tuple(reasons)
+
+
+def _phase24_live_assistant_citations_from_context(
+    snapshot: AnalystAssistantContextSnapshot,
+) -> tuple[dict[str, object], ...]:
+    citations: list[dict[str, object]] = []
+    seen: set[tuple[object, ...]] = set()
+
+    def append_citation(
+        *,
+        record_family: str,
+        record_id: str,
+        claim: str,
+        evidence_id: str | None,
+        reviewed_context_field: str | None,
+    ) -> None:
+        key = (record_family, record_id, claim, evidence_id, reviewed_context_field)
+        if key in seen:
+            return
+        seen.add(key)
+        citations.append(
+            {
+                "record_family": record_family,
+                "record_id": record_id,
+                "claim": claim,
+                "evidence_id": evidence_id,
+                "reviewed_context_field": reviewed_context_field,
+            }
+        )
+
+    lifecycle_state = snapshot.record.get("lifecycle_state")
+    if snapshot.record_family == "case":
+        append_citation(
+            record_family="case",
+            record_id=snapshot.record_id,
+            claim="Reviewed case lifecycle and scope remain anchored on the case record.",
+            evidence_id=None,
+            reviewed_context_field=(
+                "lifecycle_state" if isinstance(lifecycle_state, str) else None
+            ),
+        )
+    elif snapshot.record_family == "alert":
+        append_citation(
+            record_family="alert",
+            record_id=snapshot.record_id,
+            claim="Reviewed alert lifecycle remains anchored on the alert record.",
+            evidence_id=None,
+            reviewed_context_field=(
+                "lifecycle_state" if isinstance(lifecycle_state, str) else None
+            ),
+        )
+
+    for alert_id in snapshot.linked_alert_ids:
+        append_citation(
+            record_family="alert",
+            record_id=alert_id,
+            claim="Reviewed alert linkage preserves the bounded live assistant chain.",
+            evidence_id=None,
+            reviewed_context_field=None,
+        )
+    for case_id in snapshot.linked_case_ids:
+        append_citation(
+            record_family="case",
+            record_id=case_id,
+            claim="Reviewed case linkage preserves the bounded live assistant chain.",
+            evidence_id=None,
+            reviewed_context_field=None,
+        )
+    for evidence_id in snapshot.linked_evidence_ids:
+        append_citation(
+            record_family="evidence",
+            record_id=evidence_id,
+            claim="Linked reviewed evidence supports the live assistant summary.",
+            evidence_id=evidence_id,
+            reviewed_context_field=None,
+        )
+
+    for context_field in ("asset", "identity", "privilege", "source", "provenance"):
+        if context_field in snapshot.reviewed_context:
+            append_citation(
+                record_family=snapshot.record_family,
+                record_id=snapshot.record_id,
+                claim=(
+                    f"Reviewed context field {context_field} remains within the reviewed record chain."
+                ),
+                evidence_id=None,
+                reviewed_context_field=context_field,
+            )
+
+    return tuple(citations)
+
+
+def _phase24_live_assistant_follow_up(status: str) -> str:
+    if status == "ready":
+        return (
+            "Review the cited records before any approval, delegation, execution, or policy decision."
+        )
+    return (
+        "Review the unresolved reasons against the cited records before any approval, delegation, execution, or policy decision."
+    )
+
+
+def _phase24_live_assistant_snapshot(
+    *,
+    workflow_task: str,
+    summary: str,
+    citations: tuple[dict[str, object], ...],
+    unresolved_reasons: tuple[str, ...],
+) -> LiveAssistantWorkflowSnapshot:
+    status = "unresolved" if unresolved_reasons else "ready"
+    return LiveAssistantWorkflowSnapshot(
+        workflow_family=_PHASE24_WORKFLOW_FAMILY,
+        workflow_task=workflow_task,
+        status=status,
+        summary=summary,
+        citations=citations,
+        unresolved_reasons=unresolved_reasons,
+        operator_follow_up=_phase24_live_assistant_follow_up(status),
+    )
+
+
 def _assistant_advisory_draft_without_revision_history(
     draft: Mapping[str, object],
 ) -> dict[str, object]:
@@ -1022,6 +1235,14 @@ class AegisOpsControlPlaneService:
             config.isolated_executor_base_url
         )
         self._logger = logging.getLogger("aegisops.control_plane")
+        self._assistant_provider_adapter = AssistantProviderAdapter(
+            provider_identity="reviewed_local",
+            model_identity="bounded_reviewed_summary",
+            prompt_version=_PHASE24_WORKFLOW_PROMPT_VERSIONS["case_summary"],
+            request_timeout_seconds=5.0,
+            max_attempts=1,
+            transport=_ReviewedSummaryTransport(),
+        )
         self._reviewed_slice_policy = ReviewedSlicePolicy(
             self,
             normalize_admission_provenance=_normalize_admission_provenance,
@@ -4534,6 +4755,179 @@ class AegisOpsControlPlaneService:
             record_family,
             record_id,
         )
+
+    def run_live_assistant_workflow(
+        self,
+        *,
+        workflow_task: str,
+        record_family: str,
+        record_id: str,
+    ) -> LiveAssistantWorkflowSnapshot:
+        workflow_task = self._require_non_empty_string(workflow_task, "workflow_task")
+        record_family = self._require_non_empty_string(record_family, "record_family")
+        record_id = self._require_non_empty_string(record_id, "record_id")
+
+        expected_record_family = {
+            "case_summary": "case",
+            "queue_triage_summary": "alert",
+        }.get(workflow_task)
+        if expected_record_family is None:
+            raise ValueError(
+                "workflow_task must be one of: case_summary, queue_triage_summary"
+            )
+        if record_family != expected_record_family:
+            raise ValueError(
+                f"workflow_task {workflow_task!r} requires record_family {expected_record_family!r}"
+            )
+
+        context_snapshot = self.inspect_assistant_context(record_family, record_id)
+        self._require_reviewed_case_scoped_advisory_read(context_snapshot)
+
+        advisory_output = dict(context_snapshot.advisory_output)
+        citations = _phase24_live_assistant_citations_from_context(context_snapshot)
+        if advisory_output.get("status") != "ready":
+            unresolved_reasons = _phase24_live_assistant_unresolved_reasons(
+                advisory_output.get("uncertainty_flags", ())
+            )
+            if not unresolved_reasons:
+                unresolved_reasons = ("required citations are missing",)
+            return _phase24_live_assistant_snapshot(
+                workflow_task=workflow_task,
+                summary=(
+                    f"Reviewed {workflow_task.replace('_', ' ')} for {record_id} remains unresolved."
+                ),
+                citations=citations,
+                unresolved_reasons=unresolved_reasons,
+            )
+
+        adapter = self._assistant_provider_adapter
+        if adapter is None:
+            raise ValueError("live assistant provider is not configured")
+        adapter_prompt_version = _PHASE24_WORKFLOW_PROMPT_VERSIONS[workflow_task]
+        if (
+            isinstance(adapter, AssistantProviderAdapter)
+            and getattr(adapter, "_prompt_version", None) != adapter_prompt_version
+        ):
+            adapter = AssistantProviderAdapter(
+                provider_identity=getattr(adapter, "_provider_identity", "reviewed_local"),
+                model_identity=getattr(
+                    adapter, "_model_identity", "bounded_reviewed_summary"
+                ),
+                prompt_version=adapter_prompt_version,
+                request_timeout_seconds=float(
+                    getattr(adapter, "_request_timeout_seconds", 5.0)
+                ),
+                max_attempts=int(getattr(adapter, "_max_attempts", 1)),
+                transport=getattr(adapter, "_transport"),
+            )
+
+        reviewed_input_refs = _dedupe_strings(
+            (
+                record_id,
+                *context_snapshot.linked_alert_ids,
+                *context_snapshot.linked_case_ids,
+                *context_snapshot.linked_evidence_ids,
+                *context_snapshot.linked_recommendation_ids,
+                *context_snapshot.linked_reconciliation_ids,
+            )
+        )
+        transcript_payload = _json_ready(
+            {
+                "record_family": record_family,
+                "record_id": record_id,
+                "reviewed_context": context_snapshot.reviewed_context,
+                "linked_alert_ids": context_snapshot.linked_alert_ids,
+                "linked_case_ids": context_snapshot.linked_case_ids,
+                "linked_evidence_ids": context_snapshot.linked_evidence_ids,
+                "linked_recommendation_ids": context_snapshot.linked_recommendation_ids,
+                "linked_reconciliation_ids": context_snapshot.linked_reconciliation_ids,
+                "advisory_output": advisory_output,
+            }
+        )
+        provider_result = adapter.generate(
+            workflow_family=_PHASE24_WORKFLOW_FAMILY,
+            workflow_task=workflow_task,
+            transcript=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Return a concise reviewed-only summary. Do not add approval, delegation, execution, or policy language."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps(transcript_payload, sort_keys=True),
+                },
+            ],
+            reviewed_input_refs=reviewed_input_refs,
+            metadata={
+                "record_family": record_family,
+                "record_id": record_id,
+                "bounded_summary_text": str(advisory_output["cited_summary"]["text"]),
+            },
+        )
+        unresolved_reasons = []
+        if provider_result.status != "ready":
+            unresolved_reasons.extend(
+                _phase24_live_assistant_unresolved_reasons(
+                    ("provider_generation_failed",)
+                )
+            )
+        summary = (
+            provider_result.output_text.strip()
+            if isinstance(provider_result.output_text, str)
+            and provider_result.output_text.strip()
+            else str(advisory_output["cited_summary"]["text"])
+        )
+        unresolved_reasons.extend(
+            _phase24_live_assistant_unresolved_reasons(
+                _advisory_text_claims_authority_or_scope_expansion(summary)
+            )
+        )
+        if not citations:
+            unresolved_reasons.extend(
+                _phase24_live_assistant_unresolved_reasons(
+                    ("missing_supporting_citations",)
+                )
+            )
+        unresolved_reasons = _dedupe_strings(tuple(unresolved_reasons))
+        snapshot = _phase24_live_assistant_snapshot(
+            workflow_task=workflow_task,
+            summary=summary,
+            citations=citations,
+            unresolved_reasons=unresolved_reasons,
+        )
+
+        build_ai_trace_record = getattr(adapter, "build_ai_trace_record", None)
+        if callable(build_ai_trace_record):
+            ai_trace_record = build_ai_trace_record(
+                ai_trace_id=self._resolve_new_record_identifier(
+                    AITraceRecord,
+                    None,
+                    "ai_trace_id",
+                    "ai-trace",
+                ),
+                reviewer_identity="system://bounded-live-assistant",
+                generated_at=provider_result.generated_at,
+                result=provider_result,
+                subject_linkage={
+                    "source_record_family": record_family,
+                    "source_record_id": record_id,
+                    "alert_ids": context_snapshot.linked_alert_ids,
+                    "case_ids": context_snapshot.linked_case_ids,
+                    "evidence_ids": context_snapshot.linked_evidence_ids,
+                    "recommendation_ids": context_snapshot.linked_recommendation_ids,
+                    "reconciliation_ids": context_snapshot.linked_reconciliation_ids,
+                },
+            )
+            if isinstance(ai_trace_record, AITraceRecord):
+                self.persist_record(
+                    replace(
+                        ai_trace_record,
+                        assistant_advisory_draft=snapshot.to_dict(),
+                    )
+                )
+        return snapshot
 
     def create_reviewed_action_request_from_advisory(
         self,
