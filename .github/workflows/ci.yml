@@ -179,6 +179,7 @@ jobs:
         run: |
           bash scripts/verify-phase-24-live-assistant-workflow-contract.sh
           python3 -m unittest control-plane.tests.test_phase24_live_assistant_workflow_docs
+          python3 -m unittest control-plane.tests.test_phase24_live_assistant_validation
 
       - name: Run Phase 24 workflow coverage guard
         run: bash scripts/test-verify-ci-phase-24-workflow-coverage.sh

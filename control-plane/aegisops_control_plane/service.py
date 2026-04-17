@@ -1068,6 +1068,9 @@ def _phase24_live_assistant_unresolved_reasons(
         "scope_expansion_attempt": (
             "the requested summary would widen beyond the reviewed record chain"
         ),
+        "prompt_injection_attempt": (
+            "the requested summary would follow prompt-injection or instruction-override text instead of reviewed records"
+        ),
         "provider_generation_failed": (
             "the bounded live assistant did not return a trusted summary within the reviewed retry budget"
         ),

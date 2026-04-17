@@ -21,6 +21,7 @@ required_artifacts=(
   "docs/phase-24-first-live-assistant-workflow-family-and-trusted-output-contract.md"
   "docs/phase-24-first-live-assistant-workflow-family-and-trusted-output-contract-validation.md"
   "control-plane/tests/test_phase24_live_assistant_workflow_docs.py"
+  "control-plane/tests/test_phase24_live_assistant_validation.py"
   "scripts/verify-phase-24-live-assistant-workflow-contract.sh"
   "scripts/test-verify-phase-24-live-assistant-workflow-contract.sh"
   "scripts/test-verify-ci-phase-24-workflow-coverage.sh"
