@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import pathlib
 import sys
 import unittest
@@ -81,6 +82,55 @@ class AssistantProviderAdapterValidationTests(unittest.TestCase):
         self.assertEqual(first_request["timeout_seconds"], 5.0)
         self.assertEqual(first_request["workflow_task"], "case_summary")
 
+    def test_adapter_rebuilds_request_payload_for_each_attempt(self) -> None:
+        recorded_requests: list[dict[str, object]] = []
+        mutated_requests: list[dict[str, object]] = []
+
+        def mutate_request_then_retry(*, request: dict[str, object]) -> dict[str, object]:
+            recorded_requests.append(deepcopy(request))
+            request["request_metadata"]["mutated"] = True
+            request["transcript"][0]["content"] = "Mutated by transport."
+            mutated_requests.append(deepcopy(request))
+            if len(recorded_requests) == 1:
+                raise AssistantProviderTimeout("provider timed out")
+            return {
+                "provider_request_id": "provider-request-004",
+                "provider_response_id": "provider-response-004",
+                "provider_transcript_id": "provider-transcript-004",
+                "model_version": "model-version-2026-04-17",
+                "output_text": "Reviewed case summary.",
+            }
+
+        adapter = AssistantProviderAdapter(
+            provider_identity="openai",
+            model_identity="gpt-5.4",
+            prompt_version="phase24-case-summary-v1",
+            request_timeout_seconds=5.0,
+            max_attempts=2,
+            transport=mock.Mock(send_request=mutate_request_then_retry),
+        )
+
+        result = adapter.generate(
+            workflow_family="first_live_assistant_summary_family",
+            workflow_task="case_summary",
+            transcript=[{"role": "user", "content": "Summarize case-001."}],
+            reviewed_input_refs=("case-001",),
+            metadata={"record_family": "case", "record_id": "case-001"},
+        )
+
+        self.assertEqual(result.status, "ready")
+        self.assertEqual(len(recorded_requests), 2)
+        self.assertIn("mutated", mutated_requests[0]["request_metadata"])
+        self.assertNotIn("mutated", recorded_requests[0]["request_metadata"])
+        self.assertNotIn("mutated", recorded_requests[1]["request_metadata"])
+        self.assertEqual(mutated_requests[0]["transcript"][0]["content"], "Mutated by transport.")
+        self.assertEqual(recorded_requests[0]["transcript"][0]["content"], "Summarize case-001.")
+        self.assertEqual(
+            recorded_requests[1]["transcript"][0]["content"],
+            "Summarize case-001.",
+        )
+        self.assertNotIn("mutated", result.request_provenance["request_metadata"])
+
     def test_adapter_returns_explicit_failure_without_fabricating_output(self) -> None:
         transport = mock.Mock()
         transport.send_request.side_effect = RuntimeError("malformed provider output")
@@ -105,7 +155,9 @@ class AssistantProviderAdapterValidationTests(unittest.TestCase):
         self.assertIsNone(result.output_text)
         self.assertEqual(result.attempt_count, 2)
         self.assertEqual(len(result.failures), 2)
-        self.assertTrue(all(failure.failure_kind == "provider_error" for failure in result.failures))
+        self.assertTrue(
+            all(failure.failure_kind == "provider_error" for failure in result.failures)
+        )
         self.assertIn("malformed provider output", result.failure_summary)
 
     def test_adapter_builds_ai_trace_with_request_response_and_failure_provenance(
@@ -162,7 +214,9 @@ class AssistantProviderAdapterValidationTests(unittest.TestCase):
             "no_memory",
         )
         self.assertEqual(
-            ai_trace.subject_linkage["provider_response_provenance"]["provider_response_id"],
+            ai_trace.subject_linkage["provider_response_provenance"][
+                "provider_response_id"
+            ],
             "provider-response-003",
         )
         self.assertEqual(

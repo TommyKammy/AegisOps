@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Mapping, Protocol
@@ -93,13 +94,11 @@ class AssistantProviderAdapter:
             "reviewed_input_refs": tuple(reviewed_input_refs),
             "request_metadata": dict(metadata),
         }
-        request = {
-            **request_provenance,
-            "transcript": tuple(dict(message) for message in transcript),
-        }
 
         for attempt_number in range(1, self._max_attempts + 1):
             try:
+                request = deepcopy(request_provenance)
+                request["transcript"] = tuple(dict(message) for message in transcript)
                 response = self._transport.send_request(request=request)
                 output_text = self._require_non_empty_string(
                     response.get("output_text"),
