@@ -4808,7 +4808,10 @@ class AegisOpsControlPlaneService:
             )
 
         context_snapshot = self.inspect_assistant_context(record_family, record_id)
-        self._require_reviewed_case_scoped_advisory_read(context_snapshot)
+        if workflow_task == "queue_triage_summary":
+            self._require_reviewed_alert_scoped_queue_summary_read(context_snapshot)
+        else:
+            self._require_reviewed_case_scoped_advisory_read(context_snapshot)
 
         advisory_output = dict(context_snapshot.advisory_output)
         reviewed_input_refs = _dedupe_strings(
@@ -7069,6 +7072,14 @@ class AegisOpsControlPlaneService:
     ) -> None:
         self._reviewed_slice_policy.require_case_scoped_advisory_read(context_snapshot)
 
+    def _require_reviewed_alert_scoped_queue_summary_read(
+        self,
+        context_snapshot: AnalystAssistantContextSnapshot,
+    ) -> None:
+        self._reviewed_slice_policy.require_alert_scoped_queue_summary_read(
+            context_snapshot
+        )
+
     @staticmethod
     def _reviewed_case_scoped_read_error(record_family: str, record_id: str) -> str:
         return ReviewedSlicePolicy.case_scoped_read_error(record_family, record_id)
@@ -7097,8 +7108,14 @@ class AegisOpsControlPlaneService:
     def _require_reviewed_operator_case_record(self, case: CaseRecord) -> CaseRecord:
         return self._reviewed_slice_policy.require_operator_case_record(case)
 
+    def _require_reviewed_operator_alert_record(self, alert: AlertRecord) -> AlertRecord:
+        return self._reviewed_slice_policy.require_operator_alert_record(alert)
+
     def _case_is_in_reviewed_operator_slice(self, case: CaseRecord) -> bool:
         return self._reviewed_slice_policy.case_is_in_operator_slice(case)
+
+    def _alert_is_in_reviewed_operator_slice(self, alert: AlertRecord) -> bool:
+        return self._reviewed_slice_policy.alert_is_in_operator_slice(alert)
 
     def _reviewed_context_declares_out_of_scope_provenance(self, context: object) -> bool:
         return self._reviewed_slice_policy.context_declares_out_of_scope_provenance(
