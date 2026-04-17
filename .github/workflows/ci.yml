@@ -167,6 +167,14 @@ jobs:
       - name: Run Phase 22 workflow coverage guard
         run: bash scripts/test-verify-ci-phase-22-workflow-coverage.sh
 
+      - name: Run Phase 23 authority-closure validation
+        run: |
+          bash scripts/verify-phase-23-authority-closure.sh
+          python3 -m unittest control-plane.tests.test_phase23_end_to_end_validation control-plane.tests.test_phase23_approval_surface_validation control-plane.tests.test_phase23_transition_logging_validation control-plane.tests.test_phase23_substrate_simplification_validation
+
+      - name: Run Phase 23 workflow coverage guard
+        run: bash scripts/test-verify-ci-phase-23-workflow-coverage.sh
+
       - name: Run control-plane runtime unit tests
         run: python3 -m unittest discover -s control-plane/tests -p 'test_*.py'
 
@@ -215,12 +223,14 @@ jobs:
           bash scripts/test-verify-phase-20-low-risk-action-boundary.sh
           bash scripts/test-verify-phase-21-production-like-hardening-boundary.sh
           bash scripts/test-verify-phase-22-operator-trust-boundary.sh
+          bash scripts/test-verify-phase-23-authority-closure.sh
           bash scripts/test-verify-ci-phase-14-workflow-coverage.sh
           bash scripts/test-verify-ci-phase-15-workflow-coverage.sh
           bash scripts/test-verify-ci-phase-19-workflow-coverage.sh
           bash scripts/test-verify-ci-phase-20-workflow-coverage.sh
           bash scripts/test-verify-ci-phase-21-workflow-coverage.sh
           bash scripts/test-verify-ci-phase-22-workflow-coverage.sh
+          bash scripts/test-verify-ci-phase-23-workflow-coverage.sh
           bash scripts/test-verify-phase-6-initial-telemetry-slice-doc.sh
           bash scripts/test-verify-phase-6-opensearch-detector-artifacts.sh
           bash scripts/test-verify-phase-6-replay-to-notify-validation.sh
