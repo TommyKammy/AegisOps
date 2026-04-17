@@ -110,6 +110,9 @@ flowchart LR
 ### Assistant path
 
 The assistant is downstream of reviewed records and remains advisory-only.
+The assistant remains advisory-only.
+
+The first bounded live assistant workflow family is limited to queue triage summary and case summary.
 
 ```mermaid
 flowchart TD
@@ -125,6 +128,7 @@ Important:
 - the assistant does **not** approve actions
 - the assistant does **not** execute actions
 - the assistant does **not** become reconciliation truth
+- the bounded live assistant workflow family remains queue triage summary and case summary only
 - optional OpenSearch enrichment is secondary and must never outrank reviewed control-plane truth
 
 ---
@@ -192,6 +196,7 @@ Within the current reviewed live slice, an operator can:
 - review case details
 - inspect evidence provenance and reviewed context
 - review cited advisory output
+- review the bounded live assistant workflow family for queue triage summary and case summary
 - create a reviewed action request from a cited recommendation
 - send the first reviewed live low-risk action (`notify_identity_owner`) through the approved path
 - inspect authoritative execution and reconciliation state
@@ -344,6 +349,7 @@ Recommended starting points for a new reader:
 - `docs/automation-substrate-contract.md`
 - `docs/response-action-safety-model.md`
 - `docs/phase-15-identity-grounded-analyst-assistant-boundary.md`
+- `docs/phase-24-first-live-assistant-workflow-family-and-trusted-output-contract.md`
 - `docs/runbook.md`
 
 If you want the shortest mental model, remember this:
