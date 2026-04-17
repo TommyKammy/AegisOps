@@ -61,4 +61,20 @@ if [[ "${actual_tracked_entries[*]}" != "${expected_entries[*]}" ]]; then
   exit 1
 fi
 
+disallowed_supervisor_paths=(
+  ".codex-supervisor/issues/*/issue-journal.md"
+  ".codex-supervisor/execution-metrics/*"
+  ".codex-supervisor/pre-merge/*"
+  ".codex-supervisor/replay/*"
+  ".codex-supervisor/turn-in-progress.json"
+)
+
+for pattern in "${disallowed_supervisor_paths[@]}"; do
+  while IFS= read -r tracked_path; do
+    [[ -n "${tracked_path}" ]] || continue
+    echo "Tracked supervisor-local journal is not allowed: ${tracked_path}" >&2
+    exit 1
+  done < <(git -C "${repo_root}" ls-files "${pattern}")
+done
+
 echo "Repository skeleton matches the approved tracked top-level structure."
