@@ -4781,6 +4781,10 @@ class AegisOpsControlPlaneService:
 
         advisory_output = dict(context_snapshot.advisory_output)
         citations = _phase24_live_assistant_citations_from_context(context_snapshot)
+        trusted_summary = str(
+            advisory_output.get("cited_summary", {}).get("text")
+            or f"Reviewed {workflow_task.replace('_', ' ')} for {record_id} remains unresolved."
+        )
         if advisory_output.get("status") != "ready":
             unresolved_reasons = _phase24_live_assistant_unresolved_reasons(
                 advisory_output.get("uncertainty_flags", ())
@@ -4789,9 +4793,7 @@ class AegisOpsControlPlaneService:
                 unresolved_reasons = ("required citations are missing",)
             return _phase24_live_assistant_snapshot(
                 workflow_task=workflow_task,
-                summary=(
-                    f"Reviewed {workflow_task.replace('_', ' ')} for {record_id} remains unresolved."
-                ),
+                summary=trusted_summary,
                 citations=citations,
                 unresolved_reasons=unresolved_reasons,
             )
@@ -4840,7 +4842,6 @@ class AegisOpsControlPlaneService:
                 "advisory_output": advisory_output,
             }
         )
-        trusted_summary = str(advisory_output["cited_summary"]["text"])
         provider_result = None
         unresolved_reasons: list[str] = []
         try:
