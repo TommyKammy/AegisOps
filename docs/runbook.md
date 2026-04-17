@@ -14,6 +14,8 @@ The current content is intentionally limited to placeholders, constraints, and d
 
 Any future operational detail added here must remain consistent with the approved architecture, repository assets, and validation requirements.
 
+Startup, restore, and operator-load assumptions referenced by this runbook must stay aligned with `docs/smb-footprint-and-deployment-profile-baseline.md`.
+
 ## 2. Startup
 
 Detailed startup steps are intentionally deferred until implementation artifacts and validation procedures exist.
@@ -21,6 +23,8 @@ Detailed startup steps are intentionally deferred until implementation artifacts
 Until implementation-specific commands are approved, operators must treat first boot as limited to the AegisOps control-plane service, PostgreSQL, the approved reverse proxy boundary, and reviewed Wazuh-facing analytic-signal intake expectations.
 
 Operators must not treat optional OpenSearch, n8n, the full analyst-assistant surface, or the high-risk executor path as first-boot prerequisites.
+
+Operators should size startup expectations, maintenance windows, and review burden against `docs/smb-footprint-and-deployment-profile-baseline.md` rather than against enterprise-cluster assumptions.
 
 Future startup guidance should describe:
 
@@ -56,6 +60,8 @@ Future restore guidance should describe:
 - what evidence must be retained for audit and review.
 
 This section must not imply that hypervisor snapshots alone are a sufficient recovery procedure unless an approved ADR changes that baseline.
+
+Restore planning should remain inside the backup and restore expectations published in `docs/smb-footprint-and-deployment-profile-baseline.md`.
 
 ## 5. Approval Handling
 

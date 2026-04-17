@@ -46,4 +46,6 @@ That means later work should avoid:
 
 `docs/architecture.md` should carry the same product thesis and deployment target so component-boundary decisions stay anchored to the same audience and operating assumptions.
 
+`docs/smb-footprint-and-deployment-profile-baseline.md` should publish the concrete reviewed footprint, backup, restore, and operator-burden expectations that keep later hardening and ergonomics work honest for the approved SMB target.
+
 Future roadmap slices should treat this document as the control statement for who AegisOps is for before they add new hardening, ergonomics, or source-expansion work.
