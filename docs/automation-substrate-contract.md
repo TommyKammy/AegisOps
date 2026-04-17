@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-This document defines the reviewed contract for delegating approved AegisOps actions into external automation substrates and controlled executor surfaces.
+This document defines the reviewed contract for delegating approved AegisOps actions into the reviewed Shuffle automation substrate and controlled executor surfaces.
 
 It supplements `docs/secops-domain-model.md`, `docs/response-action-safety-model.md`, and `docs/control-plane-state-model.md` by making the approved handoff contract explicit before Phase 13 implementation work introduces live adapters or executor code.
 
@@ -10,7 +10,7 @@ This document defines delegation, binding, provenance, and reconciliation requir
 
 ## 2. Control-Plane Authority Boundary
 
-AegisOps remains the authority for `Action Request`, `Approval Decision`, evidence linkage, `Action Execution` correlation, and `Reconciliation` state even when a reviewed automation substrate or executor surface performs downstream work.
+AegisOps remains the authority for `Action Request`, `Approval Decision`, evidence linkage, `Action Execution` correlation, and `Reconciliation` state even when the reviewed Shuffle automation substrate or a controlled executor surface performs downstream work.
 
 Neither an automation substrate nor an executor surface may mint, overwrite, or become the system of record for approval truth, action-request truth, evidence custody, or reconciliation truth.
 
@@ -18,11 +18,15 @@ Delegation is allowed only after AegisOps has a bounded `Action Request` and a s
 
 The approval record must persist an immutable approved expiry value or equivalent approved time bound so delegation can reject post-approval expiry drift against the approved record rather than trusting only mutable request state.
 
+For the approved security mainline, Shuffle is the single reviewed routine-automation substrate. n8n may still exist as an optional, transitional, or experimental orchestration surface, but it is not part of the reviewed security authority path.
+
 Substrate-local queued jobs, workflow definitions, connector payload history, and executor-local run logs may provide downstream evidence, but they do not become the approval authority or the reconciliation authority for the approved action path.
 
 ## 3. Approved Delegation Contract
 
 The reviewed delegation record is the control-plane handoff artifact that binds approved response intent to one reviewed downstream execution surface.
+
+When the reviewed surface is routine automation rather than a higher-risk executor, that reviewed downstream execution surface is the reviewed Shuffle automation substrate.
 
 At minimum, the contract must preserve:
 
@@ -76,6 +80,8 @@ If the execution surface cannot prove whether a received duplicate is the same a
 ## 6. Baseline Alignment Notes
 
 This contract aligns the approved handoff model to the shipped vendor-neutral execution-surface vocabulary rather than reintroducing substrate-local approval or reconciliation authority.
+
+That vendor-neutral vocabulary does not create multiple reviewed routine-automation authorities on the security mainline; Shuffle remains the reviewed routine-automation substrate for the approved path, while executor surfaces remain a separate category for tighter-controlled actions.
 
 It keeps concrete Shuffle adapter code, isolated-executor implementation, and Phase 13 CI expansion out of scope for this baseline.
 

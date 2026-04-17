@@ -20,6 +20,8 @@ The approved first live path is intentionally narrower than a general notificati
 
 The approved first live action must remain anchored to the completed Phase 19 operator slice and the reviewed Phase 13 delegation model rather than creating a new standalone automation surface.
 
+For the approved security mainline, that routine automation surface is Shuffle only.
+
 ## 3. Approved Action Shape
 
 The reviewed `notify_identity_owner` payload must stay specific enough that approval and reconciliation remain bound to one reviewed intent.

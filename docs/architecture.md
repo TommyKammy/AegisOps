@@ -39,6 +39,8 @@ The initial standard detection substrate is Wazuh.
 
 The initial standard routine automation substrate is Shuffle.
 
+Shuffle is the single reviewed routine-automation substrate on the approved security mainline.
+
 The AegisOps control plane is the authoritative owner of policy-sensitive records, approval decisions, evidence linkage, action intent, and reconciliation truth across substrate boundaries.
 
 The controlled execution surface is the isolated executor path for higher-risk actions that require tighter execution controls than routine automation should own.
@@ -93,11 +95,13 @@ The routine automation substrate performs approved automation that the control p
 
 Shuffle is the initial standard routine automation substrate in the approved baseline.
 
+Shuffle is the only reviewed routine-automation substrate on the approved security path.
+
 Its approved boundary is routine enrichment, routing, integration handling, and approved automation execution after the control plane has produced the governing action request and approval decision context.
 
 The routine automation substrate must not mint or overwrite approval truth, action intent, evidence truth, or reconciliation truth.
 
-n8n may still be used as an optional, transitional, or experimental executor or orchestration substrate.
+n8n may still be used as an optional, transitional, or experimental executor or orchestration substrate outside the reviewed security mainline.
 
 That status does not make it a product core or an authority surface.
 
