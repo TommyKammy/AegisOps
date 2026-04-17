@@ -8,6 +8,7 @@ import hmac
 import ipaddress
 import json
 import logging
+import re
 import uuid
 from typing import Iterable, Iterator, Mapping, Protocol, Type, TypeVar
 
@@ -1081,6 +1082,28 @@ def _phase24_live_assistant_unresolved_reasons(
         if reason is not None and reason not in reasons:
             reasons.append(reason)
     return tuple(reasons)
+
+
+def _phase24_live_assistant_prompt_injection_flags(text: object) -> tuple[str, ...]:
+    if not isinstance(text, str):
+        return ()
+
+    lowered = text.lower()
+    normalized = re.sub(r"[\W_]+", " ", lowered)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    flags: list[str] = []
+    prompt_injection_terms = (
+        r"\bignore(?:\s+all)?\s+previous\s+instructions\b",
+        r"\bdisregard\s+previous\s+instructions\b",
+        r"\boverride\s+previous\s+instructions\b",
+        r"\breveal\s+(?:the\s+)?hidden\s+system\s+prompt\b",
+        r"\breveal\s+(?:the\s+)?system\s+prompt\b",
+        r"\bshow\s+(?:the\s+)?system\s+prompt\b",
+        r"\breveal\s+(?:the\s+)?developer\s+message\b",
+    )
+    if any(re.search(term, normalized) for term in prompt_injection_terms):
+        flags.append("prompt_injection_attempt")
+    return _dedupe_strings(tuple(flags))
 
 
 def _phase24_live_assistant_citations_from_context(
@@ -4875,6 +4898,7 @@ class AegisOpsControlPlaneService:
                 )
             )
         candidate_summary = trusted_summary
+        provider_output_text: str | None = None
         if provider_result is not None:
             if provider_result.status != "ready":
                 unresolved_reasons.extend(
@@ -4886,13 +4910,20 @@ class AegisOpsControlPlaneService:
                 isinstance(provider_result.output_text, str)
                 and provider_result.output_text.strip()
             ):
-                candidate_summary = provider_result.output_text.strip()
+                provider_output_text = provider_result.output_text.strip()
+                candidate_summary = provider_output_text
             else:
                 unresolved_reasons.extend(
                     _phase24_live_assistant_unresolved_reasons(
                         ("provider_generation_failed",)
                     )
                 )
+        if provider_output_text is not None:
+            unresolved_reasons.extend(
+                _phase24_live_assistant_unresolved_reasons(
+                    _phase24_live_assistant_prompt_injection_flags(provider_output_text)
+                )
+            )
         unresolved_reasons.extend(
             _phase24_live_assistant_unresolved_reasons(
                 _advisory_text_claims_authority_or_scope_expansion(candidate_summary)
