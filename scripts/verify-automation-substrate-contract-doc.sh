@@ -16,12 +16,13 @@ required_headings=(
 )
 
 required_phrases=(
-  "This document defines the reviewed contract for delegating approved AegisOps actions into external automation substrates and controlled executor surfaces."
+  "This document defines the reviewed contract for delegating approved AegisOps actions into the reviewed Shuffle automation substrate and controlled executor surfaces."
   "This document defines delegation, binding, provenance, and reconciliation requirements only. It does not introduce adapter code, isolated-executor implementation, or CI expansion in this phase."
-  'AegisOps remains the authority for `Action Request`, `Approval Decision`, evidence linkage, `Action Execution` correlation, and `Reconciliation` state even when a reviewed automation substrate or executor surface performs downstream work.'
+  'AegisOps remains the authority for `Action Request`, `Approval Decision`, evidence linkage, `Action Execution` correlation, and `Reconciliation` state even when the reviewed Shuffle automation substrate or a controlled executor surface performs downstream work.'
   "Neither an automation substrate nor an executor surface may mint, overwrite, or become the system of record for approval truth, action-request truth, evidence custody, or reconciliation truth."
   'Delegation is allowed only after AegisOps has a bounded `Action Request` and a still-valid `Approval Decision` whose binding fields exactly match the downstream execution intent.'
   "The approval record must persist an immutable approved expiry value or equivalent approved time bound so delegation can reject post-approval expiry drift against the approved record rather than trusting only mutable request state."
+  "For the approved security mainline, Shuffle is the single reviewed routine-automation substrate. n8n may still exist as an optional, transitional, or experimental orchestration surface, but it is not part of the reviewed security authority path."
   '| `delegation_id` | Immutable AegisOps delegation record identifier for one approved handoff into an automation substrate or executor surface. |'
   '| `action_request_id` | Required AegisOps identifier for the exact request whose approved intent is being delegated. |'
   '| `approval_decision_id` | Required AegisOps identifier for the approval outcome that authorizes the delegated intent. |'
