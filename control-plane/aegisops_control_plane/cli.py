@@ -258,6 +258,26 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         help="Control-plane record identifier to render for recommendation drafting.",
     )
+    run_live_assistant_workflow = subparsers.add_parser(
+        "run-live-assistant-workflow",
+        help="Run one bounded reviewed live assistant workflow over reviewed records only.",
+    )
+    run_live_assistant_workflow.add_argument(
+        "--workflow-task",
+        required=True,
+        choices=("case_summary", "queue_triage_summary"),
+        help="Bounded live assistant workflow task to run.",
+    )
+    run_live_assistant_workflow.add_argument(
+        "--family",
+        required=True,
+        help="Control-plane record family to ground for the live assistant workflow.",
+    )
+    run_live_assistant_workflow.add_argument(
+        "--record-id",
+        required=True,
+        help="Control-plane record identifier to ground for the live assistant workflow.",
+    )
     return parser
 
 
@@ -457,6 +477,15 @@ def run_command(
             return service.render_recommendation_draft(
                 parsed.family,
                 parsed.record_id,
+            ).to_dict()
+        except (LookupError, ValueError) as exc:
+            _usage_error(parser, str(exc))
+    if command == "run-live-assistant-workflow":
+        try:
+            return service.run_live_assistant_workflow(
+                workflow_task=parsed.workflow_task,
+                record_family=parsed.family,
+                record_id=parsed.record_id,
             ).to_dict()
         except (LookupError, ValueError) as exc:
             _usage_error(parser, str(exc))
