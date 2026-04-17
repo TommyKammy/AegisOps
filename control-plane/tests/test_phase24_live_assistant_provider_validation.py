@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 import pathlib
 import sys
+import time
 import unittest
 from unittest import mock
 
@@ -20,6 +21,46 @@ from aegisops_control_plane.assistant_provider import (  # type: ignore[attr-def
 
 
 class AssistantProviderAdapterValidationTests(unittest.TestCase):
+    def test_adapter_enforces_timeout_budget_for_non_cooperative_transport(self) -> None:
+        def slow_transport(*, request: dict[str, object]) -> dict[str, object]:
+            self.assertEqual(request["timeout_seconds"], 0.01)
+            time.sleep(0.2)
+            return {
+                "provider_request_id": "provider-request-slow-001",
+                "provider_response_id": "provider-response-slow-001",
+                "provider_transcript_id": "provider-transcript-slow-001",
+                "model_version": "model-version-2026-04-18",
+                "output_text": "This response should arrive too late.",
+            }
+
+        adapter = AssistantProviderAdapter(
+            provider_identity="openai",
+            model_identity="gpt-5.4",
+            prompt_version="phase24-case-summary-v1",
+            request_timeout_seconds=0.01,
+            max_attempts=1,
+            transport=mock.Mock(send_request=slow_transport),
+        )
+
+        started_at = time.perf_counter()
+        result = adapter.generate(
+            workflow_family="first_live_assistant_summary_family",
+            workflow_task="case_summary",
+            transcript=[{"role": "user", "content": "Summarize case-001."}],
+            reviewed_input_refs=("case-001",),
+            metadata={"record_family": "case", "record_id": "case-001"},
+        )
+        elapsed = time.perf_counter() - started_at
+
+        self.assertEqual(result.status, "failed")
+        self.assertIsNone(result.output_text)
+        self.assertEqual(result.attempt_count, 1)
+        self.assertEqual(len(result.failures), 1)
+        self.assertEqual(result.failures[0].failure_kind, "timeout")
+        self.assertIn("timed out", result.failures[0].detail)
+        self.assertIn("attempt 1: timeout", result.failure_summary)
+        self.assertLess(elapsed, 0.15)
+
     def test_adapter_retries_bounded_timeout_failures_and_records_no_memory_provenance(
         self,
     ) -> None:

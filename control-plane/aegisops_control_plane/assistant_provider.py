@@ -3,6 +3,8 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from queue import Queue
+import threading
 from typing import Mapping, Protocol
 
 from .models import AITraceRecord
@@ -99,7 +101,7 @@ class AssistantProviderAdapter:
             try:
                 request = deepcopy(request_provenance)
                 request["transcript"] = tuple(dict(message) for message in transcript)
-                response = self._transport.send_request(request=request)
+                response = self._send_request_with_timeout(request=request)
                 output_text = self._require_non_empty_string(
                     response.get("output_text"),
                     "provider response output_text",
@@ -170,6 +172,39 @@ class AssistantProviderAdapter:
             failures=tuple(failures),
             failure_summary=failure_summary,
         )
+
+    def _send_request_with_timeout(
+        self,
+        *,
+        request: Mapping[str, object],
+    ) -> Mapping[str, object]:
+        result_queue: Queue[tuple[str, object]] = Queue(maxsize=1)
+
+        def run_transport() -> None:
+            try:
+                response = self._transport.send_request(request=request)
+            except Exception as exc:  # noqa: BLE001
+                result_queue.put(("error", exc))
+                return
+            result_queue.put(("response", response))
+
+        worker = threading.Thread(
+            target=run_transport,
+            name="assistant-provider-request",
+            daemon=True,
+        )
+        worker.start()
+        worker.join(timeout=self._request_timeout_seconds)
+        if worker.is_alive():
+            raise AssistantProviderTimeout(
+                f"provider request timed out after {self._request_timeout_seconds:g} seconds"
+            )
+        outcome_kind, outcome_value = result_queue.get_nowait()
+        if outcome_kind == "error":
+            raise outcome_value  # type: ignore[misc]
+        if not isinstance(outcome_value, Mapping):
+            raise TypeError("provider response must be a mapping")
+        return outcome_value
 
     def build_ai_trace_record(
         self,

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 import pathlib
 import sys
+import time
 from unittest import mock
 
 
@@ -14,10 +15,60 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
 from _service_persistence_support import ServicePersistenceTestBase
-from aegisops_control_plane.assistant_provider import AssistantProviderResult
+from aegisops_control_plane.assistant_provider import (
+    AssistantProviderAdapter,
+    AssistantProviderResult,
+)
 
 
 class Phase24LiveAssistantAdversarialValidationTests(ServicePersistenceTestBase):
+    def test_workflow_returns_unresolved_when_adapter_enforces_provider_timeout_budget(
+        self,
+    ) -> None:
+        _, service, promoted_case, _, _ = self._build_phase19_in_scope_case()
+        expected_summary = service.inspect_assistant_context(
+            "case",
+            promoted_case.case_id,
+        ).advisory_output["cited_summary"]["text"]
+
+        def slow_transport(*, request: dict[str, object]) -> dict[str, object]:
+            self.assertEqual(request["request_metadata"]["record_id"], promoted_case.case_id)
+            time.sleep(0.2)
+            return {
+                "provider_request_id": "provider-request-slow-002",
+                "provider_response_id": "provider-response-slow-002",
+                "provider_transcript_id": "provider-transcript-slow-002",
+                "model_version": "model-version-2026-04-18",
+                "output_text": "This response should never be trusted because it exceeded budget.",
+            }
+
+        service._assistant_provider_adapter = AssistantProviderAdapter(
+            provider_identity="openai",
+            model_identity="gpt-5.4",
+            prompt_version="phase24-case-summary-v1",
+            request_timeout_seconds=0.01,
+            max_attempts=1,
+            transport=mock.Mock(send_request=slow_transport),
+        )
+
+        started_at = time.perf_counter()
+        snapshot = service.run_live_assistant_workflow(
+            workflow_task="case_summary",
+            record_family="case",
+            record_id=promoted_case.case_id,
+        )
+        elapsed = time.perf_counter() - started_at
+
+        self.assertEqual(snapshot.status, "unresolved")
+        self.assertEqual(snapshot.summary, expected_summary)
+        self.assertEqual(
+            snapshot.unresolved_reasons,
+            (
+                "the bounded live assistant did not return a trusted summary within the reviewed retry budget",
+            ),
+        )
+        self.assertLess(elapsed, 0.15)
+
     def test_workflow_fails_closed_when_provider_output_contains_prompt_injection_text(
         self,
     ) -> None:
