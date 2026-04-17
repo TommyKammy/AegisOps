@@ -601,9 +601,11 @@ Permanent suppressions without recorded rationale are prohibited.
 
 Approval MAY be performed through:
 
-* n8n UI when n8n is the approved execution substrate
-* Teams Adaptive Cards
-* other explicitly approved controlled approval interfaces
+* AegisOps-reviewed approval interfaces exposed on the approved control-plane path
+* Teams Adaptive Cards when they act as an AegisOps-reviewed approval interface rather than an independent authority surface
+* other explicitly approved AegisOps-reviewed approval interfaces
+
+Optional or transitional execution substrates, including n8n, MAY assist with downstream execution or notification handling but MUST NOT become the reviewed approval authority on the security mainline.
 
 The following approval metadata MUST be logged:
 

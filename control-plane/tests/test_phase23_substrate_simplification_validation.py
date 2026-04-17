@@ -61,6 +61,21 @@ class Phase23SubstrateSimplificationValidationTests(unittest.TestCase):
         ):
             self.assertIn(term, text)
 
+    def test_requirements_baseline_keeps_approval_authority_on_reviewed_control_plane_path(
+        self,
+    ) -> None:
+        text = self._read("docs/requirements-baseline.md")
+
+        self.assertIn(
+            "AegisOps is the reviewed control plane for approval, evidence, and reconciliation governance",
+            text,
+        )
+        self.assertIn(
+            "other explicitly approved AegisOps-reviewed approval interfaces",
+            text,
+        )
+        self.assertNotIn("* n8n UI when n8n is the approved execution substrate", text)
+
 
 if __name__ == "__main__":
     unittest.main()
