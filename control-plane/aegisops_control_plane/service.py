@@ -3339,11 +3339,17 @@ class AegisOpsControlPlaneService:
         *,
         overall_state: str,
     ) -> str:
-        reason_counts = Counter(
-            str(path["reason"])
-            for path in paths
-            if path.get("state") == overall_state
-        )
+        reason_counts: Counter[str] = Counter()
+        for path in paths:
+            if path.get("state") != overall_state:
+                continue
+            by_state = path.get("by_state")
+            weight = (
+                int(by_state.get(overall_state, 0))
+                if isinstance(by_state, Mapping)
+                else int(path.get("affected_reviews", 0))
+            )
+            reason_counts[str(path["reason"])] += max(weight, 1)
         return sorted(
             reason_counts.items(),
             key=lambda item: (-item[1], item[0]),

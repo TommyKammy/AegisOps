@@ -3596,6 +3596,179 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             1,
         )
 
+    def test_service_phase21_readiness_weights_automation_reason_by_impacted_reviews(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        future_expires_at = reviewed_at + timedelta(hours=4)
+
+        def persist_review(
+            *,
+            suffix: str,
+            requested_at: datetime,
+            delegated_at: datetime,
+            expires_at: datetime,
+            request_state: str,
+            execution_state: str,
+            reconciliation_state: str | None,
+            mismatch_summary: str,
+        ) -> None:
+            recommendation = service.record_case_recommendation(
+                case_id=promoted_case.case_id,
+                review_owner="analyst-001",
+                intended_outcome=(
+                    "Keep automation substrate dominant reasons aligned with the"
+                    f" most impacted reviewed requests ({suffix})."
+                ),
+            )
+            action_request = service.create_reviewed_action_request_from_advisory(
+                record_family="recommendation",
+                record_id=recommendation.recommendation_id,
+                requester_identity="analyst-001",
+                recipient_identity="repo-owner-001",
+                message_intent=(
+                    "Keep the dominant automation surface reason weighted by"
+                    f" reviewed impact ({suffix})."
+                ),
+                escalation_reason=(
+                    "Operators must see the readiness reason affecting the most"
+                    " reviewed requests on the same automation surface."
+                ),
+                expires_at=future_expires_at,
+                action_request_id=(
+                    f"action-request-phase21-readiness-automation-weighted-{suffix}"
+                ),
+            )
+            approval = service.persist_record(
+                ApprovalDecisionRecord(
+                    approval_decision_id=(
+                        f"approval-phase21-readiness-automation-weighted-{suffix}"
+                    ),
+                    action_request_id=action_request.action_request_id,
+                    approver_identities=("approver-001",),
+                    target_snapshot=dict(action_request.target_scope),
+                    payload_hash=action_request.payload_hash,
+                    decided_at=requested_at + timedelta(minutes=5),
+                    lifecycle_state="approved",
+                    approved_expires_at=expires_at,
+                )
+            )
+            service.persist_record(
+                replace(
+                    action_request,
+                    approval_decision_id=approval.approval_decision_id,
+                    requested_at=requested_at,
+                    expires_at=expires_at,
+                    lifecycle_state=request_state,
+                )
+            )
+            action_execution = service.persist_record(
+                ActionExecutionRecord(
+                    action_execution_id=(
+                        f"action-execution-phase21-readiness-automation-weighted-{suffix}"
+                    ),
+                    action_request_id=action_request.action_request_id,
+                    approval_decision_id=approval.approval_decision_id,
+                    delegation_id=(
+                        f"delegation-phase21-readiness-automation-weighted-{suffix}"
+                    ),
+                    execution_surface_type="automation_substrate",
+                    execution_surface_id="shuffle",
+                    execution_run_id=(
+                        f"execution-run-phase21-readiness-automation-weighted-{suffix}"
+                    ),
+                    idempotency_key=action_request.idempotency_key,
+                    target_scope=dict(action_request.target_scope),
+                    approved_payload=dict(action_request.requested_payload),
+                    payload_hash=action_request.payload_hash,
+                    delegated_at=delegated_at,
+                    expires_at=expires_at,
+                    provenance={"initiated_by": "operator-review"},
+                    lifecycle_state=execution_state,
+                )
+            )
+            if reconciliation_state is not None:
+                service.persist_record(
+                    ReconciliationRecord(
+                        reconciliation_id=(
+                            f"reconciliation-phase21-readiness-automation-weighted-{suffix}"
+                        ),
+                        subject_linkage={
+                            "action_request_ids": (action_request.action_request_id,),
+                            "latest_native_payload": {"secret": "keep-in-store"},
+                        },
+                        alert_id=promoted_case.alert_id,
+                        finding_id=promoted_case.finding_id,
+                        analytic_signal_id=None,
+                        execution_run_id=action_execution.execution_run_id,
+                        linked_execution_run_ids=(action_execution.execution_run_id,),
+                        correlation_key=(
+                            f"phase21-readiness-automation-weighted-{suffix}"
+                        ),
+                        first_seen_at=delegated_at + timedelta(minutes=1),
+                        last_seen_at=delegated_at + timedelta(minutes=2),
+                        ingest_disposition="matched",
+                        mismatch_summary=mismatch_summary,
+                        compared_at=delegated_at + timedelta(minutes=3),
+                        lifecycle_state=reconciliation_state,
+                    )
+                )
+
+        persist_review(
+            suffix="dispatching-001",
+            requested_at=reviewed_at - timedelta(hours=2),
+            delegated_at=reviewed_at - timedelta(hours=1, minutes=50),
+            expires_at=reviewed_at - timedelta(hours=1),
+            request_state="executing",
+            execution_state="dispatching",
+            reconciliation_state=None,
+            mismatch_summary="dispatch lag remained tied to reviewed execution lineage",
+        )
+        persist_review(
+            suffix="persistence-001",
+            requested_at=reviewed_at + timedelta(minutes=5),
+            delegated_at=reviewed_at + timedelta(minutes=15),
+            expires_at=reviewed_at + timedelta(hours=4),
+            request_state="completed",
+            execution_state="succeeded",
+            reconciliation_state="stale",
+            mismatch_summary="persistence drift remained tied to reviewed execution lineage",
+        )
+        persist_review(
+            suffix="persistence-002",
+            requested_at=reviewed_at + timedelta(minutes=10),
+            delegated_at=reviewed_at + timedelta(minutes=20),
+            expires_at=reviewed_at + timedelta(hours=4),
+            request_state="completed",
+            execution_state="succeeded",
+            reconciliation_state="stale",
+            mismatch_summary="persistence drift remained tied to reviewed execution lineage",
+        )
+
+        readiness = service.inspect_readiness_diagnostics()
+        automation_health = readiness.metrics["automation_substrate_health"]
+        shuffle_surface = automation_health["surfaces"]["automation_substrate:shuffle"]
+
+        self.assertEqual(automation_health["overall_state"], "degraded")
+        self.assertEqual(shuffle_surface["state"], "degraded")
+        self.assertEqual(shuffle_surface["tracked_reviews"], 3)
+        self.assertEqual(shuffle_surface["affected_reviews"], 3)
+        self.assertEqual(shuffle_surface["reason"], "reconciliation_stale")
+        self.assertEqual(
+            shuffle_surface["paths"]["delegation"]["affected_reviews"],
+            1,
+        )
+        self.assertEqual(
+            shuffle_surface["paths"]["provider"]["affected_reviews"],
+            1,
+        )
+        self.assertEqual(
+            shuffle_surface["paths"]["persistence"]["affected_reviews"],
+            3,
+        )
+
     def test_service_phase21_readiness_prefers_higher_reconciliation_id_when_compared_at_ties(
         self,
     ) -> None:

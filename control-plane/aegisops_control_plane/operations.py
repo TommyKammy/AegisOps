@@ -928,11 +928,15 @@ class RestoreReadinessService:
         self._inspect_reconciliation_status()
         startup = self.describe_startup_status()
         readiness_aggregates = self.inspect_readiness_aggregates()
+        readiness_review_snapshots = self._collect_readiness_review_snapshots(
+            readiness_aggregates
+        )
         readiness_status = self._derive_readiness_status(
             startup_ready=startup.startup_ready,
             reconciliation_lifecycle_counts=readiness_aggregates.reconciliation_lifecycle_counts,
             review_path_health_overall_state=self._build_readiness_review_path_health(
-                readiness_aggregates
+                readiness_aggregates,
+                readiness_review_snapshots,
             )["overall_state"],
         )
 
