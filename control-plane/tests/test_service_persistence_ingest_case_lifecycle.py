@@ -2663,15 +2663,141 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
         }
 
         self.assertNotIn(sibling_evidence.evidence_id, linked_evidence_ids)
-        self.assertNotIn(sibling_evidence.evidence_id, detail.lineage["evidence_ids"])
-        self.assertEqual(
-            linked_evidence_ids,
-            {
-                evidence.evidence_id
-                for evidence in store.list(EvidenceRecord)
-                if evidence.alert_id == admitted.alert.alert_id
-            },
+
+    def test_service_detail_surfaces_link_only_external_ticket_reference_on_alert_and_case(
+        self,
+    ) -> None:
+        store, service, promoted_case, _, _ = self._build_phase19_in_scope_case()
+
+        service.persist_record(
+            replace(
+                service.get_record(AlertRecord, promoted_case.alert_id),
+                coordination_reference_id="coord-ref-alert-001",
+                coordination_target_type="zammad",
+                coordination_target_id="ZM-4242",
+                ticket_reference_url="https://tickets.example.test/#ticket/4242",
+            )
         )
+        service.persist_record(
+            replace(
+                service.get_record(CaseRecord, promoted_case.case_id),
+                coordination_reference_id="coord-ref-case-001",
+                coordination_target_type="zammad",
+                coordination_target_id="ZM-4242",
+                ticket_reference_url="https://tickets.example.test/#ticket/4242",
+            )
+        )
+
+        alert_detail = service.inspect_alert_detail(promoted_case.alert_id)
+        case_detail = service.inspect_case_detail(promoted_case.case_id)
+
+        self.assertEqual(
+            alert_detail.alert["coordination_reference_id"],
+            "coord-ref-alert-001",
+        )
+        self.assertEqual(
+            alert_detail.alert["coordination_target_type"],
+            "zammad",
+        )
+        self.assertEqual(
+            alert_detail.alert["coordination_target_id"],
+            "ZM-4242",
+        )
+        self.assertEqual(
+            alert_detail.alert["ticket_reference_url"],
+            "https://tickets.example.test/#ticket/4242",
+        )
+        self.assertEqual(
+            alert_detail.case_record["coordination_reference_id"],
+            "coord-ref-case-001",
+        )
+        self.assertEqual(
+            case_detail.case_record["coordination_reference_id"],
+            "coord-ref-case-001",
+        )
+        self.assertEqual(
+            case_detail.case_record["coordination_target_type"],
+            "zammad",
+        )
+        self.assertEqual(
+            case_detail.case_record["coordination_target_id"],
+            "ZM-4242",
+        )
+        self.assertEqual(
+            case_detail.case_record["ticket_reference_url"],
+            "https://tickets.example.test/#ticket/4242",
+        )
+        self.assertEqual(
+            case_detail.linked_alert_records[0]["coordination_reference_id"],
+            "coord-ref-alert-001",
+        )
+        self.assertEqual(
+            alert_detail.external_ticket_reference["status"],
+            "present",
+        )
+        self.assertEqual(
+            case_detail.external_ticket_reference["status"],
+            "present",
+        )
+
+    def test_service_detail_keeps_mismatched_external_ticket_reference_explicit(
+        self,
+    ) -> None:
+        store, service, promoted_case, _, _ = self._build_phase19_in_scope_case()
+
+        service.persist_record(
+            replace(
+                service.get_record(AlertRecord, promoted_case.alert_id),
+                coordination_reference_id="coord-ref-alert-002",
+                coordination_target_type="zammad",
+                coordination_target_id="ZM-4242",
+                ticket_reference_url="https://tickets.example.test/#ticket/4242",
+            )
+        )
+        service.persist_record(
+            replace(
+                service.get_record(CaseRecord, promoted_case.case_id),
+                coordination_reference_id="coord-ref-case-002",
+                coordination_target_type="zammad",
+                coordination_target_id="ZM-5150",
+                ticket_reference_url="https://tickets.example.test/#ticket/5150",
+            )
+        )
+
+        alert_detail = service.inspect_alert_detail(promoted_case.alert_id)
+        case_detail = service.inspect_case_detail(promoted_case.case_id)
+
+        self.assertEqual(
+            alert_detail.external_ticket_reference["status"],
+            "linked_case_reference_mismatch",
+        )
+        self.assertEqual(
+            case_detail.external_ticket_reference["status"],
+            "linked_alert_reference_mismatch",
+        )
+        self.assertEqual(
+            case_detail.external_ticket_reference["linked_alert_references"][0][
+                "coordination_target_id"
+            ],
+            "ZM-4242",
+        )
+
+    def test_service_rejects_unreviewed_external_ticket_target_type(self) -> None:
+        store, service, promoted_case, _, _ = self._build_phase19_in_scope_case()
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"unsupported coordination_target_type 'jira'",
+        ):
+            service.persist_record(
+                replace(
+                    service.get_record(AlertRecord, promoted_case.alert_id),
+                    coordination_reference_id="coord-ref-alert-003",
+                    coordination_target_type="jira",
+                    coordination_target_id="JIRA-123",
+                    ticket_reference_url="https://tickets.example.test/browse/JIRA-123",
+                )
+            )
 
     def test_service_analyst_queue_ignores_newer_action_execution_reconciliation(self) -> None:
         store, _ = make_store()

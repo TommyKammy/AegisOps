@@ -256,6 +256,42 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         self.assertIn("decision_rationale text", schema_sql)
         self.assertIn("decision_rationale text", bootstrap_sql)
 
+    def test_phase26_external_ticket_reference_forward_migration_asset_exists(
+        self,
+    ) -> None:
+        migration_path = (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0009_phase_26_external_ticket_reference_columns.sql"
+        )
+
+        self.assertTrue(
+            migration_path.exists(),
+            f"Missing Phase 26 forward migration asset: {migration_path}",
+        )
+
+        migration_sql = migration_path.read_text(encoding="utf-8").lower()
+        schema_sql = (
+            CONTROL_PLANE_ROOT.parent / "postgres" / "control-plane" / "schema.sql"
+        ).read_text(encoding="utf-8").lower()
+
+        self.assertIn("begin;", migration_sql)
+        self.assertIn("commit;", migration_sql)
+        for table_name in ("alert_records", "case_records"):
+            self.assertIn(
+                f"alter table if exists aegisops_control.{table_name}",
+                migration_sql,
+            )
+        for required_column in (
+            "coordination_reference_id text",
+            "coordination_target_type text",
+            "coordination_target_id text",
+            "ticket_reference_url text",
+        ):
+            self.assertIn(required_column, schema_sql)
+
     def test_phase23_lifecycle_transition_forward_migration_asset_exists(self) -> None:
         migration_path = (
             CONTROL_PLANE_ROOT.parent

@@ -290,6 +290,7 @@ class AlertDetailSnapshot:
     lifecycle_transitions: tuple[dict[str, object], ...]
     current_action_review: dict[str, object] | None
     action_reviews: tuple[dict[str, object], ...]
+    external_ticket_reference: dict[str, object]
 
     def to_dict(self) -> dict[str, object]:
         return _json_ready(
@@ -311,6 +312,7 @@ class AlertDetailSnapshot:
                 "lifecycle_transitions": self.lifecycle_transitions,
                 "current_action_review": self.current_action_review,
                 "action_reviews": self.action_reviews,
+                "external_ticket_reference": self.external_ticket_reference,
             }
         )
 
@@ -339,6 +341,7 @@ class CaseDetailSnapshot:
     provenance_summary: dict[str, object]
     current_action_review: dict[str, object] | None
     action_reviews: tuple[dict[str, object], ...]
+    external_ticket_reference: dict[str, object]
 
     def to_dict(self) -> dict[str, object]:
         return _json_ready(
@@ -365,6 +368,7 @@ class CaseDetailSnapshot:
                 "provenance_summary": self.provenance_summary,
                 "current_action_review": self.current_action_review,
                 "action_reviews": self.action_reviews,
+                "external_ticket_reference": self.external_ticket_reference,
             }
         )
 
@@ -849,6 +853,51 @@ def _record_to_dict(record: ControlPlaneRecord) -> dict[str, object]:
         field.name: getattr(record, field.name)
         for field in fields(record)
     }
+
+
+def _coordination_reference_payload(
+    record: Mapping[str, object] | ControlPlaneRecord | None,
+) -> dict[str, str] | None:
+    if record is None:
+        return None
+    if isinstance(record, Mapping):
+        payload = record
+    else:
+        payload = _record_to_dict(record)
+
+    coordination_reference_id = payload.get("coordination_reference_id")
+    coordination_target_type = payload.get("coordination_target_type")
+    coordination_target_id = payload.get("coordination_target_id")
+    ticket_reference_url = payload.get("ticket_reference_url")
+    if not all(
+        isinstance(value, str) and value.strip()
+        for value in (
+            coordination_reference_id,
+            coordination_target_type,
+            coordination_target_id,
+            ticket_reference_url,
+        )
+    ):
+        return None
+    return {
+        "coordination_reference_id": coordination_reference_id.strip(),
+        "coordination_target_type": coordination_target_type.strip(),
+        "coordination_target_id": coordination_target_id.strip(),
+        "ticket_reference_url": ticket_reference_url.strip(),
+    }
+
+
+def _coordination_target_signature(
+    record: Mapping[str, object] | ControlPlaneRecord | None,
+) -> tuple[str, str, str] | None:
+    payload = _coordination_reference_payload(record)
+    if payload is None:
+        return None
+    return (
+        payload["coordination_target_type"],
+        payload["coordination_target_id"],
+        payload["ticket_reference_url"],
+    )
 
 
 def _redacted_reconciliation_payload(
@@ -4206,6 +4255,127 @@ class AegisOpsControlPlaneService:
             records=tuple(queue_records),
         )
 
+    def _build_alert_external_ticket_reference_surface(
+        self,
+        *,
+        alert: AlertRecord,
+        case_record: CaseRecord | None,
+    ) -> dict[str, object]:
+        alert_reference = _coordination_reference_payload(alert)
+        case_reference = _coordination_reference_payload(case_record)
+        if alert_reference is None and case_reference is None:
+            status = "missing"
+        elif alert_reference is None:
+            status = "linked_case_reference_only"
+        elif case_record is None:
+            status = "present"
+        elif case_reference is None:
+            status = "linked_case_reference_missing"
+        elif _coordination_target_signature(alert) != _coordination_target_signature(
+            case_record
+        ):
+            status = "linked_case_reference_mismatch"
+        else:
+            status = "present"
+        return {
+            "authority": "non_authoritative",
+            "status": status,
+            "coordination_reference_id": (
+                alert_reference["coordination_reference_id"]
+                if alert_reference is not None
+                else None
+            ),
+            "coordination_target_type": (
+                alert_reference["coordination_target_type"]
+                if alert_reference is not None
+                else None
+            ),
+            "coordination_target_id": (
+                alert_reference["coordination_target_id"]
+                if alert_reference is not None
+                else None
+            ),
+            "ticket_reference_url": (
+                alert_reference["ticket_reference_url"]
+                if alert_reference is not None
+                else None
+            ),
+            "linked_case_id": case_record.case_id if case_record is not None else None,
+            "linked_case_reference": case_reference,
+        }
+
+    def _build_case_external_ticket_reference_surface(
+        self,
+        *,
+        case: CaseRecord,
+        linked_alert_records: tuple[dict[str, object], ...],
+    ) -> dict[str, object]:
+        case_reference = _coordination_reference_payload(case)
+        linked_alert_references = tuple(
+            {
+                "alert_id": str(record.get("alert_id")),
+                **reference,
+            }
+            for record in linked_alert_records
+            for reference in (_coordination_reference_payload(record),)
+            if reference is not None
+        )
+        if case_reference is None and not linked_alert_references:
+            status = "missing"
+        elif case_reference is None:
+            status = "linked_alert_reference_only"
+        else:
+            linked_alert_signatures = {
+                (
+                    reference["coordination_target_type"],
+                    reference["coordination_target_id"],
+                    reference["ticket_reference_url"],
+                )
+                for reference in linked_alert_references
+            }
+            linked_alert_ids = {
+                str(record.get("alert_id"))
+                for record in linked_alert_records
+                if isinstance(record.get("alert_id"), str)
+            }
+            linked_alert_ids_with_reference = {
+                reference["alert_id"] for reference in linked_alert_references
+            }
+            if linked_alert_ids - linked_alert_ids_with_reference:
+                status = "linked_alert_reference_missing"
+            elif linked_alert_signatures and linked_alert_signatures != {
+                _coordination_target_signature(case)
+            }:
+                status = "linked_alert_reference_mismatch"
+            else:
+                status = "present"
+
+        return {
+            "authority": "non_authoritative",
+            "status": status,
+            "coordination_reference_id": (
+                case_reference["coordination_reference_id"]
+                if case_reference is not None
+                else None
+            ),
+            "coordination_target_type": (
+                case_reference["coordination_target_type"]
+                if case_reference is not None
+                else None
+            ),
+            "coordination_target_id": (
+                case_reference["coordination_target_id"]
+                if case_reference is not None
+                else None
+            ),
+            "ticket_reference_url": (
+                case_reference["ticket_reference_url"]
+                if case_reference is not None
+                else None
+            ),
+            "linked_alert_references": linked_alert_references,
+        }
+
     def inspect_alert_detail(self, alert_id: str) -> AlertDetailSnapshot:
         alert_id = self._require_non_empty_string(alert_id, "alert_id")
         alert = self._store.get(AlertRecord, alert_id)
@@ -4312,6 +4482,10 @@ class AegisOpsControlPlaneService:
             ),
             current_action_review=dict(action_reviews[0]) if action_reviews else None,
             action_reviews=action_reviews,
+            external_ticket_reference=self._build_alert_external_ticket_reference_surface(
+                alert=alert,
+                case_record=case_record,
+            ),
         )
 
     def inspect_assistant_context(
@@ -4374,6 +4548,10 @@ class AegisOpsControlPlaneService:
             provenance_summary=provenance_summary,
             current_action_review=dict(action_reviews[0]) if action_reviews else None,
             action_reviews=action_reviews,
+            external_ticket_reference=self._build_case_external_ticket_reference_surface(
+                case=case,
+                linked_alert_records=context_snapshot.linked_alert_records,
+            ),
         )
 
     def _build_case_cross_source_surfaces(

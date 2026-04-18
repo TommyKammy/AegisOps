@@ -45,6 +45,10 @@ class AlertRecord(ControlPlaneRecord):
     analytic_signal_id: str | None
     case_id: str | None
     lifecycle_state: str
+    coordination_reference_id: str | None = None
+    coordination_target_type: str | None = None
+    coordination_target_id: str | None = None
+    ticket_reference_url: str | None = None
     reviewed_context: Mapping[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -107,6 +111,10 @@ class CaseRecord(ControlPlaneRecord):
     finding_id: str | None
     evidence_ids: tuple[str, ...]
     lifecycle_state: str
+    coordination_reference_id: str | None = None
+    coordination_target_type: str | None = None
+    coordination_target_id: str | None = None
+    ticket_reference_url: str | None = None
     reviewed_context: Mapping[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
