@@ -85,6 +85,29 @@ class Phase25MultiSourceCaseAdmissionDocsTests(unittest.TestCase):
         ):
             self.assertIn(term, text)
 
+    def test_phase25_operator_runbook_exists_and_defines_multi_source_review_posture(
+        self,
+    ) -> None:
+        text = self._read(
+            "docs/phase-25-multi-source-case-review-and-osquery-evidence-runbook.md"
+        )
+
+        for term in (
+            "Phase 25 Multi-Source Case Review and Osquery Evidence Runbook",
+            "business-hours operator casework",
+            "multi-source case review",
+            "osquery-backed host evidence",
+            "augmenting evidence",
+            "same-entity",
+            "related-entity",
+            "unresolved",
+            "repository-local verification commands",
+            "must not become the authority for case identity",
+            "broad entity stitching",
+            "substrate-led investigation",
+        ):
+            self.assertIn(term, text)
+
 
 if __name__ == "__main__":
     unittest.main()
