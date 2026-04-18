@@ -883,6 +883,165 @@ if __name__ == "__main__":
                 ],
             )
 
+    def test_first_boot_entrypoint_rejects_recorded_lifecycle_transition_migration_when_latest_state_proof_is_missing(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_root = pathlib.Path(tmpdir)
+            migrations_dir = temp_root / "migrations"
+            migrations_dir.mkdir()
+
+            migration_checksums: dict[str, str] = {}
+            for migration_name in self._REQUIRED_MIGRATIONS:
+                source_path = (
+                    REPO_ROOT
+                    / "postgres"
+                    / "control-plane"
+                    / "migrations"
+                    / migration_name
+                )
+                destination_path = migrations_dir / migration_name
+                shutil.copy2(source_path, destination_path)
+                migration_checksums[migration_name] = self._normalized_migration_checksum(
+                    destination_path
+                )
+
+            psql_path = temp_root / "fake-psql.sh"
+            psql_log = temp_root / "fake-psql.log"
+            psql_state = temp_root / "fake-psql.state"
+            psql_state.write_text(
+                json.dumps(
+                    {
+                        "recorded": migration_checksums,
+                        "ready": list(self._REQUIRED_MIGRATIONS),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            psql_path.write_text(
+                """#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import os
+import pathlib
+import re
+import sys
+
+
+def classify_readiness_query(query_text: str) -> str:
+    if "lifecycle_transition_records_subject_latest_idx" in query_text:
+        return "0007_phase_23_lifecycle_transition_subject_index.sql"
+    if "missing_subjects" in query_text and "lifecycle_transition_records" in query_text:
+        return "0006_phase_23_lifecycle_transition_records.sql"
+    if "decision_rationale" in query_text:
+        return "0005_phase_23_approval_decision_rationale.sql"
+    if "requested_payload" in query_text or "requester_identity" in query_text:
+        return "0004_phase_20_action_request_binding_columns.sql"
+    if "assistant_advisory_draft" in query_text:
+        return "0003_phase_15_assistant_advisory_draft_columns.sql"
+    if "reviewed_context" in query_text:
+        return "0002_phase_14_reviewed_context_columns.sql"
+    if (
+        "approval_decision_records" in query_text
+        or "action_execution_records" in query_text
+        or "reconciliation_records" in query_text
+        or "hunt_run_records" in query_text
+    ):
+        return "0001_control_plane_schema_skeleton.sql"
+    if "lifecycle_transition_records" in query_text:
+        return "0006_phase_23_lifecycle_transition_records.sql"
+    return "0001_control_plane_schema_skeleton.sql"
+
+
+def main() -> int:
+    args = sys.argv[1:]
+    file_path = ""
+    query_text = ""
+
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        if arg == "-f":
+            index += 1
+            file_path = args[index]
+        elif arg == "-c":
+            index += 1
+            query_text = args[index]
+        index += 1
+
+    log_path = pathlib.Path(os.environ["AEGISOPS_TEST_PSQL_LOG"])
+    state_path = pathlib.Path(os.environ["AEGISOPS_TEST_PSQL_STATE"])
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+
+    if file_path:
+        print("unexpected migration replay", file=sys.stderr)
+        return 1
+
+    if query_text:
+        if "schema_migration_bootstrap" in query_text:
+            if "SELECT migration_checksum" in query_text:
+                match = re.search(r"migration_name = '([^']+)'", query_text)
+                if match is None:
+                    print("missing migration name lookup", file=sys.stderr)
+                    return 1
+                sys.stdout.write(state["recorded"].get(match.group(1), ""))
+                return 0
+
+            if "INSERT INTO aegisops_control.schema_migration_bootstrap" in query_text:
+                print("unexpected migration metadata write", file=sys.stderr)
+                return 1
+
+            return 0
+
+        migration_name = classify_readiness_query(query_text)
+        with log_path.open("a", encoding="utf-8") as handle:
+            handle.write(f"readiness:{migration_name}\\n")
+        if migration_name == "0006_phase_23_lifecycle_transition_records.sql":
+            requires_latest_state_guard = (
+                "latest_transition_mismatches" in query_text
+                and "orphan_transitions" in query_text
+            )
+            sys.stdout.write("not-ready" if requires_latest_state_guard else "ready")
+            return 0
+        ready = migration_name in state.get("ready", [])
+        sys.stdout.write("ready" if ready else "not-ready")
+        return 0
+
+    print("unexpected psql invocation", file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+""",
+                encoding="utf-8",
+            )
+            psql_path.chmod(0o755)
+
+            result = self._run_entrypoint(
+                {
+                    "AEGISOPS_CONTROL_PLANE_HOST": "127.0.0.1",
+                    "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN": "postgresql://user:pass@postgres:5432/aegisops",
+                    "AEGISOPS_CONTROL_PLANE_BOOT_MODE": "first-boot",
+                    "AEGISOPS_CONTROL_PLANE_LOG_LEVEL": "INFO",
+                    "AEGISOPS_FIRST_BOOT_MIGRATIONS_DIR": str(migrations_dir),
+                    "AEGISOPS_FIRST_BOOT_PSQL_BIN": str(psql_path),
+                    "AEGISOPS_TEST_PSQL_LOG": str(psql_log),
+                    "AEGISOPS_TEST_PSQL_STATE": str(psql_state),
+                }
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(
+                "First-boot migration bootstrap could not prove reviewed schema state for recorded migration 0006_phase_23_lifecycle_transition_records.sql.",
+                result.stderr,
+            )
+            self.assertIn(
+                "readiness:0006_phase_23_lifecycle_transition_records.sql",
+                psql_log.read_text(encoding="utf-8").splitlines(),
+            )
+
     def test_first_boot_entrypoint_accepts_crlf_migration_checkouts_when_checksums_match(
         self,
     ) -> None:
