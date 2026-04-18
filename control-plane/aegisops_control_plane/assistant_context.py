@@ -279,6 +279,8 @@ def _build_assistant_advisory_output(
     uncertainty_flags = ["advisory_only"]
     unresolved_questions: list[dict[str, object]] = []
     fail_closed = False
+    unresolved_summary_override: str | None = None
+    unresolved_summary_citations: tuple[str, ...] | None = None
     intended_outcome = record.get("intended_outcome")
     unsafe_intended_outcome_flags = _advisory_text_claims_authority_or_scope_expansion(
         intended_outcome
@@ -346,6 +348,12 @@ def _build_assistant_advisory_output(
             f"{entry['evidence_id']} ({entry['blocking_reason']})"
             for entry in linked_casework_identity_ambiguity
         )
+        unresolved_summary_override = (
+            f"{output_kind.replace('_', ' ').capitalize()} {record_id} remains unresolved "
+            "because reviewed multi-source casework still contains unresolved identity "
+            f"ambiguity: {ambiguity_details}."
+        )
+        unresolved_summary_citations = ambiguity_citations
         unresolved_questions.append(
             {
                 "text": (
@@ -416,7 +424,7 @@ def _build_assistant_advisory_output(
                 f"linked evidence, and stable reviewed-context identifiers."
             )
     else:
-        summary_text = (
+        summary_text = unresolved_summary_override or (
             f"{output_kind.replace('_', ' ').capitalize()} {record_id} remains unresolved "
             "because citation completeness or reviewed-context consistency is incomplete."
         )
@@ -449,7 +457,8 @@ def _build_assistant_advisory_output(
         "status": status,
         "cited_summary": {
             "text": summary_text,
-            "citations": _dedupe_strings((record_id, *supporting_citations)),
+            "citations": unresolved_summary_citations
+            or _dedupe_strings((record_id, *supporting_citations)),
         },
         "key_observations": tuple(key_observations),
         "unresolved_questions": tuple(unresolved_questions),

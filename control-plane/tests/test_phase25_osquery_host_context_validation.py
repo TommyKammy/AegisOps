@@ -624,6 +624,34 @@ class Phase25OsqueryHostContextValidationTests(unittest.TestCase):
             "reviewed_casework_identity_ambiguity",
             snapshot.advisory_output["uncertainty_flags"],
         )
+        summary_text = snapshot.advisory_output["cited_summary"]["text"]
+        self.assertIn(
+            f"Case summary {promoted_case.case_id} remains unresolved because reviewed "
+            "multi-source casework still contains unresolved identity ambiguity:",
+            summary_text,
+        )
+        self.assertIn(
+            (
+                f"{stable_id_mismatch_evidence.evidence_id} "
+                "(stable_identifier_mismatch)"
+            ),
+            summary_text,
+        )
+        self.assertIn(
+            f"{alias_overlap_evidence.evidence_id} (alias_like_overlap)",
+            summary_text,
+        )
+        self.assertEqual(
+            snapshot.advisory_output["cited_summary"]["citations"][0],
+            promoted_case.case_id,
+        )
+        self.assertCountEqual(
+            snapshot.advisory_output["cited_summary"]["citations"][1:],
+            (
+                stable_id_mismatch_evidence.evidence_id,
+                alias_overlap_evidence.evidence_id,
+            ),
+        )
         self.assertTrue(
             any(
                 stable_id_mismatch_evidence.evidence_id in question.get("text", "")
