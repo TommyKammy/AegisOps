@@ -3264,7 +3264,7 @@ class AegisOpsControlPlaneService:
         readiness_review_snapshots = self._collect_readiness_review_snapshots(
             readiness_aggregates
         )
-        surface_reviews: defaultdict[str, list[Mapping[str, object]]] = defaultdict(list)
+        surface_reviews: defaultdict[str, list[dict[str, object]]] = defaultdict(list)
         surface_metadata: dict[str, tuple[str, str]] = {}
         for snapshot in readiness_review_snapshots:
             execution_surface_type = snapshot.get("execution_surface_type")
@@ -3277,7 +3277,7 @@ class AegisOpsControlPlaneService:
                 else "unknown"
             )
             surface_key = f"automation_substrate:{normalized_surface_id}"
-            surface_reviews[surface_key].append(snapshot["path_health"])
+            surface_reviews[surface_key].append(snapshot)
             surface_metadata[surface_key] = ("automation_substrate", normalized_surface_id)
 
         if not surface_reviews:
@@ -3289,7 +3289,10 @@ class AegisOpsControlPlaneService:
             }
 
         surfaces: dict[str, dict[str, object]] = {}
-        for surface_key, review_path_health in sorted(surface_reviews.items()):
+        for surface_key, surface_review_snapshots in sorted(surface_reviews.items()):
+            review_path_health = [
+                snapshot["path_health"] for snapshot in surface_review_snapshots
+            ]
             aggregated_paths = {
                 path_name: self._aggregate_readiness_path_health(
                     path_name=path_name,
@@ -3309,9 +3312,10 @@ class AegisOpsControlPlaneService:
                     aggregated_paths.values(),
                     overall_state=overall_state,
                 ),
-                "tracked_reviews": len(review_path_health),
-                "affected_reviews": max(
-                    path["affected_reviews"] for path in aggregated_paths.values()
+                "tracked_reviews": len(surface_review_snapshots),
+                "affected_reviews": self._count_readiness_affected_reviews(
+                    surface_review_snapshots,
+                    path_names=("delegation", "provider", "persistence"),
                 ),
                 "paths": aggregated_paths,
             }
@@ -3539,6 +3543,24 @@ class AegisOpsControlPlaneService:
                 "failed": state_counts.get("failed", 0),
             },
         }
+
+    @staticmethod
+    def _count_readiness_affected_reviews(
+        readiness_review_snapshots: Iterable[Mapping[str, object]],
+        *,
+        path_names: Iterable[str],
+    ) -> int:
+        relevant_path_names = tuple(path_names)
+        return len(
+            {
+                str(snapshot["action_request_id"])
+                for snapshot in readiness_review_snapshots
+                if any(
+                    snapshot["path_health"]["paths"][path_name]["state"] != "healthy"
+                    for path_name in relevant_path_names
+                )
+            }
+        )
 
     def _action_review_runtime_visibility(
         self,
