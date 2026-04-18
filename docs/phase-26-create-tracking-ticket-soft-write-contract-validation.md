@@ -27,4 +27,4 @@ The reviewed contract excludes status sync, close or reopen control, comment syn
 
 ## Verification
 
-- `python3 -m unittest control-plane.tests.test_phase26_create_tracking_ticket_soft_write_contract_docs`
+- `python3 -m unittest discover -s control-plane/tests -p "test_phase26_create_tracking_ticket_soft_write_contract_docs.py"`

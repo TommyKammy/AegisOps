@@ -30,11 +30,10 @@ The reviewed contract is intentionally narrow. At minimum, the outbound create c
 | ---- | ---- |
 | `case_id` | Required authoritative AegisOps case anchor for the coordination action. |
 | `coordination_reference_id` | Required immutable AegisOps coordination-link identifier for the reviewed outbound create attempt. |
-| `coordination_target_type` | Required reviewed target family, constrained to the reviewed coordination substrate or reviewed fallback. |
-| `requested_payload` | Required reviewed coordination-ticket create payload or reviewed payload reference that approval covers exactly. |
+| `coordination_target_type` | Required reviewed target family. Allowed values for this phase: `zammad` for the preferred reviewed coordination substrate or `glpi` for the reviewed fallback only. |
+| `requested_payload` | Required coordination-ticket create payload or reviewed payload reference that approval covers exactly. |
 | `payload_hash` | Required integrity value that binds approval, delegation, receipt, and reconciliation to the same reviewed create payload. |
 | `idempotency_key` | Required replay-safe key for the exact approved create intent. |
-| `external_receipt_id` | Required downstream receipt identifier once the reviewed target accepts the create request. |
 
 The first reviewed payload may include only the coordination content needed to open and later inspect one external coordination ticket under explicit AegisOps control.
 
@@ -46,7 +45,9 @@ The first reviewed payload must not export approval outcomes as downstream-owned
 
 The downstream receipt must prove which reviewed coordination target accepted which bounded create request.
 
-At minimum, the downstream receipt must remain bindable to the reviewed `case_id`, `coordination_reference_id`, `coordination_target_type`, `payload_hash`, and `idempotency_key`, plus the reviewed downstream ticket identifier and operator-visible link returned by the target.
+`external_receipt_id` is mandatory for receipt binding once the reviewed downstream target accepts the create request, and it is not part of the outbound create request payload.
+
+At minimum, the downstream receipt must remain bindable to the reviewed `case_id`, `coordination_reference_id`, `coordination_target_type`, `payload_hash`, `idempotency_key`, and `external_receipt_id`, plus the reviewed downstream ticket identifier and operator-visible link returned by the target.
 
 The receipt is sufficient only for proving that a reviewed coordination target accepted or rejected one reviewed create request. It is not sufficient to prove case closure, approval satisfaction, execution success, or reconciliation completion.
 

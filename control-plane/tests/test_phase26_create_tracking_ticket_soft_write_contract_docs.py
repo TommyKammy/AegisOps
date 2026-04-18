@@ -31,7 +31,6 @@ class Phase26CreateTrackingTicketSoftWriteContractDocsTests(unittest.TestCase):
             "`requested_payload`",
             "`payload_hash`",
             "`idempotency_key`",
-            "`external_receipt_id`",
             "Only the reviewed coordination ticket create payload may leave AegisOps.",
             "The first reviewed payload is limited to reviewed coordination fields and must not export AegisOps-owned lifecycle truth.",
             "The downstream receipt must prove which reviewed coordination target accepted which bounded create request.",
@@ -41,6 +40,17 @@ class Phase26CreateTrackingTicketSoftWriteContractDocsTests(unittest.TestCase):
             "This contract does not approve status synchronization, close or reopen delegation, comment synchronization, downstream case ownership, or downstream approval authority.",
         ):
             self.assertIn(term, text)
+
+        outbound_section = text.split("## 4. Idempotency, Receipt, and Reconciliation Contract")[0]
+        self.assertIn(
+            "Allowed values for this phase: `zammad` for the preferred reviewed coordination substrate or `glpi` for the reviewed fallback only.",
+            outbound_section,
+        )
+        self.assertNotIn("| `external_receipt_id` |", outbound_section)
+        self.assertIn(
+            "`external_receipt_id` is mandatory for receipt binding once the reviewed downstream target accepts the create request, and it is not part of the outbound create request payload.",
+            text,
+        )
 
     def test_create_tracking_ticket_contract_validation_note_records_alignment(self) -> None:
         text = self._read(
@@ -57,6 +67,7 @@ class Phase26CreateTrackingTicketSoftWriteContractDocsTests(unittest.TestCase):
             "`create_tracking_ticket` remains a bounded `Soft Write` coordination action.",
             "AegisOps remains authoritative for case, approval, action-execution, and reconciliation truth.",
             "The reviewed contract excludes status sync, close or reopen control, comment sync, and downstream truth ownership.",
+            'python3 -m unittest discover -s control-plane/tests -p "test_phase26_create_tracking_ticket_soft_write_contract_docs.py"',
         ):
             self.assertIn(term, text)
 
