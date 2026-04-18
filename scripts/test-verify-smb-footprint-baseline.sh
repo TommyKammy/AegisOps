@@ -66,39 +66,51 @@ A profile is acceptable only if it preserves the positive SMB value proposition 
 
 The lab profile is the minimum reviewable footprint for first-boot exercises, restore rehearsal, and operator training.
 
-### 3.2 Consultant-Managed Single-Customer Profile
+### 3.2 Single-Customer Profile
 
-The consultant-managed single-customer profile is the default reviewed deployment shape for a small external operator team managing one customer environment.
+The single-customer profile is the default reviewed deployment shape for one customer environment with explicit operator ownership and no implied multi-tenant fleet posture.
 
 ### 3.3 Small-Production SMB Operation Profile
 
-The small-production SMB operation profile is the maximum reviewed baseline for Phase 23 roadmap decisions.
+The small-production SMB operation profile is the maximum reviewed baseline for Phase 27 roadmap decisions.
 
 ## 4. Baseline Expectations by Profile
 
-| Profile | Managed endpoints | vCPU | Memory | Primary storage | Backup and restore expectation | Operator overhead expectation |
+| Profile | Managed endpoints | vCPU | Memory | Primary storage | Backup expectation | Restore expectation | Upgrade and rollback expectation | Health and operator cadence | Identity and secret-management expectation |
 | --- | --- | --- | --- | --- | --- | --- |
-| Lab | 250 | 8 | 24 GB | 400 GB | PostgreSQL-aware backup plus restore rehearsal | 2 to 4 operator-hours per week |
-| Consultant-managed single-customer | 750 | 14 | 48 GB | 1 TB | PostgreSQL-aware backup plus monthly restore rehearsal | 4 to 6 operator-hours per week |
-| Small-production SMB operation | 1500 | 20 | 64 GB | 2 TB | PostgreSQL-aware backup plus quarterly restore rehearsal | 6 to 8 operator-hours per week |
+| Lab | 250 | 8 | 24 GB | 400 GB | Daily PostgreSQL-aware backup and reviewed configuration backup after changes | Restore rehearsal at least once per quarter with one named operator following the documented path | Reviewed upgrades fit one business-hours maintenance window and rollback returns to the prior known-good backup without extra platform staff | Startup, queue, and backup health reviewed at least three times per week during business hours | One named approver owner, one reviewed secret rotation touch point, and a documented break-glass contact list |
+| Single-customer | 750 | 14 | 48 GB | 1 TB | Daily PostgreSQL-aware backup plus weekly backup review against the customer environment | Monthly restore rehearsal against a reviewed single-customer recovery target | Reviewed upgrades fit one planned maintenance window per month and rollback remains operator-led without cluster failover tooling | Daily queue and health review on business days plus weekly platform hygiene review | Named customer-scoped approver ownership, reviewed secret rotation checklist, and explicit break-glass custody for customer credentials |
+| Small-production SMB operation | 1500 | 20 | 64 GB | 2 TB | Daily PostgreSQL-aware backup plus weekly backup review and pre-change configuration backup | Monthly restore rehearsal with documented recovery timing and reconciliation checks | Reviewed upgrades require a documented change plan, same-day rollback readiness, and no dependence on enterprise-only deployment tooling | Daily queue and platform health review on business days plus weekly drift and capacity review | Two-person ownership coverage for approver and secret custody, scheduled rotation checkpoints, and documented break-glass audit follow-up |
 
 CPU and memory expectations must be read as whole-environment planning guidance for the approved control-plane footprint, not as per-container reservations.
 
 Backup expectations must include PostgreSQL-aware backups, configuration backup, and a restore rehearsal expectation rather than relying on hypervisor snapshots alone.
 
-## 5. Operational Burden Baseline
+## 5. Capacity Budget Guardrails
+
+Each reviewed profile must publish explicit budget assumptions for backup, restore, upgrade, rollback, health review, identity administration, and secret management rather than leaving Phase 27 day-2 hardening work to infer them later.
+
+Upgrade and rollback expectations must stay narrow enough that one small business-hours operator team can complete a reviewed platform change and, if needed, return to the prior known-good state without enterprise-only tooling.
+
+Health expectations must state the minimum operator review cadence that later readiness, drift, and alert-handling work can assume.
+
+Identity and secret-management expectations must keep named approver ownership, secret rotation touch points, and break-glass handling inside the reviewed SMB operating posture.
+
+## 6. Operational Burden Baseline
 
 Operator-overhead expectations are part of the footprint baseline because a deployment that fits on paper but requires enterprise-style staffing is out of scope.
 
 The approved small-team operating assumption remains 2 to 6 business-hours SecOps operators with 1 to 3 designated approvers or escalation owners.
 
-## 6. Alignment to Phase 23 Product Thesis
+## 7. Alignment to Phase 27 Day-2 Hardening
 
-Phase 23 hardening and ergonomics work must stay inside these reviewed profiles unless a later ADR approves a new target footprint.
+Phase 27 day-2 hardening work must stay inside these reviewed profiles unless a later ADR approves a new target footprint.
+
+Later upgrade, rollback, health, identity, and secret-management work must target one of these reviewed profiles rather than inventing a broader operating posture by implication.
 
 This baseline supports the product thesis that AegisOps is the reviewed control plane for approval, evidence, and reconciliation governance for a narrow SMB SecOps operating model.
 
-## 7. Explicitly Out of Scope
+## 8. Explicitly Out of Scope
 
 High-availability overbuild, large-cluster sizing, and generic enterprise capacity planning are explicitly out of scope for this baseline.
 EOF
@@ -159,11 +171,11 @@ from pathlib import Path
 import sys
 path = Path(sys.argv[1])
 text = path.read_text()
-text = text.replace("## 5. Operational Burden Baseline\n", "", 1)
+text = text.replace("## 5. Capacity Budget Guardrails\n", "", 1)
 path.write_text(text)
 PY
 commit_fixture "${missing_heading_repo}"
-assert_fails_with "${missing_heading_repo}" "Missing SMB footprint baseline heading: ## 5. Operational Burden Baseline"
+assert_fails_with "${missing_heading_repo}" "Missing SMB footprint baseline heading: ## 5. Capacity Budget Guardrails"
 
 missing_readme_link_repo="${workdir}/missing-readme-link"
 create_repo "${missing_readme_link_repo}"
@@ -198,5 +210,45 @@ path.write_text(text)
 PY
 commit_fixture "${missing_scope_repo}"
 assert_fails_with "${missing_scope_repo}" "Missing SMB footprint baseline statement: High-availability overbuild, large-cluster sizing, and generic enterprise capacity planning are explicitly out of scope for this baseline."
+
+old_profile_name_repo="${workdir}/old-profile-name"
+create_repo "${old_profile_name_repo}"
+write_shared_docs "${old_profile_name_repo}"
+write_valid_baseline_doc "${old_profile_name_repo}"
+python3 - <<'PY' "${old_profile_name_repo}/docs/smb-footprint-and-deployment-profile-baseline.md"
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text()
+text = text.replace("### 3.2 Single-Customer Profile", "### 3.2 Consultant-Managed Single-Customer Profile", 1)
+text = text.replace(
+    "The single-customer profile is the default reviewed deployment shape for one customer environment with explicit operator ownership and no implied multi-tenant fleet posture.",
+    "The consultant-managed single-customer profile is the default reviewed deployment shape for a small external operator team managing one customer environment.",
+    1,
+)
+text = text.replace("| Single-customer |", "| Consultant-managed single-customer |", 1)
+path.write_text(text)
+PY
+commit_fixture "${old_profile_name_repo}"
+assert_fails_with "${old_profile_name_repo}" "Missing SMB footprint baseline heading: ### 3.2 Single-Customer Profile"
+
+missing_budget_guardrail_repo="${workdir}/missing-budget-guardrail"
+create_repo "${missing_budget_guardrail_repo}"
+write_shared_docs "${missing_budget_guardrail_repo}"
+write_valid_baseline_doc "${missing_budget_guardrail_repo}"
+python3 - <<'PY' "${missing_budget_guardrail_repo}/docs/smb-footprint-and-deployment-profile-baseline.md"
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text()
+text = text.replace(
+    "Each reviewed profile must publish explicit budget assumptions for backup, restore, upgrade, rollback, health review, identity administration, and secret management rather than leaving Phase 27 day-2 hardening work to infer them later.\n\n",
+    "",
+    1,
+)
+path.write_text(text)
+PY
+commit_fixture "${missing_budget_guardrail_repo}"
+assert_fails_with "${missing_budget_guardrail_repo}" "Missing SMB footprint baseline statement: Each reviewed profile must publish explicit budget assumptions for backup, restore, upgrade, rollback, health review, identity administration, and secret management rather than leaving Phase 27 day-2 hardening work to infer them later."
 
 echo "SMB footprint baseline verifier tests passed."
