@@ -17,14 +17,22 @@ from aegisops_control_plane.publishable_paths import is_workstation_local_path
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 VERIFY_SCRIPT = REPO_ROOT / "scripts/verify-publishable-path-hygiene.sh"
+UNIX_USERS_PATH = "/Users/alice/project/docs"  # publishable-path-hygiene: allowlist
+UNIX_HOME_PATH = "/home/alice/project/docs"  # publishable-path-hygiene: allowlist
+WINDOWS_USERS_PATH = r"C:\Users\alice\project\docs"  # publishable-path-hygiene: allowlist
+WINDOWS_USERS_PATH_POSIX = "C:/Users/alice/project/docs"  # publishable-path-hygiene: allowlist
+OFFENDER_PATH = "/Users/alice/private/project"  # publishable-path-hygiene: allowlist
 
 
 class PublishablePathHygieneTests(unittest.TestCase):
     def test_detects_unix_and_windows_workstation_paths_in_text(self) -> None:
-        self.assertTrue(is_workstation_local_path("/Users/alice/project/docs"))
-        self.assertTrue(is_workstation_local_path("see /home/alice/project/docs for details"))
-        self.assertTrue(is_workstation_local_path(r"C:\Users\alice\project\docs"))
-        self.assertTrue(is_workstation_local_path("path=C:/Users/alice/project/docs"))
+        self.assertTrue(is_workstation_local_path(UNIX_USERS_PATH))
+        self.assertTrue(is_workstation_local_path(f"see {UNIX_HOME_PATH} for details"))
+        self.assertTrue(is_workstation_local_path(f"path:{UNIX_HOME_PATH}"))
+        self.assertTrue(is_workstation_local_path(f"path:{UNIX_USERS_PATH}"))
+        self.assertTrue(is_workstation_local_path(WINDOWS_USERS_PATH))
+        self.assertTrue(is_workstation_local_path(f"path={WINDOWS_USERS_PATH_POSIX}"))
+        self.assertTrue(is_workstation_local_path(f"path:{WINDOWS_USERS_PATH_POSIX}"))
 
     def test_ignores_urls_and_non_user_windows_paths(self) -> None:
         self.assertFalse(
@@ -49,7 +57,7 @@ class PublishablePathHygieneTests(unittest.TestCase):
             (repo_root / "README.md").write_text("No local paths here.\n", encoding="utf-8")
             (docs_dir / "binary.bin").write_bytes(b"\x00\x01\x02/home/alice/private")
             (docs_dir / "offender.md").write_text(
-                "operator note: /Users/alice/private/project\n",
+                f"operator note: {OFFENDER_PATH}\n",
                 encoding="utf-8",
             )
 
@@ -89,7 +97,7 @@ class PublishablePathHygieneTests(unittest.TestCase):
                 "docs/offender.md:1: contains workstation-local absolute path",
                 result.stderr,
             )
-            self.assertNotIn("/Users/alice/private/project", result.stderr)
+            self.assertNotIn(OFFENDER_PATH, result.stderr)
             self.assertNotIn("binary.bin", result.stderr)
 
 
