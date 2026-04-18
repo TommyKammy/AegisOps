@@ -4321,29 +4321,34 @@ class AegisOpsControlPlaneService:
             for reference in (_coordination_reference_payload(record),)
             if reference is not None
         )
+        linked_alert_signatures = {
+            (
+                reference["coordination_reference_id"],
+                reference["coordination_target_type"],
+                reference["coordination_target_id"],
+                reference["ticket_reference_url"],
+            )
+            for reference in linked_alert_references
+        }
+        linked_alert_ids = {
+            str(record.get("alert_id"))
+            for record in linked_alert_records
+            if isinstance(record.get("alert_id"), str)
+        }
+        linked_alert_ids_with_reference = {
+            reference["alert_id"] for reference in linked_alert_references
+        }
+        missing_linked_alert_ids = linked_alert_ids - linked_alert_ids_with_reference
         if case_reference is None and not linked_alert_references:
             status = "missing"
+        elif case_reference is None and missing_linked_alert_ids:
+            status = "linked_alert_reference_missing"
+        elif case_reference is None and len(linked_alert_signatures) > 1:
+            status = "linked_alert_reference_mismatch"
         elif case_reference is None:
             status = "linked_alert_reference_only"
         else:
-            linked_alert_signatures = {
-                (
-                    reference["coordination_reference_id"],
-                    reference["coordination_target_type"],
-                    reference["coordination_target_id"],
-                    reference["ticket_reference_url"],
-                )
-                for reference in linked_alert_references
-            }
-            linked_alert_ids = {
-                str(record.get("alert_id"))
-                for record in linked_alert_records
-                if isinstance(record.get("alert_id"), str)
-            }
-            linked_alert_ids_with_reference = {
-                reference["alert_id"] for reference in linked_alert_references
-            }
-            if linked_alert_ids - linked_alert_ids_with_reference:
+            if missing_linked_alert_ids:
                 status = "linked_alert_reference_missing"
             elif linked_alert_signatures and linked_alert_signatures != {
                 _coordination_reference_signature(case)

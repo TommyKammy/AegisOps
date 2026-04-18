@@ -1739,6 +1739,49 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         )
         self.assertEqual(reloaded, persisted)
 
+    def test_store_allows_uppercase_https_ticket_reference_scheme(self) -> None:
+        store, _ = make_store()
+
+        persisted = store.save(
+            AlertRecord(
+                alert_id="alert-ticket-link-uppercase-001",
+                finding_id="finding-ticket-link-uppercase-001",
+                analytic_signal_id="signal-ticket-link-uppercase-001",
+                case_id=None,
+                lifecycle_state="new",
+                coordination_reference_id="coord-ref-uppercase-001",
+                coordination_target_type="zammad",
+                coordination_target_id="ZM-5150",
+                ticket_reference_url="HTTPS://tickets.example.test/#ticket/5150",
+            )
+        )
+
+        self.assertEqual(
+            persisted.ticket_reference_url,
+            "HTTPS://tickets.example.test/#ticket/5150",
+        )
+
+    def test_store_rejects_ticket_reference_url_with_embedded_spaces(self) -> None:
+        store, _ = make_store()
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "ticket_reference_url to be an https URL with a network location",
+        ):
+            store.save(
+                AlertRecord(
+                    alert_id="alert-ticket-link-space-001",
+                    finding_id="finding-ticket-link-space-001",
+                    analytic_signal_id="signal-ticket-link-space-001",
+                    case_id=None,
+                    lifecycle_state="new",
+                    coordination_reference_id="coord-ref-space-001",
+                    coordination_target_type="zammad",
+                    coordination_target_id="ZM-5151",
+                    ticket_reference_url="https://tickets.example.test/ticket 5151",
+                )
+            )
+
     def test_store_rejects_nested_isolation_level_requests(self) -> None:
         store, _ = make_store()
 

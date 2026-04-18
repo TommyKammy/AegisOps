@@ -6,6 +6,7 @@ from dataclasses import dataclass, field, fields, replace
 from datetime import datetime, timezone
 import importlib
 import json
+import re
 from typing import Any, Callable, Iterator, Mapping, Protocol, Type, TypeVar
 from urllib.parse import urlparse
 
@@ -115,6 +116,10 @@ def _readiness_reconciliation_sort_key(
 ConnectionFactory = Callable[[str], ConnectionProtocol]
 _ALLOWED_TRANSACTION_ISOLATION_LEVELS = frozenset(
     {"READ COMMITTED", "REPEATABLE READ", "SERIALIZABLE"}
+)
+_TICKET_REFERENCE_URL_PATTERN = re.compile(
+    r"^https://[^/?#\s]+([/?#][^\s]*)?$",
+    re.IGNORECASE,
 )
 
 
@@ -650,6 +655,11 @@ def _normalize_coordination_reference_record(
 
     ticket_reference_url = normalized_values["ticket_reference_url"]
     assert ticket_reference_url is not None
+    if _TICKET_REFERENCE_URL_PATTERN.fullmatch(ticket_reference_url) is None:
+        raise ValueError(
+            f"{record.record_family} record {record.record_id!r} requires "
+            "ticket_reference_url to be an https URL with a network location"
+        )
     parsed_ticket_reference_url = urlparse(ticket_reference_url)
     if (
         parsed_ticket_reference_url.scheme != "https"

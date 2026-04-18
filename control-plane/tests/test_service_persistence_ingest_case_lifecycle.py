@@ -2827,6 +2827,108 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             "ZM-4242",
         )
 
+    def test_service_detail_flags_missing_linked_alert_reference_when_case_has_none(
+        self,
+    ) -> None:
+        store, service, promoted_case, _, reviewed_at = self._build_phase19_in_scope_case()
+        primary_alert = service.get_record(AlertRecord, promoted_case.alert_id)
+        assert primary_alert is not None
+        service.persist_record(
+            replace(
+                primary_alert,
+                coordination_reference_id="coord-ref-alert-004",
+                coordination_target_type="zammad",
+                coordination_target_id="ZM-4242",
+                ticket_reference_url="https://tickets.example.test/#ticket/4242",
+            )
+        )
+        service.persist_record(
+            replace(
+                primary_alert,
+                alert_id="alert-phase26-linked-missing-002",
+                finding_id="finding-phase26-linked-missing-002",
+                analytic_signal_id="signal-phase26-linked-missing-002",
+            )
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-phase26-linked-missing-002",
+                source_record_id="source-phase26-linked-missing-002",
+                alert_id="alert-phase26-linked-missing-002",
+                case_id=promoted_case.case_id,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=reviewed_at,
+                derivation_relationship="correlated_case_context",
+                lifecycle_state="linked",
+            )
+        )
+
+        case_detail = service.inspect_case_detail(promoted_case.case_id)
+
+        self.assertEqual(
+            case_detail.external_ticket_reference["status"],
+            "linked_alert_reference_missing",
+        )
+        self.assertEqual(len(case_detail.linked_alert_records), 2)
+
+    def test_service_detail_flags_mismatched_linked_alert_references_when_case_has_none(
+        self,
+    ) -> None:
+        store, service, promoted_case, _, reviewed_at = self._build_phase19_in_scope_case()
+        primary_alert = service.get_record(AlertRecord, promoted_case.alert_id)
+        assert primary_alert is not None
+        service.persist_record(
+            replace(
+                primary_alert,
+                coordination_reference_id="coord-ref-alert-005",
+                coordination_target_type="zammad",
+                coordination_target_id="ZM-4242",
+                ticket_reference_url="https://tickets.example.test/#ticket/4242",
+            )
+        )
+        service.persist_record(
+            replace(
+                primary_alert,
+                alert_id="alert-phase26-linked-mismatch-002",
+                finding_id="finding-phase26-linked-mismatch-002",
+                analytic_signal_id="signal-phase26-linked-mismatch-002",
+                coordination_reference_id="coord-ref-alert-006",
+                coordination_target_type="zammad",
+                coordination_target_id="ZM-5150",
+                ticket_reference_url="https://tickets.example.test/#ticket/5150",
+            )
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-phase26-linked-mismatch-002",
+                source_record_id="source-phase26-linked-mismatch-002",
+                alert_id="alert-phase26-linked-mismatch-002",
+                case_id=promoted_case.case_id,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=reviewed_at,
+                derivation_relationship="correlated_case_context",
+                lifecycle_state="linked",
+            )
+        )
+
+        case_detail = service.inspect_case_detail(promoted_case.case_id)
+
+        self.assertEqual(
+            case_detail.external_ticket_reference["status"],
+            "linked_alert_reference_mismatch",
+        )
+        self.assertEqual(
+            {
+                reference["coordination_target_id"]
+                for reference in case_detail.external_ticket_reference[
+                    "linked_alert_references"
+                ]
+            },
+            {"ZM-4242", "ZM-5150"},
+        )
+
     def test_service_rejects_unreviewed_external_ticket_target_type(self) -> None:
         store, service, promoted_case, _, _ = self._build_phase19_in_scope_case()
 
