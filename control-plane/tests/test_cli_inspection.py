@@ -1277,6 +1277,28 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                     1,
                 )
                 self.assertEqual(
+                    diagnostics_payload["metrics"]["source_health"]["tracked_sources"],
+                    1,
+                )
+                self.assertEqual(
+                    diagnostics_payload["metrics"]["source_health"]["sources"][
+                        "github_audit"
+                    ]["state"],
+                    "healthy",
+                )
+                self.assertEqual(
+                    diagnostics_payload["metrics"]["automation_substrate_health"][
+                        "tracked_surfaces"
+                    ],
+                    1,
+                )
+                self.assertEqual(
+                    diagnostics_payload["metrics"]["automation_substrate_health"][
+                        "surfaces"
+                    ]["automation_substrate:shuffle"]["state"],
+                    "healthy",
+                )
+                self.assertEqual(
                     diagnostics_payload["metrics"]["review_path_health"]["paths"],
                     {
                         "ingest": {
