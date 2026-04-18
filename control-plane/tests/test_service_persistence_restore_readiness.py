@@ -3316,6 +3316,121 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         self.assertEqual(readiness.metrics["action_executions"]["dispatching"], 1)
         self.assertEqual(readiness.metrics["action_executions"]["terminal"], 0)
 
+    def test_service_phase21_readiness_surfaces_source_and_automation_health(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep source silence and substrate lag visible on readiness.",
+        )
+        requested_at = reviewed_at - timedelta(hours=2)
+        delegated_at = reviewed_at - timedelta(hours=1, minutes=50)
+        expired_at = reviewed_at - timedelta(hours=1)
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Show degraded source and automation health in readiness.",
+            escalation_reason="Operators must not infer healthy ingest or delegation from silence.",
+            expires_at=reviewed_at + timedelta(hours=4),
+            action_request_id="action-request-phase21-readiness-health-surfaces-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase21-readiness-health-surfaces-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=requested_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=expired_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                requested_at=requested_at,
+                expires_at=expired_at,
+                lifecycle_state="executing",
+            )
+        )
+        service.persist_record(
+            ActionExecutionRecord(
+                action_execution_id=(
+                    "action-execution-phase21-readiness-health-surfaces-001"
+                ),
+                action_request_id=action_request.action_request_id,
+                approval_decision_id=approval.approval_decision_id,
+                delegation_id="delegation-phase21-readiness-health-surfaces-001",
+                execution_surface_type="automation_substrate",
+                execution_surface_id="shuffle",
+                execution_run_id="execution-run-phase21-readiness-health-surfaces-001",
+                idempotency_key=action_request.idempotency_key,
+                target_scope=dict(action_request.target_scope),
+                approved_payload=dict(action_request.requested_payload),
+                payload_hash=action_request.payload_hash,
+                delegated_at=delegated_at,
+                expires_at=expired_at,
+                provenance={"initiated_by": "operator-review"},
+                lifecycle_state="dispatching",
+            )
+        )
+
+        readiness = service.inspect_readiness_diagnostics()
+        source_health = readiness.metrics["source_health"]
+        automation_health = readiness.metrics["automation_substrate_health"]
+
+        self.assertEqual(source_health["overall_state"], "degraded")
+        self.assertEqual(source_health["tracked_sources"], 1)
+        self.assertEqual(
+            source_health["sources"]["github_audit"]["reason"],
+            "ingest_signal_timeout",
+        )
+        self.assertEqual(
+            source_health["sources"]["github_audit"]["affected_reviews"],
+            1,
+        )
+        self.assertEqual(
+            source_health["sources"]["github_audit"]["by_state"],
+            {
+                "healthy": 0,
+                "delayed": 0,
+                "degraded": 1,
+                "failed": 0,
+            },
+        )
+        self.assertEqual(automation_health["overall_state"], "degraded")
+        self.assertEqual(automation_health["tracked_surfaces"], 1)
+        self.assertEqual(
+            automation_health["surfaces"]["automation_substrate:shuffle"]["state"],
+            "degraded",
+        )
+        self.assertEqual(
+            automation_health["surfaces"]["automation_substrate:shuffle"]["paths"][
+                "delegation"
+            ]["reason"],
+            "delegation_receipt_timeout",
+        )
+        self.assertEqual(
+            automation_health["surfaces"]["automation_substrate:shuffle"]["paths"][
+                "provider"
+            ]["reason"],
+            "provider_receipt_timeout",
+        )
+        self.assertEqual(
+            automation_health["surfaces"]["automation_substrate:shuffle"]["paths"][
+                "persistence"
+            ]["reason"],
+            "reconciliation_timeout",
+        )
+
     def test_service_phase21_readiness_prefers_higher_reconciliation_id_when_compared_at_ties(
         self,
     ) -> None:

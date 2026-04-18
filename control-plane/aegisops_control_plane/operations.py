@@ -362,6 +362,12 @@ class RestoreReadinessService:
         build_readiness_review_path_health: Callable[
             [ReadinessDiagnosticsAggregates], dict[str, object]
         ],
+        build_readiness_source_health: Callable[
+            [ReadinessDiagnosticsAggregates], dict[str, object]
+        ],
+        build_readiness_automation_substrate_health: Callable[
+            [ReadinessDiagnosticsAggregates], dict[str, object]
+        ],
         build_shutdown_status_snapshot: Callable[..., Any],
         derive_readiness_status: Callable[..., str],
         record_from_backup_payload: Callable[[Type[ControlPlaneRecord], Mapping[str, object]], ControlPlaneRecord],
@@ -393,6 +399,10 @@ class RestoreReadinessService:
         self._redacted_reconciliation_payload = redacted_reconciliation_payload
         self._build_readiness_review_path_health = (
             build_readiness_review_path_health
+        )
+        self._build_readiness_source_health = build_readiness_source_health
+        self._build_readiness_automation_substrate_health = (
+            build_readiness_automation_substrate_health
         )
         self._build_shutdown_status_snapshot = build_shutdown_status_snapshot
         self._derive_readiness_status = derive_readiness_status
@@ -498,6 +508,12 @@ class RestoreReadinessService:
             review_path_health = self._build_readiness_review_path_health(
                 readiness_aggregates
             )
+            source_health = self._build_readiness_source_health(readiness_aggregates)
+            automation_substrate_health = (
+                self._build_readiness_automation_substrate_health(
+                    readiness_aggregates
+                )
+            )
 
         shutdown = self._build_shutdown_status_snapshot(
             open_case_ids=readiness_aggregates.open_case_ids,
@@ -581,6 +597,8 @@ class RestoreReadinessService:
                 "reconciled_executions": readiness_aggregates.phase20_reconciled_executions,
             },
             "review_path_health": review_path_health,
+            "source_health": source_health,
+            "automation_substrate_health": automation_substrate_health,
         }
 
         return self._readiness_diagnostics_snapshot_factory(

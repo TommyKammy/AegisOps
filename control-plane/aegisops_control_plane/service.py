@@ -1370,6 +1370,14 @@ class AegisOpsControlPlaneService:
             build_readiness_review_path_health=(
                 lambda aggregates: self._build_readiness_review_path_health(aggregates)
             ),
+            build_readiness_source_health=(
+                lambda aggregates: self._build_readiness_source_health(aggregates)
+            ),
+            build_readiness_automation_substrate_health=(
+                lambda aggregates: self._build_readiness_automation_substrate_health(
+                    aggregates
+                )
+            ),
             build_shutdown_status_snapshot=_build_shutdown_status_snapshot,
             derive_readiness_status=_derive_readiness_status,
             record_from_backup_payload=_record_from_backup_payload,
@@ -2884,6 +2892,56 @@ class AegisOpsControlPlaneService:
         self,
         readiness_aggregates: ReadinessDiagnosticsAggregates,
     ) -> dict[str, object]:
+        readiness_review_snapshots = self._collect_readiness_review_snapshots(
+            readiness_aggregates
+        )
+        review_path_health = [
+            snapshot["path_health"] for snapshot in readiness_review_snapshots
+        ]
+
+        if not review_path_health:
+            return {
+                "review_count": 0,
+                "overall_state": "healthy",
+                "summary": "no active reviewed execution visibility gaps",
+                "paths": {
+                    path_name: {
+                        "state": "healthy",
+                        "reason": "no_reviewed_paths_tracked",
+                        "affected_reviews": 0,
+                        "by_state": {
+                            "healthy": 0,
+                            "delayed": 0,
+                            "degraded": 0,
+                            "failed": 0,
+                        },
+                    }
+                    for path_name in ("ingest", "delegation", "provider", "persistence")
+                },
+            }
+
+        paths = {
+            path_name: self._aggregate_readiness_path_health(
+                path_name=path_name,
+                review_path_health=review_path_health,
+            )
+            for path_name in ("ingest", "delegation", "provider", "persistence")
+        }
+        overall_state = self._action_review_overall_path_state(paths.values())
+        return {
+            "review_count": len(review_path_health),
+            "overall_state": overall_state,
+            "summary": self._action_review_path_health_summary(
+                overall_state=overall_state,
+                paths=paths,
+            ),
+            "paths": paths,
+        }
+
+    def _collect_readiness_review_snapshots(
+        self,
+        readiness_aggregates: ReadinessDiagnosticsAggregates,
+    ) -> list[dict[str, object]]:
         execution_ids = set(readiness_aggregates.active_action_execution_ids)
         execution_ids.update(readiness_aggregates.terminal_action_execution_ids)
         candidate_action_request_ids: set[str] = set()
@@ -3103,7 +3161,7 @@ class AegisOpsControlPlaneService:
                             reconciliation
                         )
 
-        review_path_health: list[dict[str, object]] = []
+        readiness_review_snapshots: list[dict[str, object]] = []
         for action_request_id, action_request in sorted(candidate_action_requests.items()):
             approval_decision = approval_decisions_by_action_request_id.get(action_request_id)
             action_execution = executions_by_action_request_id.get(action_request_id)
@@ -3117,54 +3175,190 @@ class AegisOpsControlPlaneService:
                 approval_state=approval_state,
                 action_execution=action_execution,
             )
-            review_path_health.append(
-                self._action_review_path_health(
-                    action_request=action_request,
-                    approval_decision=approval_decision,
-                    action_execution=action_execution,
-                    reconciliation=reconciliation,
-                    review_state=review_state,
-                )
+            reviewed_context = self._action_review_visibility_context(action_request)
+            path_health = self._action_review_path_health(
+                action_request=action_request,
+                approval_decision=approval_decision,
+                action_execution=action_execution,
+                reconciliation=reconciliation,
+                review_state=review_state,
             )
+            readiness_review_snapshots.append(
+                {
+                    "action_request_id": action_request_id,
+                    "source_family": (
+                        self._reviewed_operator_source_family(reviewed_context)
+                        if reviewed_context is not None
+                        else None
+                    ),
+                    "execution_surface_type": (
+                        action_execution.execution_surface_type
+                        if action_execution is not None
+                        else action_request.policy_evaluation.get("execution_surface_type")
+                    ),
+                    "execution_surface_id": (
+                        action_execution.execution_surface_id
+                        if action_execution is not None
+                        else action_request.policy_evaluation.get("execution_surface_id")
+                    ),
+                    "path_health": path_health,
+                }
+            )
+        return readiness_review_snapshots
 
-        if not review_path_health:
+    def _build_readiness_source_health(
+        self,
+        readiness_aggregates: ReadinessDiagnosticsAggregates,
+    ) -> dict[str, object]:
+        readiness_review_snapshots = self._collect_readiness_review_snapshots(
+            readiness_aggregates
+        )
+        source_reviews: defaultdict[str, list[Mapping[str, object]]] = defaultdict(list)
+        for snapshot in readiness_review_snapshots:
+            source_family = snapshot.get("source_family")
+            normalized_source_family = (
+                str(source_family).strip()
+                if isinstance(source_family, str) and source_family.strip()
+                else "unknown_reviewed_source"
+            )
+            source_reviews[normalized_source_family].append(snapshot["path_health"])
+
+        if not source_reviews:
             return {
-                "review_count": 0,
+                "tracked_sources": 0,
                 "overall_state": "healthy",
-                "summary": "no active reviewed execution visibility gaps",
-                "paths": {
-                    path_name: {
-                        "state": "healthy",
-                        "reason": "no_reviewed_paths_tracked",
-                        "affected_reviews": 0,
-                        "by_state": {
-                            "healthy": 0,
-                            "delayed": 0,
-                            "degraded": 0,
-                            "failed": 0,
-                        },
-                    }
-                    for path_name in ("ingest", "delegation", "provider", "persistence")
-                },
+                "summary": "no reviewed source health tracked",
+                "sources": {},
             }
 
-        paths = {
-            path_name: self._aggregate_readiness_path_health(
-                path_name=path_name,
+        sources: dict[str, dict[str, object]] = {}
+        for source_family, review_path_health in sorted(source_reviews.items()):
+            ingest_path = self._aggregate_readiness_path_health(
+                path_name="ingest",
                 review_path_health=review_path_health,
             )
-            for path_name in ("ingest", "delegation", "provider", "persistence")
-        }
-        overall_state = self._action_review_overall_path_state(paths.values())
+            sources[source_family] = {
+                "state": ingest_path["state"],
+                "reason": ingest_path["reason"],
+                "tracked_reviews": len(review_path_health),
+                "affected_reviews": ingest_path["affected_reviews"],
+                "by_state": ingest_path["by_state"],
+            }
+
+        overall_state = self._action_review_overall_path_state(sources.values())
         return {
-            "review_count": len(review_path_health),
+            "tracked_sources": len(sources),
             "overall_state": overall_state,
-            "summary": self._action_review_path_health_summary(
+            "summary": self._readiness_surface_health_summary(
                 overall_state=overall_state,
-                paths=paths,
+                entries=sources,
+                kind="source",
             ),
-            "paths": paths,
+            "sources": sources,
         }
+
+    def _build_readiness_automation_substrate_health(
+        self,
+        readiness_aggregates: ReadinessDiagnosticsAggregates,
+    ) -> dict[str, object]:
+        readiness_review_snapshots = self._collect_readiness_review_snapshots(
+            readiness_aggregates
+        )
+        surface_reviews: defaultdict[str, list[Mapping[str, object]]] = defaultdict(list)
+        surface_metadata: dict[str, tuple[str, str]] = {}
+        for snapshot in readiness_review_snapshots:
+            execution_surface_type = snapshot.get("execution_surface_type")
+            if execution_surface_type != "automation_substrate":
+                continue
+            execution_surface_id = snapshot.get("execution_surface_id")
+            normalized_surface_id = (
+                str(execution_surface_id).strip()
+                if isinstance(execution_surface_id, str) and execution_surface_id.strip()
+                else "unknown"
+            )
+            surface_key = f"automation_substrate:{normalized_surface_id}"
+            surface_reviews[surface_key].append(snapshot["path_health"])
+            surface_metadata[surface_key] = ("automation_substrate", normalized_surface_id)
+
+        if not surface_reviews:
+            return {
+                "tracked_surfaces": 0,
+                "overall_state": "healthy",
+                "summary": "no reviewed automation substrate health tracked",
+                "surfaces": {},
+            }
+
+        surfaces: dict[str, dict[str, object]] = {}
+        for surface_key, review_path_health in sorted(surface_reviews.items()):
+            aggregated_paths = {
+                path_name: self._aggregate_readiness_path_health(
+                    path_name=path_name,
+                    review_path_health=review_path_health,
+                )
+                for path_name in ("delegation", "provider", "persistence")
+            }
+            overall_state = self._action_review_overall_path_state(
+                aggregated_paths.values()
+            )
+            execution_surface_type, execution_surface_id = surface_metadata[surface_key]
+            surfaces[surface_key] = {
+                "execution_surface_type": execution_surface_type,
+                "execution_surface_id": execution_surface_id,
+                "state": overall_state,
+                "reason": self._readiness_dominant_reason(
+                    aggregated_paths.values(),
+                    overall_state=overall_state,
+                ),
+                "tracked_reviews": len(review_path_health),
+                "affected_reviews": max(
+                    path["affected_reviews"] for path in aggregated_paths.values()
+                ),
+                "paths": aggregated_paths,
+            }
+
+        overall_state = self._action_review_overall_path_state(surfaces.values())
+        return {
+            "tracked_surfaces": len(surfaces),
+            "overall_state": overall_state,
+            "summary": self._readiness_surface_health_summary(
+                overall_state=overall_state,
+                entries=surfaces,
+                kind="automation substrate",
+            ),
+            "surfaces": surfaces,
+        }
+
+    @staticmethod
+    def _readiness_dominant_reason(
+        paths: Iterable[Mapping[str, object]],
+        *,
+        overall_state: str,
+    ) -> str:
+        reason_counts = Counter(
+            str(path["reason"])
+            for path in paths
+            if path.get("state") == overall_state
+        )
+        return sorted(
+            reason_counts.items(),
+            key=lambda item: (-item[1], item[0]),
+        )[0][0]
+
+    def _readiness_surface_health_summary(
+        self,
+        *,
+        overall_state: str,
+        entries: Mapping[str, Mapping[str, object]],
+        kind: str,
+    ) -> str:
+        active_entries = [
+            f"{entry_name} {entry['reason'].replace('_', ' ')}"
+            for entry_name, entry in entries.items()
+            if entry.get("state") != "healthy"
+        ]
+        if not active_entries:
+            return f"all reviewed {kind} health surfaces are healthy"
+        return f"{overall_state} {kind} health: {'; '.join(active_entries[:2])}"
 
     def _readiness_candidate_action_request_ids_for_delegations(
         self,
