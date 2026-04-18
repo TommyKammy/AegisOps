@@ -3193,6 +3193,9 @@ class AegisOpsControlPlaneService:
                         if reviewed_context is not None
                         else None
                     ),
+                    "ingest_expected": (
+                        action_execution is not None or reconciliation is not None
+                    ),
                     "execution_surface_type": (
                         action_execution.execution_surface_type
                         if action_execution is not None
@@ -3219,6 +3222,8 @@ class AegisOpsControlPlaneService:
             )
         source_reviews: defaultdict[str, list[Mapping[str, object]]] = defaultdict(list)
         for snapshot in readiness_review_snapshots:
+            if not snapshot.get("ingest_expected", False):
+                continue
             source_family = snapshot.get("source_family")
             normalized_source_family = (
                 str(source_family).strip()
