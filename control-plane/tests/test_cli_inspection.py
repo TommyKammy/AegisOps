@@ -24,6 +24,7 @@ if str(TESTS_ROOT) not in sys.path:
 import main
 from aegisops_control_plane.config import RuntimeConfig
 from aegisops_control_plane.adapters.wazuh import WazuhAlertAdapter
+from aegisops_control_plane.execution_coordinator import _approved_payload_binding_hash
 from aegisops_control_plane.models import (
     AITraceRecord,
     ActionExecutionRecord,
@@ -47,6 +48,7 @@ from support.auth import (
     REVIEWED_PROXY_SERVICE_ACCOUNT,
 )
 from support.fixtures import load_wazuh_fixture
+from support.payloads import phase26_create_tracking_ticket_payload
 
 
 _load_wazuh_fixture = load_wazuh_fixture
@@ -127,6 +129,77 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         )
         promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
         return service, promoted_case
+
+    def _seed_create_tracking_ticket_request(
+        self,
+        *,
+        service: AegisOpsControlPlaneService,
+        promoted_case: CaseRecord,
+        reviewed_at: datetime,
+        suffix: str,
+        coordination_reference_id: str,
+    ) -> dict[str, object]:
+        requested_at = reviewed_at + timedelta(minutes=10)
+        expires_at = reviewed_at + timedelta(hours=4)
+        approved_target_scope = {
+            "case_id": promoted_case.case_id,
+            "alert_id": promoted_case.alert_id,
+            "finding_id": promoted_case.finding_id,
+            "coordination_reference_id": coordination_reference_id,
+            "coordination_target_type": "zammad",
+        }
+        approved_payload = phase26_create_tracking_ticket_payload(
+            case_id=promoted_case.case_id,
+            alert_id=promoted_case.alert_id,
+            finding_id=promoted_case.finding_id,
+            coordination_reference_id=coordination_reference_id,
+        )
+        payload_hash = _approved_payload_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id=f"approval-cli-create-ticket-{suffix}",
+                action_request_id=f"action-request-cli-create-ticket-{suffix}",
+                approver_identities=("approver-001",),
+                target_snapshot=approved_target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+                approved_expires_at=expires_at,
+            )
+        )
+        action_request = service.persist_record(
+            ActionRequestRecord(
+                action_request_id=f"action-request-cli-create-ticket-{suffix}",
+                approval_decision_id=approval.approval_decision_id,
+                case_id=promoted_case.case_id,
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                idempotency_key=f"idempotency-cli-create-ticket-{suffix}",
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=expires_at,
+                lifecycle_state="approved",
+                requested_payload=approved_payload,
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "approval",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+        return {
+            "action_request": action_request,
+            "approval": approval,
+            "approved_payload": approved_payload,
+            "payload_hash": payload_hash,
+        }
 
     def _build_out_of_scope_case_advisory_review_records(
         self,
@@ -4188,6 +4261,640 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                     "reason": "reconciliation_timeout",
                 },
             },
+        )
+
+    def test_cli_inspect_case_detail_surfaces_create_tracking_ticket_outcome(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        requested_at = reviewed_at + timedelta(minutes=10)
+        delegated_at = reviewed_at + timedelta(minutes=15)
+        compared_at = reviewed_at + timedelta(minutes=20)
+        approved_target_scope = {
+            "case_id": promoted_case.case_id,
+            "alert_id": promoted_case.alert_id,
+            "finding_id": promoted_case.finding_id,
+            "coordination_reference_id": "coord-ref-cli-create-ticket-001",
+            "coordination_target_type": "zammad",
+        }
+        approved_payload = phase26_create_tracking_ticket_payload(
+            case_id=promoted_case.case_id,
+            alert_id=promoted_case.alert_id,
+            finding_id=promoted_case.finding_id,
+            coordination_reference_id="coord-ref-cli-create-ticket-001",
+        )
+        payload_hash = _approved_payload_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-cli-create-ticket-outcome-001",
+                action_request_id="action-request-cli-create-ticket-outcome-001",
+                approver_identities=("approver-001",),
+                target_snapshot=approved_target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+                approved_expires_at=reviewed_at + timedelta(hours=4),
+            )
+        )
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-cli-create-ticket-outcome-001",
+                approval_decision_id=approval.approval_decision_id,
+                case_id=promoted_case.case_id,
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                idempotency_key="idempotency-cli-create-ticket-outcome-001",
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=reviewed_at + timedelta(hours=4),
+                lifecycle_state="approved",
+                requested_payload=approved_payload,
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "approval",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id="action-request-cli-create-ticket-outcome-001",
+            approved_payload=approved_payload,
+            delegated_at=delegated_at,
+            delegation_issuer="control-plane-service",
+        )
+        downstream_binding = execution.provenance["downstream_binding"]
+        service.reconcile_action_execution(
+            action_request_id="action-request-cli-create-ticket-outcome-001",
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(
+                {
+                    "execution_run_id": execution.execution_run_id,
+                    "execution_surface_id": "shuffle",
+                    "idempotency_key": "idempotency-cli-create-ticket-outcome-001",
+                    "approval_decision_id": approval.approval_decision_id,
+                    "delegation_id": execution.delegation_id,
+                    "payload_hash": payload_hash,
+                    "coordination_reference_id": downstream_binding[
+                        "coordination_reference_id"
+                    ],
+                    "coordination_target_type": downstream_binding[
+                        "coordination_target_type"
+                    ],
+                    "external_receipt_id": downstream_binding["external_receipt_id"],
+                    "coordination_target_id": downstream_binding[
+                        "coordination_target_id"
+                    ],
+                    "ticket_reference_url": downstream_binding["ticket_reference_url"],
+                    "observed_at": compared_at,
+                    "status": "success",
+                },
+            ),
+            compared_at=compared_at,
+            stale_after=reviewed_at + timedelta(hours=1),
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-case-detail", "--case-id", promoted_case.case_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        review = payload["current_action_review"]
+
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["status"],
+            "created",
+        )
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["approval_decision_id"],
+            approval.approval_decision_id,
+        )
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["coordination_reference_id"],
+            "coord-ref-cli-create-ticket-001",
+        )
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["coordination_target_type"],
+            "zammad",
+        )
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["external_receipt_id"],
+            downstream_binding["external_receipt_id"],
+        )
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["ticket_reference_url"],
+            downstream_binding["ticket_reference_url"],
+        )
+
+    def test_cli_inspect_case_detail_repairs_nested_create_tracking_ticket_approval_linkage(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        delegated_at = reviewed_at + timedelta(minutes=15)
+        compared_at = reviewed_at + timedelta(minutes=20)
+        seeded = self._seed_create_tracking_ticket_request(
+            service=service,
+            promoted_case=promoted_case,
+            reviewed_at=reviewed_at,
+            suffix="repaired-approval-001",
+            coordination_reference_id="coord-ref-cli-create-ticket-repaired-approval-001",
+        )
+
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id=seeded["action_request"].action_request_id,
+            approved_payload=seeded["approved_payload"],
+            delegated_at=delegated_at,
+            delegation_issuer="control-plane-service",
+        )
+        downstream_binding = execution.provenance["downstream_binding"]
+        service.reconcile_action_execution(
+            action_request_id=seeded["action_request"].action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(
+                {
+                    "execution_run_id": execution.execution_run_id,
+                    "execution_surface_id": "shuffle",
+                    "idempotency_key": seeded["action_request"].idempotency_key,
+                    "approval_decision_id": seeded["approval"].approval_decision_id,
+                    "delegation_id": execution.delegation_id,
+                    "payload_hash": seeded["payload_hash"],
+                    "coordination_reference_id": downstream_binding[
+                        "coordination_reference_id"
+                    ],
+                    "coordination_target_type": downstream_binding[
+                        "coordination_target_type"
+                    ],
+                    "external_receipt_id": downstream_binding["external_receipt_id"],
+                    "coordination_target_id": downstream_binding[
+                        "coordination_target_id"
+                    ],
+                    "ticket_reference_url": downstream_binding["ticket_reference_url"],
+                    "observed_at": compared_at,
+                    "status": "success",
+                },
+            ),
+            compared_at=compared_at,
+            stale_after=reviewed_at + timedelta(hours=1),
+        )
+        service.persist_record(
+            replace(seeded["action_request"], approval_decision_id=None)
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-case-detail", "--case-id", promoted_case.case_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        review = payload["current_action_review"]
+        self.assertEqual(
+            review["approval_decision_id"],
+            seeded["approval"].approval_decision_id,
+        )
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["approval_decision_id"],
+            seeded["approval"].approval_decision_id,
+        )
+        self.assertEqual(review["coordination_ticket_outcome"]["status"], "created")
+
+    def test_cli_inspect_case_detail_surfaces_create_tracking_ticket_mismatch(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        delegated_at = reviewed_at + timedelta(minutes=15)
+        compared_at = reviewed_at + timedelta(minutes=20)
+        seeded = self._seed_create_tracking_ticket_request(
+            service=service,
+            promoted_case=promoted_case,
+            reviewed_at=reviewed_at,
+            suffix="mismatch-001",
+            coordination_reference_id="coord-ref-cli-create-ticket-mismatch-001",
+        )
+
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id=seeded["action_request"].action_request_id,
+            approved_payload=seeded["approved_payload"],
+            delegated_at=delegated_at,
+            delegation_issuer="control-plane-service",
+        )
+        downstream_binding = execution.provenance["downstream_binding"]
+        service.reconcile_action_execution(
+            action_request_id=seeded["action_request"].action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(
+                {
+                    "execution_run_id": execution.execution_run_id,
+                    "execution_surface_id": "shuffle",
+                    "idempotency_key": seeded["action_request"].idempotency_key,
+                    "approval_decision_id": seeded["approval"].approval_decision_id,
+                    "delegation_id": execution.delegation_id,
+                    "payload_hash": seeded["payload_hash"],
+                    "coordination_reference_id": downstream_binding[
+                        "coordination_reference_id"
+                    ],
+                    "coordination_target_type": downstream_binding[
+                        "coordination_target_type"
+                    ],
+                    "external_receipt_id": "shuffle-receipt-cli-drifted-001",
+                    "coordination_target_id": downstream_binding[
+                        "coordination_target_id"
+                    ],
+                    "ticket_reference_url": downstream_binding["ticket_reference_url"],
+                    "observed_at": compared_at,
+                    "status": "success",
+                },
+            ),
+            compared_at=compared_at,
+            stale_after=reviewed_at + timedelta(hours=1),
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-case-detail", "--case-id", promoted_case.case_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        review = payload["current_action_review"]
+        self.assertEqual(review["coordination_ticket_outcome"]["status"], "mismatch")
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["mismatch"]["mismatch_summary"],
+            "coordination receipt mismatch between authoritative action execution "
+            "and observed downstream execution",
+        )
+
+    def test_cli_inspect_case_detail_omits_create_tracking_ticket_outcome_for_terminal_non_delegated_reviews(
+        self,
+    ) -> None:
+        for review_state in ("rejected", "expired", "superseded", "canceled"):
+            with self.subTest(review_state=review_state):
+                _, service, promoted_case, _evidence_id, reviewed_at = (
+                    self._build_phase19_in_scope_case()
+                )
+                seeded = self._seed_create_tracking_ticket_request(
+                    service=service,
+                    promoted_case=promoted_case,
+                    reviewed_at=reviewed_at,
+                    suffix=f"closed-without-delegation-{review_state}",
+                    coordination_reference_id=(
+                        f"coord-ref-cli-create-ticket-closed-without-delegation-{review_state}"
+                    ),
+                )
+                if review_state in {"rejected", "expired"}:
+                    service.persist_record(
+                        replace(seeded["approval"], lifecycle_state=review_state)
+                    )
+                service.persist_record(
+                    replace(seeded["action_request"], lifecycle_state=review_state)
+                )
+
+                stdout = io.StringIO()
+                main.main(
+                    ["inspect-case-detail", "--case-id", promoted_case.case_id],
+                    stdout=stdout,
+                    service=service,
+                )
+
+                payload = json.loads(stdout.getvalue())
+                review = payload["current_action_review"]
+                self.assertEqual(review["review_state"], review_state)
+                self.assertIsNone(review["coordination_ticket_outcome"])
+
+    def test_cli_inspect_case_detail_surfaces_create_tracking_ticket_timeout(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        delegated_at = datetime.now(timezone.utc)
+        seeded = self._seed_create_tracking_ticket_request(
+            service=service,
+            promoted_case=promoted_case,
+            reviewed_at=reviewed_at,
+            suffix="timeout-001",
+            coordination_reference_id="coord-ref-cli-create-ticket-timeout-001",
+        )
+
+        with mock.patch.object(
+            type(service._shuffle),
+            "dispatch_approved_action",
+            autospec=True,
+            side_effect=TimeoutError("synthetic create-tracking-ticket timeout"),
+        ):
+            with self.assertRaisesRegex(
+                TimeoutError,
+                "synthetic create-tracking-ticket timeout",
+            ):
+                service.delegate_approved_action_to_shuffle(
+                    action_request_id=seeded["action_request"].action_request_id,
+                    approved_payload=seeded["approved_payload"],
+                    delegated_at=delegated_at,
+                    delegation_issuer="control-plane-service",
+                )
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-case-detail", "--case-id", promoted_case.case_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        review = payload["current_action_review"]
+        self.assertEqual(review["coordination_ticket_outcome"]["status"], "timeout")
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["timeout"]["reason"],
+            "dispatch_timeout",
+        )
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["timeout"]["path"],
+            "provider",
+        )
+
+    def test_cli_inspect_case_detail_surfaces_create_tracking_ticket_provider_failure_as_timeout(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        delegated_at = reviewed_at + timedelta(minutes=15)
+        seeded = self._seed_create_tracking_ticket_request(
+            service=service,
+            promoted_case=promoted_case,
+            reviewed_at=reviewed_at,
+            suffix="failure-001",
+            coordination_reference_id="coord-ref-cli-create-ticket-failure-001",
+        )
+
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id=seeded["action_request"].action_request_id,
+            approved_payload=seeded["approved_payload"],
+            delegated_at=delegated_at,
+            delegation_issuer="control-plane-service",
+        )
+        service.persist_record(replace(execution, lifecycle_state="failed"))
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-case-detail", "--case-id", promoted_case.case_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        review = payload["current_action_review"]
+        self.assertEqual(review["coordination_ticket_outcome"]["status"], "timeout")
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["timeout"]["reason"],
+            "execution_failed",
+        )
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["timeout"]["path"],
+            "provider",
+        )
+
+    def test_cli_inspect_case_detail_prefers_provider_failure_over_derived_timeouts(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        delegated_at = reviewed_at + timedelta(minutes=15)
+        overdue_requested_at = datetime.now(timezone.utc) - timedelta(hours=2)
+        overdue_expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        seeded = self._seed_create_tracking_ticket_request(
+            service=service,
+            promoted_case=promoted_case,
+            reviewed_at=reviewed_at,
+            suffix="failure-precedence-001",
+            coordination_reference_id="coord-ref-cli-create-ticket-failure-precedence-001",
+        )
+
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id=seeded["action_request"].action_request_id,
+            approved_payload=seeded["approved_payload"],
+            delegated_at=delegated_at,
+            delegation_issuer="control-plane-service",
+        )
+        service.persist_record(
+            replace(
+                seeded["approval"],
+                decided_at=overdue_requested_at + timedelta(minutes=5),
+                approved_expires_at=overdue_expires_at,
+            )
+        )
+        action_request = service.get_record(
+            ActionRequestRecord, seeded["action_request"].action_request_id
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                requested_at=overdue_requested_at,
+                expires_at=overdue_expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                execution,
+                delegated_at=overdue_requested_at + timedelta(minutes=10),
+                expires_at=overdue_expires_at,
+                lifecycle_state="failed",
+            )
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-case-detail", "--case-id", promoted_case.case_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        review = payload["current_action_review"]
+        self.assertEqual(
+            review["path_health"]["paths"]["ingest"]["reason"],
+            "ingest_signal_timeout",
+        )
+        self.assertEqual(
+            review["path_health"]["paths"]["persistence"]["reason"],
+            "reconciliation_timeout",
+        )
+        self.assertEqual(review["coordination_ticket_outcome"]["status"], "timeout")
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["timeout"]["reason"],
+            "execution_failed",
+        )
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["timeout"]["path"],
+            "provider",
+        )
+
+    def test_cli_inspect_case_detail_surfaces_create_tracking_ticket_manual_fallback(
+        self,
+    ) -> None:
+        _, service, promoted_case, evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        seeded = self._seed_create_tracking_ticket_request(
+            service=service,
+            promoted_case=promoted_case,
+            reviewed_at=reviewed_at,
+            suffix="manual-fallback-001",
+            coordination_reference_id="coord-ref-cli-create-ticket-manual-fallback-001",
+        )
+        service.persist_record(
+            replace(
+                seeded["action_request"],
+                lifecycle_state="unresolved",
+            )
+        )
+        service.record_action_review_manual_fallback(
+            action_request_id=seeded["action_request"].action_request_id,
+            fallback_at=reviewed_at + timedelta(minutes=45),
+            fallback_actor_identity="analyst-003",
+            authority_boundary="approved_human_fallback",
+            reason="The reviewed create-ticket automation path was unavailable after approval.",
+            action_taken="Opened the reviewed tracking ticket manually using the approved procedure.",
+            verification_evidence_ids=(evidence_id,),
+            residual_uncertainty="Awaiting downstream operator acknowledgement in the next review window.",
+        )
+        service.persist_record(
+            replace(
+                service.get_record(AlertRecord, promoted_case.alert_id),
+                coordination_reference_id=(
+                    "coord-ref-cli-create-ticket-manual-fallback-001"
+                ),
+                coordination_target_type="zammad",
+                coordination_target_id="ZM-4242",
+                ticket_reference_url="https://tickets.example.test/#ticket/4242",
+            )
+        )
+        service.persist_record(
+            replace(
+                service.get_record(CaseRecord, promoted_case.case_id),
+                coordination_reference_id=(
+                    "coord-ref-cli-create-ticket-manual-fallback-001"
+                ),
+                coordination_target_type="zammad",
+                coordination_target_id="ZM-4242",
+                ticket_reference_url="https://tickets.example.test/#ticket/4242",
+            )
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-case-detail", "--case-id", promoted_case.case_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        review = payload["current_action_review"]
+        self.assertEqual(payload["external_ticket_reference"]["status"], "present")
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["status"],
+            "manual_fallback",
+        )
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["manual_fallback"]["action_taken"],
+            "Opened the reviewed tracking ticket manually using the approved procedure.",
+        )
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["manual_fallback"][
+                "fallback_actor_identity"
+            ],
+            "analyst-003",
+        )
+
+    def test_cli_inspect_case_detail_keeps_created_status_when_manual_fallback_is_recorded_after_success(
+        self,
+    ) -> None:
+        _, service, promoted_case, evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        delegated_at = reviewed_at + timedelta(minutes=15)
+        compared_at = reviewed_at + timedelta(minutes=20)
+        seeded = self._seed_create_tracking_ticket_request(
+            service=service,
+            promoted_case=promoted_case,
+            reviewed_at=reviewed_at,
+            suffix="created-with-fallback-001",
+            coordination_reference_id="coord-ref-cli-create-ticket-created-with-fallback-001",
+        )
+
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id=seeded["action_request"].action_request_id,
+            approved_payload=seeded["approved_payload"],
+            delegated_at=delegated_at,
+            delegation_issuer="control-plane-service",
+        )
+        downstream_binding = execution.provenance["downstream_binding"]
+        service.reconcile_action_execution(
+            action_request_id=seeded["action_request"].action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(
+                {
+                    "execution_run_id": execution.execution_run_id,
+                    "execution_surface_id": "shuffle",
+                    "idempotency_key": seeded["action_request"].idempotency_key,
+                    "approval_decision_id": seeded["approval"].approval_decision_id,
+                    "delegation_id": execution.delegation_id,
+                    "payload_hash": seeded["payload_hash"],
+                    "coordination_reference_id": downstream_binding[
+                        "coordination_reference_id"
+                    ],
+                    "coordination_target_type": downstream_binding[
+                        "coordination_target_type"
+                    ],
+                    "external_receipt_id": downstream_binding["external_receipt_id"],
+                    "coordination_target_id": downstream_binding[
+                        "coordination_target_id"
+                    ],
+                    "ticket_reference_url": downstream_binding["ticket_reference_url"],
+                    "observed_at": compared_at,
+                    "status": "success",
+                },
+            ),
+            compared_at=compared_at,
+            stale_after=reviewed_at + timedelta(hours=1),
+        )
+        service.record_action_review_manual_fallback(
+            action_request_id=seeded["action_request"].action_request_id,
+            fallback_at=reviewed_at + timedelta(minutes=45),
+            fallback_actor_identity="analyst-004",
+            authority_boundary="approved_human_fallback",
+            reason="Business-hours operator added manual fallback notes after a completed create-ticket review.",
+            action_taken="Captured manual ticket fallback instructions for the reviewed coordination flow.",
+            verification_evidence_ids=(evidence_id,),
+            residual_uncertainty="Awaiting operator acknowledgement during the next review window.",
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-case-detail", "--case-id", promoted_case.case_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        review = payload["current_action_review"]
+        self.assertEqual(review["coordination_ticket_outcome"]["status"], "created")
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["manual_fallback"]["action_taken"],
+            "Captured manual ticket fallback instructions for the reviewed coordination flow.",
+        )
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["manual_fallback"][
+                "fallback_actor_identity"
+            ],
+            "analyst-004",
         )
 
     def test_cli_inspect_case_detail_keeps_after_hours_handoff_visible_for_non_executed_review_states(
