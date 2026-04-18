@@ -50,7 +50,7 @@ class Phase26CoordinationSubstrateBoundaryDocsTests(unittest.TestCase):
         for term in (
             "Phase 26 First Coordination Substrate and Non-Authoritative Ticket Boundary Validation",
             "Validation status: PASS",
-            "docs/Revised Phase23-20 Epic Roadmap.md",
+            "ObsidianVault/Dev/AegisOps/Plan&Roadmap/Revised Phase23-29 Epic Roadmap.md",
             "docs/requirements-baseline.md",
             "docs/response-action-safety-model.md",
             "docs/control-plane-state-model.md",
@@ -59,6 +59,8 @@ class Phase26CoordinationSubstrateBoundaryDocsTests(unittest.TestCase):
             "non-authoritative coordination target",
         ):
             self.assertIn(term, text)
+
+        self.assertNotIn("docs/Revised Phase23-20 Epic Roadmap.md", text)
 
     def test_baseline_docs_keep_ticketing_subordinate_to_aegisops_authority(self) -> None:
         expected_terms = {
