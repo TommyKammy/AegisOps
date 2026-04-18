@@ -3,7 +3,7 @@
 - Validation status: PASS
 - Reviewed on: 2026-04-18
 - Scope: confirm the reviewed multi-source case admission contract defines bounded source admission, explicit provenance, and one fail-closed same-entity / related-entity / unresolved taxonomy without widening authority or weakening the advisory-only unresolved model.
-- Reviewed sources: `docs/phase-25-reviewed-multi-source-case-admission-and-ambiguity-taxonomy.md`, `docs/Revised Phase23-20 Epic Roadmap.md` (current reviewed roadmap note present on this host), `README.md`, `docs/architecture.md`, `docs/phase-15-identity-grounded-analyst-assistant-boundary.md`, `docs/phase-24-first-live-assistant-workflow-family-and-trusted-output-contract.md`, `docs/control-plane-state-model.md`
+- Reviewed sources: `docs/phase-25-reviewed-multi-source-case-admission-and-ambiguity-taxonomy.md`, `/Users/jp.infra/Library/Mobile Documents/com~apple~CloudDocs/ObsidianVault/Dev/AegisOps/Plan&Roadmap/Revised Phase23-29 Epic Roadmap.md` (reviewed roadmap note present on this host; it captures the accepted multi-source casework and osquery-backed host-context slice under the revised roadmap numbering as Phase 23), `README.md`, `docs/architecture.md`, `docs/phase-15-identity-grounded-analyst-assistant-boundary.md`, `docs/phase-24-first-live-assistant-workflow-family-and-trusted-output-contract.md`, `docs/control-plane-state-model.md`
 
 ## Validation Summary
 
@@ -15,11 +15,11 @@ The design keeps osquery-backed host evidence in an augmenting evidence role and
 
 ## Roadmap Alignment Review
 
-The reviewed roadmap source, `docs/Revised Phase23-20 Epic Roadmap.md`, describes the accepted slice as reviewed multi-source casework with osquery-backed host context, ambiguity-preserving review, and a same-entity / related-entity / unresolved taxonomy.
+The reviewed roadmap source, `/Users/jp.infra/Library/Mobile Documents/com~apple~CloudDocs/ObsidianVault/Dev/AegisOps/Plan&Roadmap/Revised Phase23-29 Epic Roadmap.md`, explicitly defines `Epic: Phase 23 reviewed multi-source casework and osquery-backed host context`.
 
-The Phase 25 design stays aligned with that roadmap intent by defining bounded admission rules, ambiguity preservation, and reviewed provenance rather than broad source-spanning correlation.
+That reviewed roadmap slice also enumerates the accepted follow-on work for multi-source case admission taxonomy, osquery-backed host evidence attachment, cross-source timeline and provenance rendering, identity / alias ambiguity handling, operator runbooks, and focused validation coverage.
 
-The numbering has shifted in current issue tracking, but the reviewed design intent remains the same: add cross-source casework without silently stitching entities or weakening unresolved handling.
+The current issue and validation numbering has shifted since that roadmap revision, but the reviewed design intent remains the same: add cross-source casework plus osquery-backed host context without silently stitching entities, weakening unresolved handling, or promoting augmenting evidence into case truth.
 
 ## Authority and Provenance Review
 

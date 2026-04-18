@@ -76,7 +76,8 @@ class Phase25MultiSourceCaseAdmissionDocsTests(unittest.TestCase):
         for term in (
             "Phase 25 Reviewed Multi-Source Case Admission and Ambiguity Taxonomy Validation",
             "Validation status: PASS",
-            "docs/Revised Phase23-20 Epic Roadmap.md",
+            "/Users/jp.infra/Library/Mobile Documents/com~apple~CloudDocs/ObsidianVault/Dev/AegisOps/Plan&Roadmap/Revised Phase23-29 Epic Roadmap.md",
+            "Epic: Phase 23 reviewed multi-source casework and osquery-backed host context",
             "README.md",
             "docs/architecture.md",
             "docs/phase-24-first-live-assistant-workflow-family-and-trusted-output-contract.md",
@@ -85,6 +86,7 @@ class Phase25MultiSourceCaseAdmissionDocsTests(unittest.TestCase):
         ):
             self.assertIn(term, text)
 
+        self.assertNotIn("docs/Revised Phase23-20 Epic Roadmap.md", text)
         self.assertNotIn("Archive/Old Revised Phase23-20 Epic Roadmap.md", text)
 
     def test_phase25_operator_runbook_exists_and_defines_multi_source_review_posture(
