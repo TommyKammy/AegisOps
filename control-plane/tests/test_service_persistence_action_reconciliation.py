@@ -537,6 +537,134 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
             (downstream_binding["ticket_reference_url"],),
         )
 
+    def test_service_fail_closes_when_create_tracking_ticket_reconciliation_receipt_drifts(
+        self,
+    ) -> None:
+        store, _ = support.make_store()
+        service = support.AegisOpsControlPlaneService(
+            support.RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = support.datetime(2026, 4, 18, 4, 12, tzinfo=support.timezone.utc)
+        delegated_at = support.datetime(2026, 4, 18, 4, 17, tzinfo=support.timezone.utc)
+        compared_at = support.datetime(2026, 4, 18, 4, 22, tzinfo=support.timezone.utc)
+        approved_target_scope = {
+            "case_id": "case-tracking-reconcile-drift-001",
+            "alert_id": "alert-tracking-reconcile-drift-001",
+            "finding_id": "finding-tracking-reconcile-drift-001",
+            "coordination_reference_id": "coord-ref-reconcile-drift-001",
+            "coordination_target_type": "zammad",
+        }
+        approved_payload = support._phase26_create_tracking_ticket_payload(
+            case_id="case-tracking-reconcile-drift-001",
+            alert_id="alert-tracking-reconcile-drift-001",
+            finding_id="finding-tracking-reconcile-drift-001",
+            coordination_reference_id="coord-ref-reconcile-drift-001",
+        )
+        payload_hash = support._approved_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
+        service.persist_record(
+            support.ApprovalDecisionRecord(
+                approval_decision_id="approval-create-ticket-reconcile-drift-001",
+                action_request_id="action-request-create-ticket-reconcile-drift-001",
+                approver_identities=("approver-001",),
+                target_snapshot=approved_target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+            )
+        )
+        service.persist_record(
+            support.ActionRequestRecord(
+                action_request_id="action-request-create-ticket-reconcile-drift-001",
+                approval_decision_id="approval-create-ticket-reconcile-drift-001",
+                case_id="case-tracking-reconcile-drift-001",
+                alert_id="alert-tracking-reconcile-drift-001",
+                finding_id="finding-tracking-reconcile-drift-001",
+                idempotency_key="idempotency-create-ticket-reconcile-drift-001",
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=None,
+                lifecycle_state="approved",
+                requested_payload=approved_payload,
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "approval",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id="action-request-create-ticket-reconcile-drift-001",
+            approved_payload=approved_payload,
+            delegated_at=delegated_at,
+            delegation_issuer="control-plane-service",
+            evidence_ids=("evidence-create-ticket-reconcile-drift-001",),
+        )
+        downstream_binding = execution.provenance["downstream_binding"]
+
+        reconciliation = service.reconcile_action_execution(
+            action_request_id="action-request-create-ticket-reconcile-drift-001",
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(
+                {
+                    "execution_run_id": execution.execution_run_id,
+                    "execution_surface_id": "shuffle",
+                    "idempotency_key": "idempotency-create-ticket-reconcile-drift-001",
+                    "approval_decision_id": execution.approval_decision_id,
+                    "delegation_id": execution.delegation_id,
+                    "payload_hash": execution.payload_hash,
+                    "coordination_reference_id": downstream_binding[
+                        "coordination_reference_id"
+                    ],
+                    "coordination_target_type": downstream_binding[
+                        "coordination_target_type"
+                    ],
+                    "external_receipt_id": "shuffle-receipt-drifted-001",
+                    "coordination_target_id": downstream_binding[
+                        "coordination_target_id"
+                    ],
+                    "ticket_reference_url": downstream_binding["ticket_reference_url"],
+                    "observed_at": compared_at,
+                    "status": "success",
+                },
+            ),
+            compared_at=compared_at,
+            stale_after=support.datetime(
+                2026,
+                4,
+                18,
+                4,
+                45,
+                tzinfo=support.timezone.utc,
+            ),
+        )
+
+        stored_execution = service.get_record(
+            support.ActionExecutionRecord,
+            execution.action_execution_id,
+        )
+        self.assertEqual(reconciliation.ingest_disposition, "mismatch")
+        self.assertEqual(reconciliation.lifecycle_state, "mismatched")
+        self.assertEqual(
+            reconciliation.mismatch_summary,
+            "coordination receipt mismatch between authoritative action execution "
+            "and observed downstream execution",
+        )
+        self.assertEqual(stored_execution.lifecycle_state, "queued")
+        self.assertEqual(
+            reconciliation.subject_linkage["external_receipt_ids"],
+            (downstream_binding["external_receipt_id"],),
+        )
+
     def test_service_fail_closes_when_create_tracking_ticket_receipt_has_no_authoritative_execution(
         self,
     ) -> None:
