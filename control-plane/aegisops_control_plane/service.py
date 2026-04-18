@@ -4500,6 +4500,8 @@ class AegisOpsControlPlaneService:
         provenance = raw_provenance if isinstance(raw_provenance, Mapping) else {}
 
         def _safe_optional_string(value: object, field_name: str) -> str | None:
+            if isinstance(value, str):
+                value = value.strip()
             try:
                 return self._normalize_optional_string(value, field_name)
             except ValueError:
