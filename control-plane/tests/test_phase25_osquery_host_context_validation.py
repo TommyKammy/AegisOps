@@ -93,6 +93,53 @@ class _EvidenceSaveMutationStore:
 
 
 class Phase25OsqueryHostContextValidationTests(unittest.TestCase):
+    _NON_PROCESS_OSQUERY_RESULT_CASES = (
+        {
+            "result_kind": "host_state",
+            "query_name": "host_uptime",
+            "query_sql": "SELECT hostname, uptime FROM uptime;",
+            "rows": (
+                {
+                    "hostname": "host-001",
+                    "uptime": "86400",
+                },
+            ),
+            "collection_path": "pack/osquery-defense/host/host_uptime",
+            "query_context": {"pack": "osquery-defense", "platform": "linux"},
+            "expected_columns": ("hostname", "uptime"),
+        },
+        {
+            "result_kind": "local_user",
+            "query_name": "interactive_users",
+            "query_sql": "SELECT uid, username, shell FROM users;",
+            "rows": (
+                {
+                    "uid": "1000",
+                    "username": "analyst",
+                    "shell": "/bin/zsh",
+                },
+            ),
+            "collection_path": "pack/osquery-defense/users/interactive_users",
+            "query_context": {"pack": "osquery-defense", "platform": "linux"},
+            "expected_columns": ("shell", "uid", "username"),
+        },
+        {
+            "result_kind": "scheduled_query",
+            "query_name": "pack_schedule",
+            "query_sql": "SELECT name, interval, snapshot FROM osquery_schedule;",
+            "rows": (
+                {
+                    "name": "pack_schedule",
+                    "interval": "3600",
+                    "snapshot": "false",
+                },
+            ),
+            "collection_path": "pack/osquery-defense/schedule/pack_schedule",
+            "query_context": {"pack": "osquery-defense", "platform": "linux"},
+            "expected_columns": ("interval", "name", "snapshot"),
+        },
+    )
+
     def _build_host_bound_case(
         self,
         *,
@@ -214,6 +261,134 @@ class Phase25OsqueryHostContextValidationTests(unittest.TestCase):
             ],
             evidence.evidence_id,
         )
+
+    def test_attach_osquery_host_context_preserves_guarantees_for_all_allowed_non_process_result_kinds(
+        self,
+    ) -> None:
+        expected_allowed_kinds = {"host_state", "process", "local_user", "scheduled_query"}
+        self.assertEqual(
+            set(OsqueryHostContextAdapter().allowed_result_kinds),
+            expected_allowed_kinds,
+        )
+        self.assertEqual(
+            {scenario["result_kind"] for scenario in self._NON_PROCESS_OSQUERY_RESULT_CASES},
+            expected_allowed_kinds - {"process"},
+        )
+        for scenario in self._NON_PROCESS_OSQUERY_RESULT_CASES:
+            with self.subTest(result_kind=scenario["result_kind"]):
+                _store, service, promoted_case, reviewed_at = self._build_host_bound_case(
+                    host_identifier="host-001"
+                )
+
+                evidence, observation = service.attach_osquery_host_context(
+                    case_id=promoted_case.case_id,
+                    host_identifier="host-001",
+                    query_name=scenario["query_name"],
+                    query_sql=scenario["query_sql"],
+                    result_kind=scenario["result_kind"],
+                    rows=scenario["rows"],
+                    collected_at=reviewed_at,
+                    reviewed_by="analyst-001",
+                    source_id=f"{scenario['result_kind']}-query-result-001",
+                    collection_path=scenario["collection_path"],
+                    query_context=scenario["query_context"],
+                    observation_scope_statement=(
+                        "Observed reviewed osquery host context on the explicitly scoped host."
+                    ),
+                )
+
+                self.assertEqual(evidence.case_id, promoted_case.case_id)
+                self.assertEqual(evidence.source_system, "osquery")
+                self.assertEqual(
+                    evidence.provenance["classification"],
+                    "augmenting-evidence",
+                )
+                self.assertEqual(
+                    evidence.provenance["collection_path"],
+                    scenario["collection_path"],
+                )
+                self.assertEqual(
+                    evidence.provenance["source_id"],
+                    f"{scenario['result_kind']}-query-result-001",
+                )
+                self.assertEqual(
+                    evidence.content["host"]["host_identifier"],
+                    "host-001",
+                )
+                self.assertEqual(
+                    evidence.content["query"]["name"],
+                    scenario["query_name"],
+                )
+                self.assertEqual(
+                    evidence.content["query"]["context"]["pack"],
+                    "osquery-defense",
+                )
+                self.assertEqual(
+                    evidence.content["result"]["kind"],
+                    scenario["result_kind"],
+                )
+                self.assertEqual(evidence.content["result"]["row_count"], 1)
+                self.assertEqual(
+                    evidence.content["result"]["columns"],
+                    scenario["expected_columns"],
+                )
+
+                self.assertIsNotNone(observation)
+                assert observation is not None
+                self.assertEqual(
+                    observation.supporting_evidence_ids,
+                    (evidence.evidence_id,),
+                )
+                self.assertEqual(
+                    observation.provenance["classification"],
+                    "reviewed-derived",
+                )
+                self.assertEqual(
+                    observation.content["host_context_evidence_id"],
+                    evidence.evidence_id,
+                )
+                self.assertEqual(
+                    observation.content["result_kind"],
+                    scenario["result_kind"],
+                )
+
+                case_detail = service.inspect_case_detail(promoted_case.case_id)
+                persisted_evidence = {
+                    record["evidence_id"]: record
+                    for record in case_detail.linked_evidence_records
+                }
+                self.assertEqual(
+                    persisted_evidence[evidence.evidence_id]["provenance"][
+                        "classification"
+                    ],
+                    "augmenting-evidence",
+                )
+                self.assertEqual(
+                    persisted_evidence[evidence.evidence_id]["content"]["result"]["kind"],
+                    scenario["result_kind"],
+                )
+                self.assertEqual(
+                    persisted_evidence[evidence.evidence_id]["content"]["query"][
+                        "collection_path"
+                    ],
+                    scenario["collection_path"],
+                )
+                persisted_observation = {
+                    record["observation_id"]: record
+                    for record in case_detail.linked_observation_records
+                }
+                self.assertEqual(
+                    persisted_observation[observation.observation_id]["content"][
+                        "host_context_evidence_id"
+                    ],
+                    evidence.evidence_id,
+                )
+                self.assertEqual(
+                    persisted_observation[observation.observation_id]["content"][
+                        "result_kind"
+                    ],
+                    scenario["result_kind"],
+                )
 
     def test_inspect_case_detail_exposes_cross_source_timeline_and_provenance_summary(
         self,
