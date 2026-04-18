@@ -58,6 +58,7 @@ jobs:
           bash scripts/verify-phase-6-replay-to-notify-validation.sh
           bash scripts/verify-phase-25-multi-source-case-review-runbook.sh
           bash scripts/verify-postgres-compose-skeleton.sh
+          bash scripts/verify-publishable-path-hygiene.sh
           bash scripts/verify-proxy-compose-skeleton.sh
           bash scripts/verify-response-action-safety-model-doc.sh
           bash scripts/verify-requirements-baseline-control-plane-thesis.sh
@@ -209,7 +210,9 @@ jobs:
           bash scripts/test-verify-ingest-compose-skeleton.sh
           bash scripts/test-verify-opensearch-compose-skeleton.sh
           bash scripts/test-verify-architecture-runbook-validation.sh
+          bash scripts/test-verify-ci-publishable-path-hygiene.sh
           bash scripts/test-verify-postgres-compose-skeleton.sh
+          bash scripts/test-verify-publishable-path-hygiene.sh
           bash scripts/test-verify-proxy-compose-skeleton.sh
           bash scripts/test-verify-compose-skeleton-validation.sh
           bash scripts/test-verify-compose-skeleton-overview-doc.sh
