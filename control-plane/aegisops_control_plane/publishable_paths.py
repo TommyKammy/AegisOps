@@ -9,6 +9,12 @@ REDACTED_LOCAL_PATH_TOKEN = "<redacted-local-path>"
 ALLOWLIST_MARKER = "publishable-path-hygiene: allowlist"
 
 _WINDOWS_USER_PATH_RE = re.compile(r"^[A-Za-z]:[\\/]+Users[\\/]+[^\\/]+(?:[\\/](?P<rest>.*))?$")
+_UNIX_USER_PATH_IN_TEXT_RE = re.compile(
+    r"(?<![A-Za-z0-9_./:\\-])/(?:Users|home)/[^/\s]+(?:/[^\s]*)?"
+)
+_WINDOWS_USER_PATH_IN_TEXT_RE = re.compile(
+    r"(?i)(?<![A-Za-z0-9_./:\\-])[A-Z]:[\\/]+Users[\\/]+[^\\/\s]+(?:[\\/][^\s]*)?"
+)
 
 
 def _is_relative_to(path: pathlib.Path, root: pathlib.Path) -> bool:
@@ -20,7 +26,10 @@ def _is_relative_to(path: pathlib.Path, root: pathlib.Path) -> bool:
 
 
 def is_workstation_local_path(text: str) -> bool:
-    return "/Users/" in text or "/home/" in text or bool(re.search(r"[A-Za-z]:\\Users\\", text))
+    return bool(
+        _UNIX_USER_PATH_IN_TEXT_RE.search(text)
+        or _WINDOWS_USER_PATH_IN_TEXT_RE.search(text)
+    )
 
 
 def normalize_publishable_path(

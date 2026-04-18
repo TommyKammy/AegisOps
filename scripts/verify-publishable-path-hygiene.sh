@@ -43,23 +43,30 @@ tracked_paths = subprocess.run(
     check=True,
 ).stdout.splitlines()
 
-offenders: list[tuple[str, int, str]] = []
+offenders: list[tuple[str, int]] = []
 for relative_path in tracked_paths:
     path = repo_root / relative_path
     if not path.is_file():
         continue
 
-    text = path.read_text(encoding="utf-8")
+    raw_bytes = path.read_bytes()
+    if b"\x00" in raw_bytes:
+        continue
+
+    text = raw_bytes.decode("utf-8", errors="replace")
     for line_number, line in enumerate(text.splitlines(), start=1):
         if ALLOWLIST_MARKER in line:
             continue
         if is_workstation_local_path(line):
-            offenders.append((relative_path, line_number, line.strip()))
+            offenders.append((relative_path, line_number))
 
 if offenders:
     print("Publishable docs and tests must not contain workstation-local absolute paths.", file=sys.stderr)
-    for relative_path, line_number, line in offenders:
-        print(f"{relative_path}:{line_number}: {line}", file=sys.stderr)
+    for relative_path, line_number in offenders:
+        print(
+            f"{relative_path}:{line_number}: contains workstation-local absolute path",
+            file=sys.stderr,
+        )
     sys.exit(1)
 
 print("Publishable docs and tests do not contain workstation-local absolute paths.")
