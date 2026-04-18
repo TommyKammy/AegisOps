@@ -76,7 +76,7 @@ class Phase25MultiSourceCaseAdmissionDocsTests(unittest.TestCase):
         for term in (
             "Phase 25 Reviewed Multi-Source Case Admission and Ambiguity Taxonomy Validation",
             "Validation status: PASS",
-            "Old Revised Phase23-20 Epic Roadmap.md",
+            "docs/Revised Phase23-20 Epic Roadmap.md",
             "README.md",
             "docs/architecture.md",
             "docs/phase-24-first-live-assistant-workflow-family-and-trusted-output-contract.md",
@@ -84,6 +84,8 @@ class Phase25MultiSourceCaseAdmissionDocsTests(unittest.TestCase):
             "unresolved model",
         ):
             self.assertIn(term, text)
+
+        self.assertNotIn("Archive/Old Revised Phase23-20 Epic Roadmap.md", text)
 
     def test_phase25_operator_runbook_exists_and_defines_multi_source_review_posture(
         self,
