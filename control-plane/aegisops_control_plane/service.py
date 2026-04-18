@@ -12,6 +12,8 @@ import re
 import uuid
 from typing import Iterable, Iterator, Mapping, Protocol, Type, TypeVar
 
+_DATETIME_TYPE = datetime
+
 from .adapters.executor import IsolatedExecutorAdapter
 from .adapters.n8n import N8NReconciliationAdapter
 from .adapters.osquery import OsqueryHostContextAdapter
@@ -784,7 +786,7 @@ _ACTION_POLICY_RANKS: dict[str, dict[str, int]] = {
 
 
 def _json_ready(value: object) -> object:
-    if isinstance(value, datetime):
+    if isinstance(value, _DATETIME_TYPE):
         return value.isoformat()
     if isinstance(value, Mapping):
         return {str(key): _json_ready(item) for key, item in value.items()}
@@ -4558,9 +4560,9 @@ class AegisOpsControlPlaneService:
             ambiguity_badge = "unresolved"
 
         occurred_at = None
-        if isinstance(record.get("acquired_at"), datetime):
+        if isinstance(record.get("acquired_at"), _DATETIME_TYPE):
             occurred_at = record.get("acquired_at")
-        elif isinstance(record.get("observed_at"), datetime):
+        elif isinstance(record.get("observed_at"), _DATETIME_TYPE):
             occurred_at = record.get("observed_at")
 
         reviewed_linkage: dict[str, object] = {"case_id": case_id}
@@ -6319,7 +6321,7 @@ class AegisOpsControlPlaneService:
 
     @staticmethod
     def _require_aware_datetime(value: object, field_name: str) -> datetime:
-        if not isinstance(value, datetime):
+        if not isinstance(value, _DATETIME_TYPE):
             raise ValueError(f"{field_name} must be a datetime")
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError(f"{field_name} must be timezone-aware")
