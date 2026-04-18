@@ -1367,16 +1367,11 @@ class AegisOpsControlPlaneService:
             record_to_dict=_record_to_dict,
             json_ready=_json_ready,
             redacted_reconciliation_payload=_redacted_reconciliation_payload,
-            build_readiness_review_path_health=(
-                lambda aggregates: self._build_readiness_review_path_health(aggregates)
-            ),
-            build_readiness_source_health=(
-                lambda aggregates: self._build_readiness_source_health(aggregates)
-            ),
+            collect_readiness_review_snapshots=self._collect_readiness_review_snapshots,
+            build_readiness_review_path_health=self._build_readiness_review_path_health,
+            build_readiness_source_health=self._build_readiness_source_health,
             build_readiness_automation_substrate_health=(
-                lambda aggregates: self._build_readiness_automation_substrate_health(
-                    aggregates
-                )
+                self._build_readiness_automation_substrate_health
             ),
             build_shutdown_status_snapshot=_build_shutdown_status_snapshot,
             derive_readiness_status=_derive_readiness_status,
@@ -2891,10 +2886,12 @@ class AegisOpsControlPlaneService:
     def _build_readiness_review_path_health(
         self,
         readiness_aggregates: ReadinessDiagnosticsAggregates,
+        readiness_review_snapshots: list[dict[str, object]] | None = None,
     ) -> dict[str, object]:
-        readiness_review_snapshots = self._collect_readiness_review_snapshots(
-            readiness_aggregates
-        )
+        if readiness_review_snapshots is None:
+            readiness_review_snapshots = self._collect_readiness_review_snapshots(
+                readiness_aggregates
+            )
         review_path_health = [
             snapshot["path_health"] for snapshot in readiness_review_snapshots
         ]
@@ -3209,10 +3206,12 @@ class AegisOpsControlPlaneService:
     def _build_readiness_source_health(
         self,
         readiness_aggregates: ReadinessDiagnosticsAggregates,
+        readiness_review_snapshots: list[dict[str, object]] | None = None,
     ) -> dict[str, object]:
-        readiness_review_snapshots = self._collect_readiness_review_snapshots(
-            readiness_aggregates
-        )
+        if readiness_review_snapshots is None:
+            readiness_review_snapshots = self._collect_readiness_review_snapshots(
+                readiness_aggregates
+            )
         source_reviews: defaultdict[str, list[Mapping[str, object]]] = defaultdict(list)
         for snapshot in readiness_review_snapshots:
             source_family = snapshot.get("source_family")
@@ -3260,10 +3259,12 @@ class AegisOpsControlPlaneService:
     def _build_readiness_automation_substrate_health(
         self,
         readiness_aggregates: ReadinessDiagnosticsAggregates,
+        readiness_review_snapshots: list[dict[str, object]] | None = None,
     ) -> dict[str, object]:
-        readiness_review_snapshots = self._collect_readiness_review_snapshots(
-            readiness_aggregates
-        )
+        if readiness_review_snapshots is None:
+            readiness_review_snapshots = self._collect_readiness_review_snapshots(
+                readiness_aggregates
+            )
         surface_reviews: defaultdict[str, list[dict[str, object]]] = defaultdict(list)
         surface_metadata: dict[str, tuple[str, str]] = {}
         for snapshot in readiness_review_snapshots:

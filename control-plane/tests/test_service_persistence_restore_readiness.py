@@ -3383,10 +3383,16 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             )
         )
 
-        readiness = service.inspect_readiness_diagnostics()
+        with mock.patch.object(
+            service._restore_readiness_service,
+            "_collect_readiness_review_snapshots",
+            wraps=service._collect_readiness_review_snapshots,
+        ) as collect_readiness_review_snapshots:
+            readiness = service.inspect_readiness_diagnostics()
         source_health = readiness.metrics["source_health"]
         automation_health = readiness.metrics["automation_substrate_health"]
 
+        self.assertEqual(collect_readiness_review_snapshots.call_count, 1)
         self.assertEqual(source_health["overall_state"], "degraded")
         self.assertEqual(source_health["tracked_sources"], 1)
         self.assertEqual(

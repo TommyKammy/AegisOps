@@ -359,14 +359,17 @@ class RestoreReadinessService:
         record_to_dict: Callable[[ControlPlaneRecord], dict[str, object]],
         json_ready: Callable[[object], object],
         redacted_reconciliation_payload: Callable[[ReconciliationRecord], dict[str, object]],
+        collect_readiness_review_snapshots: Callable[
+            [ReadinessDiagnosticsAggregates], list[dict[str, object]]
+        ],
         build_readiness_review_path_health: Callable[
-            [ReadinessDiagnosticsAggregates], dict[str, object]
+            [ReadinessDiagnosticsAggregates, list[dict[str, object]]], dict[str, object]
         ],
         build_readiness_source_health: Callable[
-            [ReadinessDiagnosticsAggregates], dict[str, object]
+            [ReadinessDiagnosticsAggregates, list[dict[str, object]]], dict[str, object]
         ],
         build_readiness_automation_substrate_health: Callable[
-            [ReadinessDiagnosticsAggregates], dict[str, object]
+            [ReadinessDiagnosticsAggregates, list[dict[str, object]]], dict[str, object]
         ],
         build_shutdown_status_snapshot: Callable[..., Any],
         derive_readiness_status: Callable[..., str],
@@ -397,6 +400,9 @@ class RestoreReadinessService:
         self._record_to_dict = record_to_dict
         self._json_ready = json_ready
         self._redacted_reconciliation_payload = redacted_reconciliation_payload
+        self._collect_readiness_review_snapshots = (
+            collect_readiness_review_snapshots
+        )
         self._build_readiness_review_path_health = (
             build_readiness_review_path_health
         )
@@ -505,13 +511,21 @@ class RestoreReadinessService:
         with self._store.transaction(isolation_level="REPEATABLE READ"):
             startup = self.describe_startup_status()
             readiness_aggregates = self.inspect_readiness_aggregates()
-            review_path_health = self._build_readiness_review_path_health(
+            readiness_review_snapshots = self._collect_readiness_review_snapshots(
                 readiness_aggregates
             )
-            source_health = self._build_readiness_source_health(readiness_aggregates)
+            review_path_health = self._build_readiness_review_path_health(
+                readiness_aggregates,
+                readiness_review_snapshots,
+            )
+            source_health = self._build_readiness_source_health(
+                readiness_aggregates,
+                readiness_review_snapshots,
+            )
             automation_substrate_health = (
                 self._build_readiness_automation_substrate_health(
-                    readiness_aggregates
+                    readiness_aggregates,
+                    readiness_review_snapshots,
                 )
             )
 
