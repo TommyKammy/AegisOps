@@ -52,6 +52,7 @@ class RuntimeConfig:
     protected_surface_reverse_proxy_secret: str = field(default="", repr=False)
     protected_surface_trusted_proxy_cidrs: tuple[str, ...] = ()
     protected_surface_proxy_service_account: str = ""
+    protected_surface_reviewed_identity_provider: str = ""
     admin_bootstrap_token: str = field(default="", repr=False)
     break_glass_token: str = field(default="", repr=False)
 
@@ -128,6 +129,10 @@ class RuntimeConfig:
             protected_surface_proxy_service_account=source.get(
                 "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_PROXY_SERVICE_ACCOUNT",
                 cls.protected_surface_proxy_service_account,
+            ).strip(),
+            protected_surface_reviewed_identity_provider=source.get(
+                "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVIEWED_IDENTITY_PROVIDER",
+                cls.protected_surface_reviewed_identity_provider,
             ).strip(),
             admin_bootstrap_token=_load_bound_string(
                 source,

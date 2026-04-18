@@ -56,6 +56,7 @@ def _build_service(*, host: str = "127.0.0.1") -> AegisOpsControlPlaneService:
             protected_surface_reverse_proxy_secret=REVIEWED_SURFACE_PROXY_SECRET,
             protected_surface_trusted_proxy_cidrs=("10.10.0.5/32",),
             protected_surface_proxy_service_account=REVIEWED_PROXY_SERVICE_ACCOUNT,
+            protected_surface_reviewed_identity_provider="authentik",
             admin_bootstrap_token=REVIEWED_ADMIN_BOOTSTRAP_TOKEN,
             break_glass_token=REVIEWED_BREAK_GLASS_TOKEN,
         ),
@@ -85,6 +86,8 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
                 forwarded_proto="https",
                 reverse_proxy_secret_header=REVIEWED_SURFACE_PROXY_SECRET,
                 proxy_service_account_header=REVIEWED_PROXY_SERVICE_ACCOUNT,
+                authenticated_identity_provider_header="authentik",
+                authenticated_subject_header="authentik-user-001",
                 authenticated_identity_header="platform-admin-001",
                 authenticated_role_header="platform_admin",
                 allowed_roles=("platform_admin",),
@@ -96,6 +99,8 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
             forwarded_proto="https",
             reverse_proxy_secret_header=REVIEWED_SURFACE_PROXY_SECRET,
             proxy_service_account_header=REVIEWED_PROXY_SERVICE_ACCOUNT,
+            authenticated_identity_provider_header="authentik",
+            authenticated_subject_header="authentik-user-001",
             authenticated_identity_header="platform-admin-001",
             authenticated_role_header="platform_admin",
             allowed_roles=("platform_admin",),
@@ -182,9 +187,53 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
                 forwarded_proto="https",
                 reverse_proxy_secret_header=REVIEWED_SURFACE_PROXY_SECRET,
                 proxy_service_account_header=REVIEWED_PROXY_SERVICE_ACCOUNT,
+                authenticated_identity_provider_header="authentik",
+                authenticated_subject_header="authentik-user-001",
                 authenticated_identity_header=None,
                 authenticated_role_header="analyst",
                 allowed_roles=("analyst", "approver", "platform_admin"),
+            )
+
+    def test_protected_surface_request_rejects_missing_reviewed_identity_provider_header(
+        self,
+    ) -> None:
+        service = _build_service(host=TEST_NON_LOOPBACK_HOST)
+
+        with self.assertRaisesRegex(
+            PermissionError,
+            "protected control-plane surfaces require an attributed reviewed identity provider header",
+        ):
+            service.authenticate_protected_surface_request(
+                peer_addr="10.10.0.5",
+                forwarded_proto="https",
+                reverse_proxy_secret_header=REVIEWED_SURFACE_PROXY_SECRET,
+                proxy_service_account_header=REVIEWED_PROXY_SERVICE_ACCOUNT,
+                authenticated_identity_provider_header=None,
+                authenticated_subject_header="authentik-user-001",
+                authenticated_identity_header="analyst-001",
+                authenticated_role_header="analyst",
+                allowed_roles=("analyst",),
+            )
+
+    def test_protected_surface_request_rejects_unreviewed_identity_provider_boundary(
+        self,
+    ) -> None:
+        service = _build_service(host=TEST_NON_LOOPBACK_HOST)
+
+        with self.assertRaisesRegex(
+            PermissionError,
+            "protected control-plane surfaces require the reviewed identity provider boundary",
+        ):
+            service.authenticate_protected_surface_request(
+                peer_addr="10.10.0.5",
+                forwarded_proto="https",
+                reverse_proxy_secret_header=REVIEWED_SURFACE_PROXY_SECRET,
+                proxy_service_account_header=REVIEWED_PROXY_SERVICE_ACCOUNT,
+                authenticated_identity_provider_header="entra-id",
+                authenticated_subject_header="entra-user-001",
+                authenticated_identity_header="analyst-001",
+                authenticated_role_header="analyst",
+                allowed_roles=("analyst",),
             )
 
     def test_protected_surface_request_accepts_reviewed_reverse_proxy_identity_headers(
@@ -197,6 +246,8 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
             forwarded_proto="https",
             reverse_proxy_secret_header=REVIEWED_SURFACE_PROXY_SECRET,
             proxy_service_account_header=REVIEWED_PROXY_SERVICE_ACCOUNT,
+            authenticated_identity_provider_header="authentik",
+            authenticated_subject_header="authentik-user-001",
             authenticated_identity_header="analyst-001",
             authenticated_role_header="analyst",
             allowed_roles=("analyst", "approver", "platform_admin"),
@@ -209,6 +260,8 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
             principal.proxy_service_account,
             REVIEWED_PROXY_SERVICE_ACCOUNT,
         )
+        self.assertEqual(principal.identity_provider, "authentik")
+        self.assertEqual(principal.subject, "authentik-user-001")
 
     def test_protected_surface_loopback_request_honors_allowed_roles(self) -> None:
         service = _build_service()
@@ -222,6 +275,8 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
                 forwarded_proto=None,
                 reverse_proxy_secret_header=None,
                 proxy_service_account_header=None,
+                authenticated_identity_provider_header=None,
+                authenticated_subject_header=None,
                 authenticated_identity_header=None,
                 authenticated_role_header=None,
                 allowed_roles=("platform_admin",),
@@ -235,6 +290,8 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
             forwarded_proto=None,
             reverse_proxy_secret_header=None,
             proxy_service_account_header=None,
+            authenticated_identity_provider_header=None,
+            authenticated_subject_header=None,
             authenticated_identity_header=None,
             authenticated_role_header=None,
             allowed_roles=("loopback_local",),

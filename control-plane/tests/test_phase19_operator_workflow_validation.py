@@ -46,6 +46,12 @@ REVIEWED_ANALYST_PRINCIPAL = AuthenticatedRuntimePrincipal(
     access_path="reviewed_reverse_proxy",
     proxy_service_account=REVIEWED_PROXY_SERVICE_ACCOUNT,
 )
+REVIEWED_PLATFORM_ADMIN_PRINCIPAL = AuthenticatedRuntimePrincipal(
+    identity="platform-admin-001",
+    role="platform_admin",
+    access_path="reviewed_reverse_proxy",
+    proxy_service_account=REVIEWED_PROXY_SERVICE_ACCOUNT,
+)
 
 
 _load_wazuh_fixture = load_wazuh_fixture
@@ -56,11 +62,25 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
     @contextlib.contextmanager
     def _mock_authenticated_surface_access(
         service: AegisOpsControlPlaneService,
+        *,
+        principal: AuthenticatedRuntimePrincipal = REVIEWED_ANALYST_PRINCIPAL,
     ) -> object:
+        def _authenticate_surface_access(**kwargs: object) -> AuthenticatedRuntimePrincipal:
+            allowed_roles = kwargs.get("allowed_roles")
+            if not isinstance(allowed_roles, tuple):
+                raise AssertionError("expected authenticate_protected_surface_request to receive allowed_roles")
+            if principal.role not in allowed_roles:
+                joined_roles = ", ".join(sorted(allowed_roles))
+                raise PermissionError(
+                    "protected control-plane surface role is not authorized for this endpoint; "
+                    f"expected one of: {joined_roles}"
+                )
+            return principal
+
         with mock.patch.object(
             service,
             "authenticate_protected_surface_request",
-            return_value=REVIEWED_ANALYST_PRINCIPAL,
+            side_effect=_authenticate_surface_access,
         ):
             yield
 
@@ -1337,6 +1357,91 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                             "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
                             payload["message"],
                         )
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(timeout=2)
+
+    def test_create_reviewed_action_request_rejects_platform_admin_identity(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret=REVIEWED_SHARED_SECRET,
+                wazuh_ingest_reverse_proxy_secret=REVIEWED_PROXY_SECRET,
+            ),
+            store=store,
+        )
+
+        created = service.ingest_wazuh_alert(
+            raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
+            authorization_header=f"Bearer {REVIEWED_SHARED_SECRET}",
+            forwarded_proto="https",
+            reverse_proxy_secret_header=REVIEWED_PROXY_SECRET,
+            peer_addr="127.0.0.1",
+        )
+        promoted_case = service.promote_alert_to_case(created.alert.alert_id)
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Require a reviewed approval decision inside the runtime boundary.",
+        )
+
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(
+            main,
+            "ThreadingHTTPServer",
+            RecordingServer,
+        ), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_PLATFORM_ADMIN_PRINCIPAL,
+        ):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+                base_url = f"http://127.0.0.1:{servers[0].server_port}"
+                with self.assertRaises(error.HTTPError) as request_error:
+                    request.urlopen(
+                        request.Request(
+                            f"{base_url}/operator/create-reviewed-action-request",
+                            data=json.dumps(
+                                {
+                                    "family": "recommendation",
+                                    "record_id": recommendation.recommendation_id,
+                                    "requester_identity": "platform-admin-001",
+                                    "recipient_identity": "repo-owner-001",
+                                    "message_intent": "Notify the accountable repository owner about the reviewed permission change.",
+                                    "escalation_reason": "Platform administrators must not replace the reviewed analyst request path.",
+                                    "expires_at": (
+                                        datetime.now(timezone.utc) + timedelta(hours=4)
+                                    ).isoformat(),
+                                }
+                            ).encode("utf-8"),
+                            headers={"Content-Type": "application/json"},
+                            method="POST",
+                        ),
+                        timeout=2,
+                    )
+                self.assertEqual(request_error.exception.code, 403)
+                payload = json.loads(request_error.exception.read().decode("utf-8"))
+                self.assertIn("expected one of: analyst", payload["message"])
             finally:
                 if servers:
                     servers[0].shutdown()

@@ -211,6 +211,8 @@ class AuthenticatedRuntimePrincipal:
     role: str
     access_path: str
     proxy_service_account: str | None = None
+    identity_provider: str | None = None
+    subject: str | None = None
 
 
 @dataclass(frozen=True)
@@ -1843,6 +1845,8 @@ class AegisOpsControlPlaneService:
         forwarded_proto: str | None,
         reverse_proxy_secret_header: str | None,
         proxy_service_account_header: str | None,
+        authenticated_identity_provider_header: str | None,
+        authenticated_subject_header: str | None,
         authenticated_identity_header: str | None,
         authenticated_role_header: str | None,
         allowed_roles: tuple[str, ...],
@@ -1852,6 +1856,8 @@ class AegisOpsControlPlaneService:
             forwarded_proto=forwarded_proto,
             reverse_proxy_secret_header=reverse_proxy_secret_header,
             proxy_service_account_header=proxy_service_account_header,
+            authenticated_identity_provider_header=authenticated_identity_provider_header,
+            authenticated_subject_header=authenticated_subject_header,
             authenticated_identity_header=authenticated_identity_header,
             authenticated_role_header=authenticated_role_header,
             allowed_roles=allowed_roles,

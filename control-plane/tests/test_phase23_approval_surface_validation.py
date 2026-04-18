@@ -430,10 +430,10 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
             self.assertEqual(exc_info.exception.code, HTTPStatus.FORBIDDEN)
             error_payload = json.loads(exc_info.exception.read().decode("utf-8"))
             self.assertEqual(error_payload["error"], "forbidden")
-            self.assertIn("approver role authority", error_payload["message"])
+            self.assertIn("expected one of: approver", error_payload["message"])
             self.assertEqual(
                 authenticate_mock.call_args_list[0].kwargs["allowed_roles"],
-                ("analyst", "approver", "platform_admin"),
+                ("approver",),
             )
             stored_request = service.get_record(
                 type(action_request),
