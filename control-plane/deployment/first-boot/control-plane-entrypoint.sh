@@ -324,83 +324,152 @@ SELECT CASE
   )
   AND NOT EXISTS (
     WITH required_subjects AS (
-      SELECT 'analytic_signal'::text AS subject_record_family, analytic_signal_id AS subject_record_id
+      SELECT
+        'analytic_signal'::text AS subject_record_family,
+        analytic_signal_id AS subject_record_id,
+        lifecycle_state
       FROM aegisops_control.analytic_signal_records
 
       UNION ALL
 
-      SELECT 'alert'::text, alert_id
+      SELECT 'alert'::text, alert_id, lifecycle_state
       FROM aegisops_control.alert_records
 
       UNION ALL
 
-      SELECT 'evidence'::text, evidence_id
+      SELECT 'evidence'::text, evidence_id, lifecycle_state
       FROM aegisops_control.evidence_records
 
       UNION ALL
 
-      SELECT 'observation'::text, observation_id
+      SELECT 'observation'::text, observation_id, lifecycle_state
       FROM aegisops_control.observation_records
 
       UNION ALL
 
-      SELECT 'lead'::text, lead_id
+      SELECT 'lead'::text, lead_id, lifecycle_state
       FROM aegisops_control.lead_records
 
       UNION ALL
 
-      SELECT 'case'::text, case_id
+      SELECT 'case'::text, case_id, lifecycle_state
       FROM aegisops_control.case_records
 
       UNION ALL
 
-      SELECT 'recommendation'::text, recommendation_id
+      SELECT 'recommendation'::text, recommendation_id, lifecycle_state
       FROM aegisops_control.recommendation_records
 
       UNION ALL
 
-      SELECT 'approval_decision'::text, approval_decision_id
+      SELECT 'approval_decision'::text, approval_decision_id, lifecycle_state
       FROM aegisops_control.approval_decision_records
 
       UNION ALL
 
-      SELECT 'action_request'::text, action_request_id
+      SELECT 'action_request'::text, action_request_id, lifecycle_state
       FROM aegisops_control.action_request_records
 
       UNION ALL
 
-      SELECT 'action_execution'::text, action_execution_id
+      SELECT 'action_execution'::text, action_execution_id, lifecycle_state
       FROM aegisops_control.action_execution_records
 
       UNION ALL
 
-      SELECT 'hunt'::text, hunt_id
+      SELECT 'hunt'::text, hunt_id, lifecycle_state
       FROM aegisops_control.hunt_records
 
       UNION ALL
 
-      SELECT 'hunt_run'::text, hunt_run_id
+      SELECT 'hunt_run'::text, hunt_run_id, lifecycle_state
       FROM aegisops_control.hunt_run_records
 
       UNION ALL
 
-      SELECT 'ai_trace'::text, ai_trace_id
+      SELECT 'ai_trace'::text, ai_trace_id, lifecycle_state
       FROM aegisops_control.ai_trace_records
 
       UNION ALL
 
-      SELECT 'reconciliation'::text, reconciliation_id
+      SELECT 'reconciliation'::text, reconciliation_id, lifecycle_state
       FROM aegisops_control.reconciliation_records
+    ),
+    ordered_transitions AS (
+      SELECT
+        subject_record_family,
+        subject_record_id,
+        previous_lifecycle_state,
+        lifecycle_state,
+        transitioned_at,
+        transition_id,
+        row_number() OVER (
+          PARTITION BY subject_record_family, subject_record_id
+          ORDER BY transitioned_at DESC, transition_id DESC
+        ) AS latest_rank,
+        row_number() OVER (
+          PARTITION BY subject_record_family, subject_record_id
+          ORDER BY transitioned_at ASC, transition_id ASC
+        ) AS oldest_rank,
+        lag(lifecycle_state) OVER (
+          PARTITION BY subject_record_family, subject_record_id
+          ORDER BY transitioned_at ASC, transition_id ASC
+        ) AS prior_lifecycle_state
+      FROM aegisops_control.lifecycle_transition_records
+    ),
+    latest_transitions AS (
+      SELECT
+        subject_record_family,
+        subject_record_id,
+        previous_lifecycle_state,
+        lifecycle_state
+      FROM ordered_transitions
+      WHERE latest_rank = 1
     ),
     missing_subjects AS (
       SELECT subject_record_family, subject_record_id
       FROM required_subjects
       EXCEPT
       SELECT subject_record_family, subject_record_id
-      FROM aegisops_control.lifecycle_transition_records
+      FROM latest_transitions
+    ),
+    latest_transition_mismatches AS (
+      SELECT
+        required_subjects.subject_record_family,
+        required_subjects.subject_record_id
+      FROM required_subjects
+      JOIN latest_transitions
+        ON latest_transitions.subject_record_family = required_subjects.subject_record_family
+       AND latest_transitions.subject_record_id = required_subjects.subject_record_id
+      WHERE latest_transitions.lifecycle_state <> required_subjects.lifecycle_state
+    ),
+    orphan_transitions AS (
+      SELECT
+        latest_transitions.subject_record_family,
+        latest_transitions.subject_record_id
+      FROM latest_transitions
+      LEFT JOIN required_subjects
+        ON required_subjects.subject_record_family = latest_transitions.subject_record_family
+       AND required_subjects.subject_record_id = latest_transitions.subject_record_id
+      WHERE required_subjects.subject_record_id IS NULL
+    ),
+    transition_chain_inconsistencies AS (
+      SELECT
+        subject_record_family,
+        subject_record_id
+      FROM ordered_transitions
+      WHERE
+        (oldest_rank = 1 AND previous_lifecycle_state IS NOT NULL)
+        OR (oldest_rank > 1 AND previous_lifecycle_state IS DISTINCT FROM prior_lifecycle_state)
+        OR (previous_lifecycle_state IS NOT NULL AND previous_lifecycle_state = lifecycle_state)
     )
-    SELECT 1
-    FROM missing_subjects
+    SELECT 1 FROM missing_subjects
+    UNION ALL
+    SELECT 1 FROM latest_transition_mismatches
+    UNION ALL
+    SELECT 1 FROM orphan_transitions
+    UNION ALL
+    SELECT 1 FROM transition_chain_inconsistencies
   )
   THEN 'ready'
   ELSE 'not-ready'
