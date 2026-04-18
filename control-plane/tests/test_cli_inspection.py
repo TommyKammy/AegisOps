@@ -4703,6 +4703,89 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             "analyst-003",
         )
 
+    def test_cli_inspect_case_detail_keeps_created_status_when_manual_fallback_is_recorded_after_success(
+        self,
+    ) -> None:
+        _, service, promoted_case, evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        delegated_at = reviewed_at + timedelta(minutes=15)
+        compared_at = reviewed_at + timedelta(minutes=20)
+        seeded = self._seed_create_tracking_ticket_request(
+            service=service,
+            promoted_case=promoted_case,
+            reviewed_at=reviewed_at,
+            suffix="created-with-fallback-001",
+            coordination_reference_id="coord-ref-cli-create-ticket-created-with-fallback-001",
+        )
+
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id=seeded["action_request"].action_request_id,
+            approved_payload=seeded["approved_payload"],
+            delegated_at=delegated_at,
+            delegation_issuer="control-plane-service",
+        )
+        downstream_binding = execution.provenance["downstream_binding"]
+        service.reconcile_action_execution(
+            action_request_id=seeded["action_request"].action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(
+                {
+                    "execution_run_id": execution.execution_run_id,
+                    "execution_surface_id": "shuffle",
+                    "idempotency_key": seeded["action_request"].idempotency_key,
+                    "approval_decision_id": seeded["approval"].approval_decision_id,
+                    "delegation_id": execution.delegation_id,
+                    "payload_hash": seeded["payload_hash"],
+                    "coordination_reference_id": downstream_binding[
+                        "coordination_reference_id"
+                    ],
+                    "coordination_target_type": downstream_binding[
+                        "coordination_target_type"
+                    ],
+                    "external_receipt_id": downstream_binding["external_receipt_id"],
+                    "coordination_target_id": downstream_binding[
+                        "coordination_target_id"
+                    ],
+                    "ticket_reference_url": downstream_binding["ticket_reference_url"],
+                    "observed_at": compared_at,
+                    "status": "success",
+                },
+            ),
+            compared_at=compared_at,
+            stale_after=reviewed_at + timedelta(hours=1),
+        )
+        service.record_action_review_manual_fallback(
+            action_request_id=seeded["action_request"].action_request_id,
+            fallback_at=reviewed_at + timedelta(minutes=45),
+            fallback_actor_identity="analyst-004",
+            authority_boundary="approved_human_fallback",
+            reason="Business-hours operator added manual fallback notes after a completed create-ticket review.",
+            action_taken="Captured manual ticket fallback instructions for the reviewed coordination flow.",
+            verification_evidence_ids=(evidence_id,),
+            residual_uncertainty="Awaiting operator acknowledgement during the next review window.",
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-case-detail", "--case-id", promoted_case.case_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        review = payload["current_action_review"]
+        self.assertEqual(review["coordination_ticket_outcome"]["status"], "created")
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["manual_fallback"]["action_taken"],
+            "Captured manual ticket fallback instructions for the reviewed coordination flow.",
+        )
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["manual_fallback"][
+                "fallback_actor_identity"
+            ],
+            "analyst-004",
+        )
+
     def test_cli_inspect_case_detail_keeps_after_hours_handoff_visible_for_non_executed_review_states(
         self,
     ) -> None:

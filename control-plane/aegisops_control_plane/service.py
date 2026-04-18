@@ -4193,17 +4193,7 @@ class AegisOpsControlPlaneService:
             if isinstance(manual_fallback_entry, Mapping):
                 manual_fallback = dict(manual_fallback_entry)
 
-        if manual_fallback is not None:
-            status = "manual_fallback"
-            summary = str(
-                manual_fallback.get("action_taken")
-                or manual_fallback.get("reason")
-                or "reviewed create-ticket outcome recorded as manual fallback"
-            )
-        elif mismatch is not None:
-            status = "mismatch"
-            summary = str(mismatch["mismatch_summary"])
-        elif (
+        if (
             reconciliation is not None
             and reconciliation.lifecycle_state == "matched"
             and action_execution is not None
@@ -4214,6 +4204,16 @@ class AegisOpsControlPlaneService:
                 "reviewed create-ticket outcome recorded from authoritative "
                 "execution and reconciliation"
             )
+        elif manual_fallback is not None:
+            status = "manual_fallback"
+            summary = str(
+                manual_fallback.get("action_taken")
+                or manual_fallback.get("reason")
+                or "reviewed create-ticket outcome recorded as manual fallback"
+            )
+        elif mismatch is not None:
+            status = "mismatch"
+            summary = str(mismatch["mismatch_summary"])
         elif terminal_issue is not None and terminal_issue["category"] == "timeout":
             status = "timeout"
             summary = str(terminal_issue["reason"]).replace("_", " ")
