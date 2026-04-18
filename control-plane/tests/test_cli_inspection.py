@@ -4510,6 +4510,46 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             "provider",
         )
 
+    def test_cli_inspect_case_detail_surfaces_create_tracking_ticket_failure(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        delegated_at = reviewed_at + timedelta(minutes=15)
+        seeded = self._seed_create_tracking_ticket_request(
+            service=service,
+            promoted_case=promoted_case,
+            reviewed_at=reviewed_at,
+            suffix="failure-001",
+            coordination_reference_id="coord-ref-cli-create-ticket-failure-001",
+        )
+
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id=seeded["action_request"].action_request_id,
+            approved_payload=seeded["approved_payload"],
+            delegated_at=delegated_at,
+            delegation_issuer="control-plane-service",
+        )
+        service.persist_record(replace(execution, lifecycle_state="failed"))
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-case-detail", "--case-id", promoted_case.case_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        review = payload["current_action_review"]
+        self.assertEqual(review["coordination_ticket_outcome"]["status"], "failed")
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["failure"]["reason"],
+            "execution_failed",
+        )
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["failure"]["path"],
+            "provider",
+        )
+
     def test_cli_inspect_case_detail_surfaces_create_tracking_ticket_manual_fallback(
         self,
     ) -> None:
@@ -4570,6 +4610,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         review = payload["current_action_review"]
         self.assertEqual(payload["external_ticket_reference"]["status"], "present")
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["status"],
+            "manual_fallback",
+        )
         self.assertEqual(
             review["coordination_ticket_outcome"]["manual_fallback"]["action_taken"],
             "Opened the reviewed tracking ticket manually using the approved procedure.",

@@ -4181,7 +4181,7 @@ class AegisOpsControlPlaneService:
 
         downstream_binding = self._action_review_downstream_binding(action_execution)
         mismatch = self._action_review_coordination_ticket_mismatch(reconciliation)
-        timeout = self._action_review_coordination_ticket_timeout(
+        terminal_issue = self._action_review_coordination_ticket_terminal_issue(
             action_execution=action_execution,
             path_health=path_health,
         )
@@ -4191,7 +4191,14 @@ class AegisOpsControlPlaneService:
             if isinstance(manual_fallback_entry, Mapping):
                 manual_fallback = dict(manual_fallback_entry)
 
-        if mismatch is not None:
+        if manual_fallback is not None:
+            status = "manual_fallback"
+            summary = str(
+                manual_fallback.get("action_taken")
+                or manual_fallback.get("reason")
+                or "reviewed create-ticket outcome recorded as manual fallback"
+            )
+        elif mismatch is not None:
             status = "mismatch"
             summary = str(mismatch["mismatch_summary"])
         elif (
@@ -4205,9 +4212,12 @@ class AegisOpsControlPlaneService:
                 "reviewed create-ticket outcome recorded from authoritative "
                 "execution and reconciliation"
             )
-        elif timeout is not None:
+        elif terminal_issue is not None and terminal_issue["category"] == "timeout":
             status = "timeout"
-            summary = str(timeout["reason"]).replace("_", " ")
+            summary = str(terminal_issue["reason"]).replace("_", " ")
+        elif terminal_issue is not None:
+            status = "failed"
+            summary = str(terminal_issue["reason"]).replace("_", " ")
         else:
             status = "pending"
             summary = "reviewed create-ticket outcome still awaiting authoritative result"
@@ -4253,8 +4263,20 @@ class AegisOpsControlPlaneService:
                 else downstream_binding.get("ticket_reference_url")
             ),
         }
-        if timeout is not None:
+        if terminal_issue is not None and terminal_issue["category"] == "timeout":
+            timeout = {
+                key: value
+                for key, value in terminal_issue.items()
+                if key != "category"
+            }
             outcome["timeout"] = timeout
+        elif terminal_issue is not None:
+            failure = {
+                key: value
+                for key, value in terminal_issue.items()
+                if key != "category"
+            }
+            outcome["failure"] = failure
         if mismatch is not None:
             outcome["mismatch"] = mismatch
         if manual_fallback is not None:
@@ -4289,7 +4311,7 @@ class AegisOpsControlPlaneService:
         return mismatch
 
     @staticmethod
-    def _action_review_coordination_ticket_timeout(
+    def _action_review_coordination_ticket_terminal_issue(
         *,
         action_execution: ActionExecutionRecord | None,
         path_health: Mapping[str, object],
@@ -4302,6 +4324,7 @@ class AegisOpsControlPlaneService:
             dispatch_failure = action_execution.provenance["dispatch_failure"]
             if dispatch_failure.get("error_type") == "TimeoutError":
                 timeout = {
+                    "category": "timeout",
                     "path": "provider",
                     "reason": "dispatch_timeout",
                 }
@@ -4320,13 +4343,28 @@ class AegisOpsControlPlaneService:
             "authoritative_outcome_timeout",
             "reconciliation_timeout",
         }
+        terminal_failure_reasons = {
+            "execution_failed",
+            "execution_canceled",
+            "execution_expired",
+            "execution_rejected",
+        }
         for path_name in ("ingest", "delegation", "provider", "persistence"):
             path = paths.get(path_name)
             if not isinstance(path, Mapping):
                 continue
             reason = path.get("reason")
-            if isinstance(reason, str) and reason in timeout_reasons:
+            if not isinstance(reason, str):
+                continue
+            if reason in timeout_reasons:
                 return {
+                    "category": "timeout",
+                    "path": path_name,
+                    "reason": reason,
+                }
+            if path_name == "provider" and reason in terminal_failure_reasons:
+                return {
+                    "category": "failed",
                     "path": path_name,
                     "reason": reason,
                 }
