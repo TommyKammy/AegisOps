@@ -2482,12 +2482,28 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             "authoritative-anchor",
         )
         self.assertEqual(
+            payload["cross_source_timeline"][1]["record_family"],
+            "evidence",
+        )
+        self.assertEqual(
+            payload["cross_source_timeline"][1]["blocking_reason"],
+            "missing_provenance",
+        )
+        self.assertEqual(
+            payload["cross_source_timeline"][2]["record_family"],
+            "observation",
+        )
+        self.assertEqual(
+            payload["cross_source_timeline"][2]["blocking_reason"],
+            "missing_provenance",
+        )
+        self.assertEqual(
             payload["provenance_summary"]["authoritative_anchor"]["record_id"],
             promoted_case.alert_id,
         )
         self.assertEqual(
             payload["provenance_summary"]["source_families"],
-            ["github_audit"],
+            ["github_audit", "wazuh", "unknown"],
         )
 
     def test_cli_records_bounded_operator_casework_actions(self) -> None:

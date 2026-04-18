@@ -4493,54 +4493,64 @@ class AegisOpsControlPlaneService:
         record: Mapping[str, object],
         case_id: str,
     ) -> dict[str, object] | None:
-        provenance = record.get("provenance")
-        if not isinstance(provenance, Mapping) or not provenance:
-            return None
+        raw_provenance = record.get("provenance")
+        provenance_missing = not isinstance(raw_provenance, Mapping) or not raw_provenance
+        provenance = raw_provenance if isinstance(raw_provenance, Mapping) else {}
+
+        def _safe_optional_string(value: object, field_name: str) -> str | None:
+            try:
+                return self._normalize_optional_string(value, field_name)
+            except ValueError:
+                return None
 
         record_id_field = f"{record_family}_id"
         record_id = self._normalize_optional_string(record.get(record_id_field), record_id_field)
         if record_id is None:
             return None
 
-        explicit_source_family = self._normalize_optional_string(
+        explicit_source_family = _safe_optional_string(
             provenance.get("source_family"),
             f"{record_family}.provenance.source_family",
         )
-        source_system = self._normalize_optional_string(
+        source_system = _safe_optional_string(
             provenance.get("source_system"),
             f"{record_family}.provenance.source_system",
-        ) or self._normalize_optional_string(
+        ) or _safe_optional_string(
             record.get("source_system"),
             f"{record_family}.source_system",
         )
         source_family = explicit_source_family or source_system or "unknown"
 
-        classification = self._normalize_optional_string(
+        classification = _safe_optional_string(
             provenance.get("classification"),
             f"{record_family}.provenance.classification",
         )
-        source_id = self._normalize_optional_string(
+        source_id = _safe_optional_string(
             provenance.get("source_id"),
             f"{record_family}.provenance.source_id",
         )
-        timestamp = self._normalize_optional_string(
+        timestamp = _safe_optional_string(
             provenance.get("timestamp"),
             f"{record_family}.provenance.timestamp",
         )
-        reviewed_by = self._normalize_optional_string(
+        reviewed_by = _safe_optional_string(
             provenance.get("reviewed_by"),
             f"{record_family}.provenance.reviewed_by",
         )
-        blocking_reason = self._normalize_optional_string(
+        blocking_reason = _safe_optional_string(
             provenance.get("blocking_reason"),
             f"{record_family}.provenance.blocking_reason",
         )
         if None in (classification, source_id, timestamp, reviewed_by):
             classification = "unresolved-linkage"
             if blocking_reason is None:
-                blocking_reason = "missing_required_provenance_fields"
+                blocking_reason = (
+                    "missing_provenance"
+                    if provenance_missing
+                    else "missing_or_invalid_required_provenance_fields"
+                )
 
-        ambiguity_badge = self._normalize_optional_string(
+        ambiguity_badge = _safe_optional_string(
             provenance.get("ambiguity_badge"),
             f"{record_family}.provenance.ambiguity_badge",
         )
