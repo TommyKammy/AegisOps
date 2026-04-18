@@ -3,7 +3,7 @@
 - Validation status: PASS
 - Reviewed on: 2026-04-18
 - Scope: confirm the reviewed multi-source case admission contract defines bounded source admission, explicit provenance, and one fail-closed same-entity / related-entity / unresolved taxonomy without widening authority or weakening the advisory-only unresolved model.
-- Reviewed sources: `docs/phase-25-reviewed-multi-source-case-admission-and-ambiguity-taxonomy.md`, `Archive/Old Revised Phase23-20 Epic Roadmap.md` (Obsidian roadmap note; the issue-body `Plan&Roadmap/Revised Phase23-20 Epic Roadmap.md` path does not exist on this host), `README.md`, `docs/architecture.md`, `docs/phase-15-identity-grounded-analyst-assistant-boundary.md`, `docs/phase-24-first-live-assistant-workflow-family-and-trusted-output-contract.md`, `docs/control-plane-state-model.md`
+- Reviewed sources: `docs/phase-25-reviewed-multi-source-case-admission-and-ambiguity-taxonomy.md`, `docs/Revised Phase23-20 Epic Roadmap.md` (current reviewed roadmap note present on this host), `README.md`, `docs/architecture.md`, `docs/phase-15-identity-grounded-analyst-assistant-boundary.md`, `docs/phase-24-first-live-assistant-workflow-family-and-trusted-output-contract.md`, `docs/control-plane-state-model.md`
 
 ## Validation Summary
 
@@ -15,7 +15,7 @@ The design keeps osquery-backed host evidence in an augmenting evidence role and
 
 ## Roadmap Alignment Review
 
-The reviewed roadmap source, `Archive/Old Revised Phase23-20 Epic Roadmap.md`, describes the accepted slice as reviewed multi-source casework with osquery-backed host context, ambiguity-preserving review, and a same-entity / related-entity / unresolved taxonomy.
+The reviewed roadmap source, `docs/Revised Phase23-20 Epic Roadmap.md`, describes the accepted slice as reviewed multi-source casework with osquery-backed host context, ambiguity-preserving review, and a same-entity / related-entity / unresolved taxonomy.
 
 The Phase 25 design stays aligned with that roadmap intent by defining bounded admission rules, ambiguity preservation, and reviewed provenance rather than broad source-spanning correlation.
 
