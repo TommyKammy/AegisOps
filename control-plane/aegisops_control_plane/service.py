@@ -290,6 +290,7 @@ class AlertDetailSnapshot:
     lifecycle_transitions: tuple[dict[str, object], ...]
     current_action_review: dict[str, object] | None
     action_reviews: tuple[dict[str, object], ...]
+    external_ticket_reference: dict[str, object]
 
     def to_dict(self) -> dict[str, object]:
         return _json_ready(
@@ -311,6 +312,7 @@ class AlertDetailSnapshot:
                 "lifecycle_transitions": self.lifecycle_transitions,
                 "current_action_review": self.current_action_review,
                 "action_reviews": self.action_reviews,
+                "external_ticket_reference": self.external_ticket_reference,
             }
         )
 
@@ -339,6 +341,7 @@ class CaseDetailSnapshot:
     provenance_summary: dict[str, object]
     current_action_review: dict[str, object] | None
     action_reviews: tuple[dict[str, object], ...]
+    external_ticket_reference: dict[str, object]
 
     def to_dict(self) -> dict[str, object]:
         return _json_ready(
@@ -365,6 +368,7 @@ class CaseDetailSnapshot:
                 "provenance_summary": self.provenance_summary,
                 "current_action_review": self.current_action_review,
                 "action_reviews": self.action_reviews,
+                "external_ticket_reference": self.external_ticket_reference,
             }
         )
 
@@ -849,6 +853,52 @@ def _record_to_dict(record: ControlPlaneRecord) -> dict[str, object]:
         field.name: getattr(record, field.name)
         for field in fields(record)
     }
+
+
+def _coordination_reference_payload(
+    record: Mapping[str, object] | ControlPlaneRecord | None,
+) -> dict[str, str] | None:
+    if record is None:
+        return None
+    if isinstance(record, Mapping):
+        payload = record
+    else:
+        payload = _record_to_dict(record)
+
+    coordination_reference_id = payload.get("coordination_reference_id")
+    coordination_target_type = payload.get("coordination_target_type")
+    coordination_target_id = payload.get("coordination_target_id")
+    ticket_reference_url = payload.get("ticket_reference_url")
+    if not all(
+        isinstance(value, str) and value.strip()
+        for value in (
+            coordination_reference_id,
+            coordination_target_type,
+            coordination_target_id,
+            ticket_reference_url,
+        )
+    ):
+        return None
+    return {
+        "coordination_reference_id": coordination_reference_id.strip(),
+        "coordination_target_type": coordination_target_type.strip(),
+        "coordination_target_id": coordination_target_id.strip(),
+        "ticket_reference_url": ticket_reference_url.strip(),
+    }
+
+
+def _coordination_reference_signature(
+    record: Mapping[str, object] | ControlPlaneRecord | None,
+) -> tuple[str, str, str, str] | None:
+    payload = _coordination_reference_payload(record)
+    if payload is None:
+        return None
+    return (
+        payload["coordination_reference_id"],
+        payload["coordination_target_type"],
+        payload["coordination_target_id"],
+        payload["ticket_reference_url"],
+    )
 
 
 def _redacted_reconciliation_payload(
@@ -4206,6 +4256,133 @@ class AegisOpsControlPlaneService:
             records=tuple(queue_records),
         )
 
+    def _build_alert_external_ticket_reference_surface(
+        self,
+        *,
+        alert: AlertRecord,
+        case_record: CaseRecord | None,
+    ) -> dict[str, object]:
+        alert_reference = _coordination_reference_payload(alert)
+        case_reference = _coordination_reference_payload(case_record)
+        if alert_reference is None and case_reference is None:
+            status = "missing"
+        elif alert_reference is None:
+            status = "linked_case_reference_only"
+        elif case_record is None:
+            status = "present"
+        elif case_reference is None:
+            status = "linked_case_reference_missing"
+        elif _coordination_reference_signature(
+            alert
+        ) != _coordination_reference_signature(case_record):
+            status = "linked_case_reference_mismatch"
+        else:
+            status = "present"
+        return {
+            "authority": "non_authoritative",
+            "status": status,
+            "coordination_reference_id": (
+                alert_reference["coordination_reference_id"]
+                if alert_reference is not None
+                else None
+            ),
+            "coordination_target_type": (
+                alert_reference["coordination_target_type"]
+                if alert_reference is not None
+                else None
+            ),
+            "coordination_target_id": (
+                alert_reference["coordination_target_id"]
+                if alert_reference is not None
+                else None
+            ),
+            "ticket_reference_url": (
+                alert_reference["ticket_reference_url"]
+                if alert_reference is not None
+                else None
+            ),
+            "linked_case_id": case_record.case_id if case_record is not None else None,
+            "linked_case_reference": case_reference,
+        }
+
+    def _build_case_external_ticket_reference_surface(
+        self,
+        *,
+        case: CaseRecord,
+        linked_alert_records: tuple[dict[str, object], ...],
+    ) -> dict[str, object]:
+        case_reference = _coordination_reference_payload(case)
+        linked_alert_references = tuple(
+            {
+                "alert_id": str(record.get("alert_id")),
+                **reference,
+            }
+            for record in linked_alert_records
+            for reference in (_coordination_reference_payload(record),)
+            if reference is not None
+        )
+        linked_alert_signatures = {
+            (
+                reference["coordination_reference_id"],
+                reference["coordination_target_type"],
+                reference["coordination_target_id"],
+                reference["ticket_reference_url"],
+            )
+            for reference in linked_alert_references
+        }
+        linked_alert_ids = {
+            str(record.get("alert_id"))
+            for record in linked_alert_records
+            if isinstance(record.get("alert_id"), str)
+        }
+        linked_alert_ids_with_reference = {
+            reference["alert_id"] for reference in linked_alert_references
+        }
+        missing_linked_alert_ids = linked_alert_ids - linked_alert_ids_with_reference
+        if case_reference is None and not linked_alert_references:
+            status = "missing"
+        elif case_reference is None and missing_linked_alert_ids:
+            status = "linked_alert_reference_missing"
+        elif case_reference is None and len(linked_alert_signatures) > 1:
+            status = "linked_alert_reference_mismatch"
+        elif case_reference is None:
+            status = "linked_alert_reference_only"
+        else:
+            if missing_linked_alert_ids:
+                status = "linked_alert_reference_missing"
+            elif linked_alert_signatures and linked_alert_signatures != {
+                _coordination_reference_signature(case)
+            }:
+                status = "linked_alert_reference_mismatch"
+            else:
+                status = "present"
+
+        return {
+            "authority": "non_authoritative",
+            "status": status,
+            "coordination_reference_id": (
+                case_reference["coordination_reference_id"]
+                if case_reference is not None
+                else None
+            ),
+            "coordination_target_type": (
+                case_reference["coordination_target_type"]
+                if case_reference is not None
+                else None
+            ),
+            "coordination_target_id": (
+                case_reference["coordination_target_id"]
+                if case_reference is not None
+                else None
+            ),
+            "ticket_reference_url": (
+                case_reference["ticket_reference_url"]
+                if case_reference is not None
+                else None
+            ),
+            "linked_alert_references": linked_alert_references,
+        }
+
     def inspect_alert_detail(self, alert_id: str) -> AlertDetailSnapshot:
         alert_id = self._require_non_empty_string(alert_id, "alert_id")
         alert = self._store.get(AlertRecord, alert_id)
@@ -4312,6 +4489,10 @@ class AegisOpsControlPlaneService:
             ),
             current_action_review=dict(action_reviews[0]) if action_reviews else None,
             action_reviews=action_reviews,
+            external_ticket_reference=self._build_alert_external_ticket_reference_surface(
+                alert=alert,
+                case_record=case_record,
+            ),
         )
 
     def inspect_assistant_context(
@@ -4374,6 +4555,10 @@ class AegisOpsControlPlaneService:
             provenance_summary=provenance_summary,
             current_action_review=dict(action_reviews[0]) if action_reviews else None,
             action_reviews=action_reviews,
+            external_ticket_reference=self._build_case_external_ticket_reference_surface(
+                case=case,
+                linked_alert_records=context_snapshot.linked_alert_records,
+            ),
         )
 
     def _build_case_cross_source_surfaces(
@@ -4680,13 +4865,9 @@ class AegisOpsControlPlaneService:
             )
             if merged_case_evidence_ids != current_case.evidence_ids:
                 self.persist_record(
-                    CaseRecord(
-                        case_id=current_case.case_id,
-                        alert_id=current_case.alert_id,
-                        finding_id=current_case.finding_id,
+                    replace(
+                        current_case,
                         evidence_ids=merged_case_evidence_ids,
-                        lifecycle_state=current_case.lifecycle_state,
-                        reviewed_context=current_case.reviewed_context,
                     )
                 )
 
@@ -4928,12 +5109,8 @@ class AegisOpsControlPlaneService:
                 },
             )
             return self.persist_record(
-                CaseRecord(
-                    case_id=case.case_id,
-                    alert_id=case.alert_id,
-                    finding_id=case.finding_id,
-                    evidence_ids=case.evidence_ids,
-                    lifecycle_state=case.lifecycle_state,
+                replace(
+                    case,
                     reviewed_context=updated_reviewed_context,
                 )
             )
@@ -4963,11 +5140,8 @@ class AegisOpsControlPlaneService:
                 },
             )
             updated_case = self.persist_record(
-                CaseRecord(
-                    case_id=case.case_id,
-                    alert_id=case.alert_id,
-                    finding_id=case.finding_id,
-                    evidence_ids=case.evidence_ids,
+                replace(
+                    case,
                     lifecycle_state=lifecycle_state,
                     reviewed_context=updated_reviewed_context,
                 ),
@@ -4977,11 +5151,8 @@ class AegisOpsControlPlaneService:
                 alert = self._store.get(AlertRecord, case.alert_id)
                 if alert is not None:
                     self.persist_record(
-                        AlertRecord(
-                            alert_id=alert.alert_id,
-                            finding_id=alert.finding_id,
-                            analytic_signal_id=alert.analytic_signal_id,
-                            case_id=alert.case_id,
+                        replace(
+                            alert,
                             lifecycle_state="closed",
                             reviewed_context=_merge_reviewed_context(
                                 alert.reviewed_context,
@@ -6501,30 +6672,31 @@ class AegisOpsControlPlaneService:
                 )
 
             promoted_case = self.persist_record(
-                CaseRecord(
+                replace(
+                    existing_case,
+                    alert_id=alert.alert_id,
+                    finding_id=alert.finding_id,
+                    evidence_ids=merged_case_evidence_ids,
+                    reviewed_context=_merge_reviewed_context(
+                        existing_case.reviewed_context,
+                        alert.reviewed_context,
+                    ),
+                )
+                if existing_case is not None
+                else CaseRecord(
                     case_id=resolved_case_id,
                     alert_id=alert.alert_id,
                     finding_id=alert.finding_id,
                     evidence_ids=merged_case_evidence_ids,
-                    lifecycle_state=(
-                        existing_case.lifecycle_state
-                        if existing_case is not None
-                        else case_lifecycle_state
-                    ),
-                    reviewed_context=_merge_reviewed_context(
-                        existing_case.reviewed_context if existing_case is not None else {},
-                        alert.reviewed_context,
-                    ),
+                    lifecycle_state=case_lifecycle_state,
+                    reviewed_context=alert.reviewed_context,
                 )
             )
             promoted_alert = self.persist_record(
-                AlertRecord(
-                    alert_id=alert.alert_id,
-                    finding_id=alert.finding_id,
-                    analytic_signal_id=alert.analytic_signal_id,
+                replace(
+                    alert,
                     case_id=promoted_case.case_id,
                     lifecycle_state="escalated_to_case",
-                    reviewed_context=alert.reviewed_context,
                 )
             )
             if promoted_alert.analytic_signal_id is not None:
@@ -6740,24 +6912,18 @@ class AegisOpsControlPlaneService:
             )
             if materially_new_work:
                 alert = self.persist_record(
-                    AlertRecord(
-                        alert_id=alert.alert_id,
+                    replace(
+                        alert,
                         finding_id=finding_id,
                         analytic_signal_id=analytic_signal_id,
-                        case_id=alert.case_id,
-                        lifecycle_state=alert.lifecycle_state,
                         reviewed_context=merged_reviewed_context,
                     )
                 )
                 disposition = "updated"
             elif merged_reviewed_context != alert.reviewed_context:
                 alert = self.persist_record(
-                    AlertRecord(
-                        alert_id=alert.alert_id,
-                        finding_id=alert.finding_id,
-                        analytic_signal_id=alert.analytic_signal_id,
-                        case_id=alert.case_id,
-                        lifecycle_state=alert.lifecycle_state,
+                    replace(
+                        alert,
                         reviewed_context=merged_reviewed_context,
                     )
                 )
@@ -6776,12 +6942,8 @@ class AegisOpsControlPlaneService:
                     )
                     if merged_case_reviewed_context != existing_case.reviewed_context:
                         self.persist_record(
-                            CaseRecord(
-                                case_id=existing_case.case_id,
-                                alert_id=existing_case.alert_id,
-                                finding_id=existing_case.finding_id,
-                                evidence_ids=existing_case.evidence_ids,
-                                lifecycle_state=existing_case.lifecycle_state,
+                            replace(
+                                existing_case,
                                 reviewed_context=merged_case_reviewed_context,
                             )
                         )
@@ -6910,12 +7072,9 @@ class AegisOpsControlPlaneService:
                     or merged_case_reviewed_context != existing_case.reviewed_context
                 ):
                     self.persist_record(
-                        CaseRecord(
-                            case_id=existing_case.case_id,
-                            alert_id=existing_case.alert_id,
-                            finding_id=existing_case.finding_id,
+                        replace(
+                            existing_case,
                             evidence_ids=merged_case_evidence_ids,
-                            lifecycle_state=existing_case.lifecycle_state,
                             reviewed_context=merged_case_reviewed_context,
                         )
                     )
@@ -7404,24 +7563,9 @@ class AegisOpsControlPlaneService:
             context_record.reviewed_context,
             reviewed_context_update,
         )
-        if isinstance(context_record, CaseRecord):
-            return self.persist_record(
-                CaseRecord(
-                    case_id=context_record.case_id,
-                    alert_id=context_record.alert_id,
-                    finding_id=context_record.finding_id,
-                    evidence_ids=context_record.evidence_ids,
-                    lifecycle_state=context_record.lifecycle_state,
-                    reviewed_context=updated_reviewed_context,
-                )
-            )
         return self.persist_record(
-            AlertRecord(
-                alert_id=context_record.alert_id,
-                finding_id=context_record.finding_id,
-                analytic_signal_id=context_record.analytic_signal_id,
-                case_id=context_record.case_id,
-                lifecycle_state=context_record.lifecycle_state,
+            replace(
+                context_record,
                 reviewed_context=updated_reviewed_context,
             )
         )

@@ -9,10 +9,51 @@ create table if not exists aegisops_control.alert_records (
   finding_id text not null,
   analytic_signal_id text,
   case_id text,
+  coordination_reference_id text,
+  coordination_target_type text,
+  coordination_target_id text,
+  ticket_reference_url text,
   reviewed_context jsonb not null default '{}'::jsonb,
   lifecycle_state text not null,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
+  constraint alert_records_coordination_reference_fields_complete check (
+    (
+      coordination_reference_id is null
+      and coordination_target_type is null
+      and coordination_target_id is null
+      and ticket_reference_url is null
+    ) or (
+      nullif(btrim(coordination_reference_id), '') is not null
+      and nullif(btrim(coordination_target_type), '') is not null
+      and nullif(btrim(coordination_target_id), '') is not null
+      and nullif(btrim(ticket_reference_url), '') is not null
+    )
+  ),
+  constraint alert_records_coordination_target_type_reviewed check (
+    coordination_target_type is null
+    or coordination_target_type in ('glpi', 'zammad')
+  ),
+  constraint alert_records_ticket_reference_url_https check (
+    ticket_reference_url is null
+    or ticket_reference_url ~* '^https://[^/?#[:space:]]+([/?#][^[:space:]]*)?$'
+  ),
+  constraint alert_records_coordination_reference_id_bounded check (
+    coordination_reference_id is null
+    or char_length(coordination_reference_id) <= 128
+  ),
+  constraint alert_records_coordination_target_type_bounded check (
+    coordination_target_type is null
+    or char_length(coordination_target_type) <= 32
+  ),
+  constraint alert_records_coordination_target_id_bounded check (
+    coordination_target_id is null
+    or char_length(coordination_target_id) <= 256
+  ),
+  constraint alert_records_ticket_reference_url_bounded check (
+    ticket_reference_url is null
+    or char_length(ticket_reference_url) <= 2048
+  ),
   check (lifecycle_state in ('new','triaged','investigating','escalated_to_case','closed','reopened','superseded'))
 );
 
@@ -42,12 +83,53 @@ create table if not exists aegisops_control.case_records (
   alert_id text,
   finding_id text,
   evidence_ids text[] not null,
+  coordination_reference_id text,
+  coordination_target_type text,
+  coordination_target_id text,
+  ticket_reference_url text,
   reviewed_context jsonb not null default '{}'::jsonb,
   lifecycle_state text not null,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
   check (finding_id is not null or alert_id is not null),
   check (cardinality(evidence_ids) >= 1),
+  constraint case_records_coordination_reference_fields_complete check (
+    (
+      coordination_reference_id is null
+      and coordination_target_type is null
+      and coordination_target_id is null
+      and ticket_reference_url is null
+    ) or (
+      nullif(btrim(coordination_reference_id), '') is not null
+      and nullif(btrim(coordination_target_type), '') is not null
+      and nullif(btrim(coordination_target_id), '') is not null
+      and nullif(btrim(ticket_reference_url), '') is not null
+    )
+  ),
+  constraint case_records_coordination_target_type_reviewed check (
+    coordination_target_type is null
+    or coordination_target_type in ('glpi', 'zammad')
+  ),
+  constraint case_records_ticket_reference_url_https check (
+    ticket_reference_url is null
+    or ticket_reference_url ~* '^https://[^/?#[:space:]]+([/?#][^[:space:]]*)?$'
+  ),
+  constraint case_records_coordination_reference_id_bounded check (
+    coordination_reference_id is null
+    or char_length(coordination_reference_id) <= 128
+  ),
+  constraint case_records_coordination_target_type_bounded check (
+    coordination_target_type is null
+    or char_length(coordination_target_type) <= 32
+  ),
+  constraint case_records_coordination_target_id_bounded check (
+    coordination_target_id is null
+    or char_length(coordination_target_id) <= 256
+  ),
+  constraint case_records_ticket_reference_url_bounded check (
+    ticket_reference_url is null
+    or char_length(ticket_reference_url) <= 2048
+  ),
   check (lifecycle_state in ('open','investigating','pending_action','contained_pending_validation','closed','reopened','superseded'))
 );
 

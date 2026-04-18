@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from contextvars import ContextVar
 from contextlib import contextmanager
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, replace
 from datetime import datetime, timezone
 import importlib
 import json
+import re
 from typing import Any, Callable, Iterator, Mapping, Protocol, Type, TypeVar
+from urllib.parse import urlparse
 
 from ..models import (
     AITraceRecord,
@@ -114,6 +116,10 @@ def _readiness_reconciliation_sort_key(
 ConnectionFactory = Callable[[str], ConnectionProtocol]
 _ALLOWED_TRANSACTION_ISOLATION_LEVELS = frozenset(
     {"READ COMMITTED", "REPEATABLE READ", "SERIALIZABLE"}
+)
+_TICKET_REFERENCE_URL_PATTERN = re.compile(
+    r"^https://[^/?#\s]+([/?#][^\s]*)?$",
+    re.IGNORECASE,
 )
 
 
@@ -300,6 +306,13 @@ _RECONCILIATION_INGEST_DISPOSITIONS = frozenset(
         "stale",
     }
 )
+_REVIEWED_COORDINATION_TARGET_TYPES = frozenset({"glpi", "zammad"})
+_COORDINATION_REFERENCE_FIELD_MAX_LENGTHS = {
+    "coordination_reference_id": 128,
+    "coordination_target_type": 32,
+    "coordination_target_id": 256,
+    "ticket_reference_url": 2048,
+}
 
 _LIFECYCLE_TRANSITION_SUBJECT_FAMILIES = frozenset(
     family
@@ -501,6 +514,7 @@ def _validate_record(record: ControlPlaneRecord) -> None:
                 )
         return
     if isinstance(record, CaseRecord):
+        _validate_coordination_reference_fields(record)
         _require_any_linkage(record, ("finding_id", "alert_id"))
         _require_non_empty_tuple(record, "evidence_ids")
         return
@@ -571,10 +585,92 @@ def _validate_record(record: ControlPlaneRecord) -> None:
         return
     if isinstance(
         record,
-        (AlertRecord, HuntRecord, HuntRunRecord, AITraceRecord),
+        (HuntRecord, HuntRunRecord, AITraceRecord),
     ):
         return
+    if isinstance(record, AlertRecord):
+        _validate_coordination_reference_fields(record)
+        return
     raise TypeError(f"Unsupported control-plane record type: {type(record).__name__}")
+
+
+def _validate_coordination_reference_fields(
+    record: AlertRecord | CaseRecord,
+) -> None:
+    _normalize_coordination_reference_record(record)
+
+
+def _normalize_coordination_reference_record(
+    record: AlertRecord | CaseRecord,
+) -> AlertRecord | CaseRecord:
+    normalized_values: dict[str, str | None] = {}
+    present_fields: list[str] = []
+    for field_name, max_length in _COORDINATION_REFERENCE_FIELD_MAX_LENGTHS.items():
+        raw_value = getattr(record, field_name)
+        if raw_value is None:
+            normalized_values[field_name] = None
+            continue
+        if not isinstance(raw_value, str):
+            raise ValueError(
+                f"{record.record_family} record {record.record_id!r} requires "
+                f"{field_name} to be a string when provided"
+            )
+        normalized_value = raw_value.strip()
+        if not normalized_value:
+            raise ValueError(
+                f"{record.record_family} record {record.record_id!r} requires "
+                f"{field_name} to be non-blank when provided"
+            )
+        if len(normalized_value) > max_length:
+            raise ValueError(
+                f"{record.record_family} record {record.record_id!r} requires "
+                f"{field_name} length <= {max_length}"
+            )
+        normalized_values[field_name] = normalized_value
+        present_fields.append(field_name)
+
+    if not present_fields:
+        return record
+
+    missing_fields = tuple(
+        field_name
+        for field_name in _COORDINATION_REFERENCE_FIELD_MAX_LENGTHS
+        if normalized_values[field_name] is None
+    )
+    if missing_fields:
+        raise ValueError(
+            f"{record.record_family} record {record.record_id!r} requires a complete "
+            f"external ticket reference when any coordination field is present; "
+            f"missing {missing_fields!r}"
+        )
+
+    coordination_target_type = normalized_values["coordination_target_type"]
+    assert coordination_target_type is not None
+    if coordination_target_type not in _REVIEWED_COORDINATION_TARGET_TYPES:
+        raise ValueError(
+            f"{record.record_family} record {record.record_id!r} has unsupported "
+            f"coordination_target_type {coordination_target_type!r}; expected one of "
+            f"{sorted(_REVIEWED_COORDINATION_TARGET_TYPES)!r}"
+        )
+
+    ticket_reference_url = normalized_values["ticket_reference_url"]
+    assert ticket_reference_url is not None
+    if _TICKET_REFERENCE_URL_PATTERN.fullmatch(ticket_reference_url) is None:
+        raise ValueError(
+            f"{record.record_family} record {record.record_id!r} requires "
+            "ticket_reference_url to be an https URL with a network location"
+        )
+    parsed_ticket_reference_url = urlparse(ticket_reference_url)
+    if (
+        parsed_ticket_reference_url.scheme != "https"
+        or not parsed_ticket_reference_url.netloc
+    ):
+        raise ValueError(
+            f"{record.record_family} record {record.record_id!r} requires "
+            "ticket_reference_url to be an https URL with a network location"
+        )
+
+    return replace(record, **normalized_values)
 
 
 def _load_default_connection_factory() -> ConnectionFactory:
@@ -781,6 +877,8 @@ class PostgresControlPlaneStore:
         return record_type(**kwargs)
 
     def save(self, record: RecordT) -> RecordT:
+        if isinstance(record, (AlertRecord, CaseRecord)):
+            record = _normalize_coordination_reference_record(record)
         _validate_record(record)
         table = self._table_config(type(record))
         field_names = table.record_fields

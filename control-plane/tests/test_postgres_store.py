@@ -256,6 +256,47 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         self.assertIn("decision_rationale text", schema_sql)
         self.assertIn("decision_rationale text", bootstrap_sql)
 
+    def test_phase26_external_ticket_reference_forward_migration_asset_exists(
+        self,
+    ) -> None:
+        migration_path = (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0009_phase_26_external_ticket_reference_columns.sql"
+        )
+
+        self.assertTrue(
+            migration_path.exists(),
+            f"Missing Phase 26 forward migration asset: {migration_path}",
+        )
+
+        migration_sql = migration_path.read_text(encoding="utf-8").lower()
+        schema_sql = (
+            CONTROL_PLANE_ROOT.parent / "postgres" / "control-plane" / "schema.sql"
+        ).read_text(encoding="utf-8").lower()
+
+        self.assertIn("begin;", migration_sql)
+        self.assertIn("commit;", migration_sql)
+        for table_name in ("alert_records", "case_records"):
+            self.assertIn(
+                f"alter table if exists aegisops_control.{table_name}",
+                migration_sql,
+            )
+        for required_column in (
+            "coordination_reference_id text",
+            "coordination_target_type text",
+            "coordination_target_id text",
+            "ticket_reference_url text",
+        ):
+            self.assertIn(required_column, schema_sql)
+        https_host_pattern = (
+            "or ticket_reference_url ~* '^https://[^/?#[:space:]]+([/?#][^[:space:]]*)?$'"
+        )
+        self.assertIn(https_host_pattern, migration_sql)
+        self.assertIn(https_host_pattern, schema_sql)
+
     def test_phase23_lifecycle_transition_forward_migration_asset_exists(self) -> None:
         migration_path = (
             CONTROL_PLANE_ROOT.parent
@@ -1668,6 +1709,78 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
 
         self.assertIsNone(store.get(AlertRecord, "alert-001"))
         self.assertEqual(store.list(AlertRecord), ())
+
+    def test_store_normalizes_external_ticket_reference_fields_before_persistence(
+        self,
+    ) -> None:
+        store, _ = make_store()
+
+        persisted = store.save(
+            AlertRecord(
+                alert_id="alert-ticket-link-001",
+                finding_id="finding-ticket-link-001",
+                analytic_signal_id="signal-ticket-link-001",
+                case_id=None,
+                lifecycle_state="new",
+                coordination_reference_id=" coord-ref-001 ",
+                coordination_target_type=" zammad ",
+                coordination_target_id=" ZM-4242 ",
+                ticket_reference_url=" https://tickets.example.test/#ticket/4242 ",
+            )
+        )
+        reloaded = store.get(AlertRecord, persisted.alert_id)
+
+        self.assertEqual(persisted.coordination_reference_id, "coord-ref-001")
+        self.assertEqual(persisted.coordination_target_type, "zammad")
+        self.assertEqual(persisted.coordination_target_id, "ZM-4242")
+        self.assertEqual(
+            persisted.ticket_reference_url,
+            "https://tickets.example.test/#ticket/4242",
+        )
+        self.assertEqual(reloaded, persisted)
+
+    def test_store_allows_uppercase_https_ticket_reference_scheme(self) -> None:
+        store, _ = make_store()
+
+        persisted = store.save(
+            AlertRecord(
+                alert_id="alert-ticket-link-uppercase-001",
+                finding_id="finding-ticket-link-uppercase-001",
+                analytic_signal_id="signal-ticket-link-uppercase-001",
+                case_id=None,
+                lifecycle_state="new",
+                coordination_reference_id="coord-ref-uppercase-001",
+                coordination_target_type="zammad",
+                coordination_target_id="ZM-5150",
+                ticket_reference_url="HTTPS://tickets.example.test/#ticket/5150",
+            )
+        )
+
+        self.assertEqual(
+            persisted.ticket_reference_url,
+            "HTTPS://tickets.example.test/#ticket/5150",
+        )
+
+    def test_store_rejects_ticket_reference_url_with_embedded_spaces(self) -> None:
+        store, _ = make_store()
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "ticket_reference_url to be an https URL with a network location",
+        ):
+            store.save(
+                AlertRecord(
+                    alert_id="alert-ticket-link-space-001",
+                    finding_id="finding-ticket-link-space-001",
+                    analytic_signal_id="signal-ticket-link-space-001",
+                    case_id=None,
+                    lifecycle_state="new",
+                    coordination_reference_id="coord-ref-space-001",
+                    coordination_target_type="zammad",
+                    coordination_target_id="ZM-5151",
+                    ticket_reference_url="https://tickets.example.test/ticket 5151",
+                )
+            )
 
     def test_store_rejects_nested_isolation_level_requests(self) -> None:
         store, _ = make_store()
