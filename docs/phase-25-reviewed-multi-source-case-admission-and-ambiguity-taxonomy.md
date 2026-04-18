@@ -121,7 +121,7 @@ For this slice, the authoritative reviewed control-plane storage contract is `re
 
 Implementations must write and read `record.provenance.classification` as the authoritative provenance-classification field for enforcement and validation.
 
-Implementations must also persist `record.provenance.source_id` and `record.provenance.timestamp` so operators and validators can trace the reviewed provenance origin without relying on UI-only metadata.
+Implementations must also persist `record.provenance.source_id`, `record.provenance.timestamp`, and `record.provenance.reviewed_by` so operators and validators can trace the reviewed provenance origin, review attribution, and admission accountability without relying on UI-only metadata.
 
 If an implementation also exposes `reviewed_context.provenance_classification` for compatibility with reviewed-context surfaces, that alias is optional and must mirror `record.provenance.classification`.
 
@@ -159,11 +159,11 @@ The reviewed case chain must expose, at minimum:
 
 Each attached record must surface exactly one provenance badge.
 
-Each non-anchor attached record must also surface exactly one ambiguity badge.
+Each attached record that is not the authoritative anchor must also surface exactly one ambiguity badge.
 
 The provenance badge must identify whether the record is `authoritative-anchor`, `reviewed-direct`, `reviewed-derived`, `augmenting-evidence`, or `unresolved-linkage`.
 
-The ambiguity badge applies only to non-anchor attached records and must identify whether the record is `same-entity`, `related-entity`, or `unresolved`.
+The ambiguity badge applies only to attached records that are not the authoritative anchor and must identify whether the record is `same-entity`, `related-entity`, or `unresolved`.
 
 Operator-facing ambiguity display must render from reviewed control-plane fields and reviewed linkage records, not from substrate-local UI summaries.
 
