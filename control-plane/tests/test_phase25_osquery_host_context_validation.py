@@ -215,6 +215,406 @@ class Phase25OsqueryHostContextValidationTests(unittest.TestCase):
             evidence.evidence_id,
         )
 
+    def test_inspect_case_detail_exposes_cross_source_timeline_and_provenance_summary(
+        self,
+    ) -> None:
+        _store, service, promoted_case, reviewed_at = self._build_host_bound_case(
+            host_identifier="host-001"
+        )
+        second_source_evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-entra-case-001",
+                source_record_id="wazuh://entra/record/001",
+                alert_id=None,
+                case_id=promoted_case.case_id,
+                source_system="wazuh",
+                collector_identity="wazuh-reviewed-second-source-adapter",
+                acquired_at=reviewed_at,
+                derivation_relationship="reviewed_case_attachment",
+                lifecycle_state="linked",
+                provenance={
+                    "classification": "unresolved-linkage",
+                    "source_id": "entra-record-001",
+                    "timestamp": reviewed_at.isoformat(),
+                    "reviewed_by": "analyst-001",
+                    "source_family": "entra_id",
+                    "ambiguity_badge": "unresolved",
+                    "blocking_reason": "stable_identifier_mismatch",
+                },
+                content={
+                    "attachment_reason": (
+                        "Reviewed second-source context remains candidate-only until "
+                        "stable identifiers are reconciled."
+                    )
+                },
+            )
+        )
+        promoted_case = service.persist_record(
+            CaseRecord(
+                case_id=promoted_case.case_id,
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                evidence_ids=(
+                    *promoted_case.evidence_ids,
+                    second_source_evidence.evidence_id,
+                ),
+                lifecycle_state=promoted_case.lifecycle_state,
+                reviewed_context=promoted_case.reviewed_context,
+            )
+        )
+
+        osquery_evidence, osquery_observation = service.attach_osquery_host_context(
+            case_id=promoted_case.case_id,
+            host_identifier="host-001",
+            query_name="running_processes",
+            query_sql="SELECT pid, name, path FROM processes;",
+            result_kind="process",
+            rows=(
+                {
+                    "pid": "123",
+                    "name": "sshd",
+                    "path": "/usr/sbin/sshd",
+                },
+            ),
+            collected_at=reviewed_at.replace(minute=reviewed_at.minute + 1),
+            reviewed_by="analyst-001",
+            source_id="query-result-001",
+            collection_path="pack/osquery-defense/processes/running_processes",
+            query_context={"pack": "osquery-defense", "platform": "linux"},
+            observation_scope_statement=(
+                "Observed reviewed osquery host context on the explicitly scoped host."
+            ),
+        )
+        assert osquery_observation is not None
+
+        case_detail = service.inspect_case_detail(promoted_case.case_id)
+
+        self.assertEqual(
+            [entry["record_family"] for entry in case_detail.cross_source_timeline],
+            ["alert", "evidence", "evidence", "evidence", "observation"],
+        )
+        self.assertEqual(
+            case_detail.cross_source_timeline[0]["provenance_classification"],
+            "authoritative-anchor",
+        )
+        self.assertEqual(
+            case_detail.cross_source_timeline[0]["source_family"],
+            "github_audit",
+        )
+        self.assertEqual(
+            case_detail.cross_source_timeline[1]["record_id"],
+            promoted_case.evidence_ids[0],
+        )
+        self.assertEqual(
+            case_detail.cross_source_timeline[1]["source_family"],
+            "wazuh",
+        )
+        self.assertEqual(
+            case_detail.cross_source_timeline[1]["blocking_reason"],
+            "missing_provenance",
+        )
+        self.assertEqual(
+            case_detail.cross_source_timeline[2]["record_id"],
+            second_source_evidence.evidence_id,
+        )
+        self.assertEqual(
+            case_detail.cross_source_timeline[2]["source_family"],
+            "entra_id",
+        )
+        self.assertEqual(
+            case_detail.cross_source_timeline[2]["ambiguity_badge"],
+            "unresolved",
+        )
+        self.assertEqual(
+            case_detail.cross_source_timeline[2]["blocking_reason"],
+            "stable_identifier_mismatch",
+        )
+        self.assertEqual(
+            case_detail.cross_source_timeline[3]["record_id"],
+            osquery_evidence.evidence_id,
+        )
+        self.assertEqual(
+            case_detail.cross_source_timeline[3]["source_family"],
+            "osquery",
+        )
+        self.assertEqual(
+            case_detail.cross_source_timeline[3]["ambiguity_badge"],
+            "related-entity",
+        )
+        self.assertEqual(
+            case_detail.cross_source_timeline[4]["record_id"],
+            osquery_observation.observation_id,
+        )
+        self.assertEqual(
+            case_detail.cross_source_timeline[4]["provenance_classification"],
+            "reviewed-derived",
+        )
+
+        self.assertEqual(
+            case_detail.provenance_summary["authoritative_anchor"]["record_id"],
+            promoted_case.alert_id,
+        )
+        self.assertEqual(
+            case_detail.provenance_summary["source_families"],
+            ("github_audit", "wazuh", "entra_id", "osquery"),
+        )
+        attached_records = {
+            record["record_id"]: record
+            for record in case_detail.provenance_summary["attached_records"]
+        }
+        self.assertEqual(
+            attached_records[promoted_case.evidence_ids[0]]["blocking_reason"],
+            "missing_provenance",
+        )
+        self.assertEqual(
+            attached_records[second_source_evidence.evidence_id][
+                "provenance_classification"
+            ],
+            "unresolved-linkage",
+        )
+        self.assertEqual(
+            attached_records[second_source_evidence.evidence_id]["blocking_reason"],
+            "stable_identifier_mismatch",
+        )
+        self.assertEqual(
+            attached_records[osquery_evidence.evidence_id]["evidence_origin"],
+            osquery_evidence.source_record_id,
+        )
+        self.assertEqual(
+            attached_records[osquery_observation.observation_id]["reviewed_linkage"][
+                "supporting_evidence_ids"
+            ],
+            (osquery_evidence.evidence_id,),
+        )
+
+    def test_inspect_case_detail_surfaces_missing_provenance_as_unresolved_linkage(
+        self,
+    ) -> None:
+        _store, service, promoted_case, reviewed_at = self._build_host_bound_case(
+            host_identifier="host-001"
+        )
+        second_source_evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-entra-case-missing-provenance",
+                source_record_id="wazuh://entra/record/missing-provenance",
+                alert_id=None,
+                case_id=promoted_case.case_id,
+                source_system="wazuh",
+                collector_identity="wazuh-reviewed-second-source-adapter",
+                acquired_at=reviewed_at,
+                derivation_relationship="reviewed_case_attachment",
+                lifecycle_state="linked",
+                content={"attachment_reason": "Persisted without reviewed provenance."},
+            )
+        )
+        service.persist_record(
+            CaseRecord(
+                case_id=promoted_case.case_id,
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                evidence_ids=(
+                    *promoted_case.evidence_ids,
+                    second_source_evidence.evidence_id,
+                ),
+                lifecycle_state=promoted_case.lifecycle_state,
+                reviewed_context=promoted_case.reviewed_context,
+            )
+        )
+
+        case_detail = service.inspect_case_detail(promoted_case.case_id)
+
+        attached_records = {
+            record["record_id"]: record
+            for record in case_detail.provenance_summary["attached_records"]
+        }
+        self.assertIn(second_source_evidence.evidence_id, attached_records)
+        self.assertEqual(
+            attached_records[second_source_evidence.evidence_id][
+                "provenance_classification"
+            ],
+            "unresolved-linkage",
+        )
+        self.assertEqual(
+            attached_records[second_source_evidence.evidence_id]["blocking_reason"],
+            "missing_provenance",
+        )
+        self.assertEqual(
+            attached_records[second_source_evidence.evidence_id]["source_family"],
+            "wazuh",
+        )
+
+    def test_inspect_case_detail_tolerates_malformed_persisted_provenance(
+        self,
+    ) -> None:
+        store, service, promoted_case, reviewed_at = self._build_host_bound_case(
+            host_identifier="host-001"
+        )
+        second_source_evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-entra-case-malformed-provenance",
+                source_record_id="wazuh://entra/record/malformed-provenance",
+                alert_id=None,
+                case_id=promoted_case.case_id,
+                source_system="wazuh",
+                collector_identity="wazuh-reviewed-second-source-adapter",
+                acquired_at=reviewed_at,
+                derivation_relationship="reviewed_case_attachment",
+                lifecycle_state="linked",
+                provenance={
+                    "classification": "reviewed-derived",
+                    "source_id": "entra-record-002",
+                    "timestamp": reviewed_at.isoformat(),
+                    "reviewed_by": "analyst-001",
+                    "source_family": "entra_id",
+                    "ambiguity_badge": "unresolved",
+                },
+                content={
+                    "attachment_reason": "Persisted before provenance corruption test."
+                },
+            )
+        )
+        service.persist_record(
+            CaseRecord(
+                case_id=promoted_case.case_id,
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                evidence_ids=(
+                    *promoted_case.evidence_ids,
+                    second_source_evidence.evidence_id,
+                ),
+                lifecycle_state=promoted_case.lifecycle_state,
+                reviewed_context=promoted_case.reviewed_context,
+            )
+        )
+
+        backend = getattr(store.connection_factory, "__self__", None)
+        assert backend is not None
+        backend.tables["evidence_records"][second_source_evidence.evidence_id][
+            "provenance"
+        ] = {
+            "classification": 123,
+            "source_id": ["entra-record-002"],
+            "timestamp": {"unexpected": "shape"},
+            "reviewed_by": 456,
+            "source_family": ["entra_id"],
+            "blocking_reason": {"unexpected": "shape"},
+            "ambiguity_badge": ["related-entity"],
+        }
+
+        case_detail = service.inspect_case_detail(promoted_case.case_id)
+
+        attached_records = {
+            record["record_id"]: record
+            for record in case_detail.provenance_summary["attached_records"]
+        }
+        self.assertEqual(
+            attached_records[second_source_evidence.evidence_id][
+                "provenance_classification"
+            ],
+            "unresolved-linkage",
+        )
+        self.assertEqual(
+            attached_records[second_source_evidence.evidence_id]["blocking_reason"],
+            "missing_or_invalid_required_provenance_fields",
+        )
+        self.assertEqual(
+            attached_records[second_source_evidence.evidence_id]["source_family"],
+            "wazuh",
+        )
+
+    def test_inspect_case_detail_trims_persisted_provenance_strings(self) -> None:
+        _store, service, promoted_case, reviewed_at = self._build_host_bound_case(
+            host_identifier="host-001"
+        )
+        trimmed_source_evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-entra-case-trimmed-provenance",
+                source_record_id="wazuh://entra/record/trimmed-provenance",
+                alert_id=None,
+                case_id=promoted_case.case_id,
+                source_system="entra_id",
+                collector_identity="wazuh-reviewed-second-source-adapter",
+                acquired_at=reviewed_at,
+                derivation_relationship="reviewed_case_attachment",
+                lifecycle_state="linked",
+                provenance={
+                    "classification": " reviewed-derived ",
+                    "source_id": " entra-record-003 ",
+                    "timestamp": f" {reviewed_at.isoformat()} ",
+                    "reviewed_by": " analyst-001 ",
+                    "source_family": " entra_id ",
+                    "ambiguity_badge": " related-entity ",
+                    "blocking_reason": " stable_identifier_mismatch ",
+                },
+                content={"attachment_reason": "Whitespace-padded provenance values."},
+            )
+        )
+        canonical_source_evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-entra-case-canonical-provenance",
+                source_record_id="wazuh://entra/record/canonical-provenance",
+                alert_id=None,
+                case_id=promoted_case.case_id,
+                source_system="entra_id",
+                collector_identity="wazuh-reviewed-second-source-adapter",
+                acquired_at=reviewed_at,
+                derivation_relationship="reviewed_case_attachment",
+                lifecycle_state="linked",
+                provenance={
+                    "classification": "reviewed-derived",
+                    "source_id": "entra-record-004",
+                    "timestamp": reviewed_at.isoformat(),
+                    "reviewed_by": "analyst-001",
+                    "source_family": "entra_id",
+                    "ambiguity_badge": "related-entity",
+                },
+                content={"attachment_reason": "Canonical provenance values."},
+            )
+        )
+        service.persist_record(
+            CaseRecord(
+                case_id=promoted_case.case_id,
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                evidence_ids=(
+                    *promoted_case.evidence_ids,
+                    trimmed_source_evidence.evidence_id,
+                    canonical_source_evidence.evidence_id,
+                ),
+                lifecycle_state=promoted_case.lifecycle_state,
+                reviewed_context=promoted_case.reviewed_context,
+            )
+        )
+
+        case_detail = service.inspect_case_detail(promoted_case.case_id)
+
+        attached_records = {
+            record["record_id"]: record
+            for record in case_detail.provenance_summary["attached_records"]
+        }
+        self.assertEqual(
+            attached_records[trimmed_source_evidence.evidence_id]["source_family"],
+            "entra_id",
+        )
+        self.assertEqual(
+            attached_records[trimmed_source_evidence.evidence_id][
+                "provenance_classification"
+            ],
+            "reviewed-derived",
+        )
+        self.assertEqual(
+            attached_records[trimmed_source_evidence.evidence_id]["ambiguity_badge"],
+            "related-entity",
+        )
+        self.assertEqual(
+            attached_records[trimmed_source_evidence.evidence_id]["blocking_reason"],
+            "stable_identifier_mismatch",
+        )
+        self.assertEqual(
+            case_detail.provenance_summary["source_families"],
+            ("github_audit", "wazuh", "entra_id"),
+        )
+
     def test_osquery_adapter_canonicalizes_source_record_id_segments(self) -> None:
         adapter = OsqueryHostContextAdapter()
         collected_at = datetime(2026, 4, 18, 0, 0, tzinfo=timezone.utc)
