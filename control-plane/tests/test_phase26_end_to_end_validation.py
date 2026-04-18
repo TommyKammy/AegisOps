@@ -96,7 +96,7 @@ class Phase26EndToEndValidationTests(unittest.TestCase):
         self,
     ) -> None:
         helpers = self._helpers()
-        store, service, promoted_case, _evidence_id, reviewed_at = (
+        _store, service, promoted_case, _evidence_id, reviewed_at = (
             helpers._build_phase19_in_scope_case()
         )
         delegated_at = reviewed_at + timedelta(minutes=15)
