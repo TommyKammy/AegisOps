@@ -127,6 +127,12 @@ class EvidenceRecord(ControlPlaneRecord):
     acquired_at: datetime
     derivation_relationship: str | None
     lifecycle_state: str
+    provenance: Mapping[str, object] = field(default_factory=dict)
+    content: Mapping[str, object] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "provenance", _freeze_mapping(self.provenance))
+        object.__setattr__(self, "content", _freeze_mapping(self.content))
 
 
 @dataclass(frozen=True)
@@ -144,6 +150,12 @@ class ObservationRecord(ControlPlaneRecord):
     observed_at: datetime
     scope_statement: str
     lifecycle_state: str
+    provenance: Mapping[str, object] = field(default_factory=dict)
+    content: Mapping[str, object] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "provenance", _freeze_mapping(self.provenance))
+        object.__setattr__(self, "content", _freeze_mapping(self.content))
 
 
 @dataclass(frozen=True)

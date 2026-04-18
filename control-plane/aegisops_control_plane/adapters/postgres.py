@@ -331,10 +331,15 @@ _TABLES_BY_RECORD_TYPE: dict[Type[ControlPlaneRecord], TableConfig] = {
         json_fields=frozenset({"reviewed_context"}),
         array_fields=frozenset({"evidence_ids"}),
     ),
-    EvidenceRecord: TableConfig(EvidenceRecord, "evidence_records"),
+    EvidenceRecord: TableConfig(
+        EvidenceRecord,
+        "evidence_records",
+        json_fields=frozenset({"provenance", "content"}),
+    ),
     ObservationRecord: TableConfig(
         ObservationRecord,
         "observation_records",
+        json_fields=frozenset({"provenance", "content"}),
         array_fields=frozenset({"supporting_evidence_ids"}),
     ),
     LeadRecord: TableConfig(LeadRecord, "lead_records"),
