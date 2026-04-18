@@ -4376,11 +4376,15 @@ class AegisOpsControlPlaneService:
         observation_id: str | None = None,
     ) -> tuple[EvidenceRecord, ObservationRecord | None]:
         case_id = self._require_non_empty_string(case_id, "case_id")
-        if observation_scope_statement is None and observation_id is not None:
+        normalized_scope_statement = self._normalize_optional_string(
+            observation_scope_statement,
+            "observation_scope_statement",
+        )
+        if normalized_scope_statement is None and observation_id is not None:
             raise ValueError(
                 "observation_id requires observation_scope_statement for osquery attachment"
             )
-        with self._store.transaction():
+        with self._store.transaction(isolation_level="SERIALIZABLE"):
             case = self._require_reviewed_operator_case(case_id)
             authoritative_host_identifier = self._require_case_host_identifier(case)
             attachment = self._osquery_host_context_adapter.build_attachment(
@@ -4419,27 +4423,24 @@ class AegisOpsControlPlaneService:
                     content=attachment.content,
                 )
             )
+            current_case = self._require_reviewed_operator_case(case.case_id)
             merged_case_evidence_ids = self._merge_linked_ids(
-                case.evidence_ids,
+                current_case.evidence_ids,
                 evidence.evidence_id,
             )
-            if merged_case_evidence_ids != case.evidence_ids:
+            if merged_case_evidence_ids != current_case.evidence_ids:
                 self.persist_record(
                     CaseRecord(
-                        case_id=case.case_id,
-                        alert_id=case.alert_id,
-                        finding_id=case.finding_id,
+                        case_id=current_case.case_id,
+                        alert_id=current_case.alert_id,
+                        finding_id=current_case.finding_id,
                         evidence_ids=merged_case_evidence_ids,
-                        lifecycle_state=case.lifecycle_state,
-                        reviewed_context=case.reviewed_context,
+                        lifecycle_state=current_case.lifecycle_state,
+                        reviewed_context=current_case.reviewed_context,
                     )
                 )
 
             observation: ObservationRecord | None = None
-            normalized_scope_statement = self._normalize_optional_string(
-                observation_scope_statement,
-                "observation_scope_statement",
-            )
             if normalized_scope_statement is not None:
                 resolved_observation_id = self._resolve_new_record_identifier(
                     ObservationRecord,
@@ -4452,8 +4453,8 @@ class AegisOpsControlPlaneService:
                         observation_id=resolved_observation_id,
                         hunt_id=None,
                         hunt_run_id=None,
-                        alert_id=case.alert_id,
-                        case_id=case.case_id,
+                        alert_id=current_case.alert_id,
+                        case_id=current_case.case_id,
                         supporting_evidence_ids=(evidence.evidence_id,),
                         author_identity=self._require_non_empty_string(
                             reviewed_by,

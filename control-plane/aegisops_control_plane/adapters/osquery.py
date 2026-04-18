@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+import json
 from typing import Mapping, Sequence
+from urllib.parse import quote
 
 
 def _require_non_empty_string(value: object, field_name: str) -> str:
@@ -23,6 +25,26 @@ def _normalize_mapping(value: object, field_name: str) -> dict[str, object]:
     if not isinstance(value, Mapping):
         raise ValueError(f"{field_name} must be a mapping")
     return {str(key): item for key, item in value.items()}
+
+
+def _json_ready(value: object) -> object:
+    if isinstance(value, Mapping):
+        return {str(key): _json_ready(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_json_ready(item) for item in value]
+    if isinstance(value, list):
+        return [_json_ready(item) for item in value]
+    return value
+
+
+def _json_size_bytes(value: object) -> int:
+    return len(
+        json.dumps(
+            _json_ready(value),
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    )
 
 
 def _normalize_rows(rows: object) -> tuple[dict[str, object], ...]:
@@ -59,6 +81,31 @@ class OsqueryHostContextAdapter:
         "local_user",
         "scheduled_query",
     )
+    max_rows: int = 500
+    max_columns: int = 128
+    max_cell_bytes: int = 4096
+
+    def _validate_result_bounds(
+        self,
+        normalized_rows: tuple[dict[str, object], ...],
+    ) -> tuple[str, ...]:
+        if len(normalized_rows) > self.max_rows:
+            raise ValueError(f"rows must contain at most {self.max_rows} rows")
+
+        columns = tuple(sorted({key for row in normalized_rows for key in row.keys()}))
+        if len(columns) > self.max_columns:
+            raise ValueError(
+                f"rows must contain at most {self.max_columns} distinct columns"
+            )
+
+        for row_index, row in enumerate(normalized_rows):
+            for column_name, value in row.items():
+                if _json_size_bytes(value) > self.max_cell_bytes:
+                    raise ValueError(
+                        f"rows[{row_index}][{column_name}] exceeds "
+                        f"max_cell_bytes={self.max_cell_bytes}"
+                    )
+        return columns
 
     def build_attachment(
         self,
@@ -99,14 +146,16 @@ class OsqueryHostContextAdapter:
         source_id = _require_non_empty_string(source_id, "source_id")
         collection_path = _require_non_empty_string(collection_path, "collection_path")
         normalized_rows = _normalize_rows(rows)
+        columns = self._validate_result_bounds(normalized_rows)
         normalized_query_context = (
             _normalize_mapping(query_context, "query_context")
             if query_context is not None
             else {}
         )
-        columns = tuple(sorted({key for row in normalized_rows for key in row.keys()}))
-        source_record_id = (
-            f"osquery://host/{host_identifier}/collection/{collection_path}/source/{source_id}"
+        source_record_id = "osquery://host/{}/collection/{}/source/{}".format(
+            quote(host_identifier, safe=""),
+            quote(collection_path, safe=""),
+            quote(source_id, safe=""),
         )
         provenance = {
             "classification": "augmenting-evidence",
