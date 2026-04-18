@@ -58,6 +58,7 @@ from support.fake_store import (
 from support.fixtures import load_wazuh_fixture
 from support.payloads import (
     approved_binding_hash,
+    phase26_create_tracking_ticket_payload,
     phase20_notify_identity_owner_payload,
 )
 from support.service_persistence import (
@@ -67,6 +68,7 @@ from support.service_persistence import (
 
 _load_wazuh_fixture = load_wazuh_fixture
 _approved_binding_hash = approved_binding_hash
+_phase26_create_tracking_ticket_payload = phase26_create_tracking_ticket_payload
 _phase20_notify_identity_owner_payload = phase20_notify_identity_owner_payload
 _TransactionMutationStore = TransactionMutationStore
 _ConcurrentListMutationStore = ConcurrentListMutationStore
