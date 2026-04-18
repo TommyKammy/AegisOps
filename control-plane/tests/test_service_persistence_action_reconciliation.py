@@ -19,13 +19,13 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
     def test_service_delegates_approved_create_tracking_ticket_through_shuffle(
         self,
     ) -> None:
-        store, _ = make_store()
-        service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+        store, _ = support.make_store()
+        service = support.AegisOpsControlPlaneService(
+            support.RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
             store=store,
         )
-        requested_at = datetime(2026, 4, 18, 1, 0, tzinfo=timezone.utc)
-        delegated_at = datetime(2026, 4, 18, 1, 5, tzinfo=timezone.utc)
+        requested_at = support.datetime(2026, 4, 18, 1, 0, tzinfo=support.timezone.utc)
+        delegated_at = support.datetime(2026, 4, 18, 1, 5, tzinfo=support.timezone.utc)
         approved_target_scope = {
             "case_id": "case-tracking-001",
             "alert_id": "alert-tracking-001",
@@ -33,20 +33,20 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
             "coordination_reference_id": "coord-ref-create-001",
             "coordination_target_type": "zammad",
         }
-        approved_payload = _phase26_create_tracking_ticket_payload(
+        approved_payload = support._phase26_create_tracking_ticket_payload(
             case_id="case-tracking-001",
             alert_id="alert-tracking-001",
             finding_id="finding-tracking-001",
             coordination_reference_id="coord-ref-create-001",
         )
-        payload_hash = _approved_binding_hash(
+        payload_hash = support._approved_binding_hash(
             target_scope=approved_target_scope,
             approved_payload=approved_payload,
             execution_surface_type="automation_substrate",
             execution_surface_id="shuffle",
         )
         service.persist_record(
-            ApprovalDecisionRecord(
+            support.ApprovalDecisionRecord(
                 approval_decision_id="approval-create-ticket-001",
                 action_request_id="action-request-create-ticket-001",
                 approver_identities=("approver-001",),
@@ -57,7 +57,7 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
             )
         )
         service.persist_record(
-            ActionRequestRecord(
+            support.ActionRequestRecord(
                 action_request_id="action-request-create-ticket-001",
                 approval_decision_id="approval-create-ticket-001",
                 case_id="case-tracking-001",
@@ -121,13 +121,13 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
     def test_service_fail_closes_when_create_tracking_ticket_receipt_omits_external_receipt_id(
         self,
     ) -> None:
-        store, _ = make_store()
-        service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+        store, _ = support.make_store()
+        service = support.AegisOpsControlPlaneService(
+            support.RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
             store=store,
         )
-        requested_at = datetime(2026, 4, 18, 1, 0, tzinfo=timezone.utc)
-        delegated_at = datetime(2026, 4, 18, 1, 5, tzinfo=timezone.utc)
+        requested_at = support.datetime(2026, 4, 18, 1, 0, tzinfo=support.timezone.utc)
+        delegated_at = support.datetime(2026, 4, 18, 1, 5, tzinfo=support.timezone.utc)
         approved_target_scope = {
             "case_id": "case-tracking-omit-receipt-001",
             "alert_id": "alert-tracking-omit-receipt-001",
@@ -135,20 +135,20 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
             "coordination_reference_id": "coord-ref-omit-receipt-001",
             "coordination_target_type": "zammad",
         }
-        approved_payload = _phase26_create_tracking_ticket_payload(
+        approved_payload = support._phase26_create_tracking_ticket_payload(
             case_id="case-tracking-omit-receipt-001",
             alert_id="alert-tracking-omit-receipt-001",
             finding_id="finding-tracking-omit-receipt-001",
             coordination_reference_id="coord-ref-omit-receipt-001",
         )
-        payload_hash = _approved_binding_hash(
+        payload_hash = support._approved_binding_hash(
             target_scope=approved_target_scope,
             approved_payload=approved_payload,
             execution_surface_type="automation_substrate",
             execution_surface_id="shuffle",
         )
         service.persist_record(
-            ApprovalDecisionRecord(
+            support.ApprovalDecisionRecord(
                 approval_decision_id="approval-create-ticket-omit-receipt-001",
                 action_request_id="action-request-create-ticket-omit-receipt-001",
                 approver_identities=("approver-001",),
@@ -159,7 +159,7 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
             )
         )
         service.persist_record(
-            ActionRequestRecord(
+            support.ActionRequestRecord(
                 action_request_id="action-request-create-ticket-omit-receipt-001",
                 approval_decision_id="approval-create-ticket-omit-receipt-001",
                 case_id="case-tracking-omit-receipt-001",
@@ -184,9 +184,9 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
 
         def dispatch_without_external_receipt_id(adapter: object, **kwargs: object) -> object:
             receipt = original_dispatch(adapter, **kwargs)
-            return replace(receipt, external_receipt_id="")
+            return support.replace(receipt, external_receipt_id="")
 
-        with mock.patch.object(
+        with support.mock.patch.object(
             type(service._shuffle),
             "dispatch_approved_action",
             autospec=True,
@@ -203,7 +203,7 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
                     delegation_issuer="control-plane-service",
                 )
 
-        executions = store.list(ActionExecutionRecord)
+        executions = store.list(support.ActionExecutionRecord)
         self.assertEqual(len(executions), 1)
         self.assertEqual(executions[0].lifecycle_state, "failed")
         self.assertEqual(
@@ -214,13 +214,13 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
     def test_service_fail_closes_when_create_tracking_ticket_receipt_binding_drifts(
         self,
     ) -> None:
-        store, _ = make_store()
-        service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+        store, _ = support.make_store()
+        service = support.AegisOpsControlPlaneService(
+            support.RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
             store=store,
         )
-        requested_at = datetime(2026, 4, 18, 2, 0, tzinfo=timezone.utc)
-        delegated_at = datetime(2026, 4, 18, 2, 5, tzinfo=timezone.utc)
+        requested_at = support.datetime(2026, 4, 18, 2, 0, tzinfo=support.timezone.utc)
+        delegated_at = support.datetime(2026, 4, 18, 2, 5, tzinfo=support.timezone.utc)
         approved_target_scope = {
             "case_id": "case-tracking-receipt-drift-001",
             "alert_id": "alert-tracking-receipt-drift-001",
@@ -228,20 +228,20 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
             "coordination_reference_id": "coord-ref-receipt-drift-001",
             "coordination_target_type": "zammad",
         }
-        approved_payload = _phase26_create_tracking_ticket_payload(
+        approved_payload = support._phase26_create_tracking_ticket_payload(
             case_id="case-tracking-receipt-drift-001",
             alert_id="alert-tracking-receipt-drift-001",
             finding_id="finding-tracking-receipt-drift-001",
             coordination_reference_id="coord-ref-receipt-drift-001",
         )
-        payload_hash = _approved_binding_hash(
+        payload_hash = support._approved_binding_hash(
             target_scope=approved_target_scope,
             approved_payload=approved_payload,
             execution_surface_type="automation_substrate",
             execution_surface_id="shuffle",
         )
         service.persist_record(
-            ApprovalDecisionRecord(
+            support.ApprovalDecisionRecord(
                 approval_decision_id="approval-create-ticket-receipt-drift-001",
                 action_request_id="action-request-create-ticket-receipt-drift-001",
                 approver_identities=("approver-001",),
@@ -252,7 +252,7 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
             )
         )
         service.persist_record(
-            ActionRequestRecord(
+            support.ActionRequestRecord(
                 action_request_id="action-request-create-ticket-receipt-drift-001",
                 approval_decision_id="approval-create-ticket-receipt-drift-001",
                 case_id="case-tracking-receipt-drift-001",
@@ -280,9 +280,12 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
             **kwargs: object,
         ) -> object:
             receipt = original_dispatch(adapter, **kwargs)
-            return replace(receipt, coordination_reference_id="coord-ref-drifted-999")
+            return support.replace(
+                receipt,
+                coordination_reference_id="coord-ref-drifted-999",
+            )
 
-        with mock.patch.object(
+        with support.mock.patch.object(
             type(service._shuffle),
             "dispatch_approved_action",
             autospec=True,
@@ -299,7 +302,7 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
                     delegation_issuer="control-plane-service",
                 )
 
-        executions = store.list(ActionExecutionRecord)
+        executions = store.list(support.ActionExecutionRecord)
         self.assertEqual(len(executions), 1)
         self.assertEqual(executions[0].lifecycle_state, "failed")
         self.assertEqual(
@@ -310,13 +313,13 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
     def test_service_fail_closes_when_create_tracking_ticket_dispatch_times_out(
         self,
     ) -> None:
-        store, _ = make_store()
-        service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+        store, _ = support.make_store()
+        service = support.AegisOpsControlPlaneService(
+            support.RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
             store=store,
         )
-        requested_at = datetime(2026, 4, 18, 3, 0, tzinfo=timezone.utc)
-        delegated_at = datetime(2026, 4, 18, 3, 5, tzinfo=timezone.utc)
+        requested_at = support.datetime(2026, 4, 18, 3, 0, tzinfo=support.timezone.utc)
+        delegated_at = support.datetime(2026, 4, 18, 3, 5, tzinfo=support.timezone.utc)
         approved_target_scope = {
             "case_id": "case-tracking-timeout-001",
             "alert_id": "alert-tracking-timeout-001",
@@ -324,20 +327,20 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
             "coordination_reference_id": "coord-ref-timeout-001",
             "coordination_target_type": "zammad",
         }
-        approved_payload = _phase26_create_tracking_ticket_payload(
+        approved_payload = support._phase26_create_tracking_ticket_payload(
             case_id="case-tracking-timeout-001",
             alert_id="alert-tracking-timeout-001",
             finding_id="finding-tracking-timeout-001",
             coordination_reference_id="coord-ref-timeout-001",
         )
-        payload_hash = _approved_binding_hash(
+        payload_hash = support._approved_binding_hash(
             target_scope=approved_target_scope,
             approved_payload=approved_payload,
             execution_surface_type="automation_substrate",
             execution_surface_id="shuffle",
         )
         service.persist_record(
-            ApprovalDecisionRecord(
+            support.ApprovalDecisionRecord(
                 approval_decision_id="approval-create-ticket-timeout-001",
                 action_request_id="action-request-create-ticket-timeout-001",
                 approver_identities=("approver-001",),
@@ -348,7 +351,7 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
             )
         )
         service.persist_record(
-            ActionRequestRecord(
+            support.ActionRequestRecord(
                 action_request_id="action-request-create-ticket-timeout-001",
                 approval_decision_id="approval-create-ticket-timeout-001",
                 case_id="case-tracking-timeout-001",
@@ -370,7 +373,7 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
             )
         )
 
-        with mock.patch.object(
+        with support.mock.patch.object(
             type(service._shuffle),
             "dispatch_approved_action",
             autospec=True,
@@ -387,7 +390,7 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
                     delegation_issuer="control-plane-service",
                 )
 
-        executions = store.list(ActionExecutionRecord)
+        executions = store.list(support.ActionExecutionRecord)
         self.assertEqual(len(executions), 1)
         self.assertEqual(executions[0].lifecycle_state, "failed")
         self.assertEqual(
@@ -398,14 +401,14 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
     def test_service_reconciles_create_tracking_ticket_receipt_into_authoritative_records(
         self,
     ) -> None:
-        store, _ = make_store()
-        service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+        store, _ = support.make_store()
+        service = support.AegisOpsControlPlaneService(
+            support.RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
             store=store,
         )
-        requested_at = datetime(2026, 4, 18, 4, 0, tzinfo=timezone.utc)
-        delegated_at = datetime(2026, 4, 18, 4, 5, tzinfo=timezone.utc)
-        compared_at = datetime(2026, 4, 18, 4, 10, tzinfo=timezone.utc)
+        requested_at = support.datetime(2026, 4, 18, 4, 0, tzinfo=support.timezone.utc)
+        delegated_at = support.datetime(2026, 4, 18, 4, 5, tzinfo=support.timezone.utc)
+        compared_at = support.datetime(2026, 4, 18, 4, 10, tzinfo=support.timezone.utc)
         approved_target_scope = {
             "case_id": "case-tracking-reconcile-001",
             "alert_id": "alert-tracking-reconcile-001",
@@ -413,20 +416,20 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
             "coordination_reference_id": "coord-ref-reconcile-001",
             "coordination_target_type": "zammad",
         }
-        approved_payload = _phase26_create_tracking_ticket_payload(
+        approved_payload = support._phase26_create_tracking_ticket_payload(
             case_id="case-tracking-reconcile-001",
             alert_id="alert-tracking-reconcile-001",
             finding_id="finding-tracking-reconcile-001",
             coordination_reference_id="coord-ref-reconcile-001",
         )
-        payload_hash = _approved_binding_hash(
+        payload_hash = support._approved_binding_hash(
             target_scope=approved_target_scope,
             approved_payload=approved_payload,
             execution_surface_type="automation_substrate",
             execution_surface_id="shuffle",
         )
         service.persist_record(
-            ApprovalDecisionRecord(
+            support.ApprovalDecisionRecord(
                 approval_decision_id="approval-create-ticket-reconcile-001",
                 action_request_id="action-request-create-ticket-reconcile-001",
                 approver_identities=("approver-001",),
@@ -437,7 +440,7 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
             )
         )
         service.persist_record(
-            ActionRequestRecord(
+            support.ActionRequestRecord(
                 action_request_id="action-request-create-ticket-reconcile-001",
                 approval_decision_id="approval-create-ticket-reconcile-001",
                 case_id="case-tracking-reconcile-001",
@@ -496,11 +499,18 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
                 },
             ),
             compared_at=compared_at,
-            stale_after=datetime(2026, 4, 18, 4, 30, tzinfo=timezone.utc),
+            stale_after=support.datetime(
+                2026,
+                4,
+                18,
+                4,
+                30,
+                tzinfo=support.timezone.utc,
+            ),
         )
 
         stored_execution = service.get_record(
-            ActionExecutionRecord,
+            support.ActionExecutionRecord,
             execution.action_execution_id,
         )
         self.assertEqual(reconciliation.ingest_disposition, "matched")
@@ -526,6 +536,236 @@ class ActionReconciliationPersistenceTests(ServicePersistenceTestBase):
             reconciliation.subject_linkage["ticket_reference_urls"],
             (downstream_binding["ticket_reference_url"],),
         )
+
+    def test_service_fail_closes_when_create_tracking_ticket_receipt_has_no_authoritative_execution(
+        self,
+    ) -> None:
+        store, backend = support.make_store()
+        service = support.AegisOpsControlPlaneService(
+            support.RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = support.datetime(2026, 4, 18, 4, 20, tzinfo=support.timezone.utc)
+        delegated_at = support.datetime(2026, 4, 18, 4, 25, tzinfo=support.timezone.utc)
+        compared_at = support.datetime(2026, 4, 18, 4, 30, tzinfo=support.timezone.utc)
+        approved_target_scope = {
+            "case_id": "case-tracking-missing-authoritative-001",
+            "alert_id": "alert-tracking-missing-authoritative-001",
+            "finding_id": "finding-tracking-missing-authoritative-001",
+            "coordination_reference_id": "coord-ref-missing-authoritative-001",
+            "coordination_target_type": "zammad",
+        }
+        approved_payload = support._phase26_create_tracking_ticket_payload(
+            case_id="case-tracking-missing-authoritative-001",
+            alert_id="alert-tracking-missing-authoritative-001",
+            finding_id="finding-tracking-missing-authoritative-001",
+            coordination_reference_id="coord-ref-missing-authoritative-001",
+        )
+        payload_hash = support._approved_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
+        service.persist_record(
+            support.ApprovalDecisionRecord(
+                approval_decision_id="approval-create-ticket-missing-authoritative-001",
+                action_request_id="action-request-create-ticket-missing-authoritative-001",
+                approver_identities=("approver-001",),
+                target_snapshot=approved_target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+            )
+        )
+        service.persist_record(
+            support.ActionRequestRecord(
+                action_request_id="action-request-create-ticket-missing-authoritative-001",
+                approval_decision_id="approval-create-ticket-missing-authoritative-001",
+                case_id="case-tracking-missing-authoritative-001",
+                alert_id="alert-tracking-missing-authoritative-001",
+                finding_id="finding-tracking-missing-authoritative-001",
+                idempotency_key="idempotency-create-ticket-missing-authoritative-001",
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=None,
+                lifecycle_state="approved",
+                requested_payload=approved_payload,
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "approval",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id="action-request-create-ticket-missing-authoritative-001",
+            approved_payload=approved_payload,
+            delegated_at=delegated_at,
+            delegation_issuer="control-plane-service",
+        )
+        backend.tables["action_execution_records"].pop(execution.action_execution_id)
+
+        downstream_binding = execution.provenance["downstream_binding"]
+        reconciliation = service.reconcile_action_execution(
+            action_request_id="action-request-create-ticket-missing-authoritative-001",
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(
+                {
+                    "execution_run_id": execution.execution_run_id,
+                    "execution_surface_id": "shuffle",
+                    "idempotency_key": "idempotency-create-ticket-missing-authoritative-001",
+                    "observed_at": compared_at,
+                    "approval_decision_id": "approval-create-ticket-missing-authoritative-001",
+                    "delegation_id": execution.delegation_id,
+                    "payload_hash": payload_hash,
+                    "coordination_reference_id": downstream_binding[
+                        "coordination_reference_id"
+                    ],
+                    "coordination_target_type": downstream_binding[
+                        "coordination_target_type"
+                    ],
+                    "external_receipt_id": downstream_binding["external_receipt_id"],
+                    "coordination_target_id": downstream_binding["coordination_target_id"],
+                    "ticket_reference_url": downstream_binding["ticket_reference_url"],
+                    "status": "success",
+                },
+            ),
+            compared_at=compared_at,
+            stale_after=support.datetime(
+                2026,
+                4,
+                18,
+                4,
+                45,
+                tzinfo=support.timezone.utc,
+            ),
+        )
+
+        self.assertEqual(reconciliation.ingest_disposition, "mismatch")
+        self.assertEqual(reconciliation.lifecycle_state, "mismatched")
+        self.assertEqual(
+            reconciliation.mismatch_summary,
+            "coordination receipt mismatch between authoritative action execution "
+            "and observed downstream execution",
+        )
+
+    def test_service_rejects_blank_create_tracking_ticket_receipt_identifiers(
+        self,
+    ) -> None:
+        store, _ = support.make_store()
+        service = support.AegisOpsControlPlaneService(
+            support.RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = support.datetime(2026, 4, 18, 4, 40, tzinfo=support.timezone.utc)
+        approved_target_scope = {
+            "case_id": "case-tracking-blank-receipt-001",
+            "alert_id": "alert-tracking-blank-receipt-001",
+            "finding_id": "finding-tracking-blank-receipt-001",
+            "coordination_reference_id": "coord-ref-blank-receipt-001",
+            "coordination_target_type": "zammad",
+        }
+        approved_payload = support._phase26_create_tracking_ticket_payload(
+            case_id="case-tracking-blank-receipt-001",
+            alert_id="alert-tracking-blank-receipt-001",
+            finding_id="finding-tracking-blank-receipt-001",
+            coordination_reference_id="coord-ref-blank-receipt-001",
+        )
+        payload_hash = support._approved_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
+        service.persist_record(
+            support.ApprovalDecisionRecord(
+                approval_decision_id="approval-create-ticket-blank-receipt-001",
+                action_request_id="action-request-create-ticket-blank-receipt-001",
+                approver_identities=("approver-001",),
+                target_snapshot=approved_target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+            )
+        )
+        service.persist_record(
+            support.ActionRequestRecord(
+                action_request_id="action-request-create-ticket-blank-receipt-001",
+                approval_decision_id="approval-create-ticket-blank-receipt-001",
+                case_id="case-tracking-blank-receipt-001",
+                alert_id="alert-tracking-blank-receipt-001",
+                finding_id="finding-tracking-blank-receipt-001",
+                idempotency_key="idempotency-create-ticket-blank-receipt-001",
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=None,
+                lifecycle_state="approved",
+                requested_payload=approved_payload,
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "approval",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "observed execution must include string external_receipt_id",
+        ):
+            service.reconcile_action_execution(
+                action_request_id="action-request-create-ticket-blank-receipt-001",
+                execution_surface_type="automation_substrate",
+                execution_surface_id="shuffle",
+                observed_executions=(
+                    {
+                        "execution_run_id": "shuffle-run-blank-receipt-001",
+                        "execution_surface_id": "shuffle",
+                        "idempotency_key": "idempotency-create-ticket-blank-receipt-001",
+                        "observed_at": support.datetime(
+                            2026,
+                            4,
+                            18,
+                            4,
+                            45,
+                            tzinfo=support.timezone.utc,
+                        ),
+                        "approval_decision_id": "approval-create-ticket-blank-receipt-001",
+                        "delegation_id": "delegation-blank-receipt-001",
+                        "payload_hash": payload_hash,
+                        "coordination_reference_id": "coord-ref-blank-receipt-001",
+                        "coordination_target_type": "zammad",
+                        "external_receipt_id": "   ",
+                        "coordination_target_id": "zammad-ticket-blank-receipt-001",
+                        "ticket_reference_url": "https://tickets.example.test/#ticket/zammad-ticket-blank-receipt-001",
+                        "status": "success",
+                    },
+                ),
+                compared_at=support.datetime(
+                    2026,
+                    4,
+                    18,
+                    4,
+                    45,
+                    tzinfo=support.timezone.utc,
+                ),
+                stale_after=support.datetime(
+                    2026,
+                    4,
+                    18,
+                    5,
+                    0,
+                    tzinfo=support.timezone.utc,
+                ),
+            )
+
     def test_service_records_execution_correlation_mismatch_states_separately(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(

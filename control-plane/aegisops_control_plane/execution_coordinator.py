@@ -542,6 +542,16 @@ class ExecutionCoordinator:
                     "and observed downstream execution"
                 )
             elif (
+                require_coordination_receipt_identifiers
+                and authoritative_execution is None
+            ):
+                ingest_disposition = "mismatch"
+                lifecycle_state = "mismatched"
+                mismatch_summary = (
+                    "coordination receipt mismatch between authoritative action execution "
+                    "and observed downstream execution"
+                )
+            elif (
                 authoritative_execution is not None
                 and authoritative_execution.approved_payload.get("action_type")
                 == "create_tracking_ticket"
@@ -1195,23 +1205,38 @@ class ExecutionCoordinator:
                 if not isinstance(payload_hash, str):
                     raise ValueError("observed execution must include string payload_hash")
             if require_coordination_receipt_identifiers:
-                if not isinstance(coordination_reference_id, str):
+                if (
+                    not isinstance(coordination_reference_id, str)
+                    or not coordination_reference_id.strip()
+                ):
                     raise ValueError(
                         "observed execution must include string coordination_reference_id"
                     )
-                if not isinstance(coordination_target_type, str):
+                if (
+                    not isinstance(coordination_target_type, str)
+                    or not coordination_target_type.strip()
+                ):
                     raise ValueError(
                         "observed execution must include string coordination_target_type"
                     )
-                if not isinstance(external_receipt_id, str):
+                if (
+                    not isinstance(external_receipt_id, str)
+                    or not external_receipt_id.strip()
+                ):
                     raise ValueError(
                         "observed execution must include string external_receipt_id"
                     )
-                if not isinstance(coordination_target_id, str):
+                if (
+                    not isinstance(coordination_target_id, str)
+                    or not coordination_target_id.strip()
+                ):
                     raise ValueError(
                         "observed execution must include string coordination_target_id"
                     )
-                if not isinstance(ticket_reference_url, str):
+                if (
+                    not isinstance(ticket_reference_url, str)
+                    or not ticket_reference_url.strip()
+                ):
                     raise ValueError(
                         "observed execution must include string ticket_reference_url"
                     )
