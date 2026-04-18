@@ -36,10 +36,10 @@ class PublishablePathHygieneTests(unittest.TestCase):
 
     def test_ignores_urls_and_non_user_windows_paths(self) -> None:
         self.assertFalse(
-            is_workstation_local_path("https://example.com/home/alice/project/docs")
+            is_workstation_local_path("https://example.com/home/alice/project/docs")  # publishable-path-hygiene: allowlist
         )
         self.assertFalse(
-            is_workstation_local_path("https://example.com/C:/Users/alice/project/docs")
+            is_workstation_local_path("https://example.com/C:/Users/alice/project/docs")  # publishable-path-hygiene: allowlist
         )
         self.assertFalse(is_workstation_local_path(r"D:\Program Files\AegisOps"))
         self.assertFalse(is_workstation_local_path("relative/path/to/docs"))
@@ -55,7 +55,7 @@ class PublishablePathHygieneTests(unittest.TestCase):
             (repo_root / ".github" / "workflows").mkdir(parents=True)
 
             (repo_root / "README.md").write_text("No local paths here.\n", encoding="utf-8")
-            (docs_dir / "binary.bin").write_bytes(b"\x00\x01\x02/home/alice/private")
+            (docs_dir / "binary.bin").write_bytes(b"\x00\x01\x02/home/alice/private")  # publishable-path-hygiene: allowlist
             (docs_dir / "offender.md").write_text(
                 f"operator note: {OFFENDER_PATH}\n",
                 encoding="utf-8",
