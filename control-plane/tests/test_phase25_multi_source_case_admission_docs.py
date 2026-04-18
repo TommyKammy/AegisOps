@@ -45,6 +45,7 @@ class Phase25MultiSourceCaseAdmissionDocsTests(unittest.TestCase):
             "stable identifiers",
             "provenance classification",
             "This section defines the Phase 25 reviewed multi-source implementation target.",
+            "they do not claim that pre-Phase-25 runtime surfaces already persist this contract today.",
             "`record.provenance`",
             "`reviewed_context.provenance`",
             "`admission_provenance`",

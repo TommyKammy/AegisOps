@@ -116,6 +116,7 @@ When `unresolved` applies, the system must fail closed and preserve the guard in
 ## 5. Provenance Classification and Evidence Roles
 
 This section defines the Phase 25 reviewed multi-source implementation target.
+These requirements are forward-looking design constraints for Phase 25 follow-on implementation work; they do not claim that pre-Phase-25 runtime surfaces already persist this contract today.
 
 Every admitted multi-source record must keep an explicit provenance classification.
 
