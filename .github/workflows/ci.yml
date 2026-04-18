@@ -195,6 +195,14 @@ jobs:
       - name: Run Phase 25 workflow coverage guard
         run: bash scripts/test-verify-ci-phase-25-workflow-coverage.sh
 
+      - name: Run Phase 26 ticket coordination validation
+        run: |
+          bash scripts/verify-phase-26-ticket-coordination-validation.sh
+          python3 -m unittest control-plane.tests.test_phase26_end_to_end_validation control-plane.tests.test_phase26_coordination_substrate_boundary_docs control-plane.tests.test_phase26_create_tracking_ticket_soft_write_contract_docs
+
+      - name: Run Phase 26 workflow coverage guard
+        run: bash scripts/test-verify-ci-phase-26-workflow-coverage.sh
+
       - name: Run control-plane runtime unit tests
         run: python3 -m unittest discover -s control-plane/tests -p 'test_*.py'
 
@@ -248,6 +256,7 @@ jobs:
           bash scripts/test-verify-phase-23-authority-closure.sh
           bash scripts/test-verify-phase-24-live-assistant-workflow-contract.sh
           bash scripts/test-verify-phase-25-multi-source-case-review-runbook.sh
+          bash scripts/test-verify-phase-26-ticket-coordination-validation.sh
           bash scripts/test-verify-ci-phase-14-workflow-coverage.sh
           bash scripts/test-verify-ci-phase-15-workflow-coverage.sh
           bash scripts/test-verify-ci-phase-19-workflow-coverage.sh
@@ -257,6 +266,7 @@ jobs:
           bash scripts/test-verify-ci-phase-23-workflow-coverage.sh
           bash scripts/test-verify-ci-phase-24-workflow-coverage.sh
           bash scripts/test-verify-ci-phase-25-workflow-coverage.sh
+          bash scripts/test-verify-ci-phase-26-workflow-coverage.sh
           bash scripts/test-verify-phase-6-initial-telemetry-slice-doc.sh
           bash scripts/test-verify-phase-6-opensearch-detector-artifacts.sh
           bash scripts/test-verify-phase-6-replay-to-notify-validation.sh
