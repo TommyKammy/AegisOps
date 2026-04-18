@@ -78,7 +78,7 @@ failing_repo="${workdir}/failing"
 create_repo \
   "${failing_repo}" \
   "README.md" "# Failing fixture" \
-  "docs/phase-25.md" "Leaked path: /Users/jp.infra/Library/Mobile Documents/com~apple~CloudDocs/ObsidianVault/Dev/AegisOps/Plan&Roadmap/Revised Phase23-29 Epic Roadmap.md" \
+  "docs/phase-25.md" "Leaked path: /Users""/jp.infra/Library/Mobile Documents/com~apple~CloudDocs/ObsidianVault/Dev/AegisOps/Plan&Roadmap/Revised Phase23-29 Epic Roadmap.md" \
   "control-plane/tests/test_docs.py" "EXPECTED_PATH = 'docs/phase-25.md'"
 assert_fails_with "${failing_repo}" "docs/phase-25.md:1:"
 

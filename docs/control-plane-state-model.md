@@ -45,6 +45,8 @@ The reviewed local control-plane runtime now reports `persistence_mode="postgres
 
 Execution-surface runtime history must not become the implicit system of record for case state, approval state, or action-request intent.
 
+Reviewed coordination substrates may contribute ticket identifiers, URLs, assignee metadata, comments, queue movement, and other coordination receipts, but those artifacts remain subordinate evidence rather than authoritative control-plane lifecycle state.
+
 Substrate-native detection records and admitted analytic signals remain upstream reconciliation inputs, but they do not own downstream case, approval, or execution-policy state.
 
 The minimum control-plane record families for this baseline are Alert, Case, Evidence, Observation, Lead, Recommendation, Approval Decision, Action Request, Hunt, Hunt Run, AI Trace, Reconciliation, and Action Execution.
@@ -114,6 +116,8 @@ Reconciliation records must also preserve how alerts, cases, approval decisions,
 
 Reconciliation records must also preserve emitted delegation records and their identifiers once AegisOps has handed an approved request into a reviewed automation substrate or executor surface.
 
+External coordination receipts must not replace `Case`, `Approval Decision`, `Action Execution`, or `Reconciliation` records.
+
 For approved downstream execution correlation, `delegation_id` becomes a first-class reconciliation key as soon as AegisOps emits the reviewed handoff. Later `Reconciliation` records and their deterministic correlation keys must preserve that delegation identity alongside the governing approval and execution-surface identifiers so the reviewed baseline stays aligned with `docs/automation-substrate-contract.md`.
 
 The minimum stable reconciliation key set for this baseline is:
@@ -127,6 +131,8 @@ The minimum stable reconciliation key set for this baseline is:
 - `hunt_id` and `hunt_run_id` for analyst-directed exploration and each bounded execution of that exploration;
 - `ai_trace_id` for preserved AI-assisted interpretation or recommendation context; and
 - a deterministic reconciliation correlation key that preserves the approved request identity and, once delegation occurs, the governing `approval_decision_id` plus emitted `delegation_id` instead of collapsing correlation into downstream runtime metadata alone.
+
+`coordination_reference_id`, `coordination_target_type`, `coordination_target_id`, `ticket_reference_url`, and any `external_receipt_id` must remain explicit linkage fields rather than borrowed lifecycle owners.
 
 The AegisOps control-plane runtime is responsible for:
 

@@ -21,6 +21,8 @@ Action classes define the minimum approval and evidence posture required before 
 
 Class assignment must be conservative. If an action could plausibly change protected target state or operator trust state, it must not be classified as `Read`.
 
+A link-only ticket reference does not become approval-free workflow authority.
+
 ## 3. Minimum Action Request Fields
 
 Every action request must identify the requester, the intended action class, the target, the justification, and the exact payload or payload reference proposed for execution.
@@ -74,6 +76,8 @@ Approval reuse is prohibited across materially different targets, payloads, or t
 
 At minimum, the action-request lifecycle must distinguish `draft`, `pending_approval`, `approved`, `rejected`, `expired`, `canceled`, `superseded`, `executing`, `completed`, `failed`, and `unresolved`, while the approval-decision lifecycle must distinguish `pending`, `approved`, `rejected`, `expired`, `canceled`, and `superseded`.
 
+The future reviewed create-ticket path remains a `Soft Write` coordination action, not a transfer of case, approval, execution, or reconciliation authority into the external ticket system.
+
 ## 5. Execution Safeguards
 
 Every execution attempt must carry an idempotency key that is unique for the approved action request and execution intent.
@@ -91,6 +95,8 @@ Write-capable actions must record rollback expectations before execution and mus
 Post-action verification must confirm the expected target state or clearly record the residual risk and operator follow-up required.
 
 If verification fails or remains inconclusive, the execution record must preserve that outcome explicitly rather than implying success from approval or workflow completion alone.
+
+External ticket status, assignee changes, comments, or queue movement must not be treated as approval proof, execution proof, or case closure on their own.
 
 ## 6. Baseline Alignment Notes
 

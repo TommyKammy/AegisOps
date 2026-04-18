@@ -54,6 +54,8 @@ OpenSearch MAY be used as an optional or transitional analytics substrate.
 Sigma MAY be used as an optional or transitional rule-definition format.
 n8n MAY be used as an optional, transitional, or experimental execution substrate.
 
+The first reviewed external coordination substrate for Phase 26 is Zammad, with GLPI retained only as a reviewed fallback option.
+
 The objectives are to:
 
 - Govern the analyst-facing lifecycle for alerts, cases, evidence, approvals, actions, hunts, and reconciliation above external substrates
@@ -169,6 +171,8 @@ No component should silently absorb another component’s responsibility without
 - **Detection, control, and execution MUST remain explicitly separated**
 - Upstream Analytic Signal substrates perform detection or correlation only and MUST NOT directly define AegisOps-owned approval, case, or reconciliation truth
 - AegisOps owns approval decisions, action intent, action-execution truth, evidence linkage, reconciliation, and the append-only lifecycle transition history paired with reviewed current-state records
+- External coordination substrates must remain subordinate coordination targets rather than becoming the authority for alert, case, approval, action-execution, or reconciliation truth.
+- Link-first external ticket references may be recorded without promoting external ticket lifecycle into control-plane truth.
 - Optional execution substrates execute approved workflows only after validation and approval requirements are satisfied
 - External systems MUST NOT directly trigger unrestricted execution logic
 - High-risk response actions are prohibited without human oversight
@@ -626,6 +630,8 @@ Soft write actions MAY be allowed without approval only when all of the followin
 * and the action is explicitly classified as approval-exempt by policy.
 
 Otherwise, the action MUST be treated as approval-required.
+
+Conditional coordination soft writes such as future reviewed ticket creation MUST preserve AegisOps as the authority for the linked case, approval context, execution binding, and reconciliation outcome even when the downstream target returns its own ticket identifier or receipt.
 
 ### 12.4 Prohibited Behavior
 
