@@ -887,13 +887,14 @@ def _coordination_reference_payload(
     }
 
 
-def _coordination_target_signature(
+def _coordination_reference_signature(
     record: Mapping[str, object] | ControlPlaneRecord | None,
-) -> tuple[str, str, str] | None:
+) -> tuple[str, str, str, str] | None:
     payload = _coordination_reference_payload(record)
     if payload is None:
         return None
     return (
+        payload["coordination_reference_id"],
         payload["coordination_target_type"],
         payload["coordination_target_id"],
         payload["ticket_reference_url"],
@@ -4271,9 +4272,9 @@ class AegisOpsControlPlaneService:
             status = "present"
         elif case_reference is None:
             status = "linked_case_reference_missing"
-        elif _coordination_target_signature(alert) != _coordination_target_signature(
-            case_record
-        ):
+        elif _coordination_reference_signature(
+            alert
+        ) != _coordination_reference_signature(case_record):
             status = "linked_case_reference_mismatch"
         else:
             status = "present"
@@ -4327,6 +4328,7 @@ class AegisOpsControlPlaneService:
         else:
             linked_alert_signatures = {
                 (
+                    reference["coordination_reference_id"],
                     reference["coordination_target_type"],
                     reference["coordination_target_id"],
                     reference["ticket_reference_url"],
@@ -4344,7 +4346,7 @@ class AegisOpsControlPlaneService:
             if linked_alert_ids - linked_alert_ids_with_reference:
                 status = "linked_alert_reference_missing"
             elif linked_alert_signatures and linked_alert_signatures != {
-                _coordination_target_signature(case)
+                _coordination_reference_signature(case)
             }:
                 status = "linked_alert_reference_mismatch"
             else:
@@ -4858,13 +4860,9 @@ class AegisOpsControlPlaneService:
             )
             if merged_case_evidence_ids != current_case.evidence_ids:
                 self.persist_record(
-                    CaseRecord(
-                        case_id=current_case.case_id,
-                        alert_id=current_case.alert_id,
-                        finding_id=current_case.finding_id,
+                    replace(
+                        current_case,
                         evidence_ids=merged_case_evidence_ids,
-                        lifecycle_state=current_case.lifecycle_state,
-                        reviewed_context=current_case.reviewed_context,
                     )
                 )
 
@@ -5106,12 +5104,8 @@ class AegisOpsControlPlaneService:
                 },
             )
             return self.persist_record(
-                CaseRecord(
-                    case_id=case.case_id,
-                    alert_id=case.alert_id,
-                    finding_id=case.finding_id,
-                    evidence_ids=case.evidence_ids,
-                    lifecycle_state=case.lifecycle_state,
+                replace(
+                    case,
                     reviewed_context=updated_reviewed_context,
                 )
             )
@@ -5141,11 +5135,8 @@ class AegisOpsControlPlaneService:
                 },
             )
             updated_case = self.persist_record(
-                CaseRecord(
-                    case_id=case.case_id,
-                    alert_id=case.alert_id,
-                    finding_id=case.finding_id,
-                    evidence_ids=case.evidence_ids,
+                replace(
+                    case,
                     lifecycle_state=lifecycle_state,
                     reviewed_context=updated_reviewed_context,
                 ),
@@ -5155,11 +5146,8 @@ class AegisOpsControlPlaneService:
                 alert = self._store.get(AlertRecord, case.alert_id)
                 if alert is not None:
                     self.persist_record(
-                        AlertRecord(
-                            alert_id=alert.alert_id,
-                            finding_id=alert.finding_id,
-                            analytic_signal_id=alert.analytic_signal_id,
-                            case_id=alert.case_id,
+                        replace(
+                            alert,
                             lifecycle_state="closed",
                             reviewed_context=_merge_reviewed_context(
                                 alert.reviewed_context,
@@ -6679,30 +6667,31 @@ class AegisOpsControlPlaneService:
                 )
 
             promoted_case = self.persist_record(
-                CaseRecord(
+                replace(
+                    existing_case,
+                    alert_id=alert.alert_id,
+                    finding_id=alert.finding_id,
+                    evidence_ids=merged_case_evidence_ids,
+                    reviewed_context=_merge_reviewed_context(
+                        existing_case.reviewed_context,
+                        alert.reviewed_context,
+                    ),
+                )
+                if existing_case is not None
+                else CaseRecord(
                     case_id=resolved_case_id,
                     alert_id=alert.alert_id,
                     finding_id=alert.finding_id,
                     evidence_ids=merged_case_evidence_ids,
-                    lifecycle_state=(
-                        existing_case.lifecycle_state
-                        if existing_case is not None
-                        else case_lifecycle_state
-                    ),
-                    reviewed_context=_merge_reviewed_context(
-                        existing_case.reviewed_context if existing_case is not None else {},
-                        alert.reviewed_context,
-                    ),
+                    lifecycle_state=case_lifecycle_state,
+                    reviewed_context=alert.reviewed_context,
                 )
             )
             promoted_alert = self.persist_record(
-                AlertRecord(
-                    alert_id=alert.alert_id,
-                    finding_id=alert.finding_id,
-                    analytic_signal_id=alert.analytic_signal_id,
+                replace(
+                    alert,
                     case_id=promoted_case.case_id,
                     lifecycle_state="escalated_to_case",
-                    reviewed_context=alert.reviewed_context,
                 )
             )
             if promoted_alert.analytic_signal_id is not None:
@@ -6918,24 +6907,18 @@ class AegisOpsControlPlaneService:
             )
             if materially_new_work:
                 alert = self.persist_record(
-                    AlertRecord(
-                        alert_id=alert.alert_id,
+                    replace(
+                        alert,
                         finding_id=finding_id,
                         analytic_signal_id=analytic_signal_id,
-                        case_id=alert.case_id,
-                        lifecycle_state=alert.lifecycle_state,
                         reviewed_context=merged_reviewed_context,
                     )
                 )
                 disposition = "updated"
             elif merged_reviewed_context != alert.reviewed_context:
                 alert = self.persist_record(
-                    AlertRecord(
-                        alert_id=alert.alert_id,
-                        finding_id=alert.finding_id,
-                        analytic_signal_id=alert.analytic_signal_id,
-                        case_id=alert.case_id,
-                        lifecycle_state=alert.lifecycle_state,
+                    replace(
+                        alert,
                         reviewed_context=merged_reviewed_context,
                     )
                 )
@@ -6954,12 +6937,8 @@ class AegisOpsControlPlaneService:
                     )
                     if merged_case_reviewed_context != existing_case.reviewed_context:
                         self.persist_record(
-                            CaseRecord(
-                                case_id=existing_case.case_id,
-                                alert_id=existing_case.alert_id,
-                                finding_id=existing_case.finding_id,
-                                evidence_ids=existing_case.evidence_ids,
-                                lifecycle_state=existing_case.lifecycle_state,
+                            replace(
+                                existing_case,
                                 reviewed_context=merged_case_reviewed_context,
                             )
                         )
@@ -7088,12 +7067,9 @@ class AegisOpsControlPlaneService:
                     or merged_case_reviewed_context != existing_case.reviewed_context
                 ):
                     self.persist_record(
-                        CaseRecord(
-                            case_id=existing_case.case_id,
-                            alert_id=existing_case.alert_id,
-                            finding_id=existing_case.finding_id,
+                        replace(
+                            existing_case,
                             evidence_ids=merged_case_evidence_ids,
-                            lifecycle_state=existing_case.lifecycle_state,
                             reviewed_context=merged_case_reviewed_context,
                         )
                     )
@@ -7582,24 +7558,9 @@ class AegisOpsControlPlaneService:
             context_record.reviewed_context,
             reviewed_context_update,
         )
-        if isinstance(context_record, CaseRecord):
-            return self.persist_record(
-                CaseRecord(
-                    case_id=context_record.case_id,
-                    alert_id=context_record.alert_id,
-                    finding_id=context_record.finding_id,
-                    evidence_ids=context_record.evidence_ids,
-                    lifecycle_state=context_record.lifecycle_state,
-                    reviewed_context=updated_reviewed_context,
-                )
-            )
         return self.persist_record(
-            AlertRecord(
-                alert_id=context_record.alert_id,
-                finding_id=context_record.finding_id,
-                analytic_signal_id=context_record.analytic_signal_id,
-                case_id=context_record.case_id,
-                lifecycle_state=context_record.lifecycle_state,
+            replace(
+                context_record,
                 reviewed_context=updated_reviewed_context,
             )
         )

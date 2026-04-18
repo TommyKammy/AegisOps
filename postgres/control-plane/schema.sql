@@ -36,7 +36,7 @@ create table if not exists aegisops_control.alert_records (
   ),
   constraint alert_records_ticket_reference_url_https check (
     ticket_reference_url is null
-    or ticket_reference_url ~ '^https://[^[:space:]]+$'
+    or ticket_reference_url ~ '^https://[^/?#[:space:]]+([/?#][^[:space:]]*)?$'
   ),
   constraint alert_records_coordination_reference_id_bounded check (
     coordination_reference_id is null
@@ -112,7 +112,7 @@ create table if not exists aegisops_control.case_records (
   ),
   constraint case_records_ticket_reference_url_https check (
     ticket_reference_url is null
-    or ticket_reference_url ~ '^https://[^[:space:]]+$'
+    or ticket_reference_url ~ '^https://[^/?#[:space:]]+([/?#][^[:space:]]*)?$'
   ),
   constraint case_records_coordination_reference_id_bounded check (
     coordination_reference_id is null

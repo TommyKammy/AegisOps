@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextvars import ContextVar
 from contextlib import contextmanager
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, replace
 from datetime import datetime, timezone
 import importlib
 import json
@@ -592,6 +592,12 @@ def _validate_record(record: ControlPlaneRecord) -> None:
 def _validate_coordination_reference_fields(
     record: AlertRecord | CaseRecord,
 ) -> None:
+    _normalize_coordination_reference_record(record)
+
+
+def _normalize_coordination_reference_record(
+    record: AlertRecord | CaseRecord,
+) -> AlertRecord | CaseRecord:
     normalized_values: dict[str, str | None] = {}
     present_fields: list[str] = []
     for field_name, max_length in _COORDINATION_REFERENCE_FIELD_MAX_LENGTHS.items():
@@ -619,7 +625,7 @@ def _validate_coordination_reference_fields(
         present_fields.append(field_name)
 
     if not present_fields:
-        return
+        return record
 
     missing_fields = tuple(
         field_name
@@ -653,6 +659,8 @@ def _validate_coordination_reference_fields(
             f"{record.record_family} record {record.record_id!r} requires "
             "ticket_reference_url to be an https URL with a network location"
         )
+
+    return replace(record, **normalized_values)
 
 
 def _load_default_connection_factory() -> ConnectionFactory:
@@ -859,6 +867,8 @@ class PostgresControlPlaneStore:
         return record_type(**kwargs)
 
     def save(self, record: RecordT) -> RecordT:
+        if isinstance(record, (AlertRecord, CaseRecord)):
+            record = _normalize_coordination_reference_record(record)
         _validate_record(record)
         table = self._table_config(type(record))
         field_names = table.record_fields

@@ -45,7 +45,7 @@ alter table if exists aegisops_control.alert_records
 alter table if exists aegisops_control.alert_records
   add constraint alert_records_ticket_reference_url_https check (
     ticket_reference_url is null
-    or ticket_reference_url ~ '^https://[^[:space:]]+$'
+    or ticket_reference_url ~ '^https://[^/?#[:space:]]+([/?#][^[:space:]]*)?$'
   );
 
 alter table if exists aegisops_control.alert_records
@@ -129,7 +129,7 @@ alter table if exists aegisops_control.case_records
 alter table if exists aegisops_control.case_records
   add constraint case_records_ticket_reference_url_https check (
     ticket_reference_url is null
-    or ticket_reference_url ~ '^https://[^[:space:]]+$'
+    or ticket_reference_url ~ '^https://[^/?#[:space:]]+([/?#][^[:space:]]*)?$'
   );
 
 alter table if exists aegisops_control.case_records

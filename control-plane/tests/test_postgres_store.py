@@ -291,6 +291,11 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             "ticket_reference_url text",
         ):
             self.assertIn(required_column, schema_sql)
+        https_host_pattern = (
+            "or ticket_reference_url ~ '^https://[^/?#[:space:]]+([/?#][^[:space:]]*)?$'"
+        )
+        self.assertIn(https_host_pattern, migration_sql)
+        self.assertIn(https_host_pattern, schema_sql)
 
     def test_phase23_lifecycle_transition_forward_migration_asset_exists(self) -> None:
         migration_path = (
@@ -1704,6 +1709,35 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
 
         self.assertIsNone(store.get(AlertRecord, "alert-001"))
         self.assertEqual(store.list(AlertRecord), ())
+
+    def test_store_normalizes_external_ticket_reference_fields_before_persistence(
+        self,
+    ) -> None:
+        store, _ = make_store()
+
+        persisted = store.save(
+            AlertRecord(
+                alert_id="alert-ticket-link-001",
+                finding_id="finding-ticket-link-001",
+                analytic_signal_id="signal-ticket-link-001",
+                case_id=None,
+                lifecycle_state="new",
+                coordination_reference_id=" coord-ref-001 ",
+                coordination_target_type=" zammad ",
+                coordination_target_id=" ZM-4242 ",
+                ticket_reference_url=" https://tickets.example.test/#ticket/4242 ",
+            )
+        )
+        reloaded = store.get(AlertRecord, persisted.alert_id)
+
+        self.assertEqual(persisted.coordination_reference_id, "coord-ref-001")
+        self.assertEqual(persisted.coordination_target_type, "zammad")
+        self.assertEqual(persisted.coordination_target_id, "ZM-4242")
+        self.assertEqual(
+            persisted.ticket_reference_url,
+            "https://tickets.example.test/#ticket/4242",
+        )
+        self.assertEqual(reloaded, persisted)
 
     def test_store_rejects_nested_isolation_level_requests(self) -> None:
         store, _ = make_store()
