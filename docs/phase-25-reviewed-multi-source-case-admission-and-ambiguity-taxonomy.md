@@ -15,7 +15,7 @@ The approved reviewed multi-source case admission slice is intentionally narrow.
 It allows reviewed casework to combine evidence from:
 
 - GitHub audit context;
-- one second reviewed source family that has already completed its reviewed onboarding boundary; and
+- the approved second reviewed source family for this slice (`entra_id`), which has completed its reviewed onboarding boundary; and
 - osquery-backed host evidence attached as reviewed augmentation.
 
 The bounded source set exists to support richer operator review without redefining case truth around whichever substrate currently exposes the most nearby metadata.
@@ -127,7 +127,7 @@ Minimum provenance classifications for this slice:
 | `augmenting-evidence` | Additional reviewed evidence, such as osquery-backed host evidence, that augments the case without becoming case truth. |
 | `unresolved-linkage` | A candidate source record that may be relevant but lacks trusted linkage strong enough for `same-entity` or `related-entity`. |
 
-GitHub audit context and the second reviewed source family may appear as `reviewed-direct` or `reviewed-derived` depending on how the reviewed case chain links them.
+GitHub audit context and the approved `entra_id` reviewed source family for this slice may appear as `reviewed-direct` or `reviewed-derived` depending on how the reviewed case chain links them.
 
 osquery-backed host evidence is expected to appear as `augmenting-evidence` unless a later reviewed record explicitly promotes a narrower relationship for a specific claim.
 
@@ -147,11 +147,11 @@ The reviewed case chain must expose, at minimum:
 - the reviewed linkage or missing linkage that justified the current state; and
 - the blocking reason when a record remains `unresolved`.
 
-Each attached record should surface one provenance badge and one ambiguity badge.
+Each attached record must surface exactly one provenance badge and exactly one ambiguity badge.
 
-The provenance badge identifies whether the record is `authoritative-anchor`, `reviewed-direct`, `reviewed-derived`, `augmenting-evidence`, or `unresolved-linkage`.
+The provenance badge must identify whether the record is `authoritative-anchor`, `reviewed-direct`, `reviewed-derived`, `augmenting-evidence`, or `unresolved-linkage`.
 
-The ambiguity badge identifies whether the record is `same-entity`, `related-entity`, or `unresolved`.
+The ambiguity badge must identify whether the record is `same-entity`, `related-entity`, or `unresolved`.
 
 Operator-facing ambiguity display must render from reviewed control-plane fields and reviewed linkage records, not from substrate-local UI summaries.
 
