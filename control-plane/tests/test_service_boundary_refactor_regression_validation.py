@@ -157,6 +157,42 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
         ):
             self.assertIn(term, phase19_to_phase21_validation_tests)
 
+    def test_phase26_regression_validation_keeps_link_first_and_soft_write_ticket_coverage(
+        self,
+    ) -> None:
+        phase26_end_to_end_tests = self._defined_test_names(
+            "control-plane/tests/test_phase26_end_to_end_validation.py"
+        )
+        phase26_supporting_tests = self._defined_test_names(
+            "control-plane/tests/test_service_persistence_ingest_case_lifecycle.py",
+            "control-plane/tests/test_service_persistence_action_reconciliation.py",
+            "control-plane/tests/test_cli_inspection.py",
+        )
+
+        for term in (
+            "test_phase26_end_to_end_surfaces_link_first_ticket_reference_without_authority_drift",
+            "test_phase26_end_to_end_surfaces_create_tracking_ticket_created_outcome",
+            "test_phase26_end_to_end_fail_closes_missing_receipt_before_user_facing_success",
+            "test_phase26_end_to_end_surfaces_duplicate_create_attempt_as_mismatch",
+            "test_phase26_end_to_end_surfaces_create_tracking_ticket_identifier_mismatch",
+            "test_phase26_end_to_end_surfaces_create_tracking_ticket_timeout",
+            "test_phase26_end_to_end_surfaces_create_tracking_ticket_manual_fallback",
+        ):
+            self.assertIn(term, phase26_end_to_end_tests)
+
+        for term in (
+            "test_service_detail_surfaces_link_only_external_ticket_reference_on_alert_and_case",
+            "test_service_detail_keeps_mismatched_external_ticket_reference_explicit",
+            "test_service_fail_closes_when_create_tracking_ticket_receipt_omits_external_receipt_id",
+            "test_service_fail_closes_when_create_tracking_ticket_reconciliation_receipt_drifts",
+            "test_service_delegates_approved_create_tracking_ticket_through_shuffle",
+            "test_cli_inspect_case_detail_surfaces_create_tracking_ticket_outcome",
+            "test_cli_inspect_case_detail_surfaces_create_tracking_ticket_mismatch",
+            "test_cli_inspect_case_detail_surfaces_create_tracking_ticket_timeout",
+            "test_cli_inspect_case_detail_surfaces_create_tracking_ticket_manual_fallback",
+        ):
+            self.assertIn(term, phase26_supporting_tests)
+
 
 if __name__ == "__main__":
     unittest.main()
