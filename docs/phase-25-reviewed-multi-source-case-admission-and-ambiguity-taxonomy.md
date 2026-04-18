@@ -117,6 +117,16 @@ When `unresolved` applies, the system must fail closed and preserve the guard in
 
 Every admitted multi-source record must keep an explicit provenance classification.
 
+For this slice, the authoritative reviewed control-plane storage contract is `record.provenance`.
+
+Implementations must write and read `record.provenance.classification` as the authoritative provenance-classification field for enforcement and validation.
+
+Implementations must also persist `record.provenance.source_id` and `record.provenance.timestamp` so operators and validators can trace the reviewed provenance origin without relying on UI-only metadata.
+
+If an implementation also exposes `reviewed_context.provenance_classification` for compatibility with reviewed-context surfaces, that alias is optional and must mirror `record.provenance.classification`.
+
+`reviewed_context` may support display compatibility, but it must not replace `record.provenance.*` as the authoritative storage contract for this reviewed multi-source slice.
+
 Minimum provenance classifications for this slice:
 
 | Classification | Meaning |
@@ -142,16 +152,18 @@ Operators must be able to see why evidence appears together on one reviewed case
 The reviewed case chain must expose, at minimum:
 
 - the authoritative anchor record;
-- the taxonomy state for each non-anchor record;
+- the taxonomy state for each non-anchor attached record;
 - the provenance classification for each attached record;
 - the reviewed linkage or missing linkage that justified the current state; and
 - the blocking reason when a record remains `unresolved`.
 
-Each attached record must surface exactly one provenance badge and exactly one ambiguity badge.
+Each attached record must surface exactly one provenance badge.
+
+Each non-anchor attached record must also surface exactly one ambiguity badge.
 
 The provenance badge must identify whether the record is `authoritative-anchor`, `reviewed-direct`, `reviewed-derived`, `augmenting-evidence`, or `unresolved-linkage`.
 
-The ambiguity badge must identify whether the record is `same-entity`, `related-entity`, or `unresolved`.
+The ambiguity badge applies only to non-anchor attached records and must identify whether the record is `same-entity`, `related-entity`, or `unresolved`.
 
 Operator-facing ambiguity display must render from reviewed control-plane fields and reviewed linkage records, not from substrate-local UI summaries.
 
