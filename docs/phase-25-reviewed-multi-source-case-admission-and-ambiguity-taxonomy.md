@@ -115,9 +115,13 @@ When `unresolved` applies, the system must fail closed and preserve the guard in
 
 ## 5. Provenance Classification and Evidence Roles
 
+This section defines the Phase 25 reviewed multi-source implementation target.
+
 Every admitted multi-source record must keep an explicit provenance classification.
 
 For this slice, the authoritative reviewed control-plane storage contract is `record.provenance`.
+
+Pre-Phase-25 compatibility paths may still expose admission provenance through `reviewed_context.provenance` or `admission_provenance`, but those legacy surfaces do not satisfy this reviewed multi-source contract on their own.
 
 Implementations must write and read `record.provenance.classification` as the authoritative provenance-classification field for enforcement and validation.
 
