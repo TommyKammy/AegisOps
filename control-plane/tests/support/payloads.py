@@ -52,3 +52,28 @@ def phase20_notify_identity_owner_payload(
         "linked_evidence_ids": linked_evidence_ids,
     }
 
+
+def phase26_create_tracking_ticket_payload(
+    *,
+    case_id: str,
+    alert_id: str,
+    finding_id: str,
+    coordination_reference_id: str,
+    coordination_target_type: str = "zammad",
+    ticket_title: str = "Investigate reviewed case follow-up",
+    ticket_description: str = (
+        "Open one reviewed coordination ticket for bounded operator follow-up."
+    ),
+    ticket_severity: str = "medium",
+) -> dict[str, object]:
+    return {
+        "action_type": "create_tracking_ticket",
+        "case_id": case_id,
+        "alert_id": alert_id,
+        "finding_id": finding_id,
+        "coordination_reference_id": coordination_reference_id,
+        "coordination_target_type": coordination_target_type,
+        "ticket_title": ticket_title,
+        "ticket_description": ticket_description,
+        "ticket_severity": ticket_severity,
+    }

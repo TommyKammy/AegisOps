@@ -14,6 +14,8 @@ from .models import (
     ReconciliationRecord,
 )
 
+_PHASE26_REVIEWED_COORDINATION_TARGET_TYPES = frozenset(("zammad", "glpi"))
+
 
 class ExecutionCoordinatorServiceDependencies(Protocol):
     _store: object
@@ -397,9 +399,17 @@ class ExecutionCoordinator:
             execution_surface_type == "automation_substrate"
             and execution_surface_id == "shuffle"
         )
+        require_coordination_receipt_identifiers = (
+            require_binding_identifiers
+            and action_request.requested_payload.get("action_type")
+            == "create_tracking_ticket"
+        )
         normalized_executions = self._normalize_observed_executions(
             observed_executions,
             require_binding_identifiers=require_binding_identifiers,
+            require_coordination_receipt_identifiers=(
+                require_coordination_receipt_identifiers
+            ),
         )
         linked_execution_run_ids = tuple(
             execution["execution_run_id"] for execution in normalized_executions
@@ -469,6 +479,17 @@ class ExecutionCoordinator:
             observed_approval_decision_id = latest_execution.get("approval_decision_id")
             observed_delegation_id = latest_execution.get("delegation_id")
             observed_payload_hash = latest_execution.get("payload_hash")
+            observed_coordination_reference_id = latest_execution.get(
+                "coordination_reference_id"
+            )
+            observed_coordination_target_type = latest_execution.get(
+                "coordination_target_type"
+            )
+            observed_external_receipt_id = latest_execution.get("external_receipt_id")
+            observed_coordination_target_id = latest_execution.get(
+                "coordination_target_id"
+            )
+            observed_ticket_reference_url = latest_execution.get("ticket_reference_url")
             expected_execution_run_id = (
                 None
                 if authoritative_execution is None
@@ -520,6 +541,47 @@ class ExecutionCoordinator:
                     "approved binding mismatch between authoritative action execution "
                     "and observed downstream execution"
                 )
+            elif (
+                authoritative_execution is not None
+                and authoritative_execution.approved_payload.get("action_type")
+                == "create_tracking_ticket"
+                and authoritative_execution.execution_surface_type
+                == "automation_substrate"
+                and authoritative_execution.execution_surface_id == "shuffle"
+                and (
+                    observed_coordination_reference_id
+                    != authoritative_execution.provenance.get(
+                        "downstream_binding",
+                        {},
+                    ).get("coordination_reference_id")
+                    or observed_coordination_target_type
+                    != authoritative_execution.provenance.get(
+                        "downstream_binding",
+                        {},
+                    ).get("coordination_target_type")
+                    or observed_external_receipt_id
+                    != authoritative_execution.provenance.get(
+                        "downstream_binding",
+                        {},
+                    ).get("external_receipt_id")
+                    or observed_coordination_target_id
+                    != authoritative_execution.provenance.get(
+                        "downstream_binding",
+                        {},
+                    ).get("coordination_target_id")
+                    or observed_ticket_reference_url
+                    != authoritative_execution.provenance.get(
+                        "downstream_binding",
+                        {},
+                    ).get("ticket_reference_url")
+                )
+            ):
+                ingest_disposition = "mismatch"
+                lifecycle_state = "mismatched"
+                mismatch_summary = (
+                    "coordination receipt mismatch between authoritative action execution "
+                    "and observed downstream execution"
+                )
             else:
                 ingest_disposition = "matched"
                 lifecycle_state = "matched"
@@ -556,6 +618,36 @@ class ExecutionCoordinator:
                         ),
                         transitioned_at=latest_execution["observed_at"],
                     )
+            if (
+                authoritative_execution is not None
+                and authoritative_execution.approved_payload.get("action_type")
+                == "create_tracking_ticket"
+            ):
+                downstream_binding = authoritative_execution.provenance.get(
+                    "downstream_binding",
+                    {},
+                )
+                if isinstance(downstream_binding, Mapping):
+                    if isinstance(downstream_binding.get("coordination_reference_id"), str):
+                        subject_linkage["coordination_reference_ids"] = (
+                            downstream_binding["coordination_reference_id"],
+                        )
+                    if isinstance(downstream_binding.get("coordination_target_type"), str):
+                        subject_linkage["coordination_target_types"] = (
+                            downstream_binding["coordination_target_type"],
+                        )
+                    if isinstance(downstream_binding.get("external_receipt_id"), str):
+                        subject_linkage["external_receipt_ids"] = (
+                            downstream_binding["external_receipt_id"],
+                        )
+                    if isinstance(downstream_binding.get("coordination_target_id"), str):
+                        subject_linkage["coordination_target_ids"] = (
+                            downstream_binding["coordination_target_id"],
+                        )
+                    if isinstance(downstream_binding.get("ticket_reference_url"), str):
+                        subject_linkage["ticket_reference_urls"] = (
+                            downstream_binding["ticket_reference_url"],
+                        )
 
             reconciliation = self._service.persist_record(
                 ReconciliationRecord(
@@ -659,7 +751,7 @@ class ExecutionCoordinator:
                         )
                     return existing
             if execution_surface_id == "shuffle":
-                self._require_reviewed_phase20_shuffle_payload(normalized_payload)
+                self._require_reviewed_shuffle_payload(normalized_payload)
 
             delegation_id = self._service._next_identifier("delegation")
             predispatch_execution = self._service.persist_record(
@@ -756,26 +848,49 @@ class ExecutionCoordinator:
     def _pending_dispatch_execution_run_id(delegation_id: str) -> str:
         return f"pending-dispatch-{delegation_id}"
 
-    def _require_reviewed_phase20_shuffle_payload(
+    def _require_reviewed_shuffle_payload(
         self,
         approved_payload: Mapping[str, object],
     ) -> None:
         action_type = approved_payload.get("action_type")
-        if action_type != "notify_identity_owner":
-            raise ValueError(
-                "approved action is outside the reviewed Phase 20 Shuffle delegation scope"
-            )
-
-        for field_name in (
-            "recipient_identity",
-            "message_intent",
-            "escalation_reason",
-        ):
-            value = approved_payload.get(field_name)
-            if not isinstance(value, str) or value.strip() == "":
+        if action_type == "notify_identity_owner":
+            for field_name in (
+                "recipient_identity",
+                "message_intent",
+                "escalation_reason",
+            ):
+                value = approved_payload.get(field_name)
+                if not isinstance(value, str) or value.strip() == "":
+                    raise ValueError(
+                        "approved action is outside the reviewed Phase 20 Shuffle delegation scope"
+                    )
+            return
+        if action_type == "create_tracking_ticket":
+            for field_name in (
+                "case_id",
+                "coordination_reference_id",
+                "coordination_target_type",
+                "ticket_title",
+                "ticket_description",
+            ):
+                value = approved_payload.get(field_name)
+                if not isinstance(value, str) or value.strip() == "":
+                    raise ValueError(
+                        "approved action is outside the reviewed Phase 26 Shuffle delegation scope"
+                    )
+            coordination_target_type = approved_payload.get("coordination_target_type")
+            if (
+                not isinstance(coordination_target_type, str)
+                or coordination_target_type
+                not in _PHASE26_REVIEWED_COORDINATION_TARGET_TYPES
+            ):
                 raise ValueError(
-                    "approved action is outside the reviewed Phase 20 Shuffle delegation scope"
+                    "approved action is outside the reviewed Phase 26 Shuffle delegation scope"
                 )
+            return
+        raise ValueError(
+            "approved action is outside the reviewed Phase 20 Shuffle delegation scope"
+        )
 
     def _require_exact_adapter_receipt_binding(
         self,
@@ -801,6 +916,39 @@ class ExecutionCoordinator:
             raise ValueError(
                 "shuffle receipt does not match approved delegation binding"
             )
+        if (
+            execution_surface_id == "shuffle"
+            and action_request.requested_payload.get("action_type")
+            == "create_tracking_ticket"
+        ):
+            approved_coordination_reference_id = self._service._require_non_empty_string(
+                action_request.target_scope.get("coordination_reference_id"),
+                "action_request.target_scope.coordination_reference_id",
+            )
+            approved_coordination_target_type = self._service._require_non_empty_string(
+                action_request.target_scope.get("coordination_target_type"),
+                "action_request.target_scope.coordination_target_type",
+            )
+            if any(
+                (
+                    self._require_receipt_string_attribute(
+                        receipt,
+                        "coordination_reference_id",
+                    )
+                    != approved_coordination_reference_id,
+                    self._require_receipt_string_attribute(
+                        receipt,
+                        "coordination_target_type",
+                    )
+                    != approved_coordination_target_type,
+                )
+            ):
+                raise ValueError(
+                    "shuffle receipt does not match approved delegation binding"
+                )
+            self._require_receipt_string_attribute(receipt, "external_receipt_id")
+            self._require_receipt_string_attribute(receipt, "coordination_target_id")
+            self._require_receipt_string_attribute(receipt, "ticket_reference_url")
 
     def _finalized_execution_provenance(
         self,
@@ -832,6 +980,31 @@ class ExecutionCoordinator:
                     "payload_hash",
                 ),
             }
+            if execution.approved_payload.get("action_type") == "create_tracking_ticket":
+                provenance["downstream_binding"].update(
+                    {
+                        "coordination_reference_id": self._require_receipt_string_attribute(
+                            receipt,
+                            "coordination_reference_id",
+                        ),
+                        "coordination_target_type": self._require_receipt_string_attribute(
+                            receipt,
+                            "coordination_target_type",
+                        ),
+                        "external_receipt_id": self._require_receipt_string_attribute(
+                            receipt,
+                            "external_receipt_id",
+                        ),
+                        "coordination_target_id": self._require_receipt_string_attribute(
+                            receipt,
+                            "coordination_target_id",
+                        ),
+                        "ticket_reference_url": self._require_receipt_string_attribute(
+                            receipt,
+                            "ticket_reference_url",
+                        ),
+                    }
+                )
         return provenance
 
     @staticmethod
@@ -985,6 +1158,7 @@ class ExecutionCoordinator:
         observed_executions: tuple[Mapping[str, object], ...],
         *,
         require_binding_identifiers: bool = False,
+        require_coordination_receipt_identifiers: bool = False,
     ) -> tuple[dict[str, object], ...]:
         normalized: list[dict[str, object]] = []
         for execution in observed_executions:
@@ -995,6 +1169,11 @@ class ExecutionCoordinator:
             approval_decision_id = execution.get("approval_decision_id")
             delegation_id = execution.get("delegation_id")
             payload_hash = execution.get("payload_hash")
+            coordination_reference_id = execution.get("coordination_reference_id")
+            coordination_target_type = execution.get("coordination_target_type")
+            external_receipt_id = execution.get("external_receipt_id")
+            coordination_target_id = execution.get("coordination_target_id")
+            ticket_reference_url = execution.get("ticket_reference_url")
             if not isinstance(execution_run_id, str):
                 raise ValueError("observed execution must include string execution_run_id")
             if not isinstance(execution_surface_id, str):
@@ -1015,6 +1194,27 @@ class ExecutionCoordinator:
                     raise ValueError("observed execution must include string delegation_id")
                 if not isinstance(payload_hash, str):
                     raise ValueError("observed execution must include string payload_hash")
+            if require_coordination_receipt_identifiers:
+                if not isinstance(coordination_reference_id, str):
+                    raise ValueError(
+                        "observed execution must include string coordination_reference_id"
+                    )
+                if not isinstance(coordination_target_type, str):
+                    raise ValueError(
+                        "observed execution must include string coordination_target_type"
+                    )
+                if not isinstance(external_receipt_id, str):
+                    raise ValueError(
+                        "observed execution must include string external_receipt_id"
+                    )
+                if not isinstance(coordination_target_id, str):
+                    raise ValueError(
+                        "observed execution must include string coordination_target_id"
+                    )
+                if not isinstance(ticket_reference_url, str):
+                    raise ValueError(
+                        "observed execution must include string ticket_reference_url"
+                    )
             normalized.append(
                 {
                     "execution_run_id": execution_run_id,
@@ -1024,6 +1224,11 @@ class ExecutionCoordinator:
                     "approval_decision_id": approval_decision_id,
                     "delegation_id": delegation_id,
                     "payload_hash": payload_hash,
+                    "coordination_reference_id": coordination_reference_id,
+                    "coordination_target_type": coordination_target_type,
+                    "external_receipt_id": external_receipt_id,
+                    "coordination_target_id": coordination_target_id,
+                    "ticket_reference_url": ticket_reference_url,
                     "status": execution.get("status"),
                 }
             )

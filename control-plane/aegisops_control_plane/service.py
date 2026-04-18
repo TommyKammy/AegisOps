@@ -5905,7 +5905,7 @@ class AegisOpsControlPlaneService:
         approver_identity: str,
     ) -> None:
         action_class = self._reviewed_action_class_for_request(action_request)
-        if action_class != "notify":
+        if action_class not in {"notify", "soft_write"}:
             raise PermissionError(
                 "approval decisions are not authorized for the reviewed action class"
             )
@@ -5926,6 +5926,8 @@ class AegisOpsControlPlaneService:
         action_type = action_request.requested_payload.get("action_type")
         if action_type == "notify_identity_owner":
             return "notify"
+        if action_type == "create_tracking_ticket":
+            return "soft_write"
         raise PermissionError(
             "approval decisions are not authorized for the reviewed action class"
         )
