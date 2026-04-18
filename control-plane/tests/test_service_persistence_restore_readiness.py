@@ -3769,6 +3769,122 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             3,
         )
 
+    def test_service_phase21_readiness_freezes_review_path_health_as_of_across_snapshot_collection(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        expires_at = reviewed_at + timedelta(hours=4)
+
+        def persist_review(*, suffix: str, requested_offset_minutes: int) -> None:
+            recommendation = service.record_case_recommendation(
+                case_id=promoted_case.case_id,
+                review_owner="analyst-001",
+                intended_outcome=(
+                    "Keep one frozen review-path evaluation timestamp across"
+                    f" readiness snapshots ({suffix})."
+                ),
+            )
+            requested_at = reviewed_at + timedelta(minutes=requested_offset_minutes)
+            delegated_at = requested_at + timedelta(minutes=10)
+            action_request = service.create_reviewed_action_request_from_advisory(
+                record_family="recommendation",
+                record_id=recommendation.recommendation_id,
+                requester_identity="analyst-001",
+                recipient_identity="repo-owner-001",
+                message_intent=(
+                    "Keep readiness review-path health evaluated at one instant"
+                    f" across reviewed requests ({suffix})."
+                ),
+                escalation_reason=(
+                    "Operators must not see mixed review-path states caused only"
+                    " by crossing an expiry boundary mid-snapshot."
+                ),
+                expires_at=expires_at,
+                action_request_id=(
+                    f"action-request-phase21-readiness-frozen-as-of-{suffix}"
+                ),
+            )
+            approval = service.persist_record(
+                ApprovalDecisionRecord(
+                    approval_decision_id=(
+                        f"approval-phase21-readiness-frozen-as-of-{suffix}"
+                    ),
+                    action_request_id=action_request.action_request_id,
+                    approver_identities=("approver-001",),
+                    target_snapshot=dict(action_request.target_scope),
+                    payload_hash=action_request.payload_hash,
+                    decided_at=requested_at + timedelta(minutes=5),
+                    lifecycle_state="approved",
+                    approved_expires_at=expires_at,
+                )
+            )
+            service.persist_record(
+                replace(
+                    action_request,
+                    approval_decision_id=approval.approval_decision_id,
+                    requested_at=requested_at,
+                    expires_at=expires_at,
+                    lifecycle_state="executing",
+                )
+            )
+            service.persist_record(
+                ActionExecutionRecord(
+                    action_execution_id=(
+                        f"action-execution-phase21-readiness-frozen-as-of-{suffix}"
+                    ),
+                    action_request_id=action_request.action_request_id,
+                    approval_decision_id=approval.approval_decision_id,
+                    delegation_id=(
+                        f"delegation-phase21-readiness-frozen-as-of-{suffix}"
+                    ),
+                    execution_surface_type="automation_substrate",
+                    execution_surface_id="shuffle",
+                    execution_run_id=(
+                        f"execution-run-phase21-readiness-frozen-as-of-{suffix}"
+                    ),
+                    idempotency_key=action_request.idempotency_key,
+                    target_scope=dict(action_request.target_scope),
+                    approved_payload=dict(action_request.requested_payload),
+                    payload_hash=action_request.payload_hash,
+                    delegated_at=delegated_at,
+                    expires_at=expires_at,
+                    provenance={"initiated_by": "operator-review"},
+                    lifecycle_state="dispatching",
+                )
+            )
+
+        persist_review(suffix="001", requested_offset_minutes=0)
+        persist_review(suffix="002", requested_offset_minutes=15)
+
+        counter = {"value": 0}
+
+        def advancing_now(_tz: timezone | None = None) -> datetime:
+            current = reviewed_at + timedelta(seconds=counter["value"])
+            counter["value"] += 1
+            return current
+
+        with mock.patch(
+            "aegisops_control_plane.service.datetime", wraps=datetime
+        ) as mocked_datetime:
+            mocked_datetime.now.side_effect = advancing_now
+            with mock.patch.object(
+                service,
+                "_action_review_path_health",
+                wraps=service._action_review_path_health,
+            ) as action_review_path_health:
+                readiness = service.inspect_readiness_diagnostics()
+
+        recorded_as_of = [
+            call.kwargs["as_of"] for call in action_review_path_health.call_args_list
+        ]
+
+        self.assertEqual(readiness.metrics["review_path_health"]["review_count"], 2)
+        self.assertEqual(action_review_path_health.call_count, 2)
+        self.assertEqual(len(recorded_as_of), 2)
+        self.assertEqual(recorded_as_of[0], recorded_as_of[1])
+
     def test_service_phase21_readiness_prefers_higher_reconciliation_id_when_compared_at_ties(
         self,
     ) -> None:

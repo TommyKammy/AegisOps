@@ -2378,12 +2378,14 @@ class AegisOpsControlPlaneService:
             review_state=review_state,
             record_index=record_index,
         )
+        path_health_as_of = datetime.now(timezone.utc)
         path_health = self._action_review_path_health(
             action_request=action_request,
             approval_decision=approval_decision,
             action_execution=action_execution,
             reconciliation=reconciliation,
             review_state=review_state,
+            as_of=path_health_as_of,
         )
         coordination_ticket_outcome = self._action_review_coordination_ticket_outcome(
             action_request=action_request,
@@ -2476,6 +2478,7 @@ class AegisOpsControlPlaneService:
         action_execution: ActionExecutionRecord | None,
         reconciliation: ReconciliationRecord | None,
         review_state: str,
+        as_of: datetime,
     ) -> dict[str, object]:
         if action_execution is None and reconciliation is None:
             if review_state in {"rejected", "expired", "superseded", "canceled"}:
@@ -2524,7 +2527,7 @@ class AegisOpsControlPlaneService:
             approval_decision=approval_decision,
             action_execution=action_execution,
         )
-        if deadline is not None and deadline <= datetime.now(timezone.utc):
+        if deadline is not None and deadline <= as_of:
             paths = self._action_review_overdue_path_health(
                 review_state=review_state,
                 action_execution=action_execution,
@@ -3159,6 +3162,7 @@ class AegisOpsControlPlaneService:
                         )
 
         readiness_review_snapshots: list[dict[str, object]] = []
+        path_health_as_of = datetime.now(timezone.utc)
         for action_request_id, action_request in sorted(candidate_action_requests.items()):
             approval_decision = approval_decisions_by_action_request_id.get(action_request_id)
             action_execution = executions_by_action_request_id.get(action_request_id)
@@ -3179,6 +3183,7 @@ class AegisOpsControlPlaneService:
                 action_execution=action_execution,
                 reconciliation=reconciliation,
                 review_state=review_state,
+                as_of=path_health_as_of,
             )
             readiness_review_snapshots.append(
                 {
