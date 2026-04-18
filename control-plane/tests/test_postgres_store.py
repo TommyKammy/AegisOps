@@ -292,7 +292,7 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         ):
             self.assertIn(required_column, schema_sql)
         https_host_pattern = (
-            "or ticket_reference_url ~ '^https://[^/?#[:space:]]+([/?#][^[:space:]]*)?$'"
+            "or ticket_reference_url ~* '^https://[^/?#[:space:]]+([/?#][^[:space:]]*)?$'"
         )
         self.assertIn(https_host_pattern, migration_sql)
         self.assertIn(https_host_pattern, schema_sql)
