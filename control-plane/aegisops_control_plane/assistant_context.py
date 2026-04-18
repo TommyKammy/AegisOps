@@ -113,6 +113,48 @@ def _reviewed_identity_is_alias_only(reviewed_context: Mapping[str, object]) -> 
     return any(identity.get(key) for key in alias_like_keys)
 
 
+def _normalized_optional_string(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
+def _linked_casework_identity_ambiguity_records(
+    linked_evidence_records: tuple[dict[str, object], ...],
+) -> tuple[dict[str, str], ...]:
+    blocking_reasons = {
+        "stable_identifier_mismatch",
+        "alias_like_overlap",
+        "alias_overlap",
+        "identity_alias_overlap",
+    }
+    unresolved_records: list[dict[str, str]] = []
+    seen_record_ids: set[str] = set()
+    for evidence in linked_evidence_records:
+        evidence_id = _normalized_optional_string(evidence.get("evidence_id"))
+        if evidence_id is None or evidence_id in seen_record_ids:
+            continue
+        provenance = evidence.get("provenance")
+        if not isinstance(provenance, Mapping):
+            continue
+        ambiguity_badge = _normalized_optional_string(provenance.get("ambiguity_badge"))
+        classification = _normalized_optional_string(provenance.get("classification"))
+        blocking_reason = _normalized_optional_string(provenance.get("blocking_reason"))
+        if ambiguity_badge != "unresolved" and classification != "unresolved-linkage":
+            continue
+        if blocking_reason not in blocking_reasons:
+            continue
+        seen_record_ids.add(evidence_id)
+        unresolved_records.append(
+            {
+                "evidence_id": evidence_id,
+                "blocking_reason": blocking_reason,
+            }
+        )
+    return tuple(unresolved_records)
+
+
 def _recommendation_draft_review_summary(
     record_family: str,
     record_id: str,
@@ -195,6 +237,7 @@ def _build_assistant_advisory_output(
     linked_recommendation_ids: tuple[str, ...],
     linked_alert_records: tuple[dict[str, object], ...],
     linked_case_records: tuple[dict[str, object], ...],
+    linked_evidence_records: tuple[dict[str, object], ...],
     linked_recommendation_records: tuple[dict[str, object], ...],
 ) -> dict[str, object]:
     output_kind = _assistant_advisory_output_kind(record_family)
@@ -282,6 +325,35 @@ def _build_assistant_advisory_output(
                     "alias-style identity metadata for this advisory output?"
                 ),
                 "citations": citations,
+            }
+        )
+    linked_casework_identity_ambiguity = _linked_casework_identity_ambiguity_records(
+        linked_evidence_records
+    )
+    if linked_casework_identity_ambiguity:
+        fail_closed = True
+        uncertainty_flags.append("reviewed_casework_identity_ambiguity")
+        ambiguity_citations = _dedupe_strings(
+            (
+                record_id,
+                *(
+                    entry["evidence_id"]
+                    for entry in linked_casework_identity_ambiguity
+                ),
+            )
+        )
+        ambiguity_details = ", ".join(
+            f"{entry['evidence_id']} ({entry['blocking_reason']})"
+            for entry in linked_casework_identity_ambiguity
+        )
+        unresolved_questions.append(
+            {
+                "text": (
+                    "Which stable identity identifier or explicit reviewed linkage resolves "
+                    "the multi-source identity ambiguity attached to: "
+                    f"{ambiguity_details}?"
+                ),
+                "citations": ambiguity_citations,
             }
         )
     if unsafe_intended_outcome_flags:
@@ -785,6 +857,9 @@ class AssistantContextAssembler:
                 linked_recommendation_ids=linked_recommendation_ids,
                 linked_alert_records=linked_alert_records,
                 linked_case_records=linked_case_records,
+                linked_evidence_records=tuple(
+                    self._record_to_dict(evidence) for evidence in linked_evidence_records
+                ),
                 linked_recommendation_records=linked_recommendation_payloads,
             ),
             reviewed_context=reviewed_context,

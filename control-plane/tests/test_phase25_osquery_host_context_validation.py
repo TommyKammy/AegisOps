@@ -517,9 +517,119 @@ class Phase25OsqueryHostContextValidationTests(unittest.TestCase):
             attached_records[second_source_evidence.evidence_id]["blocking_reason"],
             "missing_or_invalid_required_provenance_fields",
         )
+
+    def test_case_assistant_context_fails_closed_on_unresolved_identity_ambiguity(
+        self,
+    ) -> None:
+        _store, service, promoted_case, reviewed_at = self._build_host_bound_case(
+            host_identifier="host-001"
+        )
+        stable_id_mismatch_evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-entra-case-stable-id-mismatch",
+                source_record_id="wazuh://entra/record/stable-id-mismatch",
+                alert_id=None,
+                case_id=promoted_case.case_id,
+                source_system="wazuh",
+                collector_identity="wazuh-reviewed-second-source-adapter",
+                acquired_at=reviewed_at,
+                derivation_relationship="reviewed_case_attachment",
+                lifecycle_state="linked",
+                provenance={
+                    "classification": "unresolved-linkage",
+                    "source_id": "entra-record-stable-id-mismatch",
+                    "timestamp": reviewed_at.isoformat(),
+                    "reviewed_by": "analyst-001",
+                    "source_family": "entra_id",
+                    "ambiguity_badge": "unresolved",
+                    "blocking_reason": "stable_identifier_mismatch",
+                },
+                content={
+                    "attachment_reason": (
+                        "Reviewed Entra ID context remains unresolved until stable "
+                        "identifiers are reconciled."
+                    )
+                },
+            )
+        )
+        alias_overlap_evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-entra-case-alias-overlap",
+                source_record_id="wazuh://entra/record/alias-overlap",
+                alert_id=None,
+                case_id=promoted_case.case_id,
+                source_system="wazuh",
+                collector_identity="wazuh-reviewed-second-source-adapter",
+                acquired_at=reviewed_at,
+                derivation_relationship="reviewed_case_attachment",
+                lifecycle_state="linked",
+                provenance={
+                    "classification": "unresolved-linkage",
+                    "source_id": "entra-record-alias-overlap",
+                    "timestamp": reviewed_at.isoformat(),
+                    "reviewed_by": "analyst-001",
+                    "source_family": "entra_id",
+                    "ambiguity_badge": "unresolved",
+                    "blocking_reason": "alias_like_overlap",
+                },
+                content={
+                    "attachment_reason": (
+                        "Alias-style overlap remains reviewed context only and must "
+                        "not be collapsed into one identity."
+                    )
+                },
+            )
+        )
+        service.persist_record(
+            CaseRecord(
+                case_id=promoted_case.case_id,
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                evidence_ids=(
+                    *promoted_case.evidence_ids,
+                    stable_id_mismatch_evidence.evidence_id,
+                    alias_overlap_evidence.evidence_id,
+                ),
+                lifecycle_state=promoted_case.lifecycle_state,
+                reviewed_context=promoted_case.reviewed_context,
+            )
+        )
+
+        case_detail = service.inspect_case_detail(promoted_case.case_id)
+        attached_records = {
+            record["record_id"]: record
+            for record in case_detail.provenance_summary["attached_records"]
+        }
         self.assertEqual(
-            attached_records[second_source_evidence.evidence_id]["source_family"],
-            "wazuh",
+            attached_records[stable_id_mismatch_evidence.evidence_id]["ambiguity_badge"],
+            "unresolved",
+        )
+        self.assertEqual(
+            attached_records[stable_id_mismatch_evidence.evidence_id]["blocking_reason"],
+            "stable_identifier_mismatch",
+        )
+        self.assertEqual(
+            attached_records[alias_overlap_evidence.evidence_id]["ambiguity_badge"],
+            "unresolved",
+        )
+        self.assertEqual(
+            attached_records[alias_overlap_evidence.evidence_id]["blocking_reason"],
+            "alias_like_overlap",
+        )
+
+        snapshot = service.inspect_assistant_context("case", promoted_case.case_id)
+
+        self.assertEqual(snapshot.advisory_output["status"], "unresolved")
+        self.assertIn(
+            "reviewed_casework_identity_ambiguity",
+            snapshot.advisory_output["uncertainty_flags"],
+        )
+        self.assertTrue(
+            any(
+                stable_id_mismatch_evidence.evidence_id in question.get("text", "")
+                and alias_overlap_evidence.evidence_id in question.get("text", "")
+                for question in snapshot.advisory_output["unresolved_questions"]
+            )
         )
 
     def test_inspect_case_detail_trims_persisted_provenance_strings(self) -> None:

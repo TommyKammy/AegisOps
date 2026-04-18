@@ -1070,6 +1070,9 @@ def _phase24_live_assistant_unresolved_reasons(
         "ambiguous_identity_alias_only": (
             "the requested summary would require the assistant to collapse identity ambiguity"
         ),
+        "reviewed_casework_identity_ambiguity": (
+            "reviewed multi-source casework still contains unresolved identity ambiguity"
+        ),
         "authority_overreach": (
             "the requested summary would widen into approval, delegation, execution, or policy interpretation"
         ),

@@ -144,6 +144,53 @@ class Phase24LiveAssistantFallbackValidationTests(ServicePersistenceTestBase):
         )
         service._assistant_provider_adapter.generate.assert_not_called()
 
+    def test_workflow_preserves_reviewed_unresolved_summary_for_casework_identity_ambiguity(
+        self,
+    ) -> None:
+        _, service, promoted_case, _, _ = self._build_phase19_in_scope_case()
+        context_snapshot = service.inspect_assistant_context(
+            "case",
+            promoted_case.case_id,
+        )
+        expected_summary = (
+            "Reviewed case summary remains unresolved until multi-source identity "
+            "ambiguity is reconciled."
+        )
+        unresolved_context = replace(
+            context_snapshot,
+            advisory_output={
+                **dict(context_snapshot.advisory_output),
+                "status": "unresolved",
+                "cited_summary": {
+                    "text": expected_summary,
+                    "citations": (promoted_case.case_id,),
+                },
+                "uncertainty_flags": ("reviewed_casework_identity_ambiguity",),
+            },
+        )
+        service._assistant_provider_adapter = mock.Mock()
+
+        with mock.patch.object(
+            service,
+            "inspect_assistant_context",
+            return_value=unresolved_context,
+        ):
+            snapshot = service.run_live_assistant_workflow(
+                workflow_task="case_summary",
+                record_family="case",
+                record_id=promoted_case.case_id,
+            )
+
+        self.assertEqual(snapshot.status, "unresolved")
+        self.assertEqual(snapshot.summary, expected_summary)
+        self.assertEqual(
+            snapshot.unresolved_reasons,
+            (
+                "reviewed multi-source casework still contains unresolved identity ambiguity",
+            ),
+        )
+        service._assistant_provider_adapter.generate.assert_not_called()
+
     def test_workflow_preserves_reviewed_summary_for_provider_failure(
         self,
     ) -> None:
