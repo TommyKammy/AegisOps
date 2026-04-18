@@ -4377,6 +4377,10 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             "created",
         )
         self.assertEqual(
+            review["coordination_ticket_outcome"]["approval_decision_id"],
+            approval.approval_decision_id,
+        )
+        self.assertEqual(
             review["coordination_ticket_outcome"]["coordination_reference_id"],
             "coord-ref-cli-create-ticket-001",
         )
@@ -4392,6 +4396,80 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             review["coordination_ticket_outcome"]["ticket_reference_url"],
             downstream_binding["ticket_reference_url"],
         )
+
+    def test_cli_inspect_case_detail_repairs_nested_create_tracking_ticket_approval_linkage(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        delegated_at = reviewed_at + timedelta(minutes=15)
+        compared_at = reviewed_at + timedelta(minutes=20)
+        seeded = self._seed_create_tracking_ticket_request(
+            service=service,
+            promoted_case=promoted_case,
+            reviewed_at=reviewed_at,
+            suffix="repaired-approval-001",
+            coordination_reference_id="coord-ref-cli-create-ticket-repaired-approval-001",
+        )
+
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id=seeded["action_request"].action_request_id,
+            approved_payload=seeded["approved_payload"],
+            delegated_at=delegated_at,
+            delegation_issuer="control-plane-service",
+        )
+        downstream_binding = execution.provenance["downstream_binding"]
+        service.reconcile_action_execution(
+            action_request_id=seeded["action_request"].action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(
+                {
+                    "execution_run_id": execution.execution_run_id,
+                    "execution_surface_id": "shuffle",
+                    "idempotency_key": seeded["action_request"].idempotency_key,
+                    "approval_decision_id": seeded["approval"].approval_decision_id,
+                    "delegation_id": execution.delegation_id,
+                    "payload_hash": seeded["payload_hash"],
+                    "coordination_reference_id": downstream_binding[
+                        "coordination_reference_id"
+                    ],
+                    "coordination_target_type": downstream_binding[
+                        "coordination_target_type"
+                    ],
+                    "external_receipt_id": downstream_binding["external_receipt_id"],
+                    "coordination_target_id": downstream_binding[
+                        "coordination_target_id"
+                    ],
+                    "ticket_reference_url": downstream_binding["ticket_reference_url"],
+                    "observed_at": compared_at,
+                    "status": "success",
+                },
+            ),
+            compared_at=compared_at,
+            stale_after=reviewed_at + timedelta(hours=1),
+        )
+        service.persist_record(
+            replace(seeded["action_request"], approval_decision_id=None)
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-case-detail", "--case-id", promoted_case.case_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        review = payload["current_action_review"]
+        self.assertEqual(
+            review["approval_decision_id"],
+            seeded["approval"].approval_decision_id,
+        )
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["approval_decision_id"],
+            seeded["approval"].approval_decision_id,
+        )
+        self.assertEqual(review["coordination_ticket_outcome"]["status"], "created")
 
     def test_cli_inspect_case_detail_surfaces_create_tracking_ticket_mismatch(
         self,
@@ -4510,7 +4588,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             "provider",
         )
 
-    def test_cli_inspect_case_detail_surfaces_create_tracking_ticket_failure(
+    def test_cli_inspect_case_detail_surfaces_create_tracking_ticket_provider_failure_as_timeout(
         self,
     ) -> None:
         _, service, promoted_case, _evidence_id, reviewed_at = self._build_phase19_in_scope_case()
@@ -4540,13 +4618,13 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
 
         payload = json.loads(stdout.getvalue())
         review = payload["current_action_review"]
-        self.assertEqual(review["coordination_ticket_outcome"]["status"], "failed")
+        self.assertEqual(review["coordination_ticket_outcome"]["status"], "timeout")
         self.assertEqual(
-            review["coordination_ticket_outcome"]["failure"]["reason"],
+            review["coordination_ticket_outcome"]["timeout"]["reason"],
             "execution_failed",
         )
         self.assertEqual(
-            review["coordination_ticket_outcome"]["failure"]["path"],
+            review["coordination_ticket_outcome"]["timeout"]["path"],
             "provider",
         )
 

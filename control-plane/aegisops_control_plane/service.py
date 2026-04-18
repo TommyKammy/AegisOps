@@ -2384,6 +2384,7 @@ class AegisOpsControlPlaneService:
         )
         coordination_ticket_outcome = self._action_review_coordination_ticket_outcome(
             action_request=action_request,
+            approval_decision=approval_decision,
             action_execution=action_execution,
             reconciliation=reconciliation,
             runtime_visibility=runtime_visibility,
@@ -4170,6 +4171,7 @@ class AegisOpsControlPlaneService:
         self,
         *,
         action_request: ActionRequestRecord,
+        approval_decision: ApprovalDecisionRecord | None,
         action_execution: ActionExecutionRecord | None,
         reconciliation: ReconciliationRecord | None,
         runtime_visibility: Mapping[str, object] | None,
@@ -4216,7 +4218,7 @@ class AegisOpsControlPlaneService:
             status = "timeout"
             summary = str(terminal_issue["reason"]).replace("_", " ")
         elif terminal_issue is not None:
-            status = "failed"
+            status = "timeout"
             summary = str(terminal_issue["reason"]).replace("_", " ")
         else:
             status = "pending"
@@ -4227,7 +4229,9 @@ class AegisOpsControlPlaneService:
             "status": status,
             "summary": summary,
             "action_request_id": action_request.action_request_id,
-            "approval_decision_id": action_request.approval_decision_id,
+            "approval_decision_id": (
+                None if approval_decision is None else approval_decision.approval_decision_id
+            ),
             "action_execution_id": (
                 None if action_execution is None else action_execution.action_execution_id
             ),
@@ -4271,12 +4275,12 @@ class AegisOpsControlPlaneService:
             }
             outcome["timeout"] = timeout
         elif terminal_issue is not None:
-            failure = {
+            timeout = {
                 key: value
                 for key, value in terminal_issue.items()
                 if key != "category"
             }
-            outcome["failure"] = failure
+            outcome["timeout"] = timeout
         if mismatch is not None:
             outcome["mismatch"] = mismatch
         if manual_fallback is not None:
