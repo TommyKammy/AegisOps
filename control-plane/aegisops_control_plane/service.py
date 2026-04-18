@@ -2389,6 +2389,7 @@ class AegisOpsControlPlaneService:
             reconciliation=reconciliation,
             runtime_visibility=runtime_visibility,
             path_health=path_health,
+            review_state=review_state,
         )
 
         return {
@@ -4176,9 +4177,16 @@ class AegisOpsControlPlaneService:
         reconciliation: ReconciliationRecord | None,
         runtime_visibility: Mapping[str, object] | None,
         path_health: Mapping[str, object],
+        review_state: str,
     ) -> dict[str, object] | None:
         requested_payload = action_request.requested_payload
         if requested_payload.get("action_type") != "create_tracking_ticket":
+            return None
+        if (
+            action_execution is None
+            and reconciliation is None
+            and review_state in {"rejected", "expired", "superseded", "canceled"}
+        ):
             return None
 
         downstream_binding = self._action_review_downstream_binding(action_execution)
@@ -4353,6 +4361,18 @@ class AegisOpsControlPlaneService:
             "execution_expired",
             "execution_rejected",
         }
+        provider_path = paths.get("provider")
+        if isinstance(provider_path, Mapping):
+            provider_reason = provider_path.get("reason")
+            if (
+                isinstance(provider_reason, str)
+                and provider_reason in terminal_failure_reasons
+            ):
+                return {
+                    "category": "failed",
+                    "path": "provider",
+                    "reason": provider_reason,
+                }
         for path_name in ("ingest", "delegation", "provider", "persistence"):
             path = paths.get(path_name)
             if not isinstance(path, Mapping):
@@ -4363,12 +4383,6 @@ class AegisOpsControlPlaneService:
             if reason in timeout_reasons:
                 return {
                     "category": "timeout",
-                    "path": path_name,
-                    "reason": reason,
-                }
-            if path_name == "provider" and reason in terminal_failure_reasons:
-                return {
-                    "category": "failed",
                     "path": path_name,
                     "reason": reason,
                 }

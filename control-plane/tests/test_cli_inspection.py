@@ -4539,6 +4539,43 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             "and observed downstream execution",
         )
 
+    def test_cli_inspect_case_detail_omits_create_tracking_ticket_outcome_for_terminal_non_delegated_reviews(
+        self,
+    ) -> None:
+        for review_state in ("rejected", "expired", "superseded", "canceled"):
+            with self.subTest(review_state=review_state):
+                _, service, promoted_case, _evidence_id, reviewed_at = (
+                    self._build_phase19_in_scope_case()
+                )
+                seeded = self._seed_create_tracking_ticket_request(
+                    service=service,
+                    promoted_case=promoted_case,
+                    reviewed_at=reviewed_at,
+                    suffix=f"closed-without-delegation-{review_state}",
+                    coordination_reference_id=(
+                        f"coord-ref-cli-create-ticket-closed-without-delegation-{review_state}"
+                    ),
+                )
+                if review_state in {"rejected", "expired"}:
+                    service.persist_record(
+                        replace(seeded["approval"], lifecycle_state=review_state)
+                    )
+                service.persist_record(
+                    replace(seeded["action_request"], lifecycle_state=review_state)
+                )
+
+                stdout = io.StringIO()
+                main.main(
+                    ["inspect-case-detail", "--case-id", promoted_case.case_id],
+                    stdout=stdout,
+                    service=service,
+                )
+
+                payload = json.loads(stdout.getvalue())
+                review = payload["current_action_review"]
+                self.assertEqual(review["review_state"], review_state)
+                self.assertIsNone(review["coordination_ticket_outcome"])
+
     def test_cli_inspect_case_detail_surfaces_create_tracking_ticket_timeout(
         self,
     ) -> None:
@@ -4618,6 +4655,80 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
 
         payload = json.loads(stdout.getvalue())
         review = payload["current_action_review"]
+        self.assertEqual(review["coordination_ticket_outcome"]["status"], "timeout")
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["timeout"]["reason"],
+            "execution_failed",
+        )
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["timeout"]["path"],
+            "provider",
+        )
+
+    def test_cli_inspect_case_detail_prefers_provider_failure_over_derived_timeouts(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, reviewed_at = self._build_phase19_in_scope_case()
+        delegated_at = reviewed_at + timedelta(minutes=15)
+        overdue_requested_at = datetime.now(timezone.utc) - timedelta(hours=2)
+        overdue_expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        seeded = self._seed_create_tracking_ticket_request(
+            service=service,
+            promoted_case=promoted_case,
+            reviewed_at=reviewed_at,
+            suffix="failure-precedence-001",
+            coordination_reference_id="coord-ref-cli-create-ticket-failure-precedence-001",
+        )
+
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id=seeded["action_request"].action_request_id,
+            approved_payload=seeded["approved_payload"],
+            delegated_at=delegated_at,
+            delegation_issuer="control-plane-service",
+        )
+        service.persist_record(
+            replace(
+                seeded["approval"],
+                decided_at=overdue_requested_at + timedelta(minutes=5),
+                approved_expires_at=overdue_expires_at,
+            )
+        )
+        action_request = service.get_record(
+            ActionRequestRecord, seeded["action_request"].action_request_id
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                requested_at=overdue_requested_at,
+                expires_at=overdue_expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                execution,
+                delegated_at=overdue_requested_at + timedelta(minutes=10),
+                expires_at=overdue_expires_at,
+                lifecycle_state="failed",
+            )
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-case-detail", "--case-id", promoted_case.case_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        review = payload["current_action_review"]
+        self.assertEqual(
+            review["path_health"]["paths"]["ingest"]["reason"],
+            "ingest_signal_timeout",
+        )
+        self.assertEqual(
+            review["path_health"]["paths"]["persistence"]["reason"],
+            "reconciliation_timeout",
+        )
         self.assertEqual(review["coordination_ticket_outcome"]["status"], "timeout")
         self.assertEqual(
             review["coordination_ticket_outcome"]["timeout"]["reason"],
