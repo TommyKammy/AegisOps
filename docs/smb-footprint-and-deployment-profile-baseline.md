@@ -4,7 +4,7 @@
 
 This baseline publishes the reviewed SMB deployment profiles that future footprint, reliability, and operator-experience work must target.
 
-Use this baseline to replace intuition-only sizing discussions with a concrete, reviewable deployment floor and ceiling for the approved Phase 23 operating model.
+Use this baseline to replace intuition-only sizing discussions with a concrete, reviewable deployment floor and ceiling for the approved Phase 27 operating model.
 
 This document is a planning and review artifact. It does not authorize new runtime dependencies, high-availability topology changes, or live deployment commands.
 

@@ -54,6 +54,8 @@ write_valid_baseline_doc() {
 
 This baseline publishes the reviewed SMB deployment profiles that future footprint, reliability, and operator-experience work must target.
 
+Use this baseline to replace intuition-only sizing discussions with a concrete, reviewable deployment floor and ceiling for the approved Phase 27 operating model.
+
 ## 2. Scope and Decision Rule
 
 Use this baseline to judge whether AegisOps remains operable for the approved small-team deployment target before later work adds substrate, reliability, or ergonomics scope.
@@ -77,10 +79,10 @@ The small-production SMB operation profile is the maximum reviewed baseline for 
 ## 4. Baseline Expectations by Profile
 
 | Profile | Managed endpoints | vCPU | Memory | Primary storage | Backup expectation | Restore expectation | Upgrade and rollback expectation | Health and operator cadence | Identity and secret-management expectation |
-| --- | --- | --- | --- | --- | --- | --- |
-| Lab | 250 | 8 | 24 GB | 400 GB | Daily PostgreSQL-aware backup and reviewed configuration backup after changes | Restore rehearsal at least once per quarter with one named operator following the documented path | Reviewed upgrades fit one business-hours maintenance window and rollback returns to the prior known-good backup without extra platform staff | Startup, queue, and backup health reviewed at least three times per week during business hours | One named approver owner, one reviewed secret rotation touch point, and a documented break-glass contact list |
-| Single-customer | 750 | 14 | 48 GB | 1 TB | Daily PostgreSQL-aware backup plus weekly backup review against the customer environment | Monthly restore rehearsal against a reviewed single-customer recovery target | Reviewed upgrades fit one planned maintenance window per month and rollback remains operator-led without cluster failover tooling | Daily queue and health review on business days plus weekly platform hygiene review | Named customer-scoped approver ownership, reviewed secret rotation checklist, and explicit break-glass custody for customer credentials |
-| Small-production SMB operation | 1500 | 20 | 64 GB | 2 TB | Daily PostgreSQL-aware backup plus weekly backup review and pre-change configuration backup | Monthly restore rehearsal with documented recovery timing and reconciliation checks | Reviewed upgrades require a documented change plan, same-day rollback readiness, and no dependence on enterprise-only deployment tooling | Daily queue and platform health review on business days plus weekly drift and capacity review | Two-person ownership coverage for approver and secret custody, scheduled rotation checkpoints, and documented break-glass audit follow-up |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Lab | 250 to 500 | 8 to 10 | 24 to 32 GB | 400 to 600 GB usable persistent storage | Daily PostgreSQL-aware backup, configuration backup after reviewed changes, and a named operator responsible for verifying the backup job outcome | At least one restore rehearsal per quarter against the reviewed lab path, including confirmation that approval, evidence, action-execution, and reconciliation records remain intact after recovery | Reviewed upgrades fit one business-hours maintenance window and rollback returns to the prior known-good backup without extra platform staff or high-availability failover machinery | Startup, queue, backup, and reverse-proxy health reviewed at least three times per week during business hours, with one operator capturing the readiness result | One named approver owner, one reviewed secret rotation touch point, and a documented break-glass contact list are sufficient for the lab path |
+| Single-customer | 500 to 1,000 | 12 to 16 | 40 to 56 GB | 0.8 to 1.5 TB usable persistent storage | Daily PostgreSQL-aware backup, weekly backup review, and reviewed configuration backup before platform changes that affect customer operations | Monthly restore rehearsal against a reviewed single-customer recovery target, including validation that customer-scoped workflow truth and linked evidence return cleanly | Reviewed upgrades fit one planned maintenance window per month and rollback remains operator-led without cluster failover tooling or multi-customer coordination assumptions | Daily queue and health review on business days plus weekly platform hygiene review for certificates, storage growth, and backup drift | Named customer-scoped approver ownership, a reviewed secret rotation checklist, and explicit break-glass custody for customer credentials are required |
+| Small-production SMB operation | 1,000 to 1,500 | 16 to 24 | 56 to 96 GB | 1.5 to 3 TB usable persistent storage | Daily PostgreSQL-aware backup, weekly backup review, and pre-change configuration backup with documented custody | Monthly restore rehearsal with documented recovery timing, clean-state validation, and reconciliation checks before normal operations resume | Reviewed upgrades require a documented change plan, same-day rollback readiness, and no dependence on enterprise-only deployment tooling, dedicated database teams, or multi-region failover | Daily queue and platform health review on business days plus weekly drift, storage-growth, and capacity review by the named operator team | Two-person ownership coverage for approver and secret custody, scheduled rotation checkpoints, and documented break-glass audit follow-up are required |
 
 CPU and memory expectations must be read as whole-environment planning guidance for the approved control-plane footprint, not as per-container reservations.
 
@@ -231,6 +233,25 @@ path.write_text(text)
 PY
 commit_fixture "${old_profile_name_repo}"
 assert_fails_with "${old_profile_name_repo}" "Missing SMB footprint baseline heading: ### 3.2 Single-Customer Profile"
+
+weak_profile_budget_repo="${workdir}/weak-profile-budget"
+create_repo "${weak_profile_budget_repo}"
+write_shared_docs "${weak_profile_budget_repo}"
+write_valid_baseline_doc "${weak_profile_budget_repo}"
+python3 - <<'PY' "${weak_profile_budget_repo}/docs/smb-footprint-and-deployment-profile-baseline.md"
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text()
+text = text.replace(
+    "| Lab | 250 to 500 | 8 to 10 | 24 to 32 GB | 400 to 600 GB usable persistent storage | Daily PostgreSQL-aware backup, configuration backup after reviewed changes, and a named operator responsible for verifying the backup job outcome | At least one restore rehearsal per quarter against the reviewed lab path, including confirmation that approval, evidence, action-execution, and reconciliation records remain intact after recovery | Reviewed upgrades fit one business-hours maintenance window and rollback returns to the prior known-good backup without extra platform staff or high-availability failover machinery | Startup, queue, backup, and reverse-proxy health reviewed at least three times per week during business hours, with one operator capturing the readiness result | One named approver owner, one reviewed secret rotation touch point, and a documented break-glass contact list are sufficient for the lab path |",
+    "| Lab | 250 to 500 | 8 to 10 | 24 to 32 GB | 400 to 600 GB usable persistent storage | | | | | |",
+    1,
+)
+path.write_text(text)
+PY
+commit_fixture "${weak_profile_budget_repo}"
+assert_fails_with "${weak_profile_budget_repo}" "Missing SMB footprint baseline statement: | Lab | 250 to 500 | 8 to 10 | 24 to 32 GB | 400 to 600 GB usable persistent storage | Daily PostgreSQL-aware backup, configuration backup after reviewed changes, and a named operator responsible for verifying the backup job outcome | At least one restore rehearsal per quarter against the reviewed lab path, including confirmation that approval, evidence, action-execution, and reconciliation records remain intact after recovery | Reviewed upgrades fit one business-hours maintenance window and rollback returns to the prior known-good backup without extra platform staff or high-availability failover machinery | Startup, queue, backup, and reverse-proxy health reviewed at least three times per week during business hours, with one operator capturing the readiness result | One named approver owner, one reviewed secret rotation touch point, and a documented break-glass contact list are sufficient for the lab path |"
 
 missing_budget_guardrail_repo="${workdir}/missing-budget-guardrail"
 create_repo "${missing_budget_guardrail_repo}"
