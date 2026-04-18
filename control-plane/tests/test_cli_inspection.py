@@ -2473,6 +2473,22 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
             payload["linked_reconciliation_records"][0]["reconciliation_id"],
             payload["linked_reconciliation_ids"],
         )
+        self.assertEqual(
+            payload["cross_source_timeline"][0]["record_family"],
+            "alert",
+        )
+        self.assertEqual(
+            payload["cross_source_timeline"][0]["provenance_classification"],
+            "authoritative-anchor",
+        )
+        self.assertEqual(
+            payload["provenance_summary"]["authoritative_anchor"]["record_id"],
+            promoted_case.alert_id,
+        )
+        self.assertEqual(
+            payload["provenance_summary"]["source_families"],
+            ["github_audit"],
+        )
 
     def test_cli_records_bounded_operator_casework_actions(self) -> None:
         _, service, promoted_case, evidence_id, reviewed_at = (

@@ -333,6 +333,8 @@ class CaseDetailSnapshot:
     linked_recommendation_records: tuple[dict[str, object], ...]
     linked_reconciliation_records: tuple[dict[str, object], ...]
     lifecycle_transitions: tuple[dict[str, object], ...]
+    cross_source_timeline: tuple[dict[str, object], ...]
+    provenance_summary: dict[str, object]
     current_action_review: dict[str, object] | None
     action_reviews: tuple[dict[str, object], ...]
 
@@ -357,6 +359,8 @@ class CaseDetailSnapshot:
                 "linked_recommendation_records": self.linked_recommendation_records,
                 "linked_reconciliation_records": self.linked_reconciliation_records,
                 "lifecycle_transitions": self.lifecycle_transitions,
+                "cross_source_timeline": self.cross_source_timeline,
+                "provenance_summary": self.provenance_summary,
                 "current_action_review": self.current_action_review,
                 "action_reviews": self.action_reviews,
             }
@@ -4332,6 +4336,14 @@ class AegisOpsControlPlaneService:
             alert_id=case.alert_id,
             record_index=self._build_action_review_record_index(),
         )
+        cross_source_timeline, provenance_summary = (
+            self._build_case_cross_source_surfaces(
+                case=case,
+                linked_alert_records=context_snapshot.linked_alert_records,
+                linked_evidence_records=context_snapshot.linked_evidence_records,
+                linked_observation_records=observation_records,
+            )
+        )
         return CaseDetailSnapshot(
             read_only=True,
             case_id=case_id,
@@ -4353,9 +4365,230 @@ class AegisOpsControlPlaneService:
             linked_recommendation_records=context_snapshot.linked_recommendation_records,
             linked_reconciliation_records=context_snapshot.linked_reconciliation_records,
             lifecycle_transitions=context_snapshot.lifecycle_transitions,
+            cross_source_timeline=cross_source_timeline,
+            provenance_summary=provenance_summary,
             current_action_review=dict(action_reviews[0]) if action_reviews else None,
             action_reviews=action_reviews,
         )
+
+    def _build_case_cross_source_surfaces(
+        self,
+        *,
+        case: CaseRecord,
+        linked_alert_records: tuple[dict[str, object], ...],
+        linked_evidence_records: tuple[dict[str, object], ...],
+        linked_observation_records: tuple[dict[str, object], ...],
+    ) -> tuple[tuple[dict[str, object], ...], dict[str, object]]:
+        anchor = self._build_case_cross_source_anchor(
+            case=case,
+            linked_alert_records=linked_alert_records,
+        )
+        attached_entries = [
+            entry
+            for entry in (
+                *(
+                    self._build_case_cross_source_attached_entry(
+                        record_family="evidence",
+                        record=record,
+                        case_id=case.case_id,
+                    )
+                    for record in linked_evidence_records
+                ),
+                *(
+                    self._build_case_cross_source_attached_entry(
+                        record_family="observation",
+                        record=record,
+                        case_id=case.case_id,
+                    )
+                    for record in linked_observation_records
+                ),
+            )
+            if entry is not None
+        ]
+        attached_entries.sort(
+            key=lambda entry: (
+                entry.get("_sort_occurred_at")
+                or datetime.max.replace(tzinfo=timezone.utc),
+                str(entry["record_family"]),
+                str(entry["record_id"]),
+            )
+        )
+        timeline = tuple(
+            self._case_cross_source_public_entry(entry)
+            for entry in (anchor, *attached_entries)
+        )
+        source_families = _dedupe_strings(
+            str(source_family)
+            for source_family in (
+                entry.get("source_family") for entry in (anchor, *attached_entries)
+            )
+            if isinstance(source_family, str) and source_family.strip()
+        )
+        provenance_summary = {
+            "authoritative_anchor": {
+                "record_family": anchor["record_family"],
+                "record_id": anchor["record_id"],
+                "source_family": anchor["source_family"],
+                "provenance_classification": anchor["provenance_classification"],
+                "reviewed_linkage": anchor["reviewed_linkage"],
+            },
+            "source_families": source_families,
+            "attached_records": tuple(
+                {
+                    "record_family": entry["record_family"],
+                    "record_id": entry["record_id"],
+                    "source_family": entry["source_family"],
+                    "evidence_origin": entry["evidence_origin"],
+                    "provenance_classification": entry["provenance_classification"],
+                    "ambiguity_badge": entry["ambiguity_badge"],
+                    "reviewed_linkage": entry["reviewed_linkage"],
+                    "blocking_reason": entry["blocking_reason"],
+                }
+                for entry in attached_entries
+            ),
+        }
+        return timeline, provenance_summary
+
+    def _build_case_cross_source_anchor(
+        self,
+        *,
+        case: CaseRecord,
+        linked_alert_records: tuple[dict[str, object], ...],
+    ) -> dict[str, object]:
+        anchor_record = next(
+            (
+                dict(record)
+                for record in linked_alert_records
+                if record.get("alert_id") == case.alert_id
+            ),
+            {
+                "alert_id": case.alert_id,
+                "case_id": case.case_id,
+                "reviewed_context": dict(case.reviewed_context),
+            },
+        )
+        source_family = self._reviewed_operator_source_family(
+            anchor_record.get("reviewed_context")
+        ) or self._reviewed_operator_source_family(case.reviewed_context)
+        return {
+            "record_family": "alert",
+            "record_id": case.alert_id,
+            "source_family": source_family or "unknown",
+            "evidence_origin": case.alert_id,
+            "provenance_classification": "authoritative-anchor",
+            "ambiguity_badge": None,
+            "reviewed_linkage": {
+                "case_id": case.case_id,
+                "alert_id": case.alert_id,
+            },
+            "blocking_reason": None,
+            "occurred_at": None,
+            "_sort_occurred_at": None,
+        }
+
+    def _build_case_cross_source_attached_entry(
+        self,
+        *,
+        record_family: str,
+        record: Mapping[str, object],
+        case_id: str,
+    ) -> dict[str, object] | None:
+        provenance = record.get("provenance")
+        if not isinstance(provenance, Mapping) or not provenance:
+            return None
+
+        record_id_field = f"{record_family}_id"
+        record_id = self._normalize_optional_string(record.get(record_id_field), record_id_field)
+        if record_id is None:
+            return None
+
+        explicit_source_family = self._normalize_optional_string(
+            provenance.get("source_family"),
+            f"{record_family}.provenance.source_family",
+        )
+        source_system = self._normalize_optional_string(
+            provenance.get("source_system"),
+            f"{record_family}.provenance.source_system",
+        ) or self._normalize_optional_string(
+            record.get("source_system"),
+            f"{record_family}.source_system",
+        )
+        source_family = explicit_source_family or source_system or "unknown"
+
+        classification = self._normalize_optional_string(
+            provenance.get("classification"),
+            f"{record_family}.provenance.classification",
+        )
+        source_id = self._normalize_optional_string(
+            provenance.get("source_id"),
+            f"{record_family}.provenance.source_id",
+        )
+        timestamp = self._normalize_optional_string(
+            provenance.get("timestamp"),
+            f"{record_family}.provenance.timestamp",
+        )
+        reviewed_by = self._normalize_optional_string(
+            provenance.get("reviewed_by"),
+            f"{record_family}.provenance.reviewed_by",
+        )
+        blocking_reason = self._normalize_optional_string(
+            provenance.get("blocking_reason"),
+            f"{record_family}.provenance.blocking_reason",
+        )
+        if None in (classification, source_id, timestamp, reviewed_by):
+            classification = "unresolved-linkage"
+            if blocking_reason is None:
+                blocking_reason = "missing_required_provenance_fields"
+
+        ambiguity_badge = self._normalize_optional_string(
+            provenance.get("ambiguity_badge"),
+            f"{record_family}.provenance.ambiguity_badge",
+        )
+        if ambiguity_badge not in {"same-entity", "related-entity", "unresolved"}:
+            ambiguity_badge = "unresolved"
+
+        occurred_at = None
+        if isinstance(record.get("acquired_at"), datetime):
+            occurred_at = record.get("acquired_at")
+        elif isinstance(record.get("observed_at"), datetime):
+            occurred_at = record.get("observed_at")
+
+        reviewed_linkage: dict[str, object] = {"case_id": case_id}
+        if record_family == "observation":
+            supporting_evidence_ids = tuple(record.get("supporting_evidence_ids", ()))
+            reviewed_linkage["supporting_evidence_ids"] = supporting_evidence_ids
+
+        evidence_origin = self._normalize_optional_string(
+            record.get("source_record_id"),
+            f"{record_family}.source_record_id",
+        ) or source_id
+
+        return {
+            "record_family": record_family,
+            "record_id": record_id,
+            "source_family": source_family,
+            "evidence_origin": evidence_origin,
+            "provenance_classification": classification,
+            "ambiguity_badge": ambiguity_badge,
+            "reviewed_linkage": reviewed_linkage,
+            "blocking_reason": blocking_reason,
+            "occurred_at": occurred_at,
+            "_sort_occurred_at": occurred_at,
+        }
+
+    @staticmethod
+    def _case_cross_source_public_entry(entry: Mapping[str, object]) -> dict[str, object]:
+        return {
+            "record_family": entry["record_family"],
+            "record_id": entry["record_id"],
+            "occurred_at": entry["occurred_at"],
+            "source_family": entry["source_family"],
+            "evidence_origin": entry["evidence_origin"],
+            "provenance_classification": entry["provenance_classification"],
+            "ambiguity_badge": entry["ambiguity_badge"],
+            "reviewed_linkage": entry["reviewed_linkage"],
+            "blocking_reason": entry["blocking_reason"],
+        }
 
     def attach_osquery_host_context(
         self,

@@ -196,6 +196,7 @@ class OsqueryHostContextAdapter:
             "timestamp": collected_at.isoformat(),
             "reviewed_by": reviewed_by,
             "adapter": "osquery_host_context",
+            "source_system": self.source_system,
             "derived_from_source_id": source_id,
             "host_identifier": host_identifier,
             "ambiguity_badge": "related-entity",
