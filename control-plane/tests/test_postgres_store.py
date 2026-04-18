@@ -524,6 +524,11 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
                 acquired_at=timestamp,
                 derivation_relationship="original",
                 lifecycle_state="linked",
+                provenance={
+                    "classification": "augmenting-evidence",
+                    "source_id": "artifact-001",
+                },
+                content={"result": {"kind": "process", "row_count": 1}},
             ),
             ObservationRecord(
                 observation_id="observation-001",
@@ -536,6 +541,8 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
                 observed_at=timestamp,
                 scope_statement="bounded triage observation",
                 lifecycle_state="confirmed",
+                provenance={"classification": "reviewed-derived"},
+                content={"host_context_evidence_id": "evidence-001"},
             ),
             LeadRecord(
                 lead_id="lead-001",
