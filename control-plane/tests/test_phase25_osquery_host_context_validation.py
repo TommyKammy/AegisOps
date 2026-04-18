@@ -265,6 +265,15 @@ class Phase25OsqueryHostContextValidationTests(unittest.TestCase):
     def test_attach_osquery_host_context_preserves_guarantees_for_all_allowed_non_process_result_kinds(
         self,
     ) -> None:
+        expected_allowed_kinds = {"host_state", "process", "local_user", "scheduled_query"}
+        self.assertEqual(
+            set(OsqueryHostContextAdapter().allowed_result_kinds),
+            expected_allowed_kinds,
+        )
+        self.assertEqual(
+            {scenario["result_kind"] for scenario in self._NON_PROCESS_OSQUERY_RESULT_CASES},
+            expected_allowed_kinds - {"process"},
+        )
         for scenario in self._NON_PROCESS_OSQUERY_RESULT_CASES:
             with self.subTest(result_kind=scenario["result_kind"]):
                 _store, service, promoted_case, reviewed_at = self._build_host_bound_case(
