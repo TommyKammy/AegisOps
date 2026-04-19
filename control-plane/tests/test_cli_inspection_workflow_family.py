@@ -1,0 +1,1265 @@
+from __future__ import annotations
+
+import pathlib
+import sys
+import unittest
+
+TESTS_ROOT = pathlib.Path(__file__).resolve().parent
+if str(TESTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TESTS_ROOT))
+
+from _cli_inspection_support import *  # noqa: F403
+from _cli_inspection_support import _approved_payload_binding_hash, _load_wazuh_fixture
+
+
+class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
+    def test_cli_renders_read_only_record_and_reconciliation_views(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        compared_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        service.persist_record(
+            AlertRecord(
+                alert_id="alert-001",
+                finding_id="finding-001",
+                analytic_signal_id="signal-001",
+                case_id=None,
+                lifecycle_state="new",
+            )
+        )
+        service.persist_record(
+            AnalyticSignalRecord(
+                analytic_signal_id="signal-001",
+                substrate_detection_record_id="substrate-detection-001",
+                finding_id="finding-001",
+                alert_ids=("alert-001",),
+                case_ids=(),
+                correlation_key="claim:host-001:privilege-escalation",
+                first_seen_at=compared_at,
+                last_seen_at=compared_at,
+                lifecycle_state="active",
+            )
+        )
+        service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-001",
+                subject_linkage={
+                    "alert_ids": ("alert-001",),
+                    "latest_native_payload": {"secret": "keep-in-store"},
+                },
+                alert_id="alert-001",
+                finding_id="finding-001",
+                analytic_signal_id="signal-001",
+                execution_run_id=None,
+                linked_execution_run_ids=(),
+                correlation_key="claim:host-001:privilege-escalation",
+                first_seen_at=compared_at,
+                last_seen_at=compared_at,
+                ingest_disposition="created",
+                mismatch_summary="created upstream analytic signal into alert lifecycle",
+                compared_at=compared_at,
+                lifecycle_state="matched",
+            )
+        )
+
+        records_stdout = io.StringIO()
+        analytic_signals_stdout = io.StringIO()
+        status_stdout = io.StringIO()
+
+        main.main(
+            ["inspect-records", "--family", "alert"],
+            stdout=records_stdout,
+            service=service,
+        )
+        main.main(
+            ["inspect-records", "--family", "analytic_signal"],
+            stdout=analytic_signals_stdout,
+            service=service,
+        )
+        main.main(
+            ["inspect-reconciliation-status"],
+            stdout=status_stdout,
+            service=service,
+        )
+
+        records_payload = json.loads(records_stdout.getvalue())
+        analytic_signals_payload = json.loads(analytic_signals_stdout.getvalue())
+        status_payload = json.loads(status_stdout.getvalue())
+
+        self.assertTrue(records_payload["read_only"])
+        self.assertEqual(records_payload["record_family"], "alert")
+        self.assertEqual(records_payload["records"][0]["alert_id"], "alert-001")
+
+        self.assertTrue(analytic_signals_payload["read_only"])
+        self.assertEqual(analytic_signals_payload["record_family"], "analytic_signal")
+        self.assertEqual(
+            analytic_signals_payload["records"][0]["analytic_signal_id"],
+            "signal-001",
+        )
+        self.assertEqual(
+            analytic_signals_payload["records"][0]["substrate_detection_record_id"],
+            "substrate-detection-001",
+        )
+
+        self.assertTrue(status_payload["read_only"])
+        self.assertEqual(status_payload["total_records"], 1)
+        self.assertEqual(status_payload["by_ingest_disposition"], {"created": 1})
+        self.assertEqual(
+            status_payload["latest_compared_at"],
+            "2026-04-05T12:00:00+00:00",
+        )
+        self.assertNotIn(
+            "latest_native_payload",
+            status_payload["records"][0]["subject_linkage"],
+        )
+
+    def test_cli_renders_wazuh_business_hours_analyst_queue_view(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+        admitted = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(
+                _load_wazuh_fixture("agent-origin-alert.json")
+            ),
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+
+        stdout = io.StringIO()
+        main.main(["inspect-analyst-queue"], stdout=stdout, service=service)
+
+        payload = json.loads(stdout.getvalue())
+        self.assertTrue(payload["read_only"])
+        self.assertEqual(payload["queue_name"], "analyst_review")
+        self.assertEqual(payload["total_records"], 1)
+        self.assertEqual(payload["records"][0]["alert_id"], admitted.alert.alert_id)
+        self.assertEqual(
+            payload["records"][0]["queue_selection"],
+            "business_hours_triage",
+        )
+        self.assertEqual(payload["records"][0]["review_state"], "case_required")
+        self.assertEqual(payload["records"][0]["case_id"], promoted_case.case_id)
+        self.assertEqual(payload["records"][0]["case_lifecycle_state"], "open")
+        self.assertEqual(payload["records"][0]["source_system"], "wazuh")
+        self.assertEqual(
+            payload["records"][0]["accountable_source_identities"],
+            ["agent:007"],
+        )
+        self.assertEqual(
+            payload["records"][0]["reviewed_context"]["location"],
+            "/var/log/auth.log",
+        )
+        self.assertEqual(
+            payload["records"][0]["native_rule"]["description"],
+            "SSH brute force attempt",
+        )
+        self.assertEqual(
+            payload["records"][0]["substrate_detection_record_ids"],
+            ["wazuh:1731594986.4931506"],
+        )
+
+    def test_cli_renders_reviewed_wazuh_alert_detail_view(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+            ),
+            store=store,
+        )
+        admitted = service.ingest_wazuh_alert(
+            raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
+            authorization_header="Bearer reviewed-shared-secret",
+            forwarded_proto="https",
+            reverse_proxy_secret_header="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+            peer_addr="127.0.0.1",
+        )
+        promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-alert-detail", "--alert-id", admitted.alert.alert_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertTrue(payload["read_only"])
+        self.assertEqual(payload["alert_id"], admitted.alert.alert_id)
+        self.assertEqual(payload["alert"]["alert_id"], admitted.alert.alert_id)
+        self.assertEqual(payload["case_record"]["case_id"], promoted_case.case_id)
+        self.assertEqual(
+            payload["latest_reconciliation"]["reconciliation_id"],
+            admitted.reconciliation.reconciliation_id,
+        )
+        self.assertEqual(
+            payload["provenance"],
+            {
+                "admission_channel": "live_wazuh_webhook",
+                "admission_kind": "live",
+            },
+        )
+        self.assertEqual(
+            payload["lineage"]["substrate_detection_record_ids"],
+            ["wazuh:1731595300.1234567"],
+        )
+        self.assertEqual(
+            payload["lineage"]["accountable_source_identities"],
+            ["manager:wazuh-manager-github-1"],
+        )
+        self.assertEqual(
+            payload["reviewed_context"]["source"]["source_family"],
+            "github_audit",
+        )
+
+    def test_cli_renders_analyst_assistant_context_view_for_a_case(self) -> None:
+        _, service, promoted_case, evidence_id, _ = self._build_phase19_in_scope_case()
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-assistant-cli-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id=None,
+                review_owner="reviewer-001",
+                intended_outcome="follow reviewed evidence",
+                lifecycle_state="under_review",
+                reviewed_context=promoted_case.reviewed_context,
+            )
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            [
+                "inspect-assistant-context",
+                "--family",
+                "case",
+                "--record-id",
+                promoted_case.case_id,
+            ],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertTrue(payload["read_only"])
+        self.assertEqual(payload["record_family"], "case")
+        self.assertEqual(payload["record_id"], promoted_case.case_id)
+        self.assertEqual(payload["record"]["case_id"], promoted_case.case_id)
+        self.assertEqual(payload["advisory_output"]["output_kind"], "case_summary")
+        self.assertEqual(payload["advisory_output"]["status"], "ready")
+        self.assertIn(evidence_id, payload["advisory_output"]["citations"])
+        self.assertEqual(payload["reviewed_context"], promoted_case.reviewed_context)
+        self.assertEqual(payload["linked_evidence_ids"], [evidence_id])
+        self.assertEqual(
+            payload["linked_evidence_records"][0]["evidence_id"],
+            evidence_id,
+        )
+        self.assertIn(promoted_case.alert_id, payload["linked_alert_ids"])
+        self.assertIn(
+            recommendation.recommendation_id,
+            payload["linked_recommendation_ids"],
+        )
+        self.assertTrue(payload["linked_reconciliation_ids"])
+
+    def test_cli_renders_cited_advisory_output_view_for_a_case(self) -> None:
+        _, service, promoted_case, evidence_id, _ = self._build_phase19_in_scope_case()
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-advisory-cli-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id=None,
+                review_owner="reviewer-001",
+                intended_outcome="review the cited evidence before any approval",
+                lifecycle_state="under_review",
+                reviewed_context=promoted_case.reviewed_context,
+            )
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            [
+                "inspect-advisory-output",
+                "--family",
+                "case",
+                "--record-id",
+                promoted_case.case_id,
+            ],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertTrue(payload["read_only"])
+        self.assertEqual(payload["record_family"], "case")
+        self.assertEqual(payload["record_id"], promoted_case.case_id)
+        self.assertEqual(payload["output_kind"], "case_summary")
+        self.assertEqual(payload["status"], "ready")
+        self.assertEqual(payload["reviewed_context"], promoted_case.reviewed_context)
+        self.assertIn(evidence_id, payload["citations"])
+        self.assertIn("advisory_only", payload["uncertainty_flags"])
+        self.assertEqual(payload["linked_evidence_ids"], [evidence_id])
+        self.assertIn(promoted_case.alert_id, payload["linked_alert_ids"])
+        self.assertIn(recommendation.recommendation_id, payload["linked_recommendation_ids"])
+        self.assertTrue(payload["linked_reconciliation_ids"])
+
+    def test_cli_renders_case_detail_with_evidence_provenance_and_cited_advisory_output(
+        self,
+    ) -> None:
+        _, service, promoted_case, evidence_id, compared_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=compared_at,
+            scope_statement="Observed permission change remains within reviewed GitHub audit scope.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            observation_id=observation.observation_id,
+            triage_owner="analyst-001",
+            triage_rationale="Preserve durable case context for next business-hours analyst.",
+        )
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-case-detail-cli-001",
+                lead_id=lead.lead_id,
+                hunt_run_id=None,
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id=None,
+                review_owner="reviewer-001",
+                intended_outcome="review the cited evidence before any approval",
+                lifecycle_state="under_review",
+                reviewed_context=promoted_case.reviewed_context,
+            )
+        )
+        service.record_case_handoff(
+            case_id=promoted_case.case_id,
+            handoff_at=compared_at,
+            handoff_owner="analyst-001",
+            handoff_note="Resume owner-membership review during the next business-hours cycle.",
+            follow_up_evidence_ids=(evidence_id,),
+        )
+        service.record_case_disposition(
+            case_id=promoted_case.case_id,
+            disposition="business_hours_handoff",
+            rationale="Tracked case remains open for the next analyst review window.",
+            recorded_at=compared_at,
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            [
+                "inspect-case-detail",
+                "--case-id",
+                promoted_case.case_id,
+            ],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertTrue(payload["read_only"])
+        self.assertEqual(payload["case_id"], promoted_case.case_id)
+        self.assertEqual(payload["case_record"]["case_id"], promoted_case.case_id)
+        self.assertEqual(
+            payload["reviewed_context"]["asset"],
+            promoted_case.reviewed_context["asset"],
+        )
+        self.assertEqual(
+            payload["reviewed_context"]["identity"],
+            promoted_case.reviewed_context["identity"],
+        )
+        self.assertEqual(
+            payload["advisory_output"]["output_kind"],
+            "case_summary",
+        )
+        self.assertEqual(payload["advisory_output"]["status"], "ready")
+        self.assertEqual(payload["linked_evidence_ids"], [evidence_id])
+        self.assertEqual(
+            payload["linked_evidence_records"][0]["collector_identity"],
+            "wazuh-native-detection-adapter",
+        )
+        self.assertEqual(
+            payload["linked_evidence_records"][0]["derivation_relationship"],
+            "native_detection_record",
+        )
+        self.assertEqual(payload["linked_observation_ids"], [observation.observation_id])
+        self.assertEqual(payload["linked_lead_ids"], [lead.lead_id])
+        self.assertEqual(
+            payload["case_record"]["reviewed_context"]["triage"]["disposition"],
+            "business_hours_handoff",
+        )
+        self.assertEqual(
+            payload["case_record"]["reviewed_context"]["handoff"]["handoff_owner"],
+            "analyst-001",
+        )
+        self.assertIn(
+            recommendation.recommendation_id,
+            payload["linked_recommendation_ids"],
+        )
+        self.assertIn(
+            (
+                "reviewed_context.provenance.rule_id="
+                f"{promoted_case.reviewed_context['provenance']['rule_id']}"
+            ),
+            payload["advisory_output"]["citations"],
+        )
+        self.assertIn(
+            promoted_case.case_id,
+            payload["linked_reconciliation_records"][0]["subject_linkage"]["case_ids"],
+        )
+        self.assertIn(
+            payload["linked_reconciliation_records"][0]["reconciliation_id"],
+            payload["linked_reconciliation_ids"],
+        )
+        self.assertEqual(
+            payload["cross_source_timeline"][0]["record_family"],
+            "alert",
+        )
+        self.assertEqual(
+            payload["cross_source_timeline"][0]["provenance_classification"],
+            "authoritative-anchor",
+        )
+        self.assertEqual(
+            payload["cross_source_timeline"][1]["record_family"],
+            "evidence",
+        )
+        self.assertEqual(
+            payload["cross_source_timeline"][1]["blocking_reason"],
+            "missing_provenance",
+        )
+        self.assertEqual(
+            payload["cross_source_timeline"][2]["record_family"],
+            "observation",
+        )
+        self.assertEqual(
+            payload["cross_source_timeline"][2]["blocking_reason"],
+            "missing_provenance",
+        )
+        self.assertEqual(
+            payload["provenance_summary"]["authoritative_anchor"]["record_id"],
+            promoted_case.alert_id,
+        )
+        self.assertEqual(
+            payload["provenance_summary"]["source_families"],
+            ["github_audit", "wazuh", "unknown"],
+        )
+
+    def test_cli_records_bounded_operator_casework_actions(self) -> None:
+        _, service, alert, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_alert_without_case()
+        )
+        handoff_at = reviewed_at + timedelta(hours=8)
+
+        promote_stdout = io.StringIO()
+        main.main(
+            ["promote-alert-to-case", "--alert-id", alert.alert_id],
+            stdout=promote_stdout,
+            service=service,
+        )
+        promoted_case_payload = json.loads(promote_stdout.getvalue())
+        case_id = promoted_case_payload["case_id"]
+        self.assertEqual(promoted_case_payload["lifecycle_state"], "open")
+
+        observation_stdout = io.StringIO()
+        main.main(
+            [
+                "record-case-observation",
+                "--case-id",
+                case_id,
+                "--author-identity",
+                "analyst-001",
+                "--observed-at",
+                reviewed_at.isoformat(),
+                "--scope-statement",
+                "Observed repository permission change requires tracked review.",
+                "--supporting-evidence-id",
+                evidence_id,
+            ],
+            stdout=observation_stdout,
+            service=service,
+        )
+        observation_payload = json.loads(observation_stdout.getvalue())
+        self.assertEqual(observation_payload["case_id"], case_id)
+        self.assertEqual(observation_payload["supporting_evidence_ids"], [evidence_id])
+
+        lead_stdout = io.StringIO()
+        main.main(
+            [
+                "record-case-lead",
+                "--case-id",
+                case_id,
+                "--triage-owner",
+                "analyst-001",
+                "--triage-rationale",
+                "Privilege-impacting change needs durable business-hours follow-up.",
+                "--observation-id",
+                observation_payload["observation_id"],
+            ],
+            stdout=lead_stdout,
+            service=service,
+        )
+        lead_payload = json.loads(lead_stdout.getvalue())
+        self.assertEqual(lead_payload["case_id"], case_id)
+        self.assertEqual(lead_payload["observation_id"], observation_payload["observation_id"])
+
+        recommendation_stdout = io.StringIO()
+        main.main(
+            [
+                "record-case-recommendation",
+                "--case-id",
+                case_id,
+                "--review-owner",
+                "analyst-001",
+                "--intended-outcome",
+                "Review repository owner change evidence before any approval-bound response.",
+                "--lead-id",
+                lead_payload["lead_id"],
+            ],
+            stdout=recommendation_stdout,
+            service=service,
+        )
+        recommendation_payload = json.loads(recommendation_stdout.getvalue())
+        self.assertEqual(recommendation_payload["case_id"], case_id)
+        self.assertEqual(recommendation_payload["lead_id"], lead_payload["lead_id"])
+
+        handoff_stdout = io.StringIO()
+        main.main(
+            [
+                "record-case-handoff",
+                "--case-id",
+                case_id,
+                "--handoff-at",
+                handoff_at.isoformat(),
+                "--handoff-owner",
+                "analyst-001",
+                "--handoff-note",
+                "Recheck repository owner membership against approved change window at next business-hours review.",
+                "--follow-up-evidence-id",
+                evidence_id,
+            ],
+            stdout=handoff_stdout,
+            service=service,
+        )
+        handoff_payload = json.loads(handoff_stdout.getvalue())
+        self.assertEqual(handoff_payload["case_id"], case_id)
+        self.assertEqual(
+            handoff_payload["reviewed_context"]["handoff"]["follow_up_evidence_ids"],
+            [evidence_id],
+        )
+
+        disposition_stdout = io.StringIO()
+        main.main(
+            [
+                "record-case-disposition",
+                "--case-id",
+                case_id,
+                "--disposition",
+                "business_hours_handoff",
+                "--rationale",
+                "No same-day response required; preserve next-shift context and keep case open.",
+                "--recorded-at",
+                handoff_at.isoformat(),
+            ],
+            stdout=disposition_stdout,
+            service=service,
+        )
+        disposition_payload = json.loads(disposition_stdout.getvalue())
+        self.assertEqual(disposition_payload["case_id"], case_id)
+        self.assertEqual(disposition_payload["lifecycle_state"], "pending_action")
+        self.assertEqual(
+            disposition_payload["reviewed_context"]["triage"]["disposition"],
+            "business_hours_handoff",
+        )
+
+        detail_stdout = io.StringIO()
+        main.main(
+            ["inspect-case-detail", "--case-id", case_id],
+            stdout=detail_stdout,
+            service=service,
+        )
+        detail_payload = json.loads(detail_stdout.getvalue())
+        self.assertEqual(detail_payload["linked_observation_ids"], [observation_payload["observation_id"]])
+        self.assertEqual(detail_payload["linked_lead_ids"], [lead_payload["lead_id"]])
+        self.assertIn(
+            recommendation_payload["recommendation_id"],
+            detail_payload["linked_recommendation_ids"],
+        )
+        self.assertEqual(
+            detail_payload["case_record"]["reviewed_context"]["handoff"]["handoff_owner"],
+            "analyst-001",
+        )
+        self.assertEqual(
+            detail_payload["case_record"]["reviewed_context"]["triage"]["disposition"],
+            "business_hours_handoff",
+        )
+
+    def test_long_running_runtime_surface_records_bounded_operator_casework_actions(self) -> None:
+        _, service, alert, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_alert_without_case(host="127.0.0.1", port=0)
+        )
+        handoff_at = reviewed_at + timedelta(hours=8)
+
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_ANALYST_PRINCIPAL,
+        ):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+
+                base_url = f"http://127.0.0.1:{servers[0].server_port}"
+
+                def post_json(path: str, payload: dict[str, object]) -> dict[str, object]:
+                    response = request.urlopen(  # noqa: S310 - local in-process test HTTP server
+                        request.Request(  # noqa: S310 - local in-process test HTTP server
+                            f"{base_url}{path}",
+                            data=json.dumps(payload).encode("utf-8"),
+                            headers={"Content-Type": "application/json"},
+                            method="POST",
+                        ),
+                        timeout=2,
+                    )
+                    return json.loads(response.read().decode("utf-8"))
+
+                promoted_case_payload = post_json(
+                    "/operator/promote-alert-to-case",
+                    {"alert_id": alert.alert_id},
+                )
+                case_id = promoted_case_payload["case_id"]
+                self.assertEqual(promoted_case_payload["lifecycle_state"], "open")
+
+                observation_payload = post_json(
+                    "/operator/record-case-observation",
+                    {
+                        "case_id": case_id,
+                        "author_identity": "analyst-001",
+                        "observed_at": reviewed_at.isoformat(),
+                        "scope_statement": "Observed repository permission change requires tracked review.",
+                        "supporting_evidence_ids": [evidence_id],
+                    },
+                )
+                self.assertEqual(observation_payload["case_id"], case_id)
+
+                lead_payload = post_json(
+                    "/operator/record-case-lead",
+                    {
+                        "case_id": case_id,
+                        "triage_owner": "analyst-001",
+                        "triage_rationale": "Privilege-impacting change needs durable business-hours follow-up.",
+                        "observation_id": observation_payload["observation_id"],
+                    },
+                )
+                self.assertEqual(lead_payload["observation_id"], observation_payload["observation_id"])
+
+                recommendation_payload = post_json(
+                    "/operator/record-case-recommendation",
+                    {
+                        "case_id": case_id,
+                        "review_owner": "analyst-001",
+                        "intended_outcome": "Review repository owner change evidence before any approval-bound response.",
+                        "lead_id": lead_payload["lead_id"],
+                    },
+                )
+                self.assertEqual(recommendation_payload["lead_id"], lead_payload["lead_id"])
+
+                handoff_payload = post_json(
+                    "/operator/record-case-handoff",
+                    {
+                        "case_id": case_id,
+                        "handoff_at": handoff_at.isoformat(),
+                        "handoff_owner": "analyst-001",
+                        "handoff_note": "Recheck repository owner membership against approved change window at next business-hours review.",
+                        "follow_up_evidence_ids": [evidence_id],
+                    },
+                )
+                self.assertEqual(
+                    handoff_payload["reviewed_context"]["handoff"]["follow_up_evidence_ids"],
+                    [evidence_id],
+                )
+
+                disposition_payload = post_json(
+                    "/operator/record-case-disposition",
+                    {
+                        "case_id": case_id,
+                        "disposition": "business_hours_handoff",
+                        "rationale": "No same-day response required; preserve next-shift context and keep case open.",
+                        "recorded_at": handoff_at.isoformat(),
+                    },
+                )
+                self.assertEqual(disposition_payload["lifecycle_state"], "pending_action")
+
+                detail_payload = json.loads(
+                    request.urlopen(  # noqa: S310 - local in-process test HTTP server
+                        f"{base_url}/inspect-case-detail?case_id={case_id}",
+                        timeout=2,
+                    ).read().decode("utf-8")
+                )
+                self.assertEqual(detail_payload["linked_observation_ids"], [observation_payload["observation_id"]])
+                self.assertEqual(detail_payload["linked_lead_ids"], [lead_payload["lead_id"]])
+                self.assertIn(
+                    recommendation_payload["recommendation_id"],
+                    detail_payload["linked_recommendation_ids"],
+                )
+                self.assertEqual(
+                    detail_payload["case_record"]["reviewed_context"]["triage"]["disposition"],
+                    "business_hours_handoff",
+                )
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                    servers[0].server_close()
+                thread.join(timeout=2)
+
+    def test_long_running_runtime_surface_exposes_cited_advisory_review_routes(self) -> None:
+        _, service, promoted_case, evidence_id, _ = self._build_phase19_in_scope_case(
+            host="127.0.0.1",
+            port=0,
+        )
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-phase19-http-advisory-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id=None,
+                review_owner="reviewer-001",
+                intended_outcome="review the cited evidence before escalation",
+                lifecycle_state="under_review",
+                reviewed_context=promoted_case.reviewed_context,
+            )
+        )
+
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_ANALYST_PRINCIPAL,
+        ):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+
+                base_url = f"http://127.0.0.1:{servers[0].server_port}"
+
+                assistant_context = json.loads(
+                    request.urlopen(  # noqa: S310 - local in-process test HTTP server
+                        (
+                            f"{base_url}/inspect-assistant-context"
+                            f"?family=case&record_id={promoted_case.case_id}"
+                        ),
+                        timeout=2,
+                    ).read().decode("utf-8")
+                )
+                advisory_output = json.loads(
+                    request.urlopen(  # noqa: S310 - local in-process test HTTP server
+                        (
+                            f"{base_url}/inspect-advisory-output"
+                            f"?family=case&record_id={promoted_case.case_id}"
+                        ),
+                        timeout=2,
+                    ).read().decode("utf-8")
+                )
+                recommendation_draft = json.loads(
+                    request.urlopen(  # noqa: S310 - local in-process test HTTP server
+                        (
+                            f"{base_url}/render-recommendation-draft"
+                            f"?family=case&record_id={promoted_case.case_id}"
+                        ),
+                        timeout=2,
+                    ).read().decode("utf-8")
+                )
+
+                self.assertTrue(assistant_context["read_only"])
+                self.assertEqual(assistant_context["record_family"], "case")
+                self.assertEqual(assistant_context["record_id"], promoted_case.case_id)
+                self.assertEqual(
+                    assistant_context["advisory_output"]["output_kind"],
+                    "case_summary",
+                )
+                self.assertEqual(assistant_context["reviewed_context"], promoted_case.reviewed_context)
+                self.assertEqual(assistant_context["linked_evidence_ids"], [evidence_id])
+
+                self.assertTrue(advisory_output["read_only"])
+                self.assertEqual(advisory_output["record_family"], "case")
+                self.assertEqual(advisory_output["record_id"], promoted_case.case_id)
+                self.assertEqual(advisory_output["output_kind"], "case_summary")
+                self.assertEqual(advisory_output["status"], "ready")
+                self.assertIn(evidence_id, advisory_output["citations"])
+
+                self.assertTrue(recommendation_draft["read_only"])
+                self.assertEqual(recommendation_draft["record_family"], "case")
+                self.assertEqual(recommendation_draft["record_id"], promoted_case.case_id)
+                self.assertEqual(
+                    recommendation_draft["recommendation_draft"]["source_output_kind"],
+                    "case_summary",
+                )
+                self.assertEqual(
+                    recommendation_draft["recommendation_draft"]["status"],
+                    "ready",
+                )
+                self.assertIn(
+                    recommendation.recommendation_id,
+                    recommendation_draft["linked_recommendation_ids"],
+                )
+
+                with self.assertRaises(error.HTTPError) as invalid_family_exc:
+                    request.urlopen(  # noqa: S310 - local in-process test HTTP server
+                        (
+                            f"{base_url}/inspect-advisory-output"
+                            "?family=not-a-family"
+                            f"&record_id={promoted_case.case_id}"
+                        ),
+                        timeout=2,
+                    )
+
+                self.assertEqual(invalid_family_exc.exception.code, 400)
+                invalid_family_payload = json.loads(
+                    invalid_family_exc.exception.read().decode("utf-8")
+                )
+                self.assertEqual(invalid_family_payload["error"], "invalid_request")
+                self.assertIn(
+                    "Unsupported control-plane record family",
+                    invalid_family_payload["message"],
+                )
+
+                with self.assertRaises(error.HTTPError) as missing_record_exc:
+                    request.urlopen(  # noqa: S310 - local in-process test HTTP server
+                        (
+                            f"{base_url}/render-recommendation-draft"
+                            "?family=case"
+                            "&record_id=case-missing-phase19-http-advisory-001"
+                        ),
+                        timeout=2,
+                    )
+
+                self.assertEqual(missing_record_exc.exception.code, 404)
+                missing_record_payload = json.loads(
+                    missing_record_exc.exception.read().decode("utf-8")
+                )
+                self.assertEqual(missing_record_payload["error"], "not_found")
+                self.assertIn(
+                    "Missing case",
+                    missing_record_payload["message"],
+                )
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                    servers[0].server_close()
+                thread.join(timeout=2)
+
+    def test_long_running_runtime_surface_rejects_case_scoped_out_of_scope_advisory_reads(
+        self,
+    ) -> None:
+        service, recommendation, ai_trace = self._build_out_of_scope_case_advisory_review_records(
+            fixture_name="github-audit-alert.json",
+            host="127.0.0.1",
+            port=0,
+        )
+        expected_message = (
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice"
+        )
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_ANALYST_PRINCIPAL,
+        ):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+                base_url = f"http://127.0.0.1:{servers[0].server_port}"
+
+                for path, record_family, record_id in (
+                    (
+                        "/inspect-advisory-output",
+                        "recommendation",
+                        recommendation.recommendation_id,
+                    ),
+                    (
+                        "/inspect-advisory-output",
+                        "ai_trace",
+                        ai_trace.ai_trace_id,
+                    ),
+                    (
+                        "/render-recommendation-draft",
+                        "recommendation",
+                        recommendation.recommendation_id,
+                    ),
+                    (
+                        "/render-recommendation-draft",
+                        "ai_trace",
+                        ai_trace.ai_trace_id,
+                    ),
+                ):
+                    with self.subTest(
+                        path=path,
+                        record_family=record_family,
+                    ):
+                        with self.assertRaises(error.HTTPError) as exc_info:
+                            request.urlopen(  # noqa: S310 - local in-process test HTTP server
+                                (
+                                    f"{base_url}{path}"
+                                    f"?family={record_family}&record_id={record_id}"
+                                ),
+                                timeout=2,
+                            )
+
+                        self.assertEqual(exc_info.exception.code, 400)
+                        payload = json.loads(
+                            exc_info.exception.read().decode("utf-8")
+                        )
+                        self.assertEqual(payload["error"], "invalid_request")
+                        self.assertIn(expected_message, payload["message"])
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                    servers[0].server_close()
+                thread.join(timeout=2)
+
+    def test_long_running_runtime_surface_rejects_case_family_out_of_scope_advisory_reads(
+        self,
+    ) -> None:
+        service, promoted_case = self._build_phase19_out_of_scope_case(
+            fixture_name="github-audit-alert.json",
+            host="127.0.0.1",
+            port=0,
+        )
+        expected_message = (
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice"
+        )
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_ANALYST_PRINCIPAL,
+        ):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+                base_url = f"http://127.0.0.1:{servers[0].server_port}"
+
+                for path in (
+                    "/inspect-assistant-context",
+                    "/inspect-advisory-output",
+                    "/render-recommendation-draft",
+                ):
+                    with self.subTest(path=path):
+                        with self.assertRaises(error.HTTPError) as exc_info:
+                            request.urlopen(  # noqa: S310 - local in-process test HTTP server
+                                (
+                                    f"{base_url}{path}"
+                                    f"?family=case&record_id={promoted_case.case_id}"
+                                ),
+                                timeout=2,
+                            )
+
+                        self.assertEqual(exc_info.exception.code, 400)
+                        payload = json.loads(
+                            exc_info.exception.read().decode("utf-8")
+                        )
+                        self.assertEqual(payload["error"], "invalid_request")
+                        self.assertIn(expected_message, payload["message"])
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                    servers[0].server_close()
+                thread.join(timeout=2)
+
+    def test_long_running_runtime_surface_rejects_case_scoped_advisory_reads_without_linked_case(
+        self,
+    ) -> None:
+        service, recommendation, ai_trace = (
+            self._build_case_scoped_advisory_records_without_case_lineage(
+                host="127.0.0.1",
+                port=0,
+            )
+        )
+        expected_message = (
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice"
+        )
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_ANALYST_PRINCIPAL,
+        ):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+                base_url = f"http://127.0.0.1:{servers[0].server_port}"
+
+                for path, record_family, record_id in (
+                    (
+                        "/inspect-advisory-output",
+                        "recommendation",
+                        recommendation.recommendation_id,
+                    ),
+                    (
+                        "/inspect-advisory-output",
+                        "ai_trace",
+                        ai_trace.ai_trace_id,
+                    ),
+                    (
+                        "/render-recommendation-draft",
+                        "recommendation",
+                        recommendation.recommendation_id,
+                    ),
+                    (
+                        "/render-recommendation-draft",
+                        "ai_trace",
+                        ai_trace.ai_trace_id,
+                    ),
+                ):
+                    with self.subTest(
+                        path=path,
+                        record_family=record_family,
+                    ):
+                        with self.assertRaises(error.HTTPError) as exc_info:
+                            request.urlopen(  # noqa: S310 - local in-process test HTTP server
+                                (
+                                    f"{base_url}{path}"
+                                    f"?family={record_family}&record_id={record_id}"
+                                ),
+                                timeout=2,
+                            )
+
+                        self.assertEqual(exc_info.exception.code, 400)
+                        payload = json.loads(
+                            exc_info.exception.read().decode("utf-8")
+                        )
+                        self.assertEqual(payload["error"], "invalid_request")
+                        self.assertIn(expected_message, payload["message"])
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                    servers[0].server_close()
+                thread.join(timeout=2)
+
+    def test_long_running_runtime_surface_rejects_oversized_operator_request_body(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+            ),
+            store=store,
+        )
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_ANALYST_PRINCIPAL,
+        ):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+
+                connection = http.client.HTTPConnection(
+                    "127.0.0.1",
+                    servers[0].server_port,
+                    timeout=2,
+                )
+                connection.putrequest("POST", "/operator/promote-alert-to-case")
+                connection.putheader("Content-Type", "application/json")
+                connection.putheader(
+                    "Content-Length",
+                    str(main.MAX_WAZUH_INGEST_BODY_BYTES + 1),
+                )
+                connection.endheaders()
+
+                response = connection.getresponse()
+                self.assertEqual(response.status, 413)
+                response_body = json.loads(response.read().decode("utf-8"))
+                connection.close()
+                self.assertEqual(response_body["error"], "request_too_large")
+                self.assertEqual(store.list(AlertRecord), ())
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                    servers[0].server_close()
+                thread.join(timeout=2)
+
+    def test_long_running_runtime_surface_forbids_non_loopback_operator_requests(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+            ),
+            store=store,
+        )
+        admitted = service.ingest_finding_alert(
+            finding_id="finding-phase19-http-auth-001",
+            analytic_signal_id="signal-phase19-http-auth-001",
+            substrate_detection_record_id="substrate-detection-phase19-http-auth-001",
+            correlation_key="claim:asset-phase19-http-auth-001:github-audit",
+            first_seen_at=datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc),
+            last_seen_at=datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc),
+            reviewed_context={
+                "asset": {"asset_id": "asset-phase19-http-auth-001"},
+                "identity": {"identity_id": "principal-phase19-http-auth-001"},
+            },
+        )
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with (
+            mock.patch.object(main, "ThreadingHTTPServer", RecordingServer),
+            mock.patch.object(
+                main,
+                "_require_loopback_operator_request",
+                side_effect=PermissionError(
+                    "operator write surface only accepts loopback callers until a reviewed operator auth boundary exists"
+                ),
+            ),
+        ):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+
+                with self.assertRaises(error.HTTPError) as exc_info:
+                    request.urlopen(  # noqa: S310 - local in-process test HTTP server
+                        request.Request(  # noqa: S310 - local in-process test HTTP server
+                            f"http://127.0.0.1:{servers[0].server_port}/operator/promote-alert-to-case",
+                            data=json.dumps({"alert_id": admitted.alert.alert_id}).encode("utf-8"),
+                            headers={"Content-Type": "application/json"},
+                            method="POST",
+                        ),
+                        timeout=2,
+                    )
+
+                self.assertEqual(exc_info.exception.code, 403)
+                response_body = json.loads(exc_info.exception.read().decode("utf-8"))
+                self.assertEqual(response_body["error"], "forbidden")
+                self.assertEqual(store.list(CaseRecord), ())
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                    servers[0].server_close()
+                thread.join(timeout=2)
+
+
+
+if __name__ == "__main__":
+    unittest.main()
