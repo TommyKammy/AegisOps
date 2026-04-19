@@ -30,6 +30,12 @@ class InspectionStore(Protocol):
 class OperatorInspectionServiceDependencies(Protocol):
     _store: InspectionStore
 
+    def _require_reviewed_operator_alert_record(self, alert: AlertRecord) -> AlertRecord:
+        ...
+
+    def _alert_is_in_reviewed_operator_slice(self, alert: AlertRecord) -> bool:
+        ...
+
     def _latest_detection_reconciliations_by_alert_id(
         self,
     ) -> dict[str, ReconciliationRecord]:
@@ -171,6 +177,8 @@ class OperatorInspectionReadSurface:
 
             if not self._service._reconciliation_is_wazuh_origin(reconciliation):
                 continue
+            if not self._service._alert_is_in_reviewed_operator_slice(alert):
+                continue
 
             source_systems = self._service._merge_linked_ids(
                 reconciliation.subject_linkage.get("source_systems"),
@@ -252,6 +260,7 @@ class OperatorInspectionReadSurface:
         alert = self._service._store.get(AlertRecord, alert_id)
         if alert is None:
             raise LookupError(f"Missing alert record {alert_id!r} for detail inspection")
+        alert = self._service._require_reviewed_operator_alert_record(alert)
 
         reconciliation = self._service._latest_detection_reconciliations_by_alert_id().get(
             alert.alert_id

@@ -650,6 +650,37 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                     servers[0].shutdown()
                 thread.join(timeout=2)
 
+    def test_reviewed_runtime_path_fail_closes_out_of_scope_alert_queue_and_detail_reads(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+            ),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+
+        admitted = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(
+                _load_wazuh_fixture("github-audit-alert.json")
+            ),
+        )
+
+        queue_snapshot = service.inspect_analyst_queue()
+
+        self.assertEqual(queue_snapshot.total_records, 0)
+        self.assertEqual(queue_snapshot.records, ())
+        with self.assertRaisesRegex(
+            ValueError,
+            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+        ):
+            service.inspect_alert_detail(admitted.alert.alert_id)
+
     def test_reviewed_runtime_path_surfaces_handoff_and_manual_fallback_visibility(
         self,
     ) -> None:
