@@ -98,7 +98,7 @@ class Phase28MispEnrichmentValidationTests(ServicePersistenceTestBase):
     def test_attach_misp_context_persists_subordinate_attachment_with_provenance(
         self,
     ) -> None:
-        store, service, promoted_case, _, reviewed_at = self._build_in_scope_case(
+        _store, service, promoted_case, _, reviewed_at = self._build_in_scope_case(
             misp_enrichment_enabled=True
         )
         anchor_evidence = self._attach_anchor_evidence(
