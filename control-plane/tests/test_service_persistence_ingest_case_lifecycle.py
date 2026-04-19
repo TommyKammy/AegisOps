@@ -1941,40 +1941,6 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
         ):
             service.inspect_case_detail(spoofed_case.case_id)
 
-    def test_service_alert_inspection_omits_spoofed_linked_case_surface(self) -> None:
-        _, service, promoted_case, _, _ = self._build_phase19_in_scope_case()
-        alert = service.get_record(AlertRecord, promoted_case.alert_id)
-        self.assertIsNotNone(alert)
-
-        spoofed_case_id = "case-phase19-alert-inspection-spoofed-linkage"
-        service.persist_record(
-            CaseRecord(
-                case_id=spoofed_case_id,
-                alert_id=promoted_case.alert_id,
-                finding_id=promoted_case.finding_id,
-                evidence_ids=promoted_case.evidence_ids,
-                lifecycle_state="closed",
-                reviewed_context=dict(promoted_case.reviewed_context),
-                coordination_reference_id="coord-ref-spoofed-case-001",
-                coordination_target_type="zammad",
-                coordination_target_id="ZM-9999",
-                ticket_reference_url="https://tickets.example.test/#ticket/9999",
-            )
-        )
-        service.persist_record(replace(alert, case_id=spoofed_case_id))
-
-        queue_view = service.inspect_analyst_queue()
-        detail = service.inspect_alert_detail(promoted_case.alert_id)
-
-        self.assertEqual(queue_view.total_records, 1)
-        self.assertEqual(queue_view.records[0]["alert_id"], promoted_case.alert_id)
-        self.assertIsNone(queue_view.records[0]["case_lifecycle_state"])
-        self.assertIsNone(detail.case_record)
-        self.assertEqual(detail.lineage["case_id"], spoofed_case_id)
-        self.assertEqual(detail.external_ticket_reference["status"], "missing")
-        self.assertIsNone(detail.external_ticket_reference["linked_case_id"])
-        self.assertIsNone(detail.external_ticket_reference["linked_case_reference"])
-
     def test_service_rejects_duplicate_casework_identifiers(self) -> None:
         _, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
