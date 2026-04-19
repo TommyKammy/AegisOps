@@ -375,7 +375,7 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
             requester_identity="analyst-001",
             host_identifier="host-001",
             evidence_gap="Need endpoint evidence to resolve the reviewed host-state gap.",
-            artifact_classes=("collection_manifest", "triage_bundle", "binary_analysis"),
+            artifact_classes=("collection_manifest", "file_sample", "binary_analysis"),
             expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
         )
         self._approve_action_request(
@@ -404,10 +404,26 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
                     },
                 },
                 {
+                    "artifact_class": "file_sample",
+                    "artifact_id": "sample-001",
+                    "source_artifact_id": "collector-sample-001",
+                    "collected_at": reviewed_at + timedelta(minutes=2),
+                    "collector_identity": "velociraptor",
+                    "tool_name": "Velociraptor",
+                    "tool_version": "0.7.2",
+                    "source_boundary": "endpoint_evidence_pack",
+                    "citation_kind": "raw_collected_output",
+                    "description": "Collected reviewed file sample for binary analysis.",
+                    "content": {
+                        "path": "/opt/suspicious/sample.dll",
+                        "sha256": "c" * 64,
+                    },
+                },
+                {
                     "artifact_class": "binary_analysis",
                     "artifact_id": "binary-analysis-001",
                     "source_artifact_id": "analysis-001",
-                    "derived_from_artifact_id": "manifest-001",
+                    "derived_from_artifact_id": "sample-001",
                     "collected_at": reviewed_at + timedelta(minutes=5),
                     "collector_identity": "capa",
                     "tool_name": "capa",
@@ -423,8 +439,8 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
             admitted_by="analyst-001",
         )
 
-        self.assertEqual(len(ingested), 2)
-        manifest, analysis = ingested
+        self.assertEqual(len(ingested), 3)
+        manifest, file_sample, analysis = ingested
         self.assertEqual(manifest.case_id, promoted_case.case_id)
         self.assertEqual(
             manifest.provenance["endpoint_request_id"],
@@ -442,7 +458,11 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
         )
         self.assertEqual(
             analysis.provenance["derived_from_artifact_id"],
-            "manifest-001",
+            "sample-001",
+        )
+        self.assertEqual(
+            analysis.provenance["derived_from_evidence_id"],
+            file_sample.evidence_id,
         )
         self.assertEqual(
             analysis.content["citation"]["kind"],
@@ -460,6 +480,249 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
         self.assertIn(
             f"endpoint-evidence://request/{action_request.action_request_id}/artifact/binary-analysis-001",
             persisted,
+        )
+
+    def test_ingest_endpoint_evidence_artifacts_persists_yara_augmentation_for_file_sample(
+        self,
+    ) -> None:
+        _store, service, promoted_case, anchor_evidence_id, reviewed_at = (
+            self._build_host_bound_case()
+        )
+        action_request = service.create_endpoint_evidence_collection_request(
+            case_id=promoted_case.case_id,
+            admitting_evidence_id=anchor_evidence_id,
+            requester_identity="analyst-001",
+            host_identifier="host-001",
+            evidence_gap="Need bounded file analysis to understand the reviewed sample.",
+            artifact_classes=("file_sample", "binary_analysis"),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+        )
+        self._approve_action_request(
+            service,
+            action_request.action_request_id,
+            decided_at=action_request.requested_at + timedelta(minutes=5),
+        )
+
+        file_sample = service.ingest_endpoint_evidence_artifacts(
+            action_request_id=action_request.action_request_id,
+            artifacts=(
+                {
+                    "artifact_class": "file_sample",
+                    "artifact_id": "sample-001",
+                    "source_artifact_id": "collector-sample-001",
+                    "collected_at": reviewed_at,
+                    "collector_identity": "velociraptor",
+                    "tool_name": "Velociraptor",
+                    "tool_version": "0.7.2",
+                    "source_boundary": "endpoint_evidence_pack",
+                    "citation_kind": "raw_collected_output",
+                    "description": "Collected reviewed file sample.",
+                    "content": {
+                        "path": "/opt/suspicious/sample.dll",
+                        "sha256": "a" * 64,
+                        "media_type": "application/x-dosexec",
+                    },
+                },
+            ),
+            admitted_by="analyst-001",
+        )[0]
+
+        binary_analysis = service.ingest_endpoint_evidence_artifacts(
+            action_request_id=action_request.action_request_id,
+            artifacts=(
+                {
+                    "artifact_class": "binary_analysis",
+                    "artifact_id": "binary-analysis-yara-001",
+                    "source_artifact_id": "analysis-yara-001",
+                    "derived_from_artifact_id": "sample-001",
+                    "collected_at": reviewed_at + timedelta(minutes=3),
+                    "collector_identity": "yara",
+                    "tool_name": "YARA",
+                    "tool_version": "4.5.1",
+                    "source_boundary": "endpoint_evidence_pack",
+                    "citation_kind": "bounded_derivative",
+                    "description": "YARA findings over the reviewed file sample.",
+                    "content": {
+                        "matches": (
+                            {
+                                "rule_name": "Suspicious.Loader.Sample",
+                                "namespace": "malware",
+                                "tags": ("loader", "sample"),
+                            },
+                        ),
+                    },
+                },
+            ),
+            admitted_by="analyst-001",
+        )[0]
+
+        self.assertEqual(
+            binary_analysis.provenance["derived_from_artifact_id"],
+            "sample-001",
+        )
+        self.assertEqual(
+            binary_analysis.provenance["derived_from_evidence_id"],
+            file_sample.evidence_id,
+        )
+        self.assertEqual(
+            binary_analysis.provenance["analysis_tool"],
+            "yara",
+        )
+        self.assertEqual(
+            binary_analysis.content["artifact"]["derived_from_evidence_id"],
+            file_sample.evidence_id,
+        )
+        self.assertEqual(
+            binary_analysis.content["payload"]["matches"][0]["rule_name"],
+            "Suspicious.Loader.Sample",
+        )
+
+    def test_ingest_endpoint_evidence_artifacts_rejects_binary_analysis_without_file_sample_anchor(
+        self,
+    ) -> None:
+        store, service, promoted_case, anchor_evidence_id, reviewed_at = (
+            self._build_host_bound_case()
+        )
+        action_request = service.create_endpoint_evidence_collection_request(
+            case_id=promoted_case.case_id,
+            admitting_evidence_id=anchor_evidence_id,
+            requester_identity="analyst-001",
+            host_identifier="host-001",
+            evidence_gap="Need bounded file analysis to understand the reviewed sample.",
+            artifact_classes=("collection_manifest", "binary_analysis"),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+        )
+        self._approve_action_request(
+            service,
+            action_request.action_request_id,
+            decided_at=action_request.requested_at + timedelta(minutes=5),
+        )
+
+        service.ingest_endpoint_evidence_artifacts(
+            action_request_id=action_request.action_request_id,
+            artifacts=(
+                {
+                    "artifact_class": "collection_manifest",
+                    "artifact_id": "manifest-anchoring-001",
+                    "source_artifact_id": "collector-manifest-anchoring-001",
+                    "collected_at": reviewed_at,
+                    "collector_identity": "velociraptor",
+                    "tool_name": "Velociraptor",
+                    "source_boundary": "endpoint_evidence_pack",
+                    "citation_kind": "raw_collected_output",
+                    "description": "Reviewed collection manifest.",
+                    "content": {"requested_paths": ("/opt/suspicious",)},
+                },
+            ),
+            admitted_by="analyst-001",
+        )
+        before_ids = {record.evidence_id for record in store.list(EvidenceRecord)}
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "binary_analysis artifacts must derive from an admitted file_sample artifact",
+        ):
+            service.ingest_endpoint_evidence_artifacts(
+                action_request_id=action_request.action_request_id,
+                artifacts=(
+                    {
+                        "artifact_class": "binary_analysis",
+                        "artifact_id": "binary-analysis-manifest-001",
+                        "source_artifact_id": "analysis-manifest-001",
+                        "derived_from_artifact_id": "manifest-anchoring-001",
+                        "collected_at": reviewed_at + timedelta(minutes=1),
+                        "collector_identity": "capa",
+                        "tool_name": "capa",
+                        "tool_version": "7.0.1",
+                        "source_boundary": "endpoint_evidence_pack",
+                        "citation_kind": "bounded_derivative",
+                        "description": "capa findings must stay anchored to a file sample.",
+                        "content": {
+                            "summary": "Matched suspicious capability.",
+                        },
+                    },
+                ),
+                admitted_by="analyst-001",
+            )
+
+        self.assertEqual(
+            {record.evidence_id for record in store.list(EvidenceRecord)},
+            before_ids,
+        )
+
+    def test_ingest_endpoint_evidence_artifacts_rejects_malformed_yara_output_without_writes(
+        self,
+    ) -> None:
+        store, service, promoted_case, anchor_evidence_id, reviewed_at = (
+            self._build_host_bound_case()
+        )
+        action_request = service.create_endpoint_evidence_collection_request(
+            case_id=promoted_case.case_id,
+            admitting_evidence_id=anchor_evidence_id,
+            requester_identity="analyst-001",
+            host_identifier="host-001",
+            evidence_gap="Need bounded file analysis to understand the reviewed sample.",
+            artifact_classes=("file_sample", "binary_analysis"),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+        )
+        self._approve_action_request(
+            service,
+            action_request.action_request_id,
+            decided_at=action_request.requested_at + timedelta(minutes=5),
+        )
+        service.ingest_endpoint_evidence_artifacts(
+            action_request_id=action_request.action_request_id,
+            artifacts=(
+                {
+                    "artifact_class": "file_sample",
+                    "artifact_id": "sample-malformed-001",
+                    "source_artifact_id": "collector-sample-malformed-001",
+                    "collected_at": reviewed_at,
+                    "collector_identity": "velociraptor",
+                    "tool_name": "Velociraptor",
+                    "source_boundary": "endpoint_evidence_pack",
+                    "citation_kind": "raw_collected_output",
+                    "description": "Collected reviewed file sample.",
+                    "content": {
+                        "path": "/opt/suspicious/sample.bin",
+                        "sha256": "b" * 64,
+                    },
+                },
+            ),
+            admitted_by="analyst-001",
+        )
+        before_ids = {record.evidence_id for record in store.list(EvidenceRecord)}
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "binary_analysis artifacts for YARA require at least one structured match",
+        ):
+            service.ingest_endpoint_evidence_artifacts(
+                action_request_id=action_request.action_request_id,
+                artifacts=(
+                    {
+                        "artifact_class": "binary_analysis",
+                        "artifact_id": "binary-analysis-malformed-001",
+                        "source_artifact_id": "analysis-malformed-001",
+                        "derived_from_artifact_id": "sample-malformed-001",
+                        "collected_at": reviewed_at + timedelta(minutes=2),
+                        "collector_identity": "yara",
+                        "tool_name": "YARA",
+                        "tool_version": "4.5.1",
+                        "source_boundary": "endpoint_evidence_pack",
+                        "citation_kind": "bounded_derivative",
+                        "description": "Malformed YARA output must fail closed.",
+                        "content": {
+                            "matches": (),
+                        },
+                    },
+                ),
+                admitted_by="analyst-001",
+            )
+
+        self.assertEqual(
+            {record.evidence_id for record in store.list(EvidenceRecord)},
+            before_ids,
         )
 
     def test_ingest_endpoint_evidence_artifacts_rejects_pending_approval_requests_without_writes(

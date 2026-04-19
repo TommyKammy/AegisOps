@@ -6392,6 +6392,86 @@ class AegisOpsControlPlaneService:
                     self._store.save(transition_record)
             return action_request
 
+    def _index_endpoint_request_artifacts(
+        self,
+        *,
+        case_id: str,
+        action_request_id: str,
+        evidence_records: Iterable[EvidenceRecord],
+    ) -> dict[str, EvidenceRecord]:
+        indexed: dict[str, EvidenceRecord] = {}
+        for record in evidence_records:
+            if record.case_id != case_id:
+                continue
+            if record.source_system != self._endpoint_evidence_pack_adapter.source_system:
+                continue
+            request_id = self._normalize_optional_string(
+                record.provenance.get("endpoint_request_id"),
+                "evidence.provenance.endpoint_request_id",
+            )
+            if request_id != action_request_id:
+                continue
+            artifact_id = self._normalize_optional_string(
+                record.provenance.get("artifact_id"),
+                "evidence.provenance.artifact_id",
+            )
+            if artifact_id is None:
+                continue
+            indexed[artifact_id] = record
+        return indexed
+
+    def _resolve_binary_analysis_attachment(
+        self,
+        *,
+        attachment: object,
+        indexed_artifacts: Mapping[str, EvidenceRecord],
+    ) -> object:
+        derived_from_artifact_id = self._normalize_optional_string(
+            attachment.provenance.get("derived_from_artifact_id"),
+            "attachment.provenance.derived_from_artifact_id",
+        )
+        if derived_from_artifact_id is None:
+            raise ValueError(
+                "binary_analysis artifacts require derived_from_artifact_id"
+            )
+        source_artifact = indexed_artifacts.get(derived_from_artifact_id)
+        if source_artifact is None:
+            raise ValueError(
+                "binary_analysis artifacts must derive from an admitted file_sample artifact"
+            )
+        source_artifact_class = self._normalize_optional_string(
+            source_artifact.provenance.get("artifact_class"),
+            "source_artifact.provenance.artifact_class",
+        )
+        if source_artifact_class != "file_sample":
+            raise ValueError(
+                "binary_analysis artifacts must derive from an admitted file_sample artifact"
+            )
+        source_artifact_id = self._normalize_optional_string(
+            source_artifact.provenance.get("artifact_id"),
+            "source_artifact.provenance.artifact_id",
+        )
+        if source_artifact_id != derived_from_artifact_id:
+            raise ValueError(
+                "binary_analysis artifacts must derive from an admitted file_sample artifact"
+            )
+        return replace(
+            attachment,
+            provenance={
+                **dict(attachment.provenance),
+                "derived_from_evidence_id": source_artifact.evidence_id,
+                "derived_from_source_record_id": source_artifact.source_record_id,
+            },
+            content={
+                **dict(attachment.content),
+                "artifact": {
+                    **dict(attachment.content.get("artifact", {})),
+                    "derived_from_evidence_id": source_artifact.evidence_id,
+                    "derived_from_source_record_id": source_artifact.source_record_id,
+                },
+            },
+        )
+
     def ingest_endpoint_evidence_artifacts(
         self,
         *,
@@ -6482,8 +6562,22 @@ class AegisOpsControlPlaneService:
                 for record in self._store.list(EvidenceRecord)
                 if record.case_id == case.case_id
             }
+            indexed_artifacts = self._index_endpoint_request_artifacts(
+                case_id=case.case_id,
+                action_request_id=action_request.action_request_id,
+                evidence_records=existing_by_source_record_id.values(),
+            )
             persisted: list[EvidenceRecord] = []
             for attachment in attachments:
+                artifact_class = self._require_non_empty_string(
+                    attachment.provenance.get("artifact_class"),
+                    "attachment.provenance.artifact_class",
+                )
+                if artifact_class == "binary_analysis":
+                    attachment = self._resolve_binary_analysis_attachment(
+                        attachment=attachment,
+                        indexed_artifacts=indexed_artifacts,
+                    )
                 existing = existing_by_source_record_id.get(attachment.source_record_id)
                 if existing is not None:
                     if (
@@ -6519,6 +6613,12 @@ class AegisOpsControlPlaneService:
                 )
                 persisted.append(evidence)
                 existing_by_source_record_id[attachment.source_record_id] = evidence
+                artifact_id = self._normalize_optional_string(
+                    evidence.provenance.get("artifact_id"),
+                    "evidence.provenance.artifact_id",
+                )
+                if artifact_id is not None:
+                    indexed_artifacts[artifact_id] = evidence
             current_case = self._require_reviewed_operator_case(case.case_id)
             merged_case_evidence_ids = current_case.evidence_ids
             for evidence in persisted:
