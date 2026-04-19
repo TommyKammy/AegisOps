@@ -168,8 +168,8 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
         service = AegisOpsControlPlaneService(
             RuntimeConfig(
                 postgres_dsn="postgresql://control-plane.local/aegisops",
-                wazuh_ingest_shared_secret="reviewed-shared-secret",
-                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
             ),
             store=store,
         )
@@ -177,7 +177,7 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
             authorization_header="Bearer reviewed-shared-secret",
             forwarded_proto="https",
-            reverse_proxy_secret_header="reviewed-proxy-secret",
+            reverse_proxy_secret_header="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
             peer_addr="127.0.0.1",
         )
         promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
@@ -738,6 +738,7 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             finally:
                 if servers:
                     servers[0].shutdown()
+                    servers[0].server_close()
                 thread.join(timeout=2)
 
     def test_long_running_runtime_surface_exposes_cited_advisory_review_routes(self) -> None:
@@ -889,6 +890,7 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             finally:
                 if servers:
                     servers[0].shutdown()
+                    servers[0].server_close()
                 thread.join(timeout=2)
 
     def test_long_running_runtime_surface_rejects_case_scoped_out_of_scope_advisory_reads(
@@ -971,6 +973,7 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             finally:
                 if servers:
                     servers[0].shutdown()
+                    servers[0].server_close()
                 thread.join(timeout=2)
 
     def test_long_running_runtime_surface_rejects_case_family_out_of_scope_advisory_reads(
@@ -1033,6 +1036,7 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             finally:
                 if servers:
                     servers[0].shutdown()
+                    servers[0].server_close()
                 thread.join(timeout=2)
 
     def test_long_running_runtime_surface_rejects_case_scoped_advisory_reads_without_linked_case(
@@ -1116,6 +1120,7 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             finally:
                 if servers:
                     servers[0].shutdown()
+                    servers[0].server_close()
                 thread.join(timeout=2)
 
     def test_long_running_runtime_surface_rejects_oversized_operator_request_body(self) -> None:
@@ -1125,8 +1130,8 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
                 host="127.0.0.1",
                 port=0,
                 postgres_dsn="postgresql://control-plane.local/aegisops",
-                wazuh_ingest_shared_secret="reviewed-shared-secret",
-                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
             ),
             store=store,
         )
@@ -1176,6 +1181,7 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             finally:
                 if servers:
                     servers[0].shutdown()
+                    servers[0].server_close()
                 thread.join(timeout=2)
 
     def test_long_running_runtime_surface_forbids_non_loopback_operator_requests(self) -> None:
@@ -1185,8 +1191,8 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
                 host="127.0.0.1",
                 port=0,
                 postgres_dsn="postgresql://control-plane.local/aegisops",
-                wazuh_ingest_shared_secret="reviewed-shared-secret",
-                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
             ),
             store=store,
         )
@@ -1250,6 +1256,7 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             finally:
                 if servers:
                     servers[0].shutdown()
+                    servers[0].server_close()
                 thread.join(timeout=2)
 
 
