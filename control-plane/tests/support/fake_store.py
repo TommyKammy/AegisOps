@@ -15,6 +15,7 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 
 from aegisops_control_plane.models import ReconciliationRecord
+from aegisops_control_plane.models import ActionRequestRecord
 from aegisops_control_plane.models import LifecycleTransitionRecord
 
 
@@ -39,6 +40,12 @@ class TransactionMutationStore:
 
     def save(self, record: object) -> object:
         return self.inner.save(record)
+
+    def create_action_request_if_absent(
+        self,
+        record: ActionRequestRecord,
+    ) -> ActionRequestRecord:
+        return self.inner.create_action_request_if_absent(record)
 
     def get(self, record_type: object, record_id: str) -> object | None:
         return self.inner.get(record_type, record_id)
@@ -124,6 +131,12 @@ class ConcurrentListMutationStore:
     def save(self, record: object) -> object:
         return self.inner.save(record)
 
+    def create_action_request_if_absent(
+        self,
+        record: ActionRequestRecord,
+    ) -> ActionRequestRecord:
+        return self.inner.create_action_request_if_absent(record)
+
     def get(self, record_type: object, record_id: str) -> object | None:
         return self.inner.get(record_type, record_id)
 
@@ -200,6 +213,12 @@ class CommitFailingStore:
 
     def save(self, record: object) -> object:
         return self.inner.save(record)
+
+    def create_action_request_if_absent(
+        self,
+        record: ActionRequestRecord,
+    ) -> ActionRequestRecord:
+        return self.inner.create_action_request_if_absent(record)
 
     def get(self, record_type: object, record_id: str) -> object | None:
         return self.inner.get(record_type, record_id)
@@ -282,6 +301,14 @@ class RecordTypeSaveFailingStore:
         if isinstance(record, self.record_type):
             raise RuntimeError(self.message)
         return self.inner.save(record)
+
+    def create_action_request_if_absent(
+        self,
+        record: ActionRequestRecord,
+    ) -> ActionRequestRecord:
+        if self.record_type is ActionRequestRecord:
+            raise RuntimeError(self.message)
+        return self.inner.create_action_request_if_absent(record)
 
     def get(self, record_type: object, record_id: str) -> object | None:
         return self.inner.get(record_type, record_id)
@@ -367,6 +394,12 @@ class ListCountingStore:
     def save(self, record: object) -> object:
         return self.inner.save(record)
 
+    def create_action_request_if_absent(
+        self,
+        record: ActionRequestRecord,
+    ) -> ActionRequestRecord:
+        return self.inner.create_action_request_if_absent(record)
+
     def get(self, record_type: object, record_id: str) -> object | None:
         return self.inner.get(record_type, record_id)
 
@@ -441,6 +474,12 @@ class OutOfBandMutationStore:
 
     def save(self, record: object) -> object:
         return self.inner.save(record)
+
+    def create_action_request_if_absent(
+        self,
+        record: ActionRequestRecord,
+    ) -> ActionRequestRecord:
+        return self.inner.create_action_request_if_absent(record)
 
     def get(self, record_type: object, record_id: str) -> object | None:
         return self.inner.get(record_type, record_id)

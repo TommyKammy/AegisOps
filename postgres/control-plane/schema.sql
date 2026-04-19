@@ -243,6 +243,9 @@ create table if not exists aegisops_control.action_request_records (
   check (lifecycle_state in ('draft','pending_approval','approved','rejected','expired','canceled','superseded','executing','completed','failed','unresolved'))
 );
 
+create unique index if not exists action_request_records_idempotency_key_key
+  on aegisops_control.action_request_records (idempotency_key);
+
 create table if not exists aegisops_control.action_execution_records (
   action_execution_id text primary key,
   action_request_id text not null,

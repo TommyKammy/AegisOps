@@ -297,6 +297,38 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         self.assertIn(https_host_pattern, migration_sql)
         self.assertIn(https_host_pattern, schema_sql)
 
+    def test_phase28_action_request_idempotency_unique_index_migration_asset_exists(
+        self,
+    ) -> None:
+        migration_path = (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0010_phase_28_action_request_idempotency_key_unique_index.sql"
+        )
+
+        self.assertTrue(
+            migration_path.exists(),
+            f"Missing Phase 28 forward migration asset: {migration_path}",
+        )
+
+        migration_sql = migration_path.read_text(encoding="utf-8").lower()
+        schema_sql = (
+            CONTROL_PLANE_ROOT.parent / "postgres" / "control-plane" / "schema.sql"
+        ).read_text(encoding="utf-8").lower()
+
+        self.assertIn("begin;", migration_sql)
+        self.assertIn("commit;", migration_sql)
+        self.assertIn(
+            "create unique index if not exists action_request_records_idempotency_key_key",
+            migration_sql,
+        )
+        self.assertIn(
+            "create unique index if not exists action_request_records_idempotency_key_key",
+            schema_sql,
+        )
+
     def test_phase23_lifecycle_transition_forward_migration_asset_exists(self) -> None:
         migration_path = (
             CONTROL_PLANE_ROOT.parent
@@ -1116,6 +1148,101 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         self.assertEqual(record.target_scope["asset_id"], "asset-001")
         with self.assertRaises(TypeError):
             record.target_scope["asset_id"] = "asset-003"  # type: ignore[index]
+
+    def test_store_rejects_duplicate_action_request_idempotency_keys(self) -> None:
+        store, _ = make_store()
+        timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        first = ActionRequestRecord(
+            action_request_id="action-request-001",
+            approval_decision_id=None,
+            case_id="case-001",
+            alert_id="alert-001",
+            finding_id="finding-001",
+            idempotency_key="idempotency-001",
+            target_scope={"asset_id": "asset-001"},
+            requester_identity="analyst-001",
+            requested_payload={"action_type": "collect_endpoint_evidence_pack"},
+            policy_basis={"severity": "medium"},
+            policy_evaluation={"routing_target": "approval"},
+            payload_hash="payload-hash-001",
+            requested_at=timestamp,
+            expires_at=None,
+            lifecycle_state="pending_approval",
+        )
+        conflicting = ActionRequestRecord(
+            action_request_id="action-request-002",
+            approval_decision_id=None,
+            case_id="case-001",
+            alert_id="alert-001",
+            finding_id="finding-001",
+            idempotency_key="idempotency-001",
+            target_scope={"asset_id": "asset-001"},
+            requester_identity="analyst-001",
+            requested_payload={"action_type": "collect_endpoint_evidence_pack"},
+            policy_basis={"severity": "medium"},
+            policy_evaluation={"routing_target": "approval"},
+            payload_hash="payload-hash-001",
+            requested_at=timestamp,
+            expires_at=None,
+            lifecycle_state="pending_approval",
+        )
+
+        store.save(first)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "duplicate key value violates unique constraint",
+        ):
+            store.save(conflicting)
+
+        self.assertEqual(store.list(ActionRequestRecord), (first,))
+
+    def test_create_action_request_if_absent_returns_existing_idempotent_record(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        first = ActionRequestRecord(
+            action_request_id="action-request-001",
+            approval_decision_id=None,
+            case_id="case-001",
+            alert_id="alert-001",
+            finding_id="finding-001",
+            idempotency_key="idempotency-001",
+            target_scope={"asset_id": "asset-001"},
+            requester_identity="analyst-001",
+            requested_payload={"action_type": "collect_endpoint_evidence_pack"},
+            policy_basis={"severity": "medium"},
+            policy_evaluation={"routing_target": "approval"},
+            payload_hash="payload-hash-001",
+            requested_at=timestamp,
+            expires_at=None,
+            lifecycle_state="pending_approval",
+        )
+        duplicate = ActionRequestRecord(
+            action_request_id="action-request-002",
+            approval_decision_id=None,
+            case_id="case-001",
+            alert_id="alert-001",
+            finding_id="finding-001",
+            idempotency_key="idempotency-001",
+            target_scope={"asset_id": "asset-001"},
+            requester_identity="analyst-001",
+            requested_payload={"action_type": "collect_endpoint_evidence_pack"},
+            policy_basis={"severity": "medium"},
+            policy_evaluation={"routing_target": "approval"},
+            payload_hash="payload-hash-001",
+            requested_at=timestamp,
+            expires_at=None,
+            lifecycle_state="pending_approval",
+        )
+
+        created = store.create_action_request_if_absent(first)
+        replayed = store.create_action_request_if_absent(duplicate)
+
+        self.assertEqual(created, first)
+        self.assertEqual(replayed, first)
+        self.assertEqual(store.list(ActionRequestRecord), (first,))
 
     def test_store_freezes_nested_json_fields_after_round_trip(self) -> None:
         store, _ = make_store()

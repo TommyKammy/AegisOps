@@ -145,6 +145,12 @@ class ControlPlaneStore(Protocol):
     def save(self, record: RecordT) -> RecordT:
         ...
 
+    def create_action_request_if_absent(
+        self,
+        record: ActionRequestRecord,
+    ) -> ActionRequestRecord:
+        ...
+
     def get(self, record_type: Type[RecordT], record_id: str) -> RecordT | None:
         ...
 
@@ -6323,21 +6329,13 @@ class AegisOpsControlPlaneService:
                 "endpoint-evidence-pack:"
                 + hashlib.sha256(idempotency_material.encode("utf-8")).hexdigest()
             )
-            self._lock_lifecycle_transition_subject(
-                "action_request_idempotency",
-                idempotency_key,
-            )
-            for existing in self._store.list(ActionRequestRecord):
-                if existing.idempotency_key == idempotency_key:
-                    return existing
-
             normalized_action_request_id = self._resolve_new_record_identifier(
                 ActionRequestRecord,
                 action_request_id,
                 "action_request_id",
                 "action-request",
             )
-            return self.persist_record(
+            action_request = self._store.create_action_request_if_absent(
                 ActionRequestRecord(
                     action_request_id=normalized_action_request_id,
                     approval_decision_id=None,
@@ -6368,9 +6366,16 @@ class AegisOpsControlPlaneService:
                         "execution_surface_type": "executor",
                         "execution_surface_id": "isolated-executor",
                     },
-                ),
-                transitioned_at=requested_at,
+                )
             )
+            if action_request.action_request_id == normalized_action_request_id:
+                for transition_record in self._build_lifecycle_transition_records(
+                    action_request,
+                    existing_record=None,
+                    transitioned_at=requested_at,
+                ):
+                    self._store.save(transition_record)
+            return action_request
 
     def ingest_endpoint_evidence_artifacts(
         self,

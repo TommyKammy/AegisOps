@@ -15,7 +15,7 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 
 from aegisops_control_plane.config import RuntimeConfig
-from aegisops_control_plane.models import CaseRecord, EvidenceRecord
+from aegisops_control_plane.models import ActionRequestRecord, CaseRecord, EvidenceRecord
 from aegisops_control_plane.service import AegisOpsControlPlaneService
 from postgres_test_support import make_store
 from tests.support.fixtures import load_wazuh_fixture
@@ -46,6 +46,57 @@ class _EvidenceSaveMutationStore:
             self._mutated = True
             self.mutate_once(self.inner)
         return saved
+
+    def create_action_request_if_absent(
+        self,
+        record: ActionRequestRecord,
+    ) -> ActionRequestRecord:
+        return self.inner.create_action_request_if_absent(record)
+
+    def get(self, record_type: object, record_id: str) -> object | None:
+        return self.inner.get(record_type, record_id)
+
+    def list(self, record_type: object) -> tuple[object, ...]:
+        return self.inner.list(record_type)
+
+    def latest_lifecycle_transition(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> object | None:
+        return self.inner.latest_lifecycle_transition(record_family, record_id)
+
+    @contextmanager
+    def transaction(self, *, isolation_level: str | None = None):
+        with self.inner.transaction(isolation_level=isolation_level):
+            yield
+
+
+@dataclass
+class _ActionRequestMutationStore:
+    inner: object
+    mutate_once: object
+    _mutated: bool = False
+
+    @property
+    def dsn(self) -> str:
+        return self.inner.dsn
+
+    @property
+    def persistence_mode(self) -> str:
+        return self.inner.persistence_mode
+
+    def save(self, record: object) -> object:
+        return self.inner.save(record)
+
+    def create_action_request_if_absent(
+        self,
+        record: ActionRequestRecord,
+    ) -> ActionRequestRecord:
+        if not self._mutated:
+            self._mutated = True
+            self.mutate_once()
+        return self.inner.create_action_request_if_absent(record)
 
     def get(self, record_type: object, record_id: str) -> object | None:
         return self.inner.get(record_type, record_id)
@@ -191,6 +242,79 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
                 "blast_radius": "single_target",
                 "execution_constraint": "requires_isolated_executor",
             },
+        )
+
+    def test_create_endpoint_evidence_collection_request_reuses_existing_request_after_idempotency_race(
+        self,
+    ) -> None:
+        inner_store, backend = make_store()
+        competing_store, _ = make_store(backend)
+        _base_store, _base_service, promoted_case, anchor_evidence_id, _reviewed_at = (
+            self._build_host_bound_case(store=inner_store)
+        )
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=4)
+
+        def inject_competing_request() -> None:
+            competing_service = AegisOpsControlPlaneService(
+                RuntimeConfig(
+                    postgres_dsn="postgresql://control-plane.local/aegisops",
+                    wazuh_ingest_shared_secret=secrets.token_urlsafe(24),
+                    wazuh_ingest_reverse_proxy_secret=secrets.token_urlsafe(24),
+                ),
+                store=competing_store,
+            )
+            competing_service.create_endpoint_evidence_collection_request(
+                case_id=promoted_case.case_id,
+                admitting_evidence_id=anchor_evidence_id,
+                requester_identity="analyst-001",
+                host_identifier="host-001",
+                evidence_gap=(
+                    "Need bounded read-only host triage to resolve the case evidence gap."
+                ),
+                artifact_classes=(
+                    "collection_manifest",
+                    "triage_bundle",
+                    "tool_output_receipt",
+                ),
+                expires_at=expires_at,
+            )
+
+        racing_store = _ActionRequestMutationStore(
+            inner=inner_store,
+            mutate_once=inject_competing_request,
+        )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret=secrets.token_urlsafe(24),
+                wazuh_ingest_reverse_proxy_secret=secrets.token_urlsafe(24),
+            ),
+            store=racing_store,
+        )
+
+        action_request = service.create_endpoint_evidence_collection_request(
+            case_id=promoted_case.case_id,
+            admitting_evidence_id=anchor_evidence_id,
+            requester_identity="analyst-001",
+            host_identifier="host-001",
+            evidence_gap="Need bounded read-only host triage to resolve the case evidence gap.",
+            artifact_classes=("collection_manifest", "triage_bundle", "tool_output_receipt"),
+            expires_at=expires_at,
+        )
+
+        self.assertEqual(
+            len(
+                tuple(
+                    record
+                    for record in inner_store.list(ActionRequestRecord)
+                    if record.case_id == promoted_case.case_id
+                )
+            ),
+            1,
+        )
+        self.assertEqual(
+            action_request,
+            inner_store.list(ActionRequestRecord)[0],
         )
 
     def test_ingest_endpoint_evidence_artifacts_persists_subordinate_evidence_with_citation_metadata(

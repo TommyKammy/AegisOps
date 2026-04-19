@@ -174,6 +174,9 @@ class _NoOpStore:
     def save(self, record: object) -> object:
         return record
 
+    def create_action_request_if_absent(self, record: object) -> object:
+        return record
+
     def get(self, record_type: object, record_id: str) -> None:
         return None
 

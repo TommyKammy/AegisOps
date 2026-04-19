@@ -27,6 +27,13 @@ _INSERT_RE = re.compile(
     r"on conflict \((?P<identifier>\w+)\) do update set (?P<assignments>.+)",
     re.IGNORECASE,
 )
+_INSERT_ACTION_REQUEST_IF_ABSENT_RE = re.compile(
+    r"insert into aegisops_control\.(?P<table>\w+) "
+    r"\((?P<columns>[^)]+)\) values \((?P<placeholders>[^)]+)\) "
+    r"on conflict \(idempotency_key\) do nothing "
+    r"returning (?P<returning>.+)",
+    re.IGNORECASE,
+)
 _INSERT_ONLY_RE = re.compile(
     r"insert into aegisops_control\.(?P<table>\w+) "
     r"\((?P<columns>[^)]+)\) values \((?P<placeholders>[^)]+)\)",
@@ -35,6 +42,11 @@ _INSERT_ONLY_RE = re.compile(
 _SELECT_ONE_RE = re.compile(
     r"select (?P<columns>.+) from aegisops_control\.(?P<table>\w+) "
     r"where (?P<identifier>\w+) = %s",
+    re.IGNORECASE,
+)
+_SELECT_ACTION_REQUEST_BY_IDEMPOTENCY_KEY_RE = re.compile(
+    r"select (?P<columns>.+) from aegisops_control\.action_request_records "
+    r"where idempotency_key = %s",
     re.IGNORECASE,
 )
 _SELECT_ALL_RE = re.compile(
@@ -168,6 +180,18 @@ class FakePostgresCursor:
             self._rows = []
             return
 
+        insert_if_absent_match = _INSERT_ACTION_REQUEST_IF_ABSENT_RE.fullmatch(
+            normalized
+        )
+        if insert_if_absent_match is not None:
+            self._execute_action_request_insert_if_absent(
+                insert_if_absent_match.group("table"),
+                insert_if_absent_match.group("columns"),
+                insert_if_absent_match.group("returning"),
+                params,
+            )
+            return
+
         insert_match = _INSERT_RE.fullmatch(normalized)
         if insert_match is not None:
             self._execute_insert(insert_match.group("table"), insert_match.group("columns"), params)
@@ -177,6 +201,16 @@ class FakePostgresCursor:
             self._execute_insert_only(
                 insert_only_match.group("table"),
                 insert_only_match.group("columns"),
+                params,
+            )
+            return
+
+        select_action_request_by_idempotency_key_match = (
+            _SELECT_ACTION_REQUEST_BY_IDEMPOTENCY_KEY_RE.fullmatch(normalized)
+        )
+        if select_action_request_by_idempotency_key_match is not None:
+            self._execute_select_action_request_by_idempotency_key(
+                select_action_request_by_idempotency_key_match.group("columns"),
                 params,
             )
             return
@@ -307,10 +341,50 @@ class FakePostgresCursor:
         identifier_field = column_names[0]
         identifier_value = row[identifier_field]
         table_rows = self.tables.setdefault(table, {})
+        if table == "action_request_records":
+            idempotency_key = row.get("idempotency_key")
+            for existing_id, existing_row in table_rows.items():
+                if (
+                    existing_id != str(identifier_value)
+                    and existing_row.get("idempotency_key") == idempotency_key
+                ):
+                    raise ValueError(
+                        "duplicate key value violates unique constraint "
+                        "action_request_records.idempotency_key"
+                    )
         table_rows[str(identifier_value)] = row
         self.connection.dirty = True
         self.description = None
         self._rows = []
+
+    def _execute_action_request_insert_if_absent(
+        self,
+        table: str,
+        columns: str,
+        returning: str,
+        params: tuple[object, ...] | None,
+    ) -> None:
+        column_names = [column.strip() for column in columns.split(",")]
+        row = dict(zip(column_names, params or ()))
+        table_rows = self.tables.setdefault(table, {})
+        idempotency_key = row.get("idempotency_key")
+        returning_columns = [column.strip() for column in returning.split(",")]
+        self.description = tuple((name,) for name in returning_columns)
+        if any(
+            existing_row.get("idempotency_key") == idempotency_key
+            for existing_row in table_rows.values()
+        ):
+            self._rows = []
+            return
+        identifier_field = column_names[0]
+        identifier_value = str(row[identifier_field])
+        if identifier_value in table_rows:
+            raise ValueError(
+                f"duplicate key value violates unique constraint {table}.{identifier_field}"
+            )
+        table_rows[identifier_value] = row
+        self.connection.dirty = True
+        self._rows = [{column: row[column] for column in returning_columns}]
 
     def _execute_insert_only(
         self,
@@ -341,6 +415,24 @@ class FakePostgresCursor:
         column_names = [column.strip() for column in columns.split(",")]
         identifier_value = str((params or ("",))[0])
         row = self.tables.get(table, {}).get(identifier_value)
+        self.description = tuple((name,) for name in column_names)
+        self._rows = [self._project_row(row, column_names)] if row is not None else []
+
+    def _execute_select_action_request_by_idempotency_key(
+        self,
+        columns: str,
+        params: tuple[object, ...] | None,
+    ) -> None:
+        column_names = [column.strip() for column in columns.split(",")]
+        idempotency_key = None if params is None else params[0]
+        row = next(
+            (
+                candidate
+                for candidate in self.tables.get("action_request_records", {}).values()
+                if candidate.get("idempotency_key") == idempotency_key
+            ),
+            None,
+        )
         self.description = tuple((name,) for name in column_names)
         self._rows = [self._project_row(row, column_names)] if row is not None else []
 
