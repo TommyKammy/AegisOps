@@ -16,7 +16,12 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 from aegisops_control_plane.adapters.osquery import OsqueryHostContextAdapter
 from aegisops_control_plane.config import RuntimeConfig
-from aegisops_control_plane.models import CaseRecord, EvidenceRecord, ObservationRecord
+from aegisops_control_plane.models import (
+    ActionRequestRecord,
+    CaseRecord,
+    EvidenceRecord,
+    ObservationRecord,
+)
 from aegisops_control_plane.service import AegisOpsControlPlaneService
 from postgres_test_support import make_store
 from tests.support.fixtures import load_wazuh_fixture
@@ -44,6 +49,12 @@ class _EvidenceSaveMutationStore:
             self._mutated = True
             self.mutate_once(self.inner)
         return saved
+
+    def create_action_request_if_absent(
+        self,
+        record: ActionRequestRecord,
+    ) -> tuple[ActionRequestRecord, bool]:
+        return self.inner.create_action_request_if_absent(record)
 
     def get(self, record_type: object, record_id: str) -> object | None:
         return self.inner.get(record_type, record_id)

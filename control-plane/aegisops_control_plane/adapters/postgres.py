@@ -914,6 +914,55 @@ class PostgresControlPlaneStore:
                 cursor.close()
         return record
 
+    def create_action_request_if_absent(
+        self,
+        record: ActionRequestRecord,
+    ) -> tuple[ActionRequestRecord, bool]:
+        _validate_record(record)
+        table = self._table_config(ActionRequestRecord)
+        field_names = table.record_fields
+        placeholders = ", ".join(
+            self._placeholder(table, field_name) for field_name in field_names
+        )
+        params = tuple(
+            self._serialize_field(table, field_name, getattr(record, field_name))
+            for field_name in field_names
+        )
+        query = (
+            f"insert into aegisops_control.{table.table_name} "
+            f"({', '.join(field_names)}) values ({placeholders}) "
+            f"on conflict (idempotency_key) do nothing "
+            f"returning {', '.join(field_names)}"
+        )
+        existing_query = (
+            f"select {', '.join(field_names)} "
+            f"from aegisops_control.{table.table_name} "
+            "where idempotency_key = %s"
+        )
+
+        with self._borrow_connection() as connection:
+            cursor = connection.cursor()
+            try:
+                cursor.execute(query, params)
+                row = cursor.fetchone()
+                created = row is not None
+                if row is None:
+                    cursor.execute(existing_query, (record.idempotency_key,))
+                    row = cursor.fetchone()
+                if row is None:
+                    raise RuntimeError(
+                        "action request idempotency insert returned no authoritative row"
+                    )
+                row_mapping = _row_to_mapping(cursor, row)
+            finally:
+                cursor.close()
+        authoritative = self._row_to_record(ActionRequestRecord, row_mapping)
+        if authoritative.payload_hash != record.payload_hash:
+            raise ValueError(
+                "idempotency_key already exists for a different action request payload"
+            )
+        return authoritative, created
+
     def get(self, record_type: Type[RecordT], record_id: str) -> RecordT | None:
         table = self._table_config(record_type)
         query = (
