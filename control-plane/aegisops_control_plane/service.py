@@ -30,7 +30,7 @@ from .assistant_provider import (
     AssistantProviderResult,
     AssistantProviderTransport,
 )
-from .config import RuntimeConfig
+from .config import OpenBaoKVv2SecretTransport, RuntimeConfig
 from .execution_coordinator import ExecutionCoordinator
 from .models import (
     AITraceRecord,
@@ -8249,7 +8249,10 @@ class AegisOpsControlPlaneService:
 
 
 def build_runtime_snapshot(environ: Mapping[str, str] | None = None) -> RuntimeSnapshot:
-    config = RuntimeConfig.from_env(environ)
+    config = RuntimeConfig.from_env(
+        environ,
+        secret_backend_transport=OpenBaoKVv2SecretTransport(),
+    )
     service = AegisOpsControlPlaneService(config)
     return service.describe_runtime()
 
@@ -8257,5 +8260,8 @@ def build_runtime_snapshot(environ: Mapping[str, str] | None = None) -> RuntimeS
 def build_runtime_service(
     environ: Mapping[str, str] | None = None,
 ) -> AegisOpsControlPlaneService:
-    config = RuntimeConfig.from_env(environ)
+    config = RuntimeConfig.from_env(
+        environ,
+        secret_backend_transport=OpenBaoKVv2SecretTransport(),
+    )
     return AegisOpsControlPlaneService(config)
