@@ -6264,7 +6264,7 @@ class AegisOpsControlPlaneService:
             )
         )
 
-        with self._store.transaction():
+        with self._store.transaction(isolation_level="SERIALIZABLE"):
             case = self._require_reviewed_operator_case(case_id)
             authoritative_host_identifier = self._require_case_host_identifier(case)
             if host_identifier != authoritative_host_identifier:
@@ -6323,6 +6323,10 @@ class AegisOpsControlPlaneService:
                 "endpoint-evidence-pack:"
                 + hashlib.sha256(idempotency_material.encode("utf-8")).hexdigest()
             )
+            self._lock_lifecycle_transition_subject(
+                "action_request_idempotency",
+                idempotency_key,
+            )
             for existing in self._store.list(ActionRequestRecord):
                 if existing.idempotency_key == idempotency_key:
                     return existing
@@ -6349,11 +6353,13 @@ class AegisOpsControlPlaneService:
                     requester_identity=requester_identity,
                     requested_payload=requested_payload,
                     policy_basis={
-                        "severity": "bounded_evidence_collection",
-                        "target_scope": "single_host",
-                        "action_reversibility": "read_only",
+                        "severity": "medium",
+                        "target_scope": "single_asset",
+                        "action_reversibility": "reversible",
+                        "asset_criticality": "standard",
+                        "identity_criticality": "standard",
                         "blast_radius": "single_target",
-                        "execution_constraint": "isolated_executor_required",
+                        "execution_constraint": "requires_isolated_executor",
                     },
                     policy_evaluation={
                         "approval_requirement": "human_required",
@@ -6394,9 +6400,9 @@ class AegisOpsControlPlaneService:
                 raise ValueError(
                     "action_request_id is not a reviewed endpoint evidence collection request"
                 )
-            if action_request.lifecycle_state in {"rejected", "canceled", "failed"}:
+            if action_request.lifecycle_state not in {"approved", "executing"}:
                 raise ValueError(
-                    "endpoint evidence artifacts cannot be admitted from a terminal rejected request"
+                    "endpoint evidence artifacts may only be admitted for approved or executing endpoint evidence requests"
                 )
 
             case_id = self._require_non_empty_string(action_request.case_id, "case_id")
@@ -6444,25 +6450,34 @@ class AegisOpsControlPlaneService:
                     "artifacts must not contain duplicate artifact_id values within one request"
                 )
 
+            existing_by_source_record_id = {
+                record.source_record_id: record
+                for record in self._store.list(EvidenceRecord)
+                if record.case_id == case.case_id
+            }
             persisted: list[EvidenceRecord] = []
             for attachment in attachments:
-                persisted.append(
-                    self.persist_record(
-                        EvidenceRecord(
-                            evidence_id=self._next_identifier("evidence"),
-                            source_record_id=attachment.source_record_id,
-                            alert_id=case.alert_id,
-                            case_id=case.case_id,
-                            source_system=attachment.source_system,
-                            collector_identity=attachment.collector_identity,
-                            acquired_at=attachment.acquired_at,
-                            derivation_relationship=attachment.derivation_relationship,
-                            lifecycle_state="linked",
-                            provenance=attachment.provenance,
-                            content=attachment.content,
-                        )
+                existing = existing_by_source_record_id.get(attachment.source_record_id)
+                if existing is not None:
+                    persisted.append(existing)
+                    continue
+                evidence = self.persist_record(
+                    EvidenceRecord(
+                        evidence_id=self._next_identifier("evidence"),
+                        source_record_id=attachment.source_record_id,
+                        alert_id=case.alert_id,
+                        case_id=case.case_id,
+                        source_system=attachment.source_system,
+                        collector_identity=attachment.collector_identity,
+                        acquired_at=attachment.acquired_at,
+                        derivation_relationship=attachment.derivation_relationship,
+                        lifecycle_state="linked",
+                        provenance=attachment.provenance,
+                        content=attachment.content,
                     )
                 )
+                persisted.append(evidence)
+                existing_by_source_record_id[attachment.source_record_id] = evidence
             current_case = self._require_reviewed_operator_case(case.case_id)
             merged_case_evidence_ids = current_case.evidence_ids
             for evidence in persisted:
@@ -6625,7 +6640,7 @@ class AegisOpsControlPlaneService:
         approver_identity: str,
     ) -> None:
         action_class = self._reviewed_action_class_for_request(action_request)
-        if action_class not in {"notify", "soft_write"}:
+        if action_class not in {"notify", "soft_write", "read_only"}:
             raise PermissionError(
                 "approval decisions are not authorized for the reviewed action class"
             )
@@ -6648,6 +6663,8 @@ class AegisOpsControlPlaneService:
             return "notify"
         if action_type == "create_tracking_ticket":
             return "soft_write"
+        if action_type == "collect_endpoint_evidence_pack":
+            return "read_only"
         raise PermissionError(
             "approval decisions are not authorized for the reviewed action class"
         )

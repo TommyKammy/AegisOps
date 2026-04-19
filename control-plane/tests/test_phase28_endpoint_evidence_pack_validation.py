@@ -113,10 +113,25 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
             reviewed_at,
         )
 
+    def _approve_action_request(
+        self,
+        service: AegisOpsControlPlaneService,
+        action_request_id: str,
+        *,
+        decided_at: datetime,
+    ) -> None:
+        service.record_action_approval_decision(
+            action_request_id=action_request_id,
+            approver_identity="reviewer-001",
+            decision="grant",
+            decision_rationale="Approved bounded read-only endpoint evidence collection.",
+            decided_at=decided_at,
+        )
+
     def test_create_endpoint_evidence_collection_request_routes_to_executor_with_bounded_scope(
         self,
     ) -> None:
-        _store, service, promoted_case, anchor_evidence_id, reviewed_at = (
+        _store, service, promoted_case, anchor_evidence_id, _reviewed_at = (
             self._build_host_bound_case()
         )
 
@@ -160,6 +175,18 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
             action_request.policy_evaluation["execution_surface_id"],
             "isolated-executor",
         )
+        self.assertEqual(
+            action_request.policy_basis,
+            {
+                "severity": "medium",
+                "target_scope": "single_asset",
+                "action_reversibility": "reversible",
+                "asset_criticality": "standard",
+                "identity_criticality": "standard",
+                "blast_radius": "single_target",
+                "execution_constraint": "requires_isolated_executor",
+            },
+        )
 
     def test_ingest_endpoint_evidence_artifacts_persists_subordinate_evidence_with_citation_metadata(
         self,
@@ -175,6 +202,11 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
             evidence_gap="Need endpoint evidence to resolve the reviewed host-state gap.",
             artifact_classes=("collection_manifest", "triage_bundle", "binary_analysis"),
             expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+        )
+        self._approve_action_request(
+            service,
+            action_request.action_request_id,
+            decided_at=action_request.requested_at + timedelta(minutes=5),
         )
 
         ingested = service.ingest_endpoint_evidence_artifacts(
@@ -192,7 +224,7 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
                     "citation_kind": "raw_collected_output",
                     "description": "Reviewed manifest for the bounded endpoint collection.",
                     "content": {
-                        "requested_paths": ("/var/tmp/suspicious",),
+                        "requested_paths": ("/opt/suspicious",),
                         "query_names": ("Artifact.Windows.System.Pslist",),
                     },
                 },
@@ -255,6 +287,117 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
             persisted,
         )
 
+    def test_ingest_endpoint_evidence_artifacts_rejects_pending_approval_requests_without_writes(
+        self,
+    ) -> None:
+        store, service, promoted_case, anchor_evidence_id, reviewed_at = (
+            self._build_host_bound_case()
+        )
+        action_request = service.create_endpoint_evidence_collection_request(
+            case_id=promoted_case.case_id,
+            admitting_evidence_id=anchor_evidence_id,
+            requester_identity="analyst-001",
+            host_identifier="host-001",
+            evidence_gap="Need endpoint evidence to resolve the reviewed host-state gap.",
+            artifact_classes=("collection_manifest",),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+        )
+        before_ids = {record.evidence_id for record in store.list(EvidenceRecord)}
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "approved or executing endpoint evidence requests",
+        ):
+            service.ingest_endpoint_evidence_artifacts(
+                action_request_id=action_request.action_request_id,
+                artifacts=(
+                    {
+                        "artifact_class": "collection_manifest",
+                        "artifact_id": "manifest-pending-001",
+                        "source_artifact_id": "collector-manifest-pending-001",
+                        "collected_at": reviewed_at,
+                        "collector_identity": "velociraptor",
+                        "tool_name": "Velociraptor",
+                        "source_boundary": "endpoint_evidence_pack",
+                        "citation_kind": "raw_collected_output",
+                        "description": "Pending approval requests must stay blocked.",
+                        "content": {"requested_paths": ("/opt/suspicious",)},
+                    },
+                ),
+                admitted_by="analyst-001",
+            )
+
+        self.assertEqual(
+            {record.evidence_id for record in store.list(EvidenceRecord)},
+            before_ids,
+        )
+
+    def test_ingest_endpoint_evidence_artifacts_reuses_existing_records_on_retry(
+        self,
+    ) -> None:
+        store, service, promoted_case, anchor_evidence_id, reviewed_at = (
+            self._build_host_bound_case()
+        )
+        action_request = service.create_endpoint_evidence_collection_request(
+            case_id=promoted_case.case_id,
+            admitting_evidence_id=anchor_evidence_id,
+            requester_identity="analyst-001",
+            host_identifier="host-001",
+            evidence_gap="Need endpoint evidence to resolve the reviewed host-state gap.",
+            artifact_classes=("collection_manifest",),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+        )
+        self._approve_action_request(
+            service,
+            action_request.action_request_id,
+            decided_at=action_request.requested_at + timedelta(minutes=5),
+        )
+        artifacts = (
+            {
+                "artifact_class": "collection_manifest",
+                "artifact_id": "manifest-retry-001",
+                "source_artifact_id": "collector-manifest-retry-001",
+                "collected_at": reviewed_at,
+                "collector_identity": "velociraptor",
+                "tool_name": "Velociraptor",
+                "source_boundary": "endpoint_evidence_pack",
+                "citation_kind": "raw_collected_output",
+                "description": "Retried endpoint evidence artifact.",
+                "content": {"requested_paths": ("/opt/retry-sample",)},
+            },
+        )
+
+        first_ingest = service.ingest_endpoint_evidence_artifacts(
+            action_request_id=action_request.action_request_id,
+            artifacts=artifacts,
+            admitted_by="analyst-001",
+        )
+        second_ingest = service.ingest_endpoint_evidence_artifacts(
+            action_request_id=action_request.action_request_id,
+            artifacts=artifacts,
+            admitted_by="analyst-001",
+        )
+
+        self.assertEqual(
+            tuple(record.evidence_id for record in first_ingest),
+            tuple(record.evidence_id for record in second_ingest),
+        )
+        case_detail = service.inspect_case_detail(promoted_case.case_id)
+        persisted = [
+            record
+            for record in case_detail.linked_evidence_records
+            if record["source_record_id"]
+            == f"endpoint-evidence://request/{action_request.action_request_id}/artifact/manifest-retry-001"
+        ]
+        self.assertEqual(len(persisted), 1)
+        self.assertEqual(
+            {record.evidence_id for record in store.list(EvidenceRecord)},
+            {
+                promoted_case.evidence_ids[0],
+                first_ingest[0].evidence_id,
+            },
+        )
+
     def test_ingest_endpoint_evidence_artifacts_rejects_unsupported_artifact_without_writes(
         self,
     ) -> None:
@@ -288,6 +431,11 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
             evidence_gap="Need endpoint evidence to resolve the reviewed host-state gap.",
             artifact_classes=("collection_manifest",),
             expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+        )
+        self._approve_action_request(
+            service,
+            action_request.action_request_id,
+            decided_at=action_request.requested_at + timedelta(minutes=5),
         )
         before_ids = {record.evidence_id for record in store.list(EvidenceRecord)}
 
