@@ -358,7 +358,7 @@ class ActionReviewSurfacePersistenceTests(ServicePersistenceTestBase):
     def test_service_action_review_surfaces_prefer_live_approval_and_execution_records(
         self,
     ) -> None:
-        store, service, promoted_case, evidence_id, reviewed_at = (
+        _store, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
         )
         observation = service.record_case_observation(

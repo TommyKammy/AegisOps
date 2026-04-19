@@ -11,14 +11,7 @@ if str(TESTS_ROOT) not in sys.path:
 
 import _service_persistence_support as support
 from _service_persistence_support import (
-    ActionRequestRecord,
-    AegisOpsControlPlaneService,
-    ReconciliationRecord,
-    RuntimeConfig,
     ServicePersistenceTestBase,
-    datetime,
-    make_store,
-    timezone,
 )
 
 class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenceTestBase):
@@ -893,18 +886,20 @@ class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenc
                 ),
             )
     def test_service_records_execution_correlation_mismatch_states_separately(self) -> None:
-        store, _ = make_store()
-        service = AegisOpsControlPlaneService(
-            RuntimeConfig(
+        store, _ = support.make_store()
+        service = support.AegisOpsControlPlaneService(
+            support.RuntimeConfig(
                 postgres_dsn="postgresql://control-plane.local/aegisops",
                 opensearch_url="https://opensearch.internal",
                 n8n_base_url="https://n8n.internal",
             ),
             store=store,
         )
-        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
-        stale_cutoff = datetime(2026, 4, 5, 12, 30, tzinfo=timezone.utc)
-        action_request = ActionRequestRecord(
+        requested_at = support.datetime(2026, 4, 5, 12, 0, tzinfo=support.timezone.utc)
+        stale_cutoff = support.datetime(
+            2026, 4, 5, 12, 30, tzinfo=support.timezone.utc
+        )
+        action_request = support.ActionRequestRecord(
             action_request_id="action-request-001",
             approval_decision_id="approval-001",
             case_id="case-001",
@@ -936,18 +931,24 @@ class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenc
                     "execution_run_id": "exec-001",
                     "execution_surface_id": "n8n",
                     "idempotency_key": "idempotency-001",
-                    "observed_at": datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc),
+                    "observed_at": support.datetime(
+                        2026, 4, 5, 12, 5, tzinfo=support.timezone.utc
+                    ),
                     "status": "running",
                 },
                 {
                     "execution_run_id": "exec-002",
                     "execution_surface_id": "n8n",
                     "idempotency_key": "idempotency-001",
-                    "observed_at": datetime(2026, 4, 5, 12, 6, tzinfo=timezone.utc),
+                    "observed_at": support.datetime(
+                        2026, 4, 5, 12, 6, tzinfo=support.timezone.utc
+                    ),
                     "status": "running",
                 },
             ),
-            compared_at=datetime(2026, 4, 5, 12, 6, tzinfo=timezone.utc),
+            compared_at=support.datetime(
+                2026, 4, 5, 12, 6, tzinfo=support.timezone.utc
+            ),
             stale_after=stale_cutoff,
         )
         mismatched = service.reconcile_action_execution(
@@ -959,11 +960,15 @@ class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenc
                     "execution_run_id": "exec-003",
                     "execution_surface_id": "shuffle",
                     "idempotency_key": "idempotency-999",
-                    "observed_at": datetime(2026, 4, 5, 12, 10, tzinfo=timezone.utc),
+                    "observed_at": support.datetime(
+                        2026, 4, 5, 12, 10, tzinfo=support.timezone.utc
+                    ),
                     "status": "failed",
                 },
             ),
-            compared_at=datetime(2026, 4, 5, 12, 10, tzinfo=timezone.utc),
+            compared_at=support.datetime(
+                2026, 4, 5, 12, 10, tzinfo=support.timezone.utc
+            ),
             stale_after=stale_cutoff,
         )
         stale = service.reconcile_action_execution(
@@ -975,11 +980,15 @@ class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenc
                     "execution_run_id": "exec-004",
                     "execution_surface_id": "n8n",
                     "idempotency_key": "idempotency-001",
-                    "observed_at": datetime(2026, 4, 5, 12, 20, tzinfo=timezone.utc),
+                    "observed_at": support.datetime(
+                        2026, 4, 5, 12, 20, tzinfo=support.timezone.utc
+                    ),
                     "status": "success",
                 },
             ),
-            compared_at=datetime(2026, 4, 5, 12, 45, tzinfo=timezone.utc),
+            compared_at=support.datetime(
+                2026, 4, 5, 12, 45, tzinfo=support.timezone.utc
+            ),
             stale_after=stale_cutoff,
         )
 
@@ -1020,14 +1029,14 @@ class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenc
         self.assertEqual(stale.execution_run_id, "exec-004")
         self.assertIn("stale downstream execution observation", stale.mismatch_summary)
 
-        stored_reconciliations = store.list(ReconciliationRecord)
+        stored_reconciliations = store.list(support.ReconciliationRecord)
         self.assertEqual(len(stored_reconciliations), 4)
         self.assertEqual(
             sorted(record.ingest_disposition for record in stored_reconciliations),
             ["duplicate", "mismatch", "missing", "stale"],
         )
         self.assertEqual(
-            service.get_record(ActionRequestRecord, "action-request-001"),
+            service.get_record(support.ActionRequestRecord, "action-request-001"),
             action_request,
         )
 
