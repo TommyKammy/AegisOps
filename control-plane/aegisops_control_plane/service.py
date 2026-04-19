@@ -6466,6 +6466,20 @@ class AegisOpsControlPlaneService:
             for attachment in attachments:
                 existing = existing_by_source_record_id.get(attachment.source_record_id)
                 if existing is not None:
+                    if (
+                        existing.source_system != attachment.source_system
+                        or existing.collector_identity != attachment.collector_identity
+                        or existing.acquired_at != attachment.acquired_at
+                        or existing.derivation_relationship
+                        != attachment.derivation_relationship
+                        or _json_ready(existing.provenance)
+                        != _json_ready(attachment.provenance)
+                        or _json_ready(existing.content)
+                        != _json_ready(attachment.content)
+                    ):
+                        raise ValueError(
+                            "artifact replay conflicted with previously admitted evidence"
+                        )
                     persisted.append(existing)
                     continue
                 evidence = self.persist_record(

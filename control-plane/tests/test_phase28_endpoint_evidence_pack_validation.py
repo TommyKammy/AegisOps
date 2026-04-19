@@ -460,6 +460,89 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
             },
         )
 
+    def test_ingest_endpoint_evidence_artifacts_rejects_conflicting_replay_without_writes(
+        self,
+    ) -> None:
+        store, service, promoted_case, anchor_evidence_id, reviewed_at = (
+            self._build_host_bound_case()
+        )
+        action_request = service.create_endpoint_evidence_collection_request(
+            case_id=promoted_case.case_id,
+            admitting_evidence_id=anchor_evidence_id,
+            requester_identity="analyst-001",
+            host_identifier="host-001",
+            evidence_gap="Need endpoint evidence to resolve the reviewed host-state gap.",
+            artifact_classes=("collection_manifest",),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+        )
+        self._approve_action_request(
+            service,
+            action_request.action_request_id,
+            decided_at=action_request.requested_at + timedelta(minutes=5),
+        )
+        original_artifacts = (
+            {
+                "artifact_class": "collection_manifest",
+                "artifact_id": "manifest-conflict-001",
+                "source_artifact_id": "collector-manifest-conflict-001",
+                "collected_at": reviewed_at,
+                "collector_identity": "velociraptor",
+                "tool_name": "Velociraptor",
+                "source_boundary": "endpoint_evidence_pack",
+                "citation_kind": "raw_collected_output",
+                "description": "Original endpoint evidence artifact.",
+                "content": {"requested_paths": ("/opt/conflict-sample",)},
+            },
+        )
+
+        ingested = service.ingest_endpoint_evidence_artifacts(
+            action_request_id=action_request.action_request_id,
+            artifacts=original_artifacts,
+            admitted_by="analyst-001",
+        )
+        before_ids = {record.evidence_id for record in store.list(EvidenceRecord)}
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "artifact replay conflicted with previously admitted evidence",
+        ):
+            service.ingest_endpoint_evidence_artifacts(
+                action_request_id=action_request.action_request_id,
+                artifacts=(
+                    {
+                        "artifact_class": "collection_manifest",
+                        "artifact_id": "manifest-conflict-001",
+                        "source_artifact_id": "collector-manifest-conflict-001",
+                        "collected_at": reviewed_at + timedelta(minutes=1),
+                        "collector_identity": "velociraptor",
+                        "tool_name": "Velociraptor",
+                        "source_boundary": "endpoint_evidence_pack",
+                        "citation_kind": "raw_collected_output",
+                        "description": "Conflicting replay should fail closed.",
+                        "content": {"requested_paths": ("/opt/conflict-sample-updated",)},
+                    },
+                ),
+                admitted_by="analyst-001",
+            )
+
+        self.assertEqual(
+            {record.evidence_id for record in store.list(EvidenceRecord)},
+            before_ids,
+        )
+        persisted = service.inspect_case_detail(promoted_case.case_id)
+        linked = [
+            record
+            for record in persisted.linked_evidence_records
+            if record["source_record_id"]
+            == f"endpoint-evidence://request/{action_request.action_request_id}/artifact/manifest-conflict-001"
+        ]
+        self.assertEqual(len(linked), 1)
+        self.assertEqual(linked[0]["evidence_id"], ingested[0].evidence_id)
+        self.assertEqual(
+            linked[0]["content"]["payload"]["requested_paths"],
+            ("/opt/conflict-sample",),
+        )
+
     def test_ingest_endpoint_evidence_artifacts_rejects_unsupported_artifact_without_writes(
         self,
     ) -> None:
