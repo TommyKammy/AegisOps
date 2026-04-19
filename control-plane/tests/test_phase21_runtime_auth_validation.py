@@ -154,6 +154,42 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
         )
         self.assertEqual(readiness.status, "ready")
 
+    def test_startup_status_reports_missing_reviewed_identity_provider_binding(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host=TEST_NON_LOOPBACK_HOST,
+                port=8080,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret=REVIEWED_SHARED_SECRET,
+                wazuh_ingest_reverse_proxy_secret=REVIEWED_WAZUH_PROXY_SECRET,
+                wazuh_ingest_trusted_proxy_cidrs=("10.10.0.5/32",),
+                protected_surface_reverse_proxy_secret=REVIEWED_SURFACE_PROXY_SECRET,
+                protected_surface_trusted_proxy_cidrs=("10.10.0.5/32",),
+                protected_surface_proxy_service_account=REVIEWED_PROXY_SERVICE_ACCOUNT,
+                admin_bootstrap_token=REVIEWED_ADMIN_BOOTSTRAP_TOKEN,
+            ),
+            store=store,
+        )
+
+        startup = service.describe_startup_status()
+        readiness = service.inspect_readiness_diagnostics()
+
+        self.assertFalse(startup.startup_ready)
+        self.assertIn(
+            "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVIEWED_IDENTITY_PROVIDER",
+            startup.required_bindings,
+        )
+        self.assertIn(
+            "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVIEWED_IDENTITY_PROVIDER",
+            startup.missing_bindings,
+        )
+        self.assertIn(
+            "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVIEWED_IDENTITY_PROVIDER must be set",
+            startup.blocking_reasons[0],
+        )
+        self.assertEqual(readiness.status, "failing_closed")
+
     def test_protected_surface_runtime_fails_closed_without_trusted_proxy_bindings(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(

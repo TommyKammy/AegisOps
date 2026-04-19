@@ -477,6 +477,7 @@ class RestoreReadinessService:
                 (
                     "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVERSE_PROXY_SECRET",
                     "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_PROXY_SERVICE_ACCOUNT",
+                    "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVIEWED_IDENTITY_PROVIDER",
                 )
                 if protected_surface_proxy_bindings_required
                 else ()
@@ -496,6 +497,9 @@ class RestoreReadinessService:
             ),
             "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_PROXY_SERVICE_ACCOUNT": (
                 self._config.protected_surface_proxy_service_account
+            ),
+            "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVIEWED_IDENTITY_PROVIDER": (
+                self._config.protected_surface_reviewed_identity_provider
             ),
             "AEGISOPS_CONTROL_PLANE_ADMIN_BOOTSTRAP_TOKEN": (
                 self._config.admin_bootstrap_token

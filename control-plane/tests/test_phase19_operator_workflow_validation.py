@@ -1418,8 +1418,8 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                 self.assertTrue(servers, "expected test HTTP server to start")
                 base_url = f"http://127.0.0.1:{servers[0].server_port}"
                 with self.assertRaises(error.HTTPError) as request_error:
-                    request.urlopen(
-                        request.Request(
+                    request.urlopen(  # noqa: S310 - local in-process test HTTP server
+                        request.Request(  # noqa: S310 - local in-process test HTTP server
                             f"{base_url}/operator/create-reviewed-action-request",
                             data=json.dumps(
                                 {
