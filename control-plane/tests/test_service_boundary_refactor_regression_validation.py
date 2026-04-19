@@ -199,6 +199,23 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
         ):
             self.assertIn(term, phase26_supporting_tests)
 
+    def test_phase26_regression_validation_keeps_operator_inspection_boundary_coverage(
+        self,
+    ) -> None:
+        boundary_tests = self._defined_test_names(
+            "control-plane/tests/test_operator_inspection_boundary.py",
+            "control-plane/tests/test_cli_inspection.py",
+            "control-plane/tests/test_phase25_osquery_host_context_validation.py",
+        )
+
+        for term in (
+            "test_service_initializes_dedicated_operator_inspection_read_surface",
+            "test_service_delegates_operator_inspection_entrypoints_to_read_surface",
+            "test_long_running_runtime_surface_exposes_analyst_queue_alert_detail_and_case_detail_http_views",
+            "test_inspect_case_detail_exposes_cross_source_timeline_and_provenance_summary",
+        ):
+            self.assertIn(term, boundary_tests)
+
 
 if __name__ == "__main__":
     unittest.main()
