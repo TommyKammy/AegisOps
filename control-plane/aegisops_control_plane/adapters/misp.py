@@ -92,7 +92,7 @@ class MispContextAdapter:
         warninglists: object | None = None,
         galaxies: object | None = None,
         sightings: object | None = None,
-        citation_url: object | None = None,
+        citation_url: object,
         staleness_marker: object | None = None,
         conflict_marker: object | None = None,
     ) -> MispContextAttachment:

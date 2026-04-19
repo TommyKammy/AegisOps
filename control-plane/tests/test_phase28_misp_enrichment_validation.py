@@ -292,3 +292,105 @@ class Phase28MispEnrichmentValidationTests(ServicePersistenceTestBase):
             )
 
         self.assertEqual(store.list(EvidenceRecord), evidence_before)
+
+    def test_attach_misp_context_rejects_misp_derived_anchor_without_writes(self) -> None:
+        store, service, promoted_case, _, reviewed_at = self._build_in_scope_case(
+            misp_enrichment_enabled=True
+        )
+        anchor_evidence = self._attach_anchor_evidence(
+            service=service,
+            promoted_case=promoted_case,
+            reviewed_at=reviewed_at,
+            indicator_value="pivot.example",
+        )
+        misp_evidence, _observation = service.attach_misp_context(
+            case_id=promoted_case.case_id,
+            admitting_evidence_id=anchor_evidence.evidence_id,
+            queried_object_type="domain",
+            queried_object_value="pivot.example",
+            looked_up_at=reviewed_at,
+            reviewed_by="analyst-001",
+            event_id="misp-event-003",
+            event_info="Initial bounded MISP attachment",
+            iocs=(
+                {
+                    "type": "domain",
+                    "value": "pivot.example",
+                },
+            ),
+            citation_url="https://misp.example/events/view/3",
+            staleness_marker={
+                "state": "fresh",
+                "evaluated_at": reviewed_at.isoformat(),
+            },
+        )
+        evidence_before = store.list(EvidenceRecord)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "admitting_evidence_id must reference reviewed evidence",
+        ):
+            service.attach_misp_context(
+                case_id=promoted_case.case_id,
+                admitting_evidence_id=misp_evidence.evidence_id,
+                queried_object_type="domain",
+                queried_object_value="pivot.example",
+                looked_up_at=reviewed_at,
+                reviewed_by="analyst-001",
+                event_id="misp-event-004",
+                event_info="Attempted MISP-on-MISP pivot",
+                iocs=(
+                    {
+                        "type": "domain",
+                        "value": "pivot.example",
+                    },
+                ),
+                citation_url="https://misp.example/events/view/4",
+                staleness_marker={
+                    "state": "fresh",
+                    "evaluated_at": reviewed_at.isoformat(),
+                },
+            )
+
+        self.assertEqual(store.list(EvidenceRecord), evidence_before)
+
+    def test_attach_misp_context_treats_url_values_as_case_sensitive(self) -> None:
+        store, service, promoted_case, _, reviewed_at = self._build_in_scope_case(
+            misp_enrichment_enabled=True
+        )
+        anchor_evidence = self._attach_anchor_evidence(
+            service=service,
+            promoted_case=promoted_case,
+            reviewed_at=reviewed_at,
+            indicator_type="URL",
+            indicator_value="https://Example.test/Path?Token=AbC",
+        )
+        evidence_before = store.list(EvidenceRecord)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "queried_object must be explicitly cited",
+        ):
+            service.attach_misp_context(
+                case_id=promoted_case.case_id,
+                admitting_evidence_id=anchor_evidence.evidence_id,
+                queried_object_type="url",
+                queried_object_value="https://Example.test/path?token=abc",
+                looked_up_at=reviewed_at,
+                reviewed_by="analyst-001",
+                event_id="misp-event-url-001",
+                event_info="URL mismatch should fail closed",
+                iocs=(
+                    {
+                        "type": "url",
+                        "value": "https://Example.test/path?token=abc",
+                    },
+                ),
+                citation_url="https://misp.example/events/view/5",
+                staleness_marker={
+                    "state": "fresh",
+                    "evaluated_at": reviewed_at.isoformat(),
+                },
+            )
+
+        self.assertEqual(store.list(EvidenceRecord), evidence_before)

@@ -5440,6 +5440,10 @@ class AegisOpsControlPlaneService:
             admitting_evidence = self._store.get(EvidenceRecord, admitting_evidence_id)
             if admitting_evidence is None:
                 raise LookupError(f"Missing evidence {admitting_evidence_id!r}")
+            if admitting_evidence.derivation_relationship == "misp_context_attachment":
+                raise ValueError(
+                    "admitting_evidence_id must reference reviewed evidence, not previously attached MISP context"
+                )
             self._require_explicit_misp_anchor_binding(
                 case=case,
                 admitting_evidence=admitting_evidence,
@@ -7562,13 +7566,22 @@ class AegisOpsControlPlaneService:
         return normalized_id
 
     @staticmethod
+    def _normalize_misp_indicator_type(value: object) -> str | None:
+        if not isinstance(value, str):
+            return None
+        normalized = value.strip()
+        if normalized == "":
+            return None
+        return normalized.lower()
+
+    @staticmethod
     def _normalize_misp_indicator_value(object_type: str, value: object) -> str | None:
         if not isinstance(value, str):
             return None
         normalized = value.strip()
         if normalized == "":
             return None
-        if object_type in {"domain", "url", "ip", "sha1", "sha256", "md5"}:
+        if object_type in {"domain", "ip", "sha1", "sha256", "md5"}:
             return normalized.lower()
         return normalized
 
@@ -7579,10 +7592,7 @@ class AegisOpsControlPlaneService:
         queried_object_type: str,
         queried_object_value: str,
     ) -> bool:
-        direct_type = self._normalize_misp_indicator_value(
-            queried_object_type,
-            mapping.get("type"),
-        )
+        direct_type = self._normalize_misp_indicator_type(mapping.get("type"))
         direct_value = self._normalize_misp_indicator_value(
             queried_object_type,
             mapping.get("value"),
@@ -7590,9 +7600,8 @@ class AegisOpsControlPlaneService:
         if direct_type == queried_object_type and direct_value == queried_object_value:
             return True
 
-        indicator_type = self._normalize_misp_indicator_value(
-            queried_object_type,
-            mapping.get("indicator_type"),
+        indicator_type = self._normalize_misp_indicator_type(
+            mapping.get("indicator_type")
         )
         indicator_value = self._normalize_misp_indicator_value(
             queried_object_type,
