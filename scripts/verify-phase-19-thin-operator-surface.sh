@@ -14,6 +14,9 @@ architecture_doc="${repo_root}/docs/architecture.md"
 test_doc="${repo_root}/control-plane/tests/test_phase19_operator_surface_docs.py"
 workflow_test_doc="${repo_root}/control-plane/tests/test_phase19_operator_workflow_validation.py"
 workflow_path="${repo_root}/.github/workflows/ci.yml"
+phase_validation_step_name="Run Phase 19 thin operator surface validation"
+phase_coverage_guard_step_name="Run Phase 19 workflow coverage guard"
+phase_coverage_guard_command="bash scripts/test-verify-ci-phase-19-workflow-coverage.sh"
 
 require_file() {
   local path="$1"
@@ -138,10 +141,45 @@ require_fixed_line "${test_doc}" '    def test_phase19_validation_doc_exists_and
 require_fixed_line "${workflow_test_doc}" 'class Phase19OperatorWorkflowValidationTests(unittest.TestCase):'
 require_fixed_line "${workflow_test_doc}" '    def test_reviewed_runtime_path_covers_approved_operator_workflow(self) -> None:'
 require_fixed_line "${workflow_path}" '      - name: Run Phase 19 thin operator surface validation'
-require_fixed_line "${workflow_path}" '          bash scripts/verify-phase-19-thin-operator-surface.sh'
-require_fixed_line "${workflow_path}" '          python3 -m unittest control-plane.tests.test_phase19_operator_surface_docs control-plane.tests.test_phase19_operator_workflow_validation'
 require_fixed_line "${workflow_path}" '      - name: Run Phase 19 workflow coverage guard'
 require_fixed_line "${workflow_path}" '        run: bash scripts/test-verify-ci-phase-19-workflow-coverage.sh'
-require_fixed_line "${workflow_path}" '          bash scripts/test-verify-phase-19-thin-operator-surface.sh'
+
+. "${repo_root}/scripts/ci-workflow-phase-helper.sh"
+
+active_run_commands="$(collect_active_run_commands)"
+phase_validation_commands="$(extract_step_run_commands "${phase_validation_step_name}")"
+
+if [[ -z "${phase_validation_commands}" ]]; then
+  echo "Missing CI workflow step commands for ${phase_validation_step_name}" >&2
+  exit 1
+fi
+
+for command in \
+  "bash scripts/verify-phase-19-thin-operator-surface.sh" \
+  "python3 -m unittest control-plane.tests.test_phase19_operator_surface_docs control-plane.tests.test_phase19_operator_workflow_validation"
+do
+  if ! grep -Fqx -- "${command}" <<<"${phase_validation_commands}" >/dev/null; then
+    echo "Missing required Phase 19 validation command in ${phase_validation_step_name}: ${command}" >&2
+    exit 1
+  fi
+done
+
+if ! grep -Fqx -- "bash scripts/test-verify-phase-19-thin-operator-surface.sh" <<<"${active_run_commands}" >/dev/null; then
+  echo "Missing required Phase 19 focused shell test command in CI workflow: bash scripts/test-verify-phase-19-thin-operator-surface.sh" >&2
+  exit 1
+fi
+
+phase_coverage_guard_commands="$(extract_step_run_commands "${phase_coverage_guard_step_name}")"
+if [[ -z "${phase_coverage_guard_commands}" ]]; then
+  echo "Missing dedicated Phase 19 workflow coverage guard step in CI workflow: ${phase_coverage_guard_step_name}" >&2
+  exit 1
+fi
+
+if [[ "$(printf '%s\n' "${phase_coverage_guard_commands}")" != "${phase_coverage_guard_command}" ]]; then
+  echo "Dedicated Phase 19 workflow coverage guard step must run exactly: ${phase_coverage_guard_command}" >&2
+  echo "Found:" >&2
+  printf '%s\n' "${phase_coverage_guard_commands}" >&2
+  exit 1
+fi
 
 echo "Phase 19 thin operator surface design and validation artifacts are present and aligned."

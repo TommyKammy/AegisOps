@@ -32,15 +32,18 @@ if [[ ! -f "${workflow_path}" ]]; then
   exit 1
 fi
 
+. "${repo_root}/scripts/ci-workflow-phase-helper.sh"
+active_run_commands="$(collect_active_run_commands)"
+
 for command in "${required_verifiers[@]}"; do
-  if ! grep -Fq "${command}" "${workflow_path}"; then
+  if ! grep -Fqx -- "${command}" <<<"${active_run_commands}" >/dev/null; then
     echo "Missing Phase 5 verifier command in CI workflow: ${command}" >&2
     exit 1
   fi
 done
 
 for command in "${required_tests[@]}"; do
-  if ! grep -Fq "${command}" "${workflow_path}"; then
+  if ! grep -Fqx -- "${command}" <<<"${active_run_commands}" >/dev/null; then
     echo "Missing Phase 5 focused shell test command in CI workflow: ${command}" >&2
     exit 1
   fi

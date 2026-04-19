@@ -16,6 +16,9 @@ docs_test="${repo_root}/control-plane/tests/test_phase20_low_risk_action_docs.py
 runtime_validation_test="${repo_root}/control-plane/tests/test_phase20_low_risk_action_validation.py"
 service_test_doc="${repo_root}/control-plane/tests/test_service_persistence_action_reconciliation.py"
 workflow_path="${repo_root}/.github/workflows/ci.yml"
+phase_validation_step_name="Run Phase 20 low-risk action boundary validation"
+phase_coverage_guard_step_name="Run Phase 20 workflow coverage guard"
+phase_coverage_guard_command="bash scripts/test-verify-ci-phase-20-workflow-coverage.sh"
 
 require_file() {
   local path="$1"
@@ -141,10 +144,45 @@ require_fixed_line "${service_test_doc}" '    def test_service_rejects_shuffle_d
 require_fixed_line "${service_test_doc}" '    def test_service_rejects_shuffle_delegation_when_expiry_window_drifts_after_approval('
 require_fixed_line "${service_test_doc}" '    def test_service_reconciles_shuffle_run_back_into_authoritative_action_execution('
 require_fixed_line "${workflow_path}" '      - name: Run Phase 20 low-risk action boundary validation'
-require_fixed_line "${workflow_path}" '          bash scripts/verify-phase-20-low-risk-action-boundary.sh'
-require_fixed_line "${workflow_path}" '          python3 -m unittest control-plane.tests.test_phase20_low_risk_action_docs control-plane.tests.test_phase20_low_risk_action_validation'
 require_fixed_line "${workflow_path}" '      - name: Run Phase 20 workflow coverage guard'
 require_fixed_line "${workflow_path}" '        run: bash scripts/test-verify-ci-phase-20-workflow-coverage.sh'
-require_fixed_line "${workflow_path}" '          bash scripts/test-verify-phase-20-low-risk-action-boundary.sh'
+
+. "${repo_root}/scripts/ci-workflow-phase-helper.sh"
+
+active_run_commands="$(collect_active_run_commands)"
+phase_validation_commands="$(extract_step_run_commands "${phase_validation_step_name}")"
+
+if [[ -z "${phase_validation_commands}" ]]; then
+  echo "Missing CI workflow step commands for ${phase_validation_step_name}" >&2
+  exit 1
+fi
+
+for command in \
+  "bash scripts/verify-phase-20-low-risk-action-boundary.sh" \
+  "python3 -m unittest control-plane.tests.test_phase20_low_risk_action_docs control-plane.tests.test_phase20_low_risk_action_validation"
+do
+  if ! grep -Fqx -- "${command}" <<<"${phase_validation_commands}" >/dev/null; then
+    echo "Missing required Phase 20 validation command in ${phase_validation_step_name}: ${command}" >&2
+    exit 1
+  fi
+done
+
+if ! grep -Fqx -- "bash scripts/test-verify-phase-20-low-risk-action-boundary.sh" <<<"${active_run_commands}" >/dev/null; then
+  echo "Missing required Phase 20 focused shell test command in CI workflow: bash scripts/test-verify-phase-20-low-risk-action-boundary.sh" >&2
+  exit 1
+fi
+
+phase_coverage_guard_commands="$(extract_step_run_commands "${phase_coverage_guard_step_name}")"
+if [[ -z "${phase_coverage_guard_commands}" ]]; then
+  echo "Missing dedicated Phase 20 workflow coverage guard step in CI workflow: ${phase_coverage_guard_step_name}" >&2
+  exit 1
+fi
+
+if [[ "$(printf '%s\n' "${phase_coverage_guard_commands}")" != "${phase_coverage_guard_command}" ]]; then
+  echo "Dedicated Phase 20 workflow coverage guard step must run exactly: ${phase_coverage_guard_command}" >&2
+  echo "Found:" >&2
+  printf '%s\n' "${phase_coverage_guard_commands}" >&2
+  exit 1
+fi
 
 echo "Phase 20 low-risk action design and validation artifacts are present and aligned."

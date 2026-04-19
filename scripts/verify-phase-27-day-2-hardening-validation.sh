@@ -4,6 +4,9 @@ set -euo pipefail
 
 repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 workflow_path="${repo_root}/.github/workflows/ci.yml"
+phase_validation_step_name="Run Phase 27 day-2 hardening validation"
+phase_coverage_guard_step_name="Run Phase 27 workflow coverage guard"
+phase_coverage_guard_command="bash scripts/test-verify-ci-phase-27-workflow-coverage.sh"
 validation_doc="${repo_root}/docs/phase-27-day-2-hardening-validation.md"
 restore_readiness_test="${repo_root}/control-plane/tests/test_service_persistence_restore_readiness.py"
 runtime_auth_test="${repo_root}/control-plane/tests/test_phase21_runtime_auth_validation.py"
@@ -68,10 +71,45 @@ require_fixed_line "${runtime_secret_test}" "    def test_runtime_config_reloads
 require_fixed_line "${validation_doc_test}" "class Phase27Day2HardeningValidationTests(unittest.TestCase):"
 
 require_fixed_line "${workflow_path}" "      - name: Run Phase 27 day-2 hardening validation"
-require_fixed_line "${workflow_path}" "          bash scripts/verify-phase-27-day-2-hardening-validation.sh"
-require_fixed_line "${workflow_path}" "          python3 -m unittest control-plane.tests.test_phase27_day2_hardening_validation control-plane.tests.test_service_persistence_restore_readiness.RestoreReadinessPersistenceTests.test_service_phase21_backup_restore_and_restore_drill_preserve_record_chain control-plane.tests.test_service_persistence_restore_readiness.RestoreReadinessPersistenceTests.test_service_phase21_restore_drill_fails_closed_when_runtime_bindings_missing_after_restore control-plane.tests.test_service_persistence_restore_readiness.RestoreReadinessPersistenceTests.test_service_phase21_readiness_surfaces_source_and_automation_health control-plane.tests.test_phase21_runtime_auth_validation.Phase21RuntimeAuthValidationTests.test_startup_status_reports_missing_reviewed_identity_provider_binding control-plane.tests.test_phase21_runtime_auth_validation.Phase21RuntimeAuthValidationTests.test_protected_surface_request_rejects_unreviewed_identity_provider_boundary control-plane.tests.test_runtime_secret_boundary.RuntimeSecretBoundaryTests.test_runtime_config_fails_closed_when_openbao_backend_is_unavailable control-plane.tests.test_runtime_secret_boundary.RuntimeSecretBoundaryTests.test_runtime_config_reloads_rotated_openbao_secret_on_fresh_load"
 require_fixed_line "${workflow_path}" "      - name: Run Phase 27 workflow coverage guard"
 require_fixed_line "${workflow_path}" "        run: bash scripts/test-verify-ci-phase-27-workflow-coverage.sh"
-require_fixed_line "${workflow_path}" "          bash scripts/test-verify-phase-27-day-2-hardening-validation.sh"
+
+. "${repo_root}/scripts/ci-workflow-phase-helper.sh"
+
+active_run_commands="$(collect_active_run_commands)"
+phase_validation_commands="$(extract_step_run_commands "${phase_validation_step_name}")"
+
+if [[ -z "${phase_validation_commands}" ]]; then
+  echo "Missing CI workflow step commands for ${phase_validation_step_name}" >&2
+  exit 1
+fi
+
+for command in \
+  "bash scripts/verify-phase-27-day-2-hardening-validation.sh" \
+  "python3 -m unittest control-plane.tests.test_phase27_day2_hardening_validation control-plane.tests.test_service_persistence_restore_readiness.RestoreReadinessPersistenceTests.test_service_phase21_backup_restore_and_restore_drill_preserve_record_chain control-plane.tests.test_service_persistence_restore_readiness.RestoreReadinessPersistenceTests.test_service_phase21_restore_drill_fails_closed_when_runtime_bindings_missing_after_restore control-plane.tests.test_service_persistence_restore_readiness.RestoreReadinessPersistenceTests.test_service_phase21_readiness_surfaces_source_and_automation_health control-plane.tests.test_phase21_runtime_auth_validation.Phase21RuntimeAuthValidationTests.test_startup_status_reports_missing_reviewed_identity_provider_binding control-plane.tests.test_phase21_runtime_auth_validation.Phase21RuntimeAuthValidationTests.test_protected_surface_request_rejects_unreviewed_identity_provider_boundary control-plane.tests.test_runtime_secret_boundary.RuntimeSecretBoundaryTests.test_runtime_config_fails_closed_when_openbao_backend_is_unavailable control-plane.tests.test_runtime_secret_boundary.RuntimeSecretBoundaryTests.test_runtime_config_reloads_rotated_openbao_secret_on_fresh_load"
+do
+  if ! grep -Fqx -- "${command}" <<<"${phase_validation_commands}" >/dev/null; then
+    echo "Missing required Phase 27 validation command in ${phase_validation_step_name}: ${command}" >&2
+    exit 1
+  fi
+done
+
+if ! grep -Fqx -- "bash scripts/test-verify-phase-27-day-2-hardening-validation.sh" <<<"${active_run_commands}" >/dev/null; then
+  echo "Missing required Phase 27 focused shell test command in CI workflow: bash scripts/test-verify-phase-27-day-2-hardening-validation.sh" >&2
+  exit 1
+fi
+
+phase_coverage_guard_commands="$(extract_step_run_commands "${phase_coverage_guard_step_name}")"
+if [[ -z "${phase_coverage_guard_commands}" ]]; then
+  echo "Missing dedicated Phase 27 workflow coverage guard step in CI workflow: ${phase_coverage_guard_step_name}" >&2
+  exit 1
+fi
+
+if [[ "$(printf '%s\n' "${phase_coverage_guard_commands}")" != "${phase_coverage_guard_command}" ]]; then
+  echo "Dedicated Phase 27 workflow coverage guard step must run exactly: ${phase_coverage_guard_command}" >&2
+  echo "Found:" >&2
+  printf '%s\n' "${phase_coverage_guard_commands}" >&2
+  exit 1
+fi
 
 echo "Phase 27 day-2 hardening validation artifacts and CI wiring are present and aligned."

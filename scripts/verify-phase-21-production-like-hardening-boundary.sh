@@ -23,6 +23,9 @@ docs_test="${repo_root}/control-plane/tests/test_phase21_production_like_hardeni
 validation_test="${repo_root}/control-plane/tests/test_phase21_production_like_hardening_boundary_validation.py"
 end_to_end_test="${repo_root}/control-plane/tests/test_phase21_end_to_end_validation.py"
 workflow_path="${repo_root}/.github/workflows/ci.yml"
+phase_validation_step_name="Run Phase 21 production-like hardening boundary validation"
+phase_coverage_guard_step_name="Run Phase 21 workflow coverage guard"
+phase_coverage_guard_command="bash scripts/test-verify-ci-phase-21-workflow-coverage.sh"
 roadmap_filename="Phase 16-21 Epic Roadmap.md"
 roadmap_relative_path="docs/${roadmap_filename}"
 roadmap_path="${repo_root}/${roadmap_relative_path}"
@@ -200,10 +203,45 @@ require_fixed_line "${end_to_end_test}" '    def test_phase21_end_to_end_auth_bo
 require_fixed_line "${end_to_end_test}" '    def test_phase21_end_to_end_restore_and_readiness_preserve_phase20_live_path('
 require_fixed_line "${end_to_end_test}" '    def test_phase21_end_to_end_second_source_onboarding_stays_narrow('
 require_fixed_line "${workflow_path}" '      - name: Run Phase 21 production-like hardening boundary validation'
-require_fixed_line "${workflow_path}" '          bash scripts/verify-phase-21-production-like-hardening-boundary.sh'
-require_fixed_line "${workflow_path}" '          python3 -m unittest control-plane.tests.test_phase21_end_to_end_validation control-plane.tests.test_phase21_production_like_hardening_boundary_docs control-plane.tests.test_phase21_production_like_hardening_boundary_validation'
 require_fixed_line "${workflow_path}" '      - name: Run Phase 21 workflow coverage guard'
 require_fixed_line "${workflow_path}" '        run: bash scripts/test-verify-ci-phase-21-workflow-coverage.sh'
-require_fixed_line "${workflow_path}" '          bash scripts/test-verify-phase-21-production-like-hardening-boundary.sh'
+
+. "${repo_root}/scripts/ci-workflow-phase-helper.sh"
+
+active_run_commands="$(collect_active_run_commands)"
+phase_validation_commands="$(extract_step_run_commands "${phase_validation_step_name}")"
+
+if [[ -z "${phase_validation_commands}" ]]; then
+  echo "Missing CI workflow step commands for ${phase_validation_step_name}" >&2
+  exit 1
+fi
+
+for command in \
+  "bash scripts/verify-phase-21-production-like-hardening-boundary.sh" \
+  "python3 -m unittest control-plane.tests.test_phase21_end_to_end_validation control-plane.tests.test_phase21_production_like_hardening_boundary_docs control-plane.tests.test_phase21_production_like_hardening_boundary_validation"
+do
+  if ! grep -Fqx -- "${command}" <<<"${phase_validation_commands}" >/dev/null; then
+    echo "Missing required Phase 21 validation command in ${phase_validation_step_name}: ${command}" >&2
+    exit 1
+  fi
+done
+
+if ! grep -Fqx -- "bash scripts/test-verify-phase-21-production-like-hardening-boundary.sh" <<<"${active_run_commands}" >/dev/null; then
+  echo "Missing required Phase 21 focused shell test command in CI workflow: bash scripts/test-verify-phase-21-production-like-hardening-boundary.sh" >&2
+  exit 1
+fi
+
+phase_coverage_guard_commands="$(extract_step_run_commands "${phase_coverage_guard_step_name}")"
+if [[ -z "${phase_coverage_guard_commands}" ]]; then
+  echo "Missing dedicated Phase 21 workflow coverage guard step in CI workflow: ${phase_coverage_guard_step_name}" >&2
+  exit 1
+fi
+
+if [[ "$(printf '%s\n' "${phase_coverage_guard_commands}")" != "${phase_coverage_guard_command}" ]]; then
+  echo "Dedicated Phase 21 workflow coverage guard step must run exactly: ${phase_coverage_guard_command}" >&2
+  echo "Found:" >&2
+  printf '%s\n' "${phase_coverage_guard_commands}" >&2
+  exit 1
+fi
 
 echo "Phase 21 production-like hardening design and validation artifacts are present and aligned."

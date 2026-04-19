@@ -4,6 +4,9 @@ set -euo pipefail
 
 repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 workflow_path="${repo_root}/.github/workflows/ci.yml"
+phase_validation_step_name="Run Phase 23 authority-closure validation"
+phase_coverage_guard_step_name="Run Phase 23 workflow coverage guard"
+phase_coverage_guard_command="bash scripts/test-verify-ci-phase-23-workflow-coverage.sh"
 e2e_test="${repo_root}/control-plane/tests/test_phase23_end_to_end_validation.py"
 approval_test="${repo_root}/control-plane/tests/test_phase23_approval_surface_validation.py"
 transition_test="${repo_root}/control-plane/tests/test_phase23_transition_logging_validation.py"
@@ -53,10 +56,45 @@ require_fixed_line "${substrate_test}" "class Phase23SubstrateSimplificationVali
 require_fixed_line "${substrate_test}" "    def test_reviewed_security_mainline_declares_shuffle_as_single_routine_substrate("
 
 require_fixed_line "${workflow_path}" "      - name: Run Phase 23 authority-closure validation"
-require_fixed_line "${workflow_path}" "          bash scripts/verify-phase-23-authority-closure.sh"
-require_fixed_line "${workflow_path}" "          python3 -m unittest control-plane.tests.test_phase23_end_to_end_validation control-plane.tests.test_phase23_approval_surface_validation control-plane.tests.test_phase23_transition_logging_validation control-plane.tests.test_phase23_substrate_simplification_validation"
 require_fixed_line "${workflow_path}" "      - name: Run Phase 23 workflow coverage guard"
 require_fixed_line "${workflow_path}" "        run: bash scripts/test-verify-ci-phase-23-workflow-coverage.sh"
-require_fixed_line "${workflow_path}" "          bash scripts/test-verify-phase-23-authority-closure.sh"
+
+. "${repo_root}/scripts/ci-workflow-phase-helper.sh"
+
+active_run_commands="$(collect_active_run_commands)"
+phase_validation_commands="$(extract_step_run_commands "${phase_validation_step_name}")"
+
+if [[ -z "${phase_validation_commands}" ]]; then
+  echo "Missing CI workflow step commands for ${phase_validation_step_name}" >&2
+  exit 1
+fi
+
+for command in \
+  "bash scripts/verify-phase-23-authority-closure.sh" \
+  "python3 -m unittest control-plane.tests.test_phase23_end_to_end_validation control-plane.tests.test_phase23_approval_surface_validation control-plane.tests.test_phase23_transition_logging_validation control-plane.tests.test_phase23_substrate_simplification_validation"
+do
+  if ! grep -Fqx -- "${command}" <<<"${phase_validation_commands}" >/dev/null; then
+    echo "Missing required Phase 23 validation command in ${phase_validation_step_name}: ${command}" >&2
+    exit 1
+  fi
+done
+
+if ! grep -Fqx -- "bash scripts/test-verify-phase-23-authority-closure.sh" <<<"${active_run_commands}" >/dev/null; then
+  echo "Missing required Phase 23 focused shell test command in CI workflow: bash scripts/test-verify-phase-23-authority-closure.sh" >&2
+  exit 1
+fi
+
+phase_coverage_guard_commands="$(extract_step_run_commands "${phase_coverage_guard_step_name}")"
+if [[ -z "${phase_coverage_guard_commands}" ]]; then
+  echo "Missing dedicated Phase 23 workflow coverage guard step in CI workflow: ${phase_coverage_guard_step_name}" >&2
+  exit 1
+fi
+
+if [[ "$(printf '%s\n' "${phase_coverage_guard_commands}")" != "${phase_coverage_guard_command}" ]]; then
+  echo "Dedicated Phase 23 workflow coverage guard step must run exactly: ${phase_coverage_guard_command}" >&2
+  echo "Found:" >&2
+  printf '%s\n' "${phase_coverage_guard_commands}" >&2
+  exit 1
+fi
 
 echo "Phase 23 authority-closure validation artifacts and CI wiring are present and aligned."
