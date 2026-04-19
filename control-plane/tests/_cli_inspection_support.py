@@ -105,6 +105,45 @@ class ControlPlaneCliInspectionTestBase(unittest.TestCase):
         ].transitioned_at
         return store, service, promoted_case, promoted_case.evidence_ids[0], reviewed_at
 
+    def _build_phase19_in_scope_alert_without_case(
+        self,
+        *,
+        store: object | None = None,
+        host: str | None = None,
+        port: int | None = None,
+    ) -> tuple[object, AegisOpsControlPlaneService, AlertRecord, str, datetime]:
+        if store is None:
+            store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1" if host is None else host,
+                port=0 if port is None else port,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+            ),
+            store=store,
+        )
+        admitted = service.ingest_wazuh_alert(
+            raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
+            authorization_header="Bearer reviewed-shared-secret",  # noqa: S106 - test fixture secret
+            forwarded_proto="https",
+            reverse_proxy_secret_header="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+            peer_addr="127.0.0.1",
+        )
+        alert = admitted.alert
+        evidence_records = tuple(
+            evidence
+            for evidence in store.list(EvidenceRecord)
+            if evidence.alert_id == alert.alert_id
+        )
+        if not evidence_records:
+            raise AssertionError("expected reviewed alert fixture to persist linked evidence")
+        reviewed_at = service.list_lifecycle_transitions("alert", alert.alert_id)[-1].transitioned_at
+        return store, service, alert, evidence_records[0].evidence_id, reviewed_at
+
     def _build_phase19_out_of_scope_case(
         self,
         *,

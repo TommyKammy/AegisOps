@@ -460,14 +460,14 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
         )
 
     def test_cli_records_bounded_operator_casework_actions(self) -> None:
-        _, service, promoted_case, evidence_id, reviewed_at = (
-            self._build_phase19_in_scope_case()
+        _, service, alert, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_alert_without_case()
         )
         handoff_at = reviewed_at + timedelta(hours=8)
 
         promote_stdout = io.StringIO()
         main.main(
-            ["promote-alert-to-case", "--alert-id", promoted_case.alert_id],
+            ["promote-alert-to-case", "--alert-id", alert.alert_id],
             stdout=promote_stdout,
             service=service,
         )
@@ -609,8 +609,8 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
         )
 
     def test_long_running_runtime_surface_records_bounded_operator_casework_actions(self) -> None:
-        _, service, promoted_case, evidence_id, reviewed_at = (
-            self._build_phase19_in_scope_case(host="127.0.0.1", port=0)
+        _, service, alert, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_alert_without_case(host="127.0.0.1", port=0)
         )
         handoff_at = reviewed_at + timedelta(hours=8)
 
@@ -654,7 +654,7 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
 
                 promoted_case_payload = post_json(
                     "/operator/promote-alert-to-case",
-                    {"alert_id": promoted_case.alert_id},
+                    {"alert_id": alert.alert_id},
                 )
                 case_id = promoted_case_payload["case_id"]
                 self.assertEqual(promoted_case_payload["lifecycle_state"], "open")
