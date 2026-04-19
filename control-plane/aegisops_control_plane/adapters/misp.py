@@ -42,7 +42,7 @@ def _normalize_mapping_sequence(
 
 def _normalize_indicator_value(object_type: str, value: object, field_name: str) -> str:
     normalized_value = _require_non_empty_string(value, field_name)
-    if object_type in {"domain", "url", "ip", "sha1", "sha256", "md5"}:
+    if object_type in {"domain", "ip", "sha1", "sha256", "md5"}:
         return normalized_value.lower()
     return normalized_value
 
