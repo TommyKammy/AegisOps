@@ -94,6 +94,12 @@ class DetectionLifecycleService:
             else:
                 resolved_case_id = requested_case_id or service._next_identifier("case")
 
+            existing_case = service._store.get(CaseRecord, resolved_case_id)
+            if alert.case_id is not None and existing_case is None:
+                raise LookupError(
+                    f"Alert {alert_id!r} references missing case {resolved_case_id!r}"
+                )
+
             evidence_records = service._list_alert_evidence_records(
                 alert_id=alert.alert_id,
                 case_id=resolved_case_id,
@@ -135,7 +141,6 @@ class DetectionLifecycleService:
                     )
                 )
 
-            existing_case = service._store.get(CaseRecord, resolved_case_id)
             if existing_case is not None:
                 if (
                     existing_case.alert_id is not None
@@ -304,130 +309,144 @@ class DetectionLifecycleService:
             )
         materially_new_work = admission.materially_new_work
         reviewed_context = self._merge_reviewed_context({}, admission.reviewed_context)
+        with service._store.transaction():
+            existing_reconciliations = [
+                record
+                for record in service._store.list(ReconciliationRecord)
+                if record.correlation_key == correlation_key and record.alert_id is not None
+            ]
+            latest_reconciliation = max(
+                existing_reconciliations,
+                key=lambda record: record.compared_at,
+                default=None,
+            )
+            analytic_signal_id = service._resolve_analytic_signal_id(
+                analytic_signal_id=analytic_signal_id,
+                finding_id=finding_id,
+                correlation_key=correlation_key,
+                substrate_detection_record_id=substrate_detection_record_id,
+                latest_reconciliation=latest_reconciliation,
+            )
 
-        existing_reconciliations = [
-            record
-            for record in service._store.list(ReconciliationRecord)
-            if record.correlation_key == correlation_key and record.alert_id is not None
-        ]
-        latest_reconciliation = max(
-            existing_reconciliations,
-            key=lambda record: record.compared_at,
-            default=None,
-        )
-        analytic_signal_id = service._resolve_analytic_signal_id(
-            analytic_signal_id=analytic_signal_id,
-            finding_id=finding_id,
-            correlation_key=correlation_key,
-            substrate_detection_record_id=substrate_detection_record_id,
-            latest_reconciliation=latest_reconciliation,
-        )
-
-        if latest_reconciliation is None:
-            alert = service.persist_record(
-                AlertRecord(
-                    alert_id=service._next_identifier("alert"),
-                    finding_id=finding_id,
-                    analytic_signal_id=analytic_signal_id,
-                    case_id=None,
-                    lifecycle_state="new",
-                    reviewed_context=reviewed_context,
-                )
-            )
-            disposition = "created"
-            linked_finding_ids = (finding_id,)
-            linked_signal_ids = (
-                (analytic_signal_id,) if analytic_signal_id is not None else tuple()
-            )
-            linked_substrate_detection_ids = service._merge_linked_ids(
-                (),
-                substrate_detection_record_id,
-            )
-            linked_case_ids = service._merge_linked_ids((), alert.case_id)
-            persisted_first_seen = first_seen_at
-            persisted_last_seen = last_seen_at
-        else:
-            alert = service._store.get(AlertRecord, latest_reconciliation.alert_id)
-            if alert is None:
-                raise LookupError(
-                    f"Missing alert {latest_reconciliation.alert_id!r} for correlation key {correlation_key!r}"
-                )
-            merged_reviewed_context = self._merge_reviewed_context(
-                alert.reviewed_context,
-                admission.reviewed_context,
-            )
-            existing_finding_ids = latest_reconciliation.subject_linkage.get("finding_ids")
-            existing_signal_ids = latest_reconciliation.subject_linkage.get(
-                "analytic_signal_ids"
-            )
-            existing_substrate_detection_ids = latest_reconciliation.subject_linkage.get(
-                "substrate_detection_record_ids"
-            )
-            existing_case_ids = latest_reconciliation.subject_linkage.get("case_ids")
-            linked_finding_ids = service._merge_linked_ids(
-                existing_finding_ids,
-                finding_id,
-            )
-            linked_signal_ids = service._merge_linked_ids(
-                existing_signal_ids,
-                analytic_signal_id,
-            )
-            linked_substrate_detection_ids = service._merge_linked_ids(
-                existing_substrate_detection_ids,
-                substrate_detection_record_id,
-            )
-            linked_case_ids = service._merge_linked_ids(
-                existing_case_ids,
-                alert.case_id,
-            )
-            persisted_first_seen = min(
-                latest_reconciliation.first_seen_at or first_seen_at,
-                first_seen_at,
-            )
-            persisted_last_seen = max(
-                latest_reconciliation.last_seen_at or last_seen_at,
-                last_seen_at,
-            )
-            already_linked = (
-                service._linked_id_exists(existing_finding_ids, finding_id)
-                and (
-                    analytic_signal_id is None
-                    or service._linked_id_exists(existing_signal_ids, analytic_signal_id)
-                )
-                and (
-                    substrate_detection_record_id is None
-                    or service._linked_id_exists(
-                        existing_substrate_detection_ids,
-                        substrate_detection_record_id,
-                    )
-                )
-            )
-            if materially_new_work:
+            if latest_reconciliation is None:
                 alert = service.persist_record(
-                    replace(
-                        alert,
+                    AlertRecord(
+                        alert_id=service._next_identifier("alert"),
                         finding_id=finding_id,
                         analytic_signal_id=analytic_signal_id,
-                        reviewed_context=merged_reviewed_context,
+                        case_id=None,
+                        lifecycle_state="new",
+                        reviewed_context=reviewed_context,
                     )
                 )
-                disposition = "updated"
-            elif merged_reviewed_context != alert.reviewed_context:
-                alert = service.persist_record(
-                    replace(
-                        alert,
-                        reviewed_context=merged_reviewed_context,
-                    )
+                disposition = "created"
+                linked_finding_ids = (finding_id,)
+                linked_signal_ids = (
+                    (analytic_signal_id,) if analytic_signal_id is not None else tuple()
                 )
-                disposition = "updated"
-            elif already_linked:
-                disposition = "deduplicated"
+                linked_substrate_detection_ids = service._merge_linked_ids(
+                    (),
+                    substrate_detection_record_id,
+                )
+                linked_case_ids = service._merge_linked_ids((), alert.case_id)
+                persisted_first_seen = first_seen_at
+                persisted_last_seen = last_seen_at
             else:
-                disposition = "restated"
+                alert = service._store.get(AlertRecord, latest_reconciliation.alert_id)
+                if alert is None:
+                    raise LookupError(
+                        f"Missing alert {latest_reconciliation.alert_id!r} for correlation key {correlation_key!r}"
+                    )
+                merged_reviewed_context = self._merge_reviewed_context(
+                    alert.reviewed_context,
+                    admission.reviewed_context,
+                )
+                existing_finding_ids = latest_reconciliation.subject_linkage.get("finding_ids")
+                existing_signal_ids = latest_reconciliation.subject_linkage.get(
+                    "analytic_signal_ids"
+                )
+                existing_substrate_detection_ids = latest_reconciliation.subject_linkage.get(
+                    "substrate_detection_record_ids"
+                )
+                existing_case_ids = latest_reconciliation.subject_linkage.get("case_ids")
+                linked_finding_ids = service._merge_linked_ids(
+                    existing_finding_ids,
+                    finding_id,
+                )
+                linked_signal_ids = service._merge_linked_ids(
+                    existing_signal_ids,
+                    analytic_signal_id,
+                )
+                linked_substrate_detection_ids = service._merge_linked_ids(
+                    existing_substrate_detection_ids,
+                    substrate_detection_record_id,
+                )
+                linked_case_ids = service._merge_linked_ids(
+                    existing_case_ids,
+                    alert.case_id,
+                )
+                persisted_first_seen = min(
+                    latest_reconciliation.first_seen_at or first_seen_at,
+                    first_seen_at,
+                )
+                persisted_last_seen = max(
+                    latest_reconciliation.last_seen_at or last_seen_at,
+                    last_seen_at,
+                )
+                already_linked = (
+                    service._linked_id_exists(existing_finding_ids, finding_id)
+                    and (
+                        analytic_signal_id is None
+                        or service._linked_id_exists(
+                            existing_signal_ids,
+                            analytic_signal_id,
+                        )
+                    )
+                    and (
+                        substrate_detection_record_id is None
+                        or service._linked_id_exists(
+                            existing_substrate_detection_ids,
+                            substrate_detection_record_id,
+                        )
+                    )
+                )
+                if materially_new_work:
+                    alert = service.persist_record(
+                        replace(
+                            alert,
+                            finding_id=finding_id,
+                            analytic_signal_id=analytic_signal_id,
+                            reviewed_context=merged_reviewed_context,
+                        )
+                    )
+                    disposition = "updated"
+                elif merged_reviewed_context != alert.reviewed_context:
+                    alert = service.persist_record(
+                        replace(
+                            alert,
+                            reviewed_context=merged_reviewed_context,
+                        )
+                    )
+                    disposition = "updated"
+                elif analytic_signal_id != alert.analytic_signal_id:
+                    alert = service.persist_record(
+                        replace(
+                            alert,
+                            analytic_signal_id=analytic_signal_id,
+                        )
+                    )
+                    disposition = "restated"
+                elif already_linked:
+                    disposition = "deduplicated"
+                else:
+                    disposition = "restated"
 
-            if alert.case_id is not None:
-                existing_case = service._store.get(CaseRecord, alert.case_id)
-                if existing_case is not None:
+                if alert.case_id is not None:
+                    existing_case = service._store.get(CaseRecord, alert.case_id)
+                    if existing_case is None:
+                        raise LookupError(
+                            f"Alert {alert.alert_id!r} references missing case {alert.case_id!r}"
+                        )
                     merged_case_reviewed_context = self._merge_reviewed_context(
                         existing_case.reviewed_context,
                         alert.reviewed_context,
@@ -440,81 +459,84 @@ class DetectionLifecycleService:
                             )
                         )
 
-        if analytic_signal_id is not None:
-            existing_signal = service._store.get(AnalyticSignalRecord, analytic_signal_id)
-            signal_reviewed_context = self._merge_reviewed_context(
-                alert.reviewed_context,
-                admission.reviewed_context,
-            )
-            signal_alert_ids = service._merge_linked_ids(
-                existing_signal.alert_ids if existing_signal is not None else (),
-                alert.alert_id,
-            )
-            signal_case_ids = service._merge_linked_ids(
-                existing_signal.case_ids if existing_signal is not None else (),
-                alert.case_id,
-            )
-            signal_first_seen = first_seen_at
-            if existing_signal is not None and existing_signal.first_seen_at is not None:
-                signal_first_seen = min(existing_signal.first_seen_at, first_seen_at)
-            signal_last_seen = last_seen_at
-            if existing_signal is not None and existing_signal.last_seen_at is not None:
-                signal_last_seen = max(existing_signal.last_seen_at, last_seen_at)
-            service.persist_record(
-                AnalyticSignalRecord(
-                    analytic_signal_id=analytic_signal_id,
-                    substrate_detection_record_id=(
-                        substrate_detection_record_id
-                        if substrate_detection_record_id is not None
-                        else (
-                            existing_signal.substrate_detection_record_id
-                            if existing_signal is not None
-                            else None
-                        )
-                    ),
+            if analytic_signal_id is not None:
+                existing_signal = service._store.get(
+                    AnalyticSignalRecord,
+                    analytic_signal_id,
+                )
+                signal_reviewed_context = self._merge_reviewed_context(
+                    alert.reviewed_context,
+                    admission.reviewed_context,
+                )
+                signal_alert_ids = service._merge_linked_ids(
+                    existing_signal.alert_ids if existing_signal is not None else (),
+                    alert.alert_id,
+                )
+                signal_case_ids = service._merge_linked_ids(
+                    existing_signal.case_ids if existing_signal is not None else (),
+                    alert.case_id,
+                )
+                signal_first_seen = first_seen_at
+                if existing_signal is not None and existing_signal.first_seen_at is not None:
+                    signal_first_seen = min(existing_signal.first_seen_at, first_seen_at)
+                signal_last_seen = last_seen_at
+                if existing_signal is not None and existing_signal.last_seen_at is not None:
+                    signal_last_seen = max(existing_signal.last_seen_at, last_seen_at)
+                service.persist_record(
+                    AnalyticSignalRecord(
+                        analytic_signal_id=analytic_signal_id,
+                        substrate_detection_record_id=(
+                            substrate_detection_record_id
+                            if substrate_detection_record_id is not None
+                            else (
+                                existing_signal.substrate_detection_record_id
+                                if existing_signal is not None
+                                else None
+                            )
+                        ),
+                        finding_id=finding_id,
+                        alert_ids=signal_alert_ids,
+                        case_ids=signal_case_ids,
+                        correlation_key=correlation_key,
+                        first_seen_at=signal_first_seen,
+                        last_seen_at=signal_last_seen,
+                        lifecycle_state="active",
+                        reviewed_context=signal_reviewed_context,
+                    )
+                )
+
+            service._link_case_to_analytic_signals(linked_signal_ids, alert.case_id)
+
+            reconciliation = service.persist_record(
+                ReconciliationRecord(
+                    reconciliation_id=service._next_identifier("reconciliation"),
+                    subject_linkage={
+                        "alert_ids": (alert.alert_id,),
+                        "case_ids": linked_case_ids,
+                        "substrate_detection_record_ids": linked_substrate_detection_ids,
+                        "finding_ids": linked_finding_ids,
+                        "analytic_signal_ids": linked_signal_ids,
+                    },
+                    alert_id=alert.alert_id,
                     finding_id=finding_id,
-                    alert_ids=signal_alert_ids,
-                    case_ids=signal_case_ids,
+                    analytic_signal_id=analytic_signal_id,
+                    execution_run_id=None,
+                    linked_execution_run_ids=(),
                     correlation_key=correlation_key,
-                    first_seen_at=signal_first_seen,
-                    last_seen_at=signal_last_seen,
-                    lifecycle_state="active",
-                    reviewed_context=signal_reviewed_context,
+                    first_seen_at=persisted_first_seen,
+                    last_seen_at=persisted_last_seen,
+                    ingest_disposition=disposition,
+                    mismatch_summary=f"{disposition} upstream analytic signal into alert lifecycle",
+                    compared_at=datetime.now(timezone.utc),
+                    lifecycle_state="matched",
                 )
             )
 
-        service._link_case_to_analytic_signals(linked_signal_ids, alert.case_id)
-
-        reconciliation = service.persist_record(
-            ReconciliationRecord(
-                reconciliation_id=service._next_identifier("reconciliation"),
-                subject_linkage={
-                    "alert_ids": (alert.alert_id,),
-                    "case_ids": linked_case_ids,
-                    "substrate_detection_record_ids": linked_substrate_detection_ids,
-                    "finding_ids": linked_finding_ids,
-                    "analytic_signal_ids": linked_signal_ids,
-                },
-                alert_id=alert.alert_id,
-                finding_id=finding_id,
-                analytic_signal_id=analytic_signal_id,
-                execution_run_id=None,
-                linked_execution_run_ids=(),
-                correlation_key=correlation_key,
-                first_seen_at=persisted_first_seen,
-                last_seen_at=persisted_last_seen,
-                ingest_disposition=disposition,
-                mismatch_summary=f"{disposition} upstream analytic signal into alert lifecycle",
-                compared_at=datetime.now(timezone.utc),
-                lifecycle_state="matched",
+            return FindingAlertIngestResult(
+                alert=alert,
+                reconciliation=reconciliation,
+                disposition=disposition,
             )
-        )
-
-        return FindingAlertIngestResult(
-            alert=alert,
-            reconciliation=reconciliation,
-            disposition=disposition,
-        )
 
     def attach_native_detection_context(
         self,
