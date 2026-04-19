@@ -196,16 +196,52 @@ def action_review_chains_for_scope(
     record_index: _ActionReviewRecordIndex | None = None,
 ) -> tuple[dict[str, object], ...]:
     if record_index is not None:
-        matching_requests = list(
-            record_index.matching_requests(case_id=case_id, alert_id=alert_id)
-        )
+        if case_id is not None and alert_id is not None:
+            matching_by_id: dict[str, ActionRequestRecord] = {}
+            for scoped_request in (
+                *record_index.scoped_requests(case_id=case_id, alert_id=alert_id),
+                *record_index.scoped_requests(case_id=case_id, alert_id=None),
+                *record_index.scoped_requests(case_id=None, alert_id=alert_id),
+            ):
+                matching_by_id[scoped_request.action_request_id] = scoped_request
+            matching_requests = list(matching_by_id.values())
+        else:
+            matching_requests = list(
+                record_index.matching_requests(case_id=case_id, alert_id=alert_id)
+            )
     else:
         matching_requests = [
             record
             for record in service._store.list(ActionRequestRecord)
             if (
-                (case_id is not None and record.case_id == case_id)
-                or (alert_id is not None and record.alert_id == alert_id)
+                (
+                    case_id is not None
+                    and alert_id is not None
+                    and (
+                        (
+                            record.case_id == case_id
+                            and record.alert_id == alert_id
+                        )
+                        or (
+                            record.case_id == case_id
+                            and record.alert_id is None
+                        )
+                        or (
+                            record.case_id is None
+                            and record.alert_id == alert_id
+                        )
+                    )
+                )
+                or (
+                    alert_id is None
+                    and case_id is not None
+                    and record.case_id == case_id
+                )
+                or (
+                    case_id is None
+                    and alert_id is not None
+                    and record.alert_id == alert_id
+                )
             )
         ]
     matching_requests = [
@@ -801,11 +837,15 @@ def action_review_coordination_ticket_outcome(
         ),
     }
     if terminal_issue is not None:
-        outcome["timeout"] = {
+        issue_payload = {
             key: value
             for key, value in terminal_issue.items()
             if key != "category"
         }
+        if terminal_issue["category"] == "timeout":
+            outcome["timeout"] = issue_payload
+        else:
+            outcome["terminal_issue"] = issue_payload
     if mismatch is not None:
         outcome["mismatch"] = mismatch
     if manual_fallback is not None:

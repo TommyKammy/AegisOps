@@ -212,8 +212,9 @@ class Phase26EndToEndValidationTests(unittest.TestCase):
 
         self.assertEqual(review["action_execution_state"], "failed")
         self.assertEqual(outcome["status"], "failed")
-        self.assertEqual(outcome["timeout"]["path"], "provider")
-        self.assertEqual(outcome["timeout"]["reason"], "execution_failed")
+        self.assertEqual(outcome["terminal_issue"]["path"], "provider")
+        self.assertEqual(outcome["terminal_issue"]["reason"], "execution_failed")
+        self.assertNotIn("timeout", outcome)
         self.assertEqual(
             store.list(cli_inspection_tests.ActionExecutionRecord)[0].provenance[
                 "dispatch_failure"

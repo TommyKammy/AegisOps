@@ -1123,6 +1123,72 @@ class ActionReviewSurfacePersistenceTests(ServicePersistenceTestBase):
             ],
             replacement_request.action_request_id,
         )
+
+    def test_service_action_review_surfaces_require_exact_case_and_alert_scope_match(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Observed repository permission change requires tracked review.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            observation_id=observation.observation_id,
+            triage_owner="analyst-001",
+            triage_rationale="Privilege-impacting change needs durable business-hours follow-up.",
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep case detail scoped to the authoritative case and alert pair.",
+            lead_id=lead.lead_id,
+        )
+        matching_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-exact-scope-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-surface-exact-scope-001",
+        )
+        service.persist_record(
+            replace(
+                matching_request,
+                action_request_id="action-request-surface-exact-scope-sibling-001",
+                alert_id="alert-surface-exact-scope-sibling-001",
+                idempotency_key="idempotency-surface-exact-scope-sibling-001",
+                requested_at=matching_request.requested_at + timedelta(minutes=15),
+            )
+        )
+        service.persist_record(
+            replace(
+                matching_request,
+                action_request_id="action-request-surface-exact-scope-sibling-002",
+                case_id="case-surface-exact-scope-sibling-001",
+                idempotency_key="idempotency-surface-exact-scope-sibling-002",
+                requested_at=matching_request.requested_at + timedelta(minutes=30),
+            )
+        )
+
+        case_snapshot = service.inspect_case_detail(promoted_case.case_id).to_dict()
+
+        self.assertEqual(
+            case_snapshot["current_action_review"]["action_request_id"],
+            matching_request.action_request_id,
+        )
+        self.assertEqual(
+            [record["action_request_id"] for record in case_snapshot["action_reviews"]],
+            [matching_request.action_request_id],
+        )
+
     def test_approved_payload_binding_hash_normalizes_equivalent_datetime_offsets(
         self,
     ) -> None:

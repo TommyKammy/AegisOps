@@ -1266,7 +1266,7 @@ class CliInspectionActionReviewTests(ControlPlaneCliInspectionTestBase):
             "provider",
         )
 
-    def test_cli_inspect_case_detail_surfaces_create_tracking_ticket_provider_failure_as_timeout(
+    def test_cli_inspect_case_detail_surfaces_create_tracking_ticket_provider_failure(
         self,
     ) -> None:
         _, service, promoted_case, _evidence_id, reviewed_at = self._build_phase19_in_scope_case()
@@ -1298,13 +1298,14 @@ class CliInspectionActionReviewTests(ControlPlaneCliInspectionTestBase):
         review = payload["current_action_review"]
         self.assertEqual(review["coordination_ticket_outcome"]["status"], "failed")
         self.assertEqual(
-            review["coordination_ticket_outcome"]["timeout"]["reason"],
+            review["coordination_ticket_outcome"]["terminal_issue"]["reason"],
             "execution_failed",
         )
         self.assertEqual(
-            review["coordination_ticket_outcome"]["timeout"]["path"],
+            review["coordination_ticket_outcome"]["terminal_issue"]["path"],
             "provider",
         )
+        self.assertNotIn("timeout", review["coordination_ticket_outcome"])
 
     def test_cli_inspect_case_detail_prefers_provider_failure_over_derived_timeouts(
         self,
@@ -1372,13 +1373,14 @@ class CliInspectionActionReviewTests(ControlPlaneCliInspectionTestBase):
         )
         self.assertEqual(review["coordination_ticket_outcome"]["status"], "failed")
         self.assertEqual(
-            review["coordination_ticket_outcome"]["timeout"]["reason"],
+            review["coordination_ticket_outcome"]["terminal_issue"]["reason"],
             "execution_failed",
         )
         self.assertEqual(
-            review["coordination_ticket_outcome"]["timeout"]["path"],
+            review["coordination_ticket_outcome"]["terminal_issue"]["path"],
             "provider",
         )
+        self.assertNotIn("timeout", review["coordination_ticket_outcome"])
 
     def test_cli_inspect_case_detail_surfaces_create_tracking_ticket_manual_fallback(
         self,
