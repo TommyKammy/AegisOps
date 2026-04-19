@@ -19,6 +19,110 @@ for name, value in vars(support).items():
 
 
 class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
+    def test_service_delegates_detection_lifecycle_operations(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        ingest_result = SimpleNamespace(name="ingest-result")
+        native_result = SimpleNamespace(name="native-result")
+        attach_result = SimpleNamespace(name="attach-result")
+        promoted_case = SimpleNamespace(case_id="case-delegated-001")
+        adapter = SimpleNamespace(substrate_key="wazuh")
+        native_record = NativeDetectionRecord(
+            substrate_key="wazuh",
+            native_record_id="native-delegated-001",
+            record_kind="alert",
+            correlation_key="claim:delegated",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            metadata={},
+        )
+        admission = AnalyticSignalAdmission(
+            finding_id="finding-delegated-001",
+            analytic_signal_id="signal-delegated-001",
+            substrate_detection_record_id="substrate-delegated-001",
+            correlation_key="claim:delegated",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            reviewed_context={"source": {"source_family": "delegated"}},
+        )
+        lifecycle_delegate = mock.Mock()
+        lifecycle_delegate.ingest_finding_alert.return_value = ingest_result
+        lifecycle_delegate.promote_alert_to_case.return_value = promoted_case
+        lifecycle_delegate.ingest_native_detection_record.return_value = native_result
+        lifecycle_delegate.ingest_analytic_signal_admission.return_value = ingest_result
+        lifecycle_delegate.attach_native_detection_context.return_value = attach_result
+        service._detection_lifecycle_service = lifecycle_delegate
+
+        self.assertIs(
+            service.ingest_finding_alert(
+                finding_id="finding-delegated-001",
+                analytic_signal_id="signal-delegated-001",
+                substrate_detection_record_id="substrate-delegated-001",
+                correlation_key="claim:delegated",
+                first_seen_at=first_seen_at,
+                last_seen_at=first_seen_at,
+                materially_new_work=True,
+                reviewed_context={"source": {"source_family": "delegated"}},
+            ),
+            ingest_result,
+        )
+        self.assertIs(
+            service.promote_alert_to_case(
+                "alert-delegated-001",
+                case_id="case-delegated-001",
+                case_lifecycle_state="investigating",
+            ),
+            promoted_case,
+        )
+        self.assertIs(
+            service.ingest_native_detection_record(adapter, native_record),
+            native_result,
+        )
+        self.assertIs(
+            service._ingest_analytic_signal_admission(admission),
+            ingest_result,
+        )
+        self.assertIs(
+            service._attach_native_detection_context(
+                record=native_record,
+                ingest_result=ingest_result,
+                substrate_detection_record_id="substrate-delegated-001",
+            ),
+            attach_result,
+        )
+
+        lifecycle_delegate.ingest_finding_alert.assert_called_once_with(
+            finding_id="finding-delegated-001",
+            analytic_signal_id="signal-delegated-001",
+            substrate_detection_record_id="substrate-delegated-001",
+            correlation_key="claim:delegated",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            materially_new_work=True,
+            reviewed_context={"source": {"source_family": "delegated"}},
+        )
+        lifecycle_delegate.promote_alert_to_case.assert_called_once_with(
+            "alert-delegated-001",
+            case_id="case-delegated-001",
+            case_lifecycle_state="investigating",
+        )
+        lifecycle_delegate.ingest_native_detection_record.assert_called_once_with(
+            adapter,
+            native_record,
+        )
+        lifecycle_delegate.ingest_analytic_signal_admission.assert_called_once_with(
+            admission
+        )
+        lifecycle_delegate.attach_native_detection_context.assert_called_once_with(
+            record=native_record,
+            ingest_result=ingest_result,
+            substrate_detection_record_id="substrate-delegated-001",
+        )
+
     def test_service_merges_reviewed_context_for_existing_alert_updates(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
