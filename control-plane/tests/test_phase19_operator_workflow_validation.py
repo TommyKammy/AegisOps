@@ -650,7 +650,7 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                     servers[0].shutdown()
                 thread.join(timeout=2)
 
-    def test_reviewed_runtime_path_fail_closes_out_of_scope_alert_queue_and_detail_reads(
+    def test_reviewed_runtime_path_fail_closes_replayed_reviewed_family_queue_summary(
         self,
     ) -> None:
         store, _ = make_store()
@@ -670,16 +670,19 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                 _load_wazuh_fixture("github-audit-alert.json")
             ),
         )
+        service._assistant_provider_adapter = mock.Mock()
 
-        queue_snapshot = service.inspect_analyst_queue()
-
-        self.assertEqual(queue_snapshot.total_records, 0)
-        self.assertEqual(queue_snapshot.records, ())
         with self.assertRaisesRegex(
             ValueError,
-            "outside the approved Phase 19 Wazuh-backed GitHub audit and Entra ID live slice",
+            rf"alert {admitted.alert.alert_id!r} is outside the approved .* live slice",
         ):
-            service.inspect_alert_detail(admitted.alert.alert_id)
+            service.run_live_assistant_workflow(
+                workflow_task="queue_triage_summary",
+                record_family="alert",
+                record_id=admitted.alert.alert_id,
+            )
+
+        service._assistant_provider_adapter.generate.assert_not_called()
 
     def test_reviewed_runtime_path_surfaces_handoff_and_manual_fallback_visibility(
         self,
