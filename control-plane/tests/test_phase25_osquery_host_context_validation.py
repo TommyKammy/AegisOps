@@ -53,7 +53,7 @@ class _EvidenceSaveMutationStore:
     def create_action_request_if_absent(
         self,
         record: ActionRequestRecord,
-    ) -> ActionRequestRecord:
+    ) -> tuple[ActionRequestRecord, bool]:
         return self.inner.create_action_request_if_absent(record)
 
     def get(self, record_type: object, record_id: str) -> object | None:

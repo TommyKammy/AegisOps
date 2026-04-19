@@ -15,7 +15,12 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 
 from aegisops_control_plane.config import RuntimeConfig
-from aegisops_control_plane.models import ActionRequestRecord, CaseRecord, EvidenceRecord
+from aegisops_control_plane.models import (
+    ActionRequestRecord,
+    CaseRecord,
+    EvidenceRecord,
+    LifecycleTransitionRecord,
+)
 from aegisops_control_plane.service import AegisOpsControlPlaneService
 from postgres_test_support import make_store
 from tests.support.fixtures import load_wazuh_fixture
@@ -50,7 +55,7 @@ class _EvidenceSaveMutationStore:
     def create_action_request_if_absent(
         self,
         record: ActionRequestRecord,
-    ) -> ActionRequestRecord:
+    ) -> tuple[ActionRequestRecord, bool]:
         return self.inner.create_action_request_if_absent(record)
 
     def get(self, record_type: object, record_id: str) -> object | None:
@@ -92,7 +97,7 @@ class _ActionRequestMutationStore:
     def create_action_request_if_absent(
         self,
         record: ActionRequestRecord,
-    ) -> ActionRequestRecord:
+    ) -> tuple[ActionRequestRecord, bool]:
         if not self._mutated:
             self._mutated = True
             self.mutate_once()
@@ -315,6 +320,47 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
         self.assertEqual(
             action_request,
             inner_store.list(ActionRequestRecord)[0],
+        )
+
+    def test_create_endpoint_evidence_collection_request_reuses_existing_explicit_action_request_id(
+        self,
+    ) -> None:
+        store, service, promoted_case, anchor_evidence_id, _reviewed_at = (
+            self._build_host_bound_case()
+        )
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=4)
+
+        created = service.create_endpoint_evidence_collection_request(
+            case_id=promoted_case.case_id,
+            admitting_evidence_id=anchor_evidence_id,
+            requester_identity="analyst-001",
+            host_identifier="host-001",
+            evidence_gap="Need bounded read-only host triage to resolve the case evidence gap.",
+            artifact_classes=("collection_manifest", "triage_bundle", "tool_output_receipt"),
+            expires_at=expires_at,
+            action_request_id="action-request-explicit-001",
+        )
+        replayed = service.create_endpoint_evidence_collection_request(
+            case_id=promoted_case.case_id,
+            admitting_evidence_id=anchor_evidence_id,
+            requester_identity="analyst-001",
+            host_identifier="host-001",
+            evidence_gap="Need bounded read-only host triage to resolve the case evidence gap.",
+            artifact_classes=("collection_manifest", "triage_bundle", "tool_output_receipt"),
+            expires_at=expires_at,
+            action_request_id="action-request-explicit-001",
+        )
+
+        self.assertEqual(replayed, created)
+        self.assertEqual(store.list(ActionRequestRecord), (created,))
+        action_request_transitions = tuple(
+            record
+            for record in store.list(LifecycleTransitionRecord)
+            if record.subject_record_id == created.action_request_id
+        )
+        self.assertEqual(
+            len(action_request_transitions),
+            1,
         )
 
     def test_ingest_endpoint_evidence_artifacts_persists_subordinate_evidence_with_citation_metadata(

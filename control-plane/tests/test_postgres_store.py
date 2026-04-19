@@ -320,6 +320,14 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
 
         self.assertIn("begin;", migration_sql)
         self.assertIn("commit;", migration_sql)
+        self.assertIn("row_number() over", migration_sql)
+        self.assertIn("partition by idempotency_key", migration_sql)
+        self.assertIn("order by requested_at asc, action_request_id asc", migration_sql)
+        self.assertIn("where idempotency_key is not null", migration_sql)
+        self.assertIn(
+            "delete from aegisops_control.action_request_records as action_request",
+            migration_sql,
+        )
         self.assertIn(
             "create unique index if not exists action_request_records_idempotency_key_key",
             migration_sql,
@@ -1237,11 +1245,63 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             lifecycle_state="pending_approval",
         )
 
-        created = store.create_action_request_if_absent(first)
-        replayed = store.create_action_request_if_absent(duplicate)
+        created, created_new = store.create_action_request_if_absent(first)
+        replayed, replay_created = store.create_action_request_if_absent(duplicate)
 
         self.assertEqual(created, first)
         self.assertEqual(replayed, first)
+        self.assertTrue(created_new)
+        self.assertFalse(replay_created)
+        self.assertEqual(store.list(ActionRequestRecord), (first,))
+
+    def test_create_action_request_if_absent_rejects_conflicting_payload_hash(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        timestamp = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        first = ActionRequestRecord(
+            action_request_id="action-request-001",
+            approval_decision_id=None,
+            case_id="case-001",
+            alert_id="alert-001",
+            finding_id="finding-001",
+            idempotency_key="idempotency-001",
+            target_scope={"asset_id": "asset-001"},
+            requester_identity="analyst-001",
+            requested_payload={"action_type": "collect_endpoint_evidence_pack"},
+            policy_basis={"severity": "medium"},
+            policy_evaluation={"routing_target": "approval"},
+            payload_hash="payload-hash-001",
+            requested_at=timestamp,
+            expires_at=None,
+            lifecycle_state="pending_approval",
+        )
+        conflicting = ActionRequestRecord(
+            action_request_id="action-request-002",
+            approval_decision_id=None,
+            case_id="case-001",
+            alert_id="alert-001",
+            finding_id="finding-001",
+            idempotency_key="idempotency-001",
+            target_scope={"asset_id": "asset-001"},
+            requester_identity="analyst-001",
+            requested_payload={"action_type": "collect_endpoint_evidence_pack"},
+            policy_basis={"severity": "medium"},
+            policy_evaluation={"routing_target": "approval"},
+            payload_hash="payload-hash-002",
+            requested_at=timestamp,
+            expires_at=None,
+            lifecycle_state="pending_approval",
+        )
+
+        store.create_action_request_if_absent(first)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "idempotency_key already exists for a different action request payload",
+        ):
+            store.create_action_request_if_absent(conflicting)
+
         self.assertEqual(store.list(ActionRequestRecord), (first,))
 
     def test_store_freezes_nested_json_fields_after_round_trip(self) -> None:

@@ -148,7 +148,7 @@ class ControlPlaneStore(Protocol):
     def create_action_request_if_absent(
         self,
         record: ActionRequestRecord,
-    ) -> ActionRequestRecord:
+    ) -> tuple[ActionRequestRecord, bool]:
         ...
 
     def get(self, record_type: Type[RecordT], record_id: str) -> RecordT | None:
@@ -6329,46 +6329,61 @@ class AegisOpsControlPlaneService:
                 "endpoint-evidence-pack:"
                 + hashlib.sha256(idempotency_material.encode("utf-8")).hexdigest()
             )
-            normalized_action_request_id = self._resolve_new_record_identifier(
-                ActionRequestRecord,
+            normalized_action_request_id = self._normalize_optional_string(
                 action_request_id,
                 "action_request_id",
-                "action-request",
+            ) or self._next_identifier("action-request")
+            action_request_record = ActionRequestRecord(
+                action_request_id=normalized_action_request_id,
+                approval_decision_id=None,
+                case_id=case.case_id,
+                alert_id=case.alert_id,
+                finding_id=case.finding_id,
+                idempotency_key=idempotency_key,
+                target_scope=target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=expires_at,
+                lifecycle_state="pending_approval",
+                requester_identity=requester_identity,
+                requested_payload=requested_payload,
+                policy_basis={
+                    "severity": "medium",
+                    "target_scope": "single_asset",
+                    "action_reversibility": "reversible",
+                    "asset_criticality": "standard",
+                    "identity_criticality": "standard",
+                    "blast_radius": "single_target",
+                    "execution_constraint": "requires_isolated_executor",
+                },
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "approval_requirement_override": "human_required",
+                    "routing_target": "approval",
+                    "execution_surface_type": "executor",
+                    "execution_surface_id": "isolated-executor",
+                },
             )
-            action_request = self._store.create_action_request_if_absent(
-                ActionRequestRecord(
-                    action_request_id=normalized_action_request_id,
-                    approval_decision_id=None,
-                    case_id=case.case_id,
-                    alert_id=case.alert_id,
-                    finding_id=case.finding_id,
-                    idempotency_key=idempotency_key,
-                    target_scope=target_scope,
-                    payload_hash=payload_hash,
-                    requested_at=requested_at,
-                    expires_at=expires_at,
-                    lifecycle_state="pending_approval",
-                    requester_identity=requester_identity,
-                    requested_payload=requested_payload,
-                    policy_basis={
-                        "severity": "medium",
-                        "target_scope": "single_asset",
-                        "action_reversibility": "reversible",
-                        "asset_criticality": "standard",
-                        "identity_criticality": "standard",
-                        "blast_radius": "single_target",
-                        "execution_constraint": "requires_isolated_executor",
-                    },
-                    policy_evaluation={
-                        "approval_requirement": "human_required",
-                        "approval_requirement_override": "human_required",
-                        "routing_target": "approval",
-                        "execution_surface_type": "executor",
-                        "execution_surface_id": "isolated-executor",
-                    },
+            if action_request_id is not None:
+                existing_action_request = self._store.get(
+                    ActionRequestRecord,
+                    normalized_action_request_id,
                 )
+                if existing_action_request is not None:
+                    if (
+                        existing_action_request.idempotency_key
+                        != action_request_record.idempotency_key
+                        or existing_action_request.payload_hash
+                        != action_request_record.payload_hash
+                    ):
+                        raise ValueError(
+                            "action_request_id already exists for a different action request payload"
+                        )
+                    return existing_action_request
+            action_request, created = self._store.create_action_request_if_absent(
+                action_request_record
             )
-            if action_request.action_request_id == normalized_action_request_id:
+            if created:
                 for transition_record in self._build_lifecycle_transition_records(
                     action_request,
                     existing_record=None,

@@ -370,18 +370,18 @@ class FakePostgresCursor:
         idempotency_key = row.get("idempotency_key")
         returning_columns = [column.strip() for column in returning.split(",")]
         self.description = tuple((name,) for name in returning_columns)
-        if any(
-            existing_row.get("idempotency_key") == idempotency_key
-            for existing_row in table_rows.values()
-        ):
-            self._rows = []
-            return
         identifier_field = column_names[0]
         identifier_value = str(row[identifier_field])
         if identifier_value in table_rows:
             raise ValueError(
                 f"duplicate key value violates unique constraint {table}.{identifier_field}"
             )
+        if any(
+            existing_row.get("idempotency_key") == idempotency_key
+            for existing_row in table_rows.values()
+        ):
+            self._rows = []
+            return
         table_rows[identifier_value] = row
         self.connection.dirty = True
         self._rows = [{column: row[column] for column in returning_columns}]

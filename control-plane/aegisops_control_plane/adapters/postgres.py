@@ -917,7 +917,7 @@ class PostgresControlPlaneStore:
     def create_action_request_if_absent(
         self,
         record: ActionRequestRecord,
-    ) -> ActionRequestRecord:
+    ) -> tuple[ActionRequestRecord, bool]:
         _validate_record(record)
         table = self._table_config(ActionRequestRecord)
         field_names = table.record_fields
@@ -945,6 +945,7 @@ class PostgresControlPlaneStore:
             try:
                 cursor.execute(query, params)
                 row = cursor.fetchone()
+                created = row is not None
                 if row is None:
                     cursor.execute(existing_query, (record.idempotency_key,))
                     row = cursor.fetchone()
@@ -955,7 +956,12 @@ class PostgresControlPlaneStore:
                 row_mapping = _row_to_mapping(cursor, row)
             finally:
                 cursor.close()
-        return self._row_to_record(ActionRequestRecord, row_mapping)
+        authoritative = self._row_to_record(ActionRequestRecord, row_mapping)
+        if authoritative.payload_hash != record.payload_hash:
+            raise ValueError(
+                "idempotency_key already exists for a different action request payload"
+            )
+        return authoritative, created
 
     def get(self, record_type: Type[RecordT], record_id: str) -> RecordT | None:
         table = self._table_config(record_type)

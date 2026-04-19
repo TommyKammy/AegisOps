@@ -44,7 +44,7 @@ class TransactionMutationStore:
     def create_action_request_if_absent(
         self,
         record: ActionRequestRecord,
-    ) -> ActionRequestRecord:
+    ) -> tuple[ActionRequestRecord, bool]:
         return self.inner.create_action_request_if_absent(record)
 
     def get(self, record_type: object, record_id: str) -> object | None:
@@ -134,7 +134,7 @@ class ConcurrentListMutationStore:
     def create_action_request_if_absent(
         self,
         record: ActionRequestRecord,
-    ) -> ActionRequestRecord:
+    ) -> tuple[ActionRequestRecord, bool]:
         return self.inner.create_action_request_if_absent(record)
 
     def get(self, record_type: object, record_id: str) -> object | None:
@@ -217,7 +217,7 @@ class CommitFailingStore:
     def create_action_request_if_absent(
         self,
         record: ActionRequestRecord,
-    ) -> ActionRequestRecord:
+    ) -> tuple[ActionRequestRecord, bool]:
         return self.inner.create_action_request_if_absent(record)
 
     def get(self, record_type: object, record_id: str) -> object | None:
@@ -305,7 +305,7 @@ class RecordTypeSaveFailingStore:
     def create_action_request_if_absent(
         self,
         record: ActionRequestRecord,
-    ) -> ActionRequestRecord:
+    ) -> tuple[ActionRequestRecord, bool]:
         if self.record_type is ActionRequestRecord:
             raise RuntimeError(self.message)
         return self.inner.create_action_request_if_absent(record)
@@ -397,7 +397,7 @@ class ListCountingStore:
     def create_action_request_if_absent(
         self,
         record: ActionRequestRecord,
-    ) -> ActionRequestRecord:
+    ) -> tuple[ActionRequestRecord, bool]:
         return self.inner.create_action_request_if_absent(record)
 
     def get(self, record_type: object, record_id: str) -> object | None:
@@ -478,7 +478,7 @@ class OutOfBandMutationStore:
     def create_action_request_if_absent(
         self,
         record: ActionRequestRecord,
-    ) -> ActionRequestRecord:
+    ) -> tuple[ActionRequestRecord, bool]:
         return self.inner.create_action_request_if_absent(record)
 
     def get(self, record_type: object, record_id: str) -> object | None:
