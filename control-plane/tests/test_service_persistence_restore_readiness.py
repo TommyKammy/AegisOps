@@ -26,6 +26,33 @@ _PHASE21_LEGACY_MISSING_AUTHORITATIVE_FAMILIES = (
 )
 
 
+class IsolationLevelFallbackProbeStore:
+    def __init__(self, inner: object, nested_isolation_error: str) -> None:
+        self.inner = inner
+        self.nested_isolation_error = nested_isolation_error
+        self.transaction_isolation_levels: tuple[str | None, ...] = ()
+
+    @property
+    def dsn(self) -> str:
+        return self.inner.dsn
+
+    @property
+    def persistence_mode(self) -> str:
+        return self.inner.persistence_mode
+
+    def transaction(self, *, isolation_level: str | None = None):
+        self.transaction_isolation_levels = (
+            *self.transaction_isolation_levels,
+            isolation_level,
+        )
+        if isolation_level == "REPEATABLE READ":
+            raise ValueError(self.nested_isolation_error)
+        return self.inner.transaction(isolation_level=isolation_level)
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self.inner, name)
+
+
 class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
     def test_runtime_snapshot_reports_postgresql_authoritative_persistence_mode(self) -> None:
         service = AegisOpsControlPlaneService(
@@ -1443,6 +1470,72 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
                 "reconciliation-phase21-restore-drill-concurrent-001",
             ),
             concurrent_reconciliation,
+        )
+
+    def test_service_phase21_restore_drill_falls_back_when_nested_transaction_blocks_repeatable_read(
+        self,
+    ) -> None:
+        base_store, _ = make_store()
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case(store=base_store)
+        )
+        fallback_store = IsolationLevelFallbackProbeStore(
+            base_store,
+            "Cannot set isolation_level while inside an active transaction",
+        )
+        fallback_service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+            ),
+            store=fallback_store,
+        )
+
+        restore_drill = fallback_service.run_authoritative_restore_drill()
+
+        self.assertTrue(restore_drill.drill_passed)
+        self.assertEqual(restore_drill.verified_case_ids, (promoted_case.case_id,))
+        self.assertEqual(
+            fallback_store.transaction_isolation_levels,
+            ("REPEATABLE READ", None),
+        )
+
+    def test_service_phase21_restore_drill_reraises_unrelated_repeatable_read_value_errors(
+        self,
+    ) -> None:
+        base_store, _ = make_store()
+        _store, _service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case(store=base_store)
+        )
+        failing_store = IsolationLevelFallbackProbeStore(
+            base_store,
+            "synthetic repeatable read setup failure",
+        )
+        failing_service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+            ),
+            store=failing_store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "synthetic repeatable read setup failure",
+        ):
+            failing_service.run_authoritative_restore_drill()
+
+        self.assertEqual(
+            failing_store.transaction_isolation_levels,
+            ("REPEATABLE READ",),
         )
 
     def test_service_phase21_backup_uses_single_transaction_snapshot(self) -> None:

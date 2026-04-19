@@ -49,6 +49,10 @@ _LEGACY_RESTORE_FALLBACK_TRANSITION_ANCHOR = datetime(
     1,
     tzinfo=timezone.utc,
 )
+_NESTED_TRANSACTION_ISOLATION_LEVEL_ERROR_SNIPPETS = (
+    "isolation_level",
+    "active transaction",
+)
 
 
 def _parse_optional_backup_created_at(value: object) -> datetime | None:
@@ -63,6 +67,14 @@ def _parse_optional_backup_created_at(value: object) -> datetime | None:
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         return None
     return parsed
+
+
+def _is_nested_transaction_isolation_level_error(exc: ValueError) -> bool:
+    normalized_message = str(exc).lower()
+    return all(
+        snippet in normalized_message
+        for snippet in _NESTED_TRANSACTION_ISOLATION_LEVEL_ERROR_SNIPPETS
+    )
 
 
 class RestoreReadinessService:
@@ -599,7 +611,10 @@ class RestoreReadinessService:
                 yield
                 return
         except ValueError as exc:
-            if str(exc) != "Cannot set isolation_level inside an active transaction":
+            # Preserve the fail-closed boundary for unrelated ValueErrors while
+            # still tolerating store implementations that phrase the nested
+            # isolation-level rejection differently.
+            if not _is_nested_transaction_isolation_level_error(exc):
                 raise
         with self._store.transaction():
             yield
