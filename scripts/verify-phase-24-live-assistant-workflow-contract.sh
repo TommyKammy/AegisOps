@@ -103,7 +103,7 @@ require_active_step_command() {
   local expected="$2"
   local step_commands=""
 
-  step_commands="$(collect_active_step_commands "${step_name}")"
+  step_commands="$(extract_step_run_commands "${step_name}")"
   if [[ -z "${step_commands}" ]]; then
     echo "Missing active command in CI step \"${step_name}\": ${expected}" >&2
     exit 1
@@ -155,6 +155,8 @@ require_contains "${validation_doc}" "No deviations found."
 require_contains "${readme_doc}" "bounded live assistant workflow family"
 require_contains "${readme_doc}" "queue triage summary and case summary"
 require_contains "${readme_doc}" "The assistant remains advisory-only"
+
+. "${repo_root}/scripts/ci-workflow-phase-helper.sh"
 
 active_run_commands="$(collect_active_run_commands)"
 
