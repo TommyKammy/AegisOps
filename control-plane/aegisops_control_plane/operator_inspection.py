@@ -185,11 +185,7 @@ class OperatorInspectionReadSurface:
                 reconciliation.subject_linkage.get("substrate_detection_record_ids"),
                 None,
             )
-            case_record = (
-                self._service._store.get(CaseRecord, alert.case_id)
-                if alert.case_id is not None
-                else None
-            )
+            case_record = self._reviewed_linked_case_record(alert.case_id)
             action_reviews = self._service._action_review_chains_for_scope(
                 case_id=alert.case_id,
                 alert_id=alert.alert_id,
@@ -268,11 +264,7 @@ class OperatorInspectionReadSurface:
                 f"Missing reviewed Wazuh-backed reconciliation for alert {alert_id!r}"
             )
 
-        case_record = (
-            self._service._store.get(CaseRecord, alert.case_id)
-            if alert.case_id is not None
-            else None
-        )
+        case_record = self._reviewed_linked_case_record(alert.case_id)
         analytic_signal_record = (
             self._service._store.get(AnalyticSignalRecord, alert.analytic_signal_id)
             if alert.analytic_signal_id is not None
@@ -374,6 +366,14 @@ class OperatorInspectionReadSurface:
                 case_record=case_record,
             ),
         )
+
+    def _reviewed_linked_case_record(self, case_id: str | None) -> CaseRecord | None:
+        if case_id is None:
+            return None
+        try:
+            return self._service._require_reviewed_operator_case(case_id)
+        except (LookupError, ValueError):
+            return None
 
     def inspect_case_detail(self, case_id: str) -> object:
         case = self._service._require_reviewed_operator_case(case_id)
