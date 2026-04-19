@@ -6404,6 +6404,13 @@ class AegisOpsControlPlaneService:
                 raise ValueError(
                     "endpoint evidence artifacts may only be admitted for approved or executing endpoint evidence requests"
                 )
+            now = datetime.now(timezone.utc)
+            if action_request.expires_at is not None and (
+                now > action_request.expires_at
+            ):
+                raise ValueError(
+                    "endpoint evidence artifacts cannot be admitted after request expiry"
+                )
 
             case_id = self._require_non_empty_string(action_request.case_id, "case_id")
             case = self._require_reviewed_operator_case(case_id)

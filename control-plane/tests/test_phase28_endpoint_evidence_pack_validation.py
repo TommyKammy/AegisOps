@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 import pathlib
 import secrets
@@ -37,7 +37,12 @@ class _EvidenceSaveMutationStore:
 
     def save(self, record: object) -> object:
         saved = self.inner.save(record)
-        if isinstance(record, EvidenceRecord) and not self._mutated:
+        if (
+            isinstance(record, EvidenceRecord)
+            and not self._mutated
+            and isinstance(record.source_record_id, str)
+            and record.source_record_id.startswith("endpoint-evidence://request/")
+        ):
             self._mutated = True
             self.mutate_once(self.inner)
         return saved
@@ -321,6 +326,63 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
                         "source_boundary": "endpoint_evidence_pack",
                         "citation_kind": "raw_collected_output",
                         "description": "Pending approval requests must stay blocked.",
+                        "content": {"requested_paths": ("/opt/suspicious",)},
+                    },
+                ),
+                admitted_by="analyst-001",
+            )
+
+        self.assertEqual(
+            {record.evidence_id for record in store.list(EvidenceRecord)},
+            before_ids,
+        )
+
+    def test_ingest_endpoint_evidence_artifacts_rejects_expired_requests_without_writes(
+        self,
+    ) -> None:
+        store, service, promoted_case, anchor_evidence_id, reviewed_at = (
+            self._build_host_bound_case()
+        )
+        action_request = service.create_endpoint_evidence_collection_request(
+            case_id=promoted_case.case_id,
+            admitting_evidence_id=anchor_evidence_id,
+            requester_identity="analyst-001",
+            host_identifier="host-001",
+            evidence_gap="Need endpoint evidence to resolve the reviewed host-state gap.",
+            artifact_classes=("collection_manifest",),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+        )
+        self._approve_action_request(
+            service,
+            action_request.action_request_id,
+            decided_at=action_request.requested_at + timedelta(minutes=5),
+        )
+        expired_request = service.persist_record(
+            replace(
+                action_request,
+                lifecycle_state="approved",
+                expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+            )
+        )
+        before_ids = {record.evidence_id for record in store.list(EvidenceRecord)}
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "cannot be admitted after request expiry",
+        ):
+            service.ingest_endpoint_evidence_artifacts(
+                action_request_id=expired_request.action_request_id,
+                artifacts=(
+                    {
+                        "artifact_class": "collection_manifest",
+                        "artifact_id": "manifest-expired-001",
+                        "source_artifact_id": "collector-manifest-expired-001",
+                        "collected_at": reviewed_at,
+                        "collector_identity": "velociraptor",
+                        "tool_name": "Velociraptor",
+                        "source_boundary": "endpoint_evidence_pack",
+                        "citation_kind": "raw_collected_output",
+                        "description": "Expired requests must stay blocked.",
                         "content": {"requested_paths": ("/opt/suspicious",)},
                     },
                 ),
