@@ -77,6 +77,18 @@ def _is_nested_transaction_isolation_level_error(exc: ValueError) -> bool:
     )
 
 
+def _unexpected_restore_record_family_keys(
+    payload: Mapping[str, object],
+    *,
+    expected_families: frozenset[str],
+) -> tuple[str, ...]:
+    return tuple(sorted(set(payload) - expected_families))
+
+
+def _is_valid_restore_record_count(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 class RestoreReadinessService:
     def __init__(
         self,
@@ -545,6 +557,24 @@ class RestoreReadinessService:
         record_counts_payload = backup_payload.get("record_counts")
         if not isinstance(record_counts_payload, Mapping):
             raise ValueError("restore payload must contain record_counts")
+        expected_families = frozenset(
+            record_type.record_family
+            for record_type in self._authoritative_record_chain_record_types
+        )
+        unexpected_record_families = _unexpected_restore_record_family_keys(
+            record_families_payload,
+            expected_families=expected_families,
+        )
+        unexpected_record_counts = _unexpected_restore_record_family_keys(
+            record_counts_payload,
+            expected_families=expected_families,
+        )
+        if unexpected_record_families or unexpected_record_counts:
+            raise ValueError(
+                "restore payload contains unsupported record family keys: "
+                f"record_families={list(unexpected_record_families)!r}, "
+                f"record_counts={list(unexpected_record_counts)!r}"
+            )
         backup_created_at = _parse_optional_backup_created_at(
             backup_payload.get("created_at")
         )
@@ -564,6 +594,10 @@ class RestoreReadinessService:
             if not isinstance(raw_records, list):
                 raise ValueError(
                     f"restore payload must contain a JSON array for record family {family!r}"
+                )
+            if not _is_valid_restore_record_count(expected_count):
+                raise ValueError(
+                    f"restore payload record count for {family!r} must be an integer"
                 )
             if expected_count != len(raw_records):
                 raise ValueError(

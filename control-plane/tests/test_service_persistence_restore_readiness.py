@@ -820,6 +820,57 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         self.assertEqual(restored_service._store.list(RecommendationRecord), ())
         self.assertEqual(restored_service._store.list(CaseRecord), ())
 
+    def test_service_phase21_restore_rejects_unknown_record_family_keys(self) -> None:
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        backup["record_families"]["unexpected_family"] = []
+        backup["record_counts"]["unexpected_count_family"] = 0
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                r"restore payload contains unsupported record family keys: "
+                r"record_families=\['unexpected_family'\], "
+                r"record_counts=\['unexpected_count_family'\]"
+            ),
+        ):
+            restored_service.restore_authoritative_record_chain_backup(backup)
+        self._assert_authoritative_store_empty(restored_store)
+
+    def test_service_phase21_restore_rejects_non_integer_record_counts(self) -> None:
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+
+        for invalid_count in (True, 1.0):
+            invalid_backup = copy.deepcopy(backup)
+            invalid_backup["record_counts"]["recommendation"] = invalid_count
+
+            restored_store, _ = make_store()
+            restored_service = AegisOpsControlPlaneService(
+                RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+                store=restored_store,
+            )
+
+            with self.subTest(invalid_count=invalid_count):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "restore payload record count for 'recommendation' must be an integer",
+                ):
+                    restored_service.restore_authoritative_record_chain_backup(
+                        invalid_backup
+                    )
+                self._assert_authoritative_store_empty(restored_store)
+
     def test_service_phase21_restore_preserves_handoff_and_manual_fallback_runtime_visibility(
         self,
     ) -> None:
