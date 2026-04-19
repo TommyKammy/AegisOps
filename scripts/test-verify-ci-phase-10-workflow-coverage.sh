@@ -61,6 +61,7 @@ collect_active_run_commands() {
   ' "${workflow_path}"
 }
 
+. "${repo_root}/scripts/ci-workflow-phase-helper.sh"
 active_run_commands="$(collect_active_run_commands)"
 
 for command in "${required_verifiers[@]}"; do
