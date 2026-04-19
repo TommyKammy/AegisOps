@@ -59,7 +59,8 @@ from .models import (
     ReconciliationRecord,
     RecommendationRecord,
 )
-from .operations import RestoreReadinessService, RuntimeBoundaryService
+from .restore_readiness import RestoreReadinessService
+from .runtime_boundary import RuntimeBoundaryService
 from .assistant_context import (
     AssistantContextAssembler,
     _advisory_text_claims_authority_or_scope_expansion,
