@@ -28,7 +28,7 @@ class Phase20LowRiskActionValidationTests(unittest.TestCase):
         service_test_docs = self._service_test_docs()
         for service_test_doc in service_test_docs:
             self.assertTrue(
-                service_test_doc.exists(),
+                service_test_doc.is_file(),
                 f"expected service persistence tests at {service_test_doc}",
             )
         text = "\n".join(
