@@ -816,6 +816,7 @@ class ControlPlaneCliInspectionTests(unittest.TestCase):
                 protected_surface_reverse_proxy_secret="reviewed-surface-secret",  # noqa: S106 - test fixture secret
                 protected_surface_trusted_proxy_cidrs=("10.10.0.5/32",),
                 protected_surface_proxy_service_account=REVIEWED_PROXY_SERVICE_ACCOUNT,
+                protected_surface_reviewed_identity_provider="authentik",
                 admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
                 break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
             ),

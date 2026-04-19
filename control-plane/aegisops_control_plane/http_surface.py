@@ -58,6 +58,12 @@ def build_handler_class(
                 proxy_service_account_header=self.headers.get(
                     "X-AegisOps-Proxy-Service-Account"
                 ),
+                authenticated_identity_provider_header=self.headers.get(
+                    "X-AegisOps-Authenticated-IdP"
+                ),
+                authenticated_subject_header=self.headers.get(
+                    "X-AegisOps-Authenticated-Subject"
+                ),
                 authenticated_identity_header=self.headers.get(
                     "X-AegisOps-Authenticated-Identity"
                 ),
@@ -355,13 +361,33 @@ def build_handler_class(
             request_target = urlsplit(self.path)
             request_path = request_target.path
 
-            if request_path.startswith("/operator/"):
+            operator_analyst_paths = {
+                "/operator/promote-alert-to-case",
+                "/operator/record-case-observation",
+                "/operator/record-case-lead",
+                "/operator/record-case-recommendation",
+                "/operator/record-case-handoff",
+                "/operator/record-case-disposition",
+                "/operator/record-action-review-manual-fallback",
+                "/operator/record-action-review-escalation-note",
+                "/operator/create-reviewed-action-request",
+            }
+            operator_approver_paths = {
+                "/operator/record-action-approval-decision",
+            }
+
+            if request_path in operator_analyst_paths | operator_approver_paths:
                 try:
                     peer_addr = self.client_address[0] if self.client_address else None
                     if peer_addr_is_loopback(peer_addr):
                         require_loopback_operator_request_fn(self)
+                    allowed_roles = (
+                        ("analyst",)
+                        if request_path in operator_analyst_paths
+                        else ("approver",)
+                    )
                     principal = self._require_authenticated_surface_access(
-                        allowed_roles=("analyst", "approver", "platform_admin"),
+                        allowed_roles=allowed_roles,
                     )
                 except PermissionError as exc:
                     self._write_forbidden(str(exc))

@@ -58,6 +58,7 @@ class Phase21EndToEndValidationTests(unittest.TestCase):
                 protected_surface_reverse_proxy_secret=REVIEWED_SURFACE_PROXY_SECRET,
                 protected_surface_trusted_proxy_cidrs=("10.10.0.5/32",),
                 protected_surface_proxy_service_account=REVIEWED_PROXY_SERVICE_ACCOUNT,
+                protected_surface_reviewed_identity_provider="authentik",
                 admin_bootstrap_token=REVIEWED_ADMIN_BOOTSTRAP_TOKEN,
                 break_glass_token=REVIEWED_BREAK_GLASS_TOKEN,
             ),

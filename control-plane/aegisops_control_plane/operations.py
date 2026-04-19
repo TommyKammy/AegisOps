@@ -199,6 +199,13 @@ class RuntimeBoundaryService:
                     "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_PROXY_SERVICE_ACCOUNT must be set "
                     "before admitting reviewed reverse-proxy traffic to protected control-plane surfaces"
                 )
+            if _is_missing_runtime_binding(
+                self._config.protected_surface_reviewed_identity_provider
+            ):
+                raise ValueError(
+                    "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVIEWED_IDENTITY_PROVIDER must be set "
+                    "before admitting reviewed reverse-proxy traffic to protected control-plane surfaces"
+                )
 
     def authenticate_protected_surface_request(
         self,
@@ -207,6 +214,8 @@ class RuntimeBoundaryService:
         forwarded_proto: str | None,
         reverse_proxy_secret_header: str | None,
         proxy_service_account_header: str | None,
+        authenticated_identity_provider_header: str | None,
+        authenticated_subject_header: str | None,
         authenticated_identity_header: str | None,
         authenticated_role_header: str | None,
         allowed_roles: tuple[str, ...],
@@ -243,6 +252,28 @@ class RuntimeBoundaryService:
                 raise PermissionError(
                     "protected control-plane surfaces require the reviewed reverse proxy service account identity"
                 )
+            reviewed_identity_provider = (
+                self._config.protected_surface_reviewed_identity_provider.strip().lower()
+            )
+            supplied_identity_provider = (
+                (authenticated_identity_provider_header or "").strip().lower()
+            )
+            if supplied_identity_provider == "":
+                raise PermissionError(
+                    "protected control-plane surfaces require an attributed reviewed identity provider header"
+                )
+            if not hmac.compare_digest(
+                supplied_identity_provider,
+                reviewed_identity_provider,
+            ):
+                raise PermissionError(
+                    "protected control-plane surfaces require the reviewed identity provider boundary"
+                )
+            authenticated_subject = (authenticated_subject_header or "").strip()
+            if authenticated_subject == "":
+                raise PermissionError(
+                    "protected control-plane surfaces require an attributed authenticated subject header"
+                )
 
             identity = (authenticated_identity_header or "").strip()
             if identity == "":
@@ -265,6 +296,8 @@ class RuntimeBoundaryService:
                 role=role,
                 access_path="reviewed_reverse_proxy",
                 proxy_service_account=supplied_proxy_service_account,
+                identity_provider=supplied_identity_provider,
+                subject=authenticated_subject,
             )
 
         if principal.role not in allowed_roles:
@@ -444,6 +477,7 @@ class RestoreReadinessService:
                 (
                     "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVERSE_PROXY_SECRET",
                     "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_PROXY_SERVICE_ACCOUNT",
+                    "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVIEWED_IDENTITY_PROVIDER",
                 )
                 if protected_surface_proxy_bindings_required
                 else ()
@@ -463,6 +497,9 @@ class RestoreReadinessService:
             ),
             "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_PROXY_SERVICE_ACCOUNT": (
                 self._config.protected_surface_proxy_service_account
+            ),
+            "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVIEWED_IDENTITY_PROVIDER": (
+                self._config.protected_surface_reviewed_identity_provider
             ),
             "AEGISOPS_CONTROL_PLANE_ADMIN_BOOTSTRAP_TOKEN": (
                 self._config.admin_bootstrap_token

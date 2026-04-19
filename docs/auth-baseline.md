@@ -26,6 +26,19 @@ Human access must be attributable to an individual operator identity with an aud
 
 Shared interactive administrator logins, anonymous operator accounts, and mailbox-backed human access are not an approved baseline.
 
+The reviewed runtime boundary for human access must bind operator and approver sessions to one reviewed identity-provider path rather than trusting free-form client identity headers.
+
+For the current SMB operating model, Authentik is the preferred reviewed human IdP boundary when a concrete provider choice is required, provided it remains behind the approved reverse proxy and does not widen AegisOps into broad IAM-program ownership.
+
+At minimum, the reviewed reverse-proxy boundary must inject and protect all of the following before approval-sensitive runtime access is admitted:
+
+- the reviewed identity-provider identifier;
+- an attributable provider subject for the authenticated human session;
+- the reviewed human identity string used inside the control plane; and
+- the reviewed role assertion used for analyst, approver, or platform-administrator separation.
+
+If any of those claims are missing, malformed, or do not match the reviewed provider boundary, the runtime must fail closed rather than inferring identity from partial headers or local naming conventions.
+
 ## 3. Authorization and Separation-of-Duties Baseline
 
 Authorization must align to the platform boundary being crossed, not merely to which UI or workflow engine happens to expose the action.
