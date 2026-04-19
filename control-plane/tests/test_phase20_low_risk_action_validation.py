@@ -9,21 +9,32 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 class Phase20LowRiskActionValidationTests(unittest.TestCase):
     @staticmethod
-    def _service_test_doc() -> pathlib.Path:
-        return (
+    def _service_test_docs() -> tuple[pathlib.Path, ...]:
+        tests_root = (
             REPO_ROOT
             / "control-plane"
             / "tests"
-            / "test_service_persistence_action_reconciliation.py"
+        )
+        return (
+            tests_root / "test_service_persistence_action_reconciliation.py",
+            tests_root / "test_service_persistence_action_reconciliation_create_tracking_ticket.py",
+            tests_root / "test_service_persistence_action_reconciliation_delegation.py",
+            tests_root / "test_service_persistence_action_reconciliation_reconciliation.py",
+            tests_root / "test_service_persistence_action_reconciliation_review_surfaces.py",
+            tests_root / "test_service_persistence_action_reconciliation_reviewed_requests.py",
         )
 
     def test_reviewed_runtime_path_covers_phase20_low_risk_action_boundary(self) -> None:
-        service_test_doc = self._service_test_doc()
-        self.assertTrue(
-            service_test_doc.exists(),
-            f"expected service persistence tests at {service_test_doc}",
+        service_test_docs = self._service_test_docs()
+        for service_test_doc in service_test_docs:
+            self.assertTrue(
+                service_test_doc.is_file(),
+                f"expected service persistence tests at {service_test_doc}",
+            )
+        text = "\n".join(
+            service_test_doc.read_text(encoding="utf-8")
+            for service_test_doc in service_test_docs
         )
-        text = service_test_doc.read_text(encoding="utf-8")
 
         for term in (
             "def test_service_executes_phase20_first_live_action_end_to_end_from_reviewed_recommendation(",

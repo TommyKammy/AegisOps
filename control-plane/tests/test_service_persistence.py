@@ -30,6 +30,11 @@ class ControlPlaneServiceHelperLayoutTests(unittest.TestCase):
             regression_modules,
             [
                 "test_service_persistence_action_reconciliation.py",
+                "test_service_persistence_action_reconciliation_create_tracking_ticket.py",
+                "test_service_persistence_action_reconciliation_delegation.py",
+                "test_service_persistence_action_reconciliation_reconciliation.py",
+                "test_service_persistence_action_reconciliation_review_surfaces.py",
+                "test_service_persistence_action_reconciliation_reviewed_requests.py",
                 "test_service_persistence_assistant_advisory.py",
                 "test_service_persistence_ingest_case_lifecycle.py",
                 "test_service_persistence_restore_readiness.py",
