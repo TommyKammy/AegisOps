@@ -63,6 +63,7 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
         self,
     ) -> None:
         action_tests = self._defined_test_names(
+            "control-plane/tests/test_service_persistence_action_reconciliation.py",
             "control-plane/tests/test_service_persistence_action_reconciliation_create_tracking_ticket.py",
             "control-plane/tests/test_service_persistence_action_reconciliation_delegation.py",
             "control-plane/tests/test_service_persistence_action_reconciliation_reconciliation.py",

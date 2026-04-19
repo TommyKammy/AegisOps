@@ -1,4 +1,5 @@
 from __future__ import annotations
+# ruff: noqa: E402
 
 import pathlib
 import sys
@@ -8,15 +9,24 @@ TESTS_ROOT = pathlib.Path(__file__).resolve().parent
 if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
-import _service_persistence_support as support
-from _service_persistence_support import ServicePersistenceTestBase
-
-for name, value in vars(support).items():
-    if not (name.startswith("__") and name.endswith("__")):
-        globals()[name] = value
-
-
-
+from _service_persistence_support import (
+    ActionExecutionRecord,
+    ActionRequestRecord,
+    AegisOpsControlPlaneService,
+    ApprovalDecisionRecord,
+    RecommendationRecord,
+    ReconciliationRecord,
+    RuntimeConfig,
+    ServicePersistenceTestBase,
+    _CommitFailingStore,
+    _RecordTypeSaveFailingStore,
+    _approved_binding_hash,
+    datetime,
+    mock,
+    replace,
+    timedelta,
+    timezone,
+)
 
 class ReviewedActionRequestPersistenceTests(ServicePersistenceTestBase):
     def test_service_creates_approval_bound_action_request_from_reviewed_recommendation(
@@ -819,54 +829,5 @@ def load_tests(
     tests: unittest.TestSuite,
     pattern: str,
 ) -> unittest.TestSuite:
-    return unittest.TestSuite()
-    def test_service_reuses_reviewed_action_request_for_equivalent_expiry_instants(
-        self,
-    ) -> None:
-        store, service, promoted_case, evidence_id, reviewed_at = (
-            self._build_phase19_in_scope_case()
-        )
-        observation = service.record_case_observation(
-            case_id=promoted_case.case_id,
-            author_identity="analyst-001",
-            observed_at=reviewed_at,
-            scope_statement="Observed repository permission change requires tracked review.",
-            supporting_evidence_ids=(evidence_id,),
-        )
-        recommendation = service.record_case_recommendation(
-            case_id=promoted_case.case_id,
-            review_owner="analyst-001",
-            intended_outcome="Review repository owner change evidence before any approval-bound response.",
-            lead_id=service.record_case_lead(
-                case_id=promoted_case.case_id,
-                triage_owner="analyst-001",
-                triage_rationale="Privilege-impacting change needs durable business-hours follow-up.",
-                observation_id=observation.observation_id,
-            ).lead_id,
-        )
-        expires_at_utc = datetime.now(timezone.utc) + timedelta(hours=4)
-        expires_at_plus_two = expires_at_utc.astimezone(
-            timezone(timedelta(hours=2))
-        )
-
-        first_request = service.create_reviewed_action_request_from_advisory(
-            record_family="recommendation",
-            record_id=recommendation.recommendation_id,
-            requester_identity="analyst-001",
-            recipient_identity="repo-owner-001",
-            message_intent="Notify the accountable repository owner about the reviewed permission change.",
-            escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
-            expires_at=expires_at_utc,
-        )
-        second_request = service.create_reviewed_action_request_from_advisory(
-            record_family="recommendation",
-            record_id=recommendation.recommendation_id,
-            requester_identity="analyst-001",
-            recipient_identity="repo-owner-001",
-            message_intent="Notify the accountable repository owner about the reviewed permission change.",
-            escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
-            expires_at=expires_at_plus_two,
-        )
-
-        self.assertEqual(second_request, first_request)
-        self.assertEqual(store.list(ActionRequestRecord), (first_request,))
+    del loader, pattern
+    return tests

@@ -17,6 +17,7 @@ class Phase20LowRiskActionValidationTests(unittest.TestCase):
         )
         return (
             tests_root / "test_service_persistence_action_reconciliation.py",
+            tests_root / "test_service_persistence_action_reconciliation_create_tracking_ticket.py",
             tests_root / "test_service_persistence_action_reconciliation_delegation.py",
             tests_root / "test_service_persistence_action_reconciliation_reconciliation.py",
             tests_root / "test_service_persistence_action_reconciliation_review_surfaces.py",

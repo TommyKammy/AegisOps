@@ -1,4 +1,5 @@
 from __future__ import annotations
+# ruff: noqa: E402
 
 import pathlib
 import sys
@@ -117,7 +118,9 @@ def load_tests(
     standard_tests: unittest.TestSuite,
     pattern: str | None,
 ) -> unittest.TestSuite:
-    del standard_tests, pattern
+    del standard_tests
+    if pattern not in (None, "test_service_persistence_action_reconciliation.py"):
+        return unittest.TestSuite()
     suite = unittest.TestSuite()
     for case in (
         CreateTrackingTicketActionReconciliationPersistenceTests,
