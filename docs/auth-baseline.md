@@ -108,6 +108,18 @@ At minimum, the future operating model must define:
 
 Secret metadata may be documented in approved parameter or runbook artifacts, but live secret values, private keys, and production tokens must remain outside Git.
 
+When a concrete managed secret backend is needed for the reviewed SMB operating model, OpenBao is the preferred reviewed boundary so long as it stays subordinate to the AegisOps authority model and does not widen the platform into a general-purpose vault program.
+
+The reviewed credential-delivery pattern is:
+
+- direct environment values only for narrowly controlled local review or bootstrap paths;
+- mounted secret files for reviewed container startup and first-boot flows; and
+- explicit OpenBao references for managed service-account and provider credentials when a shared secret-delivery boundary is required.
+
+Any managed-secret integration must fail closed when the backend is unavailable, the referenced secret is unreadable, or the resolved value is empty or stale.
+
+The initial reviewed credential families for this delivery model are the PostgreSQL DSN, Wazuh ingest secrets, reverse-proxy boundary secret, admin bootstrap and break-glass tokens, and the future reviewed machine credentials for Shuffle delegation, assistant-provider access, and reviewed ticketing integrations.
+
 ## 6. Baseline Alignment Notes
 
 This baseline makes least-privilege identity ownership explicit before future monitors, workflows, approvals, and integrations are implemented.
