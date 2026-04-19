@@ -46,7 +46,7 @@ collect_active_run_commands() {
         in_block = 0
       }
 
-      if ($0 ~ /^[[:space:]]*run:[[:space:]]*[|>]-?[[:space:]]*$/) {
+      if ($0 ~ /^[[:space:]]*run:[[:space:]]*\|[-]?[[:space:]]*$/) {
         block_indent = match($0, /[^ ]/) - 1
         in_block = 1
         next
