@@ -743,6 +743,7 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
             expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
         )
         before_ids = {record.evidence_id for record in store.list(EvidenceRecord)}
+        case_detail_before = service.inspect_case_detail(promoted_case.case_id).to_dict()
 
         with self.assertRaisesRegex(
             ValueError,
@@ -770,6 +771,10 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
         self.assertEqual(
             {record.evidence_id for record in store.list(EvidenceRecord)},
             before_ids,
+        )
+        self.assertEqual(
+            service.inspect_case_detail(promoted_case.case_id).to_dict(),
+            case_detail_before,
         )
 
     def test_ingest_endpoint_evidence_artifacts_rejects_expired_requests_without_writes(
@@ -893,6 +898,113 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
                 promoted_case.evidence_ids[0],
                 first_ingest[0].evidence_id,
             },
+        )
+
+    def test_ingest_endpoint_evidence_artifacts_remain_subordinate_in_case_detail(
+        self,
+    ) -> None:
+        _store, service, promoted_case, anchor_evidence_id, reviewed_at = (
+            self._build_host_bound_case()
+        )
+        action_request = service.create_endpoint_evidence_collection_request(
+            case_id=promoted_case.case_id,
+            admitting_evidence_id=anchor_evidence_id,
+            requester_identity="analyst-001",
+            host_identifier="host-001",
+            evidence_gap="Need endpoint evidence to resolve the reviewed host-state gap.",
+            artifact_classes=("collection_manifest", "file_sample", "binary_analysis"),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+        )
+        self._approve_action_request(
+            service,
+            action_request.action_request_id,
+            decided_at=action_request.requested_at + timedelta(minutes=5),
+        )
+
+        ingested = service.ingest_endpoint_evidence_artifacts(
+            action_request_id=action_request.action_request_id,
+            artifacts=(
+                {
+                    "artifact_class": "collection_manifest",
+                    "artifact_id": "manifest-subordinate-001",
+                    "source_artifact_id": "collector-manifest-subordinate-001",
+                    "collected_at": reviewed_at,
+                    "collector_identity": "velociraptor",
+                    "tool_name": "Velociraptor",
+                    "source_boundary": "endpoint_evidence_pack",
+                    "citation_kind": "raw_collected_output",
+                    "description": "Reviewed collection manifest.",
+                    "content": {"requested_paths": ("/opt/suspicious",)},
+                },
+                {
+                    "artifact_class": "file_sample",
+                    "artifact_id": "sample-subordinate-001",
+                    "source_artifact_id": "collector-sample-subordinate-001",
+                    "collected_at": reviewed_at + timedelta(minutes=1),
+                    "collector_identity": "velociraptor",
+                    "tool_name": "Velociraptor",
+                    "source_boundary": "endpoint_evidence_pack",
+                    "citation_kind": "raw_collected_output",
+                    "description": "Collected reviewed file sample.",
+                    "content": {
+                        "path": "/opt/suspicious/sample.bin",
+                        "sha256": "c" * 64,
+                    },
+                },
+                {
+                    "artifact_class": "binary_analysis",
+                    "artifact_id": "analysis-subordinate-001",
+                    "source_artifact_id": "analysis-subordinate-001",
+                    "derived_from_artifact_id": "sample-subordinate-001",
+                    "collected_at": reviewed_at + timedelta(minutes=2),
+                    "collector_identity": "yara",
+                    "tool_name": "YARA",
+                    "source_boundary": "endpoint_evidence_pack",
+                    "citation_kind": "bounded_derivative",
+                    "description": "Bounded derivative analysis over the reviewed file sample.",
+                    "content": {
+                        "matches": (
+                            {
+                                "rule_name": "Subordinate.Sample.Match",
+                            },
+                        ),
+                    },
+                },
+            ),
+            admitted_by="analyst-001",
+        )
+
+        case_detail = service.inspect_case_detail(promoted_case.case_id)
+        attached_records = {
+            record["record_id"]: record
+            for record in case_detail.provenance_summary["attached_records"]
+        }
+
+        self.assertEqual(
+            case_detail.provenance_summary["authoritative_anchor"]["record_id"],
+            promoted_case.alert_id,
+        )
+        self.assertEqual(
+            case_detail.provenance_summary["authoritative_anchor"][
+                "provenance_classification"
+            ],
+            "authoritative-anchor",
+        )
+        self.assertEqual(case_detail.advisory_output["status"], "ready")
+        self.assertEqual(
+            tuple(record["source_family"] for record in case_detail.cross_source_timeline[1:]),
+            ("wazuh", "endpoint_evidence_pack", "endpoint_evidence_pack", "endpoint_evidence_pack"),
+        )
+        self.assertEqual(
+            tuple(
+                attached_records[record.evidence_id]["provenance_classification"]
+                for record in ingested
+            ),
+            ("augmenting-evidence", "augmenting-evidence", "reviewed-derived"),
+        )
+        self.assertEqual(
+            tuple(attached_records[record.evidence_id]["source_family"] for record in ingested),
+            ("endpoint_evidence_pack", "endpoint_evidence_pack", "endpoint_evidence_pack"),
         )
 
     def test_ingest_endpoint_evidence_artifacts_rejects_conflicting_replay_without_writes(

@@ -264,6 +264,7 @@ class Phase28MispEnrichmentValidationTests(ServicePersistenceTestBase):
             indicator_value="disabled.example",
         )
         evidence_before = store.list(EvidenceRecord)
+        case_detail_before = service.inspect_case_detail(promoted_case.case_id).to_dict()
 
         with self.assertRaisesRegex(
             ValueError,
@@ -292,6 +293,90 @@ class Phase28MispEnrichmentValidationTests(ServicePersistenceTestBase):
             )
 
         self.assertEqual(store.list(EvidenceRecord), evidence_before)
+        self.assertEqual(
+            service.inspect_case_detail(promoted_case.case_id).to_dict(),
+            case_detail_before,
+        )
+
+    def test_attach_misp_context_keeps_stale_conflicting_attachment_subordinate_in_case_detail(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _, reviewed_at = self._build_in_scope_case(
+            misp_enrichment_enabled=True
+        )
+        anchor_evidence = self._attach_anchor_evidence(
+            service=service,
+            promoted_case=promoted_case,
+            reviewed_at=reviewed_at,
+            indicator_value="stale.example",
+        )
+
+        evidence, observation = service.attach_misp_context(
+            case_id=promoted_case.case_id,
+            admitting_evidence_id=anchor_evidence.evidence_id,
+            queried_object_type="domain",
+            queried_object_value="stale.example",
+            looked_up_at=reviewed_at,
+            reviewed_by="analyst-001",
+            event_id="misp-event-case-detail-001",
+            event_info="Conflicting stale context",
+            event_published_at=reviewed_at - timedelta(days=10),
+            iocs=(
+                {
+                    "type": "domain",
+                    "value": "stale.example",
+                    "category": "Network activity",
+                },
+            ),
+            citation_url="https://misp.example/events/view/6",
+            staleness_marker={
+                "state": "stale",
+                "evaluated_at": reviewed_at.isoformat(),
+                "reason": "event older than review threshold",
+            },
+            conflict_marker={
+                "state": "conflict",
+                "reason": "MISP taxonomy confidence disagrees with reviewed case context",
+            },
+            observation_scope_statement=(
+                "Reviewed the subordinate MISP context without promoting it to case truth."
+            ),
+        )
+        assert observation is not None
+
+        case_detail = service.inspect_case_detail(promoted_case.case_id)
+        attached_records = {
+            record["record_id"]: record
+            for record in case_detail.provenance_summary["attached_records"]
+        }
+
+        self.assertEqual(
+            case_detail.provenance_summary["authoritative_anchor"]["record_id"],
+            promoted_case.alert_id,
+        )
+        self.assertEqual(
+            case_detail.provenance_summary["authoritative_anchor"][
+                "provenance_classification"
+            ],
+            "authoritative-anchor",
+        )
+        self.assertEqual(
+            attached_records[evidence.evidence_id]["provenance_classification"],
+            "augmenting-evidence",
+        )
+        self.assertEqual(
+            attached_records[evidence.evidence_id]["source_family"],
+            "misp",
+        )
+        self.assertEqual(
+            attached_records[evidence.evidence_id]["ambiguity_badge"],
+            "unresolved",
+        )
+        self.assertEqual(
+            attached_records[observation.observation_id]["provenance_classification"],
+            "reviewed-derived",
+        )
+        self.assertEqual(case_detail.advisory_output["status"], "ready")
 
     def test_attach_misp_context_rejects_misp_derived_anchor_without_writes(self) -> None:
         store, service, promoted_case, _, reviewed_at = self._build_in_scope_case(
