@@ -26,6 +26,53 @@ def _normalize_mapping(value: object, field_name: str) -> dict[str, object]:
     return {str(key): item for key, item in value.items()}
 
 
+def _normalize_string_sequence(
+    value: object,
+    field_name: str,
+) -> tuple[str, ...]:
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        raise ValueError(f"{field_name} must be a sequence of strings")
+    normalized: list[str] = []
+    for index, item in enumerate(value):
+        normalized.append(
+            _require_non_empty_string(item, f"{field_name}[{index}]")
+        )
+    return tuple(normalized)
+
+
+def _normalize_yara_matches(value: object) -> tuple[dict[str, object], ...]:
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        raise ValueError(
+            "binary_analysis artifacts for YARA require at least one structured match"
+        )
+    normalized_matches: list[dict[str, object]] = []
+    for index, match in enumerate(value):
+        normalized_match = _normalize_mapping(match, f"artifact.content.matches[{index}]")
+        rule_name = _require_non_empty_string(
+            normalized_match.get("rule_name"),
+            f"artifact.content.matches[{index}].rule_name",
+        )
+        normalized: dict[str, object] = {"rule_name": rule_name}
+        namespace = normalized_match.get("namespace")
+        if namespace is not None:
+            normalized["namespace"] = _require_non_empty_string(
+                namespace,
+                f"artifact.content.matches[{index}].namespace",
+            )
+        tags = normalized_match.get("tags")
+        if tags is not None:
+            normalized["tags"] = _normalize_string_sequence(
+                tags,
+                f"artifact.content.matches[{index}].tags",
+            )
+        normalized_matches.append(normalized)
+    if not normalized_matches:
+        raise ValueError(
+            "binary_analysis artifacts for YARA require at least one structured match"
+        )
+    return tuple(normalized_matches)
+
+
 @dataclass(frozen=True)
 class EndpointEvidenceArtifactAttachment:
     source_record_id: str
@@ -52,6 +99,7 @@ class EndpointEvidencePackAdapter:
         "operator_authored_interpretation",
         "raw_collected_output",
     )
+    allowed_binary_analysis_tools: tuple[str, ...] = ("capa", "yara")
     required_source_boundary: str = "endpoint_evidence_pack"
 
     def normalize_requested_artifact_classes(
@@ -189,6 +237,27 @@ class EndpointEvidencePackAdapter:
                 "artifact.tool_version",
             )
 
+        normalized_analysis_tool: str | None = None
+        if artifact_class == "binary_analysis":
+            normalized_analysis_tool = tool_name.strip().lower()
+            if normalized_analysis_tool not in self.allowed_binary_analysis_tools:
+                raise ValueError(
+                    "binary_analysis artifacts must identify YARA or capa as the analysis tool"
+                )
+            if normalized_analysis_tool == "yara":
+                content = {
+                    **content,
+                    "matches": _normalize_yara_matches(content.get("matches")),
+                }
+            else:
+                content = {
+                    **content,
+                    "summary": _require_non_empty_string(
+                        content.get("summary"),
+                        "artifact.content.summary",
+                    ),
+                }
+
         source_record_id = (
             "endpoint-evidence://request/{}/artifact/{}".format(
                 quote(action_request_id, safe=""),
@@ -220,6 +289,8 @@ class EndpointEvidencePackAdapter:
             provenance["tool_version"] = tool_version
         if derived_from_artifact_id is not None:
             provenance["derived_from_artifact_id"] = derived_from_artifact_id
+        if normalized_analysis_tool is not None:
+            provenance["analysis_tool"] = normalized_analysis_tool
 
         return EndpointEvidenceArtifactAttachment(
             source_record_id=source_record_id,
@@ -248,6 +319,7 @@ class EndpointEvidencePackAdapter:
                     "host_identifier": authoritative_host_identifier,
                     "tool_name": tool_name,
                     "tool_version": tool_version,
+                    "analysis_tool": normalized_analysis_tool,
                 },
                 "payload": content,
                 "scope": {
