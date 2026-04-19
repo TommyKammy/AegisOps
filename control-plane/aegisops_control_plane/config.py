@@ -171,6 +171,19 @@ def _load_bound_string(
     return default
 
 
+def _load_bool(source: Mapping[str, str], env_name: str, default: bool) -> bool:
+    raw_value = source.get(env_name, "").strip().lower()
+    if raw_value == "":
+        return default
+    if raw_value in {"1", "true", "yes", "on"}:
+        return True
+    if raw_value in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(
+        f"{env_name} must be a boolean string, got: {source.get(env_name)!r}"
+    )
+
+
 @dataclass(frozen=True)
 class RuntimeConfig:
     host: str = "127.0.0.1"
@@ -189,6 +202,7 @@ class RuntimeConfig:
     protected_surface_reviewed_identity_provider: str = ""
     admin_bootstrap_token: str = field(default="", repr=False)
     break_glass_token: str = field(default="", repr=False)
+    misp_enrichment_enabled: bool = False
 
     @classmethod
     def from_env(
@@ -288,5 +302,10 @@ class RuntimeConfig:
                 "AEGISOPS_CONTROL_PLANE_BREAK_GLASS_TOKEN",
                 cls.break_glass_token,
                 secret_backend_transport=secret_backend_transport,
+            ),
+            misp_enrichment_enabled=_load_bool(
+                source,
+                "AEGISOPS_CONTROL_PLANE_MISP_ENRICHMENT_ENABLED",
+                cls.misp_enrichment_enabled,
             ),
         )
