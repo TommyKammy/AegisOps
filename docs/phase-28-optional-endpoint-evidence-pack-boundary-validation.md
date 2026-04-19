@@ -3,7 +3,7 @@
 - Validation status: PASS
 - Reviewed on: 2026-04-19
 - Scope: confirm the reviewed Phase 28 endpoint evidence-pack boundary keeps Velociraptor, YARA, and capa subordinate to the AegisOps authority model while making optional endpoint evidence-pack use specific enough for later implementation and validation work.
-- Reviewed sources: `docs/Revised Phase23-20 Epic Roadmap.md` (repository-published roadmap anchor for the reviewed AegisOps thesis, SMB deployment target, and later source-expansion guardrails), `docs/requirements-baseline.md`, `docs/architecture.md`, `docs/phase-25-reviewed-multi-source-case-admission-and-ambiguity-taxonomy.md`, `docs/phase-25-multi-source-case-review-and-osquery-evidence-runbook.md`, `docs/phase-28-optional-endpoint-evidence-pack-boundary.md`
+- Reviewed sources: `ObsidianVault/Dev/AegisOps/Plan&Roadmap/Revised Phase23-29 Epic Roadmap.md` (vault-relative path for the reviewed roadmap note that defines the accepted Phase 28 optional endpoint evidence-pack and bounded intel-enrichment slice while keeping those extensions subordinate to the AegisOps authority model), `docs/requirements-baseline.md`, `docs/architecture.md`, `docs/phase-25-reviewed-multi-source-case-admission-and-ambiguity-taxonomy.md`, `docs/phase-25-multi-source-case-review-and-osquery-evidence-runbook.md`, `docs/phase-28-optional-endpoint-evidence-pack-boundary.md`
 
 ## Validation Summary
 
@@ -15,7 +15,7 @@ Endpoint evidence packs remain optional, provenance-preserving, and fail closed 
 
 ## Roadmap and Thesis Review
 
-`docs/Revised Phase23-20 Epic Roadmap.md` keeps later source and evidence expansion narrow and subordinate to the approved AegisOps thesis for approval, evidence, and reconciliation governance.
+`ObsidianVault/Dev/AegisOps/Plan&Roadmap/Revised Phase23-29 Epic Roadmap.md` keeps Phase 28 endpoint evidence and bounded enrichment narrow, optional, and subordinate to the approved AegisOps thesis for approval, evidence, and reconciliation governance rather than allowing endpoint tooling to become mandatory infrastructure or authority.
 
 `docs/requirements-baseline.md` remains aligned because AegisOps continues to own authoritative truth for alert, case, evidence, approval, action-execution, and reconciliation records, while upstream and subordinate tooling remain optional substrates rather than co-equal product cores.
 

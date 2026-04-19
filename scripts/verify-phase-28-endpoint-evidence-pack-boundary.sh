@@ -75,7 +75,7 @@ validation_required_lines=(
   'Velociraptor remains subordinate to the AegisOps control-plane authority model.'
   'YARA and capa remain subordinate evidence-analysis tools rather than authority surfaces.'
   'Endpoint evidence packs remain optional, provenance-preserving, and fail closed when prerequisite case-chain linkage or provenance is incomplete.'
-  '- Reviewed sources: `docs/Revised Phase23-20 Epic Roadmap.md` (repository-published roadmap anchor for the reviewed AegisOps thesis, SMB deployment target, and later source-expansion guardrails), `docs/requirements-baseline.md`, `docs/architecture.md`, `docs/phase-25-reviewed-multi-source-case-admission-and-ambiguity-taxonomy.md`, `docs/phase-25-multi-source-case-review-and-osquery-evidence-runbook.md`, `docs/phase-28-optional-endpoint-evidence-pack-boundary.md`'
+  '- Reviewed sources: `ObsidianVault/Dev/AegisOps/Plan&Roadmap/Revised Phase23-29 Epic Roadmap.md` (vault-relative path for the reviewed roadmap note that defines the accepted Phase 28 optional endpoint evidence-pack and bounded intel-enrichment slice while keeping those extensions subordinate to the AegisOps authority model), `docs/requirements-baseline.md`, `docs/architecture.md`, `docs/phase-25-reviewed-multi-source-case-admission-and-ambiguity-taxonomy.md`, `docs/phase-25-multi-source-case-review-and-osquery-evidence-runbook.md`, `docs/phase-28-optional-endpoint-evidence-pack-boundary.md`'
   '- `python3 -m unittest control-plane.tests.test_phase28_endpoint_evidence_pack_boundary_docs`'
   '- `bash scripts/verify-phase-28-endpoint-evidence-pack-boundary.sh`'
 )
@@ -83,6 +83,11 @@ validation_required_lines=(
 for line in "${validation_required_lines[@]}"; do
   require_fixed_line "${validation_doc}" "${line}"
 done
+
+if grep -Fq -- 'docs/Revised Phase23-20 Epic Roadmap.md' "${validation_doc}"; then
+  echo "Phase 28 validation doc must not reference the stale Phase23-20 roadmap anchor." >&2
+  exit 1
+fi
 
 require_fixed_line "${docs_test}" 'class Phase28EndpointEvidencePackBoundaryDocsTests(unittest.TestCase):'
 require_fixed_line "${docs_test}" '    def test_phase28_design_doc_exists_and_keeps_endpoint_evidence_subordinate('

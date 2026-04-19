@@ -211,6 +211,14 @@ jobs:
       - name: Run Phase 27 workflow coverage guard
         run: bash scripts/test-verify-ci-phase-27-workflow-coverage.sh
 
+      - name: Run Phase 28 endpoint evidence-pack boundary validation
+        run: |
+          bash scripts/verify-phase-28-endpoint-evidence-pack-boundary.sh
+          python3 -m unittest control-plane.tests.test_phase28_endpoint_evidence_pack_boundary_docs
+
+      - name: Run Phase 28 workflow coverage guard
+        run: bash scripts/test-verify-ci-phase-28-workflow-coverage.sh
+
       - name: Run control-plane runtime unit tests
         run: python3 -m unittest discover -s control-plane/tests -p 'test_*.py'
 
@@ -266,6 +274,7 @@ jobs:
           bash scripts/test-verify-phase-25-multi-source-case-review-runbook.sh
           bash scripts/test-verify-phase-26-ticket-coordination-validation.sh
           bash scripts/test-verify-phase-27-day-2-hardening-validation.sh
+          bash scripts/test-verify-ci-phase-28-workflow-coverage.sh
           bash scripts/test-verify-ci-phase-14-workflow-coverage.sh
           bash scripts/test-verify-ci-phase-15-workflow-coverage.sh
           bash scripts/test-verify-ci-phase-19-workflow-coverage.sh
