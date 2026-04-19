@@ -53,6 +53,11 @@ class ControlPlaneCliInspectionTests(ControlPlaneCliInspectionTestBase):
             self
         )
 
+    def test_cli_renders_read_only_record_and_reconciliation_views(self) -> None:
+        CliInspectionWorkflowFamilyTests.test_cli_renders_read_only_record_and_reconciliation_views(
+            self
+        )
+
     def test_long_running_runtime_surface_rejects_case_scoped_out_of_scope_advisory_reads(
         self,
     ) -> None:
