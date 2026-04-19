@@ -75,7 +75,7 @@ validation_required_lines=(
   'Velociraptor remains subordinate to the AegisOps control-plane authority model.'
   'YARA and capa remain subordinate evidence-analysis tools rather than authority surfaces.'
   'Endpoint evidence packs remain optional, provenance-preserving, and fail closed when prerequisite case-chain linkage or provenance is incomplete.'
-  '- Reviewed sources: `ObsidianVault/Dev/AegisOps/Plan&Roadmap/Revised Phase23-29 Epic Roadmap.md`, `docs/requirements-baseline.md`, `docs/architecture.md`, `docs/phase-25-reviewed-multi-source-case-admission-and-ambiguity-taxonomy.md`, `docs/phase-25-multi-source-case-review-and-osquery-evidence-runbook.md`, `docs/phase-28-optional-endpoint-evidence-pack-boundary.md`'
+  '- Reviewed sources: `docs/Revised Phase23-20 Epic Roadmap.md` (repository-published roadmap anchor for the reviewed AegisOps thesis, SMB deployment target, and later source-expansion guardrails), `docs/requirements-baseline.md`, `docs/architecture.md`, `docs/phase-25-reviewed-multi-source-case-admission-and-ambiguity-taxonomy.md`, `docs/phase-25-multi-source-case-review-and-osquery-evidence-runbook.md`, `docs/phase-28-optional-endpoint-evidence-pack-boundary.md`'
   '- `python3 -m unittest control-plane.tests.test_phase28_endpoint_evidence_pack_boundary_docs`'
   '- `bash scripts/verify-phase-28-endpoint-evidence-pack-boundary.sh`'
 )

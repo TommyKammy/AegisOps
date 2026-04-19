@@ -49,7 +49,7 @@ class Phase28EndpointEvidencePackBoundaryDocsTests(unittest.TestCase):
         for term in (
             "# Phase 28 Optional Endpoint Evidence-Pack Boundary Validation",
             "Validation status: PASS",
-            "ObsidianVault/Dev/AegisOps/Plan&Roadmap/Revised Phase23-29 Epic Roadmap.md",
+            "docs/Revised Phase23-20 Epic Roadmap.md",
             "docs/requirements-baseline.md",
             "docs/architecture.md",
             "docs/phase-25-reviewed-multi-source-case-admission-and-ambiguity-taxonomy.md",
