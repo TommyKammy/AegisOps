@@ -63,7 +63,11 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
         self,
     ) -> None:
         action_tests = self._defined_test_names(
-            "control-plane/tests/test_service_persistence_action_reconciliation.py"
+            "control-plane/tests/test_service_persistence_action_reconciliation_create_tracking_ticket.py",
+            "control-plane/tests/test_service_persistence_action_reconciliation_delegation.py",
+            "control-plane/tests/test_service_persistence_action_reconciliation_reconciliation.py",
+            "control-plane/tests/test_service_persistence_action_reconciliation_review_surfaces.py",
+            "control-plane/tests/test_service_persistence_action_reconciliation_reviewed_requests.py",
         )
         boundary_and_cli_tests = self._defined_test_names(
             "control-plane/tests/test_execution_coordinator_boundary.py",
@@ -165,7 +169,8 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
         )
         phase26_supporting_tests = self._defined_test_names(
             "control-plane/tests/test_service_persistence_ingest_case_lifecycle.py",
-            "control-plane/tests/test_service_persistence_action_reconciliation.py",
+            "control-plane/tests/test_service_persistence_action_reconciliation_create_tracking_ticket.py",
+            "control-plane/tests/test_service_persistence_action_reconciliation_reconciliation.py",
             "control-plane/tests/test_cli_inspection.py",
         )
 
