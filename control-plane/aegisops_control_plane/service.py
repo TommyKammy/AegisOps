@@ -6396,6 +6396,8 @@ class AegisOpsControlPlaneService:
         evidence_gap: str,
         artifact_classes: tuple[str, ...],
         expires_at: datetime,
+        reviewed_gap_id: str | None = None,
+        reviewed_follow_up_decision_id: str | None = None,
         action_request_id: str | None = None,
     ) -> ActionRequestRecord:
         case_id = self._require_non_empty_string(case_id, "case_id")
@@ -6431,6 +6433,26 @@ class AegisOpsControlPlaneService:
                 evidence_ids=(admitting_evidence_id,),
                 field_name="admitting_evidence_id",
             )
+            reviewed_gap_anchor = self._resolve_reviewed_endpoint_gap_anchor(
+                case=case,
+                admitting_evidence_id=admitting_evidence_id,
+                host_identifier=host_identifier,
+                evidence_gap=evidence_gap,
+                reviewed_gap_id=reviewed_gap_id,
+            )
+            reviewed_follow_up_anchor = (
+                self._resolve_reviewed_endpoint_follow_up_decision_anchor(
+                    case=case,
+                    admitting_evidence_id=admitting_evidence_id,
+                    host_identifier=host_identifier,
+                    evidence_gap=evidence_gap,
+                    reviewed_follow_up_decision_id=reviewed_follow_up_decision_id,
+                )
+            )
+            if reviewed_gap_anchor is None and reviewed_follow_up_anchor is None:
+                raise ValueError(
+                    "reviewed endpoint evidence requests require an explicit reviewed gap anchor"
+                )
             if expires_at <= datetime.now(timezone.utc):
                 raise ValueError("expires_at must be in the future")
 
@@ -6443,6 +6465,16 @@ class AegisOpsControlPlaneService:
                 "admitting_evidence_id": admitting_evidence_id,
                 "host_identifier": host_identifier,
                 "evidence_gap": evidence_gap,
+                "reviewed_gap_id": (
+                    reviewed_gap_anchor["reviewed_gap_id"]
+                    if reviewed_gap_anchor is not None
+                    else None
+                ),
+                "reviewed_follow_up_decision_id": (
+                    reviewed_follow_up_anchor["reviewed_follow_up_decision_id"]
+                    if reviewed_follow_up_anchor is not None
+                    else None
+                ),
                 "artifact_classes": normalized_artifact_classes,
             }
             target_scope = {
@@ -6451,6 +6483,16 @@ class AegisOpsControlPlaneService:
                 "finding_id": case.finding_id,
                 "admitting_evidence_id": admitting_evidence_id,
                 "host_identifier": host_identifier,
+                "reviewed_gap_id": (
+                    reviewed_gap_anchor["reviewed_gap_id"]
+                    if reviewed_gap_anchor is not None
+                    else None
+                ),
+                "reviewed_follow_up_decision_id": (
+                    reviewed_follow_up_anchor["reviewed_follow_up_decision_id"]
+                    if reviewed_follow_up_anchor is not None
+                    else None
+                ),
                 "artifact_classes": normalized_artifact_classes,
             }
             payload_hash = _approved_payload_binding_hash(
@@ -6540,6 +6582,148 @@ class AegisOpsControlPlaneService:
                 ):
                     self._store.save(transition_record)
             return action_request
+
+    def _resolve_reviewed_endpoint_gap_anchor(
+        self,
+        *,
+        case: CaseRecord,
+        admitting_evidence_id: str,
+        host_identifier: str,
+        evidence_gap: str,
+        reviewed_gap_id: str | None,
+    ) -> Mapping[str, str] | None:
+        explicit_gap_id = self._normalize_optional_string(
+            reviewed_gap_id,
+            "reviewed_gap_id",
+        )
+        matching_anchors: list[dict[str, str]] = []
+        endpoint_evidence = case.reviewed_context.get("endpoint_evidence")
+        if not isinstance(endpoint_evidence, Mapping):
+            return None
+        reviewed_gap_anchors = endpoint_evidence.get("reviewed_gap_anchors")
+        if not isinstance(reviewed_gap_anchors, (list, tuple)):
+            return None
+
+        for raw_anchor in reviewed_gap_anchors:
+            if not isinstance(raw_anchor, Mapping):
+                continue
+            anchor_gap_id = self._normalize_optional_string(
+                raw_anchor.get("reviewed_gap_id"),
+                "case.reviewed_context.endpoint_evidence.reviewed_gap_id",
+            )
+            anchor_gap_text = self._normalize_optional_string(
+                raw_anchor.get("evidence_gap"),
+                "case.reviewed_context.endpoint_evidence.evidence_gap",
+            )
+            anchor_evidence_id = self._normalize_optional_string(
+                raw_anchor.get("admitting_evidence_id"),
+                "case.reviewed_context.endpoint_evidence.admitting_evidence_id",
+            )
+            anchor_host_identifier = self._normalize_optional_string(
+                raw_anchor.get("host_identifier"),
+                "case.reviewed_context.endpoint_evidence.host_identifier",
+            )
+            if (
+                anchor_gap_id is None
+                or anchor_gap_text is None
+                or anchor_evidence_id is None
+                or anchor_host_identifier is None
+            ):
+                continue
+            if (
+                anchor_gap_text != evidence_gap
+                or anchor_evidence_id != admitting_evidence_id
+                or anchor_host_identifier != host_identifier
+            ):
+                continue
+            matching_anchors.append(
+                {
+                    "reviewed_gap_id": anchor_gap_id,
+                    "evidence_gap": anchor_gap_text,
+                    "admitting_evidence_id": anchor_evidence_id,
+                    "host_identifier": anchor_host_identifier,
+                }
+            )
+
+        if explicit_gap_id is None:
+            if len(matching_anchors) == 1:
+                return matching_anchors[0]
+            if len(matching_anchors) > 1:
+                raise ValueError(
+                    "reviewed_gap_id is required when multiple reviewed endpoint gap anchors match the request"
+                )
+            return None
+
+        for anchor in matching_anchors:
+            if anchor["reviewed_gap_id"] == explicit_gap_id:
+                return anchor
+        raise ValueError(
+            "reviewed_gap_id must reference a reviewed endpoint gap anchor on the authoritative case chain"
+        )
+
+    def _resolve_reviewed_endpoint_follow_up_decision_anchor(
+        self,
+        *,
+        case: CaseRecord,
+        admitting_evidence_id: str,
+        host_identifier: str,
+        evidence_gap: str,
+        reviewed_follow_up_decision_id: str | None,
+    ) -> Mapping[str, str] | None:
+        explicit_decision_id = self._normalize_optional_string(
+            reviewed_follow_up_decision_id,
+            "reviewed_follow_up_decision_id",
+        )
+        if explicit_decision_id is None:
+            return None
+        approval_decision = self._store.get(ApprovalDecisionRecord, explicit_decision_id)
+        if approval_decision is None:
+            raise LookupError(
+                f"Missing approval decision {explicit_decision_id!r}"
+            )
+        if approval_decision.lifecycle_state not in {"approved", "rejected"}:
+            raise ValueError(
+                "reviewed_follow_up_decision_id must reference a recorded reviewed approval decision"
+            )
+        decision_rationale = self._normalize_optional_string(
+            approval_decision.decision_rationale,
+            "approval_decision.decision_rationale",
+        )
+        if decision_rationale is None or decision_rationale != evidence_gap:
+            raise ValueError(
+                "evidence_gap must match the reviewed follow-up decision rationale"
+            )
+        action_request = self._store.get(
+            ActionRequestRecord,
+            approval_decision.action_request_id,
+        )
+        if action_request is None:
+            raise LookupError(
+                "reviewed_follow_up_decision_id must reference a decision with an authoritative action request"
+            )
+        if action_request.case_id != case.case_id:
+            raise ValueError(
+                "reviewed_follow_up_decision_id must stay bound to the authoritative case chain"
+            )
+        decision_admitting_evidence_id = self._normalize_optional_string(
+            action_request.target_scope.get("admitting_evidence_id"),
+            "action_request.target_scope.admitting_evidence_id",
+        )
+        if decision_admitting_evidence_id != admitting_evidence_id:
+            raise ValueError(
+                "reviewed_follow_up_decision_id must stay bound to the authoritative admitting evidence anchor"
+            )
+        decision_host_identifier = self._normalize_optional_string(
+            action_request.target_scope.get("host_identifier"),
+            "action_request.target_scope.host_identifier",
+        )
+        if decision_host_identifier != host_identifier:
+            raise ValueError(
+                "reviewed_follow_up_decision_id must stay bound to the authoritative case host binding"
+            )
+        return {
+            "reviewed_follow_up_decision_id": explicit_decision_id,
+        }
 
     def _index_endpoint_request_artifacts(
         self,

@@ -163,6 +163,34 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
                         **dict(promoted_case.reviewed_context.get("asset", {})),
                         "host_identifier": host_identifier,
                     },
+                    "endpoint_evidence": {
+                        "reviewed_gap_anchors": (
+                            {
+                                "reviewed_gap_id": "gap-host-triage-001",
+                                "evidence_gap": (
+                                    "Need bounded read-only host triage to resolve the case evidence gap."
+                                ),
+                                "admitting_evidence_id": promoted_case.evidence_ids[0],
+                                "host_identifier": host_identifier,
+                            },
+                            {
+                                "reviewed_gap_id": "gap-host-state-001",
+                                "evidence_gap": (
+                                    "Need endpoint evidence to resolve the reviewed host-state gap."
+                                ),
+                                "admitting_evidence_id": promoted_case.evidence_ids[0],
+                                "host_identifier": host_identifier,
+                            },
+                            {
+                                "reviewed_gap_id": "gap-file-analysis-001",
+                                "evidence_gap": (
+                                    "Need bounded file analysis to understand the reviewed sample."
+                                ),
+                                "admitting_evidence_id": promoted_case.evidence_ids[0],
+                                "host_identifier": host_identifier,
+                            },
+                        )
+                    },
                 },
             )
         )
@@ -217,6 +245,10 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
             anchor_evidence_id,
         )
         self.assertEqual(
+            action_request.requested_payload["reviewed_gap_id"],
+            "gap-host-triage-001",
+        )
+        self.assertEqual(
             action_request.requested_payload["artifact_classes"],
             (
                 "collection_manifest",
@@ -227,6 +259,10 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
         self.assertEqual(
             action_request.target_scope["host_identifier"],
             "host-001",
+        )
+        self.assertEqual(
+            action_request.target_scope["reviewed_gap_id"],
+            "gap-host-triage-001",
         )
         self.assertEqual(
             action_request.policy_evaluation["execution_surface_type"],
@@ -248,6 +284,63 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
                 "execution_constraint": "requires_isolated_executor",
             },
         )
+
+    def test_create_endpoint_evidence_collection_request_rejects_free_form_gap_without_reviewed_anchor(
+        self,
+    ) -> None:
+        store, service, promoted_case, anchor_evidence_id, _reviewed_at = (
+            self._build_host_bound_case()
+        )
+        before_requests = store.list(ActionRequestRecord)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "reviewed endpoint evidence requests require an explicit reviewed gap anchor",
+        ):
+            service.create_endpoint_evidence_collection_request(
+                case_id=promoted_case.case_id,
+                admitting_evidence_id=anchor_evidence_id,
+                requester_identity="analyst-001",
+                host_identifier="host-001",
+                evidence_gap="Arbitrary free-form endpoint rationale that is not anchored on the reviewed case chain.",
+                artifact_classes=(
+                    "collection_manifest",
+                    "triage_bundle",
+                    "tool_output_receipt",
+                ),
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            )
+
+        self.assertEqual(store.list(ActionRequestRecord), before_requests)
+
+    def test_create_endpoint_evidence_collection_request_rejects_missing_reviewed_follow_up_decision_reference(
+        self,
+    ) -> None:
+        store, service, promoted_case, anchor_evidence_id, _reviewed_at = (
+            self._build_host_bound_case()
+        )
+        before_requests = store.list(ActionRequestRecord)
+
+        with self.assertRaisesRegex(
+            LookupError,
+            "Missing approval decision 'approval-decision-missing-001'",
+        ):
+            service.create_endpoint_evidence_collection_request(
+                case_id=promoted_case.case_id,
+                admitting_evidence_id=anchor_evidence_id,
+                requester_identity="analyst-001",
+                host_identifier="host-001",
+                evidence_gap="Need bounded read-only host triage to resolve the case evidence gap.",
+                artifact_classes=(
+                    "collection_manifest",
+                    "triage_bundle",
+                    "tool_output_receipt",
+                ),
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+                reviewed_follow_up_decision_id="approval-decision-missing-001",
+            )
+
+        self.assertEqual(store.list(ActionRequestRecord), before_requests)
 
     def test_create_endpoint_evidence_collection_request_reuses_existing_request_after_idempotency_race(
         self,
