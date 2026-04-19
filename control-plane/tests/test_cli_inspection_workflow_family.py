@@ -115,18 +115,22 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             status_payload["records"][0]["subject_linkage"],
         )
 
-    def test_cli_renders_wazuh_business_hours_analyst_queue_view(self) -> None:
+    def test_cli_renders_reviewed_wazuh_business_hours_analyst_queue_view(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            RuntimeConfig(
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+            ),
             store=store,
         )
-        adapter = WazuhAlertAdapter()
-        admitted = service.ingest_native_detection_record(
-            adapter,
-            adapter.build_native_detection_record(
-                _load_wazuh_fixture("agent-origin-alert.json")
-            ),
+        admitted = service.ingest_wazuh_alert(
+            raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
+            authorization_header="Bearer reviewed-shared-secret",
+            forwarded_proto="https",
+            reverse_proxy_secret_header="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+            peer_addr="127.0.0.1",
         )
         promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)
 
@@ -148,19 +152,19 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
         self.assertEqual(payload["records"][0]["source_system"], "wazuh")
         self.assertEqual(
             payload["records"][0]["accountable_source_identities"],
-            ["agent:007"],
+            ["manager:wazuh-manager-github-1"],
         )
         self.assertEqual(
-            payload["records"][0]["reviewed_context"]["location"],
-            "/var/log/auth.log",
+            payload["records"][0]["reviewed_context"]["source"]["source_family"],
+            "github_audit",
         )
         self.assertEqual(
             payload["records"][0]["native_rule"]["description"],
-            "SSH brute force attempt",
+            "GitHub audit repository privilege change",
         )
         self.assertEqual(
             payload["records"][0]["substrate_detection_record_ids"],
-            ["wazuh:1731594986.4931506"],
+            ["wazuh:1731595300.1234567"],
         )
 
     def test_cli_renders_reviewed_wazuh_alert_detail_view(self) -> None:

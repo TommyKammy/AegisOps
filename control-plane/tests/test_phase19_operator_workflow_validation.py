@@ -650,6 +650,40 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                     servers[0].shutdown()
                 thread.join(timeout=2)
 
+    def test_reviewed_runtime_path_fail_closes_replayed_reviewed_family_queue_summary(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+            ),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+
+        admitted = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(
+                _load_wazuh_fixture("github-audit-alert.json")
+            ),
+        )
+        service._assistant_provider_adapter = mock.Mock()
+
+        with self.assertRaisesRegex(
+            ValueError,
+            rf"alert {admitted.alert.alert_id!r} is outside the approved .* live slice",
+        ):
+            service.run_live_assistant_workflow(
+                workflow_task="queue_triage_summary",
+                record_family="alert",
+                record_id=admitted.alert.alert_id,
+            )
+
+        service._assistant_provider_adapter.generate.assert_not_called()
+
     def test_reviewed_runtime_path_surfaces_handoff_and_manual_fallback_visibility(
         self,
     ) -> None:
