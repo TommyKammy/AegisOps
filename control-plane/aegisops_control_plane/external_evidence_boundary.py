@@ -11,7 +11,9 @@ from .models import (
     ActionRequestRecord,
     ApprovalDecisionRecord,
     CaseRecord,
+    ControlPlaneRecord,
     EvidenceRecord,
+    LifecycleTransitionRecord,
     ObservationRecord,
 )
 
@@ -20,6 +22,15 @@ class ExternalEvidenceBoundaryServiceDependencies(Protocol):
     _store: object
     _endpoint_evidence_pack_adapter: object
     _misp_context_adapter: object
+
+    def _build_lifecycle_transition_records(
+        self,
+        record: ControlPlaneRecord,
+        *,
+        existing_record: ControlPlaneRecord | None,
+        transitioned_at: datetime | None = None,
+    ) -> tuple[LifecycleTransitionRecord, ...]:
+        ...
 
     def persist_record(
         self,
