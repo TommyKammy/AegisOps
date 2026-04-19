@@ -58,6 +58,11 @@ class ControlPlaneCliInspectionTests(ControlPlaneCliInspectionTestBase):
             self
         )
 
+    def test_cli_renders_wazuh_business_hours_analyst_queue_view(self) -> None:
+        CliInspectionWorkflowFamilyTests.test_cli_renders_wazuh_business_hours_analyst_queue_view(
+            self
+        )
+
     def test_long_running_runtime_surface_rejects_case_scoped_out_of_scope_advisory_reads(
         self,
     ) -> None:
@@ -114,6 +119,51 @@ class ControlPlaneCliInspectionTests(ControlPlaneCliInspectionTestBase):
             self
         )
 
+    def test_cli_renders_identity_rich_analyst_queue_view_with_reviewed_context(
+        self,
+    ) -> None:
+        CliInspectionUsageErrorTests.test_cli_renders_identity_rich_analyst_queue_view_with_reviewed_context(
+            self
+        )
+
+
+class CliInspectionVerifierCompatibilityTests(unittest.TestCase):
+    """Legacy verifier names that must stay unittest-discoverable in this module."""
+
+    def _run_split_case(
+        self,
+        case_type: type[unittest.TestCase],
+        test_name: str,
+    ) -> None:
+        result = unittest.TestResult()
+        case_type(test_name).run(result)
+        if result.wasSuccessful():
+            return
+        details = []
+        for _, message in result.failures + result.errors:
+            details.append(message)
+        self.fail("\n\n".join(details) or f"{case_type.__name__}.{test_name} failed")
+
+    def test_cli_renders_read_only_record_and_reconciliation_views(self) -> None:
+        self._run_split_case(
+            CliInspectionWorkflowFamilyTests,
+            "test_cli_renders_read_only_record_and_reconciliation_views",
+        )
+
+    def test_cli_renders_wazuh_business_hours_analyst_queue_view(self) -> None:
+        self._run_split_case(
+            CliInspectionWorkflowFamilyTests,
+            "test_cli_renders_wazuh_business_hours_analyst_queue_view",
+        )
+
+    def test_cli_renders_identity_rich_analyst_queue_view_with_reviewed_context(
+        self,
+    ) -> None:
+        self._run_split_case(
+            CliInspectionUsageErrorTests,
+            "test_cli_renders_identity_rich_analyst_queue_view_with_reviewed_context",
+        )
+
 
 def load_tests(
     loader: unittest.TestLoader,
@@ -141,6 +191,7 @@ __all__ = [
     "CliInspectionActionReviewTests",
     "CliInspectionRuntimeSurfaceTests",
     "CliInspectionUsageErrorTests",
+    "CliInspectionVerifierCompatibilityTests",
     "CliInspectionWorkflowFamilyTests",
     "ControlPlaneCliInspectionTests",
     "CaseRecord",
