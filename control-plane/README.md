@@ -39,6 +39,6 @@ Phase 21 runtime hardening adds these reviewed contracts to the local service bo
 - Administrative runtime routes live under `/admin/` and require the protected-surface contract plus an explicit bootstrap or break-glass token in the request body.
 - The break-glass contract is time-bounded: `/admin/break-glass/activate` rejects expiry windows longer than 60 minutes and requires a ticket identifier and reason.
 
-The reviewed secret-delivery boundary remains intentionally narrow. Future service-account and provider credentials for the reviewed Shuffle path, assistant-provider path, and reviewed coordination integrations must use the same explicit file-backed or OpenBao-backed binding pattern rather than ad hoc `.env` sprawl or plaintext Git-tracked values.
+The reviewed secret-delivery boundary for issue `#565` now covers the live control-plane bindings listed above and also defines the only approved delivery contract for Shuffle, assistant-provider, and reviewed coordination integration credentials. When those credential-bearing integrations gain concrete runtime bindings, they must use the same explicit file-backed or OpenBao-backed pattern rather than ad hoc `.env` sprawl or plaintext Git-tracked values, and until then they remain blocked from live credential use instead of silently falling back to weaker local secret handling.
 
 This scaffold is intentionally minimal. It does not introduce real credentials, production deployment, analyst UI, or live detector execution.

@@ -36,6 +36,14 @@ class OpenBaoKVv2SecretTransport:
         normalized_path = secret_path.strip().strip("/")
         if normalized_address == "":
             raise ValueError("OpenBao address must not be empty")
+        parsed_address = parse.urlsplit(normalized_address)
+        if parsed_address.scheme not in {"http", "https"}:
+            raise ValueError(
+                "OpenBao address must use http or https, "
+                f"got scheme: {parsed_address.scheme or '<none>'!r}"
+            )
+        if parsed_address.netloc == "":
+            raise ValueError("OpenBao address must include a network location")
         if normalized_mount == "":
             raise ValueError("OpenBao KV mount must not be empty")
         if normalized_path == "":
@@ -131,6 +139,15 @@ def _load_bound_string(
             )
         openbao_address = source.get("AEGISOPS_OPENBAO_ADDRESS", "").strip()
         openbao_token = _load_env_or_file_string(source, "AEGISOPS_OPENBAO_TOKEN")
+        if openbao_address == "":
+            raise ValueError(
+                f"{env_name}_OPENBAO_PATH requires AEGISOPS_OPENBAO_ADDRESS"
+            )
+        if openbao_token == "":
+            raise ValueError(
+                f"{env_name}_OPENBAO_PATH requires "
+                "AEGISOPS_OPENBAO_TOKEN or AEGISOPS_OPENBAO_TOKEN_FILE"
+            )
         openbao_mount = source.get("AEGISOPS_OPENBAO_KV_MOUNT", "secret").strip() or "secret"
         try:
             openbao_value = secret_backend_transport.read_secret(
