@@ -211,7 +211,7 @@ class Phase26EndToEndValidationTests(unittest.TestCase):
         outcome = review["coordination_ticket_outcome"]
 
         self.assertEqual(review["action_execution_state"], "failed")
-        self.assertEqual(outcome["status"], "timeout")
+        self.assertEqual(outcome["status"], "failed")
         self.assertEqual(outcome["timeout"]["path"], "provider")
         self.assertEqual(outcome["timeout"]["reason"], "execution_failed")
         self.assertEqual(

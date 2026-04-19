@@ -1296,7 +1296,7 @@ class CliInspectionActionReviewTests(ControlPlaneCliInspectionTestBase):
 
         payload = json.loads(stdout.getvalue())
         review = payload["current_action_review"]
-        self.assertEqual(review["coordination_ticket_outcome"]["status"], "timeout")
+        self.assertEqual(review["coordination_ticket_outcome"]["status"], "failed")
         self.assertEqual(
             review["coordination_ticket_outcome"]["timeout"]["reason"],
             "execution_failed",
@@ -1370,7 +1370,7 @@ class CliInspectionActionReviewTests(ControlPlaneCliInspectionTestBase):
             review["path_health"]["paths"]["persistence"]["reason"],
             "reconciliation_timeout",
         )
-        self.assertEqual(review["coordination_ticket_outcome"]["status"], "timeout")
+        self.assertEqual(review["coordination_ticket_outcome"]["status"], "failed")
         self.assertEqual(
             review["coordination_ticket_outcome"]["timeout"]["reason"],
             "execution_failed",

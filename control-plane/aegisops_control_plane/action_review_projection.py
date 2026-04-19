@@ -523,7 +523,6 @@ def action_review_timeline(
     delegation_details: dict[str, object] = {}
     action_execution_details: dict[str, object] = {}
     execution_actor_identities: tuple[str, ...] = ()
-    action_execution_occurred_at: datetime | None = None
     if action_execution is not None:
         delegation_details["delegation_id"] = action_execution.delegation_id
         execution_actor_identities = service._assistant_merge_ids(
@@ -632,7 +631,7 @@ def action_review_timeline(
                 if action_execution is None
                 else action_execution.lifecycle_state
             ),
-            occurred_at=action_execution_occurred_at,
+            occurred_at=None,
             actor_identities=execution_actor_identities,
             details=(
                 {}
@@ -752,7 +751,7 @@ def action_review_coordination_ticket_outcome(
         status = "timeout"
         summary = str(terminal_issue["reason"]).replace("_", " ")
     elif terminal_issue is not None:
-        status = "timeout"
+        status = "failed"
         summary = str(terminal_issue["reason"]).replace("_", " ")
     else:
         status = "pending"
