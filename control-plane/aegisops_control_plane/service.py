@@ -4,6 +4,7 @@ from contextlib import AbstractContextManager, contextmanager
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, fields, replace
 from datetime import datetime, timedelta, timezone
+import hashlib
 import hmac
 import ipaddress
 import json
@@ -15,6 +16,7 @@ from typing import Iterable, Iterator, Mapping, Protocol, Type, TypeVar
 _DATETIME_TYPE = datetime
 
 from .adapters.executor import IsolatedExecutorAdapter
+from .adapters.endpoint_evidence import EndpointEvidencePackAdapter
 from .adapters.n8n import N8NReconciliationAdapter
 from .adapters.osquery import OsqueryHostContextAdapter
 from .adapters.postgres import (
@@ -31,7 +33,10 @@ from .assistant_provider import (
     AssistantProviderTransport,
 )
 from .config import OpenBaoKVv2SecretTransport, RuntimeConfig
-from .execution_coordinator import ExecutionCoordinator
+from .execution_coordinator import (
+    ExecutionCoordinator,
+    _approved_payload_binding_hash,
+)
 from .models import (
     AITraceRecord,
     ActionExecutionRecord,
@@ -1348,6 +1353,7 @@ class AegisOpsControlPlaneService:
             ),
         )
         self._execution_coordinator = ExecutionCoordinator(self)
+        self._endpoint_evidence_pack_adapter = EndpointEvidencePackAdapter()
         self._osquery_host_context_adapter = OsqueryHostContextAdapter()
         self._runtime_boundary_service = RuntimeBoundaryService(
             config=self._config,
@@ -6224,6 +6230,251 @@ class AegisOpsControlPlaneService:
             expires_at=expires_at,
             action_request_id=action_request_id,
         )
+
+    def create_endpoint_evidence_collection_request(
+        self,
+        *,
+        case_id: str,
+        admitting_evidence_id: str,
+        requester_identity: str,
+        host_identifier: str,
+        evidence_gap: str,
+        artifact_classes: tuple[str, ...],
+        expires_at: datetime,
+        action_request_id: str | None = None,
+    ) -> ActionRequestRecord:
+        case_id = self._require_non_empty_string(case_id, "case_id")
+        admitting_evidence_id = self._require_non_empty_string(
+            admitting_evidence_id,
+            "admitting_evidence_id",
+        )
+        requester_identity = self._require_non_empty_string(
+            requester_identity,
+            "requester_identity",
+        )
+        host_identifier = self._require_non_empty_string(
+            host_identifier,
+            "host_identifier",
+        )
+        evidence_gap = self._require_non_empty_string(evidence_gap, "evidence_gap")
+        expires_at = self._require_aware_datetime(expires_at, "expires_at")
+        normalized_artifact_classes = (
+            self._endpoint_evidence_pack_adapter.normalize_requested_artifact_classes(
+                artifact_classes
+            )
+        )
+
+        with self._store.transaction():
+            case = self._require_reviewed_operator_case(case_id)
+            authoritative_host_identifier = self._require_case_host_identifier(case)
+            if host_identifier != authoritative_host_identifier:
+                raise ValueError(
+                    "host_identifier must match the authoritative reviewed case host binding"
+                )
+            self._validate_case_evidence_linkage(
+                case=case,
+                evidence_ids=(admitting_evidence_id,),
+                field_name="admitting_evidence_id",
+            )
+            if expires_at <= datetime.now(timezone.utc):
+                raise ValueError("expires_at must be in the future")
+
+            requested_payload = {
+                "action_type": "collect_endpoint_evidence_pack",
+                "collection_mode": "read_only",
+                "case_id": case.case_id,
+                "alert_id": case.alert_id,
+                "finding_id": case.finding_id,
+                "admitting_evidence_id": admitting_evidence_id,
+                "host_identifier": host_identifier,
+                "evidence_gap": evidence_gap,
+                "artifact_classes": normalized_artifact_classes,
+            }
+            target_scope = {
+                "case_id": case.case_id,
+                "alert_id": case.alert_id,
+                "finding_id": case.finding_id,
+                "admitting_evidence_id": admitting_evidence_id,
+                "host_identifier": host_identifier,
+                "artifact_classes": normalized_artifact_classes,
+            }
+            payload_hash = _approved_payload_binding_hash(
+                target_scope=target_scope,
+                approved_payload=requested_payload,
+                execution_surface_type="executor",
+                execution_surface_id="isolated-executor",
+            )
+            requested_at = datetime.now(timezone.utc)
+            if expires_at <= requested_at:
+                raise ValueError("expires_at must be after requested_at")
+
+            idempotency_material = json.dumps(
+                _json_ready(
+                    {
+                        "payload_hash": payload_hash,
+                        "requester_identity": requester_identity,
+                        "expires_at": expires_at,
+                    }
+                ),
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            idempotency_key = (
+                "endpoint-evidence-pack:"
+                + hashlib.sha256(idempotency_material.encode("utf-8")).hexdigest()
+            )
+            for existing in self._store.list(ActionRequestRecord):
+                if existing.idempotency_key == idempotency_key:
+                    return existing
+
+            normalized_action_request_id = self._resolve_new_record_identifier(
+                ActionRequestRecord,
+                action_request_id,
+                "action_request_id",
+                "action-request",
+            )
+            return self.persist_record(
+                ActionRequestRecord(
+                    action_request_id=normalized_action_request_id,
+                    approval_decision_id=None,
+                    case_id=case.case_id,
+                    alert_id=case.alert_id,
+                    finding_id=case.finding_id,
+                    idempotency_key=idempotency_key,
+                    target_scope=target_scope,
+                    payload_hash=payload_hash,
+                    requested_at=requested_at,
+                    expires_at=expires_at,
+                    lifecycle_state="pending_approval",
+                    requester_identity=requester_identity,
+                    requested_payload=requested_payload,
+                    policy_basis={
+                        "severity": "bounded_evidence_collection",
+                        "target_scope": "single_host",
+                        "action_reversibility": "read_only",
+                        "blast_radius": "single_target",
+                        "execution_constraint": "isolated_executor_required",
+                    },
+                    policy_evaluation={
+                        "approval_requirement": "human_required",
+                        "approval_requirement_override": "human_required",
+                        "routing_target": "approval",
+                        "execution_surface_type": "executor",
+                        "execution_surface_id": "isolated-executor",
+                    },
+                ),
+                transitioned_at=requested_at,
+            )
+
+    def ingest_endpoint_evidence_artifacts(
+        self,
+        *,
+        action_request_id: str,
+        artifacts: tuple[Mapping[str, object], ...],
+        admitted_by: str,
+    ) -> tuple[EvidenceRecord, ...]:
+        action_request_id = self._require_non_empty_string(
+            action_request_id,
+            "action_request_id",
+        )
+        admitted_by = self._require_non_empty_string(admitted_by, "admitted_by")
+        if not isinstance(artifacts, tuple):
+            raise ValueError("artifacts must be a tuple of artifact mappings")
+        if not artifacts:
+            raise ValueError("artifacts must contain at least one artifact mapping")
+
+        with self._store.transaction(isolation_level="SERIALIZABLE"):
+            action_request = self._store.get(ActionRequestRecord, action_request_id)
+            if action_request is None:
+                raise LookupError(f"Missing action request {action_request_id!r}")
+            if (
+                action_request.requested_payload.get("action_type")
+                != "collect_endpoint_evidence_pack"
+            ):
+                raise ValueError(
+                    "action_request_id is not a reviewed endpoint evidence collection request"
+                )
+            if action_request.lifecycle_state in {"rejected", "canceled", "failed"}:
+                raise ValueError(
+                    "endpoint evidence artifacts cannot be admitted from a terminal rejected request"
+                )
+
+            case_id = self._require_non_empty_string(action_request.case_id, "case_id")
+            case = self._require_reviewed_operator_case(case_id)
+            authoritative_host_identifier = self._require_case_host_identifier(case)
+            approved_host_identifier = self._require_non_empty_string(
+                action_request.target_scope.get("host_identifier"),
+                "action_request.target_scope.host_identifier",
+            )
+            if approved_host_identifier != authoritative_host_identifier:
+                raise ValueError(
+                    "endpoint evidence request host binding drifted from the authoritative reviewed case host binding"
+                )
+            admitting_evidence_id = self._require_non_empty_string(
+                action_request.requested_payload.get("admitting_evidence_id"),
+                "action_request.requested_payload.admitting_evidence_id",
+            )
+            self._validate_case_evidence_linkage(
+                case=case,
+                evidence_ids=(admitting_evidence_id,),
+                field_name="action_request.requested_payload.admitting_evidence_id",
+            )
+            requested_artifact_classes = (
+                self._endpoint_evidence_pack_adapter.normalize_requested_artifact_classes(
+                    action_request.requested_payload.get("artifact_classes")
+                )
+            )
+            attachments = tuple(
+                self._endpoint_evidence_pack_adapter.build_attachment(
+                    action_request_id=action_request.action_request_id,
+                    case_id=case.case_id,
+                    alert_id=case.alert_id,
+                    admitting_evidence_id=admitting_evidence_id,
+                    authoritative_host_identifier=authoritative_host_identifier,
+                    requested_artifact_classes=requested_artifact_classes,
+                    artifact=artifact,
+                    admitted_by=admitted_by,
+                )
+                for artifact in artifacts
+            )
+            if len({attachment.source_record_id for attachment in attachments}) != len(
+                attachments
+            ):
+                raise ValueError(
+                    "artifacts must not contain duplicate artifact_id values within one request"
+                )
+
+            persisted: list[EvidenceRecord] = []
+            for attachment in attachments:
+                persisted.append(
+                    self.persist_record(
+                        EvidenceRecord(
+                            evidence_id=self._next_identifier("evidence"),
+                            source_record_id=attachment.source_record_id,
+                            alert_id=case.alert_id,
+                            case_id=case.case_id,
+                            source_system=attachment.source_system,
+                            collector_identity=attachment.collector_identity,
+                            acquired_at=attachment.acquired_at,
+                            derivation_relationship=attachment.derivation_relationship,
+                            lifecycle_state="linked",
+                            provenance=attachment.provenance,
+                            content=attachment.content,
+                        )
+                    )
+                )
+            current_case = self._require_reviewed_operator_case(case.case_id)
+            merged_case_evidence_ids = current_case.evidence_ids
+            for evidence in persisted:
+                merged_case_evidence_ids = self._merge_linked_ids(
+                    merged_case_evidence_ids,
+                    evidence.evidence_id,
+                )
+            if merged_case_evidence_ids != current_case.evidence_ids:
+                self.persist_record(
+                    replace(current_case, evidence_ids=merged_case_evidence_ids)
+                )
+            return tuple(persisted)
 
     def record_action_approval_decision(
         self,
