@@ -76,11 +76,11 @@ extract_self_guard_step_run_command() {
 
     {
       if (in_step) {
-        if ($0 ~ /^[[:space:]]*-[[:space:]]name:[[:space:]]+/ && line_indent($0) <= step_indent) {
+        if ($0 ~ /^[[:space:]]*-[[:space:]]/ && line_indent($0) <= step_indent) {
           exit 0
         }
 
-        if ($0 ~ /^[[:space:]]*run:[[:space:]]*/) {
+        if ($0 ~ /^[[:space:]]*run:[[:space:]]*/ && line_indent($0) > step_indent) {
           line = $0
           sub(/^[[:space:]]*run:[[:space:]]*/, "", line)
           print line
