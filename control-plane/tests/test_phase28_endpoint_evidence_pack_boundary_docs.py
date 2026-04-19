@@ -49,7 +49,7 @@ class Phase28EndpointEvidencePackBoundaryDocsTests(unittest.TestCase):
         for term in (
             "# Phase 28 Optional Endpoint Evidence-Pack Boundary Validation",
             "Validation status: PASS",
-            "docs/Revised Phase23-20 Epic Roadmap.md",
+            "ObsidianVault/Dev/AegisOps/Plan&Roadmap/Revised Phase23-29 Epic Roadmap.md",
             "docs/requirements-baseline.md",
             "docs/architecture.md",
             "docs/phase-25-reviewed-multi-source-case-admission-and-ambiguity-taxonomy.md",
@@ -60,6 +60,8 @@ class Phase28EndpointEvidencePackBoundaryDocsTests(unittest.TestCase):
             'python3 -m unittest control-plane.tests.test_phase28_endpoint_evidence_pack_boundary_docs',
         ):
             self.assertIn(term, text)
+
+        self.assertNotIn("docs/Revised Phase23-20 Epic Roadmap.md", text)
 
 
 if __name__ == "__main__":
