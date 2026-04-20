@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Callable, Iterator, Mapping, Type
 
 from .adapters.postgres import ReadinessDiagnosticsAggregates

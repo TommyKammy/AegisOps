@@ -76,6 +76,12 @@ def _unexpected_restore_record_family_keys(
     *,
     expected_families: frozenset[str],
 ) -> tuple[str, ...]:
+    non_string_keys = tuple(key for key in payload if not isinstance(key, str))
+    if non_string_keys:
+        raise ValueError(
+            "restore payload contains non-string record family keys: "
+            f"{non_string_keys!r}"
+        )
     return tuple(sorted(set(payload) - expected_families))
 
 
@@ -500,80 +506,70 @@ class _BackupRestoreFlow:
                 f"[{family!r}]={restored_record_counts.get(family)!r}"
             )
 
+        def require_family_records(
+            family: str,
+            expected_type: Type[ControlPlaneRecord],
+        ) -> tuple[ControlPlaneRecord, ...]:
+            family_records = tuple(records_by_family.get(family, ()))
+            unexpected_types = tuple(
+                type(record).__name__
+                for record in family_records
+                if not isinstance(record, expected_type)
+            )
+            if unexpected_types:
+                raise ValueError(
+                    "restore payload contains unexpected record types for "
+                    f"{family!r}: {unexpected_types!r}"
+                )
+            return family_records
+
         analytic_signal_records = tuple(
-            record
-            for record in records_by_family.get("analytic_signal", ())
-            if isinstance(record, AnalyticSignalRecord)
+            require_family_records("analytic_signal", AnalyticSignalRecord)
         )
         alert_records = tuple(
-            record
-            for record in records_by_family.get("alert", ())
-            if isinstance(record, AlertRecord)
+            require_family_records("alert", AlertRecord)
         )
         evidence_record_family = tuple(
-            record
-            for record in records_by_family.get("evidence", ())
-            if isinstance(record, EvidenceRecord)
+            require_family_records("evidence", EvidenceRecord)
         )
         observation_records = tuple(
-            record
-            for record in records_by_family.get("observation", ())
-            if isinstance(record, ObservationRecord)
+            require_family_records("observation", ObservationRecord)
         )
         lead_records = tuple(
-            record
-            for record in records_by_family.get("lead", ())
-            if isinstance(record, LeadRecord)
+            require_family_records("lead", LeadRecord)
         )
         case_records = tuple(
-            record
-            for record in records_by_family.get("case", ())
-            if isinstance(record, CaseRecord)
+            require_family_records("case", CaseRecord)
         )
         recommendation_records = tuple(
-            record
-            for record in records_by_family.get("recommendation", ())
-            if isinstance(record, RecommendationRecord)
+            require_family_records("recommendation", RecommendationRecord)
         )
         lifecycle_transition_records = tuple(
-            record
-            for record in records_by_family.get("lifecycle_transition", ())
-            if isinstance(record, LifecycleTransitionRecord)
+            require_family_records(
+                "lifecycle_transition",
+                LifecycleTransitionRecord,
+            )
         )
         approval_decision_records = tuple(
-            record
-            for record in records_by_family.get("approval_decision", ())
-            if isinstance(record, ApprovalDecisionRecord)
+            require_family_records("approval_decision", ApprovalDecisionRecord)
         )
         action_request_records = tuple(
-            record
-            for record in records_by_family.get("action_request", ())
-            if isinstance(record, ActionRequestRecord)
+            require_family_records("action_request", ActionRequestRecord)
         )
         action_execution_records = tuple(
-            record
-            for record in records_by_family.get("action_execution", ())
-            if isinstance(record, ActionExecutionRecord)
+            require_family_records("action_execution", ActionExecutionRecord)
         )
         hunt_records = tuple(
-            record
-            for record in records_by_family.get("hunt", ())
-            if isinstance(record, HuntRecord)
+            require_family_records("hunt", HuntRecord)
         )
         hunt_run_records = tuple(
-            record
-            for record in records_by_family.get("hunt_run", ())
-            if isinstance(record, HuntRunRecord)
+            require_family_records("hunt_run", HuntRunRecord)
         )
         ai_trace_records = tuple(
-            record
-            for record in records_by_family.get("ai_trace", ())
-            if isinstance(record, AITraceRecord)
+            require_family_records("ai_trace", AITraceRecord)
         )
         reconciliations = tuple(
-            record
-            for record in records_by_family.get("reconciliation", ())
-            if isinstance(record, ReconciliationRecord)
+            require_family_records("reconciliation", ReconciliationRecord)
         )
         for family, records in (
             ("analytic_signal", analytic_signal_records),
