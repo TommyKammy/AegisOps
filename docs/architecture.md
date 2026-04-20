@@ -20,6 +20,8 @@ It defines:
 
 For the canonical cross-phase anti-expansion registry that future architecture changes must also preserve, see `docs/non-goals-and-expansion-guardrails.md`.
 
+For the repo-owned maintainability rule that tells future planning and review when a hotspot should move into another decomposition backlog instead of absorbing more unrelated growth, see `docs/maintainability-decomposition-thresholds.md`.
+
 ## 2. Architecture Overview
 
 AegisOps is a governed SecOps control plane above external detection and automation substrates.

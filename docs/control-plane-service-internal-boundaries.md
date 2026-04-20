@@ -4,6 +4,8 @@ This document defines the target internal decomposition for `control-plane/aegis
 
 It supplements `docs/control-plane-runtime-service-boundary.md`, `docs/phase-19-thin-operator-surface-and-daily-analyst-workflow.md`, `docs/phase-20-first-live-low-risk-action-and-reviewed-delegation-boundary.md`, and `docs/phase-21-production-like-hardening-boundary-and-sequence.md`.
 
+For the repo-wide rule that decides when a hotspot should move into another maintainability backlog instead of continuing to grow in place, see `docs/maintainability-decomposition-thresholds.md`.
+
 This note is intentionally limited to internal service boundaries and extraction sequencing. It does not approve a broader runtime surface, new external APIs, or behavior changes outside the already-reviewed Phase 19-21 slice.
 
 ## 1. Purpose

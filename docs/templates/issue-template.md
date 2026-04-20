@@ -4,6 +4,7 @@
 
 This issue MUST comply with:
 - `docs/requirements-baseline.md`
+- `docs/maintainability-decomposition-thresholds.md` when the issue extends an existing hotspot instead of a clearly bounded module
 
 This baseline is the governing implementation contract for **AegisOps**.
 

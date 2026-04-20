@@ -38,6 +38,7 @@ If a document inside one of these areas has its own `Owner` or `Owners` field, t
 | `docs/automation-substrate-contract.md` | Approved automation delegation contract baseline | IT Operations, Information Systems Department |
 | `docs/control-plane-state-model.md` | Control-plane state and reconciliation baseline | IT Operations, Information Systems Department |
 | `docs/control-plane-runtime-service-boundary.md` | Live control-plane runtime service boundary and repository placement baseline | IT Operations, Information Systems Department |
+| `docs/maintainability-decomposition-thresholds.md` | Maintainability decomposition thresholds and backlog triggers | IT Operations, Information Systems Department |
 | `docs/phase-16-release-state-and-first-boot-scope.md` | Approved Phase 16 release-state, first-boot runtime boundary, and definition of done | IT Operations, Information Systems Department |
 | `docs/phase-16-release-state-and-first-boot-validation.md` | Review record for the approved Phase 16 first-boot scope and bootability target | IT Operations, Information Systems Department |
 | `docs/phase-17-runtime-config-contract-and-boot-command-expectations.md` | Concrete Phase 17 first-boot runtime config contract and boot command expectations | IT Operations, Information Systems Department |
