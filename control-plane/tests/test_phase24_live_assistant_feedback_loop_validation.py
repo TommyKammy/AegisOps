@@ -23,6 +23,70 @@ from aegisops_control_plane.service import _phase24_live_assistant_citations_fro
 
 
 class Phase24LiveAssistantFeedbackLoopValidationTests(ServicePersistenceTestBase):
+    def test_live_assistant_workflow_clones_configured_adapter_when_only_prompt_version_changes(
+        self,
+    ) -> None:
+        store, service, alert, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_alert_without_case()
+        )
+
+        class StatefulAssistantProviderAdapter(AssistantProviderAdapter):
+            def __init__(self, *, stateful_marker: str, **kwargs: object) -> None:
+                super().__init__(**kwargs)
+                self.stateful_marker = stateful_marker
+
+            def build_ai_trace_record(self, **kwargs: object) -> AITraceRecord:
+                ai_trace = super().build_ai_trace_record(**kwargs)
+                subject_linkage = dict(ai_trace.subject_linkage)
+                subject_linkage["adapter_marker"] = self.stateful_marker
+                return replace(ai_trace, subject_linkage=subject_linkage)
+
+        service._assistant_provider_adapter = StatefulAssistantProviderAdapter(
+            provider_identity="openai",
+            model_identity="gpt-5.4",
+            prompt_version="phase24-case-summary-v1",
+            request_timeout_seconds=5.0,
+            max_attempts=1,
+            transport=mock.Mock(
+                send_request=mock.Mock(
+                    return_value={
+                        "provider_request_id": "provider-request-clone-001",
+                        "provider_response_id": "provider-response-clone-001",
+                        "provider_transcript_id": "provider-transcript-clone-001",
+                        "model_version": "model-version-2026-04-20",
+                        "output_text": (
+                            "Reviewed queue alert scope remains bounded to the cited evidence."
+                        ),
+                    }
+                )
+            ),
+            stateful_marker="preserved-subclass-state",
+        )
+
+        snapshot = service.run_live_assistant_workflow(
+            workflow_task="queue_triage_summary",
+            record_family="alert",
+            record_id=alert.alert_id,
+        )
+
+        self.assertEqual(snapshot.status, "ready")
+        ai_traces = store.list(AITraceRecord)
+        self.assertEqual(len(ai_traces), 1)
+        self.assertEqual(
+            ai_traces[0].prompt_version,
+            "phase24-queue-summary-v1",
+        )
+        self.assertEqual(
+            ai_traces[0].subject_linkage["adapter_marker"],
+            "preserved-subclass-state",
+        )
+        self.assertEqual(
+            service._assistant_provider_adapter._prompt_version,
+            "phase24-case-summary-v1",
+        )
+        self.assertIn(alert.alert_id, ai_traces[0].material_input_refs)
+        self.assertIn(evidence_id, ai_traces[0].material_input_refs)
+
     def test_live_assistant_workflow_persists_reviewable_feedback_loop_records(self) -> None:
         store, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
@@ -362,6 +426,8 @@ class Phase24LiveAssistantFeedbackLoopValidationTests(ServicePersistenceTestBase
                 reviewer_identity="system://bounded-live-assistant",
                 lifecycle_state="ready",
                 assistant_advisory_draft={
+                    "provider_record_family": "ai_trace",
+                    "provider_request_id": "provider-request-feedback-loop-002",
                     "subject_linkage": {
                         "source_record_family": "case",
                         "source_record_id": "case-stale-001",
@@ -413,6 +479,14 @@ class Phase24LiveAssistantFeedbackLoopValidationTests(ServicePersistenceTestBase
         self.assertEqual(
             ai_trace.assistant_advisory_draft["subject_linkage"]["provider_identity"],
             "openai",
+        )
+        self.assertEqual(
+            ai_trace.assistant_advisory_draft["provider_record_family"],
+            "ai_trace",
+        )
+        self.assertEqual(
+            ai_trace.assistant_advisory_draft["provider_request_id"],
+            "provider-request-feedback-loop-002",
         )
         self.assertEqual(
             ai_trace.assistant_advisory_draft["reviewed_input_refs"],

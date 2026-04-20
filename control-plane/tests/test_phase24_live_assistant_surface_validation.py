@@ -126,6 +126,28 @@ class Phase24LiveAssistantSurfaceValidationTests(ServicePersistenceTestBase):
 
         service._assistant_provider_adapter.generate.assert_not_called()
 
+    def test_service_delegates_live_assistant_workflow_to_extracted_coordinator(
+        self,
+    ) -> None:
+        _, service, promoted_case, _, _ = self._build_phase19_in_scope_case()
+        expected_snapshot = mock.sentinel.live_assistant_snapshot
+        coordinator = mock.Mock()
+        coordinator.run_live_assistant_workflow.return_value = expected_snapshot
+        service._live_assistant_workflow_coordinator = coordinator
+
+        snapshot = service.run_live_assistant_workflow(
+            workflow_task="case_summary",
+            record_family="case",
+            record_id=promoted_case.case_id,
+        )
+
+        self.assertIs(snapshot, expected_snapshot)
+        coordinator.run_live_assistant_workflow.assert_called_once_with(
+            workflow_task="case_summary",
+            record_family="case",
+            record_id=promoted_case.case_id,
+        )
+
     def test_cli_runs_case_summary_workflow_with_phase24_trusted_output_contract(
         self,
     ) -> None:
