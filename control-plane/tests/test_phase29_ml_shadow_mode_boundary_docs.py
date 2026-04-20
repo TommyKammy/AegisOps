@@ -41,6 +41,8 @@ class Phase29MlShadowModeBoundaryDocsTests(unittest.TestCase):
             "Allowed reviewed feature sources",
             "Allowed reviewed labels",
             "ML lineage envelope semantics",
+            "MLflow experiment tracking",
+            "MLflow model registry",
             "separate ML lineage envelope namespace",
             "`provenance.source_family`",
             "`provenance.source_system`",
@@ -62,6 +64,7 @@ class Phase29MlShadowModeBoundaryDocsTests(unittest.TestCase):
             "`model_family`",
             "`model_version`",
             "`training_data_snapshot_id`",
+            "candidate shadow-model records",
             "`shadow_output_id`",
         ):
             self.assertIn(term, text)
