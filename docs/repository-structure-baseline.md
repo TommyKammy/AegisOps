@@ -28,6 +28,9 @@ Until a later ADR approves a repository rebaseline, contributors must treat the 
 | `.env.sample` | Sample environment variables for documentation and structure only; never real secrets or active environment state. |
 | `LICENSE.txt` | Repository license text tracked as a stable project-level metadata file. |
 | `README.md` | Project overview and contributor-facing orientation for the current approved baseline. |
+| `apps/` | Approved frontend application workspace home for reviewed operator-facing surfaces such as `apps/operator-ui/`; this directory does not make the UI the authority source. |
+| `package.json` | Root Node.js workspace manifest that defines approved shared frontend tooling and workspace entrypoints for reviewed UI slices. |
+| `package-lock.json` | Root npm lockfile tracked to keep reviewed workspace dependency resolution reproducible across operator-UI and related frontend changes. |
 
 ## Repository Rules
 
@@ -37,6 +40,7 @@ Until a later ADR approves a repository rebaseline, contributors must treat the 
 - The reviewed top-level tree remains transitional relative to the control-plane thesis until a later ADR explicitly approves a different repository rebaseline.
 - Only intentionally versioned repository guidance is approved under `.codex-supervisor/`; supervisor-local journals and other transient execution files in that directory must remain untracked.
 - This document defines structure only and does not authorize runtime, deployment, or workflow implementation.
+- The reviewed Phase 30 operator-console foundation explicitly approves `apps/`, `package.json`, and `package-lock.json` as repository-baseline entries so the React-Admin operator UI can ship as a dedicated workspace without dissolving backend authority into the frontend shell.
 
 Within `sigma/`, placeholder marker files may reserve approved homes such as `curated/` and `suppressed/` before any real detection or suppression content is admitted.
 

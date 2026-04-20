@@ -72,12 +72,15 @@ create_repo \
   ".gitignore" \
   "LICENSE.txt" \
   "README.md" \
+  "apps/operator-ui/README.md" \
   "config/" \
   "control-plane/" \
   "docs/" \
   "ingest/" \
   "n8n/" \
   "opensearch/" \
+  "package-lock.json" \
+  "package.json" \
   "postgres/" \
   "proxy/" \
   "scripts/" \
@@ -94,12 +97,15 @@ create_repo \
   ".gitignore" \
   "LICENSE.txt" \
   "README.md" \
+  "apps/operator-ui/README.md" \
   "config/" \
   "control-plane/" \
   "docs/" \
   "ingest/" \
   "n8n/" \
   "opensearch/" \
+  "package-lock.json" \
+  "package.json" \
   "postgres/" \
   "proxy/" \
   "scripts/" \
@@ -116,12 +122,15 @@ create_repo \
   ".gitignore" \
   "LICENSE.txt" \
   "README.md" \
+  "apps/operator-ui/README.md" \
   "config/" \
   "control-plane/" \
   "docs/" \
   "ingest/" \
   "n8n/" \
   "opensearch/" \
+  "package-lock.json" \
+  "package.json" \
   "postgres/" \
   "proxy/" \
   "scripts/" \
