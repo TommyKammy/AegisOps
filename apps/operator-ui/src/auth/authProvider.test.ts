@@ -31,11 +31,37 @@ describe("createOperatorAuthProvider", () => {
     });
 
     await authProvider.login({
-      returnTo: "/operator/queue?status=open",
+      returnTo: "queue?status=open",
     });
 
     expect(redirector.replace).toHaveBeenCalledWith(
       "/auth/oidc/login?returnTo=%2Foperator%2Fqueue%3Fstatus%3Dopen",
+    );
+  });
+
+  it("rejects external or out-of-scope return paths during login redirect", async () => {
+    const redirector = {
+      replace: vi.fn(),
+    };
+    const config = createOperatorUiConfig();
+    const sessionStore = createSessionStore({
+      config,
+      fetchFn: vi.fn(),
+    });
+
+    const authProvider = createOperatorAuthProvider({
+      config,
+      sessionStore,
+      fetchFn: vi.fn(),
+      redirector,
+    });
+
+    await authProvider.login({
+      returnTo: "https://attacker.example/operator/queue",
+    });
+
+    expect(redirector.replace).toHaveBeenCalledWith(
+      "/auth/oidc/login?returnTo=%2Foperator",
     );
   });
 

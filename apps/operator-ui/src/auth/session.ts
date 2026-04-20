@@ -59,7 +59,12 @@ function validateSession(
     );
   }
 
-  if (!roles.some((role) => config.allowedRoles.includes(role))) {
+  const allowedRoles = new Set(
+    config.allowedRoles.map((role) => role.trim().toLowerCase()),
+  );
+  const reviewedRoles = roles.filter((role) => allowedRoles.has(role));
+
+  if (reviewedRoles.length === 0) {
     throw new AuthAccessError(
       "forbidden",
       "The authenticated session does not include a reviewed operator role.",
@@ -69,7 +74,7 @@ function validateSession(
   return {
     identity,
     provider,
-    roles,
+    roles: reviewedRoles,
     subject,
   };
 }

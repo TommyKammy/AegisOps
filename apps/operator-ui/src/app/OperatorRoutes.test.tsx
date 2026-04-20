@@ -63,6 +63,31 @@ describe("OperatorRoutes", () => {
     });
   });
 
+  it("fails closed on malformed reviewed session responses", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: vi.fn<typeof fetch>().mockResolvedValue(
+        jsonResponse({
+          identity: "analyst@example.com",
+          provider: "authentik",
+          roles: "analyst",
+          subject: "operator-11",
+        }),
+      ),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Session verification failed" }),
+      ).toBeInTheDocument();
+    });
+  });
+
   it("restores an authorized session into the protected shell", async () => {
     const dependencies = createDefaultDependencies({
       fetchFn: vi.fn<typeof fetch>().mockResolvedValue(

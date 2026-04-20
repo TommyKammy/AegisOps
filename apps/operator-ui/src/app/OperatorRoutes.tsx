@@ -134,15 +134,50 @@ function ForbiddenPage({
   );
 }
 
+function InvalidSessionPage({
+  authProvider,
+}: {
+  authProvider: AuthProvider;
+}) {
+  return (
+    <Stack
+      spacing={2}
+      sx={{
+        minHeight: "100vh",
+        alignItems: "center",
+        justifyContent: "center",
+        px: 3,
+      }}
+    >
+      <Typography component="h1" variant="h3">
+        Session verification failed
+      </Typography>
+      <Typography maxWidth={560} textAlign="center" variant="body1">
+        The reviewed backend session is missing required operator claims or
+        returned an unexpected auth response. The operator shell remains
+        blocked until a reviewed session is re-established.
+      </Typography>
+      <Button
+        onClick={() => {
+          void authProvider.logout({});
+        }}
+        variant="outlined"
+      >
+        Clear Session
+      </Button>
+    </Stack>
+  );
+}
+
 function ProtectedOperatorRoute({
   authProvider,
   config,
   sessionStore,
 }: OperatorAppDependencies) {
   const location = useLocation();
-  const [status, setStatus] = useState<"loading" | "authorized" | "forbidden" | "unauthenticated">(
-    "loading",
-  );
+  const [status, setStatus] = useState<
+    "loading" | "authorized" | "forbidden" | "invalid_session" | "unauthenticated"
+  >("loading");
 
   useEffect(() => {
     let active = true;
@@ -159,11 +194,18 @@ function ProtectedOperatorRoute({
           return;
         }
 
-        if (
-          error instanceof AuthAccessError &&
-          error.code === "forbidden"
-        ) {
-          setStatus("forbidden");
+        if (error instanceof AuthAccessError) {
+          if (error.code === "forbidden") {
+            setStatus("forbidden");
+            return;
+          }
+
+          if (error.code === "invalid_session") {
+            setStatus("invalid_session");
+            return;
+          }
+
+          setStatus("unauthenticated");
           return;
         }
 
@@ -199,6 +241,10 @@ function ProtectedOperatorRoute({
     return <Navigate replace to={`${config.basePath}/forbidden`} />;
   }
 
+  if (status === "invalid_session") {
+    return <Navigate replace to={`${config.basePath}/session-invalid`} />;
+  }
+
   if (status === "unauthenticated") {
     return <Navigate replace to={loginHref} />;
   }
@@ -222,6 +268,10 @@ export function OperatorRoutes({
       <Route
         element={<ForbiddenPage authProvider={authProvider} />}
         path={`${config.basePath}/forbidden`}
+      />
+      <Route
+        element={<InvalidSessionPage authProvider={authProvider} />}
+        path={`${config.basePath}/session-invalid`}
       />
       <Route
         element={

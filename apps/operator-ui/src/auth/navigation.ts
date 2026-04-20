@@ -2,8 +2,16 @@ export interface Redirector {
   replace: (href: string) => void;
 }
 
-export const windowLocationRedirector: Redirector = {
-  replace(href) {
-    window.location.assign(href);
-  },
-};
+export function createWindowLocationRedirector(
+  location: Pick<Location, "replace">,
+): Redirector {
+  return {
+    replace(href) {
+      location.replace(href);
+    },
+  };
+}
+
+export const windowLocationRedirector = createWindowLocationRedirector(
+  window.location,
+);

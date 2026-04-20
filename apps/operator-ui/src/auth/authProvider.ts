@@ -12,10 +12,57 @@ export class AuthAccessError extends Error {
   }
 }
 
+const INTERNAL_APP_ORIGIN = "http://operator-ui.local";
+
 function buildLoginRedirect(loginPath: string, returnTo: string) {
-  const url = new URL(loginPath, "http://operator-ui.local");
+  const url = new URL(loginPath, INTERNAL_APP_ORIGIN);
   url.searchParams.set("returnTo", returnTo);
   return `${url.pathname}${url.search}`;
+}
+
+function normalizeBasePath(basePath: string) {
+  const normalized = basePath.trim() || "/";
+
+  if (normalized === "/") {
+    return normalized;
+  }
+
+  const withLeadingSlash = normalized.startsWith("/")
+    ? normalized
+    : `/${normalized}`;
+
+  return withLeadingSlash.endsWith("/")
+    ? withLeadingSlash.slice(0, -1)
+    : withLeadingSlash;
+}
+
+function sanitizeReturnTo(returnTo: string, basePath: string) {
+  const normalizedBasePath = normalizeBasePath(basePath);
+  const candidate = returnTo.trim();
+
+  if (
+    !candidate ||
+    candidate.startsWith("//") ||
+    /^[a-z][a-z0-9+.-]*:/i.test(candidate)
+  ) {
+    return normalizedBasePath;
+  }
+
+  const resolutionBase = new URL(
+    normalizedBasePath === "/" ? "/" : `${normalizedBasePath}/`,
+    INTERNAL_APP_ORIGIN,
+  );
+  const resolved = new URL(candidate, resolutionBase);
+  const normalizedReturnTo = `${resolved.pathname}${resolved.search}${resolved.hash}`;
+
+  if (
+    normalizedReturnTo === normalizedBasePath ||
+    normalizedReturnTo.startsWith(`${normalizedBasePath}/`)
+  ) {
+    return normalizedReturnTo;
+  }
+
+  return normalizedBasePath;
 }
 
 export function createOperatorAuthProvider({
@@ -31,7 +78,10 @@ export function createOperatorAuthProvider({
 }): AuthProvider {
   return {
     async login(params?: { returnTo?: string }) {
-      const returnTo = params?.returnTo ?? config.basePath;
+      const returnTo = sanitizeReturnTo(
+        params?.returnTo ?? config.basePath,
+        config.basePath,
+      );
       redirector.replace(buildLoginRedirect(config.loginPath, returnTo));
     },
 
