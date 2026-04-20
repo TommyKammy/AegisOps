@@ -32,7 +32,7 @@ Approved triggering conditions for this reviewed path are intentionally narrow:
 
 - a reviewed case already has an explicit host, service, detector, or evidence binding and needs bounded network context to resolve a documented evidence gap;
 - a reviewed evidence record already anchors the specific flow, transaction, alert, or protocol artifact for which Suricata-derived context is being requested; or
-- a reviewed Phase 29 shadow-mode comparison needs bounded non-authoritative correlation context tied to an already-reviewed subject record.
+- a reviewed Phase 29 shadow-mode comparison requires bounded non-authoritative correlation context tied to an already-reviewed subject record.
 
 The path must fail closed when the anchor case or evidence record is missing, the network scope is only implied, the requested flow or observer binding is inferred from weak hints, or the requested intake would widen into general network-first detection coverage.
 

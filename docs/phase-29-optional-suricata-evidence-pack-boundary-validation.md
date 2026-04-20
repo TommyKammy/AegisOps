@@ -39,7 +39,7 @@ Suricata-derived output cannot become an authoritative label source and cannot s
 
 ## Review Outcome
 
-One optional network evidence-pack candidate remains permissible for Phase 29 only because the reviewed Suricata slice stays bounded, subordinate, disableable, and explicitly outside the authoritative control-plane path.
+One optional network evidence-pack candidate remains permissible for Phase 29 only because the reviewed Suricata slice stays bounded, subordinate, disabled by default, and explicitly outside the authoritative control-plane path.
 
 No reviewed language in this slice promotes network-first product positioning or broad IDS-led workflow redesign.
 
