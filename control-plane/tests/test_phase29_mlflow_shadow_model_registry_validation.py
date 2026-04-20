@@ -4,6 +4,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import pathlib
 import sys
+from unittest import mock
 
 
 CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -13,6 +14,7 @@ for candidate in (CONTROL_PLANE_ROOT, TESTS_ROOT):
         sys.path.insert(0, str(candidate))
 
 
+import aegisops_control_plane.phase29_mlflow_shadow_model_registry as mlflow_shadow_model_registry
 from aegisops_control_plane.models import EvidenceRecord, ReconciliationRecord
 from aegisops_control_plane.phase29_mlflow_shadow_model_registry import (
     Phase29MlflowShadowModelRegistryError,
@@ -52,6 +54,12 @@ class _FakeModelVersion:
         self.version = version
         self.source = source
         self.run_id = run_id
+
+
+class _FakeMlflowLookupError(Exception):
+    def __init__(self, message: str, *, error_code: str | None = None) -> None:
+        super().__init__(message)
+        self.error_code = error_code
 
 
 class FakeMlflowClient:
@@ -148,6 +156,22 @@ class FakeMlflowClient:
         return _FakeModelVersion(name=name, version=version, source=source, run_id=run_id or "")
 
 
+class MissingRegisteredModelLookupClient(FakeMlflowClient):
+    def get_registered_model(self, name: str) -> _FakeRegisteredModel | None:
+        raise _FakeMlflowLookupError(
+            f"Registered Model with name={name} not found",
+            error_code="RESOURCE_DOES_NOT_EXIST",
+        )
+
+
+class UnexpectedRegisteredModelLookupClient(FakeMlflowClient):
+    def get_registered_model(self, name: str) -> _FakeRegisteredModel | None:
+        raise _FakeMlflowLookupError(
+            f"authentication failed while loading {name}",
+            error_code="PERMISSION_DENIED",
+        )
+
+
 class Phase29MlflowShadowModelRegistryValidationTests(ServicePersistenceTestBase):
     def test_tracker_records_mlflow_shadow_run_and_registry_lineage(self) -> None:
         store, service, dataset_snapshot, decided_at = self._build_shadow_dataset_snapshot()
@@ -233,6 +257,69 @@ class Phase29MlflowShadowModelRegistryValidationTests(ServicePersistenceTestBase
             for record_type in (EvidenceRecord, ReconciliationRecord)
         }
         self.assertEqual(final_record_counts, initial_record_counts)
+
+    def test_tracker_creates_registry_namespace_when_mlflow_reports_missing_model(self) -> None:
+        _store, _service, dataset_snapshot, decided_at = self._build_shadow_dataset_snapshot()
+        client = MissingRegisteredModelLookupClient()
+
+        with mock.patch.object(
+            mlflow_shadow_model_registry,
+            "_MLFLOW_LOOKUP_EXCEPTIONS",
+            (_FakeMlflowLookupError,),
+        ):
+            result = track_shadow_model_with_mlflow(
+                client=client,
+                dataset_snapshot=dataset_snapshot,
+                experiment_name="phase29-shadow-model-training",
+                run_name="missing-registry-namespace",
+                registered_model_name="shadow.models.github_audit_xgboost",
+                model_source_uri="models:/shadow.models.github_audit_xgboost/artifacts/model.pkl",
+                model_family="xgboost",
+                model_version="candidate-2026-04-20",
+                training_spec_version="phase29-shadow-training-v1",
+                feature_schema_version="phase29-shadow-features-v1",
+                label_schema_version="phase29-shadow-labels-v1",
+                lineage_review_note_id="note-phase29-shadow-001",
+                evaluation_metrics={"precision_at_5": 0.8},
+                evaluation_metadata={"evaluation_window": "2026-04-01/2026-04-20"},
+                run_timestamp=decided_at,
+            )
+
+        self.assertEqual(result.registered_model_version, "1")
+        self.assertIn("shadow.models.github_audit_xgboost", client.registered_models)
+
+    def test_tracker_reraises_unexpected_mlflow_registered_model_lookup_failure(self) -> None:
+        _store, _service, dataset_snapshot, decided_at = self._build_shadow_dataset_snapshot()
+        client = UnexpectedRegisteredModelLookupClient()
+
+        with mock.patch.object(
+            mlflow_shadow_model_registry,
+            "_MLFLOW_LOOKUP_EXCEPTIONS",
+            (_FakeMlflowLookupError,),
+        ):
+            with self.assertRaisesRegex(
+                _FakeMlflowLookupError,
+                "authentication failed",
+            ):
+                track_shadow_model_with_mlflow(
+                    client=client,
+                    dataset_snapshot=dataset_snapshot,
+                    experiment_name="phase29-shadow-model-training",
+                    run_name="unexpected-registry-error",
+                    registered_model_name="shadow.models.github_audit_xgboost",
+                    model_source_uri="models:/shadow.models.github_audit_xgboost/artifacts/model.pkl",
+                    model_family="xgboost",
+                    model_version="candidate-2026-04-20",
+                    training_spec_version="phase29-shadow-training-v1",
+                    feature_schema_version="phase29-shadow-features-v1",
+                    label_schema_version="phase29-shadow-labels-v1",
+                    lineage_review_note_id="note-phase29-shadow-001",
+                    evaluation_metrics={"precision_at_5": 0.8},
+                    evaluation_metadata={"evaluation_window": "2026-04-01/2026-04-20"},
+                    run_timestamp=decided_at,
+                )
+
+        self.assertEqual(client.registered_models, {})
 
     def test_tracker_fails_closed_when_feature_provenance_is_missing(self) -> None:
         snapshot = Phase29ShadowDatasetSnapshot(

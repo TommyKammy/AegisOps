@@ -7,6 +7,11 @@ from typing import Mapping, Protocol
 
 from .phase29_shadow_dataset import Phase29ShadowDatasetSnapshot
 
+try:
+    from mlflow.exceptions import MlflowException
+except ImportError:  # pragma: no cover - mlflow is optional in unit-test environments.
+    MlflowException = None
+
 
 _REQUIRED_FEATURE_PROVENANCE_FIELDS = (
     "feature_source_record_family",
@@ -23,6 +28,11 @@ _REQUIRED_LABEL_PROVENANCE_FIELDS = (
     "label_decision_basis",
     "label_decided_at",
     "label_linked_subject_record_id",
+)
+_MLFLOW_LOOKUP_EXCEPTIONS = tuple(
+    exception_class
+    for exception_class in (MlflowException,)
+    if exception_class is not None
 )
 
 
@@ -277,10 +287,15 @@ def _ensure_registered_model(
     client: Phase29MlflowClient,
     registered_model_name: str,
 ) -> None:
-    try:
+    if _MLFLOW_LOOKUP_EXCEPTIONS:
+        try:
+            existing = client.get_registered_model(registered_model_name)
+        except _MLFLOW_LOOKUP_EXCEPTIONS as exc:
+            if not _is_missing_registered_model_lookup(exc, registered_model_name):
+                raise
+            existing = None
+    else:
         existing = client.get_registered_model(registered_model_name)
-    except Exception:
-        existing = None
     if existing is not None:
         return
     client.create_registered_model(
@@ -293,6 +308,23 @@ def _ensure_registered_model(
             "Shadow-only candidate registry namespace for Phase 29 reviewed ML lineage. "
             "This registry does not confer control-plane authority."
         ),
+    )
+
+
+def _is_missing_registered_model_lookup(
+    exc: Exception,
+    registered_model_name: str,
+) -> bool:
+    error_code = getattr(exc, "error_code", None)
+    if error_code == "RESOURCE_DOES_NOT_EXIST":
+        return True
+
+    message = str(exc).lower()
+    registered_model_name = registered_model_name.lower()
+    return (
+        "registered model" in message
+        and registered_model_name in message
+        and ("not found" in message or "does not exist" in message)
     )
 
 
