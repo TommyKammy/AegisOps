@@ -14,6 +14,10 @@ Current scope:
 - Parameter catalog structure
 - Implementation guardrails for AI-assisted development
 
+Canonical cross-phase boundary reference:
+
+- `docs/non-goals-and-expansion-guardrails.md`
+
 The repository is no longer design-only: Phase 16 defines the approved first-boot runtime target for Phase 17 bring-up.
 That first-boot target is limited to the AegisOps control-plane service, PostgreSQL for control-plane state, the approved reverse proxy boundary, and reviewed Wazuh-facing analytic-signal intake expectations.
 OpenSearch, n8n, the full analyst-assistant surface, and the high-risk executor path remain optional, deferred, or non-blocking for first boot.
@@ -62,6 +66,8 @@ AegisOps is **not**:
 - a broad autonomous response platform
 - a broad source-coverage platform trying to rebuild Wazuh-class breadth
 - an AI-first SOC that lets an assistant become approval or execution authority
+
+For the cross-phase registry of expansion boundaries that future work should cite directly, see `docs/non-goals-and-expansion-guardrails.md`.
 
 ---
 

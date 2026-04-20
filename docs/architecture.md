@@ -18,6 +18,8 @@ It defines:
 - the separation between governance, automation, and execution, and
 - the baseline assumptions that future issues must preserve unless an ADR approves a change.
 
+For the canonical cross-phase anti-expansion registry that future architecture changes must also preserve, see `docs/non-goals-and-expansion-guardrails.md`.
+
 ## 2. Architecture Overview
 
 AegisOps is a governed SecOps control plane above external detection and automation substrates.
