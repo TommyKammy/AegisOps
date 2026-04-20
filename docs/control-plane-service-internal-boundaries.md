@@ -64,6 +64,11 @@ Representative methods include:
 
 This cluster assembles the approved operator reads and bounded casework mutations for the first daily workflow.
 
+Current extraction status as of issue `#633`:
+
+- approved analyst queue and detail reads already live behind `OperatorInspectionReadSurface`; and
+- bounded case mutation entrypoints now delegate from `AegisOpsControlPlaneService` into `CaseWorkflowService`.
+
 Representative methods include:
 
 - `inspect_analyst_queue`
@@ -157,6 +162,8 @@ The target collaborators are:
   Owns Wazuh/native-detection admission, analytic-signal materialization, alert/evidence/case linkage during intake, and source-admission normalization.
 - `AnalystWorkflowService`
   Owns analyst queue and detail read models plus bounded casework mutation paths for observations, leads, recommendations, handoff, disposition, and alert-to-case promotion.
+- `CaseWorkflowService`
+  Owns the bounded case mutation write path now extracted from `service.py`: observations, leads, recommendations, handoff, and disposition. This is the first extracted write-path slice inside the broader analyst workflow cluster and preserves the stable facade entrypoints on `AegisOpsControlPlaneService`.
 - `AssistantAdvisoryService`
   Owns assistant-context assembly, citation-grounded lineage gathering, advisory output shaping, recommendation draft rendering, and advisory draft attachment.
 - `ActionGovernanceService`
@@ -209,6 +216,10 @@ The facade should be responsible only for:
 - forwarding calls into the correct collaborator;
 - preserving transaction boundaries where a workflow spans multiple collaborators; and
 - preserving current exception text and fail-closed behavior unless a follow-up issue explicitly narrows that change.
+
+For the case mutation slice specifically, the current reviewed delegation path is:
+
+`AegisOpsControlPlaneService.record_case_* -> CaseWorkflowService`
 
 ## 6. Shared Helper Placement Rules
 
