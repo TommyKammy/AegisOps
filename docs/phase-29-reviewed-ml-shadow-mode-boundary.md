@@ -148,6 +148,8 @@ The feature provenance contract must preserve, at minimum:
 
 Feature provenance must allow a reviewer to explain which reviewed record supplied the feature, which field was extracted, which extraction spec version applied, and whether the source was direct, derived, augmenting, or unresolved.
 
+When Phase 29 drift visibility is rendered, the drift surface must preserve the same feature provenance contract so operators can trace each reported feature drift or stale feature input back to the reviewed source record and field that produced it.
+
 ### 6.2 Label provenance contract
 
 The label provenance contract must preserve, at minimum:
@@ -204,6 +206,23 @@ The shadow output lineage contract must preserve, at minimum:
 
 Shadow output lineage must keep rendered assistance anchored to the exact reviewed subject record and the exact model and feature snapshot that produced it.
 
+### 6.5 Drift visibility contract
+
+Feature drift and shadow-data drift visibility may be rendered through Evidently or a reviewed-equivalent drift surface only when the drift report stays explicitly shadow-only and audit-focused.
+
+Any such drift visibility surface must preserve, at minimum:
+
+- the reviewed baseline snapshot identifier and the compared candidate snapshot identifier;
+- the anchored reviewed subject record family and record identifier for each drifted subject;
+- the exact feature names and candidate-versus-reference values for each reported feature drift;
+- the reviewed feature provenance envelope for every drifted or stale feature input;
+- the reviewed source-health state and ingest-disposition records correlated to the affected subject; and
+- an explicit non-authoritative posture marker that keeps the drift surface advisory-only.
+
+Drift visibility must support source-feature health correlation so operators can distinguish model-surface instability caused by reviewed source-health degradation or stale feature generation from ordinary cohort variation.
+
+Drift visibility must not mutate alert, case, approval, execution, reconciliation, or promotion truth. It exists only to make shadow-data drift and degraded feature inputs visible before a reviewer treats the shadow output as operationally meaningful.
+
 ## 7. Fail-Closed and Degraded Handling
 
 The reviewed ML shadow-mode boundary must fail closed.
@@ -231,6 +250,8 @@ When those conditions apply:
 `degraded` means the shadow path may still expose bounded diagnostic context about why the output is incomplete, stale, or blocked.
 
 `unresolved` means the system cannot justify a trustworthy shadow output from the currently reviewed lineage and must withhold the candidate result.
+
+If drift visibility is enabled, degraded or stale feature inputs must become visible on the reviewed drift surface instead of silently distorting a shadow score, ranking, or recommendation draft.
 
 ## 8. Explicit Authority Prohibitions
 
