@@ -135,19 +135,34 @@ def _build_subject_visibility(
                 "reference snapshot is missing required source-health feature: "
                 f"{required_feature}"
             )
+        _validate_feature_entry(
+            candidate_features[required_feature],
+            f"candidate.features.{required_feature}",
+        )
+        _validate_feature_entry(
+            reference_features[required_feature],
+            f"reference.features.{required_feature}",
+        )
 
     source_health_state = _require_non_empty_string(
-        candidate_features["source_health_state"].get("value"),
+        candidate_features["source_health_state"]["value"],
         "candidate.features.source_health_state.value",
     )
     source_health_ingest_disposition = _require_non_empty_string(
-        candidate_features["source_health_ingest_disposition"].get("value"),
+        candidate_features["source_health_ingest_disposition"]["value"],
         "candidate.features.source_health_ingest_disposition.value",
     )
 
     feature_health: dict[str, Mapping[str, object]] = {}
     drifted_features: dict[str, Mapping[str, object]] = {}
     degraded_feature_seen = False
+
+    missing_candidate_features = sorted(set(reference_features) - set(candidate_features))
+    if missing_candidate_features:
+        raise Phase29EvidentlyDriftVisibilityError(
+            "candidate snapshot is missing reviewed baseline features: "
+            + ", ".join(missing_candidate_features)
+        )
 
     for feature_name, candidate_feature in sorted(candidate_features.items()):
         _validate_feature_entry(candidate_feature, f"candidate.features.{feature_name}")

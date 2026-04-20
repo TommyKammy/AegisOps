@@ -111,6 +111,73 @@ class Phase29EvidentlyDriftVisibilityValidationTests(ServicePersistenceTestBase)
                 stale_feature_after=timedelta(minutes=30),
             )
 
+    def test_drift_report_fails_closed_when_required_feature_entry_is_not_a_mapping(
+        self,
+    ) -> None:
+        _store, _service, reference_snapshot, candidate_snapshot, rendered_at = (
+            self._build_drift_snapshots()
+        )
+        broken_candidate = Phase29ShadowDatasetSnapshot(
+            snapshot_id=candidate_snapshot.snapshot_id,
+            extraction_spec_version=candidate_snapshot.extraction_spec_version,
+            snapshot_timestamp=candidate_snapshot.snapshot_timestamp,
+            example_count=1,
+            examples=(
+                {
+                    **candidate_snapshot.examples[0],
+                    "features": {
+                        **candidate_snapshot.examples[0]["features"],
+                        "source_health_state": "stale",
+                    },
+                },
+            ),
+        )
+
+        with self.assertRaisesRegex(
+            Phase29EvidentlyDriftVisibilityError,
+            "candidate\\.features\\.source_health_state must be a mapping",
+        ):
+            build_phase29_evidently_drift_visibility_report(
+                reference_snapshot=reference_snapshot,
+                candidate_snapshot=broken_candidate,
+                rendered_at=rendered_at,
+                stale_feature_after=timedelta(minutes=30),
+            )
+
+    def test_drift_report_fails_closed_when_candidate_omits_reviewed_baseline_feature(
+        self,
+    ) -> None:
+        _store, _service, reference_snapshot, candidate_snapshot, rendered_at = (
+            self._build_drift_snapshots()
+        )
+        broken_candidate = Phase29ShadowDatasetSnapshot(
+            snapshot_id=candidate_snapshot.snapshot_id,
+            extraction_spec_version=candidate_snapshot.extraction_spec_version,
+            snapshot_timestamp=candidate_snapshot.snapshot_timestamp,
+            example_count=1,
+            examples=(
+                {
+                    **candidate_snapshot.examples[0],
+                    "features": {
+                        key: value
+                        for key, value in candidate_snapshot.examples[0]["features"].items()
+                        if key != "source_family"
+                    },
+                },
+            ),
+        )
+
+        with self.assertRaisesRegex(
+            Phase29EvidentlyDriftVisibilityError,
+            "candidate snapshot is missing reviewed baseline features: source_family",
+        ):
+            build_phase29_evidently_drift_visibility_report(
+                reference_snapshot=reference_snapshot,
+                candidate_snapshot=broken_candidate,
+                rendered_at=rendered_at,
+                stale_feature_after=timedelta(minutes=30),
+            )
+
     def _build_drift_snapshots(
         self,
     ) -> tuple[object, object, Phase29ShadowDatasetSnapshot, Phase29ShadowDatasetSnapshot, datetime]:
