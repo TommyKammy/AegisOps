@@ -98,36 +98,75 @@ export function createSessionStore({
         return cachedSession;
       }
 
+      const fail = (error: AuthAccessError): never => {
+        cachedSession = null;
+        throw error;
+      };
+
       const response = await fetchFn(config.sessionPath, {
         credentials: "include",
         headers: {
           Accept: "application/json",
         },
-      });
+      }).catch(() =>
+        fail(
+          new AuthAccessError(
+            "invalid_session",
+            "Unable to load operator session.",
+          ),
+        ),
+      );
 
       if (response.status === 401) {
-        throw new AuthAccessError(
-          "unauthenticated",
-          "Operator session is not authenticated.",
+        fail(
+          new AuthAccessError(
+            "unauthenticated",
+            "Operator session is not authenticated.",
+          ),
         );
       }
 
       if (response.status === 403) {
-        throw new AuthAccessError(
-          "forbidden",
-          "Operator session is authenticated but not authorized.",
+        fail(
+          new AuthAccessError(
+            "forbidden",
+            "Operator session is authenticated but not authorized.",
+          ),
         );
       }
 
       if (!response.ok) {
-        throw new AuthAccessError(
-          "invalid_session",
-          `Unexpected operator session status ${response.status}.`,
+        fail(
+          new AuthAccessError(
+            "invalid_session",
+            `Unexpected operator session status ${response.status}.`,
+          ),
         );
       }
 
-      cachedSession = validateSession(await response.json(), config);
-      return cachedSession;
+      let payload: unknown;
+
+      try {
+        payload = await response.json();
+      } catch {
+        fail(
+          new AuthAccessError(
+            "invalid_session",
+            "Operator session payload is not valid JSON.",
+          ),
+        );
+      }
+
+      try {
+        cachedSession = validateSession(payload, config);
+        return cachedSession;
+      } catch (error) {
+        if (error instanceof AuthAccessError) {
+          fail(error);
+        }
+
+        throw error;
+      }
     },
   };
 }

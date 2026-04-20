@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { AuthAccessError } from "./authProvider";
 import { createOperatorUiConfig } from "./config";
 import { createSessionStore } from "./session";
 
@@ -31,5 +32,100 @@ describe("createSessionStore", () => {
     await expect(sessionStore.getSession()).resolves.toMatchObject({
       roles: ["analyst", "approver"],
     });
+  });
+
+  it("clears a cached session when a forced refresh returns unauthenticated", async () => {
+    const config = createOperatorUiConfig({
+      allowedRoles: ["analyst"],
+    });
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          identity: "stale@example.com",
+          provider: "authentik",
+          roles: ["analyst"],
+          subject: "operator-9",
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 401,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          identity: "fresh@example.com",
+          provider: "authentik",
+          roles: ["analyst"],
+          subject: "operator-10",
+        }),
+      );
+    const sessionStore = createSessionStore({
+      config,
+      fetchFn,
+    });
+
+    await expect(sessionStore.getSession()).resolves.toMatchObject({
+      identity: "stale@example.com",
+    });
+
+    await expect(sessionStore.getSession({ force: true })).rejects.toMatchObject({
+      code: "unauthenticated",
+    } satisfies Partial<AuthAccessError>);
+
+    await expect(sessionStore.getSession()).resolves.toMatchObject({
+      identity: "fresh@example.com",
+    });
+    expect(fetchFn).toHaveBeenCalledTimes(3);
+  });
+
+  it("clears a cached session when a forced refresh returns invalid JSON", async () => {
+    const config = createOperatorUiConfig({
+      allowedRoles: ["analyst"],
+    });
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          identity: "stale@example.com",
+          provider: "authentik",
+          roles: ["analyst"],
+          subject: "operator-9",
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response("not-json", {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          identity: "fresh@example.com",
+          provider: "authentik",
+          roles: ["analyst"],
+          subject: "operator-10",
+        }),
+      );
+    const sessionStore = createSessionStore({
+      config,
+      fetchFn,
+    });
+
+    await expect(sessionStore.getSession()).resolves.toMatchObject({
+      identity: "stale@example.com",
+    });
+
+    await expect(sessionStore.getSession({ force: true })).rejects.toMatchObject({
+      code: "invalid_session",
+    } satisfies Partial<AuthAccessError>);
+
+    await expect(sessionStore.getSession()).resolves.toMatchObject({
+      identity: "fresh@example.com",
+    });
+    expect(fetchFn).toHaveBeenCalledTimes(3);
   });
 });
