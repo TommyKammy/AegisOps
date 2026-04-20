@@ -3785,6 +3785,147 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
         self.assertEqual(store.list(support.AnalyticSignalRecord), ())
         self.assertEqual(store.list(support.ReconciliationRecord), ())
 
+    def test_service_rolls_back_failed_direct_native_context_attachment(self) -> None:
+        inner_store, _ = support.make_store()
+        service = support.AegisOpsControlPlaneService(
+            support.RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=inner_store,
+        )
+        first_seen_at = support.datetime(2026, 4, 5, 12, 0, tzinfo=support.timezone.utc)
+        reviewed_context = {"source": {"source_family": "reviewed-source"}}
+        created = service.ingest_finding_alert(
+            finding_id="finding-native-context-rollback-001",
+            analytic_signal_id="signal-native-context-rollback-001",
+            substrate_detection_record_id="substrate-detection-native-context-rollback-001",
+            correlation_key="claim:host-001:native-context-rollback",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            reviewed_context=reviewed_context,
+        )
+        seed_evidence = service.persist_record(
+            support.EvidenceRecord(
+                evidence_id="evidence-native-context-seed-001",
+                source_record_id="substrate-detection-native-context-rollback-001",
+                alert_id=created.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=first_seen_at,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(created.alert.alert_id)
+        persisted_alert = service.get_record(support.AlertRecord, created.alert.alert_id)
+        persisted_reconciliation = service.get_record(
+            support.ReconciliationRecord,
+            created.reconciliation.reconciliation_id,
+        )
+        self.assertIsNotNone(persisted_alert)
+        self.assertIsNotNone(persisted_reconciliation)
+
+        failing_store = support.RecordTypeSaveFailingStore(
+            inner=inner_store,
+            record_type=support.ReconciliationRecord,
+            message="synthetic native-context reconciliation failure",
+        )
+        failing_service = support.AegisOpsControlPlaneService(
+            support.RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=failing_store,
+        )
+        native_record = support.NativeDetectionRecord(
+            substrate_key="wazuh",
+            native_record_id="native-context-rollback-001",
+            record_kind="alert",
+            correlation_key="claim:host-001:native-context-rollback",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            metadata={},
+        )
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "synthetic native-context reconciliation failure",
+        ):
+            failing_service._attach_native_detection_context(
+                record=native_record,
+                ingest_result=replace(
+                    created,
+                    alert=persisted_alert,
+                    reconciliation=persisted_reconciliation,
+                ),
+                substrate_detection_record_id="substrate-detection-native-context-rollback-native-001",
+            )
+
+        persisted_case = service.get_record(support.CaseRecord, promoted_case.case_id)
+        persisted_reconciliation = service.get_record(
+            support.ReconciliationRecord,
+            created.reconciliation.reconciliation_id,
+        )
+        evidence_records = tuple(
+            evidence
+            for evidence in inner_store.list(support.EvidenceRecord)
+            if evidence.alert_id == created.alert.alert_id
+        )
+        self.assertEqual(len(evidence_records), 1)
+        self.assertEqual(evidence_records[0].evidence_id, seed_evidence.evidence_id)
+        self.assertEqual(evidence_records[0].case_id, promoted_case.case_id)
+        self.assertEqual(persisted_case.evidence_ids, (seed_evidence.evidence_id,))
+        self.assertEqual(
+            persisted_reconciliation.subject_linkage.get("evidence_ids"),
+            (seed_evidence.evidence_id,),
+        )
+
+    def test_service_rejects_direct_native_context_attach_when_alert_links_missing_case(
+        self,
+    ) -> None:
+        store, _ = support.make_store()
+        service = support.AegisOpsControlPlaneService(
+            support.RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen_at = support.datetime(2026, 4, 5, 12, 0, tzinfo=support.timezone.utc)
+        created = service.ingest_finding_alert(
+            finding_id="finding-missing-direct-native-case-001",
+            analytic_signal_id="signal-missing-direct-native-case-001",
+            substrate_detection_record_id="substrate-detection-missing-direct-native-case-001",
+            correlation_key="claim:host-001:missing-direct-native-case",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+        )
+        broken_alert = replace(
+            created.alert,
+            case_id="case-missing-direct-native-001",
+            lifecycle_state="escalated_to_case",
+        )
+        service.persist_record(broken_alert)
+        native_record = support.NativeDetectionRecord(
+            substrate_key="wazuh",
+            native_record_id="native-missing-direct-case-001",
+            record_kind="alert",
+            correlation_key="claim:host-001:missing-direct-native-case",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+            metadata={},
+        )
+
+        with self.assertRaisesRegex(
+            LookupError,
+            "Alert 'alert-[^']+' references missing case 'case-missing-direct-native-001'",
+        ):
+            service._attach_native_detection_context(
+                record=native_record,
+                ingest_result=replace(created, alert=broken_alert),
+                substrate_detection_record_id="substrate-detection-missing-direct-native-002",
+            )
+
+        self.assertEqual(store.list(support.EvidenceRecord), ())
+        self.assertEqual(
+            service.get_record(support.AlertRecord, created.alert.alert_id).case_id,
+            "case-missing-direct-native-001",
+        )
+        self.assertEqual(len(store.list(support.ReconciliationRecord)), 1)
+
     def test_service_rejects_restated_admission_when_alert_links_missing_case(self) -> None:
         store, _ = support.make_store()
         service = support.AegisOpsControlPlaneService(
