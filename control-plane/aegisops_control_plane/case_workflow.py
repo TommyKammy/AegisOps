@@ -260,6 +260,11 @@ class CaseWorkflowService:
         lifecycle_state = service._case_lifecycle_for_disposition(disposition)
         with service._store.transaction():
             case = service._require_reviewed_operator_case(case_id)
+            alert = None
+            if case.alert_id is not None and lifecycle_state == "closed":
+                alert = service._store.get(AlertRecord, case.alert_id)
+                if alert is None:
+                    raise LookupError(f"Missing alert {case.alert_id!r}")
             updated_reviewed_context = self._merge_reviewed_context(
                 case.reviewed_context,
                 {
@@ -278,18 +283,16 @@ class CaseWorkflowService:
                 ),
                 transitioned_at=recorded_at,
             )
-            if case.alert_id is not None and lifecycle_state == "closed":
-                alert = service._store.get(AlertRecord, case.alert_id)
-                if alert is not None:
-                    service.persist_record(
-                        replace(
-                            alert,
-                            lifecycle_state="closed",
-                            reviewed_context=self._merge_reviewed_context(
-                                alert.reviewed_context,
-                                {"triage": updated_reviewed_context.get("triage", {})},
-                            ),
+            if alert is not None:
+                service.persist_record(
+                    replace(
+                        alert,
+                        lifecycle_state="closed",
+                        reviewed_context=self._merge_reviewed_context(
+                            alert.reviewed_context,
+                            {"triage": updated_reviewed_context.get("triage", {})},
                         ),
-                        transitioned_at=recorded_at,
-                    )
+                    ),
+                    transitioned_at=recorded_at,
+                )
         return updated_case

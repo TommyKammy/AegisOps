@@ -2726,6 +2726,56 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             "pending_approval",
         )
 
+    def test_service_fails_closed_when_linked_alert_disappears_after_slice_validation(
+        self,
+    ) -> None:
+        store, service, promoted_case, _, reviewed_at = self._build_phase19_in_scope_case()
+        prior_case = service.get_record(CaseRecord, promoted_case.case_id)
+        prior_alert = service.get_record(AlertRecord, promoted_case.alert_id)
+        prior_transitions = store.list_lifecycle_transitions("case", promoted_case.case_id)
+        original_get = service._store.get
+        alert_reads = 0
+
+        def flaky_get(record_type: object, record_id: str) -> object | None:
+            nonlocal alert_reads
+            record = original_get(record_type, record_id)
+            if record_type is AlertRecord and record_id == promoted_case.alert_id:
+                alert_reads += 1
+                if alert_reads >= 2:
+                    return None
+            return record
+
+        service._store.get = support.mock.Mock(side_effect=flaky_get)
+        try:
+            with self.assertRaises(LookupError) as exc_info:
+                service.record_case_disposition(
+                    case_id=promoted_case.case_id,
+                    disposition="closed_resolved",
+                    rationale=(
+                        "Closing a case after the linked alert disappears must fail closed."
+                    ),
+                    recorded_at=reviewed_at,
+                )
+        finally:
+            service._store.get = original_get
+
+        self.assertEqual(
+            str(exc_info.exception),
+            f"Missing alert {promoted_case.alert_id!r}",
+        )
+        self.assertEqual(
+            service.get_record(CaseRecord, promoted_case.case_id),
+            prior_case,
+        )
+        self.assertEqual(
+            store.list_lifecycle_transitions("case", promoted_case.case_id),
+            prior_transitions,
+        )
+        self.assertEqual(
+            service.get_record(AlertRecord, promoted_case.alert_id),
+            prior_alert,
+        )
+
     def test_service_analyst_queue_prefers_explicit_wazuh_source_for_multi_source_linkage(
         self,
     ) -> None:
