@@ -161,6 +161,98 @@ class Phase29ShadowScoringValidationTests(ServicePersistenceTestBase):
                 rendered_at=decided_at + timedelta(minutes=3),
             )
 
+    def test_shadow_scoring_fails_closed_when_feature_value_is_missing(self) -> None:
+        _store, _service, dataset_snapshot, decided_at = self._build_shadow_dataset_snapshot()
+        broken_snapshot = Phase29ShadowDatasetSnapshot(
+            snapshot_id=dataset_snapshot.snapshot_id,
+            extraction_spec_version=dataset_snapshot.extraction_spec_version,
+            snapshot_timestamp=dataset_snapshot.snapshot_timestamp,
+            example_count=1,
+            examples=(
+                {
+                    **dataset_snapshot.examples[0],
+                    "features": {
+                        **dataset_snapshot.examples[0]["features"],
+                        "source_family": {
+                            "provenance": dataset_snapshot.examples[0]["features"]["source_family"][
+                                "provenance"
+                            ],
+                        },
+                    },
+                },
+            ),
+        )
+
+        with self.assertRaisesRegex(
+            Phase29ShadowScoringError,
+            "missing required feature value on source_family",
+        ):
+            score_shadow_dataset_offline(
+                dataset_snapshot=broken_snapshot,
+                scoring_spec_version="phase29-shadow-scoring-v1",
+                model_family="baseline-isolation-forest",
+                model_version="candidate-2026-04-20",
+                training_data_snapshot_id=broken_snapshot.snapshot_id,
+                feature_schema_version="phase29-shadow-features-v1",
+                label_schema_version="phase29-shadow-labels-v1",
+                lineage_review_note_id="note-phase29-shadow-001",
+                scored_at=decided_at + timedelta(minutes=1),
+            )
+
+    def test_shadow_scoring_fails_closed_for_invalid_or_naive_feature_timestamps(self) -> None:
+        _store, _service, dataset_snapshot, decided_at = self._build_shadow_dataset_snapshot()
+
+        for bad_timestamp, expected_message in (
+            (
+                "not-a-timestamp",
+                "source_family.feature_snapshot_timestamp must be a valid ISO-8601 timestamp",
+            ),
+            (
+                "2026-04-20T10:00:00",
+                "source_family.feature_snapshot_timestamp must include a timezone offset",
+            ),
+        ):
+            with self.subTest(bad_timestamp=bad_timestamp):
+                broken_snapshot = Phase29ShadowDatasetSnapshot(
+                    snapshot_id=dataset_snapshot.snapshot_id,
+                    extraction_spec_version=dataset_snapshot.extraction_spec_version,
+                    snapshot_timestamp=dataset_snapshot.snapshot_timestamp,
+                    example_count=1,
+                    examples=(
+                        {
+                            **dataset_snapshot.examples[0],
+                            "features": {
+                                **dataset_snapshot.examples[0]["features"],
+                                "source_family": {
+                                    **dataset_snapshot.examples[0]["features"]["source_family"],
+                                    "provenance": {
+                                        **dataset_snapshot.examples[0]["features"]["source_family"][
+                                            "provenance"
+                                        ],
+                                        "feature_snapshot_timestamp": bad_timestamp,
+                                    },
+                                },
+                            },
+                        },
+                    ),
+                )
+
+                with self.assertRaisesRegex(
+                    Phase29ShadowScoringError,
+                    expected_message,
+                ):
+                    score_shadow_dataset_offline(
+                        dataset_snapshot=broken_snapshot,
+                        scoring_spec_version="phase29-shadow-scoring-v1",
+                        model_family="baseline-isolation-forest",
+                        model_version="candidate-2026-04-20",
+                        training_data_snapshot_id=broken_snapshot.snapshot_id,
+                        feature_schema_version="phase29-shadow-features-v1",
+                        label_schema_version="phase29-shadow-labels-v1",
+                        lineage_review_note_id="note-phase29-shadow-001",
+                        scored_at=decided_at + timedelta(minutes=1),
+                    )
+
     def _build_shadow_dataset_snapshot(
         self,
     ) -> tuple[object, object, Phase29ShadowDatasetSnapshot, datetime]:

@@ -327,6 +327,10 @@ def _validate_feature_entry(
         raise Phase29ShadowScoringError(
             f"feature {normalized_feature_name} must be a mapping"
         )
+    if "value" not in feature_entry or feature_entry["value"] is None:
+        raise Phase29ShadowScoringError(
+            f"missing required feature value on {normalized_feature_name}"
+        )
     provenance = _expect_mapping(feature_entry.get("provenance"), f"{normalized_feature_name}.provenance")
     missing_fields = [
         field_name
@@ -431,7 +435,16 @@ def _expect_mapping(value: object, field_name: str) -> Mapping[str, object]:
 
 def _require_timestamp_string(value: object, field_name: str) -> str:
     normalized = _require_non_empty_string(value, field_name)
-    datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+    try:
+        parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+    except (TypeError, ValueError) as exc:
+        raise Phase29ShadowScoringError(
+            f"{field_name} must be a valid ISO-8601 timestamp: {normalized}"
+        ) from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise Phase29ShadowScoringError(
+            f"{field_name} must include a timezone offset: {normalized}"
+        )
     return normalized
 
 
