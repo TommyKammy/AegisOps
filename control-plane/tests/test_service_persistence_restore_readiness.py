@@ -9,7 +9,11 @@ if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
 import _service_persistence_support as support
-from _service_persistence_support import ServicePersistenceTestBase
+from _service_persistence_support import (
+    AegisOpsControlPlaneService,
+    RuntimeConfig,
+    ServicePersistenceTestBase,
+)
 
 for name, value in vars(support).items():
     if not (name.startswith("__") and name.endswith("__")):
@@ -54,6 +58,22 @@ class IsolationLevelFallbackProbeStore:
 
 
 class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
+    def test_service_wires_restore_readiness_internal_collaborators(self) -> None:
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops")
+        )
+
+        restore_readiness_service = service._restore_readiness_service
+
+        self.assertTrue(
+            hasattr(restore_readiness_service, "_backup_restore_flow"),
+            "RestoreReadinessService should delegate backup/restore flow to a dedicated collaborator",
+        )
+        self.assertTrue(
+            hasattr(restore_readiness_service, "_readiness_health_projection"),
+            "RestoreReadinessService should delegate readiness projection to a dedicated collaborator",
+        )
+
     def test_runtime_snapshot_reports_postgresql_authoritative_persistence_mode(self) -> None:
         service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops")
@@ -845,6 +865,28 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             restored_service.restore_authoritative_record_chain_backup(backup)
         self._assert_authoritative_store_empty(restored_store)
 
+    def test_service_phase21_restore_rejects_non_string_record_family_keys(
+        self,
+    ) -> None:
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        backup["record_families"][1] = []
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"restore payload contains non-string record family keys: \(1,\)",
+        ):
+            restored_service.restore_authoritative_record_chain_backup(backup)
+        self._assert_authoritative_store_empty(restored_store)
+
     def test_service_phase21_restore_rejects_non_integer_record_counts(self) -> None:
         _store, service, _promoted_case, _evidence_id, _reviewed_at = (
             self._build_phase19_in_scope_case()
@@ -870,6 +912,52 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
                         invalid_backup
                     )
                 self._assert_authoritative_store_empty(restored_store)
+
+    def test_service_phase21_restore_rejects_wrong_family_records_from_parser(
+        self,
+    ) -> None:
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+        original_parser = (
+            restored_service._restore_readiness_service._backup_restore_flow._record_from_backup_payload
+        )
+
+        def wrong_family_parser(
+            record_type: type[ControlPlaneRecord],
+            raw_record: Mapping[str, object],
+        ) -> ControlPlaneRecord:
+            parsed = original_parser(record_type, raw_record)
+            if record_type is CaseRecord:
+                return AlertRecord(
+                    alert_id="unexpected-alert-from-case-parser",
+                    finding_id="finding-unexpected-alert",
+                    analytic_signal_id=None,
+                    case_id=None,
+                    lifecycle_state="open",
+                )
+            return parsed
+
+        restored_service._restore_readiness_service._backup_restore_flow._record_from_backup_payload = (
+            wrong_family_parser
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                r"restore payload contains unexpected record types for 'case': "
+                r"\('AlertRecord',\)"
+            ),
+        ):
+            restored_service.restore_authoritative_record_chain_backup(backup)
+        self._assert_authoritative_store_empty(restored_store)
 
     def test_service_phase21_restore_preserves_handoff_and_manual_fallback_runtime_visibility(
         self,
