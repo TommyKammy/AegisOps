@@ -1,10 +1,10 @@
-# Revised Phase 23-20 Epic Roadmap
+# Revised Phase 23-29 Epic Roadmap
 
 ## 1. Purpose
 
-This roadmap revision anchors the next hardening and ergonomics work to the approved AegisOps control-plane thesis and deployment target.
+This roadmap revision anchors the reviewed Phases 23-29 hardening, ergonomics, and bounded-extension work to the approved AegisOps control-plane thesis and deployment target.
 
-It exists to keep Phase 23 planning aligned with the reviewed SMB operating model rather than drifting toward broad enterprise repositioning, generic SIEM replacement language, or multi-tenant packaging.
+It exists to keep Phases 23-29 planning aligned with the reviewed SMB operating model rather than drifting toward broad enterprise repositioning, generic SIEM replacement language, or multi-tenant packaging.
 
 ## 2. Product Thesis
 
@@ -24,7 +24,7 @@ The intended deployment shape remains a narrow on-premise control-plane environm
 
 ## 4. Roadmap Guardrails
 
-Phase 23 hardening and ergonomics work must be evaluated against this deployment target before scope expands.
+Phases 23-29 hardening, ergonomics, and bounded-extension work must be evaluated against this deployment target before scope expands.
 
 That means later work should prefer:
 
@@ -47,5 +47,9 @@ That means later work should avoid:
 `docs/architecture.md` should carry the same product thesis and deployment target so component-boundary decisions stay anchored to the same audience and operating assumptions.
 
 `docs/smb-footprint-and-deployment-profile-baseline.md` should publish the concrete reviewed footprint, backup, restore, and operator-burden expectations that keep later hardening and ergonomics work honest for the approved SMB target.
+
+`docs/non-goals-and-expansion-guardrails.md` should remain the canonical cross-phase registry for anti-expansion rules, assistant-boundary reminders, and optional-surface limits that later roadmap slices must cite directly instead of restating loosely.
+
+Phase 29 references in later design and validation notes should use the reviewed ML shadow-mode and optional evidence-pack naming already published for that slice rather than reverting to earlier placeholder wording.
 
 Future roadmap slices should treat this document as the control statement for who AegisOps is for before they add new hardening, ergonomics, or source-expansion work.

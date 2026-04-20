@@ -45,8 +45,8 @@ The primary deployment target is a single-company or single-business-unit deploy
 The target operating assumption is business-hours review with explicit after-hours escalation, not a 24x7 staffed SOC.
 EOF
 
-  cat <<'EOF' > "${target}/docs/Revised Phase23-20 Epic Roadmap.md"
-# Revised Phase 23-20 Epic Roadmap
+  cat <<'EOF' > "${target}/docs/Revised Phase23-29 Epic Roadmap.md"
+# Revised Phase 23-29 Epic Roadmap
 
 AegisOps is the reviewed control plane for approval, evidence, and reconciliation governance for a narrow SMB SecOps operating model.
 
@@ -54,10 +54,10 @@ The primary deployment target is a single-company or single-business-unit deploy
 
 The target operating assumption is business-hours review with explicit after-hours escalation, not a 24x7 staffed SOC.
 
-Phase 23 hardening and ergonomics work must be evaluated against this deployment target before scope expands.
+Phases 23-29 hardening, ergonomics, and bounded-extension work must be evaluated against this deployment target before scope expands.
 EOF
 
-  git -C "${target}" add README.md docs/architecture.md "docs/Revised Phase23-20 Epic Roadmap.md"
+  git -C "${target}" add README.md docs/architecture.md "docs/Revised Phase23-29 Epic Roadmap.md"
 }
 
 remove_text_from_doc() {
@@ -137,8 +137,8 @@ create_repo "${missing_roadmap_repo}"
 write_valid_docs "${missing_roadmap_repo}"
 cp "${repo_root}/docs/requirements-baseline.md" "${missing_roadmap_repo}/docs/requirements-baseline.md"
 git -C "${missing_roadmap_repo}" add docs/requirements-baseline.md
-rm "${missing_roadmap_repo}/docs/Revised Phase23-20 Epic Roadmap.md"
-git -C "${missing_roadmap_repo}" add -u "docs/Revised Phase23-20 Epic Roadmap.md"
+rm "${missing_roadmap_repo}/docs/Revised Phase23-29 Epic Roadmap.md"
+git -C "${missing_roadmap_repo}" add -u "docs/Revised Phase23-29 Epic Roadmap.md"
 commit_fixture "${missing_roadmap_repo}"
 assert_fails_with "${missing_roadmap_repo}" "Missing Phase 23 roadmap document:"
 
@@ -156,7 +156,7 @@ create_repo "${roadmap_contradiction_repo}"
 write_valid_docs "${roadmap_contradiction_repo}"
 cp "${repo_root}/docs/requirements-baseline.md" "${roadmap_contradiction_repo}/docs/requirements-baseline.md"
 git -C "${roadmap_contradiction_repo}" add docs/requirements-baseline.md
-append_text_to_doc "${roadmap_contradiction_repo}" "docs/Revised Phase23-20 Epic Roadmap.md" "Multi-tenant packaging is in scope for this roadmap slice."
+append_text_to_doc "${roadmap_contradiction_repo}" "docs/Revised Phase23-29 Epic Roadmap.md" "Multi-tenant packaging is in scope for this roadmap slice."
 commit_fixture "${roadmap_contradiction_repo}"
 assert_fails_with "${roadmap_contradiction_repo}" "Forbidden roadmap out-of-scope contradiction: Multi-tenant packaging is in scope for this roadmap slice."
 

@@ -65,7 +65,7 @@ class Phase24LiveAssistantWorkflowDocsTests(unittest.TestCase):
         for term in (
             "Phase 24 First Live Assistant Workflow Family and Trusted Output Contract Validation",
             "Validation status: PASS",
-            "docs/Revised Phase23-20 Epic Roadmap.md",
+            "docs/Revised Phase23-29 Epic Roadmap.md",
             "README.md",
             "docs/phase-15-identity-grounded-analyst-assistant-boundary.md",
             "workflow contract",
@@ -73,6 +73,7 @@ class Phase24LiveAssistantWorkflowDocsTests(unittest.TestCase):
             "advisory-only",
         ):
             self.assertIn(term, text)
+        self.assertNotIn("docs/Revised Phase23-20 Epic Roadmap.md", text)
 
 
 if __name__ == "__main__":

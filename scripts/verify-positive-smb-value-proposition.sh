@@ -6,7 +6,7 @@ repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 repo_root="${repo_root//\\//}"
 readme_path="${repo_root}/README.md"
 architecture_path="${repo_root}/docs/architecture.md"
-roadmap_path="${repo_root}/docs/Revised Phase23-20 Epic Roadmap.md"
+roadmap_path="${repo_root}/docs/Revised Phase23-29 Epic Roadmap.md"
 requirements_path="${repo_root}/docs/requirements-baseline.md"
 
 require_file() {
@@ -65,7 +65,7 @@ require_phrase "${requirements_path}" "${business_hours}" "requirements baseline
 require_phrase "${roadmap_path}" "${positive_thesis}" "roadmap SMB value proposition statement"
 require_phrase "${roadmap_path}" "${target_profile}" "roadmap deployment target profile"
 require_phrase "${roadmap_path}" "${business_hours}" "roadmap business-hours target statement"
-require_phrase "${roadmap_path}" "Phase 23 hardening and ergonomics work must be evaluated against this deployment target before scope expands." "roadmap Phase 23 anchoring statement"
+require_phrase "${roadmap_path}" "Phases 23-29 hardening, ergonomics, and bounded-extension work must be evaluated against this deployment target before scope expands." "roadmap Phase 23-29 anchoring statement"
 
 forbid_phrase "${readme_path}" "AegisOps is a generic SIEM replacement for broad enterprise operations." "README contradiction marker"
 forbid_phrase "${architecture_path}" "AegisOps is a generic SIEM replacement for broad enterprise operations." "architecture contradiction marker"

@@ -15,7 +15,7 @@ fail_stderr="${workdir}/fail.err"
 
 required_artifacts=(
   "README.md"
-  "docs/Revised Phase23-20 Epic Roadmap.md"
+  "docs/Revised Phase23-29 Epic Roadmap.md"
   "docs/control-plane-state-model.md"
   "docs/phase-15-identity-grounded-analyst-assistant-boundary.md"
   "docs/phase-24-first-live-assistant-workflow-family-and-trusted-output-contract.md"
