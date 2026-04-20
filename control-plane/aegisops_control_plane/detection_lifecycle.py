@@ -445,10 +445,14 @@ class DetectionLifecycleService:
                         existing_case.reviewed_context,
                         alert.reviewed_context,
                     )
-                    if merged_case_reviewed_context != existing_case.reviewed_context:
+                    if (
+                        existing_case.finding_id != alert.finding_id
+                        or merged_case_reviewed_context != existing_case.reviewed_context
+                    ):
                         service.persist_record(
                             replace(
                                 existing_case,
+                                finding_id=alert.finding_id,
                                 reviewed_context=merged_case_reviewed_context,
                             )
                         )
@@ -458,6 +462,12 @@ class DetectionLifecycleService:
                     AnalyticSignalRecord,
                     analytic_signal_id,
                 )
+                if existing_signal is not None:
+                    if existing_signal.correlation_key != correlation_key:
+                        raise ValueError(
+                            f"Analytic signal {analytic_signal_id!r} already belongs to "
+                            f"correlation key {existing_signal.correlation_key!r}"
+                        )
                 signal_reviewed_context = self._merge_reviewed_context(
                     alert.reviewed_context,
                     admission.reviewed_context,
@@ -501,16 +511,24 @@ class DetectionLifecycleService:
 
             service._link_case_to_analytic_signals(linked_signal_ids, alert.case_id)
 
+            subject_linkage = (
+                dict(latest_reconciliation.subject_linkage)
+                if latest_reconciliation is not None
+                else {}
+            )
+            subject_linkage.update(
+                {
+                    "alert_ids": (alert.alert_id,),
+                    "case_ids": linked_case_ids,
+                    "substrate_detection_record_ids": linked_substrate_detection_ids,
+                    "finding_ids": linked_finding_ids,
+                    "analytic_signal_ids": linked_signal_ids,
+                }
+            )
             reconciliation = service.persist_record(
                 ReconciliationRecord(
                     reconciliation_id=service._next_identifier("reconciliation"),
-                    subject_linkage={
-                        "alert_ids": (alert.alert_id,),
-                        "case_ids": linked_case_ids,
-                        "substrate_detection_record_ids": linked_substrate_detection_ids,
-                        "finding_ids": linked_finding_ids,
-                        "analytic_signal_ids": linked_signal_ids,
-                    },
+                    subject_linkage=subject_linkage,
                     alert_id=alert.alert_id,
                     finding_id=finding_id,
                     analytic_signal_id=analytic_signal_id,

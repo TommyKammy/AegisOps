@@ -1026,12 +1026,13 @@ class PostgresControlPlaneStore:
             try:
                 cursor.execute(query, params)
                 row = cursor.fetchone()
+                mapping = None if row is None else _row_to_mapping(cursor, row)
             finally:
                 cursor.close()
 
-        if row is None:
+        if mapping is None:
             return None
-        return self._row_to_record(ReconciliationRecord, _row_to_mapping(cursor, row))
+        return self._row_to_record(ReconciliationRecord, mapping)
 
     def latest_lifecycle_transition(
         self,

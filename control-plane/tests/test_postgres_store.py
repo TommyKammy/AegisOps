@@ -1177,6 +1177,51 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             "select reconciliation_id, subject_linkage, alert_id, finding_id, analytic_signal_id, execution_run_id, linked_execution_run_ids, correlation_key, first_seen_at, last_seen_at, ingest_disposition, mismatch_summary, compared_at, lifecycle_state from aegisops_control.reconciliation_records where correlation_key = %s and alert_id is not null order by compared_at desc, reconciliation_id desc limit 1",
         )
 
+    def test_reconciliation_lookup_maps_tuple_rows_before_cursor_close(self) -> None:
+        store, _ = make_store(_TupleRowClosingBackend())
+        older = ReconciliationRecord(
+            reconciliation_id="reconciliation-tuple-001",
+            subject_linkage={"finding_ids": ["finding-tuple-001"]},
+            alert_id="alert-tuple-001",
+            finding_id="finding-tuple-001",
+            analytic_signal_id="signal-tuple-001",
+            execution_run_id=None,
+            linked_execution_run_ids=(),
+            correlation_key="claim:host-001:tuple-lookup",
+            first_seen_at=datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc),
+            last_seen_at=datetime(2026, 4, 16, 8, 1, tzinfo=timezone.utc),
+            ingest_disposition="created",
+            mismatch_summary="",
+            compared_at=datetime(2026, 4, 16, 8, 2, tzinfo=timezone.utc),
+            lifecycle_state="matched",
+        )
+        latest = ReconciliationRecord(
+            reconciliation_id="reconciliation-tuple-002",
+            subject_linkage={"finding_ids": ["finding-tuple-001", "finding-tuple-002"]},
+            alert_id="alert-tuple-001",
+            finding_id="finding-tuple-002",
+            analytic_signal_id="signal-tuple-002",
+            execution_run_id=None,
+            linked_execution_run_ids=(),
+            correlation_key="claim:host-001:tuple-lookup",
+            first_seen_at=datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc),
+            last_seen_at=datetime(2026, 4, 16, 8, 3, tzinfo=timezone.utc),
+            ingest_disposition="restated",
+            mismatch_summary="",
+            compared_at=datetime(2026, 4, 16, 8, 4, tzinfo=timezone.utc),
+            lifecycle_state="matched",
+        )
+
+        for record in (older, latest):
+            store.save(record)
+
+        self.assertEqual(
+            store.latest_reconciliation_for_correlation_key(
+                "claim:host-001:tuple-lookup"
+            ),
+            latest,
+        )
+
     def test_store_lists_lifecycle_transitions_by_subject(self) -> None:
         store, _ = make_store()
         first_transition = LifecycleTransitionRecord(

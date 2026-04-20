@@ -959,6 +959,19 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
                 "admission_kind": "live",
             },
         )
+        expected_evidence_ids = tuple(
+            evidence.evidence_id
+            for evidence in store.list(EvidenceRecord)
+            if evidence.alert_id == created.alert.alert_id
+        )
+        self.assertCountEqual(
+            restated_reconciliation.subject_linkage["evidence_ids"],
+            expected_evidence_ids,
+        )
+        self.assertCountEqual(
+            deduplicated_reconciliation.subject_linkage["evidence_ids"],
+            expected_evidence_ids,
+        )
 
         persisted_case = service.get_record(CaseRecord, promoted_case.case_id)
         self.assertIsNotNone(persisted_case)
@@ -3607,6 +3620,63 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
         self.assertEqual(signal_three.first_seen_at, updated_seen)
         self.assertEqual(signal_three.last_seen_at, duplicate_seen)
 
+    def test_service_keeps_promoted_case_finding_aligned_with_materially_new_alert_work(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        updated_seen = datetime(2026, 4, 5, 12, 30, tzinfo=timezone.utc)
+
+        created = service.ingest_finding_alert(
+            finding_id="finding-case-alignment-001",
+            analytic_signal_id="signal-case-alignment-001",
+            substrate_detection_record_id="substrate-detection-case-alignment-001",
+            correlation_key="claim:host-001:case-alignment",
+            first_seen_at=first_seen,
+            last_seen_at=first_seen,
+            reviewed_context={"source": {"family": "seed"}},
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-case-alignment-001",
+                source_record_id="substrate-detection-case-alignment-001",
+                alert_id=created.alert.alert_id,
+                case_id=None,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=first_seen,
+                derivation_relationship="admitted_analytic_signal",
+                lifecycle_state="collected",
+            )
+        )
+        promoted_case = service.promote_alert_to_case(created.alert.alert_id)
+
+        updated = service.ingest_finding_alert(
+            finding_id="finding-case-alignment-002",
+            analytic_signal_id="signal-case-alignment-002",
+            substrate_detection_record_id="substrate-detection-case-alignment-002",
+            correlation_key="claim:host-001:case-alignment",
+            first_seen_at=updated_seen,
+            last_seen_at=updated_seen,
+            materially_new_work=True,
+            reviewed_context={"source": {"family": "updated"}},
+        )
+
+        persisted_case = service.get_record(CaseRecord, promoted_case.case_id)
+
+        self.assertEqual(updated.disposition, "updated")
+        self.assertEqual(updated.alert.case_id, promoted_case.case_id)
+        self.assertIsNotNone(persisted_case)
+        self.assertEqual(persisted_case.finding_id, "finding-case-alignment-002")
+        self.assertEqual(
+            persisted_case.reviewed_context["source"]["family"],
+            "updated",
+        )
+
     def test_service_restates_when_repeated_finding_adds_new_signal_identity(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
@@ -3884,6 +3954,52 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
         self.assertEqual(
             reconciliation.subject_linkage["substrate_detection_record_ids"],
             (),
+        )
+
+    def test_service_rejects_supplied_analytic_signal_id_from_other_correlation_key(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+
+        created = service.ingest_finding_alert(
+            finding_id="finding-signal-collision-001",
+            analytic_signal_id="signal-collision-001",
+            substrate_detection_record_id="substrate-detection-collision-001",
+            correlation_key="claim:host-001:signal-collision-a",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                "Analytic signal 'signal-collision-001' already belongs to "
+                "correlation key 'claim:host-001:signal-collision-a'"
+            ),
+        ):
+            service.ingest_finding_alert(
+                finding_id="finding-signal-collision-002",
+                analytic_signal_id="signal-collision-001",
+                substrate_detection_record_id="substrate-detection-collision-002",
+                correlation_key="claim:host-001:signal-collision-b",
+                first_seen_at=first_seen_at,
+                last_seen_at=first_seen_at + timedelta(minutes=15),
+            )
+
+        self.assertEqual(len(store.list(AlertRecord)), 1)
+        self.assertEqual(len(store.list(AnalyticSignalRecord)), 1)
+        self.assertEqual(len(store.list(ReconciliationRecord)), 1)
+        self.assertEqual(
+            service.get_record(
+                AnalyticSignalRecord,
+                "signal-collision-001",
+            ).correlation_key,
+            created.reconciliation.correlation_key,
         )
 
     def test_service_inspects_analytic_signal_records_as_first_class_records(self) -> None:
