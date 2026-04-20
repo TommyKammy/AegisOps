@@ -34,6 +34,7 @@ from .assistant_provider import (
     AssistantProviderResult,
     AssistantProviderTransport,
 )
+from .case_workflow import CaseWorkflowService
 from .config import OpenBaoKVv2SecretTransport, RuntimeConfig
 from .execution_coordinator import (
     ExecutionCoordinator,
@@ -1361,6 +1362,10 @@ class AegisOpsControlPlaneService:
             coordination_reference_payload=_coordination_reference_payload,
             coordination_reference_signature=_coordination_reference_signature,
             dedupe_strings=_dedupe_strings,
+        )
+        self._case_workflow_service = CaseWorkflowService(
+            self,
+            merge_reviewed_context=_merge_reviewed_context,
         )
         self._detection_lifecycle_service = DetectionLifecycleService(
             self,
@@ -4141,51 +4146,15 @@ class AegisOpsControlPlaneService:
         observation_id: str | None = None,
         lifecycle_state: str = "confirmed",
     ) -> ObservationRecord:
-        case = self._require_case_record(case_id)
-        author_identity = self._require_non_empty_string(
-            author_identity,
-            "author_identity",
+        return self._case_workflow_service.record_case_observation(
+            case_id=case_id,
+            author_identity=author_identity,
+            observed_at=observed_at,
+            scope_statement=scope_statement,
+            supporting_evidence_ids=supporting_evidence_ids,
+            observation_id=observation_id,
+            lifecycle_state=lifecycle_state,
         )
-        observed_at = self._require_aware_datetime(observed_at, "observed_at")
-        scope_statement = self._require_non_empty_string(
-            scope_statement,
-            "scope_statement",
-        )
-        lifecycle_state = self._require_non_empty_string(
-            lifecycle_state,
-            "lifecycle_state",
-        )
-        normalized_evidence_ids = self._normalize_linked_record_ids(
-            supporting_evidence_ids,
-            "supporting_evidence_ids",
-        )
-        with self._store.transaction():
-            case = self._require_reviewed_operator_case(case_id)
-            self._validate_case_evidence_linkage(
-                case=case,
-                evidence_ids=normalized_evidence_ids,
-                field_name="supporting_evidence_ids",
-            )
-            resolved_observation_id = self._resolve_new_record_identifier(
-                ObservationRecord,
-                observation_id,
-                "observation_id",
-                "observation",
-            )
-            return self.persist_record(
-                ObservationRecord(
-                    observation_id=resolved_observation_id,
-                    hunt_id=None,
-                    hunt_run_id=None,
-                    alert_id=case.alert_id,
-                    case_id=case.case_id,
-                    supporting_evidence_ids=normalized_evidence_ids,
-                    author_identity=author_identity,
-                    observed_at=observed_at,
-                    scope_statement=scope_statement,
-                    lifecycle_state=lifecycle_state,
-                )
-            )
 
     def record_case_lead(
         self,
@@ -4197,50 +4166,14 @@ class AegisOpsControlPlaneService:
         lead_id: str | None = None,
         lifecycle_state: str = "triaged",
     ) -> LeadRecord:
-        triage_owner = self._require_non_empty_string(triage_owner, "triage_owner")
-        triage_rationale = self._require_non_empty_string(
-            triage_rationale,
-            "triage_rationale",
+        return self._case_workflow_service.record_case_lead(
+            case_id=case_id,
+            triage_owner=triage_owner,
+            triage_rationale=triage_rationale,
+            observation_id=observation_id,
+            lead_id=lead_id,
+            lifecycle_state=lifecycle_state,
         )
-        lifecycle_state = self._require_non_empty_string(
-            lifecycle_state,
-            "lifecycle_state",
-        )
-        resolved_observation_id = self._normalize_optional_string(
-            observation_id,
-            "observation_id",
-        )
-        with self._store.transaction():
-            case = self._require_reviewed_operator_case(case_id)
-            if resolved_observation_id is not None:
-                observation = self._store.get(ObservationRecord, resolved_observation_id)
-                if observation is None:
-                    raise LookupError(f"Missing observation {resolved_observation_id!r}")
-                if observation.case_id != case.case_id:
-                    raise ValueError(
-                        f"Observation {resolved_observation_id!r} is not linked to case "
-                        f"{case.case_id!r}"
-                    )
-
-            resolved_lead_id = self._resolve_new_record_identifier(
-                LeadRecord,
-                lead_id,
-                "lead_id",
-                "lead",
-            )
-            return self.persist_record(
-                LeadRecord(
-                    lead_id=resolved_lead_id,
-                    observation_id=resolved_observation_id,
-                    finding_id=case.finding_id,
-                    hunt_run_id=None,
-                    alert_id=case.alert_id,
-                    case_id=case.case_id,
-                    triage_owner=triage_owner,
-                    triage_rationale=triage_rationale,
-                    lifecycle_state=lifecycle_state,
-                )
-            )
 
     def record_case_recommendation(
         self,
@@ -4252,47 +4185,14 @@ class AegisOpsControlPlaneService:
         recommendation_id: str | None = None,
         lifecycle_state: str = "under_review",
     ) -> RecommendationRecord:
-        review_owner = self._require_non_empty_string(review_owner, "review_owner")
-        intended_outcome = self._require_non_empty_string(
-            intended_outcome,
-            "intended_outcome",
+        return self._case_workflow_service.record_case_recommendation(
+            case_id=case_id,
+            review_owner=review_owner,
+            intended_outcome=intended_outcome,
+            lead_id=lead_id,
+            recommendation_id=recommendation_id,
+            lifecycle_state=lifecycle_state,
         )
-        lifecycle_state = self._require_non_empty_string(
-            lifecycle_state,
-            "lifecycle_state",
-        )
-        resolved_lead_id = self._normalize_optional_string(lead_id, "lead_id")
-        with self._store.transaction():
-            case = self._require_reviewed_operator_case(case_id)
-            if resolved_lead_id is not None:
-                lead = self._store.get(LeadRecord, resolved_lead_id)
-                if lead is None:
-                    raise LookupError(f"Missing lead {resolved_lead_id!r}")
-                if lead.case_id != case.case_id:
-                    raise ValueError(
-                        f"Lead {resolved_lead_id!r} is not linked to case {case.case_id!r}"
-                    )
-
-            resolved_recommendation_id = self._resolve_new_record_identifier(
-                RecommendationRecord,
-                recommendation_id,
-                "recommendation_id",
-                "recommendation",
-            )
-            return self.persist_record(
-                RecommendationRecord(
-                    recommendation_id=resolved_recommendation_id,
-                    lead_id=resolved_lead_id,
-                    hunt_run_id=None,
-                    alert_id=case.alert_id,
-                    case_id=case.case_id,
-                    ai_trace_id=None,
-                    review_owner=review_owner,
-                    intended_outcome=intended_outcome,
-                    lifecycle_state=lifecycle_state,
-                    reviewed_context=case.reviewed_context,
-                )
-            )
 
     def record_case_handoff(
         self,
@@ -4303,41 +4203,13 @@ class AegisOpsControlPlaneService:
         handoff_note: str,
         follow_up_evidence_ids: tuple[str, ...] = (),
     ) -> CaseRecord:
-        case = self._require_case_record(case_id)
-        handoff_at = self._require_aware_datetime(handoff_at, "handoff_at")
-        handoff_owner = self._require_non_empty_string(
-            handoff_owner,
-            "handoff_owner",
+        return self._case_workflow_service.record_case_handoff(
+            case_id=case_id,
+            handoff_at=handoff_at,
+            handoff_owner=handoff_owner,
+            handoff_note=handoff_note,
+            follow_up_evidence_ids=follow_up_evidence_ids,
         )
-        handoff_note = self._require_non_empty_string(handoff_note, "handoff_note")
-        normalized_evidence_ids = self._normalize_linked_record_ids(
-            follow_up_evidence_ids,
-            "follow_up_evidence_ids",
-        )
-        with self._store.transaction():
-            case = self._require_reviewed_operator_case(case_id)
-            self._validate_case_evidence_linkage(
-                case=case,
-                evidence_ids=normalized_evidence_ids,
-                field_name="follow_up_evidence_ids",
-            )
-            updated_reviewed_context = _merge_reviewed_context(
-                case.reviewed_context,
-                {
-                    "handoff": {
-                        "handoff_at": handoff_at.isoformat(),
-                        "handoff_owner": handoff_owner,
-                        "note": handoff_note,
-                        "follow_up_evidence_ids": normalized_evidence_ids,
-                    }
-                },
-            )
-            return self.persist_record(
-                replace(
-                    case,
-                    reviewed_context=updated_reviewed_context,
-                )
-            )
 
     def record_case_disposition(
         self,
@@ -4347,45 +4219,12 @@ class AegisOpsControlPlaneService:
         rationale: str,
         recorded_at: datetime,
     ) -> CaseRecord:
-        disposition = self._require_non_empty_string(disposition, "disposition")
-        rationale = self._require_non_empty_string(rationale, "rationale")
-        recorded_at = self._require_aware_datetime(recorded_at, "recorded_at")
-        lifecycle_state = self._case_lifecycle_for_disposition(disposition)
-        with self._store.transaction():
-            case = self._require_reviewed_operator_case(case_id)
-            updated_reviewed_context = _merge_reviewed_context(
-                case.reviewed_context,
-                {
-                    "triage": {
-                        "disposition": disposition,
-                        "closure_rationale": rationale,
-                        "recorded_at": recorded_at.isoformat(),
-                    }
-                },
-            )
-            updated_case = self.persist_record(
-                replace(
-                    case,
-                    lifecycle_state=lifecycle_state,
-                    reviewed_context=updated_reviewed_context,
-                ),
-                transitioned_at=recorded_at,
-            )
-            if case.alert_id is not None and lifecycle_state == "closed":
-                alert = self._store.get(AlertRecord, case.alert_id)
-                if alert is not None:
-                    self.persist_record(
-                        replace(
-                            alert,
-                            lifecycle_state="closed",
-                            reviewed_context=_merge_reviewed_context(
-                                alert.reviewed_context,
-                                {"triage": updated_reviewed_context.get("triage", {})},
-                            ),
-                        ),
-                        transitioned_at=recorded_at,
-                    )
-        return updated_case
+        return self._case_workflow_service.record_case_disposition(
+            case_id=case_id,
+            disposition=disposition,
+            rationale=rationale,
+            recorded_at=recorded_at,
+        )
 
     def record_action_review_manual_fallback(
         self,

@@ -19,6 +19,121 @@ for name, value in vars(support).items():
 
 
 class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
+    def test_service_delegates_case_workflow_mutations(self) -> None:
+        store, _ = support.make_store()
+        service = support.AegisOpsControlPlaneService(
+            support.RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        observed_at = support.datetime(2026, 4, 5, 12, 0, tzinfo=support.timezone.utc)
+        delegate = support.mock.Mock()
+        observation = support.SimpleNamespace(observation_id="observation-delegated-001")
+        lead = support.SimpleNamespace(lead_id="lead-delegated-001")
+        recommendation = support.SimpleNamespace(
+            recommendation_id="recommendation-delegated-001"
+        )
+        handed_off_case = support.SimpleNamespace(case_id="case-delegated-001")
+        disposed_case = support.SimpleNamespace(case_id="case-delegated-001")
+        delegate.record_case_observation.return_value = observation
+        delegate.record_case_lead.return_value = lead
+        delegate.record_case_recommendation.return_value = recommendation
+        delegate.record_case_handoff.return_value = handed_off_case
+        delegate.record_case_disposition.return_value = disposed_case
+        service._case_workflow_service = delegate
+
+        self.assertIs(
+            service.record_case_observation(
+                case_id="case-delegated-001",
+                author_identity="analyst-001",
+                observed_at=observed_at,
+                scope_statement="Delegated case observation.",
+                supporting_evidence_ids=("evidence-delegated-001",),
+                observation_id="observation-delegated-001",
+                lifecycle_state="confirmed",
+            ),
+            observation,
+        )
+        self.assertIs(
+            service.record_case_lead(
+                case_id="case-delegated-001",
+                triage_owner="analyst-001",
+                triage_rationale="Delegated case lead.",
+                observation_id="observation-delegated-001",
+                lead_id="lead-delegated-001",
+                lifecycle_state="triaged",
+            ),
+            lead,
+        )
+        self.assertIs(
+            service.record_case_recommendation(
+                case_id="case-delegated-001",
+                review_owner="analyst-001",
+                intended_outcome="Delegated case recommendation.",
+                lead_id="lead-delegated-001",
+                recommendation_id="recommendation-delegated-001",
+                lifecycle_state="under_review",
+            ),
+            recommendation,
+        )
+        self.assertIs(
+            service.record_case_handoff(
+                case_id="case-delegated-001",
+                handoff_at=observed_at,
+                handoff_owner="analyst-001",
+                handoff_note="Delegated handoff.",
+                follow_up_evidence_ids=("evidence-delegated-001",),
+            ),
+            handed_off_case,
+        )
+        self.assertIs(
+            service.record_case_disposition(
+                case_id="case-delegated-001",
+                disposition="business_hours_handoff",
+                rationale="Delegated disposition.",
+                recorded_at=observed_at,
+            ),
+            disposed_case,
+        )
+
+        delegate.record_case_observation.assert_called_once_with(
+            case_id="case-delegated-001",
+            author_identity="analyst-001",
+            observed_at=observed_at,
+            scope_statement="Delegated case observation.",
+            supporting_evidence_ids=("evidence-delegated-001",),
+            observation_id="observation-delegated-001",
+            lifecycle_state="confirmed",
+        )
+        delegate.record_case_lead.assert_called_once_with(
+            case_id="case-delegated-001",
+            triage_owner="analyst-001",
+            triage_rationale="Delegated case lead.",
+            observation_id="observation-delegated-001",
+            lead_id="lead-delegated-001",
+            lifecycle_state="triaged",
+        )
+        delegate.record_case_recommendation.assert_called_once_with(
+            case_id="case-delegated-001",
+            review_owner="analyst-001",
+            intended_outcome="Delegated case recommendation.",
+            lead_id="lead-delegated-001",
+            recommendation_id="recommendation-delegated-001",
+            lifecycle_state="under_review",
+        )
+        delegate.record_case_handoff.assert_called_once_with(
+            case_id="case-delegated-001",
+            handoff_at=observed_at,
+            handoff_owner="analyst-001",
+            handoff_note="Delegated handoff.",
+            follow_up_evidence_ids=("evidence-delegated-001",),
+        )
+        delegate.record_case_disposition.assert_called_once_with(
+            case_id="case-delegated-001",
+            disposition="business_hours_handoff",
+            rationale="Delegated disposition.",
+            recorded_at=observed_at,
+        )
+
     def test_service_delegates_detection_lifecycle_operations(self) -> None:
         store, _ = support.make_store()
         service = support.AegisOpsControlPlaneService(
@@ -2609,6 +2724,56 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
         self.assertEqual(
             updated_case.reviewed_context["triage"]["disposition"],
             "pending_approval",
+        )
+
+    def test_service_fails_closed_when_linked_alert_disappears_after_slice_validation(
+        self,
+    ) -> None:
+        store, service, promoted_case, _, reviewed_at = self._build_phase19_in_scope_case()
+        prior_case = service.get_record(CaseRecord, promoted_case.case_id)
+        prior_alert = service.get_record(AlertRecord, promoted_case.alert_id)
+        prior_transitions = store.list_lifecycle_transitions("case", promoted_case.case_id)
+        original_get = service._store.get
+        alert_reads = 0
+
+        def flaky_get(record_type: object, record_id: str) -> object | None:
+            nonlocal alert_reads
+            record = original_get(record_type, record_id)
+            if record_type is AlertRecord and record_id == promoted_case.alert_id:
+                alert_reads += 1
+                if alert_reads >= 2:
+                    return None
+            return record
+
+        service._store.get = support.mock.Mock(side_effect=flaky_get)
+        try:
+            with self.assertRaises(LookupError) as exc_info:
+                service.record_case_disposition(
+                    case_id=promoted_case.case_id,
+                    disposition="closed_resolved",
+                    rationale=(
+                        "Closing a case after the linked alert disappears must fail closed."
+                    ),
+                    recorded_at=reviewed_at,
+                )
+        finally:
+            service._store.get = original_get
+
+        self.assertEqual(
+            str(exc_info.exception),
+            f"Missing alert {promoted_case.alert_id!r}",
+        )
+        self.assertEqual(
+            service.get_record(CaseRecord, promoted_case.case_id),
+            prior_case,
+        )
+        self.assertEqual(
+            store.list_lifecycle_transitions("case", promoted_case.case_id),
+            prior_transitions,
+        )
+        self.assertEqual(
+            service.get_record(AlertRecord, promoted_case.alert_id),
+            prior_alert,
         )
 
     def test_service_analyst_queue_prefers_explicit_wazuh_source_for_multi_source_linkage(
