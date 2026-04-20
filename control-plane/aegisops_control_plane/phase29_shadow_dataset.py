@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import hashlib
 import json
-from typing import Mapping
+from typing import Mapping, Sequence
 
 from .models import (
     AlertRecord,
@@ -79,22 +79,34 @@ def generate_reviewed_shadow_dataset(
         key=lambda record: record.recommendation_id,
     )
 
-    examples = tuple(
-        _build_recommendation_example(
-            service=service,
-            store=store,
-            recommendation=recommendation,
-            extraction_spec_version=extraction_spec_version,
-            snapshot_timestamp=snapshot_timestamp,
+    examples: list[dict[str, object]] = []
+    for recommendation in recommendations:
+        label_transition = _latest_lifecycle_transition_as_of(
+            service,
+            "recommendation",
+            recommendation.recommendation_id,
+            snapshot_timestamp,
         )
-        for recommendation in recommendations
-        if recommendation.lifecycle_state in _ALLOWED_RECOMMENDATION_LABEL_STATES
-    )
+        if (
+            label_transition is None
+            or label_transition.lifecycle_state not in _ALLOWED_RECOMMENDATION_LABEL_STATES
+        ):
+            continue
+        examples.append(
+            _build_recommendation_example(
+                service=service,
+                store=store,
+                recommendation=recommendation,
+                label_transition=label_transition,
+                extraction_spec_version=extraction_spec_version,
+                snapshot_timestamp=snapshot_timestamp,
+            )
+        )
 
     snapshot_payload = {
         "extraction_spec_version": extraction_spec_version,
         "snapshot_timestamp": snapshot_timestamp.isoformat(),
-        "examples": examples,
+        "examples": tuple(examples),
     }
     snapshot_id = hashlib.sha256(
         _canonical_json(snapshot_payload).encode("utf-8")
@@ -104,7 +116,7 @@ def generate_reviewed_shadow_dataset(
         extraction_spec_version=extraction_spec_version,
         snapshot_timestamp=snapshot_timestamp.isoformat(),
         example_count=len(examples),
-        examples=examples,
+        examples=tuple(examples),
     )
 
 
@@ -113,6 +125,7 @@ def _build_recommendation_example(
     service: object,
     store: object,
     recommendation: RecommendationRecord,
+    label_transition: LifecycleTransitionRecord,
     extraction_spec_version: str,
     snapshot_timestamp: datetime,
 ) -> dict[str, object]:
@@ -133,6 +146,17 @@ def _build_recommendation_example(
             f"recommendation {recommendation.recommendation_id} references missing alert "
             f"{recommendation.alert_id}"
         )
+    alert_transition = _latest_lifecycle_transition_as_of(
+        service,
+        "alert",
+        alert_record.alert_id,
+        snapshot_timestamp,
+    )
+    if alert_transition is None:
+        raise Phase29ShadowDatasetGenerationError(
+            f"recommendation {recommendation.recommendation_id} references alert "
+            f"{alert_record.alert_id} without authoritative state at requested snapshot"
+        )
 
     source_family = _nested_string(
         alert_record.reviewed_context,
@@ -145,40 +169,34 @@ def _build_recommendation_example(
 
     linked_evidence = _linked_evidence_records(
         store=store,
-        case_id=case_record.case_id,
-        alert_id=alert_record.alert_id,
+        evidence_ids=case_record.evidence_ids,
+        snapshot_timestamp=snapshot_timestamp,
     )
     anchor_evidence = _select_anchor_evidence(
         recommendation_id=recommendation.recommendation_id,
         linked_evidence=linked_evidence,
     )
-
-    label_transition = _latest_lifecycle_transition(
-        service,
-        "recommendation",
-        recommendation.recommendation_id,
-    )
-    if label_transition is None:
-        raise Phase29ShadowDatasetGenerationError(
-            "missing required reviewed label transition for recommendation "
-            f"{recommendation.recommendation_id}"
-        )
-
-    ambiguity_badges = sorted(
-        {
-            ambiguity_badge
-            for evidence in linked_evidence
-            for ambiguity_badge in (_optional_string(evidence.provenance.get("ambiguity_badge")),)
-            if ambiguity_badge is not None
-        }
+    ambiguity_badges, ambiguity_contributors = _ambiguity_badge_provenance(
+        linked_evidence=linked_evidence
     )
     latest_reconciliation = _latest_reconciliation(
         store=store,
         alert_id=alert_record.alert_id,
         case_id=case_record.case_id,
+        snapshot_timestamp=snapshot_timestamp,
     )
 
-    case_transition = _latest_lifecycle_transition(service, "case", case_record.case_id)
+    case_transition = _latest_lifecycle_transition_as_of(
+        service,
+        "case",
+        case_record.case_id,
+        snapshot_timestamp,
+    )
+    if case_transition is None:
+        raise Phase29ShadowDatasetGenerationError(
+            f"recommendation {recommendation.recommendation_id} references case "
+            f"{case_record.case_id} without authoritative state at requested snapshot"
+        )
 
     features: dict[str, object] = {
         "source_family": _feature_entry(
@@ -189,11 +207,11 @@ def _build_recommendation_example(
             extraction_spec_version=extraction_spec_version,
             snapshot_timestamp=snapshot_timestamp,
             classification=None,
-            reviewed_by=_first_actor_identity(case_transition),
+            reviewed_by=_first_actor_identity(alert_transition),
             reviewed_linkage="subject-alert-link",
         ),
         "case_lifecycle_state": _feature_entry(
-            value=case_record.lifecycle_state,
+            value=case_transition.lifecycle_state,
             record_family="case",
             record_id=case_record.case_id,
             field_path="lifecycle_state",
@@ -209,7 +227,12 @@ def _build_recommendation_example(
         case_record.reviewed_context,
         ("triage", "disposition"),
     )
-    if case_triage_disposition is not None:
+    case_triage_recorded_at = _reviewed_context_recorded_at(case_record.reviewed_context)
+    if (
+        case_triage_disposition is not None
+        and case_triage_recorded_at is not None
+        and case_triage_recorded_at <= snapshot_timestamp
+    ):
         features["case_triage_disposition"] = _feature_entry(
             value=case_triage_disposition,
             record_family="case",
@@ -232,6 +255,7 @@ def _build_recommendation_example(
         classification=_optional_string(anchor_evidence.provenance.get("classification")),
         reviewed_by=_optional_string(anchor_evidence.provenance.get("reviewed_by")),
         reviewed_linkage="subject-anchor-evidence-link",
+        source_contributors=ambiguity_contributors,
     )
 
     if latest_reconciliation is not None:
@@ -265,7 +289,7 @@ def _build_recommendation_example(
         "linked_alert_id": alert_record.alert_id,
         "features": features,
         "label": {
-            "value": recommendation.lifecycle_state,
+            "value": label_transition.lifecycle_state,
             "provenance": {
                 "label_record_family": _display_record_family("recommendation"),
                 "label_record_id": recommendation.recommendation_id,
@@ -284,19 +308,20 @@ def _build_recommendation_example(
 def _linked_evidence_records(
     *,
     store: object,
-    case_id: str,
-    alert_id: str,
+    evidence_ids: Sequence[str],
+    snapshot_timestamp: datetime,
 ) -> tuple[EvidenceRecord, ...]:
-    return tuple(
-        sorted(
-            (
-                evidence
-                for evidence in store.list(EvidenceRecord)
-                if evidence.case_id == case_id or evidence.alert_id == alert_id
-            ),
-            key=lambda evidence: evidence.evidence_id,
-        )
-    )
+    linked_evidence: list[EvidenceRecord] = []
+    for evidence_id in evidence_ids:
+        evidence = store.get(EvidenceRecord, evidence_id)
+        if evidence is None:
+            raise Phase29ShadowDatasetGenerationError(
+                f"reviewed subject links missing evidence record {evidence_id}"
+            )
+        if _evidence_snapshot_timestamp(evidence) > snapshot_timestamp:
+            continue
+        linked_evidence.append(evidence)
+    return tuple(sorted(linked_evidence, key=lambda evidence: evidence.evidence_id))
 
 
 def _select_anchor_evidence(
@@ -334,12 +359,19 @@ def _latest_reconciliation(
     store: object,
     alert_id: str,
     case_id: str,
+    snapshot_timestamp: datetime,
 ) -> ReconciliationRecord | None:
     matching = [
         reconciliation
         for reconciliation in store.list(ReconciliationRecord)
-        if reconciliation.alert_id == alert_id
-        or case_id in _tuple_of_strings(reconciliation.subject_linkage.get("case_ids"))
+        if (
+            reconciliation.compared_at <= snapshot_timestamp
+            and (
+                reconciliation.alert_id == alert_id
+                or case_id
+                in _tuple_of_strings(reconciliation.subject_linkage.get("case_ids"))
+            )
+        )
     ]
     if not matching:
         return None
@@ -352,15 +384,20 @@ def _latest_reconciliation(
     )[-1]
 
 
-def _latest_lifecycle_transition(
+def _latest_lifecycle_transition_as_of(
     service: object,
     record_family: str,
     record_id: str,
+    as_of: datetime,
 ) -> LifecycleTransitionRecord | None:
     list_transitions = getattr(service, "list_lifecycle_transitions", None)
     if not callable(list_transitions):
         raise TypeError("service must expose list_lifecycle_transitions")
-    transitions = list_transitions(record_family, record_id)
+    transitions = tuple(
+        transition
+        for transition in list_transitions(record_family, record_id)
+        if transition.transitioned_at <= as_of
+    )
     if not transitions:
         return None
     return transitions[-1]
@@ -377,20 +414,86 @@ def _feature_entry(
     classification: str | None,
     reviewed_by: str | None,
     reviewed_linkage: str,
+    source_contributors: Sequence[Mapping[str, object]] | None = None,
 ) -> dict[str, object]:
+    provenance: dict[str, object] = {
+        "feature_source_record_family": _display_record_family(record_family),
+        "feature_source_record_id": record_id,
+        "feature_source_field_path": field_path,
+        "feature_extraction_spec_version": extraction_spec_version,
+        "feature_snapshot_timestamp": snapshot_timestamp.isoformat(),
+        "feature_reviewed_linkage": reviewed_linkage,
+        "feature_source_provenance_classification": classification,
+        "feature_source_reviewed_by": reviewed_by,
+    }
+    if source_contributors:
+        provenance["feature_source_contributors"] = tuple(
+            dict(contributor) for contributor in source_contributors
+        )
     return {
         "value": value,
-        "provenance": {
-            "feature_source_record_family": _display_record_family(record_family),
-            "feature_source_record_id": record_id,
-            "feature_source_field_path": field_path,
-            "feature_extraction_spec_version": extraction_spec_version,
-            "feature_snapshot_timestamp": snapshot_timestamp.isoformat(),
-            "feature_reviewed_linkage": reviewed_linkage,
-            "feature_source_provenance_classification": classification,
-            "feature_source_reviewed_by": reviewed_by,
-        },
+        "provenance": provenance,
     }
+
+
+def _ambiguity_badge_provenance(
+    *,
+    linked_evidence: Sequence[EvidenceRecord],
+) -> tuple[list[str], tuple[dict[str, object], ...]]:
+    badges = sorted(
+        {
+            ambiguity_badge
+            for evidence in linked_evidence
+            for ambiguity_badge in (_optional_string(evidence.provenance.get("ambiguity_badge")),)
+            if ambiguity_badge is not None
+        }
+    )
+    contributors = tuple(
+        {
+            "feature_source_record_family": _display_record_family("evidence"),
+            "feature_source_record_id": evidence.evidence_id,
+            "feature_source_field_path": "provenance.ambiguity_badge",
+            "feature_source_badge_value": ambiguity_badge,
+            "feature_source_provenance_classification": _optional_string(
+                evidence.provenance.get("classification")
+            ),
+            "feature_source_reviewed_by": _optional_string(
+                evidence.provenance.get("reviewed_by")
+            ),
+        }
+        for evidence in linked_evidence
+        for ambiguity_badge in (_optional_string(evidence.provenance.get("ambiguity_badge")),)
+        if ambiguity_badge is not None
+    )
+    return badges, contributors
+
+
+def _evidence_snapshot_timestamp(evidence: EvidenceRecord) -> datetime:
+    provenance_timestamp = _parse_optional_aware_datetime(
+        evidence.provenance.get("timestamp")
+    )
+    if provenance_timestamp is None:
+        return evidence.acquired_at
+    return max(evidence.acquired_at, provenance_timestamp)
+
+
+def _reviewed_context_recorded_at(reviewed_context: Mapping[str, object]) -> datetime | None:
+    triage = reviewed_context.get("triage")
+    if not isinstance(triage, Mapping):
+        return None
+    return _parse_optional_aware_datetime(triage.get("recorded_at"))
+
+
+def _parse_optional_aware_datetime(value: object) -> datetime | None:
+    raw_value = _optional_string(value)
+    if raw_value is None:
+        return None
+    parsed = datetime.fromisoformat(raw_value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise Phase29ShadowDatasetGenerationError(
+            f"expected timezone-aware ISO timestamp, got {raw_value!r}"
+        )
+    return parsed
 
 
 def _display_record_family(record_family: str) -> str:

@@ -222,3 +222,335 @@ class Phase29ShadowDatasetGenerationValidationTests(ServicePersistenceTestBase):
                 extraction_spec_version="phase29-shadow-dataset-v1",
                 snapshot_timestamp=reviewed_at + timedelta(minutes=5),
             )
+
+    def test_generator_uses_snapshot_timestamp_as_authoritative_cutoff(self) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Historical snapshots must not drift after later reviews.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            observation_id=observation.observation_id,
+            triage_owner="analyst-001",
+            triage_rationale="Snapshot generation must honor authoritative review timing.",
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            lead_id=lead.lead_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep offline shadow labels reproducible.",
+        )
+        accepted_at = reviewed_at + timedelta(minutes=5)
+        accepted_recommendation = service.persist_record(
+            replace(recommendation, lifecycle_state="accepted"),
+            transitioned_at=accepted_at,
+        )
+        anchor_evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-phase29-snapshot-anchor-001",
+                source_record_id="reviewed-source-phase29-snapshot-001",
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                source_system="github_audit",
+                collector_identity="fixture://reviewed/snapshot-anchor",
+                acquired_at=reviewed_at,
+                derivation_relationship="reviewed_context_anchor",
+                lifecycle_state="linked",
+                provenance={
+                    "classification": "authoritative-anchor",
+                    "source_id": "github-audit-event-snapshot-001",
+                    "timestamp": reviewed_at.isoformat(),
+                    "reviewed_by": "analyst-001",
+                    "ambiguity_badge": "unresolved",
+                },
+                content={"summary": {"kind": "snapshot-anchor"}},
+            )
+        )
+        linked_case = service.persist_record(
+            replace(
+                promoted_case,
+                evidence_ids=(*promoted_case.evidence_ids, anchor_evidence.evidence_id),
+            )
+        )
+        service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-phase29-snapshot-001",
+                subject_linkage={
+                    "alert_ids": (linked_case.alert_id,),
+                    "case_ids": (linked_case.case_id,),
+                    "recommendation_ids": (accepted_recommendation.recommendation_id,),
+                },
+                alert_id=linked_case.alert_id,
+                finding_id=linked_case.finding_id,
+                analytic_signal_id=None,
+                execution_run_id=None,
+                linked_execution_run_ids=(),
+                correlation_key=f"case:{linked_case.case_id}:snapshot-health",
+                first_seen_at=reviewed_at,
+                last_seen_at=accepted_at,
+                ingest_disposition="stale",
+                mismatch_summary="Historical source-health state",
+                compared_at=accepted_at,
+                lifecycle_state="stale",
+            )
+        )
+
+        later_reviewed_at = accepted_at + timedelta(minutes=10)
+        service.persist_record(
+            replace(accepted_recommendation, lifecycle_state="rejected"),
+            transitioned_at=later_reviewed_at,
+        )
+        service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-phase29-snapshot-002",
+                subject_linkage={
+                    "alert_ids": (linked_case.alert_id,),
+                    "case_ids": (linked_case.case_id,),
+                    "recommendation_ids": (accepted_recommendation.recommendation_id,),
+                },
+                alert_id=linked_case.alert_id,
+                finding_id=linked_case.finding_id,
+                analytic_signal_id=None,
+                execution_run_id=None,
+                linked_execution_run_ids=(),
+                correlation_key=f"case:{linked_case.case_id}:snapshot-health",
+                first_seen_at=later_reviewed_at,
+                last_seen_at=later_reviewed_at,
+                ingest_disposition="updated",
+                mismatch_summary="Later state that must not leak into the older snapshot",
+                compared_at=later_reviewed_at,
+                lifecycle_state="resolved",
+            )
+        )
+
+        historical_snapshot = generate_reviewed_shadow_dataset(
+            service,
+            extraction_spec_version="phase29-shadow-dataset-v1",
+            snapshot_timestamp=accepted_at,
+        )
+
+        self.assertEqual(historical_snapshot.example_count, 1)
+        example = historical_snapshot.examples[0]
+        self.assertEqual(example["label"]["value"], "accepted")
+        self.assertEqual(
+            example["label"]["provenance"]["label_decided_at"],
+            accepted_at.isoformat(),
+        )
+        self.assertEqual(
+            example["features"]["source_health_state"]["value"],
+            "stale",
+        )
+        self.assertEqual(
+            example["features"]["source_health_ingest_disposition"]["value"],
+            "stale",
+        )
+
+    def test_generator_emits_per_evidence_ambiguity_provenance(self) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Ambiguity features must preserve every contributing record.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            observation_id=observation.observation_id,
+            triage_owner="analyst-001",
+            triage_rationale="Keep aggregate ambiguity lineage reconstructible.",
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            lead_id=lead.lead_id,
+            review_owner="analyst-001",
+            intended_outcome="Preserve per-record badge provenance.",
+        )
+        decided_at = reviewed_at + timedelta(minutes=5)
+        accepted_recommendation = service.persist_record(
+            replace(recommendation, lifecycle_state="accepted"),
+            transitioned_at=decided_at,
+        )
+        anchor_evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-phase29-ambiguity-anchor-001",
+                source_record_id="reviewed-source-phase29-ambiguity-anchor-001",
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                source_system="github_audit",
+                collector_identity="fixture://reviewed/ambiguity-anchor",
+                acquired_at=reviewed_at,
+                derivation_relationship="reviewed_context_anchor",
+                lifecycle_state="linked",
+                provenance={
+                    "classification": "authoritative-anchor",
+                    "source_id": "github-audit-event-ambiguity-anchor-001",
+                    "timestamp": reviewed_at.isoformat(),
+                    "reviewed_by": "analyst-001",
+                    "ambiguity_badge": "unresolved",
+                },
+                content={"summary": {"kind": "anchor"}},
+            )
+        )
+        secondary_evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-phase29-ambiguity-secondary-001",
+                source_record_id="reviewed-source-phase29-ambiguity-secondary-001",
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                source_system="github_audit",
+                collector_identity="fixture://reviewed/ambiguity-secondary",
+                acquired_at=reviewed_at + timedelta(minutes=1),
+                derivation_relationship="reviewed_context_supporting",
+                lifecycle_state="linked",
+                provenance={
+                    "classification": "reviewed-supporting",
+                    "source_id": "github-audit-event-ambiguity-secondary-001",
+                    "timestamp": (reviewed_at + timedelta(minutes=1)).isoformat(),
+                    "reviewed_by": "analyst-002",
+                    "ambiguity_badge": "related-entity",
+                },
+                content={"summary": {"kind": "supporting"}},
+            )
+        )
+        service.persist_record(
+            replace(
+                promoted_case,
+                evidence_ids=(
+                    *promoted_case.evidence_ids,
+                    anchor_evidence.evidence_id,
+                    secondary_evidence.evidence_id,
+                ),
+            )
+        )
+
+        snapshot = generate_reviewed_shadow_dataset(
+            service,
+            extraction_spec_version="phase29-shadow-dataset-v1",
+            snapshot_timestamp=decided_at,
+        )
+
+        self.assertEqual(snapshot.example_count, 1)
+        example = snapshot.examples[0]
+        self.assertEqual(example["subject_record_id"], accepted_recommendation.recommendation_id)
+        self.assertEqual(
+            example["features"]["ambiguity_badges"]["value"],
+            ["related-entity", "unresolved"],
+        )
+        contributors = example["features"]["ambiguity_badges"]["provenance"][
+            "feature_source_contributors"
+        ]
+        self.assertEqual(len(contributors), 2)
+        self.assertEqual(
+            {
+                (entry["feature_source_record_id"], entry["feature_source_badge_value"])
+                for entry in contributors
+            },
+            {
+                (anchor_evidence.evidence_id, "unresolved"),
+                (secondary_evidence.evidence_id, "related-entity"),
+            },
+        )
+
+    def test_generator_ignores_unlinked_sibling_evidence(self) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Extraction must stay within explicit reviewed evidence linkage.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            observation_id=observation.observation_id,
+            triage_owner="analyst-001",
+            triage_rationale="Exclude sibling evidence that was never linked on the case.",
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            lead_id=lead.lead_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep Phase 29 extraction on explicit reviewed evidence only.",
+        )
+        decided_at = reviewed_at + timedelta(minutes=5)
+        service.persist_record(
+            replace(recommendation, lifecycle_state="accepted"),
+            transitioned_at=decided_at,
+        )
+        linked_anchor = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-phase29-linked-anchor-001",
+                source_record_id="reviewed-source-phase29-linked-anchor-001",
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                source_system="github_audit",
+                collector_identity="fixture://reviewed/linked-anchor",
+                acquired_at=reviewed_at,
+                derivation_relationship="reviewed_context_anchor",
+                lifecycle_state="linked",
+                provenance={
+                    "classification": "authoritative-anchor",
+                    "source_id": "github-audit-event-linked-anchor-001",
+                    "timestamp": reviewed_at.isoformat(),
+                    "reviewed_by": "analyst-001",
+                    "ambiguity_badge": "unresolved",
+                },
+                content={"summary": {"kind": "linked-anchor"}},
+            )
+        )
+        service.persist_record(
+            replace(
+                promoted_case,
+                evidence_ids=(*promoted_case.evidence_ids, linked_anchor.evidence_id),
+            )
+        )
+        service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-phase29-unlinked-sibling-001",
+                source_record_id="reviewed-source-phase29-unlinked-sibling-001",
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                source_system="github_audit",
+                collector_identity="fixture://reviewed/unlinked-sibling",
+                acquired_at=reviewed_at,
+                derivation_relationship="reviewed_context_anchor",
+                lifecycle_state="linked",
+                provenance={
+                    "classification": "authoritative-anchor",
+                    "source_id": "github-audit-event-unlinked-sibling-001",
+                    "timestamp": reviewed_at.isoformat(),
+                    "reviewed_by": "analyst-002",
+                    "ambiguity_badge": "related-entity",
+                },
+                content={"summary": {"kind": "unlinked-sibling"}},
+            )
+        )
+
+        snapshot = generate_reviewed_shadow_dataset(
+            service,
+            extraction_spec_version="phase29-shadow-dataset-v1",
+            snapshot_timestamp=decided_at,
+        )
+
+        self.assertEqual(snapshot.example_count, 1)
+        example = snapshot.examples[0]
+        self.assertEqual(example["features"]["ambiguity_badges"]["value"], ["unresolved"])
+        contributors = example["features"]["ambiguity_badges"]["provenance"][
+            "feature_source_contributors"
+        ]
+        self.assertEqual(len(contributors), 1)
+        self.assertEqual(
+            contributors[0]["feature_source_record_id"],
+            linked_anchor.evidence_id,
+        )
