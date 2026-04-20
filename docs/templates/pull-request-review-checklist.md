@@ -2,7 +2,7 @@
 
 This checklist is for human reviewers validating whether an AegisOps pull request is acceptable against the platform baseline.
 
-Review this checklist together with `docs/requirements-baseline.md`, the issue scope, and any related ADRs.
+Review this checklist together with `docs/requirements-baseline.md`, `docs/maintainability-decomposition-thresholds.md` when hotspot growth or refactor deferral is part of the change, the issue scope, and any related ADRs.
 
 ## 1. Review Framing
 
