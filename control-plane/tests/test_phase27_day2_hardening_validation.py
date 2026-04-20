@@ -12,7 +12,9 @@ class Phase27Day2HardeningValidationTests(unittest.TestCase):
     def _validation_doc() -> pathlib.Path:
         return REPO_ROOT / "docs" / "phase-27-day-2-hardening-validation.md"
 
-    def test_phase27_validation_doc_exists_and_covers_reviewed_drills(self) -> None:
+    def test_phase27_validation_doc_exists_and_separates_dedicated_and_foundational_evidence(
+        self,
+    ) -> None:
         validation_doc = self._validation_doc()
         self.assertTrue(
             validation_doc.exists(),
@@ -26,18 +28,19 @@ class Phase27Day2HardeningValidationTests(unittest.TestCase):
             "docs/runbook.md",
             "docs/auth-baseline.md",
             "docs/smb-footprint-and-deployment-profile-baseline.md",
+            "control-plane/tests/test_phase27_day2_runtime_contract.py",
             "control-plane/tests/test_service_persistence_restore_readiness.py",
+            "Evidence Matrix",
+            "Phase 27-specific contract coverage",
+            "Foundational coverage reused by Phase 27",
             "control-plane/tests/test_runtime_secret_boundary.py",
-            "restore",
-            "degraded-mode",
-            "identity-boundary",
-            "secret rotation",
-            "secret-backend unavailability",
-            "IdP outage",
-            "delegation outage",
-            "source-health",
-            "repo-owned verification path",
+            "test_phase27_restore_runtime_contract_fails_closed_without_post_restore_bindings",
+            "test_phase27_readiness_contract_surfaces_degraded_source_and_automation_state",
+            "test_phase27_identity_contract_fails_closed_for_missing_or_unreviewed_provider_boundary",
+            "test_phase27_secret_contract_requires_fresh_read_and_blocks_backend_outage",
+            "Rollback remains a reviewed operational posture and capacity guardrail, not a dedicated runtime-enforced Phase 27 contract in the current path.",
             "bash scripts/verify-phase-27-day-2-hardening-validation.sh",
+            "python3 -m unittest control-plane.tests.test_phase27_day2_hardening_validation control-plane.tests.test_phase27_day2_runtime_contract",
         ):
             self.assertIn(term, validation_text)
 
