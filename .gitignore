@@ -11,6 +11,7 @@ control-plane/config/*.env
 .venv/
 venv/
 env/
+node_modules/
 
 # Python cache and test artifacts
 __pycache__/
