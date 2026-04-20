@@ -230,7 +230,10 @@ class CrossBoundaryNegativeE2EValidationTests(unittest.TestCase):
         case_detail = service.inspect_case_detail(promoted_case.case_id).to_dict()
         current_case = store.get(CaseRecord, promoted_case.case_id)
         current_alert = store.get(AlertRecord, promoted_case.alert_id)
-        current_execution = store.list(ActionExecutionRecord)[0]
+        current_execution = store.get(
+            ActionExecutionRecord,
+            execution.action_execution_id,
+        )
 
         self.assertEqual(
             case_detail["current_action_review"]["coordination_ticket_outcome"]["status"],
@@ -249,6 +252,7 @@ class CrossBoundaryNegativeE2EValidationTests(unittest.TestCase):
         self.assertEqual(case_detail["external_ticket_reference"]["status"], "missing")
         self.assertIsNotNone(current_case)
         self.assertIsNotNone(current_alert)
+        self.assertIsNotNone(current_execution)
         self.assertIsNone(current_case.coordination_reference_id)
         self.assertIsNone(current_alert.coordination_reference_id)
         self.assertEqual(current_execution.lifecycle_state, "queued")
