@@ -1,6 +1,7 @@
 # Repository Skeleton Validation
 
 - Validation date: 2026-04-21
+- Validation timezone: Asia/Tokyo (UTC+09:00)
 - Baseline reference: `docs/repository-structure-baseline.md`
 - Verification command: `bash scripts/verify-repository-skeleton.sh`
 - Validation status: PASS
