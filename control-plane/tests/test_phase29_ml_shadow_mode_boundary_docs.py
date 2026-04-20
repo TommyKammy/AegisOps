@@ -91,6 +91,23 @@ class Phase29MlShadowModeBoundaryDocsTests(unittest.TestCase):
         ):
             self.assertIn(term, text)
 
+    def test_phase29_design_doc_records_module_naming_posture(self) -> None:
+        text = self._read("docs/phase-29-reviewed-ml-shadow-mode-boundary.md")
+
+        for term in (
+            "Module naming posture",
+            "`phase29_shadow_dataset.py`",
+            "`phase29_shadow_scoring.py`",
+            "`phase29_mlflow_shadow_model_registry.py`",
+            "`phase29_evidently_drift_visibility.py`",
+            "keep the current phase-local module names",
+            "boundary-reviewed Phase 29 slice",
+            "domain-oriented",
+            "later roadmap work",
+            "rename",
+        ):
+            self.assertIn(term, text)
+
 
 if __name__ == "__main__":
     unittest.main()

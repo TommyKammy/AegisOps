@@ -270,7 +270,21 @@ The reviewed ML shadow-mode boundary explicitly prohibits using ML scores, class
 
 Shadow-mode ML may inform reviewer attention. It must not redefine the durable control-plane truth chain.
 
-## 9. Alignment Notes
+## 9. Module naming posture
+
+The current Python implementation keeps the Phase 29 shadow-mode helpers under phase-local module names.
+
+For this reviewed boundary, `phase29_shadow_dataset.py`, `phase29_shadow_scoring.py`, `phase29_mlflow_shadow_model_registry.py`, and `phase29_evidently_drift_visibility.py` must keep the current phase-local module names.
+
+That naming remains intentional because these modules currently implement one boundary-reviewed Phase 29 slice rather than a settled cross-phase domain package.
+
+Keeping the phase-local names makes the reviewed scope explicit: this code exists to support the bounded Phase 29 shadow dataset, shadow scoring, MLflow lineage, and drift visibility surfaces without implying that the repository has already approved a broader domain-oriented ML subsystem.
+
+Renaming these modules to domain-oriented names now would add churn without a second reviewed consumer, and it would risk overstating stability for interfaces that are still tied to this specific reviewed boundary.
+
+later roadmap work may revisit this posture if the same reviewed contracts need to serve multiple phases or a clearly approved cross-phase package boundary. At that point, a rename or package extraction should happen deliberately across code, tests, scripts, and docs rather than by accidental drift.
+
+## 10. Alignment Notes
 
 This boundary stays aligned with `README.md` and `docs/architecture.md` by keeping AegisOps as the authoritative control plane above reviewed detection and automation substrates.
 
