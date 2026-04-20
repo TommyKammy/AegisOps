@@ -110,6 +110,29 @@ The reviewed ML shadow-mode boundary does not approve hidden score-only routing,
 
 Every feature, label, model artifact, and shadow output must preserve explicit lineage back to the reviewed control-plane chain.
 
+### 6.0 ML lineage envelope semantics
+
+The identifiers in Sections 6.1 through 6.4 define a separate ML lineage envelope namespace.
+
+They do not rename, replace, or relax the reviewed record-level provenance fields already used on control-plane records such as `provenance.source_family`, `provenance.source_system`, `provenance.source_id`, `provenance.classification`, and `provenance.reviewed_by`.
+
+Implementations must preserve the original reviewed record identity and provenance keys on the source record and must preserve a deterministic mapping from that reviewed record into the ML lineage envelope.
+
+The ML lineage envelope exists so later feature, label, model, and shadow-output work can record extraction-time lineage without redefining the reviewed control-plane record schema.
+
+At minimum, implementations must preserve and validate mappings such as:
+
+- `feature_source_record_family` = the reviewed control-plane record family that supplied the feature, such as `Alert`, `Case`, `Evidence`, `Observation`, `Lead`, `Recommendation`, `Approval Decision`, `Action Request`, `Action Execution`, `Reconciliation`, or `AI Trace`; this is not an alias for `provenance.source_family` or `provenance.source_system`;
+- `feature_source_record_id` = the durable identifier of that reviewed control-plane record, such as `alert_id`, `case_id`, `evidence_id`, `observation_id`, `lead_id`, `recommendation_id`, `approval_decision_id`, `action_request_id`, `action_execution_id`, `reconciliation_id`, or `ai_trace_id`; this is not an alias for `provenance.source_id`;
+- `feature_source_field_path` = the canonical field path inside the reviewed control-plane record that supplied the extracted value;
+- `feature_source_provenance_classification` = the reviewed record's `provenance.classification` value when the source record preserves it;
+- `feature_source_reviewed_by` = the reviewed record's `provenance.reviewed_by` value when the source record preserves reviewer attribution;
+- `label_record_family` = the reviewed control-plane record family that owns the label decision, rather than a source-substrate family name;
+- `label_record_id` = the durable identifier of the exact reviewed control-plane record that owns the label decision, rather than a source-substrate identifier; and
+- `label_linked_subject_record_id` = the durable identifier of the reviewed subject record to which the label decision was explicitly linked.
+
+If a reviewed record lacks the identity, provenance, or mapping data needed to populate the ML lineage envelope without ambiguity, the ML path must fail closed instead of inventing aliases or inferred lineage.
+
 ### 6.1 Feature provenance contract
 
 The feature provenance contract must preserve, at minimum:
