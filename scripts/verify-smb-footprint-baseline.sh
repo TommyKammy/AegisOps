@@ -6,7 +6,7 @@ repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 doc_path="${repo_root}/docs/smb-footprint-and-deployment-profile-baseline.md"
 readme_path="${repo_root}/README.md"
 runbook_path="${repo_root}/docs/runbook.md"
-roadmap_path="${repo_root}/docs/Revised Phase23-20 Epic Roadmap.md"
+roadmap_path="${repo_root}/docs/Revised Phase23-29 Epic Roadmap.md"
 
 require_file() {
   local path="$1"

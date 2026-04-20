@@ -4,7 +4,7 @@
 
 This document defines the first live assistant workflow family and the trusted output contract for that family.
 
-It supplements `docs/Revised Phase23-20 Epic Roadmap.md`, `README.md`, `docs/phase-15-identity-grounded-analyst-assistant-boundary.md`, and `docs/control-plane-state-model.md` by narrowing the first operator-facing assistant loop to a reviewed, bounded, advisory-only workflow family.
+It supplements `docs/Revised Phase23-29 Epic Roadmap.md`, `README.md`, `docs/phase-15-identity-grounded-analyst-assistant-boundary.md`, and `docs/control-plane-state-model.md` by narrowing the first operator-facing assistant loop to a reviewed, bounded, advisory-only workflow family.
 
 This document defines reviewed workflow scope and trusted output rules only. It does not approve live assistant authority over approval, delegation, execution, reconciliation, or policy interpretation.
 
@@ -150,7 +150,7 @@ Future expansion must be reviewed as a separate workflow-family decision rather 
 
 ## 10. Alignment Notes
 
-This Phase 24 workflow contract stays aligned with `docs/Revised Phase23-20 Epic Roadmap.md` by preferring a small business-hours operator loop over broad AI surface growth.
+This Phase 24 workflow contract stays aligned with `docs/Revised Phase23-29 Epic Roadmap.md` by preferring a small business-hours operator loop over broad AI surface growth.
 
 It stays aligned with `README.md` by keeping the assistant downstream of reviewed records and advisory-only.
 

@@ -37,10 +37,10 @@ EOF
 Startup, restore, and operator burden assumptions must stay aligned with `docs/smb-footprint-and-deployment-profile-baseline.md`.
 EOF
 
-  cat <<'EOF' > "${target}/docs/Revised Phase23-20 Epic Roadmap.md"
-# Revised Phase 23-20 Epic Roadmap
+  cat <<'EOF' > "${target}/docs/Revised Phase23-29 Epic Roadmap.md"
+# Revised Phase 23-29 Epic Roadmap
 
-Phase 23 planning remains anchored to `docs/smb-footprint-and-deployment-profile-baseline.md`.
+Phases 23-29 planning remain anchored to `docs/smb-footprint-and-deployment-profile-baseline.md`.
 EOF
 }
 
