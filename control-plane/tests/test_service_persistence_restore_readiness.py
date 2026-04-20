@@ -3669,6 +3669,65 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             "reconciliation_timeout",
         )
 
+    def test_service_phase21_readiness_surfaces_optional_extension_operability_defaults(
+        self,
+    ) -> None:
+        store, _ = support.make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+
+        readiness = service.inspect_readiness_diagnostics()
+        optional_extensions = readiness.metrics["optional_extensions"]
+
+        self.assertEqual(optional_extensions["tracked_extensions"], 4)
+        self.assertEqual(optional_extensions["overall_state"], "ready")
+        self.assertEqual(
+            optional_extensions["extensions"]["assistant"],
+            {
+                "enablement": "enabled",
+                "availability": "available",
+                "readiness": "ready",
+                "authority_mode": "advisory_only",
+                "mainline_dependency": "non_blocking",
+                "reason": "bounded_reviewed_summary_provider_available",
+            },
+        )
+        self.assertEqual(
+            optional_extensions["extensions"]["endpoint_evidence"],
+            {
+                "enablement": "disabled_by_default",
+                "availability": "unavailable",
+                "readiness": "not_applicable",
+                "authority_mode": "augmenting_evidence",
+                "mainline_dependency": "non_blocking",
+                "reason": "isolated_executor_runtime_not_configured",
+            },
+        )
+        self.assertEqual(
+            optional_extensions["extensions"]["network_evidence"],
+            {
+                "enablement": "disabled_by_default",
+                "availability": "unavailable",
+                "readiness": "not_applicable",
+                "authority_mode": "augmenting_evidence",
+                "mainline_dependency": "non_blocking",
+                "reason": "reviewed_network_evidence_extension_not_activated",
+            },
+        )
+        self.assertEqual(
+            optional_extensions["extensions"]["ml_shadow"],
+            {
+                "enablement": "disabled_by_default",
+                "availability": "unavailable",
+                "readiness": "not_applicable",
+                "authority_mode": "shadow_only",
+                "mainline_dependency": "non_blocking",
+                "reason": "reviewed_ml_shadow_extension_not_activated",
+            },
+        )
+
     def test_service_phase21_readiness_source_health_ignores_predelegation_backlog(
         self,
     ) -> None:

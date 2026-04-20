@@ -16,6 +16,7 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 from aegisops_control_plane.config import RuntimeConfig
 from aegisops_control_plane.models import (
+    ActionExecutionRecord,
     ActionRequestRecord,
     CaseRecord,
     EvidenceRecord,
@@ -294,6 +295,66 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
             action_request.policy_evaluation["execution_surface_id"],
             "isolated-executor",
         )
+
+    def test_readiness_surfaces_endpoint_evidence_extension_as_degraded_when_review_path_lags(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        _store, service, promoted_case, anchor_evidence_id, reviewed_at = (
+            self._build_host_bound_case(store=store)
+        )
+        service = AegisOpsControlPlaneService(
+            replace(
+                service._config,
+                isolated_executor_base_url="https://executor.internal",
+            ),
+            store=store,
+        )
+
+        action_request = service.create_endpoint_evidence_collection_request(
+            case_id=promoted_case.case_id,
+            admitting_evidence_id=anchor_evidence_id,
+            requester_identity="analyst-001",
+            host_identifier="host-001",
+            evidence_gap="Need endpoint evidence to resolve the reviewed host-state gap.",
+            artifact_classes=("collection_manifest", "triage_bundle"),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-endpoint-operability-001",
+        )
+        service.record_action_approval_decision(
+            action_request_id=action_request.action_request_id,
+            approver_identity="reviewer-001",
+            decision="grant",
+            decision_rationale="Approved bounded read-only endpoint evidence collection.",
+            decided_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+        )
+        approved_request = service.get_record(
+            ActionRequestRecord,
+            action_request.action_request_id,
+        )
+        assert approved_request is not None
+        service.persist_record(
+            replace(
+                approved_request,
+                requested_at=reviewed_at - timedelta(hours=2),
+                expires_at=reviewed_at - timedelta(hours=1),
+                lifecycle_state="executing",
+            )
+        )
+
+        readiness = service.inspect_readiness_diagnostics()
+        endpoint_extension = readiness.metrics["optional_extensions"]["extensions"][
+            "endpoint_evidence"
+        ]
+
+        self.assertEqual(endpoint_extension["enablement"], "enabled")
+        self.assertEqual(endpoint_extension["availability"], "available")
+        self.assertEqual(endpoint_extension["readiness"], "degraded")
+        self.assertEqual(endpoint_extension["authority_mode"], "augmenting_evidence")
+        self.assertEqual(
+            endpoint_extension["reason"],
+            "provider_signal_missing_after_approval",
+        )
         self.assertEqual(
             action_request.policy_basis,
             {
@@ -304,6 +365,190 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
                 "identity_criticality": "standard",
                 "blast_radius": "single_target",
                 "execution_constraint": "requires_isolated_executor",
+            },
+        )
+
+    def test_readiness_surfaces_endpoint_evidence_extension_as_delayed_before_overdue(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        _store, service, promoted_case, anchor_evidence_id, _reviewed_at = (
+            self._build_host_bound_case(store=store)
+        )
+        service = AegisOpsControlPlaneService(
+            replace(
+                service._config,
+                isolated_executor_base_url="https://executor.internal",
+            ),
+            store=store,
+        )
+
+        action_request = service.create_endpoint_evidence_collection_request(
+            case_id=promoted_case.case_id,
+            admitting_evidence_id=anchor_evidence_id,
+            requester_identity="analyst-001",
+            host_identifier="host-001",
+            evidence_gap="Need endpoint evidence to resolve the reviewed host-state gap.",
+            artifact_classes=("collection_manifest", "triage_bundle"),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-endpoint-operability-delayed-001",
+        )
+        service.record_action_approval_decision(
+            action_request_id=action_request.action_request_id,
+            approver_identity="reviewer-001",
+            decision="grant",
+            decision_rationale="Approved bounded read-only endpoint evidence collection.",
+            decided_at=action_request.requested_at + timedelta(minutes=5),
+        )
+
+        readiness = service.inspect_readiness_diagnostics()
+        optional_extensions = readiness.metrics["optional_extensions"]
+        endpoint_extension = optional_extensions["extensions"]["endpoint_evidence"]
+
+        self.assertEqual(optional_extensions["overall_state"], "delayed")
+        self.assertEqual(endpoint_extension["enablement"], "enabled")
+        self.assertEqual(endpoint_extension["availability"], "available")
+        self.assertEqual(endpoint_extension["readiness"], "delayed")
+        self.assertEqual(
+            endpoint_extension["reason"],
+            "reviewed_endpoint_evidence_path_delayed",
+        )
+
+    def test_readiness_keeps_unresolved_endpoint_evidence_extension_live(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        _store, service, promoted_case, anchor_evidence_id, _reviewed_at = (
+            self._build_host_bound_case(store=store)
+        )
+        service = AegisOpsControlPlaneService(
+            replace(
+                service._config,
+                isolated_executor_base_url="https://executor.internal",
+            ),
+            store=store,
+        )
+
+        action_request = service.create_endpoint_evidence_collection_request(
+            case_id=promoted_case.case_id,
+            admitting_evidence_id=anchor_evidence_id,
+            requester_identity="analyst-001",
+            host_identifier="host-001",
+            evidence_gap="Need endpoint evidence to resolve the reviewed host-state gap.",
+            artifact_classes=("collection_manifest", "triage_bundle"),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-endpoint-operability-unresolved-001",
+        )
+        service.record_action_approval_decision(
+            action_request_id=action_request.action_request_id,
+            approver_identity="reviewer-001",
+            decision="grant",
+            decision_rationale="Approved bounded read-only endpoint evidence collection.",
+            decided_at=action_request.requested_at + timedelta(minutes=5),
+        )
+        approved_request = service.get_record(
+            ActionRequestRecord,
+            action_request.action_request_id,
+        )
+        assert approved_request is not None
+        service.persist_record(
+            replace(
+                approved_request,
+                lifecycle_state="unresolved",
+            )
+        )
+
+        readiness = service.inspect_readiness_diagnostics()
+        optional_extensions = readiness.metrics["optional_extensions"]
+        endpoint_extension = optional_extensions["extensions"]["endpoint_evidence"]
+
+        self.assertEqual(optional_extensions["overall_state"], "degraded")
+        self.assertEqual(endpoint_extension["enablement"], "enabled")
+        self.assertEqual(endpoint_extension["availability"], "available")
+        self.assertEqual(endpoint_extension["readiness"], "degraded")
+        self.assertEqual(
+            endpoint_extension["reason"],
+            "provider_signal_missing_after_approval",
+        )
+
+    def test_readiness_ignores_historical_endpoint_evidence_requests_for_enablement(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        _store, service, promoted_case, anchor_evidence_id, reviewed_at = (
+            self._build_host_bound_case(store=store)
+        )
+        service = AegisOpsControlPlaneService(
+            replace(
+                service._config,
+                isolated_executor_base_url="https://executor.internal",
+            ),
+            store=store,
+        )
+
+        action_request = service.create_endpoint_evidence_collection_request(
+            case_id=promoted_case.case_id,
+            admitting_evidence_id=anchor_evidence_id,
+            requester_identity="analyst-001",
+            host_identifier="host-001",
+            evidence_gap="Need endpoint evidence to resolve the reviewed host-state gap.",
+            artifact_classes=("collection_manifest", "triage_bundle"),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-endpoint-operability-completed-001",
+        )
+        service.record_action_approval_decision(
+            action_request_id=action_request.action_request_id,
+            approver_identity="reviewer-001",
+            decision="grant",
+            decision_rationale="Approved bounded read-only endpoint evidence collection.",
+            decided_at=action_request.requested_at + timedelta(minutes=5),
+        )
+        approved_request = service.get_record(
+            ActionRequestRecord,
+            action_request.action_request_id,
+        )
+        assert approved_request is not None
+        service.persist_record(
+            ActionExecutionRecord(
+                action_execution_id="action-execution-endpoint-operability-completed-001",
+                action_request_id=approved_request.action_request_id,
+                approval_decision_id=approved_request.approval_decision_id,
+                delegation_id="delegation-endpoint-operability-completed-001",
+                execution_surface_type="isolated_executor",
+                execution_surface_id="isolated-executor",
+                execution_run_id="execution-run-endpoint-operability-completed-001",
+                idempotency_key=approved_request.idempotency_key,
+                target_scope=dict(approved_request.target_scope),
+                approved_payload=dict(approved_request.requested_payload),
+                payload_hash=approved_request.payload_hash,
+                delegated_at=reviewed_at - timedelta(minutes=30),
+                expires_at=approved_request.expires_at,
+                provenance={"initiated_by": "operator-review"},
+                lifecycle_state="succeeded",
+            )
+        )
+        service.persist_record(
+            replace(
+                approved_request,
+                requested_at=reviewed_at - timedelta(hours=1),
+                lifecycle_state="completed",
+            )
+        )
+
+        readiness = service.inspect_readiness_diagnostics()
+        optional_extensions = readiness.metrics["optional_extensions"]
+        endpoint_extension = optional_extensions["extensions"]["endpoint_evidence"]
+
+        self.assertEqual(optional_extensions["overall_state"], "ready")
+        self.assertEqual(
+            endpoint_extension,
+            {
+                "enablement": "disabled_by_default",
+                "availability": "available",
+                "readiness": "not_applicable",
+                "authority_mode": "augmenting_evidence",
+                "mainline_dependency": "non_blocking",
+                "reason": "no_reviewed_endpoint_evidence_requests",
             },
         )
 

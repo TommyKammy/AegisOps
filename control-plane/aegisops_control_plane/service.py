@@ -65,7 +65,7 @@ from .models import (
 )
 from .operator_inspection import OperatorInspectionReadSurface
 from .restore_readiness import RestoreReadinessService
-from .runtime_boundary import RuntimeBoundaryService
+from .runtime_boundary import RuntimeBoundaryService, _is_missing_runtime_binding
 from .assistant_context import (
     AssistantContextAssembler,
     _advisory_text_claims_authority_or_scope_expansion,
@@ -123,6 +123,14 @@ _PHASE24_WORKFLOW_PROMPT_VERSIONS = {
     "case_summary": "phase24-case-summary-v1",
     "queue_triage_summary": "phase24-queue-summary-v1",
 }
+_LIVE_OPTIONAL_EXTENSION_REVIEW_STATES = frozenset(
+    {
+        "pending",
+        "approved",
+        "executing",
+        "unresolved",
+    }
+)
 
 
 class _ReviewedSummaryTransport(AssistantProviderTransport):
@@ -1404,6 +1412,9 @@ class AegisOpsControlPlaneService:
             build_readiness_source_health=self._build_readiness_source_health,
             build_readiness_automation_substrate_health=(
                 self._build_readiness_automation_substrate_health
+            ),
+            build_optional_extension_operability=(
+                self._build_optional_extension_operability
             ),
             build_shutdown_status_snapshot=_build_shutdown_status_snapshot,
             derive_readiness_status=_derive_readiness_status,
@@ -2879,6 +2890,7 @@ class AegisOpsControlPlaneService:
             readiness_review_snapshots.append(
                 {
                     "action_request_id": action_request_id,
+                    "review_state": review_state,
                     "source_family": (
                         self._reviewed_operator_source_family(reviewed_context)
                         if reviewed_context is not None
@@ -2896,6 +2908,9 @@ class AegisOpsControlPlaneService:
                         action_execution.execution_surface_id
                         if action_execution is not None
                         else action_request.policy_evaluation.get("execution_surface_id")
+                    ),
+                    "requested_action_type": action_request.requested_payload.get(
+                        "action_type"
                     ),
                     "path_health": path_health,
                 }
@@ -3033,6 +3048,163 @@ class AegisOpsControlPlaneService:
             ),
             "surfaces": surfaces,
         }
+
+    def _build_optional_extension_operability(
+        self,
+        readiness_aggregates: ReadinessDiagnosticsAggregates,
+        readiness_review_snapshots: list[dict[str, object]] | None = None,
+    ) -> dict[str, object]:
+        if readiness_review_snapshots is None:
+            readiness_review_snapshots = self._collect_readiness_review_snapshots(
+                readiness_aggregates
+            )
+
+        extensions = {
+            "assistant": {
+                "enablement": "enabled",
+                "availability": "available",
+                "readiness": "ready",
+                "authority_mode": "advisory_only",
+                "mainline_dependency": "non_blocking",
+                "reason": "bounded_reviewed_summary_provider_available",
+            },
+            "endpoint_evidence": self._build_endpoint_evidence_operability(
+                readiness_review_snapshots
+            ),
+            "network_evidence": {
+                "enablement": "disabled_by_default",
+                "availability": "unavailable",
+                "readiness": "not_applicable",
+                "authority_mode": "augmenting_evidence",
+                "mainline_dependency": "non_blocking",
+                "reason": "reviewed_network_evidence_extension_not_activated",
+            },
+            "ml_shadow": {
+                "enablement": "disabled_by_default",
+                "availability": "unavailable",
+                "readiness": "not_applicable",
+                "authority_mode": "shadow_only",
+                "mainline_dependency": "non_blocking",
+                "reason": "reviewed_ml_shadow_extension_not_activated",
+            },
+        }
+        overall_state = "ready"
+        if any(entry["readiness"] == "degraded" for entry in extensions.values()):
+            overall_state = "degraded"
+        elif any(entry["readiness"] == "delayed" for entry in extensions.values()):
+            overall_state = "delayed"
+        return {
+            "tracked_extensions": len(extensions),
+            "overall_state": overall_state,
+            "summary": self._optional_extension_operability_summary(
+                extensions=extensions,
+                overall_state=overall_state,
+            ),
+            "extensions": extensions,
+        }
+
+    def _build_endpoint_evidence_operability(
+        self,
+        readiness_review_snapshots: Iterable[Mapping[str, object]],
+    ) -> dict[str, object]:
+        endpoint_review_snapshots = [
+            snapshot
+            for snapshot in readiness_review_snapshots
+            if (
+                snapshot.get("requested_action_type") == "collect_endpoint_evidence_pack"
+                and snapshot.get("review_state") in _LIVE_OPTIONAL_EXTENSION_REVIEW_STATES
+            )
+        ]
+        executor_available = not _is_missing_runtime_binding(
+            self._config.isolated_executor_base_url
+        )
+        if not endpoint_review_snapshots:
+            return {
+                "enablement": "disabled_by_default",
+                "availability": "available" if executor_available else "unavailable",
+                "readiness": "not_applicable",
+                "authority_mode": "augmenting_evidence",
+                "mainline_dependency": "non_blocking",
+                "reason": (
+                    "no_reviewed_endpoint_evidence_requests"
+                    if executor_available
+                    else "isolated_executor_runtime_not_configured"
+                ),
+            }
+
+        review_path_health = [
+            snapshot["path_health"] for snapshot in endpoint_review_snapshots
+        ]
+        aggregated_paths = {
+            path_name: self._aggregate_readiness_path_health(
+                path_name=path_name,
+                review_path_health=review_path_health,
+            )
+            for path_name in ("delegation", "provider", "persistence")
+        }
+        overall_state = self._action_review_overall_path_state(aggregated_paths.values())
+        if overall_state == "healthy":
+            readiness = "ready"
+            reason = "reviewed_endpoint_evidence_path_healthy"
+        elif overall_state == "delayed":
+            readiness = "delayed"
+            reason = "reviewed_endpoint_evidence_path_delayed"
+        else:
+            readiness = "degraded"
+            reason = self._readiness_dominant_reason(
+                aggregated_paths.values(),
+                overall_state=overall_state,
+            )
+        if not executor_available:
+            readiness = "degraded"
+            reason = "isolated_executor_runtime_not_configured"
+        return {
+            "enablement": "enabled",
+            "availability": "available" if executor_available else "unavailable",
+            "readiness": readiness,
+            "authority_mode": "augmenting_evidence",
+            "mainline_dependency": "non_blocking",
+            "reason": reason,
+        }
+
+    @staticmethod
+    def _optional_extension_operability_summary(
+        *,
+        extensions: Mapping[str, Mapping[str, object]],
+        overall_state: str,
+    ) -> str:
+        degraded_extensions = [
+            f"{extension_name} {extension['reason'].replace('_', ' ')}"
+            for extension_name, extension in extensions.items()
+            if extension.get("readiness") == "degraded"
+        ]
+        if degraded_extensions:
+            return (
+                f"{overall_state} optional extension operability: "
+                + "; ".join(degraded_extensions[:2])
+            )
+        delayed_extensions = [
+            f"{extension_name} {extension['reason'].replace('_', ' ')}"
+            for extension_name, extension in extensions.items()
+            if extension.get("readiness") == "delayed"
+        ]
+        if delayed_extensions:
+            return (
+                f"{overall_state} optional extension operability: "
+                + "; ".join(delayed_extensions[:2])
+            )
+        disabled_extensions = [
+            extension_name
+            for extension_name, extension in extensions.items()
+            if extension.get("enablement") == "disabled_by_default"
+        ]
+        if disabled_extensions:
+            return (
+                "ready optional extension operability: "
+                + ", ".join(disabled_extensions[:3])
+                + " remain disabled by default or unavailable"
+            )
+        return "all reviewed optional extensions are ready"
 
     @staticmethod
     def _readiness_dominant_reason(

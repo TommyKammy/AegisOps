@@ -91,6 +91,21 @@ For the cross-phase registry of expansion boundaries that future work should cit
 | Sigma | Optional research / prototyping asset |
 | n8n | Optional / transitional / experimental orchestration asset |
 
+### Optional extension operability model
+
+Operators must treat optional extension state as a repo-owned runtime interpretation, not as an inference from whether a package, sidecar, or external substrate happens to exist.
+
+The reviewed readiness and inspection surfaces classify optional extensions with explicit enablement, availability, and readiness signals so the mainline guarantee remains clear:
+
+| Extension family | Mainline guarantee | Default posture | Operator-visible interpretation |
+| --- | --- | --- | --- |
+| Assistant | The bounded live summary family may run on reviewed control-plane records, but it remains advisory-only and non-authoritative. | Enabled optional surface with non-blocking secondary enrichment. | `enabled` and `ready` means the bounded reviewed summary provider is available. Missing optional enrichment such as OpenSearch does not block the mainline reviewed workflow. |
+| Endpoint evidence | Subordinate endpoint evidence packs may be collected only from an already reviewed case and approved bounded request. | Disabled by default. | `disabled_by_default` means no reviewed endpoint evidence request is active. `enabled` means a reviewed endpoint evidence request is active. `degraded` means the approved endpoint-evidence review path is lagging or missing receipts and must stay visible without becoming authority. |
+| Optional network evidence | Optional network evidence packs remain subordinate to the reviewed control-plane chain. | Disabled by default. | `disabled_by_default` or `unavailable` means the optional network path is not activated on the mainline runtime and does not block boot, queue review, approval, execution, or reconciliation truth. |
+| ML shadow | ML output remains shadow-only, audit-focused, and outside approval, execution, and reconciliation authority. | Disabled by default. | `disabled_by_default` or `unavailable` means the reviewed runtime is operating without ML shadow mode. Any future `enabled` or `degraded` state must remain explicitly shadow-only and non-blocking. |
+
+If optional extension state is absent, unavailable, or degraded, operators must repair the extension surface or leave it disabled. They must not widen authority, infer healthy state from silence, or treat optional paths as first-boot prerequisites.
+
 ---
 
 ## First-use flow
