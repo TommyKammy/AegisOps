@@ -54,6 +54,22 @@ class IsolationLevelFallbackProbeStore:
 
 
 class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
+    def test_service_wires_restore_readiness_internal_collaborators(self) -> None:
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops")
+        )
+
+        restore_readiness_service = service._restore_readiness_service
+
+        self.assertTrue(
+            hasattr(restore_readiness_service, "_backup_restore_flow"),
+            "RestoreReadinessService should delegate backup/restore flow to a dedicated collaborator",
+        )
+        self.assertTrue(
+            hasattr(restore_readiness_service, "_readiness_health_projection"),
+            "RestoreReadinessService should delegate readiness projection to a dedicated collaborator",
+        )
+
     def test_runtime_snapshot_reports_postgresql_authoritative_persistence_mode(self) -> None:
         service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops")
