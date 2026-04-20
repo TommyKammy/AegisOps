@@ -282,7 +282,7 @@ Keeping the phase-local names makes the reviewed scope explicit: this code exist
 
 Renaming these modules to domain-oriented names now would add churn without a second reviewed consumer, and it would risk overstating stability for interfaces that are still tied to this specific reviewed boundary.
 
-later roadmap work may revisit this posture if the same reviewed contracts need to serve multiple phases or a clearly approved cross-phase package boundary. At that point, a rename or package extraction should happen deliberately across code, tests, scripts, and docs rather than by accidental drift.
+Later roadmap work may revisit this posture if the same reviewed contracts need to serve multiple phases or a clearly approved cross-phase package boundary. At that point, a rename or package extraction should happen deliberately across code, tests, scripts, and docs rather than by accidental drift.
 
 ## 10. Alignment Notes
 

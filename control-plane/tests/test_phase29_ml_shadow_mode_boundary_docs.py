@@ -103,7 +103,7 @@ class Phase29MlShadowModeBoundaryDocsTests(unittest.TestCase):
             "keep the current phase-local module names",
             "boundary-reviewed Phase 29 slice",
             "domain-oriented",
-            "later roadmap work",
+            "Later roadmap work",
             "rename",
         ):
             self.assertIn(term, text)
