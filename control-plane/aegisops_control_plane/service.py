@@ -123,6 +123,13 @@ _PHASE24_WORKFLOW_PROMPT_VERSIONS = {
     "case_summary": "phase24-case-summary-v1",
     "queue_triage_summary": "phase24-queue-summary-v1",
 }
+_LIVE_OPTIONAL_EXTENSION_REVIEW_STATES = frozenset(
+    {
+        "pending",
+        "approved",
+        "executing",
+    }
+)
 
 
 class _ReviewedSummaryTransport(AssistantProviderTransport):
@@ -2882,6 +2889,7 @@ class AegisOpsControlPlaneService:
             readiness_review_snapshots.append(
                 {
                     "action_request_id": action_request_id,
+                    "review_state": review_state,
                     "source_family": (
                         self._reviewed_operator_source_family(reviewed_context)
                         if reviewed_context is not None
@@ -3079,11 +3087,11 @@ class AegisOpsControlPlaneService:
                 "reason": "reviewed_ml_shadow_extension_not_activated",
             },
         }
-        overall_state = (
-            "degraded"
-            if any(entry["readiness"] == "degraded" for entry in extensions.values())
-            else "ready"
-        )
+        overall_state = "ready"
+        if any(entry["readiness"] == "degraded" for entry in extensions.values()):
+            overall_state = "degraded"
+        elif any(entry["readiness"] == "delayed" for entry in extensions.values()):
+            overall_state = "delayed"
         return {
             "tracked_extensions": len(extensions),
             "overall_state": overall_state,
@@ -3101,7 +3109,10 @@ class AegisOpsControlPlaneService:
         endpoint_review_snapshots = [
             snapshot
             for snapshot in readiness_review_snapshots
-            if snapshot.get("requested_action_type") == "collect_endpoint_evidence_pack"
+            if (
+                snapshot.get("requested_action_type") == "collect_endpoint_evidence_pack"
+                and snapshot.get("review_state") in _LIVE_OPTIONAL_EXTENSION_REVIEW_STATES
+            )
         ]
         executor_available = not _is_missing_runtime_binding(
             self._config.isolated_executor_base_url
@@ -3134,6 +3145,9 @@ class AegisOpsControlPlaneService:
         if overall_state == "healthy":
             readiness = "ready"
             reason = "reviewed_endpoint_evidence_path_healthy"
+        elif overall_state == "delayed":
+            readiness = "delayed"
+            reason = "reviewed_endpoint_evidence_path_delayed"
         else:
             readiness = "degraded"
             reason = self._readiness_dominant_reason(
@@ -3167,6 +3181,16 @@ class AegisOpsControlPlaneService:
             return (
                 f"{overall_state} optional extension operability: "
                 + "; ".join(degraded_extensions[:2])
+            )
+        delayed_extensions = [
+            f"{extension_name} {extension['reason'].replace('_', ' ')}"
+            for extension_name, extension in extensions.items()
+            if extension.get("readiness") == "delayed"
+        ]
+        if delayed_extensions:
+            return (
+                f"{overall_state} optional extension operability: "
+                + "; ".join(delayed_extensions[:2])
             )
         disabled_extensions = [
             extension_name

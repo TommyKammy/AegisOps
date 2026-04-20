@@ -3672,7 +3672,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
     def test_service_phase21_readiness_surfaces_optional_extension_operability_defaults(
         self,
     ) -> None:
-        store, _ = make_store()
+        store, _ = support.make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
             store=store,
