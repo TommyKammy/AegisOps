@@ -204,7 +204,7 @@ class Phase27Day2RuntimeContractTests(ServicePersistenceTestBase):
         self,
     ) -> None:
         transport = secret_boundary_tests._MutableOpenBaoTransport(
-            {
+            secrets={
                 "kv/aegisops/control-plane/wazuh-ingest-shared-secret": (
                     "reviewed-shared-secret-v1"
                 ),
