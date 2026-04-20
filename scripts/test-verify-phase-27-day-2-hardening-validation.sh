@@ -18,6 +18,7 @@ guard_stderr="${workdir}/guard.err"
 
 required_artifacts=(
   "docs/phase-27-day-2-hardening-validation.md"
+  "control-plane/tests/test_phase27_day2_runtime_contract.py"
   "control-plane/tests/test_service_persistence_restore_readiness.py"
   "control-plane/tests/test_phase21_runtime_auth_validation.py"
   "control-plane/tests/test_runtime_secret_boundary.py"
@@ -149,9 +150,9 @@ write_required_artifacts "${missing_drill_repo}"
 remove_text_from_file \
   "${missing_drill_repo}" \
   "docs/phase-27-day-2-hardening-validation.md" \
-  "- \`degraded-mode\`: \`test_service_phase21_readiness_surfaces_source_and_automation_health\` keeps source-health and delegation outage visibility explicit during degraded-mode handling."
+  "| Degraded-mode visibility | \`test_phase27_readiness_contract_surfaces_degraded_source_and_automation_state\` proves readiness keeps source and automation degradation visible instead of implying healthy operation from silence. | \`test_service_phase21_readiness_surfaces_source_and_automation_health\` | \`python3 -m unittest control-plane.tests.test_phase27_day2_runtime_contract\` |"
 commit_fixture "${missing_drill_repo}"
-assert_fails_with "${missing_drill_repo}" "Missing required line in ${missing_drill_repo}/docs/phase-27-day-2-hardening-validation.md: - \`degraded-mode\`: \`test_service_phase21_readiness_surfaces_source_and_automation_health\` keeps source-health and delegation outage visibility explicit during degraded-mode handling."
+assert_fails_with "${missing_drill_repo}" "Missing required line in ${missing_drill_repo}/docs/phase-27-day-2-hardening-validation.md: | Degraded-mode visibility | \`test_phase27_readiness_contract_surfaces_degraded_source_and_automation_state\` proves readiness keeps source and automation degradation visible instead of implying healthy operation from silence. | \`test_service_phase21_readiness_surfaces_source_and_automation_health\` | \`python3 -m unittest control-plane.tests.test_phase27_day2_runtime_contract\` |"
 
 missing_ci_repo="${workdir}/missing-ci"
 create_repo "${missing_ci_repo}"
