@@ -178,6 +178,15 @@ The model lineage contract must preserve, at minimum:
 
 Model lineage must make it possible to trace which reviewed feature schema and reviewed label schema produced the model artifact without treating the model as a new authority surface.
 
+An implementation may use MLflow experiment tracking and the MLflow model registry to preserve this lineage only when the MLflow surface stays explicitly shadow-only, audit-focused, and outside the reviewed control-plane authority chain.
+
+If MLflow is used for Phase 29 lineage:
+
+- MLflow experiment runs must record the reviewed `training_data_snapshot_id`, feature-schema version, label-schema version, model family, evaluation metadata, and reviewed lineage reference needed to audit the candidate model later;
+- MLflow registry entries must remain candidate shadow-model records rather than approved operator workflow state;
+- MLflow tags, params, or registry metadata must not be treated as approval truth, case truth, reconciliation truth, or promotion-to-authority state; and
+- missing dataset lineage, missing feature provenance, or missing reviewed lineage references must block the MLflow tracking path rather than silently register a partially grounded candidate.
+
 ### 6.4 Shadow output lineage contract
 
 The shadow output lineage contract must preserve, at minimum:
