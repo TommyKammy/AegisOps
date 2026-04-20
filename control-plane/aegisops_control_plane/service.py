@@ -128,6 +128,7 @@ _LIVE_OPTIONAL_EXTENSION_REVIEW_STATES = frozenset(
         "pending",
         "approved",
         "executing",
+        "unresolved",
     }
 )
 
