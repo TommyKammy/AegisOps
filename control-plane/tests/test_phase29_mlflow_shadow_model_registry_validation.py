@@ -174,7 +174,7 @@ class UnexpectedRegisteredModelLookupClient(FakeMlflowClient):
 
 class Phase29MlflowShadowModelRegistryValidationTests(ServicePersistenceTestBase):
     def test_tracker_records_mlflow_shadow_run_and_registry_lineage(self) -> None:
-        store, service, dataset_snapshot, decided_at = self._build_shadow_dataset_snapshot()
+        store, _service, dataset_snapshot, decided_at = self._build_shadow_dataset_snapshot()
         initial_record_counts = {
             record_type.__name__: len(store.list(record_type))
             for record_type in (EvidenceRecord, ReconciliationRecord)
@@ -226,7 +226,7 @@ class Phase29MlflowShadowModelRegistryValidationTests(ServicePersistenceTestBase
             "phase29-shadow-labels-v1",
         )
         self.assertEqual(
-            client.run_params[result.run_id]["evaluation_window"],
+            client.run_params[result.run_id]["evaluation_metadata.evaluation_window"],
             "2026-04-01/2026-04-20",
         )
         self.assertEqual(
@@ -246,7 +246,7 @@ class Phase29MlflowShadowModelRegistryValidationTests(ServicePersistenceTestBase
         self.assertEqual(
             client.model_versions[
                 (result.registered_model_name, result.registered_model_version)
-            ]["tags"]["aegisops.candidate_ranker"],
+            ]["tags"]["aegisops.evaluation_metadata.candidate_ranker"],
             "top_k_review_queue",
         )
         self.assertEqual(client.run_metrics[result.run_id]["precision_at_5"], 0.8)
@@ -257,6 +257,38 @@ class Phase29MlflowShadowModelRegistryValidationTests(ServicePersistenceTestBase
             for record_type in (EvidenceRecord, ReconciliationRecord)
         }
         self.assertEqual(final_record_counts, initial_record_counts)
+
+    def test_tracker_rejects_dataset_example_count_mismatches(self) -> None:
+        _store, _service, dataset_snapshot, decided_at = self._build_shadow_dataset_snapshot()
+        client = FakeMlflowClient()
+        mismatched_snapshot = replace(dataset_snapshot, example_count=dataset_snapshot.example_count + 1)
+
+        with self.assertRaisesRegex(
+            Phase29MlflowShadowModelRegistryError,
+            "dataset_snapshot.example_count must match examples payload length: "
+            f"declared={mismatched_snapshot.example_count}, actual={len(mismatched_snapshot.examples)}",
+        ):
+            track_shadow_model_with_mlflow(
+                client=client,
+                dataset_snapshot=mismatched_snapshot,
+                experiment_name="phase29-shadow-model-training",
+                run_name="count-mismatch",
+                registered_model_name="shadow.models.github_audit_xgboost",
+                model_source_uri="models:/shadow.models.github_audit_xgboost/artifacts/model.pkl",
+                model_family="xgboost",
+                model_version="candidate-2026-04-20",
+                training_spec_version="phase29-shadow-training-v1",
+                feature_schema_version="phase29-shadow-features-v1",
+                label_schema_version="phase29-shadow-labels-v1",
+                lineage_review_note_id="note-phase29-shadow-001",
+                evaluation_metrics={"precision_at_5": 0.8},
+                evaluation_metadata={"evaluation_window": "2026-04-01/2026-04-20"},
+                run_timestamp=decided_at,
+            )
+
+        self.assertEqual(client._experiments_by_name, {})
+        self.assertEqual(client.run_params, {})
+        self.assertEqual(client.registered_models, {})
 
     def test_tracker_creates_registry_namespace_when_mlflow_reports_missing_model(self) -> None:
         _store, _service, dataset_snapshot, decided_at = self._build_shadow_dataset_snapshot()
@@ -287,6 +319,39 @@ class Phase29MlflowShadowModelRegistryValidationTests(ServicePersistenceTestBase
 
         self.assertEqual(result.registered_model_version, "1")
         self.assertIn("shadow.models.github_audit_xgboost", client.registered_models)
+
+    def test_tracker_rejects_reserved_evaluation_metadata_keys(self) -> None:
+        _store, _service, dataset_snapshot, decided_at = self._build_shadow_dataset_snapshot()
+        client = FakeMlflowClient()
+
+        with self.assertRaisesRegex(
+            Phase29MlflowShadowModelRegistryError,
+            "evaluation_metadata contains reserved lineage keys: model_version, training_data_snapshot_id",
+        ):
+            track_shadow_model_with_mlflow(
+                client=client,
+                dataset_snapshot=dataset_snapshot,
+                experiment_name="phase29-shadow-model-training",
+                run_name="reserved-evaluation-metadata",
+                registered_model_name="shadow.models.github_audit_xgboost",
+                model_source_uri="models:/shadow.models.github_audit_xgboost/artifacts/model.pkl",
+                model_family="xgboost",
+                model_version="candidate-2026-04-20",
+                training_spec_version="phase29-shadow-training-v1",
+                feature_schema_version="phase29-shadow-features-v1",
+                label_schema_version="phase29-shadow-labels-v1",
+                lineage_review_note_id="note-phase29-shadow-001",
+                evaluation_metrics={"precision_at_5": 0.8},
+                evaluation_metadata={
+                    "training_data_snapshot_id": "override-attempt",
+                    "model_version": "override-attempt",
+                },
+                run_timestamp=decided_at,
+            )
+
+        self.assertEqual(client._experiments_by_name, {})
+        self.assertEqual(client.run_tags, {})
+        self.assertEqual(client.model_versions, {})
 
     def test_tracker_reraises_unexpected_mlflow_registered_model_lookup_failure(self) -> None:
         _store, _service, dataset_snapshot, decided_at = self._build_shadow_dataset_snapshot()
@@ -319,6 +384,62 @@ class Phase29MlflowShadowModelRegistryValidationTests(ServicePersistenceTestBase
                     run_timestamp=decided_at,
                 )
 
+        self.assertEqual(client.registered_models, {})
+
+    def test_tracker_validates_metadata_and_metrics_before_mlflow_state_is_created(self) -> None:
+        _store, _service, dataset_snapshot, decided_at = self._build_shadow_dataset_snapshot()
+        client = FakeMlflowClient()
+
+        with self.assertRaisesRegex(
+            Phase29MlflowShadowModelRegistryError,
+            "datetime metadata must be timezone-aware",
+        ):
+            track_shadow_model_with_mlflow(
+                client=client,
+                dataset_snapshot=dataset_snapshot,
+                experiment_name="phase29-shadow-model-training",
+                run_name="invalid-metadata",
+                registered_model_name="shadow.models.github_audit_xgboost",
+                model_source_uri="models:/shadow.models.github_audit_xgboost/artifacts/model.pkl",
+                model_family="xgboost",
+                model_version="candidate-2026-04-20",
+                training_spec_version="phase29-shadow-training-v1",
+                feature_schema_version="phase29-shadow-features-v1",
+                label_schema_version="phase29-shadow-labels-v1",
+                lineage_review_note_id="note-phase29-shadow-001",
+                evaluation_metrics={"precision_at_5": 0.8},
+                evaluation_metadata={"evaluated_at": datetime(2026, 4, 20, 0, 0)},
+                run_timestamp=decided_at,
+            )
+
+        self.assertEqual(client._experiments_by_name, {})
+        self.assertEqual(client.run_params, {})
+        self.assertEqual(client.model_versions, {})
+
+        with self.assertRaisesRegex(
+            Phase29MlflowShadowModelRegistryError,
+            "evaluation metric precision_at_5 must be numeric",
+        ):
+            track_shadow_model_with_mlflow(
+                client=client,
+                dataset_snapshot=dataset_snapshot,
+                experiment_name="phase29-shadow-model-training",
+                run_name="invalid-metric",
+                registered_model_name="shadow.models.github_audit_xgboost",
+                model_source_uri="models:/shadow.models.github_audit_xgboost/artifacts/model.pkl",
+                model_family="xgboost",
+                model_version="candidate-2026-04-20",
+                training_spec_version="phase29-shadow-training-v1",
+                feature_schema_version="phase29-shadow-features-v1",
+                label_schema_version="phase29-shadow-labels-v1",
+                lineage_review_note_id="note-phase29-shadow-001",
+                evaluation_metrics={"precision_at_5": True},
+                evaluation_metadata={"evaluation_window": "2026-04-01/2026-04-20"},
+                run_timestamp=decided_at,
+            )
+
+        self.assertEqual(client._experiments_by_name, {})
+        self.assertEqual(client.run_metrics, {})
         self.assertEqual(client.registered_models, {})
 
     def test_tracker_fails_closed_when_feature_provenance_is_missing(self) -> None:

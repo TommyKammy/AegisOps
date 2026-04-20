@@ -29,6 +29,21 @@ _REQUIRED_LABEL_PROVENANCE_FIELDS = (
     "label_decided_at",
     "label_linked_subject_record_id",
 )
+_RESERVED_EVALUATION_METADATA_KEYS = frozenset(
+    {
+        "training_data_snapshot_id",
+        "dataset_extraction_spec_version",
+        "training_spec_version",
+        "feature_schema_version",
+        "label_schema_version",
+        "model_family",
+        "model_version",
+        "lineage_review_note_id",
+        "dataset_example_count",
+        "tracked_source_families",
+        "tracked_subject_record_families",
+    }
+)
 _MLFLOW_LOOKUP_EXCEPTIONS = tuple(
     exception_class
     for exception_class in (MlflowException,)
@@ -173,6 +188,12 @@ def track_shadow_model_with_mlflow(
         raise Phase29MlflowShadowModelRegistryError(
             "shadow model tracking requires at least one lineage-backed dataset example"
         )
+    actual_example_count = len(dataset_snapshot.examples)
+    if dataset_snapshot.example_count != actual_example_count:
+        raise Phase29MlflowShadowModelRegistryError(
+            "dataset_snapshot.example_count must match examples payload length: "
+            f"declared={dataset_snapshot.example_count}, actual={actual_example_count}"
+        )
 
     dataset_lineage_summary = _validate_shadow_dataset_lineage(dataset_snapshot)
     run_tags = {
@@ -184,18 +205,15 @@ def track_shadow_model_with_mlflow(
         "aegisops.model_version": model_version,
         "aegisops.training_data_snapshot_id": dataset_snapshot.snapshot_id,
     }
-    experiment_id = _resolve_experiment_id(
-        client=client,
-        experiment_name=experiment_name,
-        experiment_tags={
-            "aegisops.phase": "29",
-            "aegisops.registry_posture": "shadow-only",
-            "aegisops.authority_path": "outside-control-plane",
-        },
+    stringified_evaluation_metadata = _stringify_mapping(evaluation_metadata)
+    reserved_metadata_keys = sorted(
+        _RESERVED_EVALUATION_METADATA_KEYS.intersection(stringified_evaluation_metadata)
     )
-    run = client.create_run(experiment_id, tags=run_tags, run_name=run_name)
-    run_id = run.info.run_id
-
+    if reserved_metadata_keys:
+        raise Phase29MlflowShadowModelRegistryError(
+            "evaluation_metadata contains reserved lineage keys: "
+            + ", ".join(reserved_metadata_keys)
+        )
     run_params = {
         "training_data_snapshot_id": dataset_snapshot.snapshot_id,
         "dataset_extraction_spec_version": dataset_snapshot.extraction_spec_version,
@@ -210,19 +228,43 @@ def track_shadow_model_with_mlflow(
         "tracked_subject_record_families": ",".join(
             dataset_lineage_summary["subject_record_families"]
         ),
+        **{
+            f"evaluation_metadata.{key}": value
+            for key, value in sorted(stringified_evaluation_metadata.items())
+        },
     }
-    run_params.update(_stringify_mapping(evaluation_metadata))
+    validated_metrics: list[tuple[str, float]] = []
+    for metric_name, metric_value in sorted(evaluation_metrics.items()):
+        normalized_metric_name = _validate_metric_name(metric_name)
+        validated_metrics.append(
+            (
+                normalized_metric_name,
+                _coerce_float(normalized_metric_name, metric_value),
+            )
+        )
+    metric_timestamp = int(run_timestamp.timestamp() * 1000)
+
+    experiment_id = _resolve_experiment_id(
+        client=client,
+        experiment_name=experiment_name,
+        experiment_tags={
+            "aegisops.phase": "29",
+            "aegisops.registry_posture": "shadow-only",
+            "aegisops.authority_path": "outside-control-plane",
+        },
+    )
+    run = client.create_run(experiment_id, tags=run_tags, run_name=run_name)
+    run_id = run.info.run_id
 
     for key, value in sorted(run_params.items()):
         client.log_param(run_id, key, value)
 
-    for metric_name, metric_value in sorted(evaluation_metrics.items()):
-        _validate_metric_name(metric_name)
+    for metric_name, metric_value in validated_metrics:
         client.log_metric(
             run_id,
             metric_name,
-            _coerce_float(metric_name, metric_value),
-            timestamp=int(run_timestamp.timestamp() * 1000),
+            metric_value,
+            timestamp=metric_timestamp,
             step=0,
         )
 
@@ -249,8 +291,8 @@ def track_shadow_model_with_mlflow(
             "aegisops.model_version": model_version,
             "aegisops.lineage_review_note_id": lineage_review_note_id,
             **{
-                f"aegisops.{key}": value
-                for key, value in sorted(_stringify_mapping(evaluation_metadata).items())
+                f"aegisops.evaluation_metadata.{key}": value
+                for key, value in sorted(stringified_evaluation_metadata.items())
             },
         },
         description=(
