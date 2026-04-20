@@ -310,15 +310,9 @@ class DetectionLifecycleService:
         materially_new_work = admission.materially_new_work
         reviewed_context = self._merge_reviewed_context({}, admission.reviewed_context)
         with service._store.transaction():
-            existing_reconciliations = [
-                record
-                for record in service._store.list(ReconciliationRecord)
-                if record.correlation_key == correlation_key and record.alert_id is not None
-            ]
-            latest_reconciliation = max(
-                existing_reconciliations,
-                key=lambda record: record.compared_at,
-                default=None,
+            latest_reconciliation = service._store.latest_reconciliation_for_correlation_key(
+                correlation_key,
+                require_alert_id=True,
             )
             analytic_signal_id = service._resolve_analytic_signal_id(
                 analytic_signal_id=analytic_signal_id,

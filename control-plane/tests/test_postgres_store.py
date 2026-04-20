@@ -337,6 +337,40 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             schema_sql,
         )
 
+    def test_phase28_reconciliation_correlation_lookup_index_migration_asset_exists(
+        self,
+    ) -> None:
+        migration_path = (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0011_phase_28_reconciliation_correlation_lookup_index.sql"
+        )
+
+        self.assertTrue(
+            migration_path.exists(),
+            f"Missing Phase 28 forward migration asset: {migration_path}",
+        )
+
+        migration_sql = migration_path.read_text(encoding="utf-8").lower()
+        schema_sql = (
+            CONTROL_PLANE_ROOT.parent / "postgres" / "control-plane" / "schema.sql"
+        ).read_text(encoding="utf-8").lower()
+
+        self.assertIn("begin;", migration_sql)
+        self.assertIn("commit;", migration_sql)
+        self.assertIn(
+            "create index if not exists reconciliation_records_correlation_alert_latest_idx",
+            migration_sql,
+        )
+        self.assertIn("where alert_id is not null", migration_sql)
+        self.assertIn(
+            "create index if not exists reconciliation_records_correlation_alert_latest_idx",
+            schema_sql,
+        )
+        self.assertIn("where alert_id is not null", schema_sql)
+
     def test_phase23_lifecycle_transition_forward_migration_asset_exists(self) -> None:
         migration_path = (
             CONTROL_PLANE_ROOT.parent
@@ -1051,6 +1085,96 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         )
         self.assertIsNone(
             store.latest_lifecycle_transition("alert", "alert-missing-001")
+        )
+
+    def test_store_lists_latest_reconciliation_by_correlation_key(self) -> None:
+        store, backend = make_store()
+        older = ReconciliationRecord(
+            reconciliation_id="reconciliation-correlation-older",
+            subject_linkage={"finding_ids": ["finding-correlation-001"]},
+            alert_id="alert-correlation-001",
+            finding_id="finding-correlation-001",
+            analytic_signal_id="signal-correlation-001",
+            execution_run_id=None,
+            linked_execution_run_ids=(),
+            correlation_key="claim:host-001:correlation-lookup",
+            first_seen_at=datetime(2026, 4, 16, 8, 0, tzinfo=timezone.utc),
+            last_seen_at=datetime(2026, 4, 16, 8, 1, tzinfo=timezone.utc),
+            ingest_disposition="created",
+            mismatch_summary="",
+            compared_at=datetime(2026, 4, 16, 8, 2, tzinfo=timezone.utc),
+            lifecycle_state="matched",
+        )
+        latest_without_alert = ReconciliationRecord(
+            reconciliation_id="reconciliation-correlation-latest-without-alert",
+            subject_linkage={"finding_ids": ["finding-correlation-002"]},
+            alert_id=None,
+            finding_id="finding-correlation-002",
+            analytic_signal_id="signal-correlation-002",
+            execution_run_id=None,
+            linked_execution_run_ids=(),
+            correlation_key="claim:host-001:correlation-lookup",
+            first_seen_at=datetime(2026, 4, 16, 8, 3, tzinfo=timezone.utc),
+            last_seen_at=datetime(2026, 4, 16, 8, 4, tzinfo=timezone.utc),
+            ingest_disposition="matched",
+            mismatch_summary="",
+            compared_at=datetime(2026, 4, 16, 8, 9, tzinfo=timezone.utc),
+            lifecycle_state="matched",
+        )
+        latest_with_alert = ReconciliationRecord(
+            reconciliation_id="reconciliation-correlation-latest-with-alert",
+            subject_linkage={"finding_ids": ["finding-correlation-003"]},
+            alert_id="alert-correlation-003",
+            finding_id="finding-correlation-003",
+            analytic_signal_id="signal-correlation-003",
+            execution_run_id=None,
+            linked_execution_run_ids=(),
+            correlation_key="claim:host-001:correlation-lookup",
+            first_seen_at=datetime(2026, 4, 16, 8, 6, tzinfo=timezone.utc),
+            last_seen_at=datetime(2026, 4, 16, 8, 7, tzinfo=timezone.utc),
+            ingest_disposition="restated",
+            mismatch_summary="",
+            compared_at=datetime(2026, 4, 16, 8, 8, tzinfo=timezone.utc),
+            lifecycle_state="matched",
+        )
+        unrelated = ReconciliationRecord(
+            reconciliation_id="reconciliation-correlation-unrelated",
+            subject_linkage={"finding_ids": ["finding-correlation-004"]},
+            alert_id="alert-correlation-004",
+            finding_id="finding-correlation-004",
+            analytic_signal_id="signal-correlation-004",
+            execution_run_id=None,
+            linked_execution_run_ids=(),
+            correlation_key="claim:host-001:other",
+            first_seen_at=datetime(2026, 4, 16, 8, 10, tzinfo=timezone.utc),
+            last_seen_at=datetime(2026, 4, 16, 8, 11, tzinfo=timezone.utc),
+            ingest_disposition="matched",
+            mismatch_summary="",
+            compared_at=datetime(2026, 4, 16, 8, 12, tzinfo=timezone.utc),
+            lifecycle_state="matched",
+        )
+
+        for record in (older, latest_without_alert, latest_with_alert, unrelated):
+            store.save(record)
+
+        statement_count_before = len(backend.statements)
+        latest = store.latest_reconciliation_for_correlation_key(
+            "claim:host-001:correlation-lookup"
+        )
+        latest_with_required_alert = store.latest_reconciliation_for_correlation_key(
+            "claim:host-001:correlation-lookup",
+            require_alert_id=True,
+        )
+
+        self.assertEqual(latest, latest_without_alert)
+        self.assertEqual(latest_with_required_alert, latest_with_alert)
+        self.assertEqual(
+            backend.statements[statement_count_before][0],
+            "select reconciliation_id, subject_linkage, alert_id, finding_id, analytic_signal_id, execution_run_id, linked_execution_run_ids, correlation_key, first_seen_at, last_seen_at, ingest_disposition, mismatch_summary, compared_at, lifecycle_state from aegisops_control.reconciliation_records where correlation_key = %s order by compared_at desc, reconciliation_id desc limit 1",
+        )
+        self.assertEqual(
+            backend.statements[statement_count_before + 1][0],
+            "select reconciliation_id, subject_linkage, alert_id, finding_id, analytic_signal_id, execution_run_id, linked_execution_run_ids, correlation_key, first_seen_at, last_seen_at, ingest_disposition, mismatch_summary, compared_at, lifecycle_state from aegisops_control.reconciliation_records where correlation_key = %s and alert_id is not null order by compared_at desc, reconciliation_id desc limit 1",
         )
 
     def test_store_lists_lifecycle_transitions_by_subject(self) -> None:

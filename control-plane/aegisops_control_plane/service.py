@@ -165,6 +165,14 @@ class ControlPlaneStore(Protocol):
     def list(self, record_type: Type[RecordT]) -> tuple[RecordT, ...]:
         ...
 
+    def latest_reconciliation_for_correlation_key(
+        self,
+        correlation_key: str,
+        *,
+        require_alert_id: bool = False,
+    ) -> ReconciliationRecord | None:
+        ...
+
     def latest_lifecycle_transition(
         self,
         record_family: str,

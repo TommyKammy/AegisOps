@@ -3655,6 +3655,39 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             ("substrate-detection-001", "substrate-detection-002"),
         )
 
+    def test_service_ingest_uses_targeted_reconciliation_lookup(self) -> None:
+        inner_store, _ = make_store()
+        store = _ListCountingStore(inner=inner_store)
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        second_seen = datetime(2026, 4, 5, 12, 15, tzinfo=timezone.utc)
+
+        service.ingest_finding_alert(
+            finding_id="finding-lookup-001",
+            analytic_signal_id="signal-lookup-001",
+            substrate_detection_record_id="substrate-detection-lookup-001",
+            correlation_key="claim:host-001:lookup",
+            first_seen_at=first_seen,
+            last_seen_at=first_seen,
+        )
+        store.reconciliation_list_calls = 0
+        store.latest_reconciliation_for_correlation_key_calls = 0
+
+        service.ingest_finding_alert(
+            finding_id="finding-lookup-002",
+            analytic_signal_id="signal-lookup-002",
+            substrate_detection_record_id="substrate-detection-lookup-002",
+            correlation_key="claim:host-001:lookup",
+            first_seen_at=first_seen,
+            last_seen_at=second_seen,
+        )
+
+        self.assertEqual(store.reconciliation_list_calls, 0)
+        self.assertEqual(store.latest_reconciliation_for_correlation_key_calls, 1)
+
     def test_service_rolls_back_failed_analytic_signal_admission(self) -> None:
         store, _ = support.make_store()
         store = support.RecordTypeSaveFailingStore(
