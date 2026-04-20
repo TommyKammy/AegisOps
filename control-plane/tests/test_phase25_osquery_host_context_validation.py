@@ -62,6 +62,17 @@ class _EvidenceSaveMutationStore:
     def list(self, record_type: object) -> tuple[object, ...]:
         return self.inner.list(record_type)
 
+    def latest_reconciliation_for_correlation_key(
+        self,
+        correlation_key: str,
+        *,
+        require_alert_id: bool = False,
+    ) -> object | None:
+        return self.inner.latest_reconciliation_for_correlation_key(
+            correlation_key,
+            require_alert_id=require_alert_id,
+        )
+
     def latest_lifecycle_transition(
         self,
         record_family: str,

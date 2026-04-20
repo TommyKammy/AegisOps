@@ -1004,6 +1004,36 @@ class PostgresControlPlaneStore:
             for row in rows
         )
 
+    def latest_reconciliation_for_correlation_key(
+        self,
+        correlation_key: str,
+        *,
+        require_alert_id: bool = False,
+    ) -> ReconciliationRecord | None:
+        table = self._table_config(ReconciliationRecord)
+        query = (
+            f"select {', '.join(table.record_fields)} "
+            f"from aegisops_control.{table.table_name} "
+            "where correlation_key = %s"
+        )
+        params: tuple[object, ...] = (correlation_key,)
+        if require_alert_id:
+            query += " and alert_id is not null"
+        query += " order by compared_at desc, reconciliation_id desc limit 1"
+
+        with self._borrow_connection() as connection:
+            cursor = connection.cursor()
+            try:
+                cursor.execute(query, params)
+                row = cursor.fetchone()
+                mapping = None if row is None else _row_to_mapping(cursor, row)
+            finally:
+                cursor.close()
+
+        if mapping is None:
+            return None
+        return self._row_to_record(ReconciliationRecord, mapping)
+
     def latest_lifecycle_transition(
         self,
         record_family: str,

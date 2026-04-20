@@ -53,6 +53,17 @@ class TransactionMutationStore:
     def list(self, record_type: object) -> tuple[object, ...]:
         return self.inner.list(record_type)
 
+    def latest_reconciliation_for_correlation_key(
+        self,
+        correlation_key: str,
+        *,
+        require_alert_id: bool = False,
+    ) -> ReconciliationRecord | None:
+        return self.inner.latest_reconciliation_for_correlation_key(
+            correlation_key,
+            require_alert_id=require_alert_id,
+        )
+
     def latest_lifecycle_transition(
         self,
         record_family: str,
@@ -146,6 +157,20 @@ class ConcurrentListMutationStore:
             self.mutate_once()
         return records
 
+    def latest_reconciliation_for_correlation_key(
+        self,
+        correlation_key: str,
+        *,
+        require_alert_id: bool = False,
+    ) -> ReconciliationRecord | None:
+        reconciliation = self.inner.latest_reconciliation_for_correlation_key(
+            correlation_key,
+            require_alert_id=require_alert_id,
+        )
+        if self._consume_mutation_token():
+            self.mutate_once()
+        return reconciliation
+
     def latest_lifecycle_transition(
         self,
         record_family: str,
@@ -225,6 +250,17 @@ class CommitFailingStore:
 
     def list(self, record_type: object) -> tuple[object, ...]:
         return self.inner.list(record_type)
+
+    def latest_reconciliation_for_correlation_key(
+        self,
+        correlation_key: str,
+        *,
+        require_alert_id: bool = False,
+    ) -> ReconciliationRecord | None:
+        return self.inner.latest_reconciliation_for_correlation_key(
+            correlation_key,
+            require_alert_id=require_alert_id,
+        )
 
     def latest_lifecycle_transition(
         self,
@@ -316,6 +352,17 @@ class RecordTypeSaveFailingStore:
     def list(self, record_type: object) -> tuple[object, ...]:
         return self.inner.list(record_type)
 
+    def latest_reconciliation_for_correlation_key(
+        self,
+        correlation_key: str,
+        *,
+        require_alert_id: bool = False,
+    ) -> ReconciliationRecord | None:
+        return self.inner.latest_reconciliation_for_correlation_key(
+            correlation_key,
+            require_alert_id=require_alert_id,
+        )
+
     def latest_lifecycle_transition(
         self,
         record_family: str,
@@ -379,6 +426,7 @@ class ListCountingStore:
     inner: object
     list_calls: int = 0
     reconciliation_list_calls: int = 0
+    latest_reconciliation_for_correlation_key_calls: int = 0
     lifecycle_transition_record_list_calls: int = 0
     latest_lifecycle_transition_calls: int = 0
     lifecycle_transition_history_calls: int = 0
@@ -410,6 +458,18 @@ class ListCountingStore:
         if record_type is LifecycleTransitionRecord:
             self.lifecycle_transition_record_list_calls += 1
         return self.inner.list(record_type)
+
+    def latest_reconciliation_for_correlation_key(
+        self,
+        correlation_key: str,
+        *,
+        require_alert_id: bool = False,
+    ) -> ReconciliationRecord | None:
+        self.latest_reconciliation_for_correlation_key_calls += 1
+        return self.inner.latest_reconciliation_for_correlation_key(
+            correlation_key,
+            require_alert_id=require_alert_id,
+        )
 
     def latest_lifecycle_transition(
         self,
@@ -486,6 +546,17 @@ class OutOfBandMutationStore:
 
     def list(self, record_type: object) -> tuple[object, ...]:
         return self.inner.list(record_type)
+
+    def latest_reconciliation_for_correlation_key(
+        self,
+        correlation_key: str,
+        *,
+        require_alert_id: bool = False,
+    ) -> ReconciliationRecord | None:
+        return self.inner.latest_reconciliation_for_correlation_key(
+            correlation_key,
+            require_alert_id=require_alert_id,
+        )
 
     def latest_lifecycle_transition(
         self,

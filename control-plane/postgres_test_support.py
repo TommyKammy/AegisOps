@@ -87,6 +87,12 @@ _SELECT_LATEST_RECONCILIATION_RE = re.compile(
     r"order by compared_at desc, reconciliation_id desc limit 1",
     re.IGNORECASE,
 )
+_SELECT_LATEST_RECONCILIATION_BY_CORRELATION_KEY_RE = re.compile(
+    r"select (?P<columns>.+) from aegisops_control\.reconciliation_records "
+    r"where correlation_key = %s(?P<require_alert_id> and alert_id is not null)? "
+    r"order by compared_at desc, reconciliation_id desc limit 1",
+    re.IGNORECASE,
+)
 _SELECT_EXECUTIONS_BY_ACTION_REQUEST_IDS_RE = re.compile(
     r"select (?P<columns>.+) from aegisops_control\.action_execution_records "
     r"where action_request_id in \((?P<placeholders>.+)\) "
@@ -280,6 +286,21 @@ class FakePostgresCursor:
         if select_latest_reconciliation_match is not None:
             self._execute_select_latest_reconciliation(
                 select_latest_reconciliation_match.group("columns")
+            )
+            return
+        select_latest_reconciliation_by_correlation_key_match = (
+            _SELECT_LATEST_RECONCILIATION_BY_CORRELATION_KEY_RE.fullmatch(normalized)
+        )
+        if select_latest_reconciliation_by_correlation_key_match is not None:
+            self._execute_select_latest_reconciliation_by_correlation_key(
+                select_latest_reconciliation_by_correlation_key_match.group("columns"),
+                params,
+                require_alert_id=(
+                    select_latest_reconciliation_by_correlation_key_match.group(
+                        "require_alert_id"
+                    )
+                    is not None
+                ),
             )
             return
 
@@ -519,6 +540,31 @@ class FakePostgresCursor:
     def _execute_select_latest_reconciliation(self, columns: str) -> None:
         column_names = [column.strip() for column in columns.split(",")]
         rows = list(self.tables.get("reconciliation_records", {}).values())
+        rows.sort(
+            key=lambda row: (row["compared_at"], row["reconciliation_id"]),
+            reverse=True,
+        )
+        self.description = tuple((name,) for name in column_names)
+        if not rows:
+            self._rows = []
+            return
+        self._rows = [self._project_row(rows[0], column_names)]
+
+    def _execute_select_latest_reconciliation_by_correlation_key(
+        self,
+        columns: str,
+        params: tuple[object, ...] | None,
+        *,
+        require_alert_id: bool,
+    ) -> None:
+        column_names = [column.strip() for column in columns.split(",")]
+        correlation_key = str((params or ("",))[0])
+        rows = [
+            row
+            for row in self.tables.get("reconciliation_records", {}).values()
+            if str(row.get("correlation_key")) == correlation_key
+            and (not require_alert_id or row.get("alert_id") is not None)
+        ]
         rows.sort(
             key=lambda row: (row["compared_at"], row["reconciliation_id"]),
             reverse=True,

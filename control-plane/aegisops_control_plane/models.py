@@ -102,6 +102,13 @@ class AnalyticSignalAdmission:
 
 
 @dataclass(frozen=True)
+class FindingAlertIngestResult:
+    alert: AlertRecord
+    reconciliation: ReconciliationRecord
+    disposition: str
+
+
+@dataclass(frozen=True)
 class CaseRecord(ControlPlaneRecord):
     record_family: ClassVar[str] = "case"
     identifier_field: ClassVar[str] = "case_id"
