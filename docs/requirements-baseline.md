@@ -19,6 +19,8 @@ This document is intended to serve as both:
 - a human-readable engineering baseline, and
 - an execution contract for AI-assisted implementation workflows, including codex-supervisor.
 
+For the canonical cross-phase registry of non-goals and anti-expansion boundaries that future baseline changes must not silently bypass, see `docs/non-goals-and-expansion-guardrails.md`.
+
 ---
 
 ## 1. Purpose
