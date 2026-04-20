@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import copy
 from dataclasses import replace
 from datetime import datetime, timezone
 import json
@@ -287,20 +288,11 @@ class LiveAssistantWorkflowCoordinator:
         adapter_prompt_version = self._workflow_prompt_versions[workflow_task]
         if (
             isinstance(adapter, AssistantProviderAdapter)
-            and getattr(adapter, "_prompt_version", None) != adapter_prompt_version
+            and adapter._prompt_version != adapter_prompt_version
         ):
-            return AssistantProviderAdapter(
-                provider_identity=getattr(adapter, "_provider_identity", "reviewed_local"),
-                model_identity=getattr(
-                    adapter, "_model_identity", "bounded_reviewed_summary"
-                ),
-                prompt_version=adapter_prompt_version,
-                request_timeout_seconds=float(
-                    getattr(adapter, "_request_timeout_seconds", 5.0)
-                ),
-                max_attempts=int(getattr(adapter, "_max_attempts", 1)),
-                transport=getattr(adapter, "_transport"),
-            )
+            workflow_adapter = copy(adapter)
+            workflow_adapter._prompt_version = adapter_prompt_version
+            return workflow_adapter
         return adapter
 
     def _persist_live_assistant_feedback_loop(
@@ -443,20 +435,24 @@ class LiveAssistantWorkflowCoordinator:
 
         canonical_subject_linkage = dict(ai_trace_record.subject_linkage)
         canonical_subject_linkage.update(subject_linkage)
-
-        return replace(
-            ai_trace_record,
-            subject_linkage=canonical_subject_linkage,
-            material_input_refs=reviewed_input_refs,
-            lifecycle_state="under_review",
-            assistant_advisory_draft={
+        advisory_draft = dict(ai_trace_record.assistant_advisory_draft)
+        advisory_draft.update(
+            {
                 **workflow_snapshot.to_dict(),
                 "source_record_family": record_family,
                 "source_record_id": record_id,
                 "review_lifecycle_state": "under_review",
                 "subject_linkage": canonical_subject_linkage,
                 "reviewed_input_refs": reviewed_input_refs,
-            },
+            }
+        )
+
+        return replace(
+            ai_trace_record,
+            subject_linkage=canonical_subject_linkage,
+            material_input_refs=reviewed_input_refs,
+            lifecycle_state="under_review",
+            assistant_advisory_draft=advisory_draft,
         )
 
     def _build_live_assistant_recommendation_record(
