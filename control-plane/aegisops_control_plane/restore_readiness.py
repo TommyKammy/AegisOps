@@ -41,6 +41,9 @@ class RestoreReadinessService:
         build_readiness_automation_substrate_health: Callable[
             [ReadinessDiagnosticsAggregates, list[dict[str, object]]], dict[str, object]
         ],
+        build_optional_extension_operability: Callable[
+            [ReadinessDiagnosticsAggregates, list[dict[str, object]]], dict[str, object]
+        ],
         build_shutdown_status_snapshot: Callable[..., Any],
         derive_readiness_status: Callable[..., str],
         record_from_backup_payload: Callable[
@@ -70,6 +73,9 @@ class RestoreReadinessService:
         self._build_readiness_automation_substrate_health = (
             build_readiness_automation_substrate_health
         )
+        self._build_optional_extension_operability = (
+            build_optional_extension_operability
+        )
         self._readiness_health_projection = _ReadinessHealthProjection(
             config=config,
             store=store,
@@ -98,6 +104,12 @@ class RestoreReadinessService:
             ),
             build_readiness_automation_substrate_health=(
                 lambda aggregates, snapshots: self._build_readiness_automation_substrate_health(
+                    aggregates,
+                    snapshots,
+                )
+            ),
+            build_optional_extension_operability=(
+                lambda aggregates, snapshots: self._build_optional_extension_operability(
                     aggregates,
                     snapshots,
                 )

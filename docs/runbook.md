@@ -89,6 +89,17 @@ Future validation guidance should describe:
 - the conditions that require escalation instead of continued operation, and
 - the repository artifacts that define the expected state.
 
+The reviewed readiness surface must expose optional-extension operability explicitly instead of leaving operators to infer state from missing sidecars or quiet logs.
+
+At minimum, validation should distinguish:
+
+- `enabled` optional paths that are intentionally active but still non-authoritative;
+- `disabled_by_default` optional paths that remain off without blocking the mainline;
+- `unavailable` optional paths whose supporting runtime is absent or intentionally not configured; and
+- `degraded` optional paths whose reviewed receipts, health, or bounded outputs are lagging and therefore require operator-visible follow-up.
+
+Validation must confirm that optional assistant, endpoint evidence, optional network evidence, and ML shadow paths stay subordinate to the reviewed control-plane chain even when their operability state is `unavailable` or `degraded`.
+
 The selected Phase 6 validation slice is limited to the Windows security and endpoint telemetry family and the three reviewed detector artifacts under `opensearch/detectors/windows-security-and-endpoint/`.
 
 This runbook section is limited to replay validation, staging-only detector review, and read-only or notify-only workflow review during business hours.

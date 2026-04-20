@@ -294,6 +294,66 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
             action_request.policy_evaluation["execution_surface_id"],
             "isolated-executor",
         )
+
+    def test_readiness_surfaces_endpoint_evidence_extension_as_degraded_when_review_path_lags(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        _store, service, promoted_case, anchor_evidence_id, reviewed_at = (
+            self._build_host_bound_case(store=store)
+        )
+        service = AegisOpsControlPlaneService(
+            replace(
+                service._config,
+                isolated_executor_base_url="https://executor.internal",
+            ),
+            store=store,
+        )
+
+        action_request = service.create_endpoint_evidence_collection_request(
+            case_id=promoted_case.case_id,
+            admitting_evidence_id=anchor_evidence_id,
+            requester_identity="analyst-001",
+            host_identifier="host-001",
+            evidence_gap="Need endpoint evidence to resolve the reviewed host-state gap.",
+            artifact_classes=("collection_manifest", "triage_bundle"),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-endpoint-operability-001",
+        )
+        service.record_action_approval_decision(
+            action_request_id=action_request.action_request_id,
+            approver_identity="reviewer-001",
+            decision="grant",
+            decision_rationale="Approved bounded read-only endpoint evidence collection.",
+            decided_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+        )
+        approved_request = service.get_record(
+            ActionRequestRecord,
+            action_request.action_request_id,
+        )
+        assert approved_request is not None
+        service.persist_record(
+            replace(
+                approved_request,
+                requested_at=reviewed_at - timedelta(hours=2),
+                expires_at=reviewed_at - timedelta(hours=1),
+                lifecycle_state="executing",
+            )
+        )
+
+        readiness = service.inspect_readiness_diagnostics()
+        endpoint_extension = readiness.metrics["optional_extensions"]["extensions"][
+            "endpoint_evidence"
+        ]
+
+        self.assertEqual(endpoint_extension["enablement"], "enabled")
+        self.assertEqual(endpoint_extension["availability"], "available")
+        self.assertEqual(endpoint_extension["readiness"], "degraded")
+        self.assertEqual(endpoint_extension["authority_mode"], "augmenting_evidence")
+        self.assertEqual(
+            endpoint_extension["reason"],
+            "provider_signal_missing_after_approval",
+        )
         self.assertEqual(
             action_request.policy_basis,
             {

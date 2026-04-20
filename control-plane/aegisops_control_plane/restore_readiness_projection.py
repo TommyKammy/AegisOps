@@ -37,6 +37,9 @@ class _ReadinessHealthProjection:
         build_readiness_automation_substrate_health: Callable[
             [ReadinessDiagnosticsAggregates, list[dict[str, object]]], dict[str, object]
         ],
+        build_optional_extension_operability: Callable[
+            [ReadinessDiagnosticsAggregates, list[dict[str, object]]], dict[str, object]
+        ],
         build_shutdown_status_snapshot: Callable[..., Any],
         derive_readiness_status: Callable[..., str],
     ) -> None:
@@ -57,6 +60,9 @@ class _ReadinessHealthProjection:
         self._build_readiness_source_health = build_readiness_source_health
         self._build_readiness_automation_substrate_health = (
             build_readiness_automation_substrate_health
+        )
+        self._build_optional_extension_operability = (
+            build_optional_extension_operability
         )
         self._build_shutdown_status_snapshot = build_shutdown_status_snapshot
         self._derive_readiness_status = derive_readiness_status
@@ -161,6 +167,10 @@ class _ReadinessHealthProjection:
                     readiness_review_snapshots,
                 )
             )
+            optional_extensions = self._build_optional_extension_operability(
+                readiness_aggregates,
+                readiness_review_snapshots,
+            )
 
         shutdown = self._build_shutdown_status_snapshot(
             open_case_ids=readiness_aggregates.open_case_ids,
@@ -246,6 +256,7 @@ class _ReadinessHealthProjection:
             "review_path_health": review_path_health,
             "source_health": source_health,
             "automation_substrate_health": automation_substrate_health,
+            "optional_extensions": optional_extensions,
         }
 
         return self._readiness_diagnostics_snapshot_factory(
