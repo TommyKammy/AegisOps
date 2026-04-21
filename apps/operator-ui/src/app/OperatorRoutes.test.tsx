@@ -585,6 +585,7 @@ describe("OperatorRoutes", () => {
     );
   });
 
+
   it("records bounded case observations, leads, and recommendations from case detail", async () => {
     const user = userEvent.setup();
     let caseDetailPayload: Record<string, unknown> = {

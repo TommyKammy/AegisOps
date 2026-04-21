@@ -715,6 +715,7 @@ function AlertDetailPageBody({
 
       <PromoteAlertToCaseCard
         alertId={alertId}
+        key={alertId}
         currentCaseId={asString(caseRecord?.case_id)}
         onSubmitted={() => {
           setReloadToken((current) => current + 1);
@@ -875,6 +876,7 @@ function CaseDetailPageBody({
 
       <RecordCaseObservationCard
         caseId={caseId}
+        key={`observation-${caseId}`}
         linkedEvidenceIds={asStringArray(data.linked_evidence_ids)}
         onSubmitted={() => {
           setReloadToken((current) => current + 1);
@@ -884,6 +886,7 @@ function CaseDetailPageBody({
 
       <RecordCaseLeadCard
         caseId={caseId}
+        key={`lead-${caseId}`}
         linkedObservationIds={asStringArray(data.linked_observation_ids)}
         onSubmitted={() => {
           setReloadToken((current) => current + 1);
@@ -893,6 +896,7 @@ function CaseDetailPageBody({
 
       <RecordCaseRecommendationCard
         caseId={caseId}
+        key={`recommendation-${caseId}`}
         linkedLeadIds={asStringArray(data.linked_lead_ids)}
         onSubmitted={() => {
           setReloadToken((current) => current + 1);
