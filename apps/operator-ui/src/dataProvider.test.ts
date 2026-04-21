@@ -251,4 +251,48 @@ describe("createOperatorDataProvider", () => {
       UnsupportedOperatorDataProviderOperationError,
     );
   });
+
+  it("rejects all mutation verbs so the adapter remains read-only", async () => {
+    const dataProvider = createOperatorDataProvider({
+      fetchFn: vi.fn<typeof fetch>(),
+    });
+
+    await expect(
+      dataProvider.create("alerts", { data: { alert_id: "alert-001" } }),
+    ).rejects.toThrow(
+      UnsupportedOperatorDataProviderOperationError,
+    );
+    await expect(
+      dataProvider.update("alerts", {
+        data: { review_state: "triaged" },
+        id: "alert-001",
+        previousData: { id: "alert-001" },
+      }),
+    ).rejects.toThrow(
+      UnsupportedOperatorDataProviderOperationError,
+    );
+    await expect(
+      dataProvider.updateMany("alerts", {
+        data: { review_state: "triaged" },
+        ids: ["alert-001"],
+      }),
+    ).rejects.toThrow(
+      UnsupportedOperatorDataProviderOperationError,
+    );
+    await expect(
+      dataProvider.delete("alerts", {
+        id: "alert-001",
+        previousData: { id: "alert-001" },
+      }),
+    ).rejects.toThrow(
+      UnsupportedOperatorDataProviderOperationError,
+    );
+    await expect(
+      dataProvider.deleteMany("alerts", {
+        ids: ["alert-001"],
+      }),
+    ).rejects.toThrow(
+      UnsupportedOperatorDataProviderOperationError,
+    );
+  });
 });

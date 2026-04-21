@@ -17,18 +17,26 @@ function jsonResponse(body: unknown, status = 200) {
 
 function createAuthorizedFetch(
   handlers: Record<string, unknown>,
+  sessionOverride?: {
+    identity: string;
+    provider: string;
+    roles: string[];
+    subject: string;
+  },
 ) {
   return vi.fn<typeof fetch>().mockImplementation((input) => {
     const url = String(input);
 
     if (url.startsWith("/api/operator/session")) {
       return Promise.resolve(
-        jsonResponse({
-          identity: "analyst@example.com",
-          provider: "authentik",
-          roles: ["Analyst"],
-          subject: "operator-7",
-        }),
+        jsonResponse(
+          sessionOverride ?? {
+            identity: "analyst@example.com",
+            provider: "authentik",
+            roles: ["Analyst"],
+            subject: "operator-7",
+          },
+        ),
       );
     }
 
@@ -139,6 +147,79 @@ describe("OperatorRoutes", () => {
     });
   });
 
+  it("hides action-review navigation for analyst-only sessions", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch({}),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Protected operator shell" }),
+      ).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText(/action review/i)).not.toBeInTheDocument();
+  });
+
+  it("shows action-review navigation for reviewed approver sessions", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch(
+        {},
+        {
+          identity: "approver@example.com",
+          provider: "authentik",
+          roles: ["Approver"],
+          subject: "operator-8",
+        },
+      ),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Protected operator shell" }),
+      ).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText(/action review/i).length).toBeGreaterThan(0);
+  });
+
+  it("redirects analyst-only deep links away from the action-review route", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch({}),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/action-review"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Protected operator shell" }),
+      ).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText(/action review/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Queue triage stays inside AegisOps as the authoritative review selection surface.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("renders the reviewed queue route from backend-authoritative queue records", async () => {
     const fetchFn = createAuthorizedFetch({
       "/inspect-analyst-queue": {
@@ -183,12 +264,72 @@ describe("OperatorRoutes", () => {
       ).toBeInTheDocument();
     });
 
-    expect(screen.getByText("alert-123")).toBeInTheDocument();
-    expect(screen.getAllByText(/Review: degraded/i).length).toBeGreaterThan(0);
-    expect(
-      screen.getByText(/Primary review surface/i),
-    ).toBeInTheDocument();
-    expect(screen.getByText("github_audit")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("alert-123")).toBeInTheDocument();
+      expect(screen.getAllByText(/Review: degraded/i).length).toBeGreaterThan(0);
+      expect(
+        screen.getByText(/Primary review surface/i),
+      ).toBeInTheDocument();
+      expect(screen.getByText("github_audit")).toBeInTheDocument();
+    });
+  });
+
+  it("keeps degraded and missing-anchor queue warnings explicit", async () => {
+    const fetchFn = createAuthorizedFetch({
+      "/inspect-analyst-queue": {
+        queue_name: "analyst_review",
+        read_only: true,
+        records: [
+          {
+            alert_id: "alert-789",
+            review_state: "degraded",
+            case_lifecycle_state: "open",
+            external_ticket_reference: {
+              status: "missing_anchor",
+            },
+            reviewed_context: {
+              source: {
+                source_family: "microsoft_365_audit",
+              },
+            },
+          },
+        ],
+        total_records: 1,
+      },
+    });
+    const dependencies = createDefaultDependencies({
+      fetchFn,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/queue"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Analyst Queue" }),
+      ).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("alert-789")).toBeInTheDocument();
+      expect(screen.getByText("No case anchor")).toBeInTheDocument();
+      expect(
+        screen.getByText("Review state remains degraded."),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "Non-authoritative coordination reference is missing_anchor.",
+        ),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "Case lifecycle state is present without an authoritative case identifier.",
+        ),
+      ).toBeInTheDocument();
+    });
   });
 
   it("renders alert detail with authoritative and subordinate sections separated", async () => {
@@ -307,10 +448,12 @@ describe("OperatorRoutes", () => {
       expect(screen.getByRole("heading", { name: "Case Detail" })).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Provenance summary")).toBeInTheDocument();
-    expect(screen.getByText("Subordinate evidence context")).toBeInTheDocument();
-    expect(screen.getAllByText("github_audit").length).toBeGreaterThan(0);
-    expect(screen.getByText("recon-123")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("Provenance summary")).toBeInTheDocument();
+      expect(screen.getByText("Subordinate evidence context")).toBeInTheDocument();
+      expect(screen.getAllByText("github_audit").length).toBeGreaterThan(0);
+      expect(screen.getByText("recon-123")).toBeInTheDocument();
+    });
   });
 
   it("renders readiness from the reviewed diagnostics surface", async () => {
@@ -360,7 +503,9 @@ describe("OperatorRoutes", () => {
       expect(screen.getByRole("heading", { name: "Readiness" })).toBeInTheDocument();
     });
 
-    expect(screen.getByText("postgresql")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("postgresql")).toBeInTheDocument();
+    });
     expect(fetchFn).toHaveBeenCalledWith(
       "/diagnostics/readiness?order=ASC&page=1&per_page=1&sort=status",
       expect.any(Object),
