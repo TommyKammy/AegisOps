@@ -38,7 +38,7 @@ create_repo() {
   local target="$1"
 
   mkdir -p "${target}/.codex-supervisor" "${target}/.github/workflows" \
-    "${target}/config" "${target}/docs" "${target}/ingest" "${target}/n8n" \
+    "${target}/apps/operator-ui" "${target}/config" "${target}/docs" "${target}/ingest" "${target}/n8n" \
     "${target}/opensearch" "${target}/proxy" "${target}/scripts" \
     "${target}/sigma" "${target}/control-plane/aegisops_control_plane/adapters" \
     "${target}/control-plane/tests" "${target}/control-plane/config" \
@@ -49,6 +49,7 @@ create_repo() {
 
   touch "${target}/.codex-supervisor/.gitkeep" \
     "${target}/.github/workflows/.gitkeep" \
+    "${target}/apps/operator-ui/.gitkeep" \
     "${target}/config/.gitkeep" \
     "${target}/ingest/.gitkeep" \
     "${target}/n8n/.gitkeep" \
@@ -59,9 +60,13 @@ create_repo() {
   printf '# fixture\n' > "${target}/.env.sample"
   printf '# fixture ignore\n' > "${target}/.gitignore"
   printf 'fixture license\n' > "${target}/LICENSE.txt"
+  printf '{\"name\":\"fixture-root-workspace\",\"private\":true}\n' > "${target}/package.json"
+  printf '{\"name\":\"fixture-root-workspace\",\"lockfileVersion\":3}\n' > "${target}/package-lock.json"
   git -C "${target}" add .codex-supervisor/.gitkeep .github/workflows/.gitkeep \
+    apps/operator-ui/.gitkeep \
     config/.gitkeep ingest/.gitkeep n8n/.gitkeep opensearch/.gitkeep \
-    proxy/.gitkeep scripts/.gitkeep sigma/.gitkeep .env.sample .gitignore LICENSE.txt
+    proxy/.gitkeep scripts/.gitkeep sigma/.gitkeep .env.sample .gitignore LICENSE.txt \
+    package.json package-lock.json
 }
 
 write_required_artifacts() {

@@ -1,0 +1,11 @@
+{
+  "name": "aegisops",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @aegisops/operator-ui",
+    "test": "npm run test --workspace @aegisops/operator-ui"
+  }
+}
