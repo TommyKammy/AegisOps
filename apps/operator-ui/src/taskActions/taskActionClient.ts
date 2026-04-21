@@ -41,6 +41,15 @@ interface CreateReviewedActionRequestPayload {
   action_request_id?: string;
 }
 
+interface RecordActionApprovalDecisionPayload {
+  action_request_id: string;
+  approval_decision_id?: string;
+  approver_identity: string;
+  decided_at: string;
+  decision: string;
+  decision_rationale: string;
+}
+
 interface RecordActionReviewManualFallbackPayload {
   action_request_id: string;
   fallback_at: string;
@@ -65,6 +74,9 @@ interface OperatorTaskActionClient {
     payload: CreateReviewedActionRequestPayload,
   ): Promise<unknown>;
   promoteAlertToCase(payload: PromoteAlertToCasePayload): Promise<unknown>;
+  recordActionApprovalDecision(
+    payload: RecordActionApprovalDecisionPayload,
+  ): Promise<unknown>;
   recordActionReviewEscalationNote(
     payload: RecordActionReviewEscalationNotePayload,
   ): Promise<unknown>;
@@ -164,6 +176,9 @@ export function createOperatorTaskActionClient({
     promoteAlertToCase(payload) {
       return submitJson(fetchFn, "/operator/promote-alert-to-case", payload);
     },
+    recordActionApprovalDecision(payload) {
+      return submitJson(fetchFn, "/operator/record-action-approval-decision", payload);
+    },
     recordActionReviewEscalationNote(payload) {
       return submitJson(fetchFn, "/operator/record-action-review-escalation-note", payload);
     },
@@ -186,6 +201,7 @@ export type {
   CreateReviewedActionRequestPayload,
   OperatorTaskActionClient,
   PromoteAlertToCasePayload,
+  RecordActionApprovalDecisionPayload,
   RecordActionReviewEscalationNotePayload,
   RecordActionReviewManualFallbackPayload,
   RecordCaseLeadPayload,

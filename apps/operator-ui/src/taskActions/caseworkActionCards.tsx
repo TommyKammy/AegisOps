@@ -514,6 +514,123 @@ export function CreateReviewedActionRequestCard({
   );
 }
 
+export function RecordActionApprovalDecisionCard({
+  actionRequestId,
+  actionRequestState,
+  approvalState,
+  approverIdentity,
+  decisionRationale,
+  expiresAt,
+  onSubmitted,
+}: {
+  actionRequestId: string;
+  actionRequestState: string | null;
+  approvalState: string | null;
+  approverIdentity: string;
+  decisionRationale: string | null;
+  expiresAt: string | null;
+  onSubmitted?: () => void;
+}) {
+  const submission = useTaskActionSubmission<{ action_request_id: string }>();
+  const [decidedAt, setDecidedAt] = useState("");
+  const [decision, setDecision] = useState("grant");
+  const [approvalDecisionIdOverride, setApprovalDecisionIdOverride] = useState("");
+  const [nextDecisionRationale, setNextDecisionRationale] = useState(
+    decisionRationale ?? "",
+  );
+
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submission.submit({
+          onSubmitted: () => onSubmitted?.(),
+          refreshTargets: [
+            {
+              id: actionRequestId,
+              label: "Action review detail",
+              resource: "actionReview",
+            },
+          ],
+          run: (client) =>
+            client.recordActionApprovalDecision({
+              action_request_id: actionRequestId,
+              approval_decision_id: normalizeOptionalString(approvalDecisionIdOverride),
+              approver_identity: approverIdentity,
+              decided_at: decidedAt.trim(),
+              decision,
+              decision_rationale: nextDecisionRationale.trim(),
+            }) as Promise<{ action_request_id: string }>,
+        });
+      }}
+    >
+      <TaskActionFormCard
+        actor={[
+          ["Identity", approverIdentity],
+          ["Action", "Approval decision"],
+        ]}
+        binding={[
+          ["Record family", "action_request"],
+          ["Action request id", actionRequestId],
+          ["Lifecycle", actionRequestState ?? "Not available"],
+        ]}
+        provenance={[
+          ["Backend boundary", "reviewed operator approval-decision endpoint"],
+          ["Current approval state", approvalState ?? "Not available"],
+          ["Approval window", expiresAt ?? "Not available"],
+        ]}
+        submission={submission}
+        submitLabel="Record approval decision"
+        subtitle="Record one reviewed approval decision against the authoritative action request. This surface stays decision-oriented and requires an authoritative reread before the lifecycle is treated as durable."
+        title="Record approval decision"
+      >
+        <Stack spacing={2}>
+          <TextField
+            fullWidth
+            label="Decided at"
+            onChange={(event) => {
+              setDecidedAt(event.target.value);
+            }}
+            required
+            value={decidedAt}
+          />
+          <TextField
+            fullWidth
+            label="Decision"
+            onChange={(event) => {
+              setDecision(event.target.value);
+            }}
+            select
+            value={decision}
+          >
+            <MenuItem value="grant">grant</MenuItem>
+            <MenuItem value="reject">reject</MenuItem>
+          </TextField>
+          <TextField
+            fullWidth
+            label="Decision rationale"
+            minRows={3}
+            multiline
+            onChange={(event) => {
+              setNextDecisionRationale(event.target.value);
+            }}
+            required
+            value={nextDecisionRationale}
+          />
+          <TextField
+            fullWidth
+            label="Approval decision id override"
+            onChange={(event) => {
+              setApprovalDecisionIdOverride(event.target.value);
+            }}
+            value={approvalDecisionIdOverride}
+          />
+        </Stack>
+      </TaskActionFormCard>
+    </form>
+  );
+}
+
 export function RecordActionReviewManualFallbackCard({
   actionRequestId,
   caseId,

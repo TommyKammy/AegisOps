@@ -26,7 +26,12 @@ import {
   OperatorTaskActionError,
 } from "./taskActionClient";
 
-type TaskActionResource = "advisoryOutput" | "alerts" | "cases" | "reconciliations";
+type TaskActionResource =
+  | "actionReview"
+  | "advisoryOutput"
+  | "alerts"
+  | "cases"
+  | "reconciliations";
 
 interface TaskActionClientProviderProps {
   children: ReactNode;

@@ -25,6 +25,7 @@ import { useDataProvider } from "react-admin";
 import {
   CreateReviewedActionRequestCard,
   PromoteAlertToCaseCard,
+  RecordActionApprovalDecisionCard,
   RecordActionReviewEscalationNoteCard,
   RecordActionReviewManualFallbackCard,
   RecordCaseLeadCard,
@@ -148,6 +149,36 @@ function statusTone(
   }
 
   return "default";
+}
+
+function canRecordActionApprovalDecision(operatorRoles: readonly string[]) {
+  return operatorRoles.some((role) => role.toLowerCase() === "approver");
+}
+
+function approvalLifecycleExplanation(approvalState: string | null) {
+  switch ((approvalState ?? "").toLowerCase()) {
+    case "approved":
+      return "Approved remains a lifecycle-bearing reviewed decision. Execution may still be pending, blocked, or later found mismatched by reconciliation.";
+    case "rejected":
+      return "Rejected keeps the reviewed request blocked. The operator console must not imply execution authority returned through a local retry or toggle.";
+    case "expired":
+      return "Expired means the reviewed approval window no longer authorizes this request. Operators must reread authoritative state rather than infer continued validity.";
+    case "superseded":
+      return "Superseded means a newer authoritative request or decision replaced this record. This page stays anchored to the selected record without redefining it as current truth.";
+    case "unresolved":
+      return "Unresolved means authoritative completion is still missing or inconclusive. The UI must keep the decision path explicit instead of implying durable success.";
+    case "pending":
+      return "Pending means approval is still waiting on a reviewed decision or prerequisite. Approval remains a decision surface, not a reversible setting.";
+    default:
+      return "Approval lifecycle stays explicit here so operators can distinguish pending, approved, rejected, expired, superseded, and unresolved states without collapsing them into generic status text.";
+  }
+}
+
+function approvalLifecycleSeverity(
+  approvalState: string | null,
+): "error" | "info" | "success" | "warning" {
+  const tone = statusTone(approvalState);
+  return tone === "default" ? "info" : tone;
 }
 
 function useOperatorList(
@@ -998,10 +1029,16 @@ export function CaseDetailPage({
 
 function ActionReviewPageBody({
   actionRequestId,
+  operatorIdentity,
+  operatorRoles,
 }: {
   actionRequestId: string;
+  operatorIdentity: string;
+  operatorRoles: readonly string[];
 }) {
-  const { data, error, loading } = useOperatorRecord("actionReview", actionRequestId);
+  const [reloadToken, setReloadToken] = useState(0);
+  const recordMeta = useMemo(() => ({ reloadToken }), [reloadToken]);
+  const { data, error, loading } = useOperatorRecord("actionReview", actionRequestId, recordMeta);
 
   if (loading) {
     return <LoadingState label="Loading action review detail" />;
@@ -1020,6 +1057,16 @@ function ActionReviewPageBody({
   const timelineEntries = asRecordArray(actionReview?.timeline);
   const selectedActionRequestId = asString(actionReview?.action_request_id) ?? actionRequestId;
   const currentActionRequestId = asString(currentActionReview?.action_request_id);
+  const actionRequestState = asString(actionReview?.action_request_state);
+  const approvalState = asString(actionReview?.approval_state);
+  const decisionRationale = asString(actionReview?.decision_rationale);
+  const approverIdentities = asStringArray(actionReview?.approver_identities);
+  const isCurrentAuthoritativeReview =
+    currentActionRequestId === null || currentActionRequestId === selectedActionRequestId;
+  const canRecordApproval =
+    canRecordActionApprovalDecision(operatorRoles) &&
+    isCurrentAuthoritativeReview &&
+    actionRequestState === "pending_approval";
 
   return (
     <Stack spacing={3}>
@@ -1045,6 +1092,8 @@ function ActionReviewPageBody({
           entries={[
             ["Action request id", selectedActionRequestId],
             ["Current authoritative review", currentActionRequestId],
+            ["Action request lifecycle", actionRequestState],
+            ["Approval decision id", asString(actionReview?.approval_decision_id)],
             ["Requester", asString(actionReview?.requester_identity)],
             ["Recipient", asString(actionReview?.recipient_identity)],
             ["Recommendation id", asString(actionReview?.recommendation_id)],
@@ -1077,6 +1126,43 @@ function ActionReviewPageBody({
             >
               Open alert detail
             </Button>
+          ) : null}
+        </Stack>
+      </SectionCard>
+
+      <SectionCard
+        subtitle="Approval is rendered as authoritative lifecycle state with explicit actor, rationale, and expiry instead of as a generic mutable field."
+        title="Approval lifecycle"
+      >
+        <Stack spacing={2}>
+          <Alert severity={approvalLifecycleSeverity(approvalState)} variant="outlined">
+            {approvalLifecycleExplanation(approvalState)}
+          </Alert>
+          <ValueList
+            entries={[
+              ["Approval lifecycle", approvalState],
+              ["Approver identities", approverIdentities],
+              ["Decision rationale", decisionRationale],
+              ["Approval binding expires at", asString(actionReview?.expires_at)],
+              ["Next expected action", asString(actionReview?.next_expected_action)],
+            ]}
+          />
+          {!canRecordActionApprovalDecision(operatorRoles) ? (
+            <Alert severity="info" variant="outlined">
+              The current reviewed session can inspect this record but cannot submit approval decisions without approver role authority.
+            </Alert>
+          ) : null}
+          {canRecordActionApprovalDecision(operatorRoles) && !isCurrentAuthoritativeReview ? (
+            <Alert severity="warning" variant="outlined">
+              Approval submission stays blocked because this record is no longer the current authoritative review for the selected scope.
+            </Alert>
+          ) : null}
+          {canRecordActionApprovalDecision(operatorRoles) &&
+          isCurrentAuthoritativeReview &&
+          actionRequestState !== "pending_approval" ? (
+            <Alert severity="info" variant="outlined">
+              Approval submission is only available while the authoritative action-request lifecycle is <strong>pending_approval</strong>.
+            </Alert>
           ) : null}
         </Stack>
       </SectionCard>
@@ -1126,11 +1212,31 @@ function ActionReviewPageBody({
           <EmptyState message="No action review timeline entries were returned." />
         )}
       </SectionCard>
+
+      {canRecordApproval ? (
+        <RecordActionApprovalDecisionCard
+          actionRequestId={selectedActionRequestId}
+          actionRequestState={actionRequestState}
+          approvalState={approvalState}
+          approverIdentity={operatorIdentity}
+          decisionRationale={decisionRationale}
+          expiresAt={asString(actionReview?.expires_at)}
+          onSubmitted={() => {
+            setReloadToken((current) => current + 1);
+          }}
+        />
+      ) : null}
     </Stack>
   );
 }
 
-export function ActionReviewPage() {
+export function ActionReviewPage({
+  operatorIdentity,
+  operatorRoles,
+}: {
+  operatorIdentity: string;
+  operatorRoles: readonly string[];
+}) {
   const params = useParams();
   const actionRequestId = asString(params.actionRequestId);
 
@@ -1140,7 +1246,11 @@ export function ActionReviewPage() {
       title="Action Review"
     >
       {actionRequestId ? (
-        <ActionReviewPageBody actionRequestId={actionRequestId} />
+        <ActionReviewPageBody
+          actionRequestId={actionRequestId}
+          operatorIdentity={operatorIdentity}
+          operatorRoles={operatorRoles}
+        />
       ) : (
         <SectionCard
           subtitle="Open action review from a case or alert detail page so the shell stays anchored to one authoritative action-request record."

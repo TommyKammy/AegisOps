@@ -247,7 +247,10 @@ export function OperatorShell({
             <Route
               element={
                 canViewActionReview ? (
-                  <ActionReviewPage />
+                  <ActionReviewPage
+                    operatorIdentity={operatorIdentity}
+                    operatorRoles={operatorRoles}
+                  />
                 ) : (
                   <Navigate replace to="/operator" />
                 )
@@ -257,7 +260,10 @@ export function OperatorShell({
             <Route
               element={
                 canViewActionReview ? (
-                  <ActionReviewPage />
+                  <ActionReviewPage
+                    operatorIdentity={operatorIdentity}
+                    operatorRoles={operatorRoles}
+                  />
                 ) : (
                   <Navigate replace to="/operator" />
                 )
