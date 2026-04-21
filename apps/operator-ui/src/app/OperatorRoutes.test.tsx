@@ -476,6 +476,64 @@ describe("OperatorRoutes", () => {
     });
   });
 
+  it("keeps approval submission blocked when the backend has not confirmed the current authoritative review", async () => {
+    const fetchFn = createAuthorizedFetch({
+      "/inspect-action-review": {
+        action_request_id: "action-request-123",
+        read_only: true,
+        current_action_review: {
+          review_state: "pending",
+        },
+        action_review: {
+          action_request_id: "action-request-123",
+          review_state: "pending",
+          action_request_state: "pending_approval",
+          approval_state: "pending",
+          requester_identity: "analyst@example.com",
+          recipient_identity: "repo-owner@example.com",
+          approver_identities: [],
+          requested_at: "2026-04-22T00:00:00Z",
+          expires_at: "2026-04-23T00:00:00Z",
+          next_expected_action: "await_approver_decision",
+          timeline: [
+            {
+              label: "Requested",
+              state: "completed",
+            },
+            {
+              label: "Approval decision",
+              state: "pending",
+            },
+          ],
+        },
+      },
+    }, {
+      identity: "approver@example.com",
+      provider: "authentik",
+      roles: ["Approver"],
+      subject: "operator-8",
+    });
+    const dependencies = createDefaultDependencies({ fetchFn });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/action-review/action-request-123"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          "Approval submission stays blocked because this record is no longer the current authoritative review for the selected scope.",
+        ),
+      ).toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByRole("heading", { name: "Record approval decision" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders the reviewed queue route from backend-authoritative queue records", async () => {
     const fetchFn = createAuthorizedFetch({
       "/inspect-analyst-queue": {

@@ -1062,11 +1062,12 @@ function ActionReviewPageBody({
   const decisionRationale = asString(actionReview?.decision_rationale);
   const approverIdentities = asStringArray(actionReview?.approver_identities);
   const isCurrentAuthoritativeReview =
-    currentActionRequestId === null || currentActionRequestId === selectedActionRequestId;
+    currentActionRequestId !== null && currentActionRequestId === selectedActionRequestId;
   const canRecordApproval =
     canRecordActionApprovalDecision(operatorRoles) &&
     isCurrentAuthoritativeReview &&
-    actionRequestState === "pending_approval";
+    actionRequestState === "pending_approval" &&
+    approvalState === "pending";
 
   return (
     <Stack spacing={3}>
@@ -1162,6 +1163,14 @@ function ActionReviewPageBody({
           actionRequestState !== "pending_approval" ? (
             <Alert severity="info" variant="outlined">
               Approval submission is only available while the authoritative action-request lifecycle is <strong>pending_approval</strong>.
+            </Alert>
+          ) : null}
+          {canRecordActionApprovalDecision(operatorRoles) &&
+          isCurrentAuthoritativeReview &&
+          actionRequestState === "pending_approval" &&
+          approvalState !== "pending" ? (
+            <Alert severity="info" variant="outlined">
+              Approval submission is only available while the authoritative approval lifecycle is <strong>pending</strong>.
             </Alert>
           ) : null}
         </Stack>
