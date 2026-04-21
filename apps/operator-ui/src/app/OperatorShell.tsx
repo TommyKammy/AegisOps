@@ -206,11 +206,13 @@ function PlaceholderPage({
 export function OperatorShell({
   authProvider,
   dataProvider,
+  operatorIdentity,
   operatorRoles,
   taskActionClient,
 }: {
   authProvider: AuthProvider;
   dataProvider: DataProvider;
+  operatorIdentity: string;
   operatorRoles: string[];
   taskActionClient: OperatorTaskActionClient;
 }) {
@@ -230,8 +232,14 @@ export function OperatorShell({
           <Routes>
             <Route element={<OverviewPage operatorRoles={operatorRoles} />} index />
             <Route element={<QueuePage />} path="queue" />
-            <Route element={<AlertDetailPage />} path="alerts/:alertId" />
-            <Route element={<CaseDetailPage />} path="cases/:caseId" />
+            <Route
+              element={<AlertDetailPage operatorIdentity={operatorIdentity} />}
+              path="alerts/:alertId"
+            />
+            <Route
+              element={<CaseDetailPage operatorIdentity={operatorIdentity} />}
+              path="cases/:caseId"
+            />
             <Route element={<ProvenancePage />} path="provenance/:family/:recordId" />
             <Route element={<ReadinessPage />} path="readiness" />
             <Route element={<ReconciliationPage />} path="reconciliation" />

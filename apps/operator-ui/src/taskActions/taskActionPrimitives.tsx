@@ -51,6 +51,7 @@ interface TaskActionRefreshRecord {
 }
 
 interface TaskActionSubmissionRequest<TAcknowledgement> {
+  onSubmitted?(acknowledgement: TAcknowledgement): void;
   refreshTargets?:
     | TaskActionRefreshTarget[]
     | ((acknowledgement: TAcknowledgement) => TaskActionRefreshTarget[]);
@@ -163,6 +164,7 @@ export function useTaskActionSubmission<TAcknowledgement>(): TaskActionSubmissio
             : (request.refreshTargets ?? []);
 
         if (refreshTargets.length === 0) {
+          request.onSubmitted?.(acknowledgement);
           setState({
             acknowledgement,
             error: null,
@@ -184,6 +186,7 @@ export function useTaskActionSubmission<TAcknowledgement>(): TaskActionSubmissio
             dataProvider,
             refreshTargets,
           );
+          request.onSubmitted?.(acknowledgement);
           setState({
             acknowledgement,
             error: null,
@@ -191,6 +194,7 @@ export function useTaskActionSubmission<TAcknowledgement>(): TaskActionSubmissio
             refreshRecords,
           });
         } catch (error: unknown) {
+          request.onSubmitted?.(acknowledgement);
           setState({
             acknowledgement,
             error:

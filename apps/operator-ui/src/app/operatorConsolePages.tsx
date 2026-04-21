@@ -22,6 +22,12 @@ import {
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Link as ReactRouterLink, useParams } from "react-router-dom";
 import { useDataProvider } from "react-admin";
+import {
+  PromoteAlertToCaseCard,
+  RecordCaseLeadCard,
+  RecordCaseObservationCard,
+  RecordCaseRecommendationCard,
+} from "../taskActions/caseworkActionCards";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -579,8 +585,16 @@ export function QueuePage() {
   );
 }
 
-function AlertDetailPageBody({ alertId }: { alertId: string }) {
-  const { data, error, loading } = useOperatorRecord("alerts", alertId);
+function AlertDetailPageBody({
+  alertId,
+  operatorIdentity,
+}: {
+  alertId: string;
+  operatorIdentity: string;
+}) {
+  const [reloadToken, setReloadToken] = useState(0);
+  const recordMeta = useMemo(() => ({ reloadToken }), [reloadToken]);
+  const { data, error, loading } = useOperatorRecord("alerts", alertId, recordMeta);
 
   if (loading) {
     return <LoadingState label="Loading alert detail" />;
@@ -698,11 +712,25 @@ function AlertDetailPageBody({ alertId }: { alertId: string }) {
         )}
         <SubordinateLinks records={[...evidenceRecords, reconciliationRecord].filter((record): record is UnknownRecord => record !== null)} />
       </SectionCard>
+
+      <PromoteAlertToCaseCard
+        alertId={alertId}
+        key={alertId}
+        currentCaseId={asString(caseRecord?.case_id)}
+        onSubmitted={() => {
+          setReloadToken((current) => current + 1);
+        }}
+        operatorIdentity={operatorIdentity}
+      />
     </Stack>
   );
 }
 
-export function AlertDetailPage() {
+export function AlertDetailPage({
+  operatorIdentity,
+}: {
+  operatorIdentity: string;
+}) {
   const params = useParams();
   const alertId = asString(params.alertId);
 
@@ -712,7 +740,7 @@ export function AlertDetailPage() {
       title="Alert Detail"
     >
       {alertId ? (
-        <AlertDetailPageBody alertId={alertId} />
+        <AlertDetailPageBody alertId={alertId} operatorIdentity={operatorIdentity} />
       ) : (
         <ErrorState error={new Error("Missing alert identifier in the operator route.")} />
       )}
@@ -720,8 +748,16 @@ export function AlertDetailPage() {
   );
 }
 
-function CaseDetailPageBody({ caseId }: { caseId: string }) {
-  const { data, error, loading } = useOperatorRecord("cases", caseId);
+function CaseDetailPageBody({
+  caseId,
+  operatorIdentity,
+}: {
+  caseId: string;
+  operatorIdentity: string;
+}) {
+  const [reloadToken, setReloadToken] = useState(0);
+  const recordMeta = useMemo(() => ({ reloadToken }), [reloadToken]);
+  const { data, error, loading } = useOperatorRecord("cases", caseId, recordMeta);
 
   if (loading) {
     return <LoadingState label="Loading case detail" />;
@@ -762,6 +798,7 @@ function CaseDetailPageBody({ caseId }: { caseId: string }) {
             ["Case id", caseRecord?.case_id ?? data.case_id],
             ["Alert ids", data.linked_alert_ids],
             ["Observation ids", data.linked_observation_ids],
+            ["Lead ids", data.linked_lead_ids],
             ["Recommendation ids", data.linked_recommendation_ids],
           ]}
         />
@@ -836,11 +873,45 @@ function CaseDetailPageBody({ caseId }: { caseId: string }) {
           ]}
         />
       </SectionCard>
+
+      <RecordCaseObservationCard
+        caseId={caseId}
+        key={`observation-${caseId}`}
+        linkedEvidenceIds={asStringArray(data.linked_evidence_ids)}
+        onSubmitted={() => {
+          setReloadToken((current) => current + 1);
+        }}
+        operatorIdentity={operatorIdentity}
+      />
+
+      <RecordCaseLeadCard
+        caseId={caseId}
+        key={`lead-${caseId}`}
+        linkedObservationIds={asStringArray(data.linked_observation_ids)}
+        onSubmitted={() => {
+          setReloadToken((current) => current + 1);
+        }}
+        operatorIdentity={operatorIdentity}
+      />
+
+      <RecordCaseRecommendationCard
+        caseId={caseId}
+        key={`recommendation-${caseId}`}
+        linkedLeadIds={asStringArray(data.linked_lead_ids)}
+        onSubmitted={() => {
+          setReloadToken((current) => current + 1);
+        }}
+        operatorIdentity={operatorIdentity}
+      />
     </Stack>
   );
 }
 
-export function CaseDetailPage() {
+export function CaseDetailPage({
+  operatorIdentity,
+}: {
+  operatorIdentity: string;
+}) {
   const params = useParams();
   const caseId = asString(params.caseId);
 
@@ -850,7 +921,7 @@ export function CaseDetailPage() {
       title="Case Detail"
     >
       {caseId ? (
-        <CaseDetailPageBody caseId={caseId} />
+        <CaseDetailPageBody caseId={caseId} operatorIdentity={operatorIdentity} />
       ) : (
         <ErrorState error={new Error("Missing case identifier in the operator route.")} />
       )}
