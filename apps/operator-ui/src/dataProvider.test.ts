@@ -284,6 +284,47 @@ describe("createOperatorDataProvider", () => {
     );
   });
 
+  it("rejects action-review detail payloads whose selected review is missing or mismatched", async () => {
+    const missingSelectedReviewId = createOperatorDataProvider({
+      fetchFn: vi.fn<typeof fetch>().mockResolvedValue(
+        jsonResponse({
+          action_request_id: "action-request-001",
+          action_review: {
+            review_state: "approved",
+          },
+        }),
+      ),
+    });
+
+    await expect(
+      missingSelectedReviewId.getOne("actionReview", {
+        id: "action-request-001",
+      }),
+    ).rejects.toThrow(
+      "Resource actionReview detail payload is missing action_review.action_request_id.",
+    );
+
+    const mismatchedSelectedReviewId = createOperatorDataProvider({
+      fetchFn: vi.fn<typeof fetch>().mockResolvedValue(
+        jsonResponse({
+          action_request_id: "action-request-001",
+          action_review: {
+            action_request_id: "action-request-999",
+            review_state: "approved",
+          },
+        }),
+      ),
+    });
+
+    await expect(
+      mismatchedSelectedReviewId.getOne("actionReview", {
+        id: "action-request-001",
+      }),
+    ).rejects.toThrow(
+      "Resource actionReview requires action_review.action_request_id to match action-request-001.",
+    );
+  });
+
   it("rejects unsupported standard-resource typos explicitly", async () => {
     const dataProvider = createOperatorDataProvider({
       fetchFn: vi.fn<typeof fetch>(),

@@ -132,6 +132,10 @@ function statusTone(
     return "warning";
   }
   if (
+    normalized.includes("approved") ||
+    normalized.includes("completed") ||
+    normalized.includes("executed") ||
+    normalized.includes("reconciled") ||
     normalized.includes("matched") ||
     normalized.includes("healthy") ||
     normalized.includes("ready") ||

@@ -613,6 +613,11 @@ async function getOneForActionReview(
     "Resource actionReview returned a malformed detail payload.",
   );
   const authoritativeId = asString(payload.action_request_id);
+  const selectedReview = asObject(
+    payload.action_review,
+    "Resource actionReview detail payload is missing action_review.",
+  );
+  const selectedReviewId = asString(selectedReview.action_request_id);
 
   if (authoritativeId === null) {
     throw new OperatorDataProviderContractError(
@@ -623,6 +628,16 @@ async function getOneForActionReview(
   if (authoritativeId !== requestedId) {
     throw new OperatorDataProviderContractError(
       `Resource actionReview requires response action_request_id to match ${requestedId}.`,
+    );
+  }
+  if (selectedReviewId === null) {
+    throw new OperatorDataProviderContractError(
+      "Resource actionReview detail payload is missing action_review.action_request_id.",
+    );
+  }
+  if (selectedReviewId !== requestedId) {
+    throw new OperatorDataProviderContractError(
+      `Resource actionReview requires action_review.action_request_id to match ${requestedId}.`,
     );
   }
 

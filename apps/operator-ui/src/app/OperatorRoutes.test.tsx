@@ -235,6 +235,7 @@ describe("OperatorRoutes", () => {
             action_review: {
               action_request_id: "action-request-123",
               review_state: "approved",
+              approval_state: "approved",
               requester_identity: "analyst@example.com",
               recipient_identity: "repo-owner@example.com",
               next_expected_action: "await_execution_receipt",
@@ -279,6 +280,11 @@ describe("OperatorRoutes", () => {
     expect(screen.getByText("repo-owner@example.com")).toBeInTheDocument();
     expect(screen.getByText("Requested")).toBeInTheDocument();
     expect(screen.getByText("Approved")).toBeInTheDocument();
+    const approvalChip = screen
+      .getAllByText("Approval: approved")
+      .map((element) => element.closest(".MuiChip-root"))
+      .find((element): element is HTMLElement => element !== null);
+    expect(approvalChip).toHaveClass("MuiChip-colorSuccess");
     expect(screen.queryByText(/remains inspection-only until a separately reviewed slice/i)).not.toBeInTheDocument();
   });
 

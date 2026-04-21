@@ -81,6 +81,56 @@ class ActionReviewSurfacePersistenceTests(ServicePersistenceTestBase):
         self.assertEqual(detail["case_record"]["case_id"], promoted_case.case_id)
         self.assertEqual(detail["alert_record"]["alert_id"], promoted_case.alert_id)
 
+    def test_service_inspect_action_review_detail_keeps_case_scope_when_optional_alert_link_is_missing(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Observed repository permission change requires tracked review.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            observation_id=observation.observation_id,
+            triage_owner="analyst-001",
+            triage_rationale="Privilege-impacting change needs durable business-hours follow-up.",
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before any approval-bound response.",
+            lead_id=lead.lead_id,
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-detail-002",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-detail-surface-002",
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                alert_id="missing-alert-record",
+            )
+        )
+
+        detail = service.inspect_action_review_detail(
+            action_request.action_request_id
+        ).to_dict()
+
+        self.assertEqual(detail["action_request_id"], action_request.action_request_id)
+        self.assertEqual(detail["case_record"]["case_id"], promoted_case.case_id)
+        self.assertIsNone(detail["alert_record"])
+
     def test_service_delegates_action_review_chain_snapshot_to_projection_module(
         self,
     ) -> None:

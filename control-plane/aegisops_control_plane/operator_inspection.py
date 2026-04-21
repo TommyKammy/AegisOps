@@ -444,16 +444,19 @@ class OperatorInspectionReadSurface:
 
         case_record = None
         if action_request.case_id is not None:
-            case_record = self._service._require_reviewed_operator_case(action_request.case_id)
+            case = self._service._store.get(CaseRecord, action_request.case_id)
+            if case is not None:
+                case_record = self._service._require_reviewed_operator_case(
+                    action_request.case_id
+                )
 
         alert_record = None
         if action_request.alert_id is not None:
             alert = self._service._store.get(AlertRecord, action_request.alert_id)
-            if alert is None:
-                raise LookupError(
-                    f"Missing alert record {action_request.alert_id!r} for review inspection"
+            if alert is not None:
+                alert_record = self._service._require_reviewed_operator_alert_record(
+                    alert
                 )
-            alert_record = self._service._require_reviewed_operator_alert_record(alert)
 
         if case_record is None and alert_record is None:
             raise LookupError(
