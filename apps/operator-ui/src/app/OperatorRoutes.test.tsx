@@ -164,7 +164,7 @@ describe("OperatorRoutes", () => {
       ).toBeInTheDocument();
     });
 
-    expect(screen.queryByText("Action Review")).not.toBeInTheDocument();
+    expect(screen.queryByText(/action review/i)).not.toBeInTheDocument();
   });
 
   it("shows action-review navigation for reviewed approver sessions", async () => {
@@ -192,7 +192,32 @@ describe("OperatorRoutes", () => {
       ).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Action Review")).toBeInTheDocument();
+    expect(screen.getAllByText(/action review/i).length).toBeGreaterThan(0);
+  });
+
+  it("redirects analyst-only deep links away from the action-review route", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch({}),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/action-review"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Protected operator shell" }),
+      ).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText(/action review/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Queue triage stays inside AegisOps as the authoritative review selection surface.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("renders the reviewed queue route from backend-authoritative queue records", async () => {
@@ -288,19 +313,23 @@ describe("OperatorRoutes", () => {
       ).toBeInTheDocument();
     });
 
-    expect(screen.getByText("alert-789")).toBeInTheDocument();
-    expect(screen.getByText("No case anchor")).toBeInTheDocument();
-    expect(screen.getByText("Review state remains degraded.")).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Non-authoritative coordination reference is missing_anchor.",
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Case lifecycle state is present without an authoritative case identifier.",
-      ),
-    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("alert-789")).toBeInTheDocument();
+      expect(screen.getByText("No case anchor")).toBeInTheDocument();
+      expect(
+        screen.getByText("Review state remains degraded."),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "Non-authoritative coordination reference is missing_anchor.",
+        ),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "Case lifecycle state is present without an authoritative case identifier.",
+        ),
+      ).toBeInTheDocument();
+    });
   });
 
   it("renders alert detail with authoritative and subordinate sections separated", async () => {

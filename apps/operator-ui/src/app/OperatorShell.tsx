@@ -22,7 +22,7 @@ import {
   Menu,
   TitlePortal,
 } from "react-admin";
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { operatorTheme } from "./theme";
 import {
   AlertDetailPage,
@@ -210,6 +210,8 @@ export function OperatorShell({
   dataProvider: DataProvider;
   operatorRoles: string[];
 }) {
+  const canViewActionReview = canInspectActionReview(operatorRoles);
+
   return (
     <AdminContext
       authProvider={authProvider}
@@ -230,10 +232,14 @@ export function OperatorShell({
           <Route element={<ReconciliationPage />} path="reconciliation" />
           <Route
             element={
-              <PlaceholderPage
-                description="Action review remains inspection-only until a separately reviewed slice introduces action workflows."
-                title="Action review"
-              />
+              canViewActionReview ? (
+                <PlaceholderPage
+                  description="Action review remains inspection-only until a separately reviewed slice introduces action workflows."
+                  title="Action review"
+                />
+              ) : (
+                <Navigate replace to="/operator" />
+              )
             }
             path="action-review"
           />
