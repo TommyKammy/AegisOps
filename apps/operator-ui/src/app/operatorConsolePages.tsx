@@ -807,6 +807,7 @@ function CaseDetailPageBody({
         <ValueList
           entries={[
             ["Case id", caseRecord?.case_id ?? data.case_id],
+            ["Current action request", currentActionRequestId],
             ["Alert ids", data.linked_alert_ids],
             ["Observation ids", data.linked_observation_ids],
             ["Lead ids", data.linked_lead_ids],
@@ -814,6 +815,16 @@ function CaseDetailPageBody({
           ]}
         />
         <Stack direction="row" gap={1}>
+          {currentActionRequestId ? (
+            <Button
+              component={ReactRouterLink}
+              endIcon={<LaunchOutlinedIcon />}
+              to={`/operator/action-review/${currentActionRequestId}`}
+              variant="outlined"
+            >
+              Open action review
+            </Button>
+          ) : null}
           <Button
             component={ReactRouterLink}
             endIcon={<LaunchOutlinedIcon />}
@@ -976,6 +987,163 @@ export function CaseDetailPage({
         <CaseDetailPageBody caseId={caseId} operatorIdentity={operatorIdentity} />
       ) : (
         <ErrorState error={new Error("Missing case identifier in the operator route.")} />
+      )}
+    </PageFrame>
+  );
+}
+
+function ActionReviewPageBody({
+  actionRequestId,
+}: {
+  actionRequestId: string;
+}) {
+  const { data, error, loading } = useOperatorRecord("actionReview", actionRequestId);
+
+  if (loading) {
+    return <LoadingState label="Loading action review detail" />;
+  }
+  if (error) {
+    return <ErrorState error={error} />;
+  }
+  if (!data) {
+    return <EmptyState message="Action review detail is unavailable." />;
+  }
+
+  const actionReview = asRecord(data.action_review);
+  const currentActionReview = asRecord(data.current_action_review);
+  const caseRecord = asRecord(data.case_record);
+  const alertRecord = asRecord(data.alert_record);
+  const timelineEntries = asRecordArray(actionReview?.timeline);
+  const selectedActionRequestId = asString(actionReview?.action_request_id) ?? actionRequestId;
+  const currentActionRequestId = asString(currentActionReview?.action_request_id);
+
+  return (
+    <Stack spacing={3}>
+      <SectionCard
+        subtitle="This page stays anchored to one authoritative action-review record. Browser-local routing does not redefine the active review."
+        title="Action request detail"
+      >
+        <StatusStrip
+          values={[
+            ["Review", asString(actionReview?.review_state)],
+            ["Approval", asString(actionReview?.approval_state)],
+            ["Execution", asString(actionReview?.action_execution_state)],
+            ["Reconciliation", asString(actionReview?.reconciliation_state)],
+          ]}
+        />
+        {currentActionRequestId && currentActionRequestId !== selectedActionRequestId ? (
+          <Alert severity="warning" variant="outlined">
+            The requested record is no longer the current authoritative review for this scope.
+            Current review: {currentActionRequestId}.
+          </Alert>
+        ) : null}
+        <ValueList
+          entries={[
+            ["Action request id", selectedActionRequestId],
+            ["Current authoritative review", currentActionRequestId],
+            ["Requester", asString(actionReview?.requester_identity)],
+            ["Recipient", asString(actionReview?.recipient_identity)],
+            ["Recommendation id", asString(actionReview?.recommendation_id)],
+            ["Requested at", asString(actionReview?.requested_at)],
+            ["Expires at", asString(actionReview?.expires_at)],
+            ["Next expected action", asString(actionReview?.next_expected_action)],
+            ["Execution surface", asString(actionReview?.execution_surface_id)],
+            ["Execution surface type", asString(actionReview?.execution_surface_type)],
+            ["Message intent", asString(actionReview?.message_intent)],
+            ["Escalation reason", asString(actionReview?.escalation_reason)],
+          ]}
+        />
+        <Stack direction="row" gap={1}>
+          {caseRecord?.case_id ? (
+            <Button
+              component={ReactRouterLink}
+              endIcon={<LaunchOutlinedIcon />}
+              to={`/operator/cases/${String(caseRecord.case_id)}`}
+              variant="outlined"
+            >
+              Open case detail
+            </Button>
+          ) : null}
+          {alertRecord?.alert_id ? (
+            <Button
+              component={ReactRouterLink}
+              endIcon={<LaunchOutlinedIcon />}
+              to={`/operator/alerts/${String(alertRecord.alert_id)}`}
+              variant="outlined"
+            >
+              Open alert detail
+            </Button>
+          ) : null}
+        </Stack>
+      </SectionCard>
+
+      <SectionCard
+        subtitle="Authoritative linkage stays explicit so later approval, execution, and reconciliation panels can extend this view without inferring broader workflow truth."
+        title="Authoritative linkage"
+      >
+        <ValueList
+          entries={[
+            ["Case id", caseRecord?.case_id],
+            ["Case lifecycle", caseRecord?.lifecycle_state],
+            ["Alert id", alertRecord?.alert_id],
+            ["Alert lifecycle", alertRecord?.lifecycle_state],
+            ["Target scope", actionReview?.target_scope],
+            ["Requested payload", actionReview?.requested_payload],
+          ]}
+        />
+      </SectionCard>
+
+      <SectionCard
+        subtitle="Lifecycle-bearing review history remains visible without collapsing request, approval, execution, and reconciliation into one convenience badge."
+        title="Review timeline"
+      >
+        {timelineEntries.length > 0 ? (
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Stage</TableCell>
+                <TableCell>State</TableCell>
+                <TableCell>At</TableCell>
+                <TableCell>Details</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {timelineEntries.map((entry, index) => (
+                <TableRow key={`${String(entry.label ?? entry.state ?? index)}-${index}`}>
+                  <TableCell>{formatValue(entry.label)}</TableCell>
+                  <TableCell>{formatValue(entry.state)}</TableCell>
+                  <TableCell>{formatValue(entry.at)}</TableCell>
+                  <TableCell>{formatValue(entry.details)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : (
+          <EmptyState message="No action review timeline entries were returned." />
+        )}
+      </SectionCard>
+    </Stack>
+  );
+}
+
+export function ActionReviewPage() {
+  const params = useParams();
+  const actionRequestId = asString(params.actionRequestId);
+
+  return (
+    <PageFrame
+      subtitle="Read-only action-review inspection keeps authoritative request detail, active-review selection, and lifecycle history visible without widening the browser into workflow authority."
+      title="Action Review"
+    >
+      {actionRequestId ? (
+        <ActionReviewPageBody actionRequestId={actionRequestId} />
+      ) : (
+        <SectionCard
+          subtitle="Open action review from a case or alert detail page so the shell stays anchored to one authoritative action-request record."
+          title="Select an action review"
+        >
+          <EmptyState message="No action request is selected yet." />
+        </SectionCard>
       )}
     </PageFrame>
   );

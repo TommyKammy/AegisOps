@@ -405,6 +405,28 @@ class CaseDetailSnapshot:
 
 
 @dataclass(frozen=True)
+class ActionReviewDetailSnapshot:
+    read_only: bool
+    action_request_id: str
+    action_review: dict[str, object]
+    current_action_review: dict[str, object] | None
+    case_record: dict[str, object] | None
+    alert_record: dict[str, object] | None
+
+    def to_dict(self) -> dict[str, object]:
+        return _json_ready(
+            {
+                "read_only": self.read_only,
+                "action_request_id": self.action_request_id,
+                "action_review": self.action_review,
+                "current_action_review": self.current_action_review,
+                "case_record": self.case_record,
+                "alert_record": self.alert_record,
+            }
+        )
+
+
+@dataclass(frozen=True)
 class AnalystAssistantContextSnapshot:
     read_only: bool
     record_family: str
@@ -1364,6 +1386,7 @@ class AegisOpsControlPlaneService:
             analyst_queue_snapshot_factory=AnalystQueueSnapshot,
             alert_detail_snapshot_factory=AlertDetailSnapshot,
             case_detail_snapshot_factory=CaseDetailSnapshot,
+            action_review_detail_snapshot_factory=ActionReviewDetailSnapshot,
             record_to_dict=_record_to_dict,
             redacted_reconciliation_payload=_redacted_reconciliation_payload,
             normalize_admission_provenance=_normalize_admission_provenance,
@@ -4145,6 +4168,14 @@ class AegisOpsControlPlaneService:
 
     def inspect_case_detail(self, case_id: str) -> CaseDetailSnapshot:
         return self._operator_inspection_read_surface.inspect_case_detail(case_id)
+
+    def inspect_action_review_detail(
+        self,
+        action_request_id: str,
+    ) -> ActionReviewDetailSnapshot:
+        return self._operator_inspection_read_surface.inspect_action_review_detail(
+            action_request_id
+        )
 
     def attach_osquery_host_context(
         self,

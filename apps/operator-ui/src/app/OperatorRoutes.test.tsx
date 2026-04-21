@@ -221,6 +221,67 @@ describe("OperatorRoutes", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders the reviewed action-review detail route from backend-authoritative action review data", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch(
+        {
+          "/inspect-action-review": {
+            action_request_id: "action-request-123",
+            read_only: true,
+            current_action_review: {
+              action_request_id: "action-request-123",
+              review_state: "approved",
+            },
+            action_review: {
+              action_request_id: "action-request-123",
+              review_state: "approved",
+              requester_identity: "analyst@example.com",
+              recipient_identity: "repo-owner@example.com",
+              next_expected_action: "await_execution_receipt",
+              timeline: [
+                {
+                  label: "Requested",
+                  state: "completed",
+                },
+                {
+                  label: "Approved",
+                  state: "active",
+                },
+              ],
+            },
+            case_record: {
+              case_id: "case-456",
+              lifecycle_state: "open",
+            },
+          },
+        },
+        {
+          identity: "approver@example.com",
+          provider: "authentik",
+          roles: ["Approver"],
+          subject: "operator-8",
+        },
+      ),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/action-review/action-request-123"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Action Review" })).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText("action-request-123").length).toBeGreaterThan(0);
+    expect(screen.getByText("await_execution_receipt")).toBeInTheDocument();
+    expect(screen.getByText("repo-owner@example.com")).toBeInTheDocument();
+    expect(screen.getByText("Requested")).toBeInTheDocument();
+    expect(screen.getByText("Approved")).toBeInTheDocument();
+    expect(screen.queryByText(/remains inspection-only until a separately reviewed slice/i)).not.toBeInTheDocument();
+  });
+
   it("renders the reviewed queue route from backend-authoritative queue records", async () => {
     const fetchFn = createAuthorizedFetch({
       "/inspect-analyst-queue": {

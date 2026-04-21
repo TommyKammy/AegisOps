@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Callable, Mapping, Protocol, Type, TypeVar
 
 from .models import (
+    ActionRequestRecord,
     AlertRecord,
     AnalyticSignalRecord,
     CaseRecord,
@@ -137,6 +138,7 @@ class OperatorInspectionReadSurface:
         analyst_queue_snapshot_factory: Callable[..., object],
         alert_detail_snapshot_factory: Callable[..., object],
         case_detail_snapshot_factory: Callable[..., object],
+        action_review_detail_snapshot_factory: Callable[..., object],
         record_to_dict: Callable[[object], dict[str, object]],
         redacted_reconciliation_payload: Callable[[ReconciliationRecord], dict[str, object]],
         normalize_admission_provenance: Callable[[object], dict[str, str] | None],
@@ -148,6 +150,7 @@ class OperatorInspectionReadSurface:
         self._analyst_queue_snapshot_factory = analyst_queue_snapshot_factory
         self._alert_detail_snapshot_factory = alert_detail_snapshot_factory
         self._case_detail_snapshot_factory = case_detail_snapshot_factory
+        self._action_review_detail_snapshot_factory = action_review_detail_snapshot_factory
         self._record_to_dict = record_to_dict
         self._redacted_reconciliation_payload = redacted_reconciliation_payload
         self._normalize_admission_provenance = normalize_admission_provenance
@@ -425,6 +428,66 @@ class OperatorInspectionReadSurface:
             external_ticket_reference=self._build_case_external_ticket_reference_surface(
                 case=case,
                 linked_alert_records=context_snapshot.linked_alert_records,
+            ),
+        )
+
+    def inspect_action_review_detail(self, action_request_id: str) -> object:
+        action_request_id = self._service._require_non_empty_string(
+            action_request_id,
+            "action_request_id",
+        )
+        action_request = self._service._store.get(ActionRequestRecord, action_request_id)
+        if action_request is None:
+            raise LookupError(
+                f"Missing action request {action_request_id!r} for review inspection"
+            )
+
+        case_record = None
+        if action_request.case_id is not None:
+            case_record = self._service._require_reviewed_operator_case(action_request.case_id)
+
+        alert_record = None
+        if action_request.alert_id is not None:
+            alert = self._service._store.get(AlertRecord, action_request.alert_id)
+            if alert is None:
+                raise LookupError(
+                    f"Missing alert record {action_request.alert_id!r} for review inspection"
+                )
+            alert_record = self._service._require_reviewed_operator_alert_record(alert)
+
+        if case_record is None and alert_record is None:
+            raise LookupError(
+                "Action review inspection requires an authoritative reviewed case or alert scope"
+            )
+
+        action_reviews = self._service._action_review_chains_for_scope(
+            case_id=action_request.case_id,
+            alert_id=action_request.alert_id,
+            record_index=self._service._build_action_review_record_index(),
+        )
+        selected_review = next(
+            (
+                review
+                for review in action_reviews
+                if review.get("action_request_id") == action_request_id
+            ),
+            None,
+        )
+        if selected_review is None:
+            raise LookupError(
+                f"Missing authoritative action review projection for {action_request_id!r}"
+            )
+
+        return self._action_review_detail_snapshot_factory(
+            read_only=True,
+            action_request_id=action_request_id,
+            action_review=dict(selected_review),
+            current_action_review=dict(action_reviews[0]) if action_reviews else None,
+            case_record=(
+                self._record_to_dict(case_record) if case_record is not None else None
+            ),
+            alert_record=(
+                self._record_to_dict(alert_record) if alert_record is not None else None
             ),
         )
 

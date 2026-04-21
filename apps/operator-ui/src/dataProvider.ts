@@ -590,6 +590,50 @@ async function getOneForAdvisoryOutput(
   };
 }
 
+async function getOneForActionReview(
+  fetchFn: typeof fetch,
+  params: GetOneParams,
+): Promise<GetOneResult> {
+  const requestedId =
+    typeof params.id === "string" || typeof params.id === "number"
+      ? String(params.id).trim()
+      : "";
+
+  if (!requestedId) {
+    throw new OperatorDataProviderContractError(
+      "Resource actionReview getOne requires a non-empty identifier.",
+    );
+  }
+
+  const url = new URL("/inspect-action-review", "http://operator-ui.local");
+  url.searchParams.set("action_request_id", requestedId);
+
+  const payload = asObject(
+    await fetchJson(fetchFn, `${url.pathname}${url.search}`),
+    "Resource actionReview returned a malformed detail payload.",
+  );
+  const authoritativeId = asString(payload.action_request_id);
+
+  if (authoritativeId === null) {
+    throw new OperatorDataProviderContractError(
+      "Resource actionReview detail payload is missing action_request_id.",
+    );
+  }
+
+  if (authoritativeId !== requestedId) {
+    throw new OperatorDataProviderContractError(
+      `Resource actionReview requires response action_request_id to match ${requestedId}.`,
+    );
+  }
+
+  return {
+    data: {
+      ...payload,
+      id: authoritativeId,
+    },
+  };
+}
+
 export function createOperatorDataProvider({
   fetchFn = fetch,
 }: OperatorDataProviderConfig = {}): DataProvider {
@@ -617,7 +661,7 @@ export function createOperatorDataProvider({
       }
 
       if (resource === "actionReview") {
-        return rejectUnsupported("getOne", resource);
+        return getOneForActionReview(fetchFn, params);
       }
 
       if (!isStandardResource(resource)) {

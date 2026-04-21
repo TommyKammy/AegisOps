@@ -163,6 +163,7 @@ def build_handler_class(
                 "/inspect-analyst-queue",
                 "/inspect-alert-detail",
                 "/inspect-case-detail",
+                "/inspect-action-review",
                 "/inspect-assistant-context",
                 "/inspect-advisory-output",
                 "/render-recommendation-draft",
@@ -262,6 +263,42 @@ def build_handler_class(
                     return
                 try:
                     payload = service.inspect_case_detail(case_id).to_dict()
+                except ValueError as exc:
+                    self._write_json(
+                        HTTPStatus.BAD_REQUEST,
+                        {
+                            "error": "invalid_request",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                except LookupError as exc:
+                    self._write_json(
+                        HTTPStatus.NOT_FOUND,
+                        {
+                            "error": "not_found",
+                            "message": str(exc),
+                        },
+                    )
+                    return
+                self._write_json(HTTPStatus.OK, payload)
+                return
+
+            if request_path == "/inspect-action-review":
+                action_request_id = normalize_record_id(
+                    parse_qs(request_target.query).get("action_request_id", [""])[0]
+                )
+                if not action_request_id:
+                    self._write_json(
+                        HTTPStatus.BAD_REQUEST,
+                        {
+                            "error": "invalid_request",
+                            "message": "action_request_id query parameter is required",
+                        },
+                    )
+                    return
+                try:
+                    payload = service.inspect_action_review_detail(action_request_id).to_dict()
                 except ValueError as exc:
                     self._write_json(
                         HTTPStatus.BAD_REQUEST,

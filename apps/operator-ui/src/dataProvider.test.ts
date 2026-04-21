@@ -228,6 +228,62 @@ describe("createOperatorDataProvider", () => {
     });
   });
 
+  it("reads one action review by authoritative action_request_id without enabling list semantics", async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
+        action_request_id: "action-request-001",
+        review_state: "approved",
+        current_action_review: {
+          action_request_id: "action-request-001",
+          review_state: "approved",
+        },
+        action_review: {
+          action_request_id: "action-request-001",
+          review_state: "approved",
+          requester_identity: "analyst-001",
+        },
+        case_record: {
+          case_id: "case-001",
+          lifecycle_state: "open",
+        },
+        read_only: true,
+      }),
+    );
+    const dataProvider = createOperatorDataProvider({ fetchFn });
+
+    await expect(
+      dataProvider.getOne("actionReview", {
+        id: "action-request-001",
+      }),
+    ).resolves.toEqual({
+      data: expect.objectContaining({
+        id: "action-request-001",
+        action_request_id: "action-request-001",
+        read_only: true,
+      }),
+    });
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      "/inspect-action-review?action_request_id=action-request-001",
+      {
+        credentials: "include",
+        headers: {
+          Accept: "application/json",
+        },
+      },
+    );
+
+    await expect(
+      dataProvider.getList("actionReview", {
+        filter: {},
+        pagination: { page: 1, perPage: 25 },
+        sort: { field: "id", order: "ASC" },
+      }),
+    ).rejects.toThrow(
+      UnsupportedOperatorDataProviderOperationError,
+    );
+  });
+
   it("rejects unsupported standard-resource typos explicitly", async () => {
     const dataProvider = createOperatorDataProvider({
       fetchFn: vi.fn<typeof fetch>(),
