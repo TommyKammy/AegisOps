@@ -1,0 +1,183 @@
+import { describe, expect, it, vi } from "vitest";
+import {
+  createOperatorDataProvider,
+  UnsupportedOperatorDataProviderOperationError,
+} from "./dataProvider";
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    headers: {
+      "Content-Type": "application/json",
+    },
+    status,
+  });
+}
+
+describe("createOperatorDataProvider", () => {
+  it("maps reviewed queue reads into react-admin list semantics", async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
+        queue_name: "analyst_review",
+        read_only: true,
+        records: [
+          {
+            alert_id: "alert-002",
+            review_state: "investigating",
+          },
+          {
+            alert_id: "alert-001",
+            review_state: "new",
+          },
+        ],
+        total_records: 2,
+      }),
+    );
+    const dataProvider = createOperatorDataProvider({ fetchFn });
+
+    await expect(
+      dataProvider.getList("queue", {
+        filter: {},
+        pagination: { page: 1, perPage: 25 },
+        sort: { field: "alert_id", order: "ASC" },
+      }),
+    ).resolves.toEqual({
+      data: [
+        {
+          alert_id: "alert-002",
+          id: "alert-002",
+          review_state: "investigating",
+        },
+        {
+          alert_id: "alert-001",
+          id: "alert-001",
+          review_state: "new",
+        },
+      ],
+      total: 2,
+    });
+
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(fetchFn.mock.calls[0]?.[0]).toBe(
+      "/inspect-analyst-queue?order=ASC&page=1&per_page=25&sort=alert_id",
+    );
+    expect(fetchFn.mock.calls[0]?.[1]).toEqual({
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+  });
+
+  it("maps reviewed alert detail reads into react-admin record semantics", async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
+        alert: {
+          alert_id: "alert-007",
+          lifecycle_state: "triaged",
+        },
+        alert_id: "alert-007",
+        current_action_review: null,
+        latest_reconciliation: {
+          reconciliation_id: "recon-007",
+        },
+        read_only: true,
+        review_state: "triaged",
+      }),
+    );
+    const dataProvider = createOperatorDataProvider({ fetchFn });
+
+    await expect(
+      dataProvider.getOne("alerts", {
+        id: "alert-007",
+      }),
+    ).resolves.toEqual({
+      data: {
+        alert: {
+          alert_id: "alert-007",
+          lifecycle_state: "triaged",
+        },
+        alert_id: "alert-007",
+        current_action_review: null,
+        id: "alert-007",
+        latest_reconciliation: {
+          reconciliation_id: "recon-007",
+        },
+        read_only: true,
+        review_state: "triaged",
+      },
+    });
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      "/inspect-alert-detail?alert_id=alert-007",
+      {
+        credentials: "include",
+        headers: {
+          Accept: "application/json",
+        },
+      },
+    );
+  });
+
+  it("fails closed when a reviewed queue record is missing its authoritative anchor", async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
+        queue_name: "analyst_review",
+        read_only: true,
+        records: [
+          {
+            review_state: "new",
+          },
+        ],
+        total_records: 1,
+      }),
+    );
+    const dataProvider = createOperatorDataProvider({ fetchFn });
+
+    await expect(
+      dataProvider.getList("queue", {
+        filter: {},
+        pagination: { page: 1, perPage: 25 },
+        sort: { field: "alert_id", order: "ASC" },
+      }),
+    ).rejects.toThrow(
+      "Resource queue record is missing authoritative identifier field alert_id.",
+    );
+  });
+
+  it("requires authoritative scope metadata before advisory output reads", async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
+        advisory_output: {
+          output_kind: "recommendation",
+          status: "ready",
+        },
+        read_only: true,
+      }),
+    );
+    const dataProvider = createOperatorDataProvider({ fetchFn });
+
+    await expect(
+      dataProvider.getOne("advisoryOutput", {
+        id: "advisory-001",
+      }),
+    ).rejects.toThrow(
+      UnsupportedOperatorDataProviderOperationError,
+    );
+
+    await expect(
+      dataProvider.getOne("advisoryOutput", {
+        id: "advisory-001",
+        meta: {
+          recordFamily: "case",
+          recordId: "case-001",
+        },
+      }),
+    ).resolves.toEqual({
+      data: expect.objectContaining({
+        id: "case:case-001",
+        record_family: "case",
+        record_id: "case-001",
+      }),
+    });
+  });
+});
