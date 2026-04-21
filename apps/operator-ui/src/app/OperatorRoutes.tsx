@@ -22,12 +22,17 @@ import {
   createSessionStore,
 } from "../auth/session";
 import type { DataProvider } from "react-admin";
+import {
+  createOperatorTaskActionClient,
+  type OperatorTaskActionClient,
+} from "../taskActions/taskActionClient";
 
 export interface OperatorAppDependencies {
   authProvider: AuthProvider;
   config: OperatorUiConfig;
   dataProvider: DataProvider;
   sessionStore: SessionStore;
+  taskActionClient: OperatorTaskActionClient;
 }
 
 interface OperatorDependencyOverrides {
@@ -47,6 +52,9 @@ export function createDefaultDependencies(
   const dataProvider = createOperatorDataProvider({
     fetchFn: overrides.fetchFn,
   });
+  const taskActionClient = createOperatorTaskActionClient({
+    fetchFn: overrides.fetchFn,
+  });
 
   const authProvider = createOperatorAuthProvider({
     config,
@@ -60,6 +68,7 @@ export function createDefaultDependencies(
     config,
     dataProvider,
     sessionStore,
+    taskActionClient,
   };
 }
 
@@ -182,6 +191,7 @@ function ProtectedOperatorRoute({
   config,
   dataProvider,
   sessionStore,
+  taskActionClient,
 }: OperatorAppDependencies) {
   const location = useLocation();
   const [session, setSession] = useState<OperatorSession | null>(null);
@@ -267,6 +277,7 @@ function ProtectedOperatorRoute({
       authProvider={authProvider}
       dataProvider={dataProvider}
       operatorRoles={session?.roles ?? []}
+      taskActionClient={taskActionClient}
     />
   );
 }
@@ -276,7 +287,7 @@ export function OperatorRoutes({
 }: {
   dependencies: OperatorAppDependencies;
 }) {
-  const { authProvider, config, dataProvider, sessionStore } = dependencies;
+  const { authProvider, config, dataProvider, sessionStore, taskActionClient } = dependencies;
 
   return (
     <Routes>
@@ -299,6 +310,7 @@ export function OperatorRoutes({
             config={config}
             dataProvider={dataProvider}
             sessionStore={sessionStore}
+            taskActionClient={taskActionClient}
           />
         }
         path={`${config.basePath}/*`}

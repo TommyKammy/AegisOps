@@ -32,6 +32,8 @@ import {
   ReadinessPage,
   ReconciliationPage,
 } from "./operatorConsolePages";
+import { TaskActionClientProvider } from "../taskActions/taskActionPrimitives";
+import type { OperatorTaskActionClient } from "../taskActions/taskActionClient";
 
 function canInspectActionReview(operatorRoles: readonly string[]) {
   return operatorRoles.some((role) =>
@@ -205,10 +207,12 @@ export function OperatorShell({
   authProvider,
   dataProvider,
   operatorRoles,
+  taskActionClient,
 }: {
   authProvider: AuthProvider;
   dataProvider: DataProvider;
   operatorRoles: string[];
+  taskActionClient: OperatorTaskActionClient;
 }) {
   const canViewActionReview = canInspectActionReview(operatorRoles);
 
@@ -218,60 +222,62 @@ export function OperatorShell({
       dataProvider={dataProvider}
       theme={operatorTheme}
     >
-      <Layout
-        appBar={OperatorAppBar}
-        menu={() => <OperatorMenu operatorRoles={operatorRoles} />}
-      >
-        <Routes>
-          <Route element={<OverviewPage operatorRoles={operatorRoles} />} index />
-          <Route element={<QueuePage />} path="queue" />
-          <Route element={<AlertDetailPage />} path="alerts/:alertId" />
-          <Route element={<CaseDetailPage />} path="cases/:caseId" />
-          <Route element={<ProvenancePage />} path="provenance/:family/:recordId" />
-          <Route element={<ReadinessPage />} path="readiness" />
-          <Route element={<ReconciliationPage />} path="reconciliation" />
-          <Route
-            element={
-              canViewActionReview ? (
+      <TaskActionClientProvider client={taskActionClient}>
+        <Layout
+          appBar={OperatorAppBar}
+          menu={() => <OperatorMenu operatorRoles={operatorRoles} />}
+        >
+          <Routes>
+            <Route element={<OverviewPage operatorRoles={operatorRoles} />} index />
+            <Route element={<QueuePage />} path="queue" />
+            <Route element={<AlertDetailPage />} path="alerts/:alertId" />
+            <Route element={<CaseDetailPage />} path="cases/:caseId" />
+            <Route element={<ProvenancePage />} path="provenance/:family/:recordId" />
+            <Route element={<ReadinessPage />} path="readiness" />
+            <Route element={<ReconciliationPage />} path="reconciliation" />
+            <Route
+              element={
+                canViewActionReview ? (
+                  <PlaceholderPage
+                    description="Action review remains inspection-only until a separately reviewed slice introduces action workflows."
+                    title="Action review"
+                  />
+                ) : (
+                  <Navigate replace to="/operator" />
+                )
+              }
+              path="action-review"
+            />
+            <Route
+              element={
                 <PlaceholderPage
-                  description="Action review remains inspection-only until a separately reviewed slice introduces action workflows."
-                  title="Action review"
+                  description="Use the queue as the primary route into alert detail."
+                  title="Alerts"
                 />
-              ) : (
-                <Navigate replace to="/operator" />
-              )
-            }
-            path="action-review"
-          />
-          <Route
-            element={
-              <PlaceholderPage
-                description="Use the queue as the primary route into alert detail."
-                title="Alerts"
-              />
-            }
-            path="alerts"
-          />
-          <Route
-            element={
-              <PlaceholderPage
-                description="Use the queue or linked alert detail to open a specific case."
-                title="Cases"
-              />
-            }
-            path="cases"
-          />
-          <Route
-            element={
-              <PlaceholderPage
-                description="Open provenance from alert or case detail so the page stays anchored to an authoritative record."
-                title="Provenance"
-              />
-            }
-            path="provenance/*"
-          />
-        </Routes>
-      </Layout>
+              }
+              path="alerts"
+            />
+            <Route
+              element={
+                <PlaceholderPage
+                  description="Use the queue or linked alert detail to open a specific case."
+                  title="Cases"
+                />
+              }
+              path="cases"
+            />
+            <Route
+              element={
+                <PlaceholderPage
+                  description="Open provenance from alert or case detail so the page stays anchored to an authoritative record."
+                  title="Provenance"
+                />
+              }
+              path="provenance/*"
+            />
+          </Routes>
+        </Layout>
+      </TaskActionClientProvider>
     </AdminContext>
   );
 }
