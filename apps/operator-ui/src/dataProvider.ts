@@ -30,6 +30,7 @@ interface OperatorResourceBinding {
   detailQueryKey?: string;
   idField: string;
   listPath?: string;
+  listSemantics?: "client";
   recordFamily?: string;
 }
 
@@ -42,12 +43,14 @@ const RESOURCE_BINDINGS: Record<Exclude<OperatorResourceName, "advisoryOutput" |
     queue: {
       idField: "alert_id",
       listPath: "/inspect-analyst-queue",
+      listSemantics: "client",
     },
     alerts: {
       detailPath: "/inspect-alert-detail",
       detailQueryKey: "alert_id",
       idField: "alert_id",
       listPath: "/inspect-records",
+      listSemantics: "client",
       recordFamily: "alert",
     },
     cases: {
@@ -55,17 +58,20 @@ const RESOURCE_BINDINGS: Record<Exclude<OperatorResourceName, "advisoryOutput" |
       detailQueryKey: "case_id",
       idField: "case_id",
       listPath: "/inspect-records",
+      listSemantics: "client",
       recordFamily: "case",
     },
     runtimeReadiness: {
       detailPath: "/inspect-readiness-diagnostics",
       idField: "status",
       listPath: "/inspect-readiness-diagnostics",
+      listSemantics: "client",
     },
     reconciliations: {
       detailPath: "/inspect-reconciliation-status",
       idField: "reconciliation_id",
       listPath: "/inspect-reconciliation-status",
+      listSemantics: "client",
     },
   };
 
@@ -99,6 +105,231 @@ function appendQuery(url: URL, params: Record<string, string | null | undefined>
       url.searchParams.set(key, value);
     }
   }
+}
+
+function isStandardResource(
+  resource: string,
+): resource is Exclude<OperatorResourceName, "advisoryOutput" | "actionReview"> {
+  return Object.prototype.hasOwnProperty.call(RESOURCE_BINDINGS, resource);
+}
+
+function getRecordField(record: Record<string, unknown>, fieldPath: string): unknown {
+  return fieldPath.split(".").reduce<unknown>((value, segment) => {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      return undefined;
+    }
+
+    return (value as Record<string, unknown>)[segment];
+  }, record);
+}
+
+function comparePrimitiveValues(left: unknown, right: unknown): number {
+  if (left === right) {
+    return 0;
+  }
+
+  if (left === null || left === undefined) {
+    return 1;
+  }
+
+  if (right === null || right === undefined) {
+    return -1;
+  }
+
+  if (typeof left === "number" && typeof right === "number") {
+    return left - right;
+  }
+
+  if (typeof left === "boolean" && typeof right === "boolean") {
+    return Number(left) - Number(right);
+  }
+
+  return String(left).localeCompare(String(right), undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
+function matchesPrimitiveFilter(candidate: unknown, filterValue: unknown): boolean {
+  if (Array.isArray(candidate)) {
+    return candidate.some((item) => matchesPrimitiveFilter(item, filterValue));
+  }
+
+  if (typeof filterValue === "string") {
+    const operand = filterValue.trim().toLowerCase();
+    if (!operand) {
+      return true;
+    }
+
+    if (candidate === null || candidate === undefined) {
+      return false;
+    }
+
+    return String(candidate).toLowerCase().includes(operand);
+  }
+
+  if (
+    typeof filterValue === "number" ||
+    typeof filterValue === "boolean" ||
+    typeof filterValue === "bigint"
+  ) {
+    return (
+      candidate === filterValue ||
+      (candidate !== null &&
+        candidate !== undefined &&
+        String(candidate).trim() === String(filterValue))
+    );
+  }
+
+  return candidate === filterValue;
+}
+
+function matchesFilterValue(candidate: unknown, filterValue: unknown): boolean {
+  if (filterValue === null || filterValue === undefined) {
+    return true;
+  }
+
+  if (Array.isArray(filterValue)) {
+    if (filterValue.length === 0) {
+      return true;
+    }
+
+    return filterValue.some((item) => matchesPrimitiveFilter(candidate, item));
+  }
+
+  if (typeof filterValue === "object") {
+    const filterObject = filterValue as Record<string, unknown>;
+    const filterEntries = Object.entries(filterObject).filter(([, value]) => {
+      if (value === null || value === undefined) {
+        return false;
+      }
+
+      if (typeof value === "string") {
+        return value.trim().length > 0;
+      }
+
+      if (Array.isArray(value)) {
+        return value.length > 0;
+      }
+
+      return true;
+    });
+
+    if (filterEntries.length === 0) {
+      return true;
+    }
+
+    const knownOperatorKeys = new Set([
+      "contains",
+      "endsWith",
+      "eq",
+      "equals",
+      "in",
+      "is",
+      "ne",
+      "neq",
+      "not",
+      "startsWith",
+    ]);
+    const usesKnownOperators = filterEntries.some(([key]) =>
+      knownOperatorKeys.has(key),
+    );
+
+    if (usesKnownOperators) {
+      return filterEntries.every(([key, value]) => {
+        switch (key) {
+          case "contains":
+            return matchesPrimitiveFilter(candidate, value);
+          case "endsWith": {
+            const operand = asString(value);
+            return operand !== null && candidate !== null && candidate !== undefined
+              ? String(candidate).toLowerCase().endsWith(operand.toLowerCase())
+              : false;
+          }
+          case "eq":
+          case "equals":
+          case "is":
+            return matchesPrimitiveFilter(candidate, value);
+          case "in":
+            return Array.isArray(value)
+              ? value.some((entry) => matchesPrimitiveFilter(candidate, entry))
+              : matchesPrimitiveFilter(candidate, value);
+          case "ne":
+          case "neq":
+          case "not":
+            return !matchesPrimitiveFilter(candidate, value);
+          case "startsWith": {
+            const operand = asString(value);
+            return operand !== null && candidate !== null && candidate !== undefined
+              ? String(candidate).toLowerCase().startsWith(operand.toLowerCase())
+              : false;
+          }
+          default:
+            return true;
+        }
+      });
+    }
+
+    if (typeof candidate !== "object" || candidate === null || Array.isArray(candidate)) {
+      return false;
+    }
+
+    return filterEntries.every(([key, value]) =>
+      matchesFilterValue(
+        (candidate as Record<string, unknown>)[key],
+        value,
+      ),
+    );
+  }
+
+  return matchesPrimitiveFilter(candidate, filterValue);
+}
+
+function matchesListFilters(record: RaRecord, filter: Record<string, unknown>): boolean {
+  return Object.entries(filter).every(([field, value]) => {
+    if (value === null || value === undefined) {
+      return true;
+    }
+
+    if (typeof value === "string" && value.trim().length === 0) {
+      return true;
+    }
+
+    if (Array.isArray(value) && value.length === 0) {
+      return true;
+    }
+
+    return matchesFilterValue(getRecordField(record, field), value);
+  });
+}
+
+function applyClientSideListSemantics(
+  records: RaRecord[],
+  params: GetListParams,
+): GetListResult {
+  const filteredRecords = records.filter((record) =>
+    matchesListFilters(record, params.filter ?? {}),
+  );
+  const sortField = params.sort?.field;
+  const sortOrder = params.sort?.order ?? "ASC";
+  const sortedRecords = sortField
+    ? [...filteredRecords].sort((left, right) => {
+        const comparison = comparePrimitiveValues(
+          getRecordField(left, sortField),
+          getRecordField(right, sortField),
+        );
+        return sortOrder === "DESC" ? comparison * -1 : comparison;
+      })
+    : filteredRecords;
+  const total = sortedRecords.length;
+  const page = Math.max(1, params.pagination?.page ?? 1);
+  const perPage = Math.max(1, params.pagination?.perPage ?? 25);
+  const start = (page - 1) * perPage;
+
+  return {
+    data: sortedRecords.slice(start, start + perPage),
+    total,
+  };
 }
 
 function normalizeRecord(
@@ -192,38 +423,40 @@ async function getListForStandardResource(
 ): Promise<GetListResult> {
   const binding = RESOURCE_BINDINGS[resource];
   const payload = await fetchJson(fetchFn, buildListUrl(resource, params));
+  let records: RaRecord[];
+  let totalRecords: number | null = null;
 
   if (resource === "runtimeReadiness") {
-    const record = normalizeRecord(resource, payload, binding.idField);
-    return {
-      data: [record],
-      total: 1,
-    };
-  }
+    records = [normalizeRecord(resource, payload, binding.idField)];
+  } else {
+    const response = asObject(
+      payload,
+      `Resource ${resource} returned a malformed list payload.`,
+    ) as unknown as OperatorRecordFamilyListResponse;
+    const rawRecords = Array.isArray(response.records) ? response.records : null;
 
-  const response = asObject(
-    payload,
-    `Resource ${resource} returned a malformed list payload.`,
-  ) as unknown as OperatorRecordFamilyListResponse;
-  const rawRecords = Array.isArray(response.records) ? response.records : null;
+    if (rawRecords === null) {
+      throw new OperatorDataProviderContractError(
+        `Resource ${resource} list payload is missing records.`,
+      );
+    }
 
-  if (rawRecords === null) {
-    throw new OperatorDataProviderContractError(
-      `Resource ${resource} list payload is missing records.`,
+    records = rawRecords.map((record) =>
+      normalizeRecord(resource, record, binding.idField),
     );
+    totalRecords =
+      typeof response.total_records === "number"
+        ? response.total_records
+        : records.length;
   }
 
-  const data = rawRecords.map((record) =>
-    normalizeRecord(resource, record, binding.idField),
-  );
-  const total =
-    typeof response.total_records === "number"
-      ? response.total_records
-      : data.length;
+  if (binding.listSemantics === "client") {
+    return applyClientSideListSemantics(records, params);
+  }
 
   return {
-    data,
-    total,
+    data: records,
+    total: totalRecords ?? records.length,
   };
 }
 
@@ -320,6 +553,24 @@ async function getOneForAdvisoryOutput(
     );
   }
 
+  const requestedId =
+    typeof params.id === "string" || typeof params.id === "number"
+      ? String(params.id).trim()
+      : "";
+  const authoritativeId = `${recordFamily}:${recordId}`;
+
+  if (!requestedId) {
+    throw new OperatorDataProviderContractError(
+      "Resource advisoryOutput getOne requires a non-empty identifier.",
+    );
+  }
+
+  if (requestedId !== authoritativeId) {
+    throw new OperatorDataProviderContractError(
+      `Resource advisoryOutput requires params.id to match ${authoritativeId}.`,
+    );
+  }
+
   const url = new URL("/inspect-advisory-output", "http://operator-ui.local");
   url.searchParams.set("family", recordFamily);
   url.searchParams.set("record_id", recordId);
@@ -332,7 +583,7 @@ async function getOneForAdvisoryOutput(
   return {
     data: {
       ...payload,
-      id: `${recordFamily}:${recordId}`,
+      id: requestedId,
       record_family: recordFamily,
       record_id: recordId,
     },
@@ -351,11 +602,11 @@ export function createOperatorDataProvider({
         return rejectUnsupported("getList", resource);
       }
 
-      return getListForStandardResource(
-        fetchFn,
-        resource as Exclude<OperatorResourceName, "advisoryOutput" | "actionReview">,
-        params,
-      );
+      if (!isStandardResource(resource)) {
+        return rejectUnsupported("getList", resource);
+      }
+
+      return getListForStandardResource(fetchFn, resource, params);
     },
     getMany: (_resource) => rejectUnsupported("getMany", _resource),
     getManyReference: (_resource) =>
@@ -369,11 +620,11 @@ export function createOperatorDataProvider({
         return rejectUnsupported("getOne", resource);
       }
 
-      return getOneForStandardResource(
-        fetchFn,
-        resource as Exclude<OperatorResourceName, "advisoryOutput" | "actionReview">,
-        params,
-      );
+      if (!isStandardResource(resource)) {
+        return rejectUnsupported("getOne", resource);
+      }
+
+      return getOneForStandardResource(fetchFn, resource, params);
     },
     update: (_resource) => rejectUnsupported("update", _resource),
     updateMany: (_resource) => rejectUnsupported("updateMany", _resource),

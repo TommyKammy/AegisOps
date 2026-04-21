@@ -14,39 +14,40 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 describe("createOperatorDataProvider", () => {
-  it("maps reviewed queue reads into react-admin list semantics", async () => {
+  it("applies reviewed queue list filters, sorting, and pagination client-side", async () => {
     const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
       jsonResponse({
         queue_name: "analyst_review",
         read_only: true,
         records: [
           {
-            alert_id: "alert-002",
+            alert_id: "alert-003",
             review_state: "investigating",
           },
           {
             alert_id: "alert-001",
             review_state: "new",
           },
+          {
+            alert_id: "alert-002",
+            review_state: "new",
+          },
         ],
-        total_records: 2,
+        total_records: 3,
       }),
     );
     const dataProvider = createOperatorDataProvider({ fetchFn });
 
     await expect(
       dataProvider.getList("queue", {
-        filter: {},
-        pagination: { page: 1, perPage: 25 },
-        sort: { field: "alert_id", order: "ASC" },
+        filter: {
+          review_state: " new ",
+        },
+        pagination: { page: 2, perPage: 1 },
+        sort: { field: "alert_id", order: "DESC" },
       }),
     ).resolves.toEqual({
       data: [
-        {
-          alert_id: "alert-002",
-          id: "alert-002",
-          review_state: "investigating",
-        },
         {
           alert_id: "alert-001",
           id: "alert-001",
@@ -58,7 +59,7 @@ describe("createOperatorDataProvider", () => {
 
     expect(fetchFn).toHaveBeenCalledTimes(1);
     expect(fetchFn.mock.calls[0]?.[0]).toBe(
-      "/inspect-analyst-queue?order=ASC&page=1&per_page=25&sort=alert_id",
+      "/inspect-analyst-queue?order=DESC&page=2&per_page=1&sort=alert_id&review_state=new",
     );
     expect(fetchFn.mock.calls[0]?.[1]).toEqual({
       credentials: "include",
@@ -172,6 +173,18 @@ describe("createOperatorDataProvider", () => {
           recordId: "case-001",
         },
       }),
+    ).rejects.toThrow(
+      "Resource advisoryOutput requires params.id to match case:case-001.",
+    );
+
+    await expect(
+      dataProvider.getOne("advisoryOutput", {
+        id: "case:case-001",
+        meta: {
+          recordFamily: "case",
+          recordId: "case-001",
+        },
+      }),
     ).resolves.toEqual({
       data: expect.objectContaining({
         id: "case:case-001",
@@ -179,5 +192,29 @@ describe("createOperatorDataProvider", () => {
         record_id: "case-001",
       }),
     });
+  });
+
+  it("rejects unsupported standard-resource typos explicitly", async () => {
+    const dataProvider = createOperatorDataProvider({
+      fetchFn: vi.fn<typeof fetch>(),
+    });
+
+    await expect(
+      dataProvider.getList("unknown-resource" as never, {
+        filter: {},
+        pagination: { page: 1, perPage: 25 },
+        sort: { field: "id", order: "ASC" },
+      }),
+    ).rejects.toThrow(
+      UnsupportedOperatorDataProviderOperationError,
+    );
+
+    await expect(
+      dataProvider.getOne("unknown-resource" as never, {
+        id: "record-001",
+      }),
+    ).rejects.toThrow(
+      UnsupportedOperatorDataProviderOperationError,
+    );
   });
 });
