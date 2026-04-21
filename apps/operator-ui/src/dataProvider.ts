@@ -62,9 +62,9 @@ const RESOURCE_BINDINGS: Record<Exclude<OperatorResourceName, "advisoryOutput" |
       recordFamily: "case",
     },
     runtimeReadiness: {
-      detailPath: "/inspect-readiness-diagnostics",
+      detailPath: "/diagnostics/readiness",
       idField: "status",
-      listPath: "/inspect-readiness-diagnostics",
+      listPath: "/diagnostics/readiness",
       listSemantics: "client",
     },
     reconciliations: {

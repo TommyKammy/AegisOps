@@ -119,6 +119,40 @@ describe("createOperatorDataProvider", () => {
     );
   });
 
+  it("uses the reviewed readiness diagnostics route for runtime readiness reads", async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
+        status: "ready",
+        read_only: true,
+      }),
+    );
+    const dataProvider = createOperatorDataProvider({ fetchFn });
+
+    await expect(
+      dataProvider.getList("runtimeReadiness", {
+        filter: {},
+        pagination: { page: 1, perPage: 1 },
+        sort: { field: "status", order: "ASC" },
+      }),
+    ).resolves.toEqual({
+      data: [
+        {
+          id: "ready",
+          read_only: true,
+          status: "ready",
+        },
+      ],
+      total: 1,
+    });
+
+    expect(fetchFn).toHaveBeenCalledWith("/diagnostics/readiness?order=ASC&page=1&per_page=1&sort=status", {
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+  });
+
   it("fails closed when a reviewed queue record is missing its authoritative anchor", async () => {
     const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
       jsonResponse({
