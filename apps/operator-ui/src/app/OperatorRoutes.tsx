@@ -276,6 +276,7 @@ function ProtectedOperatorRoute({
     <OperatorShell
       authProvider={authProvider}
       dataProvider={dataProvider}
+      operatorIdentity={session?.identity ?? ""}
       operatorRoles={session?.roles ?? []}
       taskActionClient={taskActionClient}
     />
