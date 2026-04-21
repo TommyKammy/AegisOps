@@ -185,12 +185,12 @@ The narrowest first regression test for this issue is a documentation test that 
 
 `docs/phase-19-thin-operator-surface-and-daily-analyst-workflow.md` remains the normative source for the operator workflow shape that bounded write actions must serve rather than redefine.
 
-`docs/phase-22-operator-trust-and-workflow-ergonomics-boundary-and-sequence.md` remains the normative source for explicit mismatch visibility, lifecycle honesty, and the rule that operator-facing convenience must not replace authoritative truth.
+For explicit mismatch visibility, lifecycle honesty, and the rule that operator-facing convenience must not replace authoritative truth, defer to `docs/phase-22-operator-trust-and-workflow-ergonomics-boundary-and-sequence.md`.
 
-`docs/control-plane-state-model.md` remains the normative source for lifecycle-bearing authoritative records and the requirement that the browser re-read those records instead of inventing state locally.
+For lifecycle-bearing authoritative records and the requirement that the browser re-read those records instead of inventing state locally, use `docs/control-plane-state-model.md` as the normative source.
 
-`docs/response-action-safety-model.md` remains the normative source for approval-sensitive workflow separation and the rule that reviewed action-request creation does not imply approval decisions or execution controls.
+Approval-sensitive workflow separation, including the rule that reviewed action-request creation does not imply approval decisions or execution controls, continues to be defined by `docs/response-action-safety-model.md`.
 
-`docs/architecture.md` remains the normative source for the authority boundary where AegisOps owns policy-sensitive workflow truth above subordinate substrates.
+The governing authority boundary still comes from `docs/architecture.md`, where AegisOps owns policy-sensitive workflow truth above subordinate substrates.
 
 Phase 30C therefore approves bounded write actions only as a reviewed task-oriented client over existing AegisOps write paths. It does not approve browser-owned workflow truth, optimistic authority shortcuts, approval decisions, execution controls, reconciliation mutation, substrate-owned forms, or assistant-owned authority.
