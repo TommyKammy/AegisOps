@@ -2,6 +2,8 @@ import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
 import InboxOutlinedIcon from "@mui/icons-material/InboxOutlined";
 import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
+import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
+import RuleFolderOutlinedIcon from "@mui/icons-material/RuleFolderOutlined";
 import WarningAmberOutlinedIcon from "@mui/icons-material/WarningAmberOutlined";
 import {
   Card,
@@ -11,7 +13,7 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
-import type { AuthProvider } from "react-admin";
+import type { AuthProvider, DataProvider } from "react-admin";
 import {
   AdminContext,
   AppBar,
@@ -21,8 +23,15 @@ import {
   TitlePortal,
 } from "react-admin";
 import { Route, Routes } from "react-router-dom";
-import { operatorDataProvider } from "../dataProvider";
 import { operatorTheme } from "./theme";
+import {
+  AlertDetailPage,
+  CaseDetailPage,
+  ProvenancePage,
+  QueuePage,
+  ReadinessPage,
+  ReconciliationPage,
+} from "./operatorConsolePages";
 
 function OperatorAppBar() {
   return (
@@ -48,17 +57,27 @@ function OperatorMenu() {
       <Menu.Item
         leftIcon={<WarningAmberOutlinedIcon />}
         primaryText="Alerts"
-        to="/operator/alerts"
+        to="/operator/queue"
       />
       <Menu.Item
         leftIcon={<InsightsOutlinedIcon />}
         primaryText="Cases"
-        to="/operator/cases"
+        to="/operator/queue"
+      />
+      <Menu.Item
+        leftIcon={<LinkOutlinedIcon />}
+        primaryText="Provenance"
+        to="/operator/provenance/alerts"
       />
       <Menu.Item
         leftIcon={<CheckCircleOutlineIcon />}
         primaryText="Readiness"
         to="/operator/readiness"
+      />
+      <Menu.Item
+        leftIcon={<RuleFolderOutlinedIcon />}
+        primaryText="Reconciliation"
+        to="/operator/reconciliation"
       />
       <Menu.Item
         leftIcon={<GavelOutlinedIcon />}
@@ -87,9 +106,9 @@ function OverviewPage() {
         {[
           {
             title: "Queue",
-            chip: "Next slice",
+            chip: "Primary surface",
             description:
-              "Queue triage pages will land here once the reviewed data adapter is wired.",
+              "Queue triage stays inside AegisOps as the authoritative review selection surface.",
           },
           {
             title: "Alerts",
@@ -160,54 +179,26 @@ function PlaceholderPage({
 
 export function OperatorShell({
   authProvider,
+  dataProvider,
 }: {
   authProvider: AuthProvider;
+  dataProvider: DataProvider;
 }) {
   return (
     <AdminContext
       authProvider={authProvider}
-      dataProvider={operatorDataProvider}
+      dataProvider={dataProvider}
       theme={operatorTheme}
     >
       <Layout appBar={OperatorAppBar} menu={OperatorMenu}>
         <Routes>
           <Route element={<OverviewPage />} index />
-          <Route
-            element={
-              <PlaceholderPage
-                description="Reviewed queue views will render backend-authoritative queue summaries here."
-                title="Queue"
-              />
-            }
-            path="queue"
-          />
-          <Route
-            element={
-              <PlaceholderPage
-                description="Alert pages remain read-only and anchored to backend-normalized alert records."
-                title="Alerts"
-              />
-            }
-            path="alerts"
-          />
-          <Route
-            element={
-              <PlaceholderPage
-                description="Case pages will preserve authoritative lifecycle state and provenance anchors."
-                title="Cases"
-              />
-            }
-            path="cases"
-          />
-          <Route
-            element={
-              <PlaceholderPage
-                description="Readiness stays derived from authoritative backend state instead of browser-local projections."
-                title="Readiness"
-              />
-            }
-            path="readiness"
-          />
+          <Route element={<QueuePage />} path="queue" />
+          <Route element={<AlertDetailPage />} path="alerts/:alertId" />
+          <Route element={<CaseDetailPage />} path="cases/:caseId" />
+          <Route element={<ProvenancePage />} path="provenance/:family/:recordId" />
+          <Route element={<ReadinessPage />} path="readiness" />
+          <Route element={<ReconciliationPage />} path="reconciliation" />
           <Route
             element={
               <PlaceholderPage
@@ -216,6 +207,33 @@ export function OperatorShell({
               />
             }
             path="action-review"
+          />
+          <Route
+            element={
+              <PlaceholderPage
+                description="Use the queue as the primary route into alert detail."
+                title="Alerts"
+              />
+            }
+            path="alerts"
+          />
+          <Route
+            element={
+              <PlaceholderPage
+                description="Use the queue or linked alert detail to open a specific case."
+                title="Cases"
+              />
+            }
+            path="cases"
+          />
+          <Route
+            element={
+              <PlaceholderPage
+                description="Open provenance from alert or case detail so the page stays anchored to an authoritative record."
+                title="Provenance"
+              />
+            }
+            path="provenance/*"
           />
         </Routes>
       </Layout>

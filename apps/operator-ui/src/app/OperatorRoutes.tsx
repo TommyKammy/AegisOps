@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import type { AuthProvider } from "react-admin";
 import { OperatorShell } from "./OperatorShell";
+import { createOperatorDataProvider } from "../dataProvider";
 import {
   AuthAccessError,
   createOperatorAuthProvider,
@@ -19,10 +20,12 @@ import {
   SessionStore,
   createSessionStore,
 } from "../auth/session";
+import type { DataProvider } from "react-admin";
 
 export interface OperatorAppDependencies {
   authProvider: AuthProvider;
   config: OperatorUiConfig;
+  dataProvider: DataProvider;
   sessionStore: SessionStore;
 }
 
@@ -40,6 +43,9 @@ export function createDefaultDependencies(
     config,
     fetchFn: overrides.fetchFn,
   });
+  const dataProvider = createOperatorDataProvider({
+    fetchFn: overrides.fetchFn,
+  });
 
   const authProvider = createOperatorAuthProvider({
     config,
@@ -51,6 +57,7 @@ export function createDefaultDependencies(
   return {
     authProvider,
     config,
+    dataProvider,
     sessionStore,
   };
 }
@@ -172,6 +179,7 @@ function InvalidSessionPage({
 function ProtectedOperatorRoute({
   authProvider,
   config,
+  dataProvider,
   sessionStore,
 }: OperatorAppDependencies) {
   const location = useLocation();
@@ -249,7 +257,7 @@ function ProtectedOperatorRoute({
     return <Navigate replace to={loginHref} />;
   }
 
-  return <OperatorShell authProvider={authProvider} />;
+  return <OperatorShell authProvider={authProvider} dataProvider={dataProvider} />;
 }
 
 export function OperatorRoutes({
@@ -257,7 +265,7 @@ export function OperatorRoutes({
 }: {
   dependencies: OperatorAppDependencies;
 }) {
-  const { authProvider, config, sessionStore } = dependencies;
+  const { authProvider, config, dataProvider, sessionStore } = dependencies;
 
   return (
     <Routes>
@@ -278,6 +286,7 @@ export function OperatorRoutes({
           <ProtectedOperatorRoute
             authProvider={authProvider}
             config={config}
+            dataProvider={dataProvider}
             sessionStore={sessionStore}
           />
         }
