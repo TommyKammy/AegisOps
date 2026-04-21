@@ -10,7 +10,18 @@ permissions:
   contents: read
 
 jobs:
-  verify:
+  workflow-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Lint GitHub Actions workflows
+        uses: rhysd/actionlint@v1.7.12
+
+  docs-and-skeleton:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -68,6 +79,14 @@ jobs:
           bash scripts/verify-source-onboarding-contract-doc.sh
           bash scripts/verify-wazuh-rule-lifecycle-runbook.sh
           bash scripts/verify-windows-source-onboarding-assets.sh
+
+  phase-boundary-validations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
 
       - name: Run Phase 8 workflow coverage guard
         run: bash scripts/test-verify-ci-phase-8-workflow-coverage.sh
@@ -212,8 +231,33 @@ jobs:
       - name: Run Phase 28 workflow coverage guard
         run: bash scripts/test-verify-ci-phase-28-workflow-coverage.sh
 
+      - name: Run Phase 29 reviewed ML shadow mode and optional network evidence validation
+        run: |
+          bash scripts/verify-phase-29-suricata-evidence-pack-boundary.sh
+          bash scripts/verify-phase-29-reviewed-ml-shadow-mode-and-optional-network-evidence-pack.sh
+          python3 -m unittest control-plane.tests.test_phase29_ml_shadow_mode_boundary_docs control-plane.tests.test_phase29_shadow_dataset_generation_validation control-plane.tests.test_phase29_mlflow_shadow_model_registry_validation control-plane.tests.test_phase29_shadow_scoring_validation control-plane.tests.test_phase29_evidently_drift_visibility_validation control-plane.tests.test_phase29_suricata_evidence_pack_boundary_validation control-plane.tests.test_phase29_no_authority_ml_and_optional_network_validation
+
+      - name: Run Phase 29 workflow coverage guard
+        run: bash scripts/test-verify-ci-phase-29-workflow-coverage.sh
+
+  control-plane-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
       - name: Run control-plane runtime unit tests
         run: python3 -m unittest discover -s control-plane/tests -p 'test_*.py'
+
+  focused-shell-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
 
       - name: Run focused shell tests
         run: |
@@ -254,3 +298,4 @@ jobs:
           bash scripts/test-verify-source-onboarding-contract-doc.sh
           bash scripts/test-verify-wazuh-rule-lifecycle-runbook.sh
           bash scripts/test-verify-windows-source-onboarding-assets.sh
+          bash scripts/test-verify-ci-phase-29-workflow-coverage.sh

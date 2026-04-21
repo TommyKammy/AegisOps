@@ -1,0 +1,123 @@
+# Rename this file to `frontend-ci.yml` when the Phase 30 operator UI workspace
+# lands on the default branch and the repository begins tracking:
+# - `apps/operator-ui/`
+# - `package.json`
+# - `package-lock.json`
+#
+# This draft keeps the current AegisOps control-plane CI separate from the
+# future frontend pipeline while the WebUI remains in Phase 30 implementation.
+
+name: Frontend CI
+
+on:
+  pull_request:
+    paths:
+      - "apps/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/frontend-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/frontend-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  operator-ui-unit-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install workspace dependencies
+        run: npm ci
+
+      - name: Run operator UI tests
+        run: npm run test --workspace @aegisops/operator-ui
+
+      - name: Build operator UI
+        run: npm run build --workspace @aegisops/operator-ui
+
+      - name: Upload operator UI build output
+        uses: actions/upload-artifact@v4
+        with:
+          name: operator-ui-dist
+          path: apps/operator-ui/dist
+
+  operator-ui-bundle-budget:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install workspace dependencies
+        run: npm ci
+
+      - name: Build operator UI for bundle analysis
+        run: npm run build --workspace @aegisops/operator-ui
+
+      - name: Enforce initial Phase 30 bundle budget
+        env:
+          MAX_ENTRY_BUNDLE_BYTES: "750000"
+        run: |
+          bundle_path="$(find apps/operator-ui/dist/assets -maxdepth 1 -type f -name 'index-*.js' | head -n 1)"
+          if [[ -z "${bundle_path}" ]]; then
+            echo "Missing operator UI entry bundle under apps/operator-ui/dist/assets" >&2
+            exit 1
+          fi
+          bundle_bytes="$(wc -c < "${bundle_path}")"
+          echo "entry_bundle=${bundle_path}"
+          echo "entry_bundle_bytes=${bundle_bytes}"
+          if (( bundle_bytes > MAX_ENTRY_BUNDLE_BYTES )); then
+            echo "Operator UI entry bundle exceeds the Phase 30 draft budget (${bundle_bytes} > ${MAX_ENTRY_BUNDLE_BYTES})." >&2
+            exit 1
+          fi
+
+  # Enable after the reviewed operator session endpoint and read-only queue/detail
+  # pages exist on mainline and a browser-smoke contract is documented.
+  #
+  # operator-ui-browser-smoke:
+  #   runs-on: ubuntu-latest
+  #   timeout-minutes: 15
+  #   needs:
+  #     - operator-ui-unit-and-build
+  #   steps:
+  #     - name: Check out repository
+  #       uses: actions/checkout@v4
+  #
+  #     - name: Set up Node.js
+  #       uses: actions/setup-node@v4
+  #       with:
+  #         node-version: "22"
+  #         cache: npm
+  #
+  #     - name: Install workspace dependencies
+  #       run: npm ci
+  #
+  #     - name: Install browser automation dependencies
+  #       run: npx playwright install --with-deps chromium
+  #
+  #     - name: Run browser smoke tests
+  #       run: npm run test:e2e --workspace @aegisops/operator-ui
