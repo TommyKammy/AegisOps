@@ -377,3 +377,385 @@ export function RecordCaseRecommendationCard({
     </form>
   );
 }
+
+export function CreateReviewedActionRequestCard({
+  caseId,
+  linkedRecommendationIds,
+  onSubmitted,
+  operatorIdentity,
+}: {
+  caseId: string;
+  linkedRecommendationIds: string[];
+  onSubmitted?: () => void;
+  operatorIdentity: string;
+}) {
+  const submission = useTaskActionSubmission<{ action_request_id?: string; case_id?: string }>();
+  const [recommendationId, setRecommendationId] = useState(
+    linkedRecommendationIds.length === 1 ? linkedRecommendationIds[0] ?? "" : "",
+  );
+  const [recipientIdentity, setRecipientIdentity] = useState("");
+  const [messageIntent, setMessageIntent] = useState("");
+  const [escalationReason, setEscalationReason] = useState("");
+  const [expiresAt, setExpiresAt] = useState("");
+  const [actionRequestIdOverride, setActionRequestIdOverride] = useState("");
+
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submission.submit({
+          onSubmitted: () => onSubmitted?.(),
+          refreshTargets: [
+            {
+              id: caseId,
+              label: "Case detail",
+              resource: "cases",
+            },
+          ],
+          run: (client) =>
+            client.createReviewedActionRequest({
+              action_request_id: normalizeOptionalString(actionRequestIdOverride),
+              escalation_reason: escalationReason.trim(),
+              expires_at: expiresAt.trim(),
+              family: "recommendation",
+              message_intent: messageIntent.trim(),
+              recipient_identity: recipientIdentity.trim(),
+              record_id: recommendationId.trim(),
+              requester_identity: operatorIdentity,
+            }) as Promise<{ action_request_id?: string; case_id?: string }>,
+        });
+      }}
+    >
+      <TaskActionFormCard
+        actor={[
+          ["Identity", operatorIdentity],
+          ["Action", "Reviewed action request"],
+        ]}
+        binding={[
+          ["Record family", "recommendation"],
+          ["Case id", caseId],
+          ["Recommendation id", recommendationId.trim() || "Select authoritative recommendation id"],
+        ]}
+        provenance={[
+          ["Backend boundary", "reviewed operator action-request endpoint"],
+          ["Refresh target", "case detail"],
+        ]}
+        submission={submission}
+        submitLabel="Create action request"
+        subtitle="Create a reviewed action request from an authoritative recommendation anchor without exposing approval or execution controls."
+        title="Create reviewed action request"
+      >
+        <Stack spacing={2}>
+          <TextField
+            fullWidth
+            helperText={
+              linkedRecommendationIds.length > 0
+                ? `Known recommendation ids: ${linkedRecommendationIds.join(", ")}`
+                : "No authoritative recommendation ids are currently linked."
+            }
+            label="Recommendation id"
+            onChange={(event) => {
+              setRecommendationId(event.target.value);
+            }}
+            required
+            value={recommendationId}
+          />
+          <TextField
+            fullWidth
+            label="Recipient identity"
+            onChange={(event) => {
+              setRecipientIdentity(event.target.value);
+            }}
+            required
+            value={recipientIdentity}
+          />
+          <TextField
+            fullWidth
+            label="Message intent"
+            minRows={3}
+            multiline
+            onChange={(event) => {
+              setMessageIntent(event.target.value);
+            }}
+            required
+            value={messageIntent}
+          />
+          <TextField
+            fullWidth
+            label="Escalation reason"
+            minRows={3}
+            multiline
+            onChange={(event) => {
+              setEscalationReason(event.target.value);
+            }}
+            required
+            value={escalationReason}
+          />
+          <TextField
+            fullWidth
+            label="Expires at"
+            onChange={(event) => {
+              setExpiresAt(event.target.value);
+            }}
+            required
+            value={expiresAt}
+          />
+          <TextField
+            fullWidth
+            label="Action request id override"
+            onChange={(event) => {
+              setActionRequestIdOverride(event.target.value);
+            }}
+            value={actionRequestIdOverride}
+          />
+        </Stack>
+      </TaskActionFormCard>
+    </form>
+  );
+}
+
+export function RecordActionReviewManualFallbackCard({
+  actionRequestId,
+  caseId,
+  linkedEvidenceIds,
+  nextExpectedAction,
+  onSubmitted,
+  operatorIdentity,
+  reviewState,
+}: {
+  actionRequestId: string;
+  caseId: string;
+  linkedEvidenceIds: string[];
+  nextExpectedAction: string | null;
+  onSubmitted?: () => void;
+  operatorIdentity: string;
+  reviewState: string | null;
+}) {
+  const submission = useTaskActionSubmission<{ action_request_id: string }>();
+  const [fallbackAt, setFallbackAt] = useState("");
+  const [authorityBoundary, setAuthorityBoundary] = useState("approved_human_fallback");
+  const [reason, setReason] = useState("");
+  const [actionTaken, setActionTaken] = useState("");
+  const [verificationEvidenceIds, setVerificationEvidenceIds] = useState(
+    linkedEvidenceIds.join(", "),
+  );
+  const [residualUncertainty, setResidualUncertainty] = useState("");
+
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submission.submit({
+          onSubmitted: () => onSubmitted?.(),
+          refreshTargets: [
+            {
+              id: caseId,
+              label: "Case detail",
+              resource: "cases",
+            },
+          ],
+          run: (client) =>
+            client.recordActionReviewManualFallback({
+              action_request_id: actionRequestId,
+              action_taken: actionTaken.trim(),
+              authority_boundary: authorityBoundary,
+              fallback_actor_identity: operatorIdentity,
+              fallback_at: fallbackAt.trim(),
+              reason: reason.trim(),
+              residual_uncertainty: normalizeOptionalString(residualUncertainty),
+              verification_evidence_ids: splitIdentifierList(verificationEvidenceIds),
+            }) as Promise<{ action_request_id: string }>,
+        });
+      }}
+    >
+      <TaskActionFormCard
+        actor={[
+          ["Identity", operatorIdentity],
+          ["Action", "Manual fallback note"],
+        ]}
+        binding={[
+          ["Record family", "action_request"],
+          ["Case id", caseId],
+          ["Action request id", actionRequestId],
+        ]}
+        provenance={[
+          ["Backend boundary", "reviewed operator manual-fallback endpoint"],
+          ["Current review state", reviewState ?? "Not available"],
+          ["Next expected action", nextExpectedAction ?? "Not available"],
+        ]}
+        submission={submission}
+        submitLabel="Record manual fallback"
+        subtitle="Record a reviewed manual fallback against the authoritative action request without widening the UI into execution ownership or generic coordination editing."
+        title="Record manual fallback"
+      >
+        <Stack spacing={2}>
+          <TextField
+            fullWidth
+            label="Fallback at"
+            onChange={(event) => {
+              setFallbackAt(event.target.value);
+            }}
+            required
+            value={fallbackAt}
+          />
+          <TextField
+            fullWidth
+            label="Authority boundary"
+            onChange={(event) => {
+              setAuthorityBoundary(event.target.value);
+            }}
+            select
+            value={authorityBoundary}
+          >
+            <MenuItem value="approved_human_fallback">approved_human_fallback</MenuItem>
+          </TextField>
+          <TextField
+            fullWidth
+            label="Reason"
+            minRows={3}
+            multiline
+            onChange={(event) => {
+              setReason(event.target.value);
+            }}
+            required
+            value={reason}
+          />
+          <TextField
+            fullWidth
+            label="Action taken"
+            minRows={3}
+            multiline
+            onChange={(event) => {
+              setActionTaken(event.target.value);
+            }}
+            required
+            value={actionTaken}
+          />
+          <TextField
+            fullWidth
+            helperText={
+              linkedEvidenceIds.length > 0
+                ? `Known evidence ids: ${linkedEvidenceIds.join(", ")}`
+                : "No authoritative evidence ids are currently linked."
+            }
+            label="Verification evidence ids"
+            onChange={(event) => {
+              setVerificationEvidenceIds(event.target.value);
+            }}
+            value={verificationEvidenceIds}
+          />
+          <TextField
+            fullWidth
+            label="Residual uncertainty"
+            minRows={2}
+            multiline
+            onChange={(event) => {
+              setResidualUncertainty(event.target.value);
+            }}
+            value={residualUncertainty}
+          />
+        </Stack>
+      </TaskActionFormCard>
+    </form>
+  );
+}
+
+export function RecordActionReviewEscalationNoteCard({
+  actionRequestId,
+  caseId,
+  nextExpectedAction,
+  onSubmitted,
+  operatorIdentity,
+  reviewState,
+}: {
+  actionRequestId: string;
+  caseId: string;
+  nextExpectedAction: string | null;
+  onSubmitted?: () => void;
+  operatorIdentity: string;
+  reviewState: string | null;
+}) {
+  const submission = useTaskActionSubmission<{ action_request_id: string }>();
+  const [escalatedAt, setEscalatedAt] = useState("");
+  const [escalatedTo, setEscalatedTo] = useState("");
+  const [note, setNote] = useState("");
+
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submission.submit({
+          onSubmitted: () => onSubmitted?.(),
+          refreshTargets: [
+            {
+              id: caseId,
+              label: "Case detail",
+              resource: "cases",
+            },
+          ],
+          run: (client) =>
+            client.recordActionReviewEscalationNote({
+              action_request_id: actionRequestId,
+              escalated_at: escalatedAt.trim(),
+              escalated_by_identity: operatorIdentity,
+              escalated_to: escalatedTo.trim(),
+              note: note.trim(),
+            }) as Promise<{ action_request_id: string }>,
+        });
+      }}
+    >
+      <TaskActionFormCard
+        actor={[
+          ["Identity", operatorIdentity],
+          ["Action", "Escalation note"],
+        ]}
+        binding={[
+          ["Record family", "action_request"],
+          ["Case id", caseId],
+          ["Action request id", actionRequestId],
+        ]}
+        provenance={[
+          ["Backend boundary", "reviewed operator escalation-note endpoint"],
+          ["Current review state", reviewState ?? "Not available"],
+          ["Next expected action", nextExpectedAction ?? "Not available"],
+        ]}
+        submission={submission}
+        submitLabel="Record escalation note"
+        subtitle="Record a reviewed escalation note on the authoritative action request while keeping approval decisions and execution controls outside this slice."
+        title="Record escalation note"
+      >
+        <Stack spacing={2}>
+          <TextField
+            fullWidth
+            label="Escalated at"
+            onChange={(event) => {
+              setEscalatedAt(event.target.value);
+            }}
+            required
+            value={escalatedAt}
+          />
+          <TextField
+            fullWidth
+            label="Escalated to"
+            onChange={(event) => {
+              setEscalatedTo(event.target.value);
+            }}
+            required
+            value={escalatedTo}
+          />
+          <TextField
+            fullWidth
+            label="Note"
+            minRows={3}
+            multiline
+            onChange={(event) => {
+              setNote(event.target.value);
+            }}
+            required
+            value={note}
+          />
+        </Stack>
+      </TaskActionFormCard>
+    </form>
+  );
+}

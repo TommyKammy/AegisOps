@@ -23,7 +23,10 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Link as ReactRouterLink, useParams } from "react-router-dom";
 import { useDataProvider } from "react-admin";
 import {
+  CreateReviewedActionRequestCard,
   PromoteAlertToCaseCard,
+  RecordActionReviewEscalationNoteCard,
+  RecordActionReviewManualFallbackCard,
   RecordCaseLeadCard,
   RecordCaseObservationCard,
   RecordCaseRecommendationCard,
@@ -778,6 +781,14 @@ function CaseDetailPageBody({
   const alertRecords = asRecordArray(data.linked_alert_records);
   const evidenceRecords = asRecordArray(data.linked_evidence_records);
   const timelineEntries = asRecordArray(data.cross_source_timeline);
+  const currentActionReview = asRecord(data.current_action_review);
+  const linkedEvidenceIds = asStringArray(data.linked_evidence_ids);
+  const linkedObservationIds = asStringArray(data.linked_observation_ids);
+  const linkedLeadIds = asStringArray(data.linked_lead_ids);
+  const linkedRecommendationIds = asStringArray(data.linked_recommendation_ids);
+  const currentActionRequestId = asString(currentActionReview?.action_request_id);
+  const currentReviewState = asString(currentActionReview?.review_state);
+  const nextExpectedAction = asString(currentActionReview?.next_expected_action);
 
   return (
     <Stack spacing={3}>
@@ -877,7 +888,7 @@ function CaseDetailPageBody({
       <RecordCaseObservationCard
         caseId={caseId}
         key={`observation-${caseId}`}
-        linkedEvidenceIds={asStringArray(data.linked_evidence_ids)}
+        linkedEvidenceIds={linkedEvidenceIds}
         onSubmitted={() => {
           setReloadToken((current) => current + 1);
         }}
@@ -887,7 +898,7 @@ function CaseDetailPageBody({
       <RecordCaseLeadCard
         caseId={caseId}
         key={`lead-${caseId}`}
-        linkedObservationIds={asStringArray(data.linked_observation_ids)}
+        linkedObservationIds={linkedObservationIds}
         onSubmitted={() => {
           setReloadToken((current) => current + 1);
         }}
@@ -897,12 +908,53 @@ function CaseDetailPageBody({
       <RecordCaseRecommendationCard
         caseId={caseId}
         key={`recommendation-${caseId}`}
-        linkedLeadIds={asStringArray(data.linked_lead_ids)}
+        linkedLeadIds={linkedLeadIds}
         onSubmitted={() => {
           setReloadToken((current) => current + 1);
         }}
         operatorIdentity={operatorIdentity}
       />
+
+      {linkedRecommendationIds.length > 0 ? (
+        <CreateReviewedActionRequestCard
+          caseId={caseId}
+          key={`action-request-${caseId}`}
+          linkedRecommendationIds={linkedRecommendationIds}
+          onSubmitted={() => {
+            setReloadToken((current) => current + 1);
+          }}
+          operatorIdentity={operatorIdentity}
+        />
+      ) : null}
+
+      {currentActionRequestId ? (
+        <RecordActionReviewManualFallbackCard
+          actionRequestId={currentActionRequestId}
+          caseId={caseId}
+          key={`manual-fallback-${caseId}-${currentActionRequestId}`}
+          linkedEvidenceIds={linkedEvidenceIds}
+          nextExpectedAction={nextExpectedAction}
+          onSubmitted={() => {
+            setReloadToken((current) => current + 1);
+          }}
+          operatorIdentity={operatorIdentity}
+          reviewState={currentReviewState}
+        />
+      ) : null}
+
+      {currentActionRequestId ? (
+        <RecordActionReviewEscalationNoteCard
+          actionRequestId={currentActionRequestId}
+          caseId={caseId}
+          key={`escalation-note-${caseId}-${currentActionRequestId}`}
+          nextExpectedAction={nextExpectedAction}
+          onSubmitted={() => {
+            setReloadToken((current) => current + 1);
+          }}
+          operatorIdentity={operatorIdentity}
+          reviewState={currentReviewState}
+        />
+      ) : null}
     </Stack>
   );
 }
