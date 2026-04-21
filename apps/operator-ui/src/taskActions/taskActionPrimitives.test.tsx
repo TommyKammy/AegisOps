@@ -209,4 +209,126 @@ describe("taskActionPrimitives", () => {
       status: 409,
     } satisfies Partial<OperatorTaskActionError>);
   });
+
+  it("classifies unauthorized submit failures without implying success", async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse(
+        {
+          error: "forbidden",
+          message: "Reviewed authorization is required for this task action.",
+        },
+        403,
+      ),
+    );
+
+    await expect(
+      createOperatorTaskActionClient({ fetchFn }).recordCaseObservation({
+        author_identity: "analyst@example.com",
+        case_id: "case-123",
+        observed_at: "2026-04-22T00:00:00+00:00",
+        scope_statement: "Reviewed scoped observation",
+        supporting_evidence_ids: ["evidence-123"],
+      }),
+    ).rejects.toMatchObject({
+      code: "forbidden",
+      message: "Reviewed authorization is required for this task action.",
+      status: 403,
+    } satisfies Partial<OperatorTaskActionError>);
+  });
+
+  it("keeps unauthorized submit failures explicit in the operator UI", async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse(
+        {
+          error: "forbidden",
+          message: "Reviewed authorization is required for this task action.",
+        },
+        403,
+      ),
+    );
+    const dataProvider = {
+      create: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+      getList: vi.fn(),
+      getMany: vi.fn(),
+      getManyReference: vi.fn(),
+      getOne: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+    };
+    const user = userEvent.setup();
+
+    render(
+      <AdminContext dataProvider={dataProvider}>
+        <TaskActionClientProvider
+          client={createOperatorTaskActionClient({ fetchFn })}
+        >
+          <TestTaskActionForm />
+        </TaskActionClientProvider>
+      </AdminContext>,
+    );
+
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Record observation" }));
+
+    expect(
+      await screen.findByText("Reviewed backend authorization denied the task action."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        /Authoritative refresh completed from the reviewed backend record\./i,
+      ),
+    ).not.toBeInTheDocument();
+    expect(dataProvider.getOne).not.toHaveBeenCalled();
+  });
+
+  it("keeps failed-submit outcomes explicit when the backend returns a server error", async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse(
+        {
+          error: "server_error",
+          message: "Task action persistence failed before authoritative reread.",
+        },
+        500,
+      ),
+    );
+    const dataProvider = {
+      create: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+      getList: vi.fn(),
+      getMany: vi.fn(),
+      getManyReference: vi.fn(),
+      getOne: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+    };
+    const user = userEvent.setup();
+
+    render(
+      <AdminContext dataProvider={dataProvider}>
+        <TaskActionClientProvider
+          client={createOperatorTaskActionClient({ fetchFn })}
+        >
+          <TestTaskActionForm />
+        </TaskActionClientProvider>
+      </AdminContext>,
+    );
+
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Record observation" }));
+
+    expect(
+      await screen.findByText(
+        "Task action persistence failed before authoritative reread.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        /Authoritative refresh completed from the reviewed backend record\./i,
+      ),
+    ).not.toBeInTheDocument();
+    expect(dataProvider.getOne).not.toHaveBeenCalled();
+  });
 });
