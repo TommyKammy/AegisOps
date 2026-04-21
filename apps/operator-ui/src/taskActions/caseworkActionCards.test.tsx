@@ -119,6 +119,50 @@ function CaseworkCardsHarness({
 }
 
 describe("caseworkActionCards", () => {
+  it("renders task-oriented metadata for promote, casework, action-request, and fallback flows", () => {
+    renderWithTaskActionProviders(
+      <>
+        <PromoteAlertCardHarness alertId="alert-123" currentCaseId="case-123" />
+        <CaseworkCardsHarness
+          actionRequestId="action-request-456"
+          caseId="case-456"
+          linkedEvidenceIds={["evidence-123"]}
+          linkedLeadIds={["lead-123"]}
+          linkedObservationIds={["observation-123"]}
+          linkedRecommendationIds={["recommendation-123"]}
+        />
+      </>,
+    );
+
+    for (const title of [
+      "Promote alert into case",
+      "Record case observation",
+      "Record case lead",
+      "Record case recommendation",
+      "Create reviewed action request",
+      "Record manual fallback",
+      "Record escalation note",
+    ]) {
+      expect(screen.getAllByText(title).length).toBeGreaterThan(0);
+    }
+
+    for (const text of [
+      "reviewed operator promote endpoint",
+      "reviewed operator observation endpoint",
+      "reviewed operator lead endpoint",
+      "reviewed operator recommendation endpoint",
+      "reviewed operator action-request endpoint",
+      "reviewed operator manual-fallback endpoint",
+      "reviewed operator escalation-note endpoint",
+      "Current review state",
+      "Next expected action",
+      "Action request id",
+      "Recommendation id",
+    ]) {
+      expect(screen.getAllByText(text).length).toBeGreaterThan(0);
+    }
+  });
+
   it("resets promote draft state when the bound alert id changes", async () => {
     const user = userEvent.setup();
     const { rerender } = renderWithTaskActionProviders(
