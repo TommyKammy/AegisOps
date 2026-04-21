@@ -12,6 +12,16 @@ export function createWindowLocationRedirector(
   };
 }
 
-export const windowLocationRedirector = createWindowLocationRedirector(
-  window.location,
-);
+export const windowLocationRedirector: Redirector = {
+  replace(href) {
+    if (
+      typeof window === "undefined" ||
+      !window.location ||
+      typeof window.location.replace !== "function"
+    ) {
+      throw new Error("Window location is unavailable for auth redirects.");
+    }
+
+    window.location.replace(href);
+  },
+};

@@ -33,6 +33,12 @@ import {
   ReconciliationPage,
 } from "./operatorConsolePages";
 
+function canInspectActionReview(operatorRoles: readonly string[]) {
+  return operatorRoles.some((role) =>
+    ["approver", "platform-administrator"].includes(role),
+  );
+}
+
 function OperatorAppBar() {
   return (
     <AppBar userMenu={false}>
@@ -45,7 +51,13 @@ function OperatorAppBar() {
   );
 }
 
-function OperatorMenu() {
+function OperatorMenu({
+  operatorRoles,
+}: {
+  operatorRoles: readonly string[];
+}) {
+  const showActionReview = canInspectActionReview(operatorRoles);
+
   return (
     <Menu>
       <Menu.DashboardItem primaryText="Overview" />
@@ -79,16 +91,53 @@ function OperatorMenu() {
         primaryText="Reconciliation"
         to="/operator/reconciliation"
       />
-      <Menu.Item
-        leftIcon={<GavelOutlinedIcon />}
-        primaryText="Action Review"
-        to="/operator/action-review"
-      />
+      {showActionReview ? (
+        <Menu.Item
+          leftIcon={<GavelOutlinedIcon />}
+          primaryText="Action Review"
+          to="/operator/action-review"
+        />
+      ) : null}
     </Menu>
   );
 }
 
-function OverviewPage() {
+function OverviewPage({
+  operatorRoles,
+}: {
+  operatorRoles: readonly string[];
+}) {
+  const sections = [
+    {
+      title: "Queue",
+      chip: "Primary surface",
+      description:
+        "Queue triage stays inside AegisOps as the authoritative review selection surface.",
+    },
+    {
+      title: "Alerts",
+      chip: "Read-only",
+      description:
+        "Alert inspection stays anchored to backend-authoritative alert and provenance records.",
+    },
+    {
+      title: "Cases",
+      chip: "Read-only",
+      description:
+        "Case detail pages will remain task-oriented instead of generic CRUD resources.",
+    },
+    ...(canInspectActionReview(operatorRoles)
+      ? [
+          {
+            title: "Action review",
+            chip: "Guarded",
+            description:
+              "Action review surfaces remain separate from execution authority and stay read-oriented here.",
+          },
+        ]
+      : []),
+  ];
+
   return (
     <Stack spacing={3} sx={{ p: 3 }}>
       <Stack spacing={1}>
@@ -103,32 +152,7 @@ function OverviewPage() {
       </Stack>
 
       <Grid container spacing={2}>
-        {[
-          {
-            title: "Queue",
-            chip: "Primary surface",
-            description:
-              "Queue triage stays inside AegisOps as the authoritative review selection surface.",
-          },
-          {
-            title: "Alerts",
-            chip: "Read-only",
-            description:
-              "Alert inspection stays anchored to backend-authoritative alert and provenance records.",
-          },
-          {
-            title: "Cases",
-            chip: "Read-only",
-            description:
-              "Case detail pages will remain task-oriented instead of generic CRUD resources.",
-          },
-          {
-            title: "Action review",
-            chip: "Guarded",
-            description:
-              "Action review surfaces remain separate from execution authority and stay read-oriented here.",
-          },
-        ].map((section) => (
+        {sections.map((section) => (
           <Grid key={section.title} size={{ xs: 12, md: 6 }}>
             <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider" }}>
               <CardContent>
@@ -180,9 +204,11 @@ function PlaceholderPage({
 export function OperatorShell({
   authProvider,
   dataProvider,
+  operatorRoles,
 }: {
   authProvider: AuthProvider;
   dataProvider: DataProvider;
+  operatorRoles: string[];
 }) {
   return (
     <AdminContext
@@ -190,9 +216,12 @@ export function OperatorShell({
       dataProvider={dataProvider}
       theme={operatorTheme}
     >
-      <Layout appBar={OperatorAppBar} menu={OperatorMenu}>
+      <Layout
+        appBar={OperatorAppBar}
+        menu={() => <OperatorMenu operatorRoles={operatorRoles} />}
+      >
         <Routes>
-          <Route element={<OverviewPage />} index />
+          <Route element={<OverviewPage operatorRoles={operatorRoles} />} index />
           <Route element={<QueuePage />} path="queue" />
           <Route element={<AlertDetailPage />} path="alerts/:alertId" />
           <Route element={<CaseDetailPage />} path="cases/:caseId" />

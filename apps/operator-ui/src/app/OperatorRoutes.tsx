@@ -18,6 +18,7 @@ import {
 } from "../auth/navigation";
 import {
   SessionStore,
+  OperatorSession,
   createSessionStore,
 } from "../auth/session";
 import type { DataProvider } from "react-admin";
@@ -183,6 +184,7 @@ function ProtectedOperatorRoute({
   sessionStore,
 }: OperatorAppDependencies) {
   const location = useLocation();
+  const [session, setSession] = useState<OperatorSession | null>(null);
   const [status, setStatus] = useState<
     "loading" | "authorized" | "forbidden" | "invalid_session" | "unauthenticated"
   >("loading");
@@ -192,8 +194,9 @@ function ProtectedOperatorRoute({
 
     void sessionStore
       .getSession({ force: true })
-      .then(() => {
+      .then((nextSession) => {
         if (active) {
+          setSession(nextSession);
           setStatus("authorized");
         }
       })
@@ -201,6 +204,8 @@ function ProtectedOperatorRoute({
         if (!active) {
           return;
         }
+
+        setSession(null);
 
         if (error instanceof AuthAccessError) {
           if (error.code === "forbidden") {
@@ -257,7 +262,13 @@ function ProtectedOperatorRoute({
     return <Navigate replace to={loginHref} />;
   }
 
-  return <OperatorShell authProvider={authProvider} dataProvider={dataProvider} />;
+  return (
+    <OperatorShell
+      authProvider={authProvider}
+      dataProvider={dataProvider}
+      operatorRoles={session?.roles ?? []}
+    />
+  );
 }
 
 export function OperatorRoutes({
