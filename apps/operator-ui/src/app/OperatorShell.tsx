@@ -25,6 +25,7 @@ import {
 import { Navigate, Route, Routes } from "react-router-dom";
 import { operatorTheme } from "./theme";
 import {
+  ActionReviewPage,
   AlertDetailPage,
   CaseDetailPage,
   ProvenancePage,
@@ -246,15 +247,22 @@ export function OperatorShell({
             <Route
               element={
                 canViewActionReview ? (
-                  <PlaceholderPage
-                    description="Action review remains inspection-only until a separately reviewed slice introduces action workflows."
-                    title="Action review"
-                  />
+                  <ActionReviewPage />
                 ) : (
                   <Navigate replace to="/operator" />
                 )
               }
               path="action-review"
+            />
+            <Route
+              element={
+                canViewActionReview ? (
+                  <ActionReviewPage />
+                ) : (
+                  <Navigate replace to="/operator" />
+                )
+              }
+              path="action-review/:actionRequestId"
             />
             <Route
               element={
