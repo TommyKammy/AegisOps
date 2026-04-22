@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import AutoAwesomeOutlinedIcon from "@mui/icons-material/AutoAwesomeOutlined";
 import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
@@ -22,6 +23,7 @@ import {
   Logout,
   Menu,
   TitlePortal,
+  useDataProvider,
 } from "react-admin";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { operatorTheme } from "./theme";
@@ -35,6 +37,10 @@ import {
   ReadinessPage,
   ReconciliationPage,
 } from "./operatorConsolePages";
+import {
+  OptionalExtensionVisibilityPanel,
+  buildOptionalExtensionDefinitionsFromPayload,
+} from "./optionalExtensionVisibility";
 import { TaskActionClientProvider } from "../taskActions/taskActionPrimitives";
 import type { OperatorTaskActionClient } from "../taskActions/taskActionClient";
 
@@ -117,6 +123,50 @@ function OverviewPage({
 }: {
   operatorRoles: readonly string[];
 }) {
+  const dataProvider = useDataProvider();
+  const [optionalExtensionDefinitions, setOptionalExtensionDefinitions] = useState(() =>
+    buildOptionalExtensionDefinitionsFromPayload(null),
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    void dataProvider
+      .getList("runtimeReadiness", {
+        filter: {},
+        pagination: {
+          page: 1,
+          perPage: 1,
+        },
+        sort: {
+          field: "status",
+          order: "ASC",
+        },
+      })
+      .then((result) => {
+        if (!active) {
+          return;
+        }
+
+        setOptionalExtensionDefinitions(
+          buildOptionalExtensionDefinitionsFromPayload(
+            result.data[0]?.metrics?.optional_extensions,
+          ),
+        );
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+
+        setOptionalExtensionDefinitions(buildOptionalExtensionDefinitionsFromPayload(null));
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [dataProvider]);
+
   const sections = [
     {
       title: "Queue",
@@ -190,6 +240,8 @@ function OverviewPage({
           </Grid>
         ))}
       </Grid>
+
+      <OptionalExtensionVisibilityPanel definitions={optionalExtensionDefinitions} />
     </Stack>
   );
 }
