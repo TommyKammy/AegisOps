@@ -181,6 +181,194 @@ function approvalLifecycleSeverity(
   return tone === "default" ? "info" : tone;
 }
 
+function findTimelineStage(
+  actionReview: UnknownRecord | null,
+  stage: string,
+): UnknownRecord | null {
+  return (
+    asRecordArray(actionReview?.timeline).find(
+      (entry) => asString(entry.stage) === stage,
+    ) ?? null
+  );
+}
+
+function dispatchLifecycleState(actionReview: UnknownRecord | null): string | null {
+  const timelineStageState = asString(findTimelineStage(actionReview, "delegation")?.state);
+  if (timelineStageState !== null) {
+    return timelineStageState;
+  }
+  if (asString(actionReview?.delegation_id) !== null) {
+    return "delegated";
+  }
+  if (asString(actionReview?.approval_state) === "approved") {
+    return "awaiting_delegation";
+  }
+  return null;
+}
+
+function ExecutionReceiptSection({ actionReview }: { actionReview: UnknownRecord | null }) {
+  const coordinationOutcome = asRecord(actionReview?.coordination_ticket_outcome);
+  const executionState = asString(actionReview?.action_execution_state);
+  const reconciliationState = asString(actionReview?.reconciliation_state);
+  const dispatchState = dispatchLifecycleState(actionReview);
+  const actionExecutionId = asString(actionReview?.action_execution_id);
+
+  return (
+    <SectionCard
+      subtitle="Dispatch, execution receipt, and reconciliation are rendered as separate lifecycle surfaces so downstream completion is not overstated."
+      title="Execution receipt"
+    >
+      <Stack spacing={2}>
+        <StatusStrip
+          values={[
+            ["Dispatch", dispatchState],
+            ["Execution", executionState],
+            ["Reconciliation", reconciliationState],
+            ["Coordination", asString(coordinationOutcome?.status)],
+          ]}
+        />
+        {!actionExecutionId ? (
+          <Alert severity="warning" variant="outlined">
+            No authoritative execution receipt is attached to this reviewed request yet.
+          </Alert>
+        ) : null}
+        {actionExecutionId && reconciliationState !== "matched" ? (
+          <Alert severity="warning" variant="outlined">
+            Execution receipt visibility is present, but downstream reconciliation is still
+            {reconciliationState ? ` ${reconciliationState}` : " unresolved"}.
+          </Alert>
+        ) : null}
+        <ValueList
+          entries={[
+            ["Action execution id", actionExecutionId],
+            ["Delegation id", asString(actionReview?.delegation_id)],
+            ["Execution run id", asString(actionReview?.execution_run_id)],
+            ["Execution surface type", asString(actionReview?.execution_surface_type)],
+            ["Execution surface id", asString(actionReview?.execution_surface_id)],
+            ["External receipt id", asString(coordinationOutcome?.external_receipt_id)],
+            ["Next expected action", asString(actionReview?.next_expected_action)],
+          ]}
+        />
+      </Stack>
+    </SectionCard>
+  );
+}
+
+function ReconciliationVisibilitySection({
+  actionReview,
+}: {
+  actionReview: UnknownRecord | null;
+}) {
+  const mismatchInspection = asRecord(actionReview?.mismatch_inspection);
+  const reconciliationState = asString(actionReview?.reconciliation_state);
+  const mismatchSummary = asString(mismatchInspection?.mismatch_summary);
+
+  return (
+    <SectionCard
+      subtitle="Mismatch, missing receipt, and unresolved downstream outcomes stay explicit instead of being normalized into generic success."
+      title="Reconciliation visibility"
+    >
+      <Stack spacing={2}>
+        <StatusStrip
+          values={[
+            ["Reconciliation", reconciliationState],
+            ["Ingest", asString(mismatchInspection?.ingest_disposition)],
+          ]}
+        />
+        {mismatchInspection ? (
+          <Alert severity="warning" variant="outlined">
+            {mismatchSummary ??
+              "Authoritative reconciliation still reports a mismatch or unresolved downstream state."}
+          </Alert>
+        ) : null}
+        {!mismatchInspection && !asString(actionReview?.reconciliation_id) ? (
+          <Alert severity="warning" variant="outlined">
+            No authoritative reconciliation record is visible for this reviewed request yet.
+          </Alert>
+        ) : null}
+        <ValueList
+          entries={[
+            ["Reconciliation id", asString(actionReview?.reconciliation_id)],
+            ["Mismatch summary", mismatchSummary],
+            ["Correlation key", asString(mismatchInspection?.correlation_key)],
+            ["Observed execution run", asString(mismatchInspection?.execution_run_id)],
+            ["Linked execution runs", mismatchInspection?.linked_execution_run_ids],
+            ["Compared at", asString(mismatchInspection?.compared_at)],
+            ["Last seen at", asString(mismatchInspection?.last_seen_at)],
+          ]}
+        />
+      </Stack>
+    </SectionCard>
+  );
+}
+
+function CoordinationVisibilitySection({
+  actionReview,
+}: {
+  actionReview: UnknownRecord | null;
+}) {
+  const coordinationOutcome = asRecord(actionReview?.coordination_ticket_outcome);
+  const targetScope = asRecord(actionReview?.target_scope);
+  const ticketReferenceUrl = asString(coordinationOutcome?.ticket_reference_url);
+
+  if (coordinationOutcome === null && targetScope === null) {
+    return null;
+  }
+
+  return (
+    <SectionCard
+      subtitle="Downstream coordination references stay visible as subordinate context without replacing AegisOps-owned request, approval, execution, or reconciliation truth."
+      title="Coordination visibility"
+    >
+      <Stack spacing={2}>
+        <StatusStrip
+          values={[
+            ["Coordination", asString(coordinationOutcome?.status)],
+            ["Authority", asString(coordinationOutcome?.authority)],
+          ]}
+        />
+        {asString(coordinationOutcome?.summary) ? (
+          <Alert severity="info" variant="outlined">
+            {asString(coordinationOutcome?.summary)}
+          </Alert>
+        ) : null}
+        <ValueList
+          entries={[
+            [
+              "Coordination reference id",
+              asString(coordinationOutcome?.coordination_reference_id) ??
+                asString(targetScope?.coordination_reference_id),
+            ],
+            [
+              "Coordination target type",
+              asString(coordinationOutcome?.coordination_target_type) ??
+                asString(targetScope?.coordination_target_type),
+            ],
+            [
+              "Coordination target id",
+              asString(coordinationOutcome?.coordination_target_id) ??
+                asString(targetScope?.coordination_target_id),
+            ],
+            ["External receipt id", asString(coordinationOutcome?.external_receipt_id)],
+            ["Linked action execution", asString(coordinationOutcome?.action_execution_id)],
+            ["Linked reconciliation", asString(coordinationOutcome?.reconciliation_id)],
+          ]}
+        />
+        {ticketReferenceUrl ? (
+          <Link
+            href={ticketReferenceUrl}
+            rel="noreferrer"
+            target="_blank"
+            underline="hover"
+          >
+            Open downstream coordination reference
+          </Link>
+        ) : null}
+      </Stack>
+    </SectionCard>
+  );
+}
+
 function useOperatorList(
   resource: string,
   filter: Record<string, unknown>,
@@ -1177,6 +1365,12 @@ function ActionReviewPageBody({
           ) : null}
         </Stack>
       </SectionCard>
+
+      <ExecutionReceiptSection actionReview={actionReview} />
+
+      <ReconciliationVisibilitySection actionReview={actionReview} />
+
+      <CoordinationVisibilitySection actionReview={actionReview} />
 
       <SectionCard
         subtitle="Authoritative linkage stays explicit so later approval, execution, and reconciliation panels can extend this view without inferring broader workflow truth."

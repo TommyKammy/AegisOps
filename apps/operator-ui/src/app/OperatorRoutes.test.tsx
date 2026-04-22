@@ -288,6 +288,123 @@ describe("OperatorRoutes", () => {
     expect(screen.queryByText(/remains inspection-only until a separately reviewed slice/i)).not.toBeInTheDocument();
   });
 
+  it("renders execution receipt, reconciliation mismatch, and coordination visibility on action-review detail", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch(
+        {
+          "/inspect-action-review": {
+            action_request_id: "action-request-789",
+            read_only: true,
+            current_action_review: {
+              action_request_id: "action-request-789",
+              review_state: "approved",
+            },
+            action_review: {
+              action_request_id: "action-request-789",
+              review_state: "approved",
+              action_request_state: "approved",
+              approval_state: "approved",
+              action_execution_state: "succeeded",
+              reconciliation_state: "mismatched",
+              requester_identity: "analyst@example.com",
+              recipient_identity: "repo-owner@example.com",
+              next_expected_action: "review_reconciliation_mismatch",
+              execution_surface_type: "automation_substrate",
+              execution_surface_id: "shuffle",
+              action_execution_id: "action-execution-789",
+              delegation_id: "delegation-789",
+              execution_run_id: "shuffle-run-789",
+              reconciliation_id: "recon-789",
+              mismatch_inspection: {
+                reconciliation_id: "recon-789",
+                lifecycle_state: "mismatched",
+                ingest_disposition: "mismatch",
+                mismatch_summary: "receipt payload disagrees with the reconciled ticket state",
+                execution_run_id: "shuffle-run-789",
+                linked_execution_run_ids: ["shuffle-run-789"],
+              },
+              coordination_ticket_outcome: {
+                authority: "authoritative_aegisops_review",
+                status: "mismatch",
+                summary: "ticket receipt remains mismatched with the reviewed coordination target",
+                action_request_id: "action-request-789",
+                action_execution_id: "action-execution-789",
+                execution_run_id: "shuffle-run-789",
+                reconciliation_id: "recon-789",
+                coordination_reference_id: "coord-ref-789",
+                coordination_target_type: "zammad",
+                coordination_target_id: "ZM-789",
+                external_receipt_id: "receipt-789",
+                ticket_reference_url: "https://tickets.example.invalid/tickets/ZM-789",
+                mismatch: {
+                  mismatch_summary:
+                    "ticket receipt remains mismatched with the reviewed coordination target",
+                },
+              },
+              timeline: [
+                {
+                  label: "Requested",
+                  state: "completed",
+                },
+                {
+                  label: "Approved",
+                  state: "approved",
+                },
+                {
+                  label: "Delegated",
+                  state: "delegated",
+                },
+                {
+                  label: "Execution",
+                  state: "succeeded",
+                },
+                {
+                  label: "Reconciliation",
+                  state: "mismatched",
+                },
+              ],
+            },
+            case_record: {
+              case_id: "case-789",
+              lifecycle_state: "open",
+            },
+          },
+        },
+        {
+          identity: "approver@example.com",
+          provider: "authentik",
+          roles: ["Approver"],
+          subject: "operator-8",
+        },
+      ),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/action-review/action-request-789"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Execution receipt")).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole("heading", { name: "Action Review" })).toBeInTheDocument();
+    expect(screen.getByText("Execution receipt")).toBeInTheDocument();
+    expect(screen.getByText("Reconciliation visibility")).toBeInTheDocument();
+    expect(screen.getByText("Coordination visibility")).toBeInTheDocument();
+    expect(screen.getAllByText("action-execution-789").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("shuffle-run-789").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(
+        "receipt payload disagrees with the reconciled ticket state",
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText("coord-ref-789")).toBeInTheDocument();
+    expect(screen.getAllByText("receipt-789").length).toBeGreaterThan(0);
+    expect(screen.getByText("ZM-789")).toBeInTheDocument();
+  });
+
   it("submits a reviewed approval decision and waits for the authoritative reread before rendering the approved lifecycle", async () => {
     const user = userEvent.setup();
     let actionReviewPayload: Record<string, unknown> = {
