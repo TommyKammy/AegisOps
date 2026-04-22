@@ -290,6 +290,64 @@ describe("OperatorRoutes", () => {
     expect(screen.queryByText(/remains inspection-only until a separately reviewed slice/i)).not.toBeInTheDocument();
   });
 
+  it("renders recommendation, approval, and reconciliation advisory links from action review detail", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch(
+        {
+          "/inspect-action-review": {
+            action_request_id: "action-request-321",
+            read_only: true,
+            current_action_review: {
+              action_request_id: "action-request-321",
+              review_state: "approved",
+            },
+            action_review: {
+              action_request_id: "action-request-321",
+              review_state: "approved",
+              action_request_state: "approved",
+              approval_state: "approved",
+              recommendation_id: "recommendation-321",
+              approval_decision_id: "approval-321",
+              reconciliation_id: "recon-321",
+              requester_identity: "analyst@example.com",
+              recipient_identity: "repo-owner@example.com",
+            },
+            case_record: {
+              case_id: "case-321",
+              lifecycle_state: "open",
+            },
+          },
+        },
+        {
+          identity: "approver@example.com",
+          provider: "authentik",
+          roles: ["Approver"],
+          subject: "operator-8",
+        },
+      ),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/action-review/action-request-321"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Action Review" })).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByRole("link", { name: "Open recommendation advisory" }),
+    ).toHaveAttribute("href", "/operator/assistant/recommendation/recommendation-321");
+    expect(
+      screen.getByRole("link", { name: "Open approval advisory" }),
+    ).toHaveAttribute("href", "/operator/assistant/approval_decision/approval-321");
+    expect(
+      screen.getByRole("link", { name: "Open reconciliation advisory" }),
+    ).toHaveAttribute("href", "/operator/assistant/reconciliation/recon-321");
+  });
+
   it("renders execution receipt, reconciliation mismatch, and coordination visibility on action-review detail", async () => {
     const dependencies = createDefaultDependencies({
       fetchFn: createAuthorizedFetch(
@@ -1724,6 +1782,86 @@ describe("OperatorRoutes", () => {
       "/diagnostics/readiness?order=ASC&page=1&per_page=1&sort=status",
       expect.any(Object),
     );
+  });
+
+  it("renders a case-anchored assistant advisory route from reviewed advisory output", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch({
+        "/inspect-advisory-output": {
+          read_only: true,
+          record_family: "case",
+          record_id: "case-456",
+          output_kind: "case_summary",
+          status: "ready",
+          summary:
+            "Repository owner membership drift remains bounded to the reviewed case scope.",
+          citations: ["case-456", "alert-123", "evidence-123"],
+        },
+      }),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/assistant/case/case-456"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Assistant Advisory" })).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText("case").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("case-456").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Output: case_summary/i)).toBeInTheDocument();
+    expect(screen.getByText(/Status: ready/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Repository owner membership drift remains bounded to the reviewed case scope.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("evidence-123")).toBeInTheDocument();
+  });
+
+  it("keeps fallback advisory summary fields out of the detail table", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch({
+        "/inspect-advisory-output": {
+          read_only: true,
+          record_family: "recommendation",
+          record_id: "recommendation-123",
+          output_kind: "recommendation_summary",
+          status: "ready",
+          message: "Use the reviewed recommendation as bounded advisory context.",
+          advisory_text: "This fallback field should not be repeated in detail rows.",
+          supporting_note: "Analyst follow-up remains separate from advisory prose.",
+        },
+      }),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/assistant/recommendation/recommendation-123"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Assistant Advisory" })).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText("Use the reviewed recommendation as bounded advisory context."),
+    ).toBeInTheDocument();
+
+    const detailTable = screen.getByRole("table");
+    expect(within(detailTable).queryByText("Message")).not.toBeInTheDocument();
+    expect(within(detailTable).queryByText("Output Text")).not.toBeInTheDocument();
+    expect(within(detailTable).queryByText("Advisory Text")).not.toBeInTheDocument();
+    expect(within(detailTable).getByText("Supporting Note")).toBeInTheDocument();
+    expect(
+      within(detailTable).getByText(
+        "Analyst follow-up remains separate from advisory prose.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("renders reconciliation mismatch visibility from reviewed records", async () => {

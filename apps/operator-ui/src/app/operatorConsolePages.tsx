@@ -84,6 +84,18 @@ function formatLabel(value: string) {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
+const ADVISORY_SUMMARY_FIELDS = ["summary", "message", "output_text", "advisory_text"] as const;
+const ADVISORY_DETAIL_EXCLUDED_FIELDS = [
+  "id",
+  "record_family",
+  "record_id",
+  "output_kind",
+  "status",
+  "read_only",
+  "citations",
+  ...ADVISORY_SUMMARY_FIELDS,
+] as const;
+
 function formatValue(value: unknown): string {
   if (value === null || value === undefined) {
     return "Not available";
@@ -650,6 +662,31 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
+function supportedAnchorRoute(
+  recordFamily: string | null,
+  recordId: string | null,
+): { label: string; to: string } | null {
+  if (recordFamily === null || recordId === null) {
+    return null;
+  }
+
+  if (recordFamily === "alert") {
+    return {
+      label: "Open alert detail",
+      to: `/operator/alerts/${recordId}`,
+    };
+  }
+
+  if (recordFamily === "case") {
+    return {
+      label: "Open case detail",
+      to: `/operator/cases/${recordId}`,
+    };
+  }
+
+  return null;
+}
+
 function RecordWarnings({ record }: { record: UnknownRecord }) {
   const warnings: string[] = [];
   const reviewState = asString(record.review_state);
@@ -914,6 +951,14 @@ function AlertDetailPageBody({
           <Button
             component={ReactRouterLink}
             endIcon={<LaunchOutlinedIcon />}
+            to={`/operator/assistant/alert/${alertId}`}
+            variant="outlined"
+          >
+            Open assistant advisory
+          </Button>
+          <Button
+            component={ReactRouterLink}
+            endIcon={<LaunchOutlinedIcon />}
             to={`/operator/provenance/alerts/${alertId}`}
             variant="outlined"
           >
@@ -1086,6 +1131,14 @@ function CaseDetailPageBody({
               Open action review
             </Button>
           ) : null}
+          <Button
+            component={ReactRouterLink}
+            endIcon={<LaunchOutlinedIcon />}
+            to={`/operator/assistant/case/${caseId}`}
+            variant="outlined"
+          >
+            Open assistant advisory
+          </Button>
           <Button
             component={ReactRouterLink}
             endIcon={<LaunchOutlinedIcon />}
@@ -1285,8 +1338,11 @@ function ActionReviewPageBody({
   const currentActionRequestId = asString(currentActionReview?.action_request_id);
   const actionRequestState = asString(actionReview?.action_request_state);
   const approvalState = asString(actionReview?.approval_state);
+  const approvalDecisionId = asString(actionReview?.approval_decision_id);
+  const reconciliationId = asString(actionReview?.reconciliation_id);
   const decisionRationale = asString(actionReview?.decision_rationale);
   const approverIdentities = asStringArray(actionReview?.approver_identities);
+  const recommendationId = asString(actionReview?.recommendation_id);
   const isCurrentAuthoritativeReview =
     selectedActionRequestId !== null &&
     currentActionRequestId !== null &&
@@ -1344,6 +1400,36 @@ function ActionReviewPageBody({
               variant="outlined"
             >
               Open case detail
+            </Button>
+          ) : null}
+          {recommendationId ? (
+            <Button
+              component={ReactRouterLink}
+              endIcon={<LaunchOutlinedIcon />}
+              to={`/operator/assistant/recommendation/${recommendationId}`}
+              variant="outlined"
+            >
+              Open recommendation advisory
+            </Button>
+          ) : null}
+          {approvalDecisionId ? (
+            <Button
+              component={ReactRouterLink}
+              endIcon={<LaunchOutlinedIcon />}
+              to={`/operator/assistant/approval_decision/${approvalDecisionId}`}
+              variant="outlined"
+            >
+              Open approval advisory
+            </Button>
+          ) : null}
+          {reconciliationId ? (
+            <Button
+              component={ReactRouterLink}
+              endIcon={<LaunchOutlinedIcon />}
+              to={`/operator/assistant/reconciliation/${reconciliationId}`}
+              variant="outlined"
+            >
+              Open reconciliation advisory
             </Button>
           ) : null}
           {alertRecord?.alert_id ? (
@@ -1500,6 +1586,167 @@ export function ActionReviewPage({
           title="Select an action review"
         >
           <EmptyState message="No action request is selected yet." />
+        </SectionCard>
+      )}
+    </PageFrame>
+  );
+}
+
+function AdvisoryDetailTable({ record }: { record: UnknownRecord }) {
+  const rows = Object.entries(record).filter(([key]) => {
+    return !ADVISORY_DETAIL_EXCLUDED_FIELDS.includes(
+      key as (typeof ADVISORY_DETAIL_EXCLUDED_FIELDS)[number],
+    );
+  });
+
+  if (rows.length === 0) {
+    return <EmptyState message="No additional advisory fields were returned for this record." />;
+  }
+
+  return (
+    <Table size="small">
+      <TableHead>
+        <TableRow>
+          <TableCell>Field</TableCell>
+          <TableCell>Value</TableCell>
+        </TableRow>
+      </TableHead>
+      <TableBody>
+        {rows.map(([key, value]) => (
+          <TableRow key={key}>
+            <TableCell>{formatLabel(key)}</TableCell>
+            <TableCell>{formatValue(value)}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+function AssistantAdvisoryPageBody({
+  recordFamily,
+  recordId,
+}: {
+  recordFamily: string;
+  recordId: string;
+}) {
+  const advisoryId = `${recordFamily}:${recordId}`;
+  const meta = useMemo(
+    () => ({
+      recordFamily,
+      recordId,
+    }),
+    [recordFamily, recordId],
+  );
+  const { data, error, loading } = useOperatorRecord("advisoryOutput", advisoryId, meta);
+  const anchorLink = supportedAnchorRoute(recordFamily, recordId);
+
+  if (loading) {
+    return <LoadingState label="Loading assistant advisory" />;
+  }
+  if (error) {
+    return <ErrorState error={error} />;
+  }
+  if (!data) {
+    return <EmptyState message="Assistant advisory is unavailable." />;
+  }
+
+  const summary =
+    ADVISORY_SUMMARY_FIELDS.map((key) => asString(data[key])).find(
+      (value): value is string => value !== null,
+    ) ?? null;
+  const citations = asStringArray(data.citations);
+
+  return (
+    <Stack spacing={3}>
+      <SectionCard
+        subtitle="Assistant output stays subordinate to the selected authoritative record and remains read-only inside the reviewed shell."
+        title="Authoritative advisory anchor"
+      >
+        <StatusStrip
+          values={[
+            ["Status", asString(data.status)],
+            ["Output", asString(data.output_kind)],
+          ]}
+        />
+        <ValueList
+          entries={[
+            ["Record family", asString(data.record_family) ?? recordFamily],
+            ["Record id", asString(data.record_id) ?? recordId],
+            ["Read only", formatValue(data.read_only)],
+          ]}
+        />
+        {anchorLink ? (
+          <Button
+            component={ReactRouterLink}
+            endIcon={<LaunchOutlinedIcon />}
+            to={anchorLink.to}
+            variant="outlined"
+          >
+            {anchorLink.label}
+          </Button>
+        ) : null}
+      </SectionCard>
+
+      <SectionCard
+        subtitle="The reviewed shell exposes bounded advisory text without widening this route into a generic assistant workspace."
+        title="Assistant summary"
+      >
+        {summary ? (
+          <Alert severity="info" variant="outlined">
+            {summary}
+          </Alert>
+        ) : (
+          <EmptyState message="No assistant summary text was returned for this record." />
+        )}
+      </SectionCard>
+
+      <SectionCard
+        subtitle="Evidence citations stay visible as directly linked support for this advisory output."
+        title="Evidence anchors"
+      >
+        {citations.length > 0 ? (
+          <Stack direction="row" flexWrap="wrap" gap={1}>
+            {citations.map((citation) => (
+              <Chip key={citation} label={citation} size="small" variant="outlined" />
+            ))}
+          </Stack>
+        ) : (
+          <EmptyState message="No advisory citations were returned for this record." />
+        )}
+      </SectionCard>
+
+      <SectionCard
+        subtitle="Additional reviewed advisory fields remain readable here until richer advisory-specific rendering lands."
+        title="Advisory detail"
+      >
+        <AdvisoryDetailTable record={data} />
+      </SectionCard>
+    </Stack>
+  );
+}
+
+export function AssistantAdvisoryPage() {
+  const params = useParams();
+  const recordFamily = asString(params.recordFamily);
+  const recordId = asString(params.recordId);
+
+  return (
+    <PageFrame
+      subtitle="Assistant advisory stays a dedicated read surface anchored to one authoritative record. It does not become a generic assistant chat or mutable workflow console."
+      title="Assistant Advisory"
+    >
+      {recordFamily && recordId ? (
+        <AssistantAdvisoryPageBody
+          recordFamily={recordFamily}
+          recordId={recordId}
+        />
+      ) : (
+        <SectionCard
+          subtitle="Open assistant advisory from alert, case, or action-review detail so the route stays grounded in one authoritative record."
+          title="Select advisory context"
+        >
+          <EmptyState message="No authoritative record is selected for assistant advisory yet." />
         </SectionCard>
       )}
     </PageFrame>

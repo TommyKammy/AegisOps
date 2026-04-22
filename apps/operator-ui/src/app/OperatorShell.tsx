@@ -1,4 +1,5 @@
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import AutoAwesomeOutlinedIcon from "@mui/icons-material/AutoAwesomeOutlined";
 import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
 import InboxOutlinedIcon from "@mui/icons-material/InboxOutlined";
 import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
@@ -26,6 +27,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { operatorTheme } from "./theme";
 import {
   ActionReviewPage,
+  AssistantAdvisoryPage,
   AlertDetailPage,
   CaseDetailPage,
   ProvenancePage,
@@ -94,6 +96,11 @@ function OperatorMenu({
         primaryText="Reconciliation"
         to="/operator/reconciliation"
       />
+      <Menu.Item
+        leftIcon={<AutoAwesomeOutlinedIcon />}
+        primaryText="Assistant"
+        to="/operator/assistant"
+      />
       {showActionReview ? (
         <Menu.Item
           leftIcon={<GavelOutlinedIcon />}
@@ -128,6 +135,12 @@ function OverviewPage({
       chip: "Read-only",
       description:
         "Case detail pages will remain task-oriented instead of generic CRUD resources.",
+    },
+    {
+      title: "Assistant",
+      chip: "Advisory only",
+      description:
+        "Assistant advisory stays subordinate to authoritative AegisOps records and remains read-oriented in the reviewed shell.",
     },
     ...(canInspectActionReview(operatorRoles)
       ? [
@@ -244,6 +257,11 @@ export function OperatorShell({
             <Route element={<ProvenancePage />} path="provenance/:family/:recordId" />
             <Route element={<ReadinessPage />} path="readiness" />
             <Route element={<ReconciliationPage />} path="reconciliation" />
+            <Route element={<AssistantAdvisoryPage />} path="assistant" />
+            <Route
+              element={<AssistantAdvisoryPage />}
+              path="assistant/:recordFamily/:recordId"
+            />
             <Route
               element={
                 canViewActionReview ? (
