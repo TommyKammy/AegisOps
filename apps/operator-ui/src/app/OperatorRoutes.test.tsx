@@ -1875,6 +1875,9 @@ describe("OperatorRoutes", () => {
         "Assistant output does not approve, execute, or reconcile workflow state.",
       ),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Advisory failure visibility" }),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps fallback advisory summary fields out of the detail table", async () => {
@@ -1925,6 +1928,88 @@ describe("OperatorRoutes", () => {
     expect(
       within(detailTable).getByText(
         "Analyst follow-up remains separate from advisory prose.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("renders explicit citation-failure and reviewed-context visibility for unresolved advisory output", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch({
+        "/inspect-advisory-output": {
+          read_only: true,
+          record_family: "case",
+          record_id: "case-456",
+          output_kind: "case_summary",
+          status: "unresolved",
+          cited_summary: {
+            text: "Case summary case-456 remains unresolved because citation completeness or reviewed-context consistency is incomplete.",
+            citations: ["case-456"],
+          },
+          key_observations: [
+            {
+              text: "Reviewed context exposes stable identifiers for the cited advisory output.",
+              citations: [
+                "reviewed_context.asset.asset_id=asset-123",
+                "reviewed_context.identity.user_id=user-456",
+              ],
+            },
+          ],
+          unresolved_questions: [
+            {
+              text: "Which reviewed records, linked evidence, or stable reviewed-context identifiers support this advisory output?",
+              citations: ["case-456"],
+            },
+            {
+              text: "Which reviewed-context values are authoritative for: identity.user_id?",
+              citations: ["case-456", "alert-123"],
+            },
+          ],
+          uncertainty_flags: [
+            "advisory_only",
+            "missing_supporting_citations",
+            "conflicting_reviewed_context",
+          ],
+          citations: ["case-456", "alert-123"],
+        },
+      }),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/assistant/case/case-456"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Assistant Advisory" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Advisory failure visibility" })).toBeInTheDocument();
+    expect(
+      screen.getByText(/Missing citation support is visible here/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Conflicting reviewed context remains visible here/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Assistant advisory remains unresolved because required citation or reviewed-context checks failed.",
+      ),
+    ).toBeInTheDocument();
+
+    const contextSection = screen.getByRole("heading", { name: "Assistant context explorer" });
+    const contextCard = contextSection.closest(".MuiCard-root");
+    expect(contextCard).not.toBeNull();
+    expect(
+      within(contextCard as HTMLElement).getByText(
+        "Reviewed context exposes stable identifiers for the cited advisory output.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(contextCard as HTMLElement).getByText(
+        "Which reviewed records, linked evidence, or stable reviewed-context identifiers support this advisory output?",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(contextCard as HTMLElement).getByText(
+        "reviewed_context.asset.asset_id=asset-123",
       ),
     ).toBeInTheDocument();
   });
