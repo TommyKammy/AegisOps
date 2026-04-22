@@ -26,6 +26,7 @@ The locked verification surfaces are:
 - `docs/phase-30-react-admin-foundation-and-read-only-operator-console-boundary.md`
 - `docs/phase-30d-approval-execution-reconciliation-ui-boundary.md`
 - `control-plane/tests/test_phase30e_assistant_advisory_ui_boundary_docs.py`
+- `control-plane/tests/test_phase30e_operator_ui_validation.py`
 - `apps/operator-ui/src/app/OperatorRoutes.test.tsx`
 
 Focused validation covers:
@@ -39,5 +40,6 @@ Focused validation covers:
 Focused verification commands:
 
 - `python3 -m unittest control-plane.tests.test_phase30e_assistant_advisory_ui_boundary_docs`
+- `python3 -m unittest control-plane.tests.test_phase30e_operator_ui_validation`
 - `npm --prefix apps/operator-ui test -- src/app/OperatorRoutes.test.tsx`
 - `npm --prefix apps/operator-ui run build`
