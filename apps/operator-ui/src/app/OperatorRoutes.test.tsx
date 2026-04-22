@@ -16,6 +16,61 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
+function createOptionalExtensionPayload(
+  overrides: Partial<Record<"assistant" | "endpoint_evidence" | "network_evidence" | "ml_shadow", unknown>> = {},
+) {
+  return {
+    overall_state: "ready",
+    tracked_extensions: 4,
+    extensions: {
+      assistant: {
+        authority_mode: "advisory_only",
+        availability: "available",
+        enablement: "enabled",
+        mainline_dependency: "non_blocking",
+        readiness: "ready",
+        reason: "bounded_reviewed_summary_provider_available",
+      },
+      endpoint_evidence: {
+        authority_mode: "augmenting_evidence",
+        availability: "unavailable",
+        enablement: "disabled_by_default",
+        mainline_dependency: "non_blocking",
+        readiness: "not_applicable",
+        reason: "isolated_executor_runtime_not_configured",
+      },
+      network_evidence: {
+        authority_mode: "augmenting_evidence",
+        availability: "unavailable",
+        enablement: "disabled_by_default",
+        mainline_dependency: "non_blocking",
+        readiness: "not_applicable",
+        reason: "reviewed_network_evidence_extension_not_activated",
+      },
+      ml_shadow: {
+        authority_mode: "shadow_only",
+        availability: "unavailable",
+        enablement: "disabled_by_default",
+        mainline_dependency: "non_blocking",
+        readiness: "not_applicable",
+        reason: "reviewed_ml_shadow_extension_not_activated",
+      },
+      ...overrides,
+    },
+  };
+}
+
+function createReadinessResponse(
+  optionalExtensionsOverrides?: Partial<Record<"assistant" | "endpoint_evidence" | "network_evidence" | "ml_shadow", unknown>>,
+) {
+  return {
+    metrics: {
+      optional_extensions: createOptionalExtensionPayload(optionalExtensionsOverrides),
+    },
+    status: "ready",
+  };
+}
+
 function createAuthorizedFetch(
   handlers: Record<string, unknown>,
   sessionOverride?: {
@@ -44,6 +99,10 @@ function createAuthorizedFetch(
     const match = Object.entries(handlers).find(([prefix]) => url.startsWith(prefix));
     if (match) {
       return Promise.resolve(jsonResponse(match[1]));
+    }
+
+    if (url.startsWith("/diagnostics/readiness")) {
+      return Promise.resolve(jsonResponse(createReadinessResponse()));
     }
 
     return Promise.reject(new Error(`Unexpected fetch: ${url}`));
@@ -124,15 +183,21 @@ describe("OperatorRoutes", () => {
   });
 
   it("restores an authorized session into the protected shell", async () => {
+    const fetchFn = createAuthorizedFetch({
+      "/diagnostics/readiness": createReadinessResponse({
+        ml_shadow: {
+          authority_mode: "shadow_only",
+          availability: "available",
+          enablement: "enabled",
+          mainline_dependency: "non_blocking",
+          readiness: "degraded",
+          reason: "reviewed_ml_shadow_extension_provider_lagging",
+        },
+        network_evidence: undefined,
+      }),
+    });
     const dependencies = createDefaultDependencies({
-      fetchFn: vi.fn<typeof fetch>().mockResolvedValue(
-        jsonResponse({
-          identity: "analyst@example.com",
-          provider: "authentik",
-          roles: ["Analyst"],
-          subject: "operator-7",
-        }),
-      ),
+      fetchFn,
     });
 
     render(
@@ -155,15 +220,26 @@ describe("OperatorRoutes", () => {
         "Optional-path posture stays subordinate to authoritative workflow pages and reviewed runtime truth.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText("Enabled")).toBeInTheDocument();
-    expect(screen.getAllByText("Disabled By Default").length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(screen.getByText("Enabled")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Disabled By Default")).toBeInTheDocument();
     expect(screen.getByText("Unavailable")).toBeInTheDocument();
     expect(screen.getByText("Degraded")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Reviewed status source: reviewed ml shadow extension provider lagging\./i,
+      ),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
         "Missing optional paths do not imply a control-plane failure when the mainline reviewed workflow remains healthy.",
       ),
     ).toBeInTheDocument();
+    expect(fetchFn).toHaveBeenCalledWith(
+      "/diagnostics/readiness?order=ASC&page=1&per_page=1&sort=status",
+      expect.any(Object),
+    );
   });
 
   it("hides action-review navigation for analyst-only sessions", async () => {
