@@ -44,4 +44,4 @@ Client-event logging remains subordinate to backend audit authority and explicit
 - `python3 -m unittest control-plane.tests.test_phase31_operator_ui_validation`
 - `npm --prefix apps/operator-ui test -- --run src/app/OperatorRoutes.test.tsx`
 - `npm --prefix apps/operator-ui run build`
-- `node /Users/jp.infra/Dev/codex-supervisor/dist/index.js issue-lint 708 --config /Users/jp.infra/Dev/codex-supervisor/supervisor.config.aegisops.coderabbit.json`
+- `node <codex-supervisor-checkout>/dist/index.js issue-lint 708 --config <codex-supervisor-checkout>/supervisor.config.aegisops.coderabbit.json`
