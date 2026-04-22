@@ -92,6 +92,9 @@ const ADVISORY_DETAIL_EXCLUDED_FIELDS = [
   "output_kind",
   "status",
   "read_only",
+  "cited_summary",
+  "candidate_recommendations",
+  "uncertainty_flags",
   "citations",
   ...ADVISORY_SUMMARY_FIELDS,
 ] as const;
@@ -117,6 +120,28 @@ function formatValue(value: unknown): string {
   }
 
   return JSON.stringify(value);
+}
+
+function advisorySummary(record: UnknownRecord) {
+  const citedSummary = asRecord(record.cited_summary);
+  const citedText = asString(citedSummary?.text);
+  const citedCitations = asStringArray(citedSummary?.citations);
+  const fallbackText =
+    ADVISORY_SUMMARY_FIELDS.map((key) => asString(record[key])).find(
+      (value): value is string => value !== null,
+    ) ?? null;
+
+  return {
+    citations: citedText ? citedCitations : [],
+    text: citedText ?? fallbackText,
+  };
+}
+
+function advisoryRecommendations(record: UnknownRecord) {
+  return asRecordArray(record.candidate_recommendations).map((entry) => ({
+    citations: asStringArray(entry.citations),
+    text: asString(entry.text),
+  }));
 }
 
 function statusTone(
@@ -1651,11 +1676,14 @@ function AssistantAdvisoryPageBody({
     return <EmptyState message="Assistant advisory is unavailable." />;
   }
 
-  const summary =
-    ADVISORY_SUMMARY_FIELDS.map((key) => asString(data[key])).find(
-      (value): value is string => value !== null,
-    ) ?? null;
+  const summary = advisorySummary(data);
+  const recommendationDrafts = advisoryRecommendations(data).filter(
+    (entry): entry is { citations: string[]; text: string } => entry.text !== null,
+  );
   const citations = asStringArray(data.citations);
+  const uncertaintyFlags = asStringArray(data.uncertainty_flags);
+  const showsRecommendationDraft =
+    asString(data.output_kind) === "recommendation_draft" || recommendationDrafts.length > 0;
 
   return (
     <Stack spacing={3}>
@@ -1689,17 +1717,71 @@ function AssistantAdvisoryPageBody({
       </SectionCard>
 
       <SectionCard
-        subtitle="The reviewed shell exposes bounded advisory text without widening this route into a generic assistant workspace."
-        title="Assistant summary"
+        subtitle="Citation-led assistant output stays visibly subordinate to the authoritative anchor and remains advisory only."
+        title="Cited advisory output"
       >
-        {summary ? (
-          <Alert severity="info" variant="outlined">
-            {summary}
-          </Alert>
+        {summary.text ? (
+          <Stack spacing={2}>
+            <Alert severity="info" variant="outlined">
+              {summary.text}
+            </Alert>
+            {summary.citations.length > 0 ? (
+              <Stack direction="row" flexWrap="wrap" gap={1}>
+                {summary.citations.map((citation) => (
+                  <Chip key={citation} label={citation} size="small" variant="outlined" />
+                ))}
+              </Stack>
+            ) : (
+              <EmptyState message="No cited summary anchors were returned for this advisory output." />
+            )}
+          </Stack>
         ) : (
           <EmptyState message="No assistant summary text was returned for this record." />
         )}
       </SectionCard>
+
+      {showsRecommendationDraft ? (
+        <SectionCard
+          subtitle="Recommendation proposals remain explicit assistant drafts and do not replace reviewed workflow state."
+          title="Recommendation draft"
+        >
+          <Stack spacing={2}>
+            <Stack direction="row" flexWrap="wrap" gap={1}>
+              <Chip color="warning" label="Draft only" size="small" />
+              {uncertaintyFlags.map((flag) => (
+                <Chip key={flag} label={formatLabel(flag)} size="small" variant="outlined" />
+              ))}
+            </Stack>
+            <Alert severity="warning" variant="outlined">
+              Assistant output does not approve, execute, or reconcile workflow state.
+            </Alert>
+            {recommendationDrafts.length > 0 ? (
+              <Stack spacing={2}>
+                {recommendationDrafts.map((draft, index) => (
+                  <Card elevation={0} key={`${draft.text}-${index}`} sx={{ border: "1px solid", borderColor: "divider" }}>
+                    <CardContent>
+                      <Stack spacing={2}>
+                        <Typography variant="body1">{draft.text}</Typography>
+                        {draft.citations.length > 0 ? (
+                          <Stack direction="row" flexWrap="wrap" gap={1}>
+                            {draft.citations.map((citation) => (
+                              <Chip key={`${draft.text}-${citation}`} label={citation} size="small" variant="outlined" />
+                            ))}
+                          </Stack>
+                        ) : (
+                          <EmptyState message="This recommendation draft did not include supporting citations." />
+                        )}
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                ))}
+              </Stack>
+            ) : (
+              <EmptyState message="No recommendation draft proposals were returned for this advisory output." />
+            )}
+          </Stack>
+        </SectionCard>
+      ) : null}
 
       <SectionCard
         subtitle="Evidence citations stay visible as directly linked support for this advisory output."

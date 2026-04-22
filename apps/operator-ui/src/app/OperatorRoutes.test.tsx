@@ -333,12 +333,8 @@ describe("OperatorRoutes", () => {
       </MemoryRouter>,
     );
 
-    await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Action Review" })).toBeInTheDocument();
-    });
-
     expect(
-      screen.getByRole("link", { name: "Open recommendation advisory" }),
+      await screen.findByRole("link", { name: "Open recommendation advisory" }),
     ).toHaveAttribute("href", "/operator/assistant/recommendation/recommendation-321");
     expect(
       screen.getByRole("link", { name: "Open approval advisory" }),
@@ -1822,6 +1818,65 @@ describe("OperatorRoutes", () => {
     expect(screen.getByText("evidence-123")).toBeInTheDocument();
   });
 
+  it("renders cited recommendation draft output with explicit assistant-only framing", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch({
+        "/inspect-advisory-output": {
+          read_only: true,
+          record_family: "recommendation",
+          record_id: "recommendation-123",
+          output_kind: "recommendation_draft",
+          status: "ready",
+          cited_summary: {
+            text: "The assistant draft stays anchored to the cited evidence before any reviewed action.",
+            citations: ["recommendation-123", "evidence-123", "case-456"],
+          },
+          candidate_recommendations: [
+            {
+              text: "Proposal only: confirm the repository ownership change before raising an action request.",
+              citations: ["evidence-123", "case-456"],
+            },
+          ],
+          uncertainty_flags: ["advisory_only"],
+          citations: ["recommendation-123", "evidence-123", "case-456"],
+        },
+      }),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/assistant/recommendation/recommendation-123"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    const citedOutputSection = await screen.findByRole("heading", { name: "Cited advisory output" });
+    const citedOutputCard = citedOutputSection.closest(".MuiCard-root");
+    expect(citedOutputCard).not.toBeNull();
+    expect(
+      within(citedOutputCard as HTMLElement).getByText(
+        "The assistant draft stays anchored to the cited evidence before any reviewed action.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(citedOutputCard as HTMLElement).getByText("recommendation-123")).toBeInTheDocument();
+    expect(within(citedOutputCard as HTMLElement).getByText("evidence-123")).toBeInTheDocument();
+    expect(within(citedOutputCard as HTMLElement).getByText("case-456")).toBeInTheDocument();
+
+    const draftSection = screen.getByRole("heading", { name: "Recommendation draft" });
+    const draftCard = draftSection.closest(".MuiCard-root");
+    expect(draftCard).not.toBeNull();
+    expect(within(draftCard as HTMLElement).getByText("Draft only")).toBeInTheDocument();
+    expect(
+      within(draftCard as HTMLElement).getByText(
+        "Proposal only: confirm the repository ownership change before raising an action request.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(draftCard as HTMLElement).getByText(
+        "Assistant output does not approve, execute, or reconcile workflow state.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("keeps fallback advisory summary fields out of the detail table", async () => {
     const dependencies = createDefaultDependencies({
       fetchFn: createAuthorizedFetch({
@@ -1831,6 +1886,9 @@ describe("OperatorRoutes", () => {
           record_id: "recommendation-123",
           output_kind: "recommendation_summary",
           status: "ready",
+          cited_summary: {
+            citations: ["recommendation-123", "evidence-123"],
+          },
           message: "Use the reviewed recommendation as bounded advisory context.",
           advisory_text: "This fallback field should not be repeated in detail rows.",
           supporting_note: "Analyst follow-up remains separate from advisory prose.",
@@ -1844,13 +1902,20 @@ describe("OperatorRoutes", () => {
       </MemoryRouter>,
     );
 
-    await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Assistant Advisory" })).toBeInTheDocument();
-    });
-
     expect(
-      screen.getByText("Use the reviewed recommendation as bounded advisory context."),
+      await screen.findByText("Use the reviewed recommendation as bounded advisory context."),
     ).toBeInTheDocument();
+
+    const citedOutputSection = await screen.findByRole("heading", { name: "Cited advisory output" });
+    const citedOutputCard = citedOutputSection.closest(".MuiCard-root");
+    expect(citedOutputCard).not.toBeNull();
+    expect(
+      within(citedOutputCard as HTMLElement).getByText(
+        "No cited summary anchors were returned for this advisory output.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(citedOutputCard as HTMLElement).queryByText("recommendation-123")).not.toBeInTheDocument();
+    expect(within(citedOutputCard as HTMLElement).queryByText("evidence-123")).not.toBeInTheDocument();
 
     const detailTable = screen.getByRole("table");
     expect(within(detailTable).queryByText("Message")).not.toBeInTheDocument();
