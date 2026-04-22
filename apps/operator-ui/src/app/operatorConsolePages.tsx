@@ -144,6 +144,67 @@ function advisoryRecommendations(record: UnknownRecord) {
   }));
 }
 
+function advisoryContextEntries(record: UnknownRecord, field: "key_observations" | "unresolved_questions") {
+  return asRecordArray(record[field]).map((entry) => ({
+    citations: asStringArray(entry.citations),
+    text: asString(entry.text),
+  }));
+}
+
+function advisoryUncertaintyMessage(flag: string): string {
+  switch (flag) {
+    case "missing_supporting_citations":
+      return "Required reviewed citations are missing, so this advisory output remains fail-closed.";
+    case "missing_evidence_citation":
+      return "Linked evidence citations required for this advisory output are missing.";
+    case "conflicting_reviewed_context":
+      return "Reviewed context conflicts remain unresolved and must stay visible before any operator action.";
+    case "ambiguous_identity_alias_only":
+      return "Alias-style identity context is still unresolved; stable reviewed identifiers are still required.";
+    case "reviewed_casework_identity_ambiguity":
+      return "Reviewed casework identity ambiguity remains open across linked records and evidence.";
+    case "scope_authority_pressure":
+      return "Assistant output tried to imply scope or authority beyond the reviewed record boundary.";
+    case "approval_authority_pressure":
+      return "Assistant output must not imply approval authority.";
+    case "execution_authority_pressure":
+      return "Assistant output must not imply execution authority.";
+    case "reconciliation_authority_pressure":
+      return "Assistant output must not imply reconciliation authority.";
+    case "advisory_only":
+      return "Assistant output remains advisory-only and subordinate to the authoritative record.";
+    default:
+      return `${formatLabel(flag)} remains visible on this advisory output.`;
+  }
+}
+
+function advisoryUncertaintyLabel(flag: string): string {
+  switch (flag) {
+    case "missing_supporting_citations":
+      return "Missing citation support";
+    case "missing_evidence_citation":
+      return "Missing evidence citation";
+    case "conflicting_reviewed_context":
+      return "Conflicting reviewed context";
+    case "ambiguous_identity_alias_only":
+      return "Alias-only identity ambiguity";
+    case "reviewed_casework_identity_ambiguity":
+      return "Reviewed casework identity ambiguity";
+    case "scope_authority_pressure":
+      return "Scope authority pressure";
+    case "approval_authority_pressure":
+      return "Approval authority pressure";
+    case "execution_authority_pressure":
+      return "Execution authority pressure";
+    case "reconciliation_authority_pressure":
+      return "Reconciliation authority pressure";
+    case "advisory_only":
+      return "Advisory only";
+    default:
+      return formatLabel(flag);
+  }
+}
+
 function statusTone(
   status: string | null,
 ): "default" | "error" | "info" | "success" | "warning" {
@@ -684,6 +745,45 @@ function EmptyState({ message }: { message: string }) {
     <Alert severity="info" variant="outlined">
       {message}
     </Alert>
+  );
+}
+
+function AdvisoryContextList({
+  entries,
+  emptyMessage,
+}: {
+  entries: Array<{ citations: string[]; text: string | null }>;
+  emptyMessage: string;
+}) {
+  const populatedEntries = entries.filter(
+    (entry): entry is { citations: string[]; text: string } => entry.text !== null,
+  );
+
+  if (populatedEntries.length === 0) {
+    return <EmptyState message={emptyMessage} />;
+  }
+
+  return (
+    <Stack spacing={2}>
+      {populatedEntries.map((entry, index) => (
+        <Card elevation={0} key={`${entry.text}-${index}`} sx={{ border: "1px solid", borderColor: "divider" }}>
+          <CardContent>
+            <Stack spacing={2}>
+              <Typography variant="body1">{entry.text}</Typography>
+              {entry.citations.length > 0 ? (
+                <Stack direction="row" flexWrap="wrap" gap={1}>
+                  {entry.citations.map((citation) => (
+                    <Chip key={`${entry.text}-${citation}`} label={citation} size="small" variant="outlined" />
+                  ))}
+                </Stack>
+              ) : (
+                <EmptyState message="No reviewed citations were attached to this context entry." />
+              )}
+            </Stack>
+          </CardContent>
+        </Card>
+      ))}
+    </Stack>
   );
 }
 
@@ -1680,10 +1780,17 @@ function AssistantAdvisoryPageBody({
   const recommendationDrafts = advisoryRecommendations(data).filter(
     (entry): entry is { citations: string[]; text: string } => entry.text !== null,
   );
+  const keyObservations = advisoryContextEntries(data, "key_observations");
+  const unresolvedQuestions = advisoryContextEntries(data, "unresolved_questions");
   const citations = asStringArray(data.citations);
   const uncertaintyFlags = asStringArray(data.uncertainty_flags);
   const showsRecommendationDraft =
     asString(data.output_kind) === "recommendation_draft" || recommendationDrafts.length > 0;
+  const hasCitationFailure =
+    uncertaintyFlags.includes("missing_supporting_citations") ||
+    uncertaintyFlags.includes("missing_evidence_citation");
+  const hasUnresolvedState = asString(data.status) === "unresolved";
+  const hasReviewedContextConflict = uncertaintyFlags.includes("conflicting_reviewed_context");
 
   return (
     <Stack spacing={3}>
@@ -1716,13 +1823,60 @@ function AssistantAdvisoryPageBody({
         ) : null}
       </SectionCard>
 
+      {(hasUnresolvedState || uncertaintyFlags.length > 0) ? (
+        <SectionCard
+          subtitle="Citation failures, unresolved grounding, and reviewed-context conflicts stay explicit instead of being normalized into a cleaner assistant summary."
+          title="Advisory failure visibility"
+        >
+          <Stack spacing={2}>
+            <Stack direction="row" flexWrap="wrap" gap={1}>
+              {uncertaintyFlags.map((flag) => (
+                <Chip
+                  color={flag === "advisory_only" ? "warning" : "error"}
+                  key={flag}
+                  label={advisoryUncertaintyLabel(flag)}
+                  size="small"
+                  variant={flag === "advisory_only" ? "outlined" : "filled"}
+                />
+              ))}
+            </Stack>
+            {hasUnresolvedState ? (
+              <Alert severity="error" variant="outlined">
+                Assistant advisory remains unresolved because required citation or reviewed-context checks failed.
+              </Alert>
+            ) : null}
+            {hasCitationFailure ? (
+              <Alert severity="error" variant="outlined">
+                Missing citation support is visible here so uncited assistant prose does not resemble reviewed workflow truth.
+              </Alert>
+            ) : null}
+            {hasReviewedContextConflict ? (
+              <Alert severity="warning" variant="outlined">
+                Conflicting reviewed context remains visible here; the browser does not silently pick one record as authoritative support for assistant output.
+              </Alert>
+            ) : null}
+            <Stack spacing={1}>
+              {uncertaintyFlags.map((flag) => (
+                <Alert
+                  key={`uncertainty-${flag}`}
+                  severity={flag === "advisory_only" ? "info" : flag === "conflicting_reviewed_context" ? "warning" : "error"}
+                  variant="outlined"
+                >
+                  {advisoryUncertaintyMessage(flag)}
+                </Alert>
+              ))}
+            </Stack>
+          </Stack>
+        </SectionCard>
+      ) : null}
+
       <SectionCard
         subtitle="Citation-led assistant output stays visibly subordinate to the authoritative anchor and remains advisory only."
         title="Cited advisory output"
       >
         {summary.text ? (
           <Stack spacing={2}>
-            <Alert severity="info" variant="outlined">
+            <Alert severity={hasCitationFailure || hasUnresolvedState ? "warning" : "info"} variant="outlined">
               {summary.text}
             </Alert>
             {summary.citations.length > 0 ? (
@@ -1738,6 +1892,28 @@ function AssistantAdvisoryPageBody({
         ) : (
           <EmptyState message="No assistant summary text was returned for this record." />
         )}
+      </SectionCard>
+
+      <SectionCard
+        subtitle="Reviewed context, linked evidence, and unresolved grounding questions stay inspectable here instead of collapsing into a cleaner assistant answer."
+        title="Assistant context explorer"
+      >
+        <Stack spacing={3}>
+          <Stack spacing={1}>
+            <Typography variant="subtitle2">Reviewed context</Typography>
+            <AdvisoryContextList
+              emptyMessage="No reviewed context observations were returned for this advisory output."
+              entries={keyObservations}
+            />
+          </Stack>
+          <Stack spacing={1}>
+            <Typography variant="subtitle2">Unresolved grounding</Typography>
+            <AdvisoryContextList
+              emptyMessage="No unresolved grounding questions were returned for this advisory output."
+              entries={unresolvedQuestions}
+            />
+          </Stack>
+        </Stack>
       </SectionCard>
 
       {showsRecommendationDraft ? (
