@@ -1818,6 +1818,37 @@ describe("OperatorRoutes", () => {
     expect(screen.getByText("evidence-123")).toBeInTheDocument();
   });
 
+  it("keeps no-authority semantics explicit for cited advisory output without a recommendation draft", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch({
+        "/inspect-advisory-output": {
+          read_only: true,
+          record_family: "case",
+          record_id: "case-456",
+          output_kind: "case_summary",
+          status: "ready",
+          cited_summary: {
+            text: "The reviewed case remains open while the assistant summary stays advisory-only.",
+            citations: ["case-456", "alert-123"],
+          },
+          uncertainty_flags: ["advisory_only"],
+          citations: ["case-456", "alert-123"],
+        },
+      }),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/assistant/case/case-456"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Assistant Advisory" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Assistant output does not approve, execute, or reconcile workflow state."),
+    ).toBeInTheDocument();
+  });
+
   it("renders cited recommendation draft output with explicit assistant-only framing", async () => {
     const dependencies = createDefaultDependencies({
       fetchFn: createAuthorizedFetch({
@@ -1981,7 +2012,7 @@ describe("OperatorRoutes", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "Assistant Advisory" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Advisory failure visibility" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Advisory failure visibility" })).toBeInTheDocument();
     expect(
       screen.getByText(/Missing citation support is visible here/i),
     ).toBeInTheDocument();

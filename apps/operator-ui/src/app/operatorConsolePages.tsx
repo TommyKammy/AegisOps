@@ -1823,6 +1823,9 @@ function AssistantAdvisoryPageBody({
             {anchorLink.label}
           </Button>
         ) : null}
+        <Alert severity="warning" variant="outlined">
+          Assistant output does not approve, execute, or reconcile workflow state.
+        </Alert>
       </SectionCard>
 
       {hasFailureVisibility ? (
