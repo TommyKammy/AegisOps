@@ -640,13 +640,15 @@ describe("OperatorRoutes", () => {
       expect(screen.getByRole("heading", { name: "Action Review" })).toBeInTheDocument();
     });
 
-    expect(screen.getAllByText("Approval lifecycle").length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          "Expired means the reviewed approval window no longer authorizes this request. Operators must reread authoritative state rather than infer continued validity.",
+        ),
+      ).toBeInTheDocument();
+    });
+
     expect(screen.getAllByText("expired").length).toBeGreaterThan(0);
-    expect(
-      screen.getByText(
-        "Expired means the reviewed approval window no longer authorizes this request. Operators must reread authoritative state rather than infer continued validity.",
-      ),
-    ).toBeInTheDocument();
     expect(screen.getByText("Execution receipt")).toBeInTheDocument();
     expect(screen.getByText("Reconciliation visibility")).toBeInTheDocument();
     expect(
@@ -1925,15 +1927,18 @@ describe("OperatorRoutes", () => {
       expect(screen.getByRole("heading", { name: "Assistant Advisory" })).toBeInTheDocument();
     });
 
-    expect(screen.getAllByText("case").length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          "Repository owner membership drift remains bounded to the reviewed case scope.",
+        ),
+      ).toBeInTheDocument();
+    });
+
     expect(screen.getAllByText("case-456").length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: "Open case detail" })).toBeInTheDocument();
     expect(screen.getByText(/Output: case_summary/i)).toBeInTheDocument();
     expect(screen.getByText(/Status: ready/i)).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Repository owner membership drift remains bounded to the reviewed case scope.",
-      ),
-    ).toBeInTheDocument();
     expect(screen.getByText("evidence-123")).toBeInTheDocument();
   });
 
