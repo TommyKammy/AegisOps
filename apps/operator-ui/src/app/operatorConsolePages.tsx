@@ -185,15 +185,19 @@ function findTimelineStage(
   actionReview: UnknownRecord | null,
   stage: string,
 ): UnknownRecord | null {
+  const normalizedStage = stage.toLowerCase();
   return (
-    asRecordArray(actionReview?.timeline).find(
-      (entry) => asString(entry.stage) === stage,
-    ) ?? null
+    asRecordArray(actionReview?.timeline).find((entry) => {
+      const candidate = (asString(entry.stage) ?? asString(entry.label))?.toLowerCase();
+      return candidate === normalizedStage;
+    }) ?? null
   );
 }
 
 function dispatchLifecycleState(actionReview: UnknownRecord | null): string | null {
-  const timelineStageState = asString(findTimelineStage(actionReview, "delegation")?.state);
+  const timelineStageState =
+    asString(findTimelineStage(actionReview, "delegation")?.state) ??
+    asString(findTimelineStage(actionReview, "delegated")?.state);
   if (timelineStageState !== null) {
     return timelineStageState;
   }
@@ -201,7 +205,7 @@ function dispatchLifecycleState(actionReview: UnknownRecord | null): string | nu
     return "delegated";
   }
   if (asString(actionReview?.approval_state) === "approved") {
-    return "awaiting_delegation";
+    return "pending_delegation";
   }
   return null;
 }
@@ -310,6 +314,24 @@ function CoordinationVisibilitySection({
   const coordinationOutcome = asRecord(actionReview?.coordination_ticket_outcome);
   const targetScope = asRecord(actionReview?.target_scope);
   const ticketReferenceUrl = asString(coordinationOutcome?.ticket_reference_url);
+  const requestedCoordinationReferenceId = asString(targetScope?.coordination_reference_id);
+  const observedCoordinationReferenceId = asString(coordinationOutcome?.coordination_reference_id);
+  const requestedCoordinationTargetType = asString(targetScope?.coordination_target_type);
+  const observedCoordinationTargetType = asString(coordinationOutcome?.coordination_target_type);
+  const requestedCoordinationTargetId = asString(targetScope?.coordination_target_id);
+  const observedCoordinationTargetId = asString(coordinationOutcome?.coordination_target_id);
+  const coordinationReferenceMismatch =
+    requestedCoordinationReferenceId !== null &&
+    observedCoordinationReferenceId !== null &&
+    requestedCoordinationReferenceId !== observedCoordinationReferenceId;
+  const coordinationTargetTypeMismatch =
+    requestedCoordinationTargetType !== null &&
+    observedCoordinationTargetType !== null &&
+    requestedCoordinationTargetType !== observedCoordinationTargetType;
+  const coordinationTargetIdMismatch =
+    requestedCoordinationTargetId !== null &&
+    observedCoordinationTargetId !== null &&
+    requestedCoordinationTargetId !== observedCoordinationTargetId;
 
   if (coordinationOutcome === null && targetScope === null) {
     return null;
@@ -332,22 +354,38 @@ function CoordinationVisibilitySection({
             {asString(coordinationOutcome?.summary)}
           </Alert>
         ) : null}
+        {coordinationReferenceMismatch ||
+        coordinationTargetTypeMismatch ||
+        coordinationTargetIdMismatch ? (
+          <Alert severity="warning" variant="outlined">
+            Requested and observed coordination references do not match.
+          </Alert>
+        ) : null}
         <ValueList
           entries={[
             [
-              "Coordination reference id",
-              asString(coordinationOutcome?.coordination_reference_id) ??
-                asString(targetScope?.coordination_reference_id),
+              "Requested coordination reference id",
+              requestedCoordinationReferenceId,
             ],
             [
-              "Coordination target type",
-              asString(coordinationOutcome?.coordination_target_type) ??
-                asString(targetScope?.coordination_target_type),
+              "Observed coordination reference id",
+              observedCoordinationReferenceId,
             ],
             [
-              "Coordination target id",
-              asString(coordinationOutcome?.coordination_target_id) ??
-                asString(targetScope?.coordination_target_id),
+              "Requested coordination target type",
+              requestedCoordinationTargetType,
+            ],
+            [
+              "Observed coordination target type",
+              observedCoordinationTargetType,
+            ],
+            [
+              "Requested coordination target id",
+              requestedCoordinationTargetId,
+            ],
+            [
+              "Observed coordination target id",
+              observedCoordinationTargetId,
             ],
             ["External receipt id", asString(coordinationOutcome?.external_receipt_id)],
             ["Linked action execution", asString(coordinationOutcome?.action_execution_id)],

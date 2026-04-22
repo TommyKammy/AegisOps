@@ -275,11 +275,13 @@ describe("OperatorRoutes", () => {
       expect(screen.getByRole("heading", { name: "Action Review" })).toBeInTheDocument();
     });
 
-    expect(screen.getAllByText("action-request-123").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("await_execution_receipt").length).toBeGreaterThan(0);
-    expect(screen.getByText("repo-owner@example.com")).toBeInTheDocument();
-    expect(screen.getByText("Requested")).toBeInTheDocument();
-    expect(screen.getByText("Approved")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getAllByText("action-request-123").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("await_execution_receipt").length).toBeGreaterThan(0);
+      expect(screen.getByText("repo-owner@example.com")).toBeInTheDocument();
+      expect(screen.getByText("Requested")).toBeInTheDocument();
+      expect(screen.getByText("Approved")).toBeInTheDocument();
+    });
     const approvalChip = screen
       .getAllByText("Approval: approved")
       .map((element) => element.closest(".MuiChip-root"))
@@ -315,6 +317,11 @@ describe("OperatorRoutes", () => {
               delegation_id: "delegation-789",
               execution_run_id: "shuffle-run-789",
               reconciliation_id: "recon-789",
+              target_scope: {
+                coordination_reference_id: "coord-ref-requested-789",
+                coordination_target_type: "ticket",
+                coordination_target_id: "ZM-REQ-789",
+              },
               mismatch_inspection: {
                 reconciliation_id: "recon-789",
                 lifecycle_state: "mismatched",
@@ -352,7 +359,7 @@ describe("OperatorRoutes", () => {
                 },
                 {
                   label: "Delegated",
-                  state: "delegated",
+                  state: "delayed",
                 },
                 {
                   label: "Execution",
@@ -400,9 +407,15 @@ describe("OperatorRoutes", () => {
         "receipt payload disagrees with the reconciled ticket state",
       ).length,
     ).toBeGreaterThan(0);
+    expect(screen.getByText("delayed")).toBeInTheDocument();
+    expect(screen.getByText("coord-ref-requested-789")).toBeInTheDocument();
     expect(screen.getByText("coord-ref-789")).toBeInTheDocument();
     expect(screen.getAllByText("receipt-789").length).toBeGreaterThan(0);
+    expect(screen.getByText("ZM-REQ-789")).toBeInTheDocument();
     expect(screen.getByText("ZM-789")).toBeInTheDocument();
+    expect(
+      screen.getByText("Requested and observed coordination references do not match."),
+    ).toBeInTheDocument();
   });
 
   it("submits a reviewed approval decision and waits for the authoritative reread before rendering the approved lifecycle", async () => {
