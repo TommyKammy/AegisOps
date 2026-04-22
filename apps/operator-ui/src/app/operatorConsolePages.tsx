@@ -1055,14 +1055,16 @@ function ActionReviewPageBody({
   const caseRecord = asRecord(data.case_record);
   const alertRecord = asRecord(data.alert_record);
   const timelineEntries = asRecordArray(actionReview?.timeline);
-  const selectedActionRequestId = asString(actionReview?.action_request_id) ?? actionRequestId;
+  const selectedActionRequestId = asString(actionReview?.action_request_id);
   const currentActionRequestId = asString(currentActionReview?.action_request_id);
   const actionRequestState = asString(actionReview?.action_request_state);
   const approvalState = asString(actionReview?.approval_state);
   const decisionRationale = asString(actionReview?.decision_rationale);
   const approverIdentities = asStringArray(actionReview?.approver_identities);
   const isCurrentAuthoritativeReview =
-    currentActionRequestId !== null && currentActionRequestId === selectedActionRequestId;
+    selectedActionRequestId !== null &&
+    currentActionRequestId !== null &&
+    currentActionRequestId === selectedActionRequestId;
   const canRecordApproval =
     canRecordActionApprovalDecision(operatorRoles) &&
     isCurrentAuthoritativeReview &&
@@ -1091,7 +1093,7 @@ function ActionReviewPageBody({
         ) : null}
         <ValueList
           entries={[
-            ["Action request id", selectedActionRequestId],
+            ["Action request id", selectedActionRequestId ?? actionRequestId],
             ["Current authoritative review", currentActionRequestId],
             ["Action request lifecycle", actionRequestState],
             ["Approval decision id", asString(actionReview?.approval_decision_id)],
@@ -1222,7 +1224,7 @@ function ActionReviewPageBody({
         )}
       </SectionCard>
 
-      {canRecordApproval ? (
+      {canRecordApproval && selectedActionRequestId ? (
         <RecordActionApprovalDecisionCard
           actionRequestId={selectedActionRequestId}
           actionRequestState={actionRequestState}
