@@ -56,11 +56,14 @@ class Phase30EAssistantAdvisoryUiBoundaryDocsTests(unittest.TestCase):
             "docs/phase-24-first-live-assistant-workflow-family-and-trusted-output-contract.md",
             "docs/phase-30-react-admin-foundation-and-read-only-operator-console-boundary.md",
             "docs/phase-30d-approval-execution-reconciliation-ui-boundary.md",
+            "apps/operator-ui/src/app/OperatorRoutes.test.tsx",
             "citation-first rendering",
             "ambiguity visibility",
             "draft-versus-authoritative split",
             "no-authority posture",
             "python3 -m unittest control-plane.tests.test_phase30e_assistant_advisory_ui_boundary_docs",
+            "npm --prefix apps/operator-ui test -- src/app/OperatorRoutes.test.tsx",
+            "npm --prefix apps/operator-ui run build",
         ):
             self.assertIn(term, text)
 

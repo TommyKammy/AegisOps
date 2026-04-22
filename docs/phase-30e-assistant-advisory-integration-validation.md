@@ -26,15 +26,18 @@ The locked verification surfaces are:
 - `docs/phase-30-react-admin-foundation-and-read-only-operator-console-boundary.md`
 - `docs/phase-30d-approval-execution-reconciliation-ui-boundary.md`
 - `control-plane/tests/test_phase30e_assistant_advisory_ui_boundary_docs.py`
+- `apps/operator-ui/src/app/OperatorRoutes.test.tsx`
 
 Focused validation covers:
 
 - citation-first rendering rules for advisory output detail;
 - ambiguity visibility, conflicting context visibility, unresolved visibility, and missing-citation failure posture;
 - draft-versus-authoritative split between recommendation draft rendering and reviewed lifecycle truth; and
-- no-authority posture for assistant content rendered beside authoritative anchor records and action-review or case detail surfaces.
+- no-authority posture for assistant content rendered beside authoritative anchor records and action-review or case detail surfaces; and
+- explicit browser rendering that assistant content does not approve, execute, or reconcile workflow state even when no recommendation draft card is present.
 
 Focused verification commands:
 
 - `python3 -m unittest control-plane.tests.test_phase30e_assistant_advisory_ui_boundary_docs`
-- `node ../codex-supervisor/dist/index.js issue-lint 682 --config ../codex-supervisor/supervisor.config.aegisops.coderabbit.json`
+- `npm --prefix apps/operator-ui test -- src/app/OperatorRoutes.test.tsx`
+- `npm --prefix apps/operator-ui run build`
