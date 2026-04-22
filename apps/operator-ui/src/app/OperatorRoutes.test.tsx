@@ -1875,6 +1875,9 @@ describe("OperatorRoutes", () => {
         "Assistant output does not approve, execute, or reconcile workflow state.",
       ),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Advisory failure visibility" }),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps fallback advisory summary fields out of the detail table", async () => {

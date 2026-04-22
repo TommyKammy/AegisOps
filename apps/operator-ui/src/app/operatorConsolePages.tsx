@@ -1791,6 +1791,8 @@ function AssistantAdvisoryPageBody({
     uncertaintyFlags.includes("missing_evidence_citation");
   const hasUnresolvedState = asString(data.status) === "unresolved";
   const hasReviewedContextConflict = uncertaintyFlags.includes("conflicting_reviewed_context");
+  const hasFailureVisibility =
+    hasCitationFailure || hasUnresolvedState || hasReviewedContextConflict;
 
   return (
     <Stack spacing={3}>
@@ -1823,7 +1825,7 @@ function AssistantAdvisoryPageBody({
         ) : null}
       </SectionCard>
 
-      {(hasUnresolvedState || uncertaintyFlags.length > 0) ? (
+      {hasFailureVisibility ? (
         <SectionCard
           subtitle="Citation failures, unresolved grounding, and reviewed-context conflicts stay explicit instead of being normalized into a cleaner assistant summary."
           title="Advisory failure visibility"
