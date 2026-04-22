@@ -84,6 +84,18 @@ function formatLabel(value: string) {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
+const ADVISORY_SUMMARY_FIELDS = ["summary", "message", "output_text", "advisory_text"] as const;
+const ADVISORY_DETAIL_EXCLUDED_FIELDS = [
+  "id",
+  "record_family",
+  "record_id",
+  "output_kind",
+  "status",
+  "read_only",
+  "citations",
+  ...ADVISORY_SUMMARY_FIELDS,
+] as const;
+
 function formatValue(value: unknown): string {
   if (value === null || value === undefined) {
     return "Not available";
@@ -1327,6 +1339,7 @@ function ActionReviewPageBody({
   const actionRequestState = asString(actionReview?.action_request_state);
   const approvalState = asString(actionReview?.approval_state);
   const approvalDecisionId = asString(actionReview?.approval_decision_id);
+  const reconciliationId = asString(actionReview?.reconciliation_id);
   const decisionRationale = asString(actionReview?.decision_rationale);
   const approverIdentities = asStringArray(actionReview?.approver_identities);
   const recommendationId = asString(actionReview?.recommendation_id);
@@ -1407,6 +1420,16 @@ function ActionReviewPageBody({
               variant="outlined"
             >
               Open approval advisory
+            </Button>
+          ) : null}
+          {reconciliationId ? (
+            <Button
+              component={ReactRouterLink}
+              endIcon={<LaunchOutlinedIcon />}
+              to={`/operator/assistant/reconciliation/${reconciliationId}`}
+              variant="outlined"
+            >
+              Open reconciliation advisory
             </Button>
           ) : null}
           {alertRecord?.alert_id ? (
@@ -1571,16 +1594,9 @@ export function ActionReviewPage({
 
 function AdvisoryDetailTable({ record }: { record: UnknownRecord }) {
   const rows = Object.entries(record).filter(([key]) => {
-    return ![
-      "id",
-      "record_family",
-      "record_id",
-      "output_kind",
-      "status",
-      "read_only",
-      "citations",
-      "summary",
-    ].includes(key);
+    return !ADVISORY_DETAIL_EXCLUDED_FIELDS.includes(
+      key as (typeof ADVISORY_DETAIL_EXCLUDED_FIELDS)[number],
+    );
   });
 
   if (rows.length === 0) {
@@ -1636,10 +1652,9 @@ function AssistantAdvisoryPageBody({
   }
 
   const summary =
-    asString(data.summary) ??
-    asString(data.message) ??
-    asString(data.output_text) ??
-    asString(data.advisory_text);
+    ADVISORY_SUMMARY_FIELDS.map((key) => asString(data[key])).find(
+      (value): value is string => value !== null,
+    ) ?? null;
   const citations = asStringArray(data.citations);
 
   return (
