@@ -6,6 +6,7 @@ import {
   OperatorRoutes,
   createDefaultDependencies,
 } from "./OperatorRoutes";
+import { buildOptionalEvidenceDefinitionsFromPayload } from "./optionalExtensionVisibility";
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -110,6 +111,23 @@ function createAuthorizedFetch(
 }
 
 describe("OperatorRoutes", () => {
+  it("keeps unavailable endpoint and network evidence posture visible when the optional path is disabled by default", () => {
+    const definitions = buildOptionalEvidenceDefinitionsFromPayload(
+      createOptionalExtensionPayload(),
+    );
+
+    expect(definitions).toEqual([
+      expect.objectContaining({
+        status: "unavailable",
+        title: "Endpoint evidence",
+      }),
+      expect.objectContaining({
+        status: "unavailable",
+        title: "Optional network evidence",
+      }),
+    ]);
+  });
+
   it("redirects unauthenticated users to the reviewed login route", async () => {
     const dependencies = createDefaultDependencies({
       fetchFn: vi
@@ -223,8 +241,7 @@ describe("OperatorRoutes", () => {
     await waitFor(() => {
       expect(screen.getByText("Enabled")).toBeInTheDocument();
     });
-    expect(screen.getByText("Disabled By Default")).toBeInTheDocument();
-    expect(screen.getByText("Unavailable")).toBeInTheDocument();
+    expect(screen.getAllByText("Unavailable")).toHaveLength(2);
     expect(screen.getByText("Degraded")).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -1840,6 +1857,7 @@ describe("OperatorRoutes", () => {
           action_executions: {
             terminal: 1,
           },
+          optional_extensions: createOptionalExtensionPayload(),
           review_path_health: {
             overall_state: "healthy",
             review_count: 1,
@@ -1868,6 +1886,13 @@ describe("OperatorRoutes", () => {
     await waitFor(() => {
       expect(screen.getByText("postgresql")).toBeInTheDocument();
     });
+    expect(
+      screen.getByRole("heading", { name: "Optional evidence posture" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Endpoint evidence")).toBeInTheDocument();
+    expect(screen.getByText("Optional network evidence")).toBeInTheDocument();
+    expect(screen.getAllByText("Unavailable")).toHaveLength(2);
+    expect(screen.queryByText("ML shadow")).not.toBeInTheDocument();
     expect(fetchFn).toHaveBeenCalledWith(
       "/diagnostics/readiness?order=ASC&page=1&per_page=1&sort=status",
       expect.any(Object),
