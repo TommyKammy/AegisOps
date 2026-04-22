@@ -75,12 +75,12 @@ function deriveOptionalExtensionStatus(extension: OptionalExtensionSignal | null
     return "degraded";
   }
 
-  if (enablement === "disabled_by_default") {
-    return "disabled_by_default";
-  }
-
   if (availability === "unavailable") {
     return "unavailable";
+  }
+
+  if (enablement === "disabled_by_default") {
+    return "disabled_by_default";
   }
 
   if (enablement === "enabled") {
@@ -124,6 +124,14 @@ export function buildOptionalExtensionDefinitionsFromPayload(
       title: family.title,
     };
   });
+}
+
+export function buildOptionalEvidenceDefinitionsFromPayload(
+  optionalExtensions: unknown,
+): OptionalExtensionDefinition[] {
+  return buildOptionalExtensionDefinitionsFromPayload(optionalExtensions).filter((definition) =>
+    ["Endpoint evidence", "Optional network evidence"].includes(definition.title),
+  );
 }
 
 function optionalExtensionStatusMetadata(status: OptionalExtensionStatus): {

@@ -32,6 +32,10 @@ import {
   RecordCaseObservationCard,
   RecordCaseRecommendationCard,
 } from "../taskActions/caseworkActionCards";
+import {
+  OptionalExtensionVisibilityPanel,
+  buildOptionalEvidenceDefinitionsFromPayload,
+} from "./optionalExtensionVisibility";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -2119,6 +2123,9 @@ export function ReadinessPage() {
   const reviewPathHealth = asRecord(getPath(record, "metrics.review_path_health"));
   const sourceHealth = asRecord(getPath(record, "metrics.source_health"));
   const automationHealth = asRecord(getPath(record, "metrics.automation_substrate_health"));
+  const optionalEvidenceDefinitions = buildOptionalEvidenceDefinitionsFromPayload(
+    getPath(record, "metrics.optional_extensions"),
+  );
 
   return (
     <PageFrame
@@ -2162,6 +2169,12 @@ export function ReadinessPage() {
                 ["Tracked automation surfaces", automationHealth?.tracked_surfaces],
               ]}
             />
+          </SectionCard>
+          <SectionCard
+            subtitle="Optional endpoint and network evidence paths stay visibly subordinate to authoritative alerts, cases, evidence anchors, and workflow records."
+            title="Optional evidence posture"
+          >
+            <OptionalExtensionVisibilityPanel definitions={optionalEvidenceDefinitions} />
           </SectionCard>
         </Stack>
       ) : null}
