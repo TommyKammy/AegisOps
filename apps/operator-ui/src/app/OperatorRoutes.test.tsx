@@ -6,7 +6,10 @@ import {
   OperatorRoutes,
   createDefaultDependencies,
 } from "./OperatorRoutes";
-import { buildOptionalEvidenceDefinitionsFromPayload } from "./optionalExtensionVisibility";
+import {
+  buildOptionalEvidenceDefinitionsFromPayload,
+  buildOptionalExtensionDefinitionsFromPayload,
+} from "./optionalExtensionVisibility";
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -111,21 +114,42 @@ function createAuthorizedFetch(
 }
 
 describe("OperatorRoutes", () => {
-  it("keeps unavailable endpoint and network evidence posture visible when the optional path is disabled by default", () => {
+  it("keeps disabled-by-default endpoint and network evidence posture visible", () => {
     const definitions = buildOptionalEvidenceDefinitionsFromPayload(
       createOptionalExtensionPayload(),
     );
 
     expect(definitions).toEqual([
       expect.objectContaining({
-        status: "unavailable",
+        status: "disabled_by_default",
         title: "Endpoint evidence",
       }),
       expect.objectContaining({
-        status: "unavailable",
+        status: "disabled_by_default",
         title: "Optional network evidence",
       }),
     ]);
+  });
+
+  it("fails closed when optional enablement is present without backend availability", () => {
+    const definitions = buildOptionalExtensionDefinitionsFromPayload(
+      createOptionalExtensionPayload({
+        endpoint_evidence: {
+          authority_mode: "augmenting_evidence",
+          enablement: "enabled",
+          mainline_dependency: "non_blocking",
+          readiness: "ready",
+          reason: "reviewed_endpoint_extension_binding_missing",
+        },
+      }),
+    );
+
+    expect(definitions).toContainEqual(
+      expect.objectContaining({
+        status: "unavailable",
+        title: "Endpoint evidence",
+      }),
+    );
   });
 
   it("redirects unauthenticated users to the reviewed login route", async () => {
@@ -241,7 +265,8 @@ describe("OperatorRoutes", () => {
     await waitFor(() => {
       expect(screen.getByText("Enabled")).toBeInTheDocument();
     });
-    expect(screen.getAllByText("Unavailable")).toHaveLength(2);
+    expect(screen.getByText("Disabled By Default")).toBeInTheDocument();
+    expect(screen.getByText("Unavailable")).toBeInTheDocument();
     expect(screen.getByText("Degraded")).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -1893,7 +1918,7 @@ describe("OperatorRoutes", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Endpoint evidence")).toBeInTheDocument();
     expect(screen.getByText("Optional network evidence")).toBeInTheDocument();
-    expect(screen.getAllByText("Unavailable")).toHaveLength(2);
+    expect(screen.getAllByText("Disabled By Default")).toHaveLength(2);
     expect(screen.queryByText("ML shadow")).not.toBeInTheDocument();
     expect(fetchFn).toHaveBeenCalledWith(
       "/diagnostics/readiness?order=ASC&page=1&per_page=1&sort=status",

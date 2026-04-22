@@ -75,16 +75,16 @@ function deriveOptionalExtensionStatus(extension: OptionalExtensionSignal | null
     return "degraded";
   }
 
-  if (availability === "unavailable") {
-    return "unavailable";
-  }
-
   if (enablement === "disabled_by_default") {
     return "disabled_by_default";
   }
 
   if (enablement === "enabled") {
-    return "enabled";
+    return availability === "available" ? "enabled" : "unavailable";
+  }
+
+  if (availability === "unavailable") {
+    return "unavailable";
   }
 
   return "unavailable";
