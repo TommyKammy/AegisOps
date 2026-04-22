@@ -1822,6 +1822,69 @@ describe("OperatorRoutes", () => {
     expect(screen.getByText("evidence-123")).toBeInTheDocument();
   });
 
+  it("renders cited recommendation draft output with explicit assistant-only framing", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch({
+        "/inspect-advisory-output": {
+          read_only: true,
+          record_family: "recommendation",
+          record_id: "recommendation-123",
+          output_kind: "recommendation_draft",
+          status: "ready",
+          cited_summary: {
+            text: "The assistant draft stays anchored to the cited evidence before any reviewed action.",
+            citations: ["recommendation-123", "evidence-123", "case-456"],
+          },
+          candidate_recommendations: [
+            {
+              text: "Proposal only: confirm the repository ownership change before raising an action request.",
+              citations: ["evidence-123", "case-456"],
+            },
+          ],
+          uncertainty_flags: ["advisory_only"],
+          citations: ["recommendation-123", "evidence-123", "case-456"],
+        },
+      }),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/assistant/recommendation/recommendation-123"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Assistant Advisory" })).toBeInTheDocument();
+    });
+
+    const citedOutputSection = screen.getByRole("heading", { name: "Cited advisory output" });
+    const citedOutputCard = citedOutputSection.closest(".MuiCard-root");
+    expect(citedOutputCard).not.toBeNull();
+    expect(
+      within(citedOutputCard as HTMLElement).getByText(
+        "The assistant draft stays anchored to the cited evidence before any reviewed action.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(citedOutputCard as HTMLElement).getByText("recommendation-123")).toBeInTheDocument();
+    expect(within(citedOutputCard as HTMLElement).getByText("evidence-123")).toBeInTheDocument();
+    expect(within(citedOutputCard as HTMLElement).getByText("case-456")).toBeInTheDocument();
+
+    const draftSection = screen.getByRole("heading", { name: "Recommendation draft" });
+    const draftCard = draftSection.closest(".MuiCard-root");
+    expect(draftCard).not.toBeNull();
+    expect(within(draftCard as HTMLElement).getByText("Draft only")).toBeInTheDocument();
+    expect(
+      within(draftCard as HTMLElement).getByText(
+        "Proposal only: confirm the repository ownership change before raising an action request.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(draftCard as HTMLElement).getByText(
+        "Assistant output does not approve, execute, or reconcile workflow state.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("keeps fallback advisory summary fields out of the detail table", async () => {
     const dependencies = createDefaultDependencies({
       fetchFn: createAuthorizedFetch({
