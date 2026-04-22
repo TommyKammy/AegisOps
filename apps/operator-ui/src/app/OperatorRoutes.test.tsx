@@ -1726,6 +1726,44 @@ describe("OperatorRoutes", () => {
     );
   });
 
+  it("renders a case-anchored assistant advisory route from reviewed advisory output", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch({
+        "/inspect-advisory-output": {
+          read_only: true,
+          record_family: "case",
+          record_id: "case-456",
+          output_kind: "case_summary",
+          status: "ready",
+          summary:
+            "Repository owner membership drift remains bounded to the reviewed case scope.",
+          citations: ["case-456", "alert-123", "evidence-123"],
+        },
+      }),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/assistant/case/case-456"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Assistant Advisory" })).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText("case").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("case-456").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Output: case_summary/i)).toBeInTheDocument();
+    expect(screen.getByText(/Status: ready/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Repository owner membership drift remains bounded to the reviewed case scope.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("evidence-123")).toBeInTheDocument();
+  });
+
   it("renders reconciliation mismatch visibility from reviewed records", async () => {
     const dependencies = createDefaultDependencies({
       fetchFn: createAuthorizedFetch({
