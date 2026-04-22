@@ -35,6 +35,7 @@ import {
   ReadinessPage,
   ReconciliationPage,
 } from "./operatorConsolePages";
+import { OptionalExtensionVisibilityPanel } from "./optionalExtensionVisibility";
 import { TaskActionClientProvider } from "../taskActions/taskActionPrimitives";
 import type { OperatorTaskActionClient } from "../taskActions/taskActionClient";
 
@@ -190,6 +191,8 @@ function OverviewPage({
           </Grid>
         ))}
       </Grid>
+
+      <OptionalExtensionVisibilityPanel />
     </Stack>
   );
 }

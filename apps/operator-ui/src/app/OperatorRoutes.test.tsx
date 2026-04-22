@@ -146,6 +146,24 @@ describe("OperatorRoutes", () => {
         screen.getByRole("heading", { name: "Protected operator shell" }),
       ).toBeInTheDocument();
     });
+
+    expect(
+      screen.getByRole("heading", { name: "Optional extension visibility" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Optional-path posture stays subordinate to authoritative workflow pages and reviewed runtime truth.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Enabled")).toBeInTheDocument();
+    expect(screen.getAllByText("Disabled By Default").length).toBeGreaterThan(0);
+    expect(screen.getByText("Unavailable")).toBeInTheDocument();
+    expect(screen.getByText("Degraded")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Missing optional paths do not imply a control-plane failure when the mainline reviewed workflow remains healthy.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("hides action-review navigation for analyst-only sessions", async () => {
