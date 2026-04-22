@@ -1994,8 +1994,16 @@ describe("OperatorRoutes", () => {
 
     expect(await screen.findByRole("heading", { name: "Assistant Advisory" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Recommendation draft" })).not.toBeInTheDocument();
+
+    const anchorSection = screen.getByRole("heading", { name: "Authoritative advisory anchor" });
+    const anchorCard = anchorSection.closest(".MuiCard-root");
+    expect(anchorCard).not.toBeNull();
+    expect(within(anchorCard as HTMLElement).getByText("Read only")).toBeInTheDocument();
+    expect(within(anchorCard as HTMLElement).getByText("true")).toBeInTheDocument();
     expect(
-      screen.getByText("Assistant output does not approve, execute, or reconcile workflow state."),
+      within(anchorCard as HTMLElement).getByText(
+        /Assistant output does not approve, execute, or reconcile workflow state\./i,
+      ),
     ).toBeInTheDocument();
   });
 
