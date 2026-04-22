@@ -1844,6 +1844,7 @@ describe("OperatorRoutes", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "Assistant Advisory" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Recommendation draft" })).not.toBeInTheDocument();
     expect(
       screen.getByText("Assistant output does not approve, execute, or reconcile workflow state."),
     ).toBeInTheDocument();
