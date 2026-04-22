@@ -10,7 +10,7 @@ This document defines browser boundary, citation posture, ambiguity visibility, 
 
 ## 2. Reviewed Phase 30E Boundary
 
-Phase 30E introduces a reviewed operator surface for cited advisory output and assistant context inspection only.
+Phase 30E introduces a reviewed operator surface for cited advisory output, assistant context inspection, bounded recommendation draft rendering, and unresolved or citation-failure visibility.
 
 The Reviewed Phase 30E Boundary is intentionally narrow:
 
