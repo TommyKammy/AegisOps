@@ -132,7 +132,7 @@ function advisorySummary(record: UnknownRecord) {
     ) ?? null;
 
   return {
-    citations: citedCitations,
+    citations: citedText ? citedCitations : [],
     text: citedText ?? fallbackText,
   };
 }

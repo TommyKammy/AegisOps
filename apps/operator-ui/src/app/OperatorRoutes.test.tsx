@@ -333,12 +333,8 @@ describe("OperatorRoutes", () => {
       </MemoryRouter>,
     );
 
-    await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Action Review" })).toBeInTheDocument();
-    });
-
     expect(
-      screen.getByRole("link", { name: "Open recommendation advisory" }),
+      await screen.findByRole("link", { name: "Open recommendation advisory" }),
     ).toHaveAttribute("href", "/operator/assistant/recommendation/recommendation-321");
     expect(
       screen.getByRole("link", { name: "Open approval advisory" }),
@@ -1853,11 +1849,7 @@ describe("OperatorRoutes", () => {
       </MemoryRouter>,
     );
 
-    await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Assistant Advisory" })).toBeInTheDocument();
-    });
-
-    const citedOutputSection = screen.getByRole("heading", { name: "Cited advisory output" });
+    const citedOutputSection = await screen.findByRole("heading", { name: "Cited advisory output" });
     const citedOutputCard = citedOutputSection.closest(".MuiCard-root");
     expect(citedOutputCard).not.toBeNull();
     expect(
@@ -1894,6 +1886,9 @@ describe("OperatorRoutes", () => {
           record_id: "recommendation-123",
           output_kind: "recommendation_summary",
           status: "ready",
+          cited_summary: {
+            citations: ["recommendation-123", "evidence-123"],
+          },
           message: "Use the reviewed recommendation as bounded advisory context.",
           advisory_text: "This fallback field should not be repeated in detail rows.",
           supporting_note: "Analyst follow-up remains separate from advisory prose.",
@@ -1907,13 +1902,20 @@ describe("OperatorRoutes", () => {
       </MemoryRouter>,
     );
 
-    await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Assistant Advisory" })).toBeInTheDocument();
-    });
-
     expect(
-      screen.getByText("Use the reviewed recommendation as bounded advisory context."),
+      await screen.findByText("Use the reviewed recommendation as bounded advisory context."),
     ).toBeInTheDocument();
+
+    const citedOutputSection = await screen.findByRole("heading", { name: "Cited advisory output" });
+    const citedOutputCard = citedOutputSection.closest(".MuiCard-root");
+    expect(citedOutputCard).not.toBeNull();
+    expect(
+      within(citedOutputCard as HTMLElement).getByText(
+        "No cited summary anchors were returned for this advisory output.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(citedOutputCard as HTMLElement).queryByText("recommendation-123")).not.toBeInTheDocument();
+    expect(within(citedOutputCard as HTMLElement).queryByText("evidence-123")).not.toBeInTheDocument();
 
     const detailTable = screen.getByRole("table");
     expect(within(detailTable).queryByText("Message")).not.toBeInTheDocument();
