@@ -418,6 +418,84 @@ describe("OperatorRoutes", () => {
     ).toBeInTheDocument();
   });
 
+  it("keeps expired approval lifecycle state explicit without implying execution or reconciliation success", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch(
+        {
+          "/inspect-action-review": {
+            action_request_id: "action-request-expired-789",
+            read_only: true,
+            current_action_review: {
+              action_request_id: "action-request-expired-789",
+              review_state: "expired",
+            },
+            action_review: {
+              action_request_id: "action-request-expired-789",
+              review_state: "expired",
+              action_request_state: "expired",
+              approval_state: "expired",
+              requester_identity: "analyst@example.com",
+              recipient_identity: "repo-owner@example.com",
+              next_expected_action: "request_new_approval",
+              requested_at: "2026-04-21T00:00:00Z",
+              expires_at: "2026-04-21T12:00:00Z",
+              timeline: [
+                {
+                  label: "Requested",
+                  state: "completed",
+                },
+                {
+                  label: "Approval decision",
+                  state: "expired",
+                },
+              ],
+            },
+            case_record: {
+              case_id: "case-expired-789",
+              lifecycle_state: "open",
+            },
+          },
+        },
+        {
+          identity: "approver@example.com",
+          provider: "authentik",
+          roles: ["Approver"],
+          subject: "operator-8",
+        },
+      ),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/action-review/action-request-expired-789"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Action Review" })).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText("Approval lifecycle").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("expired").length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(
+        "Expired means the reviewed approval window no longer authorizes this request. Operators must reread authoritative state rather than infer continued validity.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Execution receipt")).toBeInTheDocument();
+    expect(screen.getByText("Reconciliation visibility")).toBeInTheDocument();
+    expect(
+      screen.getByText("No authoritative execution receipt is attached to this reviewed request yet."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("No authoritative reconciliation record is visible for this reviewed request yet."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Execution receipt visibility is present, but downstream reconciliation is still/i),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Coordination visibility")).not.toBeInTheDocument();
+  });
+
   it("submits a reviewed approval decision and waits for the authoritative reread before rendering the approved lifecycle", async () => {
     const user = userEvent.setup();
     let actionReviewPayload: Record<string, unknown> = {
@@ -1680,9 +1758,11 @@ describe("OperatorRoutes", () => {
       expect(screen.getByRole("heading", { name: "Reconciliation" })).toBeInTheDocument();
     });
 
-    expect(
-      screen.getAllByText("case linkage mismatch remains unresolved").length,
-    ).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(
+        screen.getAllByText("case linkage mismatch remains unresolved").length,
+      ).toBeGreaterThan(0);
+    });
     expect(screen.getAllByText(/mismatch/i).length).toBeGreaterThan(0);
   });
 });
