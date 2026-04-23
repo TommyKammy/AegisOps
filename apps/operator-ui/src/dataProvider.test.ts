@@ -153,6 +153,44 @@ describe("createOperatorDataProvider", () => {
     });
   });
 
+  it("selects reconciliation detail records by authoritative reconciliation_id", async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
+        records: [
+          {
+            reconciliation_id: "recon-001",
+            status: "pending",
+          },
+          {
+            reconciliation_id: "recon-002",
+            status: "completed",
+          },
+        ],
+        total_records: 2,
+      }),
+    );
+    const dataProvider = createOperatorDataProvider({ fetchFn });
+
+    await expect(
+      dataProvider.getOne("reconciliations", {
+        id: "recon-002",
+      }),
+    ).resolves.toEqual({
+      data: {
+        reconciliation_id: "recon-002",
+        status: "completed",
+        id: "recon-002",
+      },
+    });
+
+    expect(fetchFn).toHaveBeenCalledWith("/inspect-reconciliation-status", {
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+  });
+
   it("fails closed when a reviewed queue record is missing its authoritative anchor", async () => {
     const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
       jsonResponse({
