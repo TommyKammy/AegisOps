@@ -77,7 +77,7 @@ function sanitizeTarget(value: string) {
 
     return `${parsed.origin}${path}`;
   } catch {
-    return sanitizeRoute(value);
+    return redactUnsafePathSuffix(value);
   }
 }
 
