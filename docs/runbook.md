@@ -199,6 +199,39 @@ This section must remain consistent with the business-hours-oriented operating m
 
 Validation steps must be documented and repeatable before this runbook can be treated as an operational procedure beyond the reviewed startup and shutdown path.
 
+The operator health review contract is the reviewed business-hours cadence for deciding whether the mainline path is ready, safely degraded, or escalation-bound.
+
+Each business day, operators must review `curl -fsS http://127.0.0.1:<proxy-port>/readyz`, `curl -fsS http://127.0.0.1:<proxy-port>/runtime`, the reviewed queue and alert surfaces, and any explicit degraded-state markers before treating the platform as ready for normal work.
+
+The daily review must classify each degraded condition as safe for continued business-hours inspection, requiring same-day follow-up, or requiring escalation before normal operation continues.
+
+Daily review should cover these operator-owned questions in one pass:
+
+- Is the reviewed ingress path still reporting green readiness and a first-boot-consistent runtime scope?
+- Can operators inspect the reviewed queue and alert path without hidden refresh gaps, contradictory status text, or missing authoritative anchors?
+- Are degraded source, automation, assistant, or subordinate optional-path signals visible enough that operators can decide whether they are safe to inspect, need same-day follow-up, or must escalate immediately?
+
+At least once per business week, operators must review storage growth, certificate expiry horizon, backup drift, and restore-readiness evidence against the reviewed SMB baseline instead of inferring platform hygiene from startup success alone.
+
+Weekly review findings must remain operator-visible and must not redefine optional or degraded surfaces as startup blockers when the reviewed mainline path remains healthy.
+
+Weekly review should record:
+
+- whether PostgreSQL and reviewed runtime storage growth still fit the approved SMB footprint and leave headroom for the next business-hours window;
+- whether reverse-proxy and other reviewed certificate material remain inside the approved expiry horizon without forcing an emergency change window;
+- whether PostgreSQL-aware backups, reviewed configuration backups, and backup custody checks remained on cadence; and
+- whether the latest restore-readiness evidence still proves the authoritative approval, evidence, execution, and reconciliation chain can be recovered cleanly.
+
+Assistant optional path: `enabled` and `ready` means the bounded advisory surface is available; `degraded` means advisory outputs or receipts are lagging and require operator follow-up without widening authority.
+
+Endpoint evidence optional path: `disabled_by_default` means no reviewed endpoint evidence request is active; `enabled` means a reviewed request is active; `degraded` means receipts or review-state updates are lagging and require follow-up without making endpoint evidence authoritative.
+
+Optional network evidence path: `disabled_by_default` or `unavailable` means the reviewed runtime is operating without that optional path and the mainline queue, approval, execution, and reconciliation path remains valid.
+
+ML shadow path: `disabled_by_default` or `unavailable` means the reviewed runtime is operating without ML shadow mode; any future `enabled` or `degraded` state must remain explicitly shadow-only, audit-focused, and non-blocking.
+
+Escalation is required when readiness is not green on the reviewed ingress path, when queue or alert review cannot be completed from the reviewed mainline surface, when storage or certificate drift threatens the next business-hours window, when backup drift exceeds the reviewed cadence, or when any degraded condition could hide missing provenance or widen authority.
+
 Future validation guidance should describe:
 
 - the minimum checks required after startup, shutdown, or restore activity,
