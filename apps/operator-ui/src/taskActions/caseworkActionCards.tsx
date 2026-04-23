@@ -2,6 +2,7 @@ import { MenuItem, Stack, TextField } from "@mui/material";
 import { useState } from "react";
 import {
   TaskActionFormCard,
+  TaskActionSubmissionForm,
   useTaskActionSubmission,
 } from "./taskActionPrimitives";
 
@@ -33,35 +34,32 @@ export function PromoteAlertToCaseCard({
   const [caseLifecycleState, setCaseLifecycleState] = useState("open");
 
   return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        void submission.submit({
-          onSubmitted: () => onSubmitted?.(),
-          refreshTargets: (acknowledgement) => [
-            {
-              id: alertId,
-              label: "Alert detail",
-              resource: "alerts",
-            },
-            ...(typeof acknowledgement.case_id === "string" && acknowledgement.case_id.trim()
-              ? [
-                  {
-                    id: acknowledgement.case_id,
-                    label: "Case detail",
-                    resource: "cases" as const,
-                  },
-                ]
-              : []),
-          ],
-          run: (client) =>
-            client.promoteAlertToCase({
-              alert_id: alertId,
-              case_id: normalizeOptionalString(caseIdOverride),
-              case_lifecycle_state: caseLifecycleState,
-            }) as Promise<{ case_id?: string }>,
-        });
-      }}
+    <TaskActionSubmissionForm
+      onSubmitted={onSubmitted}
+      refreshTargets={(acknowledgement) => [
+        {
+          id: alertId,
+          label: "Alert detail",
+          resource: "alerts",
+        },
+        ...(typeof acknowledgement.case_id === "string" && acknowledgement.case_id.trim()
+          ? [
+              {
+                id: acknowledgement.case_id,
+                label: "Case detail",
+                resource: "cases" as const,
+              },
+            ]
+          : []),
+      ]}
+      run={(client) =>
+        client.promoteAlertToCase({
+          alert_id: alertId,
+          case_id: normalizeOptionalString(caseIdOverride),
+          case_lifecycle_state: caseLifecycleState,
+        }) as Promise<{ case_id?: string }>
+      }
+      submission={submission}
     >
       <TaskActionFormCard
         actor={[
@@ -105,7 +103,7 @@ export function PromoteAlertToCaseCard({
           </TextField>
         </Stack>
       </TaskActionFormCard>
-    </form>
+    </TaskActionSubmissionForm>
   );
 }
 
@@ -128,28 +126,25 @@ export function RecordCaseObservationCard({
   );
 
   return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        void submission.submit({
-          onSubmitted: () => onSubmitted?.(),
-          refreshTargets: [
-            {
-              id: caseId,
-              label: "Case detail",
-              resource: "cases",
-            },
-          ],
-          run: (client) =>
-            client.recordCaseObservation({
-              author_identity: operatorIdentity,
-              case_id: caseId,
-              observed_at: observedAt.trim(),
-              scope_statement: scopeStatement.trim(),
-              supporting_evidence_ids: splitIdentifierList(supportingEvidenceIds),
-            }) as Promise<{ case_id: string }>,
-        });
-      }}
+    <TaskActionSubmissionForm
+      onSubmitted={onSubmitted}
+      refreshTargets={[
+        {
+          id: caseId,
+          label: "Case detail",
+          resource: "cases",
+        },
+      ]}
+      run={(client) =>
+        client.recordCaseObservation({
+          author_identity: operatorIdentity,
+          case_id: caseId,
+          observed_at: observedAt.trim(),
+          scope_statement: scopeStatement.trim(),
+          supporting_evidence_ids: splitIdentifierList(supportingEvidenceIds),
+        }) as Promise<{ case_id: string }>
+      }
+      submission={submission}
     >
       <TaskActionFormCard
         actor={[
@@ -200,7 +195,7 @@ export function RecordCaseObservationCard({
           />
         </Stack>
       </TaskActionFormCard>
-    </form>
+    </TaskActionSubmissionForm>
   );
 }
 
@@ -220,27 +215,24 @@ export function RecordCaseLeadCard({
   const [triageRationale, setTriageRationale] = useState("");
 
   return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        void submission.submit({
-          onSubmitted: () => onSubmitted?.(),
-          refreshTargets: [
-            {
-              id: caseId,
-              label: "Case detail",
-              resource: "cases",
-            },
-          ],
-          run: (client) =>
-            client.recordCaseLead({
-              case_id: caseId,
-              observation_id: normalizeOptionalString(observationId),
-              triage_owner: operatorIdentity,
-              triage_rationale: triageRationale.trim(),
-            }) as Promise<{ case_id: string }>,
-        });
-      }}
+    <TaskActionSubmissionForm
+      onSubmitted={onSubmitted}
+      refreshTargets={[
+        {
+          id: caseId,
+          label: "Case detail",
+          resource: "cases",
+        },
+      ]}
+      run={(client) =>
+        client.recordCaseLead({
+          case_id: caseId,
+          observation_id: normalizeOptionalString(observationId),
+          triage_owner: operatorIdentity,
+          triage_rationale: triageRationale.trim(),
+        }) as Promise<{ case_id: string }>
+      }
+      submission={submission}
     >
       <TaskActionFormCard
         actor={[
@@ -287,7 +279,7 @@ export function RecordCaseLeadCard({
           />
         </Stack>
       </TaskActionFormCard>
-    </form>
+    </TaskActionSubmissionForm>
   );
 }
 
@@ -307,27 +299,24 @@ export function RecordCaseRecommendationCard({
   const [intendedOutcome, setIntendedOutcome] = useState("");
 
   return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        void submission.submit({
-          onSubmitted: () => onSubmitted?.(),
-          refreshTargets: [
-            {
-              id: caseId,
-              label: "Case detail",
-              resource: "cases",
-            },
-          ],
-          run: (client) =>
-            client.recordCaseRecommendation({
-              case_id: caseId,
-              intended_outcome: intendedOutcome.trim(),
-              lead_id: normalizeOptionalString(leadId),
-              review_owner: operatorIdentity,
-            }) as Promise<{ case_id: string }>,
-        });
-      }}
+    <TaskActionSubmissionForm
+      onSubmitted={onSubmitted}
+      refreshTargets={[
+        {
+          id: caseId,
+          label: "Case detail",
+          resource: "cases",
+        },
+      ]}
+      run={(client) =>
+        client.recordCaseRecommendation({
+          case_id: caseId,
+          intended_outcome: intendedOutcome.trim(),
+          lead_id: normalizeOptionalString(leadId),
+          review_owner: operatorIdentity,
+        }) as Promise<{ case_id: string }>
+      }
+      submission={submission}
     >
       <TaskActionFormCard
         actor={[
@@ -374,7 +363,7 @@ export function RecordCaseRecommendationCard({
           />
         </Stack>
       </TaskActionFormCard>
-    </form>
+    </TaskActionSubmissionForm>
   );
 }
 
@@ -400,31 +389,28 @@ export function CreateReviewedActionRequestCard({
   const [actionRequestIdOverride, setActionRequestIdOverride] = useState("");
 
   return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        void submission.submit({
-          onSubmitted: () => onSubmitted?.(),
-          refreshTargets: [
-            {
-              id: caseId,
-              label: "Case detail",
-              resource: "cases",
-            },
-          ],
-          run: (client) =>
-            client.createReviewedActionRequest({
-              action_request_id: normalizeOptionalString(actionRequestIdOverride),
-              escalation_reason: escalationReason.trim(),
-              expires_at: expiresAt.trim(),
-              family: "recommendation",
-              message_intent: messageIntent.trim(),
-              recipient_identity: recipientIdentity.trim(),
-              record_id: recommendationId.trim(),
-              requester_identity: operatorIdentity,
-            }) as Promise<{ action_request_id?: string; case_id?: string }>,
-        });
-      }}
+    <TaskActionSubmissionForm
+      onSubmitted={onSubmitted}
+      refreshTargets={[
+        {
+          id: caseId,
+          label: "Case detail",
+          resource: "cases",
+        },
+      ]}
+      run={(client) =>
+        client.createReviewedActionRequest({
+          action_request_id: normalizeOptionalString(actionRequestIdOverride),
+          escalation_reason: escalationReason.trim(),
+          expires_at: expiresAt.trim(),
+          family: "recommendation",
+          message_intent: messageIntent.trim(),
+          recipient_identity: recipientIdentity.trim(),
+          record_id: recommendationId.trim(),
+          requester_identity: operatorIdentity,
+        }) as Promise<{ action_request_id?: string; case_id?: string }>
+      }
+      submission={submission}
     >
       <TaskActionFormCard
         actor={[
@@ -510,7 +496,7 @@ export function CreateReviewedActionRequestCard({
           />
         </Stack>
       </TaskActionFormCard>
-    </form>
+    </TaskActionSubmissionForm>
   );
 }
 
@@ -540,29 +526,26 @@ export function RecordActionApprovalDecisionCard({
   );
 
   return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        void submission.submit({
-          onSubmitted: () => onSubmitted?.(),
-          refreshTargets: [
-            {
-              id: actionRequestId,
-              label: "Action review detail",
-              resource: "actionReview",
-            },
-          ],
-          run: (client) =>
-            client.recordActionApprovalDecision({
-              action_request_id: actionRequestId,
-              approval_decision_id: normalizeOptionalString(approvalDecisionIdOverride),
-              approver_identity: approverIdentity,
-              decided_at: decidedAt.trim(),
-              decision,
-              decision_rationale: nextDecisionRationale.trim(),
-            }) as Promise<{ action_request_id: string }>,
-        });
-      }}
+    <TaskActionSubmissionForm
+      onSubmitted={onSubmitted}
+      refreshTargets={[
+        {
+          id: actionRequestId,
+          label: "Action review detail",
+          resource: "actionReview",
+        },
+      ]}
+      run={(client) =>
+        client.recordActionApprovalDecision({
+          action_request_id: actionRequestId,
+          approval_decision_id: normalizeOptionalString(approvalDecisionIdOverride),
+          approver_identity: approverIdentity,
+          decided_at: decidedAt.trim(),
+          decision,
+          decision_rationale: nextDecisionRationale.trim(),
+        }) as Promise<{ action_request_id: string }>
+      }
+      submission={submission}
     >
       <TaskActionFormCard
         actor={[
@@ -627,7 +610,7 @@ export function RecordActionApprovalDecisionCard({
           />
         </Stack>
       </TaskActionFormCard>
-    </form>
+    </TaskActionSubmissionForm>
   );
 }
 
@@ -659,31 +642,28 @@ export function RecordActionReviewManualFallbackCard({
   const [residualUncertainty, setResidualUncertainty] = useState("");
 
   return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        void submission.submit({
-          onSubmitted: () => onSubmitted?.(),
-          refreshTargets: [
-            {
-              id: caseId,
-              label: "Case detail",
-              resource: "cases",
-            },
-          ],
-          run: (client) =>
-            client.recordActionReviewManualFallback({
-              action_request_id: actionRequestId,
-              action_taken: actionTaken.trim(),
-              authority_boundary: authorityBoundary,
-              fallback_actor_identity: operatorIdentity,
-              fallback_at: fallbackAt.trim(),
-              reason: reason.trim(),
-              residual_uncertainty: normalizeOptionalString(residualUncertainty),
-              verification_evidence_ids: splitIdentifierList(verificationEvidenceIds),
-            }) as Promise<{ action_request_id: string }>,
-        });
-      }}
+    <TaskActionSubmissionForm
+      onSubmitted={onSubmitted}
+      refreshTargets={[
+        {
+          id: caseId,
+          label: "Case detail",
+          resource: "cases",
+        },
+      ]}
+      run={(client) =>
+        client.recordActionReviewManualFallback({
+          action_request_id: actionRequestId,
+          action_taken: actionTaken.trim(),
+          authority_boundary: authorityBoundary,
+          fallback_actor_identity: operatorIdentity,
+          fallback_at: fallbackAt.trim(),
+          reason: reason.trim(),
+          residual_uncertainty: normalizeOptionalString(residualUncertainty),
+          verification_evidence_ids: splitIdentifierList(verificationEvidenceIds),
+        }) as Promise<{ action_request_id: string }>
+      }
+      submission={submission}
     >
       <TaskActionFormCard
         actor={[
@@ -773,7 +753,7 @@ export function RecordActionReviewManualFallbackCard({
           />
         </Stack>
       </TaskActionFormCard>
-    </form>
+    </TaskActionSubmissionForm>
   );
 }
 
@@ -798,28 +778,25 @@ export function RecordActionReviewEscalationNoteCard({
   const [note, setNote] = useState("");
 
   return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        void submission.submit({
-          onSubmitted: () => onSubmitted?.(),
-          refreshTargets: [
-            {
-              id: caseId,
-              label: "Case detail",
-              resource: "cases",
-            },
-          ],
-          run: (client) =>
-            client.recordActionReviewEscalationNote({
-              action_request_id: actionRequestId,
-              escalated_at: escalatedAt.trim(),
-              escalated_by_identity: operatorIdentity,
-              escalated_to: escalatedTo.trim(),
-              note: note.trim(),
-            }) as Promise<{ action_request_id: string }>,
-        });
-      }}
+    <TaskActionSubmissionForm
+      onSubmitted={onSubmitted}
+      refreshTargets={[
+        {
+          id: caseId,
+          label: "Case detail",
+          resource: "cases",
+        },
+      ]}
+      run={(client) =>
+        client.recordActionReviewEscalationNote({
+          action_request_id: actionRequestId,
+          escalated_at: escalatedAt.trim(),
+          escalated_by_identity: operatorIdentity,
+          escalated_to: escalatedTo.trim(),
+          note: note.trim(),
+        }) as Promise<{ action_request_id: string }>
+      }
+      submission={submission}
     >
       <TaskActionFormCard
         actor={[
@@ -873,6 +850,6 @@ export function RecordActionReviewEscalationNoteCard({
           />
         </Stack>
       </TaskActionFormCard>
-    </form>
+    </TaskActionSubmissionForm>
   );
 }

@@ -7,6 +7,7 @@ import { createOperatorTaskActionClient } from "./taskActionClient";
 import {
   CreateReviewedActionRequestCard,
   PromoteAlertToCaseCard,
+  RecordActionApprovalDecisionCard,
   RecordActionReviewEscalationNoteCard,
   RecordActionReviewManualFallbackCard,
   RecordCaseLeadCard,
@@ -58,14 +59,22 @@ function PromoteAlertCardHarness({
 
 function CaseworkCardsHarness({
   actionRequestId,
+  approvalState,
   caseId,
+  decisionRationale,
+  expiresAt,
   linkedEvidenceIds,
   linkedLeadIds,
   linkedObservationIds,
   linkedRecommendationIds,
+  actionRequestState,
 }: {
   actionRequestId: string;
+  actionRequestState: string | null;
+  approvalState: string | null;
   caseId: string;
+  decisionRationale: string | null;
+  expiresAt: string | null;
   linkedEvidenceIds: string[];
   linkedLeadIds: string[];
   linkedObservationIds: string[];
@@ -97,6 +106,15 @@ function CaseworkCardsHarness({
         linkedRecommendationIds={linkedRecommendationIds}
         operatorIdentity="analyst@example.com"
       />
+      <RecordActionApprovalDecisionCard
+        actionRequestId={actionRequestId}
+        actionRequestState={actionRequestState}
+        approvalState={approvalState}
+        approverIdentity="approver@example.com"
+        decisionRationale={decisionRationale}
+        expiresAt={expiresAt}
+        key={`approval-decision-${actionRequestId}`}
+      />
       <RecordActionReviewManualFallbackCard
         actionRequestId={actionRequestId}
         caseId={caseId}
@@ -125,7 +143,11 @@ describe("caseworkActionCards", () => {
         <PromoteAlertCardHarness alertId="alert-123" currentCaseId="case-123" />
         <CaseworkCardsHarness
           actionRequestId="action-request-456"
+          actionRequestState="pending_approval"
+          approvalState="pending"
+          decisionRationale="Pending review"
           caseId="case-456"
+          expiresAt="2026-05-01T00:00:00Z"
           linkedEvidenceIds={["evidence-123"]}
           linkedLeadIds={["lead-123"]}
           linkedObservationIds={["observation-123"]}
@@ -140,6 +162,7 @@ describe("caseworkActionCards", () => {
       "Record case lead",
       "Record case recommendation",
       "Create reviewed action request",
+      "Record approval decision",
       "Record manual fallback",
       "Record escalation note",
     ]) {
@@ -152,6 +175,7 @@ describe("caseworkActionCards", () => {
       "reviewed operator lead endpoint",
       "reviewed operator recommendation endpoint",
       "reviewed operator action-request endpoint",
+      "reviewed operator approval-decision endpoint",
       "reviewed operator manual-fallback endpoint",
       "reviewed operator escalation-note endpoint",
       "Current review state",
@@ -196,7 +220,11 @@ describe("caseworkActionCards", () => {
     const { rerender } = renderWithTaskActionProviders(
       <CaseworkCardsHarness
         actionRequestId="action-request-456"
+        actionRequestState="pending_approval"
+        approvalState="pending"
         caseId="case-456"
+        decisionRationale="Pending review"
+        expiresAt="2026-05-01T00:00:00Z"
         linkedEvidenceIds={["evidence-123"]}
         linkedLeadIds={["lead-123"]}
         linkedObservationIds={["observation-123"]}
@@ -245,6 +273,11 @@ describe("caseworkActionCards", () => {
       screen.getByRole("textbox", { name: "Action request id override" }),
       "stale-request",
     );
+    await user.type(screen.getByRole("textbox", { name: "Decided at" }), "2026-04");
+    await user.type(
+      screen.getByRole("textbox", { name: "Decision rationale" }),
+      "stale-decision-rationale",
+    );
     await user.type(screen.getByRole("textbox", { name: "Fallback at" }), "2026-04");
     await user.type(screen.getByRole("textbox", { name: "Reason" }), "stale-reason");
     await user.type(
@@ -273,7 +306,11 @@ describe("caseworkActionCards", () => {
         >
           <CaseworkCardsHarness
             actionRequestId="action-request-789"
+            actionRequestState="granted"
+            approvalState="approved"
             caseId="case-789"
+            decisionRationale="Already granted"
+            expiresAt="2026-06-01T00:00:00Z"
             linkedEvidenceIds={["evidence-789"]}
             linkedLeadIds={["lead-789"]}
             linkedObservationIds={["observation-789"]}
@@ -300,6 +337,10 @@ describe("caseworkActionCards", () => {
     expect(screen.getByRole("textbox", { name: "Escalation reason" })).toHaveValue("");
     expect(screen.getByRole("textbox", { name: "Expires at" })).toHaveValue("");
     expect(screen.getByRole("textbox", { name: "Action request id override" })).toHaveValue("");
+    expect(screen.getByRole("textbox", { name: "Decided at" })).toHaveValue("");
+    expect(screen.getByRole("textbox", { name: "Decision rationale" })).toHaveValue(
+      "Already granted",
+    );
     expect(screen.getByRole("textbox", { name: "Fallback at" })).toHaveValue("");
     expect(screen.getByRole("textbox", { name: "Reason" })).toHaveValue("");
     expect(screen.getByRole("textbox", { name: "Action taken" })).toHaveValue("");
@@ -313,5 +354,5 @@ describe("caseworkActionCards", () => {
     expect(screen.getByText("Known observation ids: observation-789")).toBeInTheDocument();
     expect(screen.getByText("Known lead ids: lead-789")).toBeInTheDocument();
     expect(screen.getByText("Known recommendation ids: recommendation-789")).toBeInTheDocument();
-  }, 10000);
+  }, 15000);
 });
