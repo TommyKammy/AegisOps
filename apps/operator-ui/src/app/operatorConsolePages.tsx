@@ -19,7 +19,7 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { Link as ReactRouterLink, useParams } from "react-router-dom";
 import { useDataProvider } from "react-admin";
 import {
@@ -36,6 +36,11 @@ import {
   OptionalExtensionVisibilityPanel,
   buildOptionalEvidenceDefinitionsFromPayload,
 } from "./optionalExtensionVisibility";
+import {
+  buildOperatorQueryKey,
+  useOperatorQueryLoader,
+  useOperatorQueryState,
+} from "./operatorQueryCache";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -43,6 +48,7 @@ interface QueryState<T> {
   data: T | null;
   error: Error | null;
   loading: boolean;
+  refreshing: boolean;
 }
 
 function asRecord(value: unknown): UnknownRecord | null {
@@ -524,55 +530,34 @@ function useOperatorList(
   perPage = 25,
 ): QueryState<UnknownRecord[]> {
   const dataProvider = useDataProvider();
-  const [state, setState] = useState<QueryState<UnknownRecord[]>>({
-    data: null,
-    error: null,
-    loading: true,
-  });
-
-  useEffect(() => {
-    let active = true;
-
-    setState({
-      data: null,
-      error: null,
-      loading: true,
-    });
-
-    void dataProvider
-      .getList(resource, {
+  const key = useMemo(
+    () => buildOperatorQueryKey(["list", resource, filter, perPage, sort]),
+    [filter, perPage, resource, sort],
+  );
+  const queryFn = useMemo(
+    () => async () => {
+      const result = await dataProvider.getList(resource, {
         filter,
         pagination: {
           page: 1,
           perPage,
         },
         sort,
-      })
-      .then((result) => {
-        if (!active) {
-          return;
-        }
-        setState({
-          data: result.data.map((record) => record as UnknownRecord),
-          error: null,
-          loading: false,
-        });
-      })
-      .catch((error: unknown) => {
-        if (!active) {
-          return;
-        }
-        setState({
-          data: null,
-          error: error instanceof Error ? error : new Error("Unknown operator list error."),
-          loading: false,
-        });
       });
 
-    return () => {
-      active = false;
-    };
-  }, [dataProvider, filter, perPage, resource, sort]);
+      return result.data.map((record) => record as UnknownRecord);
+    },
+    [dataProvider, filter, perPage, resource, sort],
+  );
+  const state = useOperatorQueryState<UnknownRecord[]>(key);
+
+  useOperatorQueryLoader({
+    key,
+    policy: {
+      refetchOnMount: true,
+    },
+    queryFn,
+  });
 
   return state;
 }
@@ -583,48 +568,45 @@ function useOperatorRecord(
   meta?: Record<string, unknown>,
 ): QueryState<UnknownRecord> {
   const dataProvider = useDataProvider();
-  const [state, setState] = useState<QueryState<UnknownRecord>>({
-    data: null,
-    error: null,
-    loading: true,
-  });
-
-  useEffect(() => {
-    let active = true;
-
-    setState({
-      data: null,
-      error: null,
-      loading: true,
-    });
-
-    void dataProvider
-      .getOne(resource, { id, meta })
-      .then((result) => {
-        if (!active) {
-          return;
-        }
-        setState({
-          data: result.data as UnknownRecord,
-          error: null,
-          loading: false,
-        });
-      })
-      .catch((error: unknown) => {
-        if (!active) {
-          return;
-        }
-        setState({
-          data: null,
-          error: error instanceof Error ? error : new Error("Unknown operator record error."),
-          loading: false,
-        });
+  const metaRecord =
+    meta && typeof meta === "object" ? meta : {};
+  const { reloadToken, ...cacheableMeta } = metaRecord;
+  const refreshToken =
+    typeof reloadToken === "number" && reloadToken > 0 ? reloadToken : undefined;
+  const requestMetaKey = useMemo(
+    () => buildOperatorQueryKey(["request-meta", metaRecord]),
+    [metaRecord],
+  );
+  const requestMeta = useMemo(
+    () => (Object.keys(metaRecord).length > 0 ? metaRecord : undefined),
+    [requestMetaKey],
+  );
+  const key = useMemo(
+    () => buildOperatorQueryKey(["record", resource, id, cacheableMeta]),
+    [cacheableMeta, id, resource],
+  );
+  const queryFn = useMemo(
+    () => async () => {
+      const result = await dataProvider.getOne(resource, {
+        id,
+        meta: requestMeta,
       });
 
-    return () => {
-      active = false;
-    };
-  }, [dataProvider, id, meta, resource]);
+      return result.data as UnknownRecord;
+    },
+    [dataProvider, id, requestMeta, requestMetaKey, resource],
+  );
+  const state = useOperatorQueryState<UnknownRecord>(key);
+
+  useOperatorQueryLoader({
+    force: refreshToken !== undefined,
+    key,
+    policy: {
+      refetchOnMount: true,
+    },
+    queryFn,
+    refreshToken,
+  });
 
   return state;
 }
@@ -667,11 +649,55 @@ function LoadingState({ label }: { label: string }) {
 }
 
 function ErrorState({ error }: { error: Error }) {
+  if (error.name === "OperatorDataProviderAuthorizationError") {
+    return (
+      <Alert severity="warning" variant="outlined">
+        Reviewed backend authorization is required before this operator surface can render.
+      </Alert>
+    );
+  }
+
+  if (error.name === "OperatorDataProviderContractError") {
+    return (
+      <Alert severity="error" variant="outlined">
+        Reviewed operator data could not be verified. The browser stayed fail-closed instead of rendering an untrusted record.
+      </Alert>
+    );
+  }
+
   return (
     <Alert severity="error" variant="outlined">
       {error.message}
     </Alert>
   );
+}
+
+function QueryStateNotice({
+  error,
+  refreshing,
+}: {
+  error: Error | null;
+  refreshing: boolean;
+}) {
+  if (error) {
+    return (
+      <Alert severity="warning" variant="outlined">
+        Showing the last verified operator data while refresh is unavailable.
+        <br />
+        {error.message}
+      </Alert>
+    );
+  }
+
+  if (refreshing) {
+    return (
+      <Alert severity="info" variant="outlined">
+        Refreshing reviewed operator data while the last verified state remains visible.
+      </Alert>
+    );
+  }
+
+  return null;
 }
 
 function SectionCard({
@@ -910,15 +936,16 @@ export function QueuePage() {
     }),
     [],
   );
-  const { data, error, loading } = useOperatorList("queue", filter, sort);
+  const { data, error, loading, refreshing } = useOperatorList("queue", filter, sort);
 
   return (
     <PageFrame
       subtitle="Primary review surface; substrate links stay secondary. AegisOps queue records remain the authoritative selection surface for operator review."
       title="Analyst Queue"
     >
-      {loading ? <LoadingState label="Loading analyst queue" /> : null}
-      {error ? <ErrorState error={error} /> : null}
+      {loading && !data ? <LoadingState label="Loading analyst queue" /> : null}
+      {error && !data ? <ErrorState error={error} /> : null}
+      {data ? <QueryStateNotice error={error} refreshing={refreshing} /> : null}
       {data ? (
         data.length > 0 ? (
           <SectionCard
@@ -1032,13 +1059,13 @@ function AlertDetailPageBody({
 }) {
   const [reloadToken, setReloadToken] = useState(0);
   const recordMeta = useMemo(() => ({ reloadToken }), [reloadToken]);
-  const { data, error, loading } = useOperatorRecord("alerts", alertId, recordMeta);
+  const { data, error, loading, refreshing } = useOperatorRecord("alerts", alertId, recordMeta);
 
-  if (loading) {
+  if (loading && !data) {
     return <LoadingState label="Loading alert detail" />;
   }
 
-  if (error) {
+  if (error && !data) {
     return <ErrorState error={error} />;
   }
 
@@ -1054,6 +1081,7 @@ function AlertDetailPageBody({
 
   return (
     <Stack spacing={3}>
+      <QueryStateNotice error={error} refreshing={refreshing} />
       <SectionCard
         subtitle="Authoritative anchor records stay primary even when subordinate substrate context disagrees or is missing."
         title="Authoritative anchor"
@@ -1203,13 +1231,13 @@ function CaseDetailPageBody({
 }) {
   const [reloadToken, setReloadToken] = useState(0);
   const recordMeta = useMemo(() => ({ reloadToken }), [reloadToken]);
-  const { data, error, loading } = useOperatorRecord("cases", caseId, recordMeta);
+  const { data, error, loading, refreshing } = useOperatorRecord("cases", caseId, recordMeta);
 
-  if (loading) {
+  if (loading && !data) {
     return <LoadingState label="Loading case detail" />;
   }
 
-  if (error) {
+  if (error && !data) {
     return <ErrorState error={error} />;
   }
 
@@ -1235,6 +1263,7 @@ function CaseDetailPageBody({
 
   return (
     <Stack spacing={3}>
+      <QueryStateNotice error={error} refreshing={refreshing} />
       <SectionCard
         subtitle="Case lifecycle state and linked identifiers come from the authoritative AegisOps case record, not from summaries or substrate convenience surfaces."
         title="Authoritative anchor"
@@ -1454,12 +1483,12 @@ function ActionReviewPageBody({
 }) {
   const [reloadToken, setReloadToken] = useState(0);
   const recordMeta = useMemo(() => ({ reloadToken }), [reloadToken]);
-  const { data, error, loading } = useOperatorRecord("actionReview", actionRequestId, recordMeta);
+  const { data, error, loading, refreshing } = useOperatorRecord("actionReview", actionRequestId, recordMeta);
 
-  if (loading) {
+  if (loading && !data) {
     return <LoadingState label="Loading action review detail" />;
   }
-  if (error) {
+  if (error && !data) {
     return <ErrorState error={error} />;
   }
   if (!data) {
@@ -1492,6 +1521,7 @@ function ActionReviewPageBody({
 
   return (
     <Stack spacing={3}>
+      <QueryStateNotice error={error} refreshing={refreshing} />
       <SectionCard
         subtitle="This page stays anchored to one authoritative action-review record. Browser-local routing does not redefine the active review."
         title="Action request detail"
@@ -1775,13 +1805,13 @@ function AssistantAdvisoryPageBody({
     }),
     [recordFamily, recordId],
   );
-  const { data, error, loading } = useOperatorRecord("advisoryOutput", advisoryId, meta);
+  const { data, error, loading, refreshing } = useOperatorRecord("advisoryOutput", advisoryId, meta);
   const anchorLink = supportedAnchorRoute(recordFamily, recordId);
 
-  if (loading) {
+  if (loading && !data) {
     return <LoadingState label="Loading assistant advisory" />;
   }
-  if (error) {
+  if (error && !data) {
     return <ErrorState error={error} />;
   }
   if (!data) {
@@ -1808,6 +1838,7 @@ function AssistantAdvisoryPageBody({
 
   return (
     <Stack spacing={3}>
+      <QueryStateNotice error={error} refreshing={refreshing} />
       <SectionCard
         subtitle="Assistant output stays subordinate to the selected authoritative record and remains read-only inside the reviewed shell."
         title="Authoritative advisory anchor"
@@ -2043,12 +2074,12 @@ export function AssistantAdvisoryPage() {
 }
 
 function ProvenanceAlertBody({ alertId }: { alertId: string }) {
-  const { data, error, loading } = useOperatorRecord("alerts", alertId);
+  const { data, error, loading, refreshing } = useOperatorRecord("alerts", alertId);
 
-  if (loading) {
+  if (loading && !data) {
     return <LoadingState label="Loading alert provenance" />;
   }
-  if (error) {
+  if (error && !data) {
     return <ErrorState error={error} />;
   }
   if (!data) {
@@ -2058,31 +2089,34 @@ function ProvenanceAlertBody({ alertId }: { alertId: string }) {
   const lineage = asRecord(data.lineage);
 
   return (
-    <SectionCard
-      subtitle="This page is provenance-focused but still anchored to the reviewed alert record rather than to substrate-native summaries."
-      title="Alert provenance"
-    >
-      <ValueList
-        entries={[
-          ["Alert id", data.alert_id],
-          ["Reconciliation id", lineage?.reconciliation_id],
-          ["Detection ids", lineage?.substrate_detection_record_ids],
-          ["Accountable identities", lineage?.accountable_source_identities],
-          ["First seen", lineage?.first_seen_at],
-          ["Last seen", lineage?.last_seen_at],
-        ]}
-      />
-    </SectionCard>
+    <Stack spacing={3}>
+      <QueryStateNotice error={error} refreshing={refreshing} />
+      <SectionCard
+        subtitle="This page is provenance-focused but still anchored to the reviewed alert record rather than to substrate-native summaries."
+        title="Alert provenance"
+      >
+        <ValueList
+          entries={[
+            ["Alert id", data.alert_id],
+            ["Reconciliation id", lineage?.reconciliation_id],
+            ["Detection ids", lineage?.substrate_detection_record_ids],
+            ["Accountable identities", lineage?.accountable_source_identities],
+            ["First seen", lineage?.first_seen_at],
+            ["Last seen", lineage?.last_seen_at],
+          ]}
+        />
+      </SectionCard>
+    </Stack>
   );
 }
 
 function ProvenanceCaseBody({ caseId }: { caseId: string }) {
-  const { data, error, loading } = useOperatorRecord("cases", caseId);
+  const { data, error, loading, refreshing } = useOperatorRecord("cases", caseId);
 
-  if (loading) {
+  if (loading && !data) {
     return <LoadingState label="Loading case provenance" />;
   }
-  if (error) {
+  if (error && !data) {
     return <ErrorState error={error} />;
   }
   if (!data) {
@@ -2093,21 +2127,24 @@ function ProvenanceCaseBody({ caseId }: { caseId: string }) {
   const authoritativeAnchor = asRecord(getPath(provenanceSummary, "authoritative_anchor"));
 
   return (
-    <SectionCard
-      subtitle="Only directly linked case lineage is shown here. Neighbor or sibling lineage is not widened by inference."
-      title="Case provenance"
-    >
-      <ValueList
-        entries={[
-          ["Case id", data.case_id],
-          ["Anchor family", authoritativeAnchor?.record_family],
-          ["Anchor id", authoritativeAnchor?.record_id],
-          ["Anchor source family", authoritativeAnchor?.source_family],
-          ["Linked reconciliation ids", data.linked_reconciliation_ids],
-          ["Linked evidence ids", data.linked_evidence_ids],
-        ]}
-      />
-    </SectionCard>
+    <Stack spacing={3}>
+      <QueryStateNotice error={error} refreshing={refreshing} />
+      <SectionCard
+        subtitle="Only directly linked case lineage is shown here. Neighbor or sibling lineage is not widened by inference."
+        title="Case provenance"
+      >
+        <ValueList
+          entries={[
+            ["Case id", data.case_id],
+            ["Anchor family", authoritativeAnchor?.record_family],
+            ["Anchor id", authoritativeAnchor?.record_id],
+            ["Anchor source family", authoritativeAnchor?.source_family],
+            ["Linked reconciliation ids", data.linked_reconciliation_ids],
+            ["Linked evidence ids", data.linked_evidence_ids],
+          ]}
+        />
+      </SectionCard>
+    </Stack>
   );
 }
 
@@ -2139,7 +2176,7 @@ export function ReadinessPage() {
     }),
     [],
   );
-  const { data, error, loading } = useOperatorList("runtimeReadiness", filter, sort, 1);
+  const { data, error, loading, refreshing } = useOperatorList("runtimeReadiness", filter, sort, 1);
 
   const record = data?.[0] ?? null;
   const reviewPathHealth = asRecord(getPath(record, "metrics.review_path_health"));
@@ -2154,8 +2191,9 @@ export function ReadinessPage() {
       subtitle="Readiness remains a reviewed status surface. It does not become a hidden write console or override authoritative backend state."
       title="Readiness"
     >
-      {loading ? <LoadingState label="Loading readiness diagnostics" /> : null}
-      {error ? <ErrorState error={error} /> : null}
+      {loading && !record ? <LoadingState label="Loading readiness diagnostics" /> : null}
+      {error && !record ? <ErrorState error={error} /> : null}
+      {record ? <QueryStateNotice error={error} refreshing={refreshing} /> : null}
       {record ? (
         <Stack spacing={3}>
           <SectionCard
@@ -2213,15 +2251,16 @@ export function ReconciliationPage() {
     }),
     [],
   );
-  const { data, error, loading } = useOperatorList("reconciliations", filter, sort);
+  const { data, error, loading, refreshing } = useOperatorList("reconciliations", filter, sort);
 
   return (
     <PageFrame
       subtitle="Reconciliation surfaces keep mismatch and linkage problems visible instead of collapsing them into generic success dashboards."
       title="Reconciliation"
     >
-      {loading ? <LoadingState label="Loading reconciliation status" /> : null}
-      {error ? <ErrorState error={error} /> : null}
+      {loading && !data ? <LoadingState label="Loading reconciliation status" /> : null}
+      {error && !data ? <ErrorState error={error} /> : null}
+      {data ? <QueryStateNotice error={error} refreshing={refreshing} /> : null}
       {data ? (
         data.length > 0 ? (
           <Stack spacing={3}>

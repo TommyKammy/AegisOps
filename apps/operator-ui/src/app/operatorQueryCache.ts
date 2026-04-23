@@ -1,0 +1,195 @@
+import { useEffect, useSyncExternalStore } from "react";
+
+interface QueryPolicy {
+  refetchOnMount: boolean;
+}
+
+interface QueryState<T> {
+  data: T | null;
+  error: Error | null;
+  loading: boolean;
+  refreshing: boolean;
+}
+
+interface CacheEntry<T> {
+  inFlight: Promise<T> | null;
+  listeners: Set<() => void>;
+  state: QueryState<T>;
+}
+
+interface LoadQueryArgs<T> {
+  force?: boolean;
+  key: string;
+  queryFn: () => Promise<T>;
+  retainStaleOnError?: boolean;
+}
+
+const DEFAULT_QUERY_STATE = {
+  data: null,
+  error: null,
+  loading: true,
+  refreshing: false,
+};
+
+const queryCache = new Map<string, CacheEntry<unknown>>();
+
+function getOrCreateEntry<T>(key: string): CacheEntry<T> {
+  const existing = queryCache.get(key) as CacheEntry<T> | undefined;
+  if (existing) {
+    return existing;
+  }
+
+  const created: CacheEntry<T> = {
+    inFlight: null,
+    listeners: new Set(),
+    state: DEFAULT_QUERY_STATE,
+  };
+  queryCache.set(key, created as CacheEntry<unknown>);
+  return created;
+}
+
+function notifyEntry(entry: CacheEntry<unknown>) {
+  entry.listeners.forEach((listener) => listener());
+}
+
+function shouldRetainDataOnError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return !(
+    error.name === "OperatorDataProviderAuthorizationError" ||
+    error.name === "OperatorDataProviderContractError"
+  );
+}
+
+export function buildOperatorQueryKey(parts: unknown[]): string {
+  return JSON.stringify(parts);
+}
+
+export function subscribeToOperatorQuery(
+  key: string,
+  listener: () => void,
+) {
+  const entry = getOrCreateEntry(key);
+  entry.listeners.add(listener);
+
+  return () => {
+    entry.listeners.delete(listener);
+  };
+}
+
+export function getOperatorQuerySnapshot<T>(key: string): QueryState<T> {
+  return getOrCreateEntry<T>(key).state;
+}
+
+export async function loadOperatorQuery<T>({
+  force = false,
+  key,
+  queryFn,
+  retainStaleOnError = true,
+}: LoadQueryArgs<T>): Promise<T> {
+  const entry = getOrCreateEntry<T>(key);
+  const hasData = entry.state.data !== null;
+
+  if (!force && entry.inFlight !== null) {
+    return entry.inFlight;
+  }
+
+  if (!force && hasData) {
+    entry.state = {
+      ...entry.state,
+      error: null,
+      loading: false,
+      refreshing: true,
+    };
+    notifyEntry(entry);
+  } else {
+    entry.state = {
+      data: null,
+      error: null,
+      loading: true,
+      refreshing: false,
+    };
+    notifyEntry(entry);
+  }
+
+  const request = queryFn()
+    .then((data) => {
+      entry.state = {
+        data,
+        error: null,
+        loading: false,
+        refreshing: false,
+      };
+      notifyEntry(entry);
+      return data;
+    })
+    .catch((error: unknown) => {
+      const normalizedError =
+        error instanceof Error
+          ? error
+          : new Error("Unknown operator query failure.");
+
+      if (hasData && retainStaleOnError && shouldRetainDataOnError(normalizedError)) {
+        entry.state = {
+          data: entry.state.data,
+          error: normalizedError,
+          loading: false,
+          refreshing: false,
+        };
+        notifyEntry(entry);
+        return entry.state.data as T;
+      }
+
+      entry.state = {
+        data: null,
+        error: normalizedError,
+        loading: false,
+        refreshing: false,
+      };
+      notifyEntry(entry);
+      throw normalizedError;
+    })
+    .finally(() => {
+      entry.inFlight = null;
+    });
+
+  entry.inFlight = request;
+  return request;
+}
+
+export function useOperatorQueryState<T>(key: string): QueryState<T> {
+  return useSyncExternalStore(
+    (listener) => subscribeToOperatorQuery(key, listener),
+    () => getOperatorQuerySnapshot<T>(key),
+    () => DEFAULT_QUERY_STATE,
+  );
+}
+
+export function useOperatorQueryLoader<T>({
+  force = false,
+  key,
+  policy,
+  queryFn,
+  refreshToken,
+}: {
+  force?: boolean;
+  key: string;
+  policy: QueryPolicy;
+  queryFn: () => Promise<T>;
+  refreshToken?: number;
+}) {
+  useEffect(() => {
+    void loadOperatorQuery<T>({
+      force: force || refreshToken !== undefined,
+      key,
+      queryFn,
+      retainStaleOnError: policy.refetchOnMount,
+    }).catch(() => undefined);
+  }, [force, key, policy.refetchOnMount, queryFn, refreshToken]);
+}
+
+export function resetOperatorQueryCacheForTests() {
+  queryCache.clear();
+}
