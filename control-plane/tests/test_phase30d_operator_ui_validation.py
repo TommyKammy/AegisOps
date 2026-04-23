@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 import pathlib
+import sys
 import unittest
+
+TESTS_ROOT = pathlib.Path(__file__).resolve().parent
+if str(TESTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TESTS_ROOT))
+
+from support.operator_ui_sources import read_operator_routes_test_bundle
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -37,7 +44,7 @@ class Phase30DOperatorUiValidationTests(unittest.TestCase):
     def test_phase30d_frontend_tests_cover_authoritative_split_and_explicit_failure_states(
         self,
     ) -> None:
-        operator_routes_tests = self._read("apps/operator-ui/src/app/OperatorRoutes.test.tsx")
+        operator_routes_tests = read_operator_routes_test_bundle(REPO_ROOT)
 
         for term in (
             "renders the reviewed action-review detail route from backend-authoritative action review data",

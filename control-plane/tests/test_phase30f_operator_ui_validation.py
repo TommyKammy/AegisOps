@@ -5,6 +5,10 @@ import sys
 import unittest
 
 
+TESTS_ROOT = pathlib.Path(__file__).resolve().parent
+if str(TESTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TESTS_ROOT))
+
 CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
@@ -12,6 +16,7 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 from aegisops_control_plane.config import RuntimeConfig
 from aegisops_control_plane.service import AegisOpsControlPlaneService
 from postgres_test_support import make_store
+from support.operator_ui_sources import read_operator_routes_test_bundle
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -92,7 +97,7 @@ class Phase30FOperatorUiValidationTests(unittest.TestCase):
         mapper_tests = self._read(
             "apps/operator-ui/src/app/optionalExtensionVisibility.test.tsx"
         )
-        route_tests = self._read("apps/operator-ui/src/app/OperatorRoutes.test.tsx")
+        route_tests = read_operator_routes_test_bundle(REPO_ROOT)
 
         for term in (
             "keeps disabled-by-default posture distinct from unavailable",
