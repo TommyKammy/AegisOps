@@ -275,6 +275,7 @@ function ProtectedOperatorRoute({
   return (
     <OperatorShell
       authProvider={authProvider}
+      basePath={config.basePath}
       dataProvider={dataProvider}
       operatorIdentity={session?.identity ?? ""}
       operatorRoles={session?.roles ?? []}

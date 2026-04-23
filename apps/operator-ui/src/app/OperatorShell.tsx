@@ -46,10 +46,14 @@ import type { OperatorTaskActionClient } from "../taskActions/taskActionClient";
 
 function hasReviewedOperatorRole(
   operatorRoles: readonly string[],
-  allowedRoles: readonly string[],
+  allowedRoles: readonly string[] = operatorRoles,
 ) {
+  const normalizedAllowedRoles = new Set(
+    allowedRoles.map((role) => role.trim().toLowerCase()),
+  );
+
   return operatorRoles.some((role) =>
-    allowedRoles.includes(role.toLowerCase()),
+    normalizedAllowedRoles.has(role.toLowerCase()),
   );
 }
 
@@ -60,11 +64,15 @@ function canBrowseActionReview(operatorRoles: readonly string[]) {
 }
 
 function canInspectActionReviewDetail(operatorRoles: readonly string[]) {
-  return hasReviewedOperatorRole(operatorRoles, [
-    "analyst",
-    "approver",
-    "platform-administrator",
-  ]);
+  return hasReviewedOperatorRole(operatorRoles);
+}
+
+function buildOperatorShellPath(basePath: string, path = "") {
+  if (!path) {
+    return basePath;
+  }
+
+  return `${basePath}/${path}`;
 }
 
 function OperatorAppBar() {
@@ -80,8 +88,10 @@ function OperatorAppBar() {
 }
 
 function OperatorMenu({
+  basePath,
   operatorRoles,
 }: {
+  basePath: string;
   operatorRoles: readonly string[];
 }) {
   const showActionReview = canBrowseActionReview(operatorRoles);
@@ -92,43 +102,43 @@ function OperatorMenu({
       <Menu.Item
         leftIcon={<InboxOutlinedIcon />}
         primaryText="Queue"
-        to="/operator/queue"
+        to={buildOperatorShellPath(basePath, "queue")}
       />
       <Menu.Item
         leftIcon={<WarningAmberOutlinedIcon />}
         primaryText="Alerts"
-        to="/operator/queue"
+        to={buildOperatorShellPath(basePath, "queue")}
       />
       <Menu.Item
         leftIcon={<InsightsOutlinedIcon />}
         primaryText="Cases"
-        to="/operator/queue"
+        to={buildOperatorShellPath(basePath, "queue")}
       />
       <Menu.Item
         leftIcon={<LinkOutlinedIcon />}
         primaryText="Provenance"
-        to="/operator/provenance/alerts"
+        to={buildOperatorShellPath(basePath, "provenance/alerts")}
       />
       <Menu.Item
         leftIcon={<CheckCircleOutlineIcon />}
         primaryText="Readiness"
-        to="/operator/readiness"
+        to={buildOperatorShellPath(basePath, "readiness")}
       />
       <Menu.Item
         leftIcon={<RuleFolderOutlinedIcon />}
         primaryText="Reconciliation"
-        to="/operator/reconciliation"
+        to={buildOperatorShellPath(basePath, "reconciliation")}
       />
       <Menu.Item
         leftIcon={<AutoAwesomeOutlinedIcon />}
         primaryText="Assistant"
-        to="/operator/assistant"
+        to={buildOperatorShellPath(basePath, "assistant")}
       />
       {showActionReview ? (
         <Menu.Item
           leftIcon={<GavelOutlinedIcon />}
           primaryText="Action Review"
-          to="/operator/action-review"
+          to={buildOperatorShellPath(basePath, "action-review")}
         />
       ) : null}
     </Menu>
@@ -305,12 +315,14 @@ function PlaceholderPage({
 
 export function OperatorShell({
   authProvider,
+  basePath,
   dataProvider,
   operatorIdentity,
   operatorRoles,
   taskActionClient,
 }: {
   authProvider: AuthProvider;
+  basePath: string;
   dataProvider: DataProvider;
   operatorIdentity: string;
   operatorRoles: string[];
@@ -328,7 +340,9 @@ export function OperatorShell({
       <TaskActionClientProvider client={taskActionClient}>
         <Layout
           appBar={OperatorAppBar}
-          menu={() => <OperatorMenu operatorRoles={operatorRoles} />}
+          menu={() => (
+            <OperatorMenu basePath={basePath} operatorRoles={operatorRoles} />
+          )}
         >
           <Routes>
             <Route element={<OverviewPage operatorRoles={operatorRoles} />} index />
@@ -357,7 +371,10 @@ export function OperatorShell({
                     operatorRoles={operatorRoles}
                   />
                 ) : (
-                  <Navigate replace to="/operator/forbidden" />
+                  <Navigate
+                    replace
+                    to={buildOperatorShellPath(basePath, "forbidden")}
+                  />
                 )
               }
               path="action-review"
@@ -370,7 +387,10 @@ export function OperatorShell({
                     operatorRoles={operatorRoles}
                   />
                 ) : (
-                  <Navigate replace to="/operator/forbidden" />
+                  <Navigate
+                    replace
+                    to={buildOperatorShellPath(basePath, "forbidden")}
+                  />
                 )
               }
               path="action-review/:actionRequestId"
