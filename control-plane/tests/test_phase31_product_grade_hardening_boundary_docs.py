@@ -77,15 +77,18 @@ class Phase31ProductGradeHardeningBoundaryDocsTests(unittest.TestCase):
             "apps/operator-ui/src/app/OperatorRoutes.tsx",
             "apps/operator-ui/src/app/OperatorShell.tsx",
             "apps/operator-ui/src/app/OperatorRoutes.test.tsx",
+            "apps/operator-ui/e2e/operator-workflows.spec.ts",
+            "playwright.config.ts",
             "route, menu, and page-level gating remain posture controls while backend authorization stays authoritative",
             "deep-link and `returnTo` handling remain bounded",
             "unauthorized, forbidden, invalid-session, empty, error, and degraded shell states remain explicit and non-interchangeable",
             "client-event logging remains bounded, audit-friendly, and subordinate to backend audit records",
             "python3 -m unittest control-plane.tests.test_phase31_product_grade_hardening_boundary_docs",
             "python3 -m unittest control-plane.tests.test_phase31_operator_ui_validation",
+            "npm --prefix apps/operator-ui exec playwright test",
             "npm --prefix apps/operator-ui test -- --run src/app/OperatorRoutes.test.tsx",
             "npm --prefix apps/operator-ui run build",
-            "issue-lint 708",
+            "issue-lint 712",
         ):
             self.assertIn(term, text)
 

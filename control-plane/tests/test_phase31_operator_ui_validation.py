@@ -28,8 +28,11 @@ class Phase31OperatorUiValidationTests(unittest.TestCase):
             "client-event logging remains bounded, audit-friendly, and subordinate to backend audit records",
             "caching, refetch, reload, and fixed-theme guardrails remain product-grade browser behavior rather than workflow authority expansion",
             "control-plane/tests/test_phase31_operator_ui_validation.py",
+            "apps/operator-ui/e2e/operator-workflows.spec.ts",
+            "playwright.config.ts",
             "apps/operator-ui/src/app/OperatorRoutes.test.tsx",
             "python3 -m unittest control-plane.tests.test_phase31_operator_ui_validation",
+            "npm --prefix apps/operator-ui exec playwright test",
             "npm --prefix apps/operator-ui test -- --run src/app/OperatorRoutes.test.tsx",
             "npm --prefix apps/operator-ui run build",
         ):
@@ -51,6 +54,46 @@ class Phase31OperatorUiValidationTests(unittest.TestCase):
             "keeps no-authority semantics explicit for cited advisory output without a recommendation draft",
         ):
             self.assertIn(term, operator_routes_tests)
+
+    def test_phase31_browser_workflow_suite_locks_product_grade_operator_paths(
+        self,
+    ) -> None:
+        playwright_config = self._read("playwright.config.ts")
+        package_config = self._read("apps/operator-ui/playwright.config.ts")
+        operator_workflows = self._read("apps/operator-ui/e2e/operator-workflows.spec.ts")
+        package_json = self._read("apps/operator-ui/package.json")
+
+        for term in (
+            'testDir: "./apps/operator-ui/e2e"',
+            'command: "npm --prefix apps/operator-ui run dev -- --host 127.0.0.1"',
+            'baseURL: "http://127.0.0.1:4173"',
+        ):
+            self.assertIn(term, playwright_config)
+
+        for term in (
+            'testDir: "./e2e"',
+            'command: "npm run dev -- --host 127.0.0.1"',
+            'baseURL: "http://127.0.0.1:4173"',
+        ):
+            self.assertIn(term, package_config)
+
+        for term in (
+            "@playwright/test",
+            '"test:e2e": "playwright test"',
+        ):
+            self.assertIn(term, package_json)
+
+        for term in (
+            "unauthenticated protected deep links preserve a bounded return path without rendering shell data",
+            "role gating blocks analyst browser navigation to action review collection routes",
+            "operator workflows render degraded queue state and approver action-review detail from backend records",
+            "Return path: /operator/queue?focus=degraded#summary",
+            "Access denied",
+            "Review state remains degraded.",
+            "Non-authoritative coordination reference is missing_anchor.",
+            "Record approval decision",
+        ):
+            self.assertIn(term, operator_workflows)
 
     def test_phase31_shell_and_route_sources_expose_reviewed_gating_and_binding_points(
         self,

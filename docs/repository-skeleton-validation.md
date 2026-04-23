@@ -25,6 +25,7 @@ The approved top-level repository baseline allows these tracked entries:
 - `opensearch/`
 - `package-lock.json`
 - `package.json`
+- `playwright.config.ts`
 - `postgres/`
 - `proxy/`
 - `scripts/`
@@ -49,6 +50,7 @@ The repository currently tracks these top-level entries in the verified pull req
 - `opensearch/`
 - `package-lock.json`
 - `package.json`
+- `playwright.config.ts`
 - `postgres/`
 - `proxy/`
 - `scripts/`
@@ -64,5 +66,6 @@ Disposition decisions:
 - `.gitignore` is an approved tracked top-level metadata file because the repository baseline depends on committed ignore rules for transient local and supervisor artifacts.
 - `LICENSE.txt` and `README.md` are approved tracked top-level files and are part of the documented baseline.
 - `apps/`, `package.json`, and `package-lock.json` are approved Phase 30 operator-console baseline entries that support the dedicated frontend workspace while preserving backend authority.
+- `playwright.config.ts` is an approved Phase 31 browser-validation shim for repository-root E2E invocation and does not create a new top-level application home.
 
 No approved baseline top-level entries are missing.

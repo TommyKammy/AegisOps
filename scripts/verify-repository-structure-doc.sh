@@ -20,6 +20,7 @@ required_entries=(
   "ingest/"
   "package.json"
   "package-lock.json"
+  "playwright.config.ts"
   "postgres/"
   "proxy/"
   "scripts/"

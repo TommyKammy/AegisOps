@@ -21,6 +21,7 @@ expected_top_level_entries=(
   "opensearch"
   "package-lock.json"
   "package.json"
+  "playwright.config.ts"
   "postgres"
   "proxy"
   "scripts"
