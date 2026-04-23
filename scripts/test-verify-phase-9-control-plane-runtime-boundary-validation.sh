@@ -62,11 +62,12 @@ create_repo() {
   printf 'fixture license\n' > "${target}/LICENSE.txt"
   printf '{\"name\":\"fixture-root-workspace\",\"private\":true}\n' > "${target}/package.json"
   printf '{\"name\":\"fixture-root-workspace\",\"lockfileVersion\":3}\n' > "${target}/package-lock.json"
+  printf 'export default {};\n' > "${target}/playwright.config.ts"
   git -C "${target}" add .codex-supervisor/.gitkeep .github/workflows/.gitkeep \
     apps/operator-ui/.gitkeep \
     config/.gitkeep ingest/.gitkeep n8n/.gitkeep opensearch/.gitkeep \
     proxy/.gitkeep scripts/.gitkeep sigma/.gitkeep .env.sample .gitignore LICENSE.txt \
-    package.json package-lock.json
+    package.json package-lock.json playwright.config.ts
 }
 
 write_required_artifacts() {
