@@ -1,52 +1,140 @@
-# AegisOps Runbook Skeleton
+# AegisOps Runbook
 
-This runbook is an initial skeleton for approved future operational procedures.
+This runbook defines the reviewed operator procedure for the current AegisOps startup and shutdown path.
 
-It supplements `docs/requirements-baseline.md` by reserving a structured home for startup, shutdown, restore, approval handling, and validation guidance as implementation artifacts mature.
+It supplements `docs/requirements-baseline.md`, `docs/phase-16-release-state-and-first-boot-scope.md`, `docs/phase-17-runtime-config-contract-and-boot-command-expectations.md`, and `docs/control-plane-runtime-service-boundary.md` by turning the approved first-boot runtime contract into one repo-owned daily procedure.
 
-It does not claim production completeness and does not authorize environment-specific commands.
+It does not authorize environment-specific secrets in version control, optional-extension startup blockers, direct backend exposure, HA or multi-node operating patterns, or unsupported emergency shortcuts.
 
 ## 1. Purpose and Status
 
-This document exists to define the minimum approved structure for future operator procedures without implying that those procedures are complete today.
+This document exists to define one reviewed startup and shutdown path that operators can rehearse without reconstructing the sequence from multiple phase notes.
 
-The current content is intentionally limited to placeholders, constraints, and documentation expectations that align with the AegisOps baseline.
+The reviewed procedure is limited to the current first-boot runtime floor:
 
-Any future operational detail added here must remain consistent with the approved architecture, repository assets, and validation requirements.
+- the AegisOps control-plane service under `control-plane/`;
+- PostgreSQL as the authoritative control-plane persistence dependency;
+- the approved reverse proxy boundary as the only reviewed user-facing ingress path; and
+- reviewed Wazuh-facing analytic-signal intake expectations.
 
 Startup, restore, and operator-load assumptions referenced by this runbook must stay aligned with `docs/smb-footprint-and-deployment-profile-baseline.md`.
-
-## 2. Startup
-
-Detailed startup steps are intentionally deferred until implementation artifacts and validation procedures exist.
 
 Until implementation-specific commands are approved, operators must treat first boot as limited to the AegisOps control-plane service, PostgreSQL, the approved reverse proxy boundary, and reviewed Wazuh-facing analytic-signal intake expectations.
 
 Operators must not treat optional OpenSearch, n8n, the full analyst-assistant surface, or the high-risk executor path as first-boot prerequisites.
 
-Operators should size startup expectations, maintenance windows, and review burden against `docs/smb-footprint-and-deployment-profile-baseline.md` rather than against enterprise-cluster assumptions.
+## 2. Startup
 
-Future startup guidance should describe:
+The reviewed startup path is business-hours oriented and must begin from a change-aware operator session with repository access, the approved runtime env file, and access to the reviewed secret source referenced by that env file.
 
-- approved prerequisites and dependencies,
-- the order in which platform components may be started,
-- the records or evidence operators must capture during startup, and
-- the validation checkpoints required before the platform is treated as ready.
+### 2.1 Startup Preconditions
 
-This section must not be expanded with environment-specific commands until those commands are backed by approved version-controlled artifacts.
+Before starting anything, the operator must confirm all of the following:
+
+- the workspace is on the reviewed repository revision for the maintenance window or first-boot rehearsal;
+- an untracked runtime env file has been prepared from `control-plane/deployment/first-boot/bootstrap.env.sample` without committing live secrets, DSNs, or tokens;
+- the required Phase 17 runtime keys are present and intentionally set: `AEGISOPS_CONTROL_PLANE_HOST`, `AEGISOPS_CONTROL_PLANE_PORT`, `AEGISOPS_CONTROL_PLANE_POSTGRES_DSN`, `AEGISOPS_CONTROL_PLANE_BOOT_MODE`, and `AEGISOPS_CONTROL_PLANE_LOG_LEVEL`;
+- `AEGISOPS_CONTROL_PLANE_BOOT_MODE` remains `first-boot`;
+- the reviewed reverse-proxy-first ingress posture remains in force, with no plan to publish the control-plane backend port directly; and
+- the operator has a place to capture startup evidence for the window, including command output, readiness results, and any refusal or retry reason.
+
+Optional environment keys such as `AEGISOPS_CONTROL_PLANE_OPENSEARCH_URL`, `AEGISOPS_CONTROL_PLANE_N8N_BASE_URL`, `AEGISOPS_CONTROL_PLANE_SHUFFLE_BASE_URL`, and `AEGISOPS_CONTROL_PLANE_ISOLATED_EXECUTOR_BASE_URL` may remain unset without blocking startup.
+
+If required bootstrap state is absent, malformed, contradictory, or would bypass the approved reverse-proxy boundary, startup must stop and remain failed closed instead of guessing a broader runtime context.
+
+### 2.2 Reviewed Startup Sequence
+
+The reviewed repo-owned startup sequence is:
+
+1. Confirm the env file and secret references are ready without echoing secret values into the evidence record.
+2. Start the reviewed first-boot runtime surface with `docker compose --env-file <runtime-env-file> -f control-plane/deployment/first-boot/docker-compose.yml up -d`.
+3. Let the reviewed control-plane entrypoint perform runtime-config validation, PostgreSQL reachability proof, and migration bootstrap before the system is treated as ready.
+4. Confirm the reverse proxy, not the backend container port, is the user-facing access path for health, readiness, and runtime inspection.
+5. Capture the resulting container state and reviewed ingress evidence before admitting normal operator use.
+
+The reviewed startup order is PostgreSQL dependency first, then the control-plane service with migration bootstrap, then the reverse proxy admission surface.
+
+Operators must not reorder startup to make optional components authoritative, bypass the reverse proxy with direct backend publication, or treat partial container creation as proof of readiness.
+
+### 2.3 Startup Evidence Capture
+
+The minimum startup evidence set is:
+
+- the reviewed repository revision or release identifier used for the startup window;
+- confirmation that the runtime env file was sourced from the reviewed sample contract and kept untracked;
+- `docker compose --env-file <runtime-env-file> -f control-plane/deployment/first-boot/docker-compose.yml ps`;
+- a bounded log capture from the startup window such as `docker compose --env-file <runtime-env-file> -f control-plane/deployment/first-boot/docker-compose.yml logs --tail=200`;
+- the reverse-proxy health result from `curl -fsS http://127.0.0.1:<proxy-port>/healthz`;
+- the reverse-proxy readiness result from `curl -fsS http://127.0.0.1:<proxy-port>/readyz`; and
+- the runtime inspection snapshot from `curl -fsS http://127.0.0.1:<proxy-port>/runtime`.
+
+Evidence capture must record whether any startup step initially failed, what was corrected, and whether the final ready state was achieved without changing the approved boundary or adding new prerequisites.
+
+Operators must redact or omit secret material from saved evidence.
+
+### 2.4 Ready-to-Operate Checks
+
+The platform may be treated as ready for the reviewed operational baseline only when all of the following are true:
+
+- the control-plane service has not failed closed on missing runtime config, missing migration assets, PostgreSQL connection failure, partial migration application, or readiness-proof failure;
+- `/healthz` succeeds through the reverse proxy;
+- `/readyz` succeeds through the reverse proxy, proving required bootstrap state, PostgreSQL reachability, and the expected reviewed schema state;
+- `/runtime` shows the reviewed first-boot surface rather than an expanded optional-extension claim;
+- the operator can confirm the startup remained limited to the control-plane, PostgreSQL, reverse proxy, and reviewed Wazuh-facing first-boot boundary; and
+- optional extensions, if shown at all, remain explicitly subordinate and non-blocking rather than being inferred as part of mainline readiness.
+
+If readiness fails, operators must stop at evidence capture and correction review. They must not admit normal traffic, widen ingress, or substitute optional-extension health for first-boot readiness.
 
 ## 3. Shutdown
 
-Detailed shutdown steps are intentionally deferred until implementation artifacts and validation procedures exist.
+The reviewed shutdown path exists to return the platform to a clean, operator-confirmed safe state without leaving ambiguous runtime ownership or half-stopped ingress.
 
-Future shutdown guidance should describe:
+### 3.1 Controlled Shutdown Conditions
 
-- when a controlled shutdown is permitted,
-- the sequence that preserves data integrity and auditability,
-- what approvals or change records are required before shutdown, and
-- what post-shutdown checks confirm the platform is in a safe state.
+Controlled shutdown is permitted only when one of the following applies:
 
-This section must not be expanded with unsupported emergency procedures or ad-hoc manual shortcuts.
+- a reviewed maintenance window is active;
+- a restore, rollback, or platform hygiene change requires the runtime to stop cleanly; or
+- the runtime has already failed a reviewed readiness or safety gate and operators need to preserve state while preventing further admission.
+
+Shutdown must be paused for manual review if the operator cannot account for active review work, in-flight approval handling, unresolved reconciliation state, or another circumstance where immediate stop would make the audit trail or operator handoff ambiguous.
+
+### 3.2 Reviewed Shutdown Sequence
+
+The reviewed repo-owned shutdown sequence is:
+
+1. Capture a final pre-shutdown readiness snapshot through the reverse proxy.
+2. Record container state and bounded logs for the shutdown window.
+3. Stop the reviewed first-boot runtime surface with `docker compose --env-file <runtime-env-file> -f control-plane/deployment/first-boot/docker-compose.yml down`.
+4. Confirm that the reverse proxy is no longer admitting the reviewed inspection and readiness routes.
+5. Confirm the reviewed runtime surface is fully stopped before declaring the environment safe for follow-on maintenance, restore, or rollback work.
+
+The shutdown order must preserve the operator evidence trail: inspect first, stop the repo-owned stack second, then confirm ingress withdrawal and runtime absence.
+
+Operators must not use ad hoc container deletion, direct data-path manipulation, or undocumented shortcuts as the reviewed shutdown path.
+
+### 3.3 Shutdown Evidence Capture
+
+The minimum shutdown evidence set is:
+
+- the shutdown reason and approved maintenance or recovery context;
+- the final `curl -fsS http://127.0.0.1:<proxy-port>/readyz` result before stopping the stack, or the exact refusal if readiness was already unavailable;
+- `docker compose --env-file <runtime-env-file> -f control-plane/deployment/first-boot/docker-compose.yml ps` captured before shutdown;
+- a bounded shutdown-window log capture such as `docker compose --env-file <runtime-env-file> -f control-plane/deployment/first-boot/docker-compose.yml logs --tail=200`; and
+- post-stop confirmation that the reviewed stack is down and the proxy-facing routes are no longer serving the runtime.
+
+If shutdown follows a fault, the evidence must preserve the failing signal instead of overwriting it with a clean retry narrative.
+
+### 3.4 Safe-State Confirmation
+
+Shutdown is complete only when operators can confirm all of the following:
+
+- the reviewed compose stack reports no running first-boot services;
+- the reverse proxy no longer exposes the reviewed `/healthz`, `/readyz`, or `/runtime` path for this stack;
+- there is no claim that optional services remained authoritative or that the backend stayed intentionally exposed after shutdown; and
+- the evidence record is sufficient for later restore, rollback, or health review work to understand the state that was stopped.
+
+If any part of the stack remains running unexpectedly, shutdown is incomplete and must stay open until the drift is resolved or escalated.
 
 ## 4. Restore
 
@@ -80,7 +168,7 @@ This section must remain consistent with the business-hours-oriented operating m
 
 ## 6. Validation
 
-Validation steps must be documented and repeatable before this runbook can be treated as an operational procedure.
+Validation steps must be documented and repeatable before this runbook can be treated as an operational procedure beyond the reviewed startup and shutdown path.
 
 Future validation guidance should describe:
 

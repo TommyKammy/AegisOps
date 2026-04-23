@@ -135,7 +135,7 @@ create_repo "${missing_runbook_marker_repo}"
 write_canonical_docs "${missing_runbook_marker_repo}"
 remove_text_from_doc "${missing_runbook_marker_repo}" "docs/runbook.md" "Until implementation-specific commands are approved, operators must treat first boot as limited to the AegisOps control-plane service, PostgreSQL, the approved reverse proxy boundary, and reviewed Wazuh-facing analytic-signal intake expectations."
 commit_fixture "${missing_runbook_marker_repo}"
-assert_fails_with "${missing_runbook_marker_repo}" "Missing thesis marker in docs/runbook.md: Until implementation-specific commands are approved, operators must treat first boot as limited to the AegisOps control-plane service, PostgreSQL, the approved reverse proxy boundary, and reviewed Wazuh-facing analytic-signal intake expectations."
+assert_fails_with "${missing_runbook_marker_repo}" "Missing runbook statement: Until implementation-specific commands are approved, operators must treat first boot as limited to the AegisOps control-plane service, PostgreSQL, the approved reverse proxy boundary, and reviewed Wazuh-facing analytic-signal intake expectations."
 
 missing_marker_repo="${workdir}/missing-marker"
 create_repo "${missing_marker_repo}"
