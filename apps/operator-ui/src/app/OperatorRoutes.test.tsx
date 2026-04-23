@@ -409,6 +409,50 @@ describe("OperatorRoutes", () => {
     );
   });
 
+  it("records reviewed route views in the bounded UI event log", async () => {
+    const user = userEvent.setup();
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch({
+        "/inspect-alert-detail": {
+          alert_id: "alert-123",
+          alert: {
+            alert_id: "alert-123",
+            lifecycle_state: "triaged",
+          },
+          review_state: "triaged",
+          provenance: {
+            admission_channel: "live_wazuh_webhook",
+          },
+          linked_evidence_records: [],
+        },
+      }),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/alerts/alert-123"]}>
+        <TestRouteNavigator />
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Alert Detail" })).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByRole("heading", { name: "Reviewed UI event log" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Route: /operator/alerts/alert-123")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Go to readiness" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Readiness" })).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Route: /operator/readiness")).toBeInTheDocument();
+  });
+
   it("shows an explicit forbidden outcome for analyst-only action-review landing routes", async () => {
     const dependencies = createDefaultDependencies({
       fetchFn: createAuthorizedFetch({}),
@@ -1218,6 +1262,107 @@ describe("OperatorRoutes", () => {
         ),
       ).toBeInTheDocument();
     });
+  });
+
+  it("sanitizes bounded external-link logging so secret-like URL suffixes stay out of the UI event log", async () => {
+    const user = userEvent.setup();
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch({
+        "/inspect-action-review": {
+          action_request_id: "action-request-246",
+          read_only: true,
+          current_action_review: {
+            action_request_id: "action-request-246",
+            review_state: "approved",
+          },
+          action_review: {
+            action_request_id: "action-request-246",
+            review_state: "approved",
+            approval_state: "approved",
+            requester_identity: "analyst@example.com",
+            recipient_identity: "repo-owner@example.com",
+            coordination_ticket_outcome: {
+              authority: "authoritative_aegisops_review",
+              status: "present",
+              ticket_reference_url:
+                "https://tickets.example.invalid/incidents/246/signed/super-secret-token?token=query-secret",
+            },
+          },
+        },
+      }, {
+        identity: "approver@example.com",
+        provider: "authentik",
+        roles: ["Approver"],
+        subject: "operator-8",
+      }),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/action-review/action-request-246"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Action Review" })).toBeInTheDocument();
+    });
+
+    await user.click(
+      screen.getByRole("link", {
+        name: "Open downstream coordination reference",
+      }),
+    );
+
+    expect(screen.getByText("Target: https://tickets.example.invalid/incidents/246/<redacted-path-suffix>")).toBeInTheDocument();
+    expect(screen.queryByText(/query-secret|super-secret-token/)).not.toBeInTheDocument();
+  });
+
+  it("keeps unsafe coordination reference schemes non-clickable", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch({
+        "/inspect-action-review": {
+          action_request_id: "action-request-unsafe-link",
+          read_only: true,
+          current_action_review: {
+            action_request_id: "action-request-unsafe-link",
+            review_state: "approved",
+          },
+          action_review: {
+            action_request_id: "action-request-unsafe-link",
+            review_state: "approved",
+            approval_state: "approved",
+            requester_identity: "analyst@example.com",
+            recipient_identity: "repo-owner@example.com",
+            coordination_ticket_outcome: {
+              authority: "authoritative_aegisops_review",
+              status: "present",
+              ticket_reference_url: "javascript:alert('ticket')",
+            },
+          },
+        },
+      }, {
+        identity: "approver@example.com",
+        provider: "authentik",
+        roles: ["Approver"],
+        subject: "operator-8",
+      }),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/action-review/action-request-unsafe-link"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Action Review" })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole("link", {
+      name: "Open downstream coordination reference",
+    })).not.toBeInTheDocument();
+    expect(screen.getByText("Downstream coordination reference: javascript:alert('ticket')")).toBeInTheDocument();
+    expect(screen.queryByText("External open")).not.toBeInTheDocument();
   });
 
   it("renders alert detail with authoritative and subordinate sections separated", async () => {

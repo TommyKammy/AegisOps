@@ -36,6 +36,7 @@ import {
   OptionalExtensionVisibilityPanel,
   buildOptionalEvidenceDefinitionsFromPayload,
 } from "./optionalExtensionVisibility";
+import { useOperatorUiEventLog } from "./operatorUiEvents";
 import {
   buildOperatorQueryKey,
   useOperatorQueryLoader,
@@ -67,6 +68,15 @@ function asRecordArray(value: unknown): UnknownRecord[] {
 
 function asString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function isAllowedExternalHref(value: string) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 function asStringArray(value: unknown): string[] {
@@ -427,6 +437,7 @@ function CoordinationVisibilitySection({
 }: {
   actionReview: UnknownRecord | null;
 }) {
+  const { recordBoundedExternalOpen } = useOperatorUiEventLog();
   const coordinationOutcome = asRecord(actionReview?.coordination_ticket_outcome);
   const targetScope = asRecord(actionReview?.target_scope);
   const ticketReferenceUrl = asString(coordinationOutcome?.ticket_reference_url);
@@ -508,15 +519,25 @@ function CoordinationVisibilitySection({
             ["Linked reconciliation", asString(coordinationOutcome?.reconciliation_id)],
           ]}
         />
-        {ticketReferenceUrl ? (
+        {ticketReferenceUrl && isAllowedExternalHref(ticketReferenceUrl) ? (
           <Link
             href={ticketReferenceUrl}
+            onClick={() => {
+              recordBoundedExternalOpen(
+                "Open downstream coordination reference",
+                ticketReferenceUrl,
+              );
+            }}
             rel="noreferrer"
             target="_blank"
             underline="hover"
           >
             Open downstream coordination reference
           </Link>
+        ) : ticketReferenceUrl ? (
+          <Typography color="text.secondary" variant="body2">
+            Downstream coordination reference: {ticketReferenceUrl}
+          </Typography>
         ) : null}
       </Stack>
     </SectionCard>
@@ -887,7 +908,7 @@ function extractSubordinateLinks(record: UnknownRecord): Array<{ href: string; l
 
   for (const [key, value] of Object.entries(record)) {
     const href = asString(value);
-    if (href && /^https?:\/\//.test(href)) {
+    if (href && isAllowedExternalHref(href)) {
       entries.push({
         href,
         label: formatLabel(key),
@@ -900,6 +921,7 @@ function extractSubordinateLinks(record: UnknownRecord): Array<{ href: string; l
 
 function SubordinateLinks({ records }: { records: UnknownRecord[] }) {
   const links = records.flatMap((record) => extractSubordinateLinks(record));
+  const { recordBoundedExternalOpen } = useOperatorUiEventLog();
 
   if (links.length === 0) {
     return (
@@ -917,6 +939,9 @@ function SubordinateLinks({ records }: { records: UnknownRecord[] }) {
           endIcon={<OpenInNewOutlinedIcon />}
           href={link.href}
           key={`${link.label}-${link.href}`}
+          onClick={() => {
+            recordBoundedExternalOpen(link.label, link.href);
+          }}
           rel="noreferrer"
           size="small"
           target="_blank"
@@ -926,6 +951,57 @@ function SubordinateLinks({ records }: { records: UnknownRecord[] }) {
         </Button>
       ))}
     </Stack>
+  );
+}
+
+function AuditedRouteLink({
+  children,
+  label,
+  to,
+}: {
+  children: ReactNode;
+  label: string;
+  to: string;
+}) {
+  const { recordNavigation } = useOperatorUiEventLog();
+
+  return (
+    <Link
+      component={ReactRouterLink}
+      onClick={() => {
+        recordNavigation(label, to);
+      }}
+      to={to}
+      underline="hover"
+    >
+      {children}
+    </Link>
+  );
+}
+
+function AuditedRouteButton({
+  children,
+  label,
+  to,
+}: {
+  children: ReactNode;
+  label: string;
+  to: string;
+}) {
+  const { recordNavigation } = useOperatorUiEventLog();
+
+  return (
+    <Button
+      component={ReactRouterLink}
+      endIcon={<LaunchOutlinedIcon />}
+      onClick={() => {
+        recordNavigation(label, to);
+      }}
+      to={to}
+      variant="outlined"
+    >
+      {children}
+    </Button>
   );
 }
 
@@ -978,13 +1054,12 @@ export function QueuePage() {
                     <TableRow hover key={String(record.id ?? alertId)}>
                       <TableCell>
                         <Stack spacing={0.75}>
-                          <Link
-                            component={ReactRouterLink}
+                          <AuditedRouteLink
+                            label="Open alert detail"
                             to={`/operator/alerts/${alertId}`}
-                            underline="hover"
                           >
                             {alertId}
-                          </Link>
+                          </AuditedRouteLink>
                           <Typography color="text.secondary" variant="caption">
                             {formatValue(record.queue_selection)}
                           </Typography>
@@ -995,13 +1070,12 @@ export function QueuePage() {
                       </TableCell>
                       <TableCell>
                         {caseId ? (
-                          <Link
-                            component={ReactRouterLink}
+                          <AuditedRouteLink
+                            label="Open case detail"
                             to={`/operator/cases/${caseId}`}
-                            underline="hover"
                           >
                             {caseId}
-                          </Link>
+                          </AuditedRouteLink>
                         ) : (
                           <Typography color="text.secondary" variant="body2">
                             No case anchor
@@ -1106,31 +1180,25 @@ function AlertDetailPageBody({
         />
         <Stack direction="row" gap={1}>
           {caseRecord?.case_id ? (
-            <Button
-              component={ReactRouterLink}
-              endIcon={<LaunchOutlinedIcon />}
+            <AuditedRouteButton
+              label="Open case detail"
               to={`/operator/cases/${String(caseRecord.case_id)}`}
-              variant="outlined"
             >
               Open case detail
-            </Button>
+            </AuditedRouteButton>
           ) : null}
-          <Button
-            component={ReactRouterLink}
-            endIcon={<LaunchOutlinedIcon />}
+          <AuditedRouteButton
+            label="Open assistant advisory"
             to={`/operator/assistant/alert/${alertId}`}
-            variant="outlined"
           >
             Open assistant advisory
-          </Button>
-          <Button
-            component={ReactRouterLink}
-            endIcon={<LaunchOutlinedIcon />}
+          </AuditedRouteButton>
+          <AuditedRouteButton
+            label="Open provenance"
             to={`/operator/provenance/alerts/${alertId}`}
-            variant="outlined"
           >
             Open provenance
-          </Button>
+          </AuditedRouteButton>
         </Stack>
       </SectionCard>
 
@@ -1290,31 +1358,25 @@ function CaseDetailPageBody({
         />
         <Stack direction="row" gap={1}>
           {currentActionRequestId ? (
-            <Button
-              component={ReactRouterLink}
-              endIcon={<LaunchOutlinedIcon />}
+            <AuditedRouteButton
+              label="Open action review"
               to={`/operator/action-review/${currentActionRequestId}`}
-              variant="outlined"
             >
               Open action review
-            </Button>
+            </AuditedRouteButton>
           ) : null}
-          <Button
-            component={ReactRouterLink}
-            endIcon={<LaunchOutlinedIcon />}
+          <AuditedRouteButton
+            label="Open assistant advisory"
             to={`/operator/assistant/case/${caseId}`}
-            variant="outlined"
           >
             Open assistant advisory
-          </Button>
-          <Button
-            component={ReactRouterLink}
-            endIcon={<LaunchOutlinedIcon />}
+          </AuditedRouteButton>
+          <AuditedRouteButton
+            label="Open provenance"
             to={`/operator/provenance/cases/${caseId}`}
-            variant="outlined"
           >
             Open provenance
-          </Button>
+          </AuditedRouteButton>
         </Stack>
       </SectionCard>
 
@@ -1562,54 +1624,44 @@ function ActionReviewPageBody({
         />
         <Stack direction="row" gap={1}>
           {caseRecord?.case_id ? (
-            <Button
-              component={ReactRouterLink}
-              endIcon={<LaunchOutlinedIcon />}
+            <AuditedRouteButton
+              label="Open case detail"
               to={`/operator/cases/${String(caseRecord.case_id)}`}
-              variant="outlined"
             >
               Open case detail
-            </Button>
+            </AuditedRouteButton>
           ) : null}
           {recommendationId ? (
-            <Button
-              component={ReactRouterLink}
-              endIcon={<LaunchOutlinedIcon />}
+            <AuditedRouteButton
+              label="Open recommendation advisory"
               to={`/operator/assistant/recommendation/${recommendationId}`}
-              variant="outlined"
             >
               Open recommendation advisory
-            </Button>
+            </AuditedRouteButton>
           ) : null}
           {approvalDecisionId ? (
-            <Button
-              component={ReactRouterLink}
-              endIcon={<LaunchOutlinedIcon />}
+            <AuditedRouteButton
+              label="Open approval advisory"
               to={`/operator/assistant/approval_decision/${approvalDecisionId}`}
-              variant="outlined"
             >
               Open approval advisory
-            </Button>
+            </AuditedRouteButton>
           ) : null}
           {reconciliationId ? (
-            <Button
-              component={ReactRouterLink}
-              endIcon={<LaunchOutlinedIcon />}
+            <AuditedRouteButton
+              label="Open reconciliation advisory"
               to={`/operator/assistant/reconciliation/${reconciliationId}`}
-              variant="outlined"
             >
               Open reconciliation advisory
-            </Button>
+            </AuditedRouteButton>
           ) : null}
           {alertRecord?.alert_id ? (
-            <Button
-              component={ReactRouterLink}
-              endIcon={<LaunchOutlinedIcon />}
+            <AuditedRouteButton
+              label="Open alert detail"
               to={`/operator/alerts/${String(alertRecord.alert_id)}`}
-              variant="outlined"
             >
               Open alert detail
-            </Button>
+            </AuditedRouteButton>
           ) : null}
         </Stack>
       </SectionCard>
@@ -1859,14 +1911,9 @@ function AssistantAdvisoryPageBody({
           ]}
         />
         {anchorLink ? (
-          <Button
-            component={ReactRouterLink}
-            endIcon={<LaunchOutlinedIcon />}
-            to={anchorLink.to}
-            variant="outlined"
-          >
+          <AuditedRouteButton label={anchorLink.label} to={anchorLink.to}>
             {anchorLink.label}
-          </Button>
+          </AuditedRouteButton>
         ) : null}
         <Alert severity="warning" variant="outlined">
           Assistant output does not approve, execute, or reconcile workflow state.

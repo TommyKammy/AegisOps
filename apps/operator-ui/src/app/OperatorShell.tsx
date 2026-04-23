@@ -1,4 +1,11 @@
-import { useEffect, useState } from "react";
+import {
+  Suspense,
+  lazy,
+  useEffect,
+  useEffectEvent,
+  useState,
+  type ComponentType,
+} from "react";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import AutoAwesomeOutlinedIcon from "@mui/icons-material/AutoAwesomeOutlined";
 import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
@@ -10,6 +17,7 @@ import WarningAmberOutlinedIcon from "@mui/icons-material/WarningAmberOutlined";
 import {
   Card,
   CardContent,
+  CircularProgress,
   Chip,
   Grid,
   Stack,
@@ -25,24 +33,50 @@ import {
   TitlePortal,
   useDataProvider,
 } from "react-admin";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { operatorTheme } from "./theme";
-import {
-  ActionReviewPage,
-  AssistantAdvisoryPage,
-  AlertDetailPage,
-  CaseDetailPage,
-  ProvenancePage,
-  QueuePage,
-  ReadinessPage,
-  ReconciliationPage,
-} from "./operatorConsolePages";
 import {
   OptionalExtensionVisibilityPanel,
   buildOptionalExtensionDefinitionsFromPayload,
 } from "./optionalExtensionVisibility";
+import {
+  OperatorUiEventLogPanel,
+  OperatorUiEventLogProvider,
+  useOperatorUiEventLog,
+} from "./operatorUiEvents";
 import { TaskActionClientProvider } from "../taskActions/taskActionPrimitives";
 import type { OperatorTaskActionClient } from "../taskActions/taskActionClient";
+
+const loadOperatorConsolePages = () => import("./operatorConsolePages");
+
+function lazyOperatorConsolePage<T extends keyof Awaited<ReturnType<typeof loadOperatorConsolePages>>>(
+  exportName: T,
+) {
+  return lazy(async () => {
+    const module = await loadOperatorConsolePages();
+
+    return {
+      default: module[exportName] as ComponentType<any>,
+    };
+  });
+}
+
+const ActionReviewPage =
+  lazyOperatorConsolePage("ActionReviewPage") as unknown as typeof import("./operatorConsolePages").ActionReviewPage;
+const AssistantAdvisoryPage =
+  lazyOperatorConsolePage("AssistantAdvisoryPage") as unknown as typeof import("./operatorConsolePages").AssistantAdvisoryPage;
+const AlertDetailPage =
+  lazyOperatorConsolePage("AlertDetailPage") as unknown as typeof import("./operatorConsolePages").AlertDetailPage;
+const CaseDetailPage =
+  lazyOperatorConsolePage("CaseDetailPage") as unknown as typeof import("./operatorConsolePages").CaseDetailPage;
+const ProvenancePage =
+  lazyOperatorConsolePage("ProvenancePage") as unknown as typeof import("./operatorConsolePages").ProvenancePage;
+const QueuePage =
+  lazyOperatorConsolePage("QueuePage") as unknown as typeof import("./operatorConsolePages").QueuePage;
+const ReadinessPage =
+  lazyOperatorConsolePage("ReadinessPage") as unknown as typeof import("./operatorConsolePages").ReadinessPage;
+const ReconciliationPage =
+  lazyOperatorConsolePage("ReconciliationPage") as unknown as typeof import("./operatorConsolePages").ReconciliationPage;
 
 function hasReviewedOperatorRole(
   operatorRoles: readonly string[],
@@ -313,6 +347,146 @@ function PlaceholderPage({
   );
 }
 
+function DeferredPageFallback() {
+  return (
+    <Stack
+      spacing={2}
+      sx={{
+        minHeight: 280,
+        justifyContent: "center",
+        p: 3,
+      }}
+    >
+      <CircularProgress aria-label="Loading reviewed operator surface" />
+      <Typography color="text.secondary" variant="body2">
+        Loading the reviewed operator surface while the shell preserves the
+        backend-authenticated boundary.
+      </Typography>
+    </Stack>
+  );
+}
+
+function OperatorShellContent({
+  basePath,
+  canInspectActionReview,
+  canViewActionReview,
+  operatorIdentity,
+  operatorRoles,
+}: {
+  basePath: string;
+  canInspectActionReview: boolean;
+  canViewActionReview: boolean;
+  operatorIdentity: string;
+  operatorRoles: string[];
+}) {
+  const location = useLocation();
+  const { recordRouteView } = useOperatorUiEventLog();
+  const recordRouteViewEffect = useEffectEvent((route: string) => {
+    recordRouteView(route);
+  });
+
+  useEffect(() => {
+    recordRouteViewEffect(
+      `${location.pathname}${location.search}${location.hash}`,
+    );
+  }, [
+    location.hash,
+    location.pathname,
+    location.search,
+    recordRouteViewEffect,
+  ]);
+
+  return (
+    <Stack spacing={3} sx={{ pb: 3 }}>
+      <Suspense fallback={<DeferredPageFallback />}>
+        <Routes>
+          <Route element={<OverviewPage operatorRoles={operatorRoles} />} index />
+          <Route element={<QueuePage />} path="queue" />
+          <Route
+            element={<AlertDetailPage operatorIdentity={operatorIdentity} />}
+            path="alerts/:alertId"
+          />
+          <Route
+            element={<CaseDetailPage operatorIdentity={operatorIdentity} />}
+            path="cases/:caseId"
+          />
+          <Route element={<ProvenancePage />} path="provenance/:family/:recordId" />
+          <Route element={<ReadinessPage />} path="readiness" />
+          <Route element={<ReconciliationPage />} path="reconciliation" />
+          <Route element={<AssistantAdvisoryPage />} path="assistant" />
+          <Route
+            element={<AssistantAdvisoryPage />}
+            path="assistant/:recordFamily/:recordId"
+          />
+          <Route
+            element={
+              canViewActionReview ? (
+                <ActionReviewPage
+                  operatorIdentity={operatorIdentity}
+                  operatorRoles={operatorRoles}
+                />
+              ) : (
+                <Navigate
+                  replace
+                  to={buildOperatorShellPath(basePath, "forbidden")}
+                />
+              )
+            }
+            path="action-review"
+          />
+          <Route
+            element={
+              canInspectActionReview ? (
+                <ActionReviewPage
+                  operatorIdentity={operatorIdentity}
+                  operatorRoles={operatorRoles}
+                />
+              ) : (
+                <Navigate
+                  replace
+                  to={buildOperatorShellPath(basePath, "forbidden")}
+                />
+              )
+            }
+            path="action-review/:actionRequestId"
+          />
+          <Route
+            element={
+              <PlaceholderPage
+                description="Use the queue as the primary route into alert detail."
+                title="Alerts"
+              />
+            }
+            path="alerts"
+          />
+          <Route
+            element={
+              <PlaceholderPage
+                description="Use the queue or linked alert detail to open a specific case."
+                title="Cases"
+              />
+            }
+            path="cases"
+          />
+          <Route
+            element={
+              <PlaceholderPage
+                description="Open provenance from alert or case detail so the page stays anchored to an authoritative record."
+                title="Provenance"
+              />
+            }
+            path="provenance/*"
+          />
+          <Route element={<UnsupportedOperatorRoutePage />} path="*" />
+        </Routes>
+      </Suspense>
+      <Stack sx={{ px: { xs: 2, md: 3 } }}>
+        <OperatorUiEventLogPanel />
+      </Stack>
+    </Stack>
+  );
+}
+
 export function OperatorShell({
   authProvider,
   basePath,
@@ -337,95 +511,24 @@ export function OperatorShell({
       dataProvider={dataProvider}
       theme={operatorTheme}
     >
-      <TaskActionClientProvider client={taskActionClient}>
-        <Layout
-          appBar={OperatorAppBar}
-          menu={() => (
-            <OperatorMenu basePath={basePath} operatorRoles={operatorRoles} />
-          )}
-        >
-          <Routes>
-            <Route element={<OverviewPage operatorRoles={operatorRoles} />} index />
-            <Route element={<QueuePage />} path="queue" />
-            <Route
-              element={<AlertDetailPage operatorIdentity={operatorIdentity} />}
-              path="alerts/:alertId"
+      <OperatorUiEventLogProvider>
+        <TaskActionClientProvider client={taskActionClient}>
+          <Layout
+            appBar={OperatorAppBar}
+            menu={() => (
+              <OperatorMenu basePath={basePath} operatorRoles={operatorRoles} />
+            )}
+          >
+            <OperatorShellContent
+              basePath={basePath}
+              canInspectActionReview={canInspectActionReview}
+              canViewActionReview={canViewActionReview}
+              operatorIdentity={operatorIdentity}
+              operatorRoles={operatorRoles}
             />
-            <Route
-              element={<CaseDetailPage operatorIdentity={operatorIdentity} />}
-              path="cases/:caseId"
-            />
-            <Route element={<ProvenancePage />} path="provenance/:family/:recordId" />
-            <Route element={<ReadinessPage />} path="readiness" />
-            <Route element={<ReconciliationPage />} path="reconciliation" />
-            <Route element={<AssistantAdvisoryPage />} path="assistant" />
-            <Route
-              element={<AssistantAdvisoryPage />}
-              path="assistant/:recordFamily/:recordId"
-            />
-            <Route
-              element={
-                canViewActionReview ? (
-                  <ActionReviewPage
-                    operatorIdentity={operatorIdentity}
-                    operatorRoles={operatorRoles}
-                  />
-                ) : (
-                  <Navigate
-                    replace
-                    to={buildOperatorShellPath(basePath, "forbidden")}
-                  />
-                )
-              }
-              path="action-review"
-            />
-            <Route
-              element={
-                canInspectActionReview ? (
-                  <ActionReviewPage
-                    operatorIdentity={operatorIdentity}
-                    operatorRoles={operatorRoles}
-                  />
-                ) : (
-                  <Navigate
-                    replace
-                    to={buildOperatorShellPath(basePath, "forbidden")}
-                  />
-                )
-              }
-              path="action-review/:actionRequestId"
-            />
-            <Route
-              element={
-                <PlaceholderPage
-                  description="Use the queue as the primary route into alert detail."
-                  title="Alerts"
-                />
-              }
-              path="alerts"
-            />
-            <Route
-              element={
-                <PlaceholderPage
-                  description="Use the queue or linked alert detail to open a specific case."
-                  title="Cases"
-                />
-              }
-              path="cases"
-            />
-            <Route
-              element={
-                <PlaceholderPage
-                  description="Open provenance from alert or case detail so the page stays anchored to an authoritative record."
-                  title="Provenance"
-                />
-              }
-              path="provenance/*"
-            />
-            <Route element={<UnsupportedOperatorRoutePage />} path="*" />
-          </Routes>
-        </Layout>
-      </TaskActionClientProvider>
+          </Layout>
+        </TaskActionClientProvider>
+      </OperatorUiEventLogProvider>
     </AdminContext>
   );
 }
