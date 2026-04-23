@@ -128,10 +128,15 @@ Restore must stop and remain failed closed if backup provenance, custody, comple
 
 Restore validation before normal operations resume must confirm that:
 
+- approval records remain linked to the reviewed case and action scope rather than disappearing behind backup age or partial restore drift;
+- evidence records remain attributable, reviewable, and linked to the restored case, approval, execution, and reconciliation chain;
+- execution records and receipts remain intact without orphaning partially restored downstream state;
+- reconciliation records still describe the authoritative post-action outcome, including mismatch, pending, or terminal markers where they existed before recovery; and
+- readiness, reverse-proxy admission, and runtime inspection all reflect the same committed restored state rather than a mixed snapshot assembled from different recovery points.
+
 Rollback is the same-day operator path for returning from a reviewed change window to the prior known-good state when restore validation, readiness, or operator evidence shows the changed state is no longer trustworthy.
 
 Rollback must begin when any of the following apply:
-
 - the reviewed startup path succeeds but post-change validation shows missing or drifted approval, evidence, execution, or reconciliation records;
 
 Operators must retain rollback evidence showing the trigger, the backup set or configuration revision used, the restoration point selected, the post-rollback readiness results, and the confirmation that the prior known-good approval, evidence, execution, and reconciliation chain was restored.
@@ -247,10 +252,15 @@ Restore must stop and remain failed closed if backup provenance, custody, comple
 
 Restore validation before normal operations resume must confirm that:
 
+- approval records remain linked to the reviewed case and action scope rather than disappearing behind backup age or partial restore drift;
+- evidence records remain attributable, reviewable, and linked to the restored case, approval, execution, and reconciliation chain;
+- execution records and receipts remain intact without orphaning partially restored downstream state;
+- reconciliation records still describe the authoritative post-action outcome, including mismatch, pending, or terminal markers where they existed before recovery; and
+- readiness, reverse-proxy admission, and runtime inspection all reflect the same committed restored state rather than a mixed snapshot assembled from different recovery points.
+
 Rollback is the same-day operator path for returning from a reviewed change window to the prior known-good state when restore validation, readiness, or operator evidence shows the changed state is no longer trustworthy.
 
 Rollback must begin when any of the following apply:
-
 - the reviewed startup path succeeds but post-change validation shows missing or drifted approval, evidence, execution, or reconciliation records;
 
 Operators must retain rollback evidence showing the trigger, the backup set or configuration revision used, the restoration point selected, the post-rollback readiness results, and the confirmation that the prior known-good approval, evidence, execution, and reconciliation chain was restored.
@@ -368,10 +378,15 @@ Restore must stop and remain failed closed if backup provenance, custody, comple
 
 Restore validation before normal operations resume must confirm that:
 
+- approval records remain linked to the reviewed case and action scope rather than disappearing behind backup age or partial restore drift;
+- evidence records remain attributable, reviewable, and linked to the restored case, approval, execution, and reconciliation chain;
+- execution records and receipts remain intact without orphaning partially restored downstream state;
+- reconciliation records still describe the authoritative post-action outcome, including mismatch, pending, or terminal markers where they existed before recovery; and
+- readiness, reverse-proxy admission, and runtime inspection all reflect the same committed restored state rather than a mixed snapshot assembled from different recovery points.
+
 Rollback is the same-day operator path for returning from a reviewed change window to the prior known-good state when restore validation, readiness, or operator evidence shows the changed state is no longer trustworthy.
 
 Rollback must begin when any of the following apply:
-
 - the reviewed startup path succeeds but post-change validation shows missing or drifted approval, evidence, execution, or reconciliation records;
 
 Operators must retain rollback evidence showing the trigger, the backup set or configuration revision used, the restoration point selected, the post-rollback readiness results, and the confirmation that the prior known-good approval, evidence, execution, and reconciliation chain was restored.
@@ -410,6 +425,11 @@ If validation fails, disable the selected slice by keeping the detector artifact
 
 The selected slice remains business-hours oriented and does not imply 24x7 monitoring, production write behavior, or uncontrolled activation.'
 assert_fails_with "${deferred_startup_repo}" "Forbidden runbook statement still present: Detailed startup steps are intentionally deferred until implementation artifacts and validation procedures exist."
+
+missing_restore_validation_bullet_repo="${workdir}/missing-restore-validation-bullet"
+create_repo "${missing_restore_validation_bullet_repo}"
+grep -Fvx -- '- approval records remain linked to the reviewed case and action scope rather than disappearing behind backup age or partial restore drift;' "${valid_repo}/docs/runbook.md" >"${missing_restore_validation_bullet_repo}/docs/runbook.md"
+assert_fails_with "${missing_restore_validation_bullet_repo}" "Missing restore validation bullet: - approval records remain linked to the reviewed case and action scope rather than disappearing behind backup age or partial restore drift;"
 
 missing_rollback_evidence_repo="${workdir}/missing-rollback-evidence"
 create_repo "${missing_rollback_evidence_repo}"
@@ -487,10 +507,15 @@ Restore must stop and remain failed closed if backup provenance, custody, comple
 
 Restore validation before normal operations resume must confirm that:
 
+- approval records remain linked to the reviewed case and action scope rather than disappearing behind backup age or partial restore drift;
+- evidence records remain attributable, reviewable, and linked to the restored case, approval, execution, and reconciliation chain;
+- execution records and receipts remain intact without orphaning partially restored downstream state;
+- reconciliation records still describe the authoritative post-action outcome, including mismatch, pending, or terminal markers where they existed before recovery; and
+- readiness, reverse-proxy admission, and runtime inspection all reflect the same committed restored state rather than a mixed snapshot assembled from different recovery points.
+
 Rollback is the same-day operator path for returning from a reviewed change window to the prior known-good state when restore validation, readiness, or operator evidence shows the changed state is no longer trustworthy.
 
 Rollback must begin when any of the following apply:
-
 - the reviewed startup path succeeds but post-change validation shows missing or drifted approval, evidence, execution, or reconciliation records;
 
 This contract stays aligned with `docs/smb-footprint-and-deployment-profile-baseline.md` by requiring operator-led same-day rollback readiness, PostgreSQL-aware backup custody, and reconciliation-preserving restore validation instead of HA overbuild or snapshot-only recovery claims.
@@ -603,6 +628,12 @@ The approved backup set for restore and rollback readiness includes the PostgreS
 Restore must stop and remain failed closed if backup provenance, custody, completeness, or reviewed scope cannot be demonstrated from the evidence set.
 
 Restore validation before normal operations resume must confirm that:
+
+- approval records remain linked to the reviewed case and action scope rather than disappearing behind backup age or partial restore drift;
+- evidence records remain attributable, reviewable, and linked to the restored case, approval, execution, and reconciliation chain;
+- execution records and receipts remain intact without orphaning partially restored downstream state;
+- reconciliation records still describe the authoritative post-action outcome, including mismatch, pending, or terminal markers where they existed before recovery; and
+- readiness, reverse-proxy admission, and runtime inspection all reflect the same committed restored state rather than a mixed snapshot assembled from different recovery points.
 
 Rollback is the same-day operator path for returning from a reviewed change window to the prior known-good state when restore validation, readiness, or operator evidence shows the changed state is no longer trustworthy.
 

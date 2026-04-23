@@ -63,6 +63,14 @@ required_phrases=(
   "The selected slice remains business-hours oriented and does not imply 24x7 monitoring, production write behavior, or uncontrolled activation."
 )
 
+required_restore_validation_bullets=(
+  "- approval records remain linked to the reviewed case and action scope rather than disappearing behind backup age or partial restore drift;"
+  "- evidence records remain attributable, reviewable, and linked to the restored case, approval, execution, and reconciliation chain;"
+  "- execution records and receipts remain intact without orphaning partially restored downstream state;"
+  "- reconciliation records still describe the authoritative post-action outcome, including mismatch, pending, or terminal markers where they existed before recovery; and"
+  "- readiness, reverse-proxy admission, and runtime inspection all reflect the same committed restored state rather than a mixed snapshot assembled from different recovery points."
+)
+
 rollback_trigger_header="Rollback must begin when any of the following apply:"
 
 forbidden_phrases=(
@@ -91,6 +99,13 @@ for phrase in "${required_phrases[@]}"; do
   fi
 done
 
+for bullet in "${required_restore_validation_bullets[@]}"; do
+  if ! grep -Fq -- "${bullet}" "${doc_path}"; then
+    echo "Missing restore validation bullet: ${bullet}" >&2
+    exit 1
+  fi
+done
+
 rollback_trigger_line="$(
   grep -nF "${rollback_trigger_header}" "${doc_path}" | head -n 1 | cut -d: -f1
 )"
@@ -99,7 +114,7 @@ if [[ -z "${rollback_trigger_line}" ]]; then
   exit 1
 fi
 
-if ! sed -n "$((rollback_trigger_line + 1)),$((rollback_trigger_line + 3))p" "${doc_path}" | grep -Eq '^[[:space:]]*[-*][[:space:]]+'; then
+if ! sed -n "$((rollback_trigger_line + 1))p" "${doc_path}" | grep -Eq '^[[:space:]]*[-*][[:space:]]+'; then
   echo "Rollback trigger block must include a bullet immediately after header: ${rollback_trigger_header}" >&2
   exit 1
 fi

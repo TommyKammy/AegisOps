@@ -169,7 +169,6 @@ Operators must retain restore evidence showing the triggering reason, the select
 Rollback is the same-day operator path for returning from a reviewed change window to the prior known-good state when restore validation, readiness, or operator evidence shows the changed state is no longer trustworthy.
 
 Rollback must begin when any of the following apply:
-
 - the reviewed startup path succeeds but post-change validation shows missing or drifted approval, evidence, execution, or reconciliation records;
 - readiness or runtime inspection exposes a degraded or contradictory state that operators cannot correct inside the approved maintenance window without widening scope;
 - a reviewed configuration or schema change leaves the environment unable to resume the prior safe business-hours operating path; or
