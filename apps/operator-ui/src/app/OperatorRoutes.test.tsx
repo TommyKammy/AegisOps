@@ -332,7 +332,45 @@ describe("OperatorRoutes", () => {
     expect(screen.getAllByText(/action review/i).length).toBeGreaterThan(0);
   });
 
-  it("redirects analyst-only deep links away from the action-review route", async () => {
+  it("uses the configured base path for reviewed operator navigation links", async () => {
+    const dependencies = createDefaultDependencies({
+      config: {
+        basePath: "/reviewed-operator",
+      },
+      fetchFn: createAuthorizedFetch(
+        {},
+        {
+          identity: "approver@example.com",
+          provider: "authentik",
+          roles: ["Approver"],
+          subject: "operator-8",
+        },
+      ),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/reviewed-operator"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Protected operator shell" }),
+      ).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole("menuitem", { name: "Queue" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("/reviewed-operator/queue"),
+    );
+    expect(screen.getByRole("menuitem", { name: "Action Review" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("/reviewed-operator/action-review"),
+    );
+  });
+
+  it("shows an explicit forbidden outcome for analyst-only action-review landing routes", async () => {
     const dependencies = createDefaultDependencies({
       fetchFn: createAuthorizedFetch({}),
     });
@@ -344,15 +382,112 @@ describe("OperatorRoutes", () => {
     );
 
     await waitFor(() => {
-      expect(
-        screen.getByRole("heading", { name: "Protected operator shell" }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Access denied" })).toBeInTheDocument();
+    });
+  });
+
+  it("allows analyst deep links into reviewed action-review detail as read-only inspection", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch({
+        "/inspect-action-review": {
+          action_request_id: "action-request-123",
+          read_only: true,
+          current_action_review: {
+            action_request_id: "action-request-123",
+            review_state: "pending",
+          },
+          action_review: {
+            action_request_id: "action-request-123",
+            review_state: "pending",
+            approval_state: "pending",
+            requester_identity: "analyst@example.com",
+            recipient_identity: "repo-owner@example.com",
+            next_expected_action: "await_approver_decision",
+          },
+          case_record: {
+            case_id: "case-456",
+            lifecycle_state: "pending_action",
+          },
+        },
+      }),
     });
 
-    expect(screen.queryByText(/action review/i)).not.toBeInTheDocument();
+    render(
+      <MemoryRouter initialEntries={["/operator/action-review/action-request-123"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Action Review" })).toBeInTheDocument();
+    });
+
     expect(
       screen.getByText(
-        "Queue triage stays inside AegisOps as the authoritative review selection surface.",
+        "The current reviewed session can inspect this record but cannot submit approval decisions without approver role authority.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("honors allowed-role extensions for reviewed action-review detail routes", async () => {
+    const dependencies = createDefaultDependencies({
+      config: {
+        allowedRoles: [
+          "analyst",
+          "approver",
+          "platform-administrator",
+          "security-auditor",
+        ],
+        basePath: "/reviewed-operator",
+      },
+      fetchFn: createAuthorizedFetch(
+        {
+          "/inspect-action-review": {
+            action_request_id: "action-request-123",
+            read_only: true,
+            current_action_review: {
+              action_request_id: "action-request-123",
+              review_state: "pending",
+            },
+            action_review: {
+              action_request_id: "action-request-123",
+              review_state: "pending",
+              approval_state: "pending",
+              requester_identity: "analyst@example.com",
+              recipient_identity: "repo-owner@example.com",
+              next_expected_action: "await_approver_decision",
+            },
+            case_record: {
+              case_id: "case-456",
+              lifecycle_state: "pending_action",
+            },
+          },
+        },
+        {
+          identity: "security.auditor@example.com",
+          provider: "authentik",
+          roles: ["Security-Auditor"],
+          subject: "operator-42",
+        },
+      ),
+    });
+
+    render(
+      <MemoryRouter
+        initialEntries={["/reviewed-operator/action-review/action-request-123"]}
+      >
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Action Review" })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole("heading", { name: "Access denied" })).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The current reviewed session can inspect this record but cannot submit approval decisions without approver role authority.",
       ),
     ).toBeInTheDocument();
   });
@@ -2241,5 +2376,57 @@ describe("OperatorRoutes", () => {
       ).toBeGreaterThan(0);
     });
     expect(screen.getAllByText(/mismatch/i).length).toBeGreaterThan(0);
+  });
+
+  it("fails closed on unsupported assistant advisory route families", async () => {
+    const fetchFn = createAuthorizedFetch({});
+    const dependencies = createDefaultDependencies({
+      fetchFn,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/assistant/not-reviewed/record-123"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Assistant Advisory" })).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText(
+        "Unsupported assistant advisory route. Use alert, case, recommendation, approval decision, or reconciliation with an authoritative identifier.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      fetchFn.mock.calls.some(([url]) =>
+        String(url).includes("/inspect-advisory-output"),
+      ),
+    ).toBe(false);
+  });
+
+  it("renders an explicit unsupported-route outcome for unknown operator shell paths", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch({}),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/not-reviewed-path"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Unsupported operator route" }),
+      ).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText(
+        "Use the queue, authoritative detail links, reviewed diagnostics, or other approved operator entrypoints instead of guessing route shape.",
+      ),
+    ).toBeInTheDocument();
   });
 });
