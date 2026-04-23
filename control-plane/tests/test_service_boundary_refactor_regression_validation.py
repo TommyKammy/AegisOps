@@ -216,6 +216,23 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
         ):
             self.assertIn(term, boundary_tests)
 
+    def test_phase31_regression_validation_keeps_action_review_write_boundary_coverage(
+        self,
+    ) -> None:
+        boundary_tests = self._defined_test_names(
+            "control-plane/tests/test_action_review_write_boundary.py",
+            "control-plane/tests/test_phase22_end_to_end_validation.py",
+            "control-plane/tests/test_phase26_end_to_end_validation.py",
+        )
+
+        for term in (
+            "test_service_initializes_dedicated_action_review_write_surface",
+            "test_service_delegates_action_review_write_entrypoints_to_write_surface",
+            "test_phase22_end_to_end_keeps_review_states_and_visibility_explicit",
+            "test_phase26_end_to_end_surfaces_create_tracking_ticket_manual_fallback",
+        ):
+            self.assertIn(term, boundary_tests)
+
 
 if __name__ == "__main__":
     unittest.main()
