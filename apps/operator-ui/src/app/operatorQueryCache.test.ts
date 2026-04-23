@@ -218,18 +218,23 @@ describe("operatorQueryCache", () => {
       }),
     ).resolves.toEqual(cachedData);
 
-    renderHook(() =>
-      useOperatorQueryLoader({
-        force: true,
-        key,
-        policy: {
-          refetchOnMount: false,
-          retainStaleOnError: true,
-        },
-        queryFn,
-        refreshToken: 1,
-      }),
+    const { rerender } = renderHook(
+      ({ refreshToken }: { refreshToken?: number }) =>
+        useOperatorQueryLoader({
+          force: false,
+          key,
+          policy: {
+            refetchOnMount: false,
+            retainStaleOnError: true,
+          },
+          queryFn,
+          refreshToken,
+        }),
+      { initialProps: {} as { refreshToken?: number } },
     );
+
+    expect(queryFn).not.toHaveBeenCalled();
+    rerender({ refreshToken: 1 });
 
     await waitFor(() => {
       expect(queryFn).toHaveBeenCalledTimes(1);
