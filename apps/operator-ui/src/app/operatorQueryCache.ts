@@ -14,6 +14,7 @@ interface QueryState<T> {
 interface CacheEntry<T> {
   inFlight: Promise<T> | null;
   listeners: Set<() => void>;
+  requestVersion: number;
   state: QueryState<T>;
 }
 
@@ -42,6 +43,7 @@ function getOrCreateEntry<T>(key: string): CacheEntry<T> {
   const created: CacheEntry<T> = {
     inFlight: null,
     listeners: new Set(),
+    requestVersion: 0,
     state: DEFAULT_QUERY_STATE,
   };
   queryCache.set(key, created as CacheEntry<unknown>);
@@ -96,6 +98,9 @@ export async function loadOperatorQuery<T>({
     return entry.inFlight;
   }
 
+  const requestVersion = entry.requestVersion + 1;
+  entry.requestVersion = requestVersion;
+
   if (!force && hasData) {
     entry.state = {
       ...entry.state,
@@ -116,6 +121,10 @@ export async function loadOperatorQuery<T>({
 
   const request = queryFn()
     .then((data) => {
+      if (entry.requestVersion !== requestVersion) {
+        return data;
+      }
+
       entry.state = {
         data,
         error: null,
@@ -130,6 +139,10 @@ export async function loadOperatorQuery<T>({
         error instanceof Error
           ? error
           : new Error("Unknown operator query failure.");
+
+      if (entry.requestVersion !== requestVersion) {
+        throw normalizedError;
+      }
 
       if (hasData && retainStaleOnError && shouldRetainDataOnError(normalizedError)) {
         entry.state = {
@@ -152,7 +165,9 @@ export async function loadOperatorQuery<T>({
       throw normalizedError;
     })
     .finally(() => {
-      entry.inFlight = null;
+      if (entry.requestVersion === requestVersion) {
+        entry.inFlight = null;
+      }
     });
 
   entry.inFlight = request;
