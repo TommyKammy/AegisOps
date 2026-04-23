@@ -138,18 +138,48 @@ If any part of the stack remains running unexpectedly, shutdown is incomplete an
 
 ## 4. Restore
 
-Detailed restore steps are intentionally deferred until implementation artifacts and validation procedures exist.
+This section defines the reviewed backup, restore, and rollback contract for the current AegisOps control-plane environment.
 
-Future restore guidance should describe:
+Before a reviewed platform change, operators must confirm the latest PostgreSQL-aware backup completed successfully, the reviewed configuration backup set is current, and the backup custody record identifies the named operator or break-glass owner for the window.
 
-- the approved restore inputs and dependencies,
-- the order for restoring services and data-bearing components,
-- how restore success is validated before normal operations resume, and
-- what evidence must be retained for audit and review.
+The approved backup set for restore and rollback readiness includes the PostgreSQL-aware backup, the reviewed repository revision or release identifier, the untracked runtime env file or equivalent reviewed configuration export, and any reviewed secret-source references needed to recreate runtime bindings without storing live secret values in Git.
 
-This section must not imply that hypervisor snapshots alone are a sufficient recovery procedure unless an approved ADR changes that baseline.
+Backup artifacts must remain separately custodied from the active runtime mounts, must stay attributable to the reviewed environment and time window, and must not be treated as valid if provenance, retention status, or operator ownership is ambiguous.
 
-Restore planning should remain inside the backup and restore expectations published in `docs/smb-footprint-and-deployment-profile-baseline.md`.
+Restore must stop and remain failed closed if backup provenance, custody, completeness, or reviewed scope cannot be demonstrated from the evidence set.
+
+The reviewed restore sequence is:
+
+1. Capture the pre-restore state, including the last available readiness result, compose status, bounded logs, and the exact maintenance or failure reason that triggered recovery.
+2. Confirm the reviewed backup set, the intended restore point, and the reviewed repository revision or release identifier before any durable state is replaced.
+3. Execute the approved PostgreSQL-aware restore path and restore the reviewed configuration set needed to recreate runtime bindings without substituting guessed values, placeholder secrets, or ad hoc topology changes.
+4. Restart the reviewed runtime only through the documented startup path in Section 2 and treat `/readyz` success as necessary but not sufficient for return to service.
+5. Validate the restored environment against the authoritative record chain before normal operations resume and preserve the resulting evidence bundle with the restore ticket or maintenance record.
+
+Restore validation before normal operations resume must confirm that:
+
+- approval records remain linked to the reviewed case and action scope rather than disappearing behind backup age or partial restore drift;
+- evidence records remain attributable, reviewable, and linked to the restored case, approval, execution, and reconciliation chain;
+- execution records and receipts remain intact without orphaning partially restored downstream state;
+- reconciliation records still describe the authoritative post-action outcome, including mismatch, pending, or terminal markers where they existed before recovery; and
+- readiness, reverse-proxy admission, and runtime inspection all reflect the same committed restored state rather than a mixed snapshot assembled from different recovery points.
+
+Operators must retain restore evidence showing the triggering reason, the selected restore point, the backup custody confirmation, the repository revision or release identifier used, the post-restore readiness checks, and the record-chain validation outcome before normal operations resume.
+
+Rollback is the same-day operator path for returning from a reviewed change window to the prior known-good state when restore validation, readiness, or operator evidence shows the changed state is no longer trustworthy.
+
+Rollback must begin when any of the following apply:
+
+- the reviewed startup path succeeds but post-change validation shows missing or drifted approval, evidence, execution, or reconciliation records;
+- readiness or runtime inspection exposes a degraded or contradictory state that operators cannot correct inside the approved maintenance window without widening scope;
+- a reviewed configuration or schema change leaves the environment unable to resume the prior safe business-hours operating path; or
+- operators cannot prove the changed state preserves the same authoritative record chain as the pre-change environment.
+
+Operators must retain rollback evidence showing the trigger, the backup set or configuration revision used, the restoration point selected, the post-rollback readiness results, and the confirmation that the prior known-good approval, evidence, execution, and reconciliation chain was restored.
+
+VM snapshots may support infrastructure recovery tasks, but they do not replace the reviewed PostgreSQL-aware backup, restore validation, or record-chain checks required by this contract.
+
+This contract stays aligned with `docs/smb-footprint-and-deployment-profile-baseline.md` by requiring operator-led same-day rollback readiness, PostgreSQL-aware backup custody, and reconciliation-preserving restore validation instead of HA overbuild or snapshot-only recovery claims.
 
 ## 5. Approval Handling
 

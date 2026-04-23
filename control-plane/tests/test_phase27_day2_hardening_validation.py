@@ -38,7 +38,8 @@ class Phase27Day2HardeningValidationTests(unittest.TestCase):
             "test_phase27_readiness_contract_surfaces_degraded_source_and_automation_state",
             "test_phase27_identity_contract_fails_closed_for_missing_or_unreviewed_provider_boundary",
             "test_phase27_secret_contract_requires_fresh_read_and_blocks_backend_outage",
-            "Rollback remains a reviewed operational posture and capacity guardrail, not a dedicated runtime-enforced Phase 27 contract in the current path.",
+            "Rollback remains a reviewed operational contract and capacity guardrail, not a dedicated runtime-enforced Phase 27 contract in the current path.",
+            "None at the runtime-enforcement layer. Phase 27 currently relies on the reviewed runbook backup, restore, and rollback contract as the operator-facing rollback proof while dedicated runtime rollback enforcement remains out of scope.",
             "bash scripts/verify-phase-27-day-2-hardening-validation.sh",
             "python3 -m unittest control-plane.tests.test_phase27_day2_hardening_validation control-plane.tests.test_phase27_day2_runtime_contract",
         ):

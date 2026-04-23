@@ -45,8 +45,15 @@ required_phrases=(
   'Stop the reviewed first-boot runtime surface with `docker compose --env-file <runtime-env-file> -f control-plane/deployment/first-boot/docker-compose.yml down`.'
   'the final `curl -fsS http://127.0.0.1:<proxy-port>/readyz` result before stopping the stack, or the exact refusal if readiness was already unavailable;'
   'the reverse proxy no longer exposes the reviewed `/healthz`, `/readyz`, or `/runtime` path for this stack;'
+  "This section defines the reviewed backup, restore, and rollback contract for the current AegisOps control-plane environment."
+  "Before a reviewed platform change, operators must confirm the latest PostgreSQL-aware backup completed successfully, the reviewed configuration backup set is current, and the backup custody record identifies the named operator or break-glass owner for the window."
+  "The approved backup set for restore and rollback readiness includes the PostgreSQL-aware backup, the reviewed repository revision or release identifier, the untracked runtime env file or equivalent reviewed configuration export, and any reviewed secret-source references needed to recreate runtime bindings without storing live secret values in Git."
+  "Restore must stop and remain failed closed if backup provenance, custody, completeness, or reviewed scope cannot be demonstrated from the evidence set."
+  "Restore validation before normal operations resume must confirm that:"
+  "Rollback is the same-day operator path for returning from a reviewed change window to the prior known-good state when restore validation, readiness, or operator evidence shows the changed state is no longer trustworthy."
+  "Operators must retain rollback evidence showing the trigger, the backup set or configuration revision used, the restoration point selected, the post-rollback readiness results, and the confirmation that the prior known-good approval, evidence, execution, and reconciliation chain was restored."
+  'This contract stays aligned with `docs/smb-footprint-and-deployment-profile-baseline.md` by requiring operator-led same-day rollback readiness, PostgreSQL-aware backup custody, and reconciliation-preserving restore validation instead of HA overbuild or snapshot-only recovery claims.'
   "The approved baseline requires explicit approval for SOAR workflows that perform write or destructive actions by default."
-  "Detailed restore steps are intentionally deferred until implementation artifacts and validation procedures exist."
   "Approval handling procedures must preserve human review, auditability, and the separation between detection and execution."
   "Validation steps must be documented and repeatable before this runbook can be treated as an operational procedure beyond the reviewed startup and shutdown path."
   'The selected Phase 6 validation slice is limited to the Windows security and endpoint telemetry family and the three reviewed detector artifacts under `opensearch/detectors/windows-security-and-endpoint/`.'
@@ -60,6 +67,7 @@ forbidden_phrases=(
   "This runbook is an initial skeleton for approved future operational procedures."
   "Detailed startup steps are intentionally deferred until implementation artifacts and validation procedures exist."
   "Detailed shutdown steps are intentionally deferred until implementation artifacts and validation procedures exist."
+  "Detailed restore steps are intentionally deferred until implementation artifacts and validation procedures exist."
 )
 
 if [[ ! -f "${doc_path}" ]]; then
