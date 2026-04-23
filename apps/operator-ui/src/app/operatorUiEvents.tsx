@@ -30,6 +30,10 @@ interface OperatorUiEventLogContextValue {
 }
 
 const MAX_EVENT_LOG_ENTRIES = 12;
+const REDACTED_PATH_SUFFIX = "<redacted-path-suffix>";
+const SECRET_LIKE_PATH_SEGMENT_PATTERN =
+  /(?:auth|bearer|credential|jwt|key|secret|session|sig|signed|signature|token)/i;
+const OPAQUE_PATH_SEGMENT_PATTERN = /^[A-Za-z0-9_-]{32,}$/;
 const OperatorUiEventLogContext =
   createContext<OperatorUiEventLogContextValue | null>(null);
 
@@ -44,10 +48,28 @@ function sanitizeRoute(value: string) {
   return trimmed.length > 0 ? trimmed : "/";
 }
 
+function redactUnsafePathSuffix(pathname: string) {
+  const path = sanitizeRoute(pathname);
+  const segments = path.split("/");
+  const redactionIndex = segments.findIndex((segment) => (
+    SECRET_LIKE_PATH_SEGMENT_PATTERN.test(segment) ||
+    OPAQUE_PATH_SEGMENT_PATTERN.test(segment)
+  ));
+
+  if (redactionIndex < 0) {
+    return path;
+  }
+
+  const visiblePrefix = segments.slice(0, redactionIndex).join("/") || "/";
+  return visiblePrefix.endsWith("/")
+    ? `${visiblePrefix}${REDACTED_PATH_SUFFIX}`
+    : `${visiblePrefix}/${REDACTED_PATH_SUFFIX}`;
+}
+
 function sanitizeTarget(value: string) {
   try {
     const parsed = new URL(value, "https://operator-ui.invalid");
-    const path = sanitizeRoute(parsed.pathname);
+    const path = redactUnsafePathSuffix(parsed.pathname);
 
     if (parsed.origin === "https://operator-ui.invalid") {
       return path;

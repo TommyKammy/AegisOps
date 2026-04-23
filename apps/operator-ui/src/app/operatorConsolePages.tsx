@@ -70,6 +70,15 @@ function asString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
+function isAllowedExternalHref(value: string) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value
@@ -510,7 +519,7 @@ function CoordinationVisibilitySection({
             ["Linked reconciliation", asString(coordinationOutcome?.reconciliation_id)],
           ]}
         />
-        {ticketReferenceUrl ? (
+        {ticketReferenceUrl && isAllowedExternalHref(ticketReferenceUrl) ? (
           <Link
             href={ticketReferenceUrl}
             onClick={() => {
@@ -525,6 +534,10 @@ function CoordinationVisibilitySection({
           >
             Open downstream coordination reference
           </Link>
+        ) : ticketReferenceUrl ? (
+          <Typography color="text.secondary" variant="body2">
+            Downstream coordination reference: {ticketReferenceUrl}
+          </Typography>
         ) : null}
       </Stack>
     </SectionCard>
@@ -895,7 +908,7 @@ function extractSubordinateLinks(record: UnknownRecord): Array<{ href: string; l
 
   for (const [key, value] of Object.entries(record)) {
     const href = asString(value);
-    if (href && /^https?:\/\//.test(href)) {
+    if (href && isAllowedExternalHref(href)) {
       entries.push({
         href,
         label: formatLabel(key),
