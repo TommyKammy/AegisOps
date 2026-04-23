@@ -34,6 +34,7 @@ from .assistant_provider import (
     AssistantProviderResult,
     AssistantProviderTransport,
 )
+from .action_review_write_surface import ActionReviewWriteSurface
 from .case_workflow import CaseWorkflowService
 from .config import OpenBaoKVv2SecretTransport, RuntimeConfig
 from .execution_coordinator import (
@@ -1394,6 +1395,7 @@ class AegisOpsControlPlaneService:
             coordination_reference_signature=_coordination_reference_signature,
             dedupe_strings=_dedupe_strings,
         )
+        self._action_review_write_surface = ActionReviewWriteSurface(self)
         self._case_workflow_service = CaseWorkflowService(
             self,
             merge_reviewed_context=_merge_reviewed_context,
@@ -4441,82 +4443,16 @@ class AegisOpsControlPlaneService:
         verification_evidence_ids: tuple[str, ...] = (),
         residual_uncertainty: str | None = None,
     ) -> CaseRecord | AlertRecord:
-        fallback_at = self._require_aware_datetime(fallback_at, "fallback_at")
-        fallback_actor_identity = self._require_non_empty_string(
-            fallback_actor_identity,
-            "fallback_actor_identity",
+        return self._action_review_write_surface.record_action_review_manual_fallback(
+            action_request_id=action_request_id,
+            fallback_at=fallback_at,
+            fallback_actor_identity=fallback_actor_identity,
+            authority_boundary=authority_boundary,
+            reason=reason,
+            action_taken=action_taken,
+            verification_evidence_ids=verification_evidence_ids,
+            residual_uncertainty=residual_uncertainty,
         )
-        authority_boundary = self._require_non_empty_string(
-            authority_boundary,
-            "authority_boundary",
-        )
-        reason = self._require_non_empty_string(reason, "reason")
-        action_taken = self._require_non_empty_string(action_taken, "action_taken")
-        normalized_evidence_ids = self._normalize_linked_record_ids(
-            verification_evidence_ids,
-            "verification_evidence_ids",
-        )
-        normalized_residual_uncertainty = self._normalize_optional_string(
-            residual_uncertainty,
-            "residual_uncertainty",
-        )
-        with self._store.transaction():
-            action_request = self._require_review_bound_action_request(action_request_id)
-            approval_decision = self._action_review_approval_decision(action_request)
-            approval_state = self._action_review_approval_state(
-                action_request=action_request,
-                approval_decision=approval_decision,
-            )
-            review_state = self._action_review_state(
-                action_request=action_request,
-                approval_state=approval_state,
-                action_execution=self._action_review_execution(action_request),
-            )
-            if (
-                approval_decision is None
-                or approval_decision.lifecycle_state != "approved"
-                or review_state in {"pending", "rejected", "expired", "superseded"}
-            ):
-                raise ValueError(
-                    "manual fallback requires an approved action review in a live post-approval state"
-                )
-            context_record = self._require_action_review_visibility_context_record(
-                action_request
-            )
-            if isinstance(context_record, CaseRecord):
-                self._validate_case_evidence_linkage(
-                    case=context_record,
-                    evidence_ids=normalized_evidence_ids,
-                    field_name="verification_evidence_ids",
-                )
-            else:
-                self._validate_alert_evidence_linkage(
-                    alert=context_record,
-                    evidence_ids=normalized_evidence_ids,
-                    field_name="verification_evidence_ids",
-                )
-            manual_fallback_context: dict[str, object] = {
-                "action_request_id": action_request.action_request_id,
-                "approval_decision_id": approval_decision.approval_decision_id,
-                "fallback_at": fallback_at.isoformat(),
-                "fallback_actor_identity": fallback_actor_identity,
-                "authority_boundary": authority_boundary,
-                "reason": reason,
-                "action_taken": action_taken,
-                "verification_evidence_ids": normalized_evidence_ids,
-            }
-            if normalized_residual_uncertainty is not None:
-                manual_fallback_context["residual_uncertainty"] = (
-                    normalized_residual_uncertainty
-                )
-            return self._persist_action_review_visibility_context_record(
-                context_record=context_record,
-                reviewed_context_update=self._action_review_visibility_update(
-                    action_request_id=action_request.action_request_id,
-                    context_key="manual_fallback",
-                    context_value=manual_fallback_context,
-                ),
-            )
 
     def record_action_review_escalation_note(
         self,
@@ -4527,48 +4463,13 @@ class AegisOpsControlPlaneService:
         escalated_to: str,
         note: str,
     ) -> CaseRecord | AlertRecord:
-        escalated_at = self._require_aware_datetime(escalated_at, "escalated_at")
-        escalated_by_identity = self._require_non_empty_string(
-            escalated_by_identity,
-            "escalated_by_identity",
+        return self._action_review_write_surface.record_action_review_escalation_note(
+            action_request_id=action_request_id,
+            escalated_at=escalated_at,
+            escalated_by_identity=escalated_by_identity,
+            escalated_to=escalated_to,
+            note=note,
         )
-        escalated_to = self._require_non_empty_string(escalated_to, "escalated_to")
-        note = self._require_non_empty_string(note, "note")
-        with self._store.transaction():
-            action_request = self._require_review_bound_action_request(action_request_id)
-            approval_decision = self._action_review_approval_decision(action_request)
-            approval_state = self._action_review_approval_state(
-                action_request=action_request,
-                approval_decision=approval_decision,
-            )
-            review_state = self._action_review_state(
-                action_request=action_request,
-                approval_state=approval_state,
-                action_execution=self._action_review_execution(action_request),
-            )
-            context_record = self._require_action_review_visibility_context_record(
-                action_request
-            )
-            escalation_context: dict[str, object] = {
-                "action_request_id": action_request.action_request_id,
-                "escalated_at": escalated_at.isoformat(),
-                "escalated_by_identity": escalated_by_identity,
-                "escalated_to": escalated_to,
-                "note": note,
-                "review_state": review_state,
-            }
-            if approval_decision is not None:
-                escalation_context["approval_decision_id"] = (
-                    approval_decision.approval_decision_id
-                )
-            return self._persist_action_review_visibility_context_record(
-                context_record=context_record,
-                reviewed_context_update=self._action_review_visibility_update(
-                    action_request_id=action_request.action_request_id,
-                    context_key="escalation",
-                    context_value=escalation_context,
-                ),
-            )
 
     def inspect_advisory_output(
         self,
@@ -4681,136 +4582,15 @@ class AegisOpsControlPlaneService:
         decided_at: datetime,
         approval_decision_id: str | None = None,
     ) -> ApprovalDecisionRecord:
-        approver_identity = self._require_non_empty_string(
-            approver_identity,
-            "approver_identity",
-        )
-        normalized_decision = self._require_non_empty_string(
-            decision,
-            "decision",
-        ).lower()
-        if normalized_decision not in {"grant", "reject"}:
-            raise ValueError("decision must be 'grant' or 'reject'")
-        decision_rationale = self._require_non_empty_string(
-            decision_rationale,
-            "decision_rationale",
-        )
-        decided_at = self._require_aware_datetime(decided_at, "decided_at")
-        if authenticated_approver_identity is not None:
-            authenticated_approver_identity = self._require_non_empty_string(
-                authenticated_approver_identity,
-                "authenticated_approver_identity",
-            )
-            if authenticated_approver_identity != approver_identity:
-                raise PermissionError(
-                    "authenticated approver identity must match the asserted control-plane approver identity"
-                )
-
-        approval_decision: ApprovalDecisionRecord | None = None
-        request_expired = False
-        with self._store.transaction(isolation_level="SERIALIZABLE"):
-            action_request = self._require_review_bound_action_request(action_request_id)
-            if action_request.lifecycle_state != "pending_approval":
-                raise ValueError(
-                    "approval decisions can only be recorded for pending reviewed action requests"
-                )
-            if action_request.approval_decision_id is not None:
-                raise ValueError(
-                    f"action request {action_request.action_request_id!r} already has an approval decision"
-                )
-            if (
-                action_request.requester_identity is not None
-                and action_request.requester_identity == approver_identity
-            ):
-                raise PermissionError(
-                    "approver identity must be distinct from requester identity"
-                )
-            if decided_at < action_request.requested_at:
-                raise ValueError("decided_at must be on or after requested_at")
-
-            policy_evaluation = self._apply_action_policy_evaluation_overrides(
-                computed_policy_evaluation=self._determine_action_policy(
-                    self._normalize_action_policy_basis(action_request.policy_basis)
-                ),
-                persisted_policy_evaluation=action_request.policy_evaluation,
-            )
-            if policy_evaluation.get("approval_requirement") == "policy_authorized":
-                raise PermissionError(
-                    "reviewed approval decisions are not authorized when the re-evaluated action policy is policy_authorized"
-                )
-            if policy_evaluation.get("approval_requirement") != "human_required":
-                raise PermissionError(
-                    "reviewed approval decisions require a human-required action policy"
-                )
-            self._require_reviewed_action_approver_policy(
-                action_request=action_request,
-                approver_identity=approver_identity,
-            )
-
-            now = datetime.now(timezone.utc)
-            if action_request.expires_at is not None and (
-                now > action_request.expires_at or decided_at > action_request.expires_at
-            ):
-                self.persist_record(
-                    replace(action_request, lifecycle_state="expired"),
-                    transitioned_at=action_request.expires_at,
-                )
-                request_expired = True
-            else:
-                resolved_approval_decision_id = self._resolve_new_record_identifier(
-                    ApprovalDecisionRecord,
-                    approval_decision_id,
-                    "approval_decision_id",
-                    "approval-decision",
-                )
-                decision_state = (
-                    "approved" if normalized_decision == "grant" else "rejected"
-                )
-                approval_decision = self.persist_record(
-                    ApprovalDecisionRecord(
-                        approval_decision_id=resolved_approval_decision_id,
-                        action_request_id=action_request.action_request_id,
-                        approver_identities=(approver_identity,),
-                        target_snapshot=dict(action_request.target_scope),
-                        payload_hash=action_request.payload_hash,
-                        decided_at=decided_at,
-                        lifecycle_state=decision_state,
-                        decision_rationale=decision_rationale,
-                        approved_expires_at=(
-                            action_request.expires_at
-                            if decision_state == "approved"
-                            else None
-                        ),
-                    ),
-                    transitioned_at=decided_at,
-                )
-                self.persist_record(
-                    replace(
-                        action_request,
-                        approval_decision_id=approval_decision.approval_decision_id,
-                        lifecycle_state=decision_state,
-                        policy_evaluation=policy_evaluation,
-                    ),
-                    transitioned_at=decided_at,
-                )
-        if request_expired:
-            raise PermissionError(
-                "reviewed action request expired before the approval decision was recorded"
-            )
-        if approval_decision is None:
-            raise RuntimeError(
-                "approval decision transaction completed without recording a decision"
-            )
-        self._emit_structured_event(
-            logging.INFO,
-            "action_approval_decision_recorded",
-            approval_decision_id=approval_decision.approval_decision_id,
-            action_request_id=approval_decision.action_request_id,
-            decision=normalized_decision,
+        return self._action_review_write_surface.record_action_approval_decision(
+            action_request_id=action_request_id,
             approver_identity=approver_identity,
-            lifecycle_state=approval_decision.lifecycle_state,
+            authenticated_approver_identity=authenticated_approver_identity,
+            decision=decision,
+            decision_rationale=decision_rationale,
+            decided_at=decided_at,
+            approval_decision_id=approval_decision_id,
         )
-        return approval_decision
 
     def _require_reviewed_action_approver_policy(
         self,
