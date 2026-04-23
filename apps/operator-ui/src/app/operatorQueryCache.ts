@@ -204,6 +204,17 @@ export function useOperatorQueryLoader<T>({
   refreshToken?: number;
 }) {
   useEffect(() => {
+    const snapshot = getOperatorQuerySnapshot<T>(key);
+    const shouldLoad =
+      force ||
+      refreshToken !== undefined ||
+      snapshot.data === null ||
+      policy.refetchOnMount;
+
+    if (!shouldLoad) {
+      return;
+    }
+
     void loadOperatorQuery<T>({
       force: force || refreshToken !== undefined,
       key,

@@ -1,8 +1,10 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { renderHook, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getOperatorQuerySnapshot,
   loadOperatorQuery,
   resetOperatorQueryCacheForTests,
+  useOperatorQueryLoader,
 } from "./operatorQueryCache";
 
 function createDeferred<T>() {
@@ -165,6 +167,81 @@ describe("operatorQueryCache", () => {
       }),
       loading: false,
       refreshing: false,
+    });
+  });
+
+  it("skips mount rereads when cached data exists and refetchOnMount is disabled", async () => {
+    const key = "alerts/detail/alert-skip";
+    const cachedData = { id: "alert-skip", source: "cached-success" };
+    const queryFn = vi.fn().mockResolvedValue({
+      id: "alert-skip",
+      source: "unexpected-reread",
+    });
+
+    await expect(
+      loadOperatorQuery({
+        key,
+        queryFn: async () => cachedData,
+      }),
+    ).resolves.toEqual(cachedData);
+
+    renderHook(() =>
+      useOperatorQueryLoader({
+        key,
+        policy: {
+          refetchOnMount: false,
+          retainStaleOnError: true,
+        },
+        queryFn,
+      }),
+    );
+
+    expect(queryFn).not.toHaveBeenCalled();
+    expect(getOperatorQuerySnapshot<typeof cachedData>(key)).toEqual({
+      data: cachedData,
+      error: null,
+      loading: false,
+      refreshing: false,
+    });
+  });
+
+  it("keeps explicit refresh tokens authoritative even when refetchOnMount is disabled", async () => {
+    const key = "alerts/detail/alert-refresh";
+    const cachedData = { id: "alert-refresh", source: "cached-success" };
+    const refreshedData = { id: "alert-refresh", source: "authoritative-reread" };
+    const queryFn = vi.fn().mockResolvedValue(refreshedData);
+
+    await expect(
+      loadOperatorQuery({
+        key,
+        queryFn: async () => cachedData,
+      }),
+    ).resolves.toEqual(cachedData);
+
+    renderHook(() =>
+      useOperatorQueryLoader({
+        force: true,
+        key,
+        policy: {
+          refetchOnMount: false,
+          retainStaleOnError: true,
+        },
+        queryFn,
+        refreshToken: 1,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(queryFn).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(getOperatorQuerySnapshot<typeof refreshedData>(key)).toEqual({
+        data: refreshedData,
+        error: null,
+        loading: false,
+        refreshing: false,
+      });
     });
   });
 });
