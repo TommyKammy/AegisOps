@@ -63,6 +63,8 @@ required_phrases=(
   "The selected slice remains business-hours oriented and does not imply 24x7 monitoring, production write behavior, or uncontrolled activation."
 )
 
+rollback_trigger_header="Rollback must begin when any of the following apply:"
+
 forbidden_phrases=(
   "This runbook is an initial skeleton for approved future operational procedures."
   "Detailed startup steps are intentionally deferred until implementation artifacts and validation procedures exist."
@@ -88,6 +90,19 @@ for phrase in "${required_phrases[@]}"; do
     exit 1
   fi
 done
+
+rollback_trigger_line="$(
+  grep -nF "${rollback_trigger_header}" "${doc_path}" | head -n 1 | cut -d: -f1
+)"
+if [[ -z "${rollback_trigger_line}" ]]; then
+  echo "Missing runbook statement: ${rollback_trigger_header}" >&2
+  exit 1
+fi
+
+if ! sed -n "$((rollback_trigger_line + 1)),$((rollback_trigger_line + 3))p" "${doc_path}" | grep -Eq '^[[:space:]]*[-*][[:space:]]+'; then
+  echo "Rollback trigger block must include a bullet immediately after header: ${rollback_trigger_header}" >&2
+  exit 1
+fi
 
 for phrase in "${forbidden_phrases[@]}"; do
   if grep -Fq "${phrase}" "${doc_path}"; then
