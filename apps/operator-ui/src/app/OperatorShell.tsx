@@ -44,10 +44,27 @@ import {
 import { TaskActionClientProvider } from "../taskActions/taskActionPrimitives";
 import type { OperatorTaskActionClient } from "../taskActions/taskActionClient";
 
-function canInspectActionReview(operatorRoles: readonly string[]) {
+function hasReviewedOperatorRole(
+  operatorRoles: readonly string[],
+  allowedRoles: readonly string[],
+) {
+  return operatorRoles.some((role) =>
+    allowedRoles.includes(role.toLowerCase()),
+  );
+}
+
+function canBrowseActionReview(operatorRoles: readonly string[]) {
   return operatorRoles.some((role) =>
     ["approver", "platform-administrator"].includes(role),
   );
+}
+
+function canInspectActionReviewDetail(operatorRoles: readonly string[]) {
+  return hasReviewedOperatorRole(operatorRoles, [
+    "analyst",
+    "approver",
+    "platform-administrator",
+  ]);
 }
 
 function OperatorAppBar() {
@@ -67,7 +84,7 @@ function OperatorMenu({
 }: {
   operatorRoles: readonly string[];
 }) {
-  const showActionReview = canInspectActionReview(operatorRoles);
+  const showActionReview = canBrowseActionReview(operatorRoles);
 
   return (
     <Menu>
@@ -192,7 +209,7 @@ function OverviewPage({
       description:
         "Assistant advisory stays subordinate to authoritative AegisOps records and remains read-oriented in the reviewed shell.",
     },
-    ...(canInspectActionReview(operatorRoles)
+    ...(canBrowseActionReview(operatorRoles)
       ? [
           {
             title: "Action review",
@@ -246,6 +263,23 @@ function OverviewPage({
   );
 }
 
+function UnsupportedOperatorRoutePage() {
+  return (
+    <Stack spacing={2} sx={{ p: 3 }}>
+      <Typography component="h1" variant="h4">
+        Unsupported operator route
+      </Typography>
+      <Typography color="text.secondary" variant="body1">
+        The requested path is not part of the reviewed operator shell.
+      </Typography>
+      <Typography variant="body2">
+        Use the queue, authoritative detail links, reviewed diagnostics, or
+        other approved operator entrypoints instead of guessing route shape.
+      </Typography>
+    </Stack>
+  );
+}
+
 function PlaceholderPage({
   title,
   description,
@@ -282,7 +316,8 @@ export function OperatorShell({
   operatorRoles: string[];
   taskActionClient: OperatorTaskActionClient;
 }) {
-  const canViewActionReview = canInspectActionReview(operatorRoles);
+  const canViewActionReview = canBrowseActionReview(operatorRoles);
+  const canInspectActionReview = canInspectActionReviewDetail(operatorRoles);
 
   return (
     <AdminContext
@@ -322,20 +357,20 @@ export function OperatorShell({
                     operatorRoles={operatorRoles}
                   />
                 ) : (
-                  <Navigate replace to="/operator" />
+                  <Navigate replace to="/operator/forbidden" />
                 )
               }
               path="action-review"
             />
             <Route
               element={
-                canViewActionReview ? (
+                canInspectActionReview ? (
                   <ActionReviewPage
                     operatorIdentity={operatorIdentity}
                     operatorRoles={operatorRoles}
                   />
                 ) : (
-                  <Navigate replace to="/operator" />
+                  <Navigate replace to="/operator/forbidden" />
                 )
               }
               path="action-review/:actionRequestId"
@@ -367,6 +402,7 @@ export function OperatorShell({
               }
               path="provenance/*"
             />
+            <Route element={<UnsupportedOperatorRoutePage />} path="*" />
           </Routes>
         </Layout>
       </TaskActionClientProvider>

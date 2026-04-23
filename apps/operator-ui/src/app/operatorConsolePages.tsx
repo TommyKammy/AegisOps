@@ -103,6 +103,14 @@ const ADVISORY_DETAIL_EXCLUDED_FIELDS = [
   ...ADVISORY_SUMMARY_FIELDS,
 ] as const;
 
+const SUPPORTED_ADVISORY_RECORD_FAMILIES = new Set([
+  "alert",
+  "case",
+  "recommendation",
+  "approval_decision",
+  "reconciliation",
+]);
+
 function formatValue(value: unknown): string {
   if (value === null || value === undefined) {
     return "Not available";
@@ -1997,24 +2005,38 @@ export function AssistantAdvisoryPage() {
   const params = useParams();
   const recordFamily = asString(params.recordFamily);
   const recordId = asString(params.recordId);
+  const hasSupportedAdvisoryBinding =
+    recordFamily !== null && SUPPORTED_ADVISORY_RECORD_FAMILIES.has(recordFamily);
 
   return (
     <PageFrame
       subtitle="Assistant advisory stays a dedicated read surface anchored to one authoritative record. It does not become a generic assistant chat or mutable workflow console."
       title="Assistant Advisory"
     >
-      {recordFamily && recordId ? (
+      {hasSupportedAdvisoryBinding && recordId ? (
         <AssistantAdvisoryPageBody
           recordFamily={recordFamily}
           recordId={recordId}
         />
       ) : (
-        <SectionCard
-          subtitle="Open assistant advisory from alert, case, or action-review detail so the route stays grounded in one authoritative record."
-          title="Select advisory context"
-        >
-          <EmptyState message="No authoritative record is selected for assistant advisory yet." />
-        </SectionCard>
+        <>
+          {recordFamily === null || recordId === null ? (
+            <SectionCard
+              subtitle="Open assistant advisory from alert, case, or action-review detail so the route stays grounded in one authoritative record."
+              title="Select advisory context"
+            >
+              <EmptyState message="No authoritative record is selected for assistant advisory yet." />
+            </SectionCard>
+          ) : (
+            <ErrorState
+              error={
+                new Error(
+                  "Unsupported assistant advisory route. Use alert, case, recommendation, approval decision, or reconciliation with an authoritative identifier.",
+                )
+              }
+            />
+          )}
+        </>
       )}
     </PageFrame>
   );

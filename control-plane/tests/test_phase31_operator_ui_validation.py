@@ -43,6 +43,8 @@ class Phase31OperatorUiValidationTests(unittest.TestCase):
             "Return path: /operator/queue",
             "routes unsupported backend roles to the forbidden page",
             "fails closed on malformed reviewed session responses",
+            "allows analyst deep links into reviewed action-review detail as read-only inspection",
+            "fails closed on unsupported assistant advisory route families",
             "renders a case-anchored assistant advisory route from reviewed advisory output",
             "keeps no-authority semantics explicit for cited advisory output without a recommendation draft",
         ):
@@ -65,9 +67,11 @@ class Phase31OperatorUiValidationTests(unittest.TestCase):
 
         for term in (
             'to="/operator/action-review"',
-            '<Navigate replace to="/operator" />',
+            '<Navigate replace to="/operator/forbidden" />',
             'path="assistant/:recordFamily/:recordId"',
             'path="action-review/:actionRequestId"',
+            'path="*"',
+            "Unsupported operator route",
             "Open provenance from alert or case detail so the page stays anchored to an authoritative record.",
         ):
             self.assertIn(term, operator_shell)
