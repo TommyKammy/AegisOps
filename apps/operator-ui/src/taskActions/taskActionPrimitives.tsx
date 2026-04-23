@@ -76,6 +76,12 @@ interface TaskActionSubmissionController<TAcknowledgement> {
   submit(request: TaskActionSubmissionRequest<TAcknowledgement>): Promise<void>;
 }
 
+interface TaskActionSubmissionFormProps<TAcknowledgement>
+  extends TaskActionSubmissionRequest<TAcknowledgement> {
+  children: ReactNode;
+  submission: TaskActionSubmissionController<TAcknowledgement>;
+}
+
 const TaskActionClientContext = createContext<TaskActionContextValue | null>(null);
 
 function taskActionStatusMessage(error: Error | null) {
@@ -223,6 +229,29 @@ export function useTaskActionSubmission<TAcknowledgement>(): TaskActionSubmissio
       }
     },
   };
+}
+
+export function TaskActionSubmissionForm<TAcknowledgement>({
+  children,
+  onSubmitted,
+  refreshTargets,
+  run,
+  submission,
+}: TaskActionSubmissionFormProps<TAcknowledgement>) {
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submission.submit({
+          onSubmitted,
+          refreshTargets,
+          run,
+        });
+      }}
+    >
+      {children}
+    </form>
+  );
 }
 
 function TaskActionStatusBanner<TAcknowledgement>({

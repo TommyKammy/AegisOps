@@ -9,6 +9,7 @@ import {
 import {
   TaskActionClientProvider,
   TaskActionFormCard,
+  TaskActionSubmissionForm,
   useTaskActionSubmission,
 } from "./taskActionPrimitives";
 
@@ -25,27 +26,24 @@ function TestTaskActionForm() {
   const submission = useTaskActionSubmission<{ case_id: string }>();
 
   return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        void submission.submit({
-          refreshTargets: (acknowledgement) => [
-            {
-              id: acknowledgement.case_id,
-              label: "Case detail",
-              resource: "cases",
-            },
-          ],
-          run: (client) =>
-            client.recordCaseObservation({
-              author_identity: "analyst@example.com",
-              case_id: "case-123",
-              observed_at: "2026-04-22T00:00:00+00:00",
-              scope_statement: "Reviewed scoped observation",
-              supporting_evidence_ids: ["evidence-123"],
-            }) as Promise<{ case_id: string }>,
-        });
-      }}
+    <TaskActionSubmissionForm
+      refreshTargets={(acknowledgement) => [
+        {
+          id: acknowledgement.case_id,
+          label: "Case detail",
+          resource: "cases",
+        },
+      ]}
+      run={(client) =>
+        client.recordCaseObservation({
+          author_identity: "analyst@example.com",
+          case_id: "case-123",
+          observed_at: "2026-04-22T00:00:00+00:00",
+          scope_statement: "Reviewed scoped observation",
+          supporting_evidence_ids: ["evidence-123"],
+        }) as Promise<{ case_id: string }>
+      }
+      submission={submission}
     >
       <TaskActionFormCard
         actor={[
@@ -67,7 +65,7 @@ function TestTaskActionForm() {
       >
         <div>Observation body</div>
       </TaskActionFormCard>
-    </form>
+    </TaskActionSubmissionForm>
   );
 }
 
