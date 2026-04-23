@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 import pathlib
+import sys
 import unittest
+
+TESTS_ROOT = pathlib.Path(__file__).resolve().parent
+if str(TESTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TESTS_ROOT))
+
+from support.operator_ui_sources import read_operator_routes_test_bundle
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -28,7 +35,7 @@ class Phase30OperatorUiValidationTests(unittest.TestCase):
             self.assertIn(term, text)
 
     def test_phase30_frontend_tests_lock_auth_role_and_read_only_behaviors(self) -> None:
-        route_tests = self._read("apps/operator-ui/src/app/OperatorRoutes.test.tsx")
+        route_tests = read_operator_routes_test_bundle(REPO_ROOT)
         data_provider_tests = self._read("apps/operator-ui/src/dataProvider.test.ts")
         auth_navigation = self._read("apps/operator-ui/src/auth/navigation.ts")
 

@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 import pathlib
+import sys
 import unittest
+
+TESTS_ROOT = pathlib.Path(__file__).resolve().parent
+if str(TESTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TESTS_ROOT))
+
+from support.operator_ui_sources import read_operator_routes_test_bundle
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -33,7 +40,7 @@ class Phase30EOperatorUiValidationTests(unittest.TestCase):
     def test_phase30e_frontend_tests_lock_citations_ambiguity_and_no_authority_semantics(
         self,
     ) -> None:
-        operator_routes_tests = self._read("apps/operator-ui/src/app/OperatorRoutes.test.tsx")
+        operator_routes_tests = read_operator_routes_test_bundle(REPO_ROOT)
 
         for term in (
             "renders a case-anchored assistant advisory route from reviewed advisory output",

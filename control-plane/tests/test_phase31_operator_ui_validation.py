@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 import pathlib
+import sys
 import unittest
+
+TESTS_ROOT = pathlib.Path(__file__).resolve().parent
+if str(TESTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(TESTS_ROOT))
+
+from support.operator_ui_sources import read_operator_routes_test_bundle
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -39,7 +46,7 @@ class Phase31OperatorUiValidationTests(unittest.TestCase):
             self.assertIn(term, text)
 
     def test_phase31_frontend_route_tests_lock_fail_closed_access_semantics(self) -> None:
-        operator_routes_tests = self._read("apps/operator-ui/src/app/OperatorRoutes.test.tsx")
+        operator_routes_tests = read_operator_routes_test_bundle(REPO_ROOT)
 
         for term in (
             "redirects unauthenticated users to the reviewed login route",
