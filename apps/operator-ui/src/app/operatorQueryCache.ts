@@ -2,6 +2,7 @@ import { useEffect, useSyncExternalStore } from "react";
 
 interface QueryPolicy {
   refetchOnMount: boolean;
+  retainStaleOnError: boolean;
 }
 
 interface QueryState<T> {
@@ -92,7 +93,8 @@ export async function loadOperatorQuery<T>({
   retainStaleOnError = true,
 }: LoadQueryArgs<T>): Promise<T> {
   const entry = getOrCreateEntry<T>(key);
-  const hasData = entry.state.data !== null;
+  const previousData = entry.state.data;
+  const hasData = previousData !== null;
 
   if (!force && entry.inFlight !== null) {
     return entry.inFlight;
@@ -144,15 +146,19 @@ export async function loadOperatorQuery<T>({
         throw normalizedError;
       }
 
-      if (hasData && retainStaleOnError && shouldRetainDataOnError(normalizedError)) {
+      if (
+        previousData !== null &&
+        retainStaleOnError &&
+        shouldRetainDataOnError(normalizedError)
+      ) {
         entry.state = {
-          data: entry.state.data,
+          data: previousData,
           error: normalizedError,
           loading: false,
           refreshing: false,
         };
         notifyEntry(entry);
-        return entry.state.data as T;
+        return previousData;
       }
 
       entry.state = {
@@ -182,6 +188,8 @@ export function useOperatorQueryState<T>(key: string): QueryState<T> {
   );
 }
 
+// `queryFn` should stay stable for a given cache key so renders do not trigger
+// redundant rereads for the same authoritative request identity.
 export function useOperatorQueryLoader<T>({
   force = false,
   key,
@@ -200,9 +208,16 @@ export function useOperatorQueryLoader<T>({
       force: force || refreshToken !== undefined,
       key,
       queryFn,
-      retainStaleOnError: policy.refetchOnMount,
+      retainStaleOnError: policy.retainStaleOnError,
     }).catch(() => undefined);
-  }, [force, key, policy.refetchOnMount, queryFn, refreshToken]);
+  }, [
+    force,
+    key,
+    policy.refetchOnMount,
+    policy.retainStaleOnError,
+    queryFn,
+    refreshToken,
+  ]);
 }
 
 export function resetOperatorQueryCacheForTests() {

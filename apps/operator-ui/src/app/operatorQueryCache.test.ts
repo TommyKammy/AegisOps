@@ -97,4 +97,74 @@ describe("operatorQueryCache", () => {
       refreshing: false,
     });
   });
+
+  it("retains the last successful data when a forced reread fails", async () => {
+    const key = "alerts/detail/alert-789";
+    const initialData = { id: "alert-789", source: "cached-success" };
+    const forcedRequest = createDeferred<typeof initialData>();
+
+    await expect(
+      loadOperatorQuery({
+        key,
+        queryFn: async () => initialData,
+      }),
+    ).resolves.toEqual(initialData);
+
+    const forcedPromise = loadOperatorQuery({
+      force: true,
+      key,
+      queryFn: () => forcedRequest.promise,
+    });
+
+    expect(getOperatorQuerySnapshot<typeof initialData>(key)).toEqual({
+      data: null,
+      error: null,
+      loading: true,
+      refreshing: false,
+    });
+
+    forcedRequest.reject(new Error("authoritative reread failed"));
+    await expect(forcedPromise).resolves.toEqual(initialData);
+
+    expect(getOperatorQuerySnapshot<typeof initialData>(key)).toEqual({
+      data: initialData,
+      error: expect.objectContaining({
+        message: "authoritative reread failed",
+      }),
+      loading: false,
+      refreshing: false,
+    });
+  });
+
+  it("drops stale data when retainStaleOnError is disabled", async () => {
+    const key = "alerts/detail/alert-999";
+    const initialData = { id: "alert-999", source: "cached-success" };
+    const forcedRequest = createDeferred<typeof initialData>();
+
+    await expect(
+      loadOperatorQuery({
+        key,
+        queryFn: async () => initialData,
+      }),
+    ).resolves.toEqual(initialData);
+
+    const forcedPromise = loadOperatorQuery({
+      force: true,
+      key,
+      queryFn: () => forcedRequest.promise,
+      retainStaleOnError: false,
+    });
+
+    forcedRequest.reject(new Error("authoritative reread failed"));
+    await expect(forcedPromise).rejects.toThrow("authoritative reread failed");
+
+    expect(getOperatorQuerySnapshot<typeof initialData>(key)).toEqual({
+      data: null,
+      error: expect.objectContaining({
+        message: "authoritative reread failed",
+      }),
+      loading: false,
+      refreshing: false,
+    });
+  });
 });

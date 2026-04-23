@@ -555,6 +555,7 @@ function useOperatorList(
     key,
     policy: {
       refetchOnMount: true,
+      retainStaleOnError: true,
     },
     queryFn,
   });
@@ -603,6 +604,7 @@ function useOperatorRecord(
     key,
     policy: {
       refetchOnMount: true,
+      retainStaleOnError: true,
     },
     queryFn,
     refreshToken,
