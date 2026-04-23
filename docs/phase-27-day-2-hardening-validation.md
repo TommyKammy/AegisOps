@@ -13,7 +13,7 @@ That focused module proves the current reviewed path fails closed for post-resto
 
 The older restore, identity, and secret tests remain part of the evidence set, but they are treated here as foundational coverage reused by Phase 27 rather than being presented as if they were the dedicated Phase 27 contract by themselves.
 
-Rollback remains a reviewed operational posture and capacity guardrail, not a dedicated runtime-enforced Phase 27 contract in the current path. The evidence matrix calls that out explicitly so reviewers do not infer runtime rollback proof that the repository does not yet provide.
+Rollback remains a reviewed operational contract and capacity guardrail, not a dedicated runtime-enforced Phase 27 contract in the current path. The evidence matrix calls that out explicitly so reviewers do not infer runtime rollback proof that the repository does not yet provide.
 
 ## Evidence Matrix
 
@@ -23,7 +23,7 @@ Rollback remains a reviewed operational posture and capacity guardrail, not a de
 | Degraded-mode visibility | `test_phase27_readiness_contract_surfaces_degraded_source_and_automation_state` proves readiness keeps source and automation degradation visible instead of implying healthy operation from silence. | `test_service_phase21_readiness_surfaces_source_and_automation_health` | `python3 -m unittest control-plane.tests.test_phase27_day2_runtime_contract` |
 | Identity hardening | `test_phase27_identity_contract_fails_closed_for_missing_or_unreviewed_provider_boundary` proves startup and protected-surface access fail closed when the reviewed IdP binding is absent or crossed through an unreviewed provider. | `test_startup_status_reports_missing_reviewed_identity_provider_binding`; `test_protected_surface_request_rejects_unreviewed_identity_provider_boundary` | `python3 -m unittest control-plane.tests.test_phase27_day2_runtime_contract` |
 | Secret delivery and rotation | `test_phase27_secret_contract_requires_fresh_read_and_blocks_backend_outage` proves OpenBao-backed config reloads rotated secrets only through a fresh read and blocks when the backend is unavailable. | `test_runtime_config_fails_closed_when_openbao_backend_is_unavailable`; `test_runtime_config_reloads_rotated_openbao_secret_on_fresh_load` | `python3 -m unittest control-plane.tests.test_phase27_day2_runtime_contract` |
-| Rollback posture | None. Phase 27 currently treats rollback as a documented operational guardrail rather than a dedicated runtime-enforced contract. | `docs/runbook.md`; `docs/smb-footprint-and-deployment-profile-baseline.md` | `bash scripts/verify-phase-27-day-2-hardening-validation.sh` |
+| Rollback posture | None at the runtime-enforcement layer. Phase 27 currently relies on the reviewed runbook backup, restore, and rollback contract as the operator-facing rollback proof while dedicated runtime rollback enforcement remains out of scope. | `docs/runbook.md`; `docs/smb-footprint-and-deployment-profile-baseline.md` | `bash scripts/verify-phase-27-day-2-hardening-validation.sh` |
 
 ## Coverage Boundaries
 
