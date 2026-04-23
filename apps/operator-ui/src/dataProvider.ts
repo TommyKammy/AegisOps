@@ -77,7 +77,22 @@ const RESOURCE_BINDINGS: Record<Exclude<OperatorResourceName, "advisoryOutput" |
 
 export class UnsupportedOperatorDataProviderOperationError extends Error {}
 
-class OperatorDataProviderContractError extends Error {}
+export class OperatorDataProviderAuthorizationError extends Error {
+  status: number;
+
+  constructor(status: number) {
+    super("Backend operator boundary rejected the request.");
+    this.name = "OperatorDataProviderAuthorizationError";
+    this.status = status;
+  }
+}
+
+export class OperatorDataProviderContractError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "OperatorDataProviderContractError";
+  }
+}
 
 function rejectUnsupported(method: string, resource: string): Promise<never> {
   return Promise.reject(
@@ -396,9 +411,7 @@ async function fetchJson(fetchFn: typeof fetch, path: string): Promise<unknown> 
   });
 
   if (response.status === 401 || response.status === 403) {
-    const error = new Error("Backend operator boundary rejected the request.");
-    Object.assign(error, { status: response.status });
-    throw error;
+    throw new OperatorDataProviderAuthorizationError(response.status);
   }
 
   if (!response.ok) {
