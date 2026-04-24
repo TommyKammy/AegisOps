@@ -1481,6 +1481,111 @@ class Phase19OperatorWorkflowValidationTests(unittest.TestCase):
                     servers[0].shutdown()
                 thread.join(timeout=2)
 
+    def test_reviewed_action_request_http_surface_rejects_blank_defaulted_fields(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret=REVIEWED_SHARED_SECRET,
+                wazuh_ingest_reverse_proxy_secret=REVIEWED_PROXY_SECRET,
+            ),
+            store=store,
+        )
+
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(
+            main,
+            "ThreadingHTTPServer",
+            RecordingServer,
+        ), self._mock_authenticated_surface_access(
+            service
+        ), mock.patch.object(
+            service,
+            "create_reviewed_action_request_from_advisory",
+            wraps=service.create_reviewed_action_request_from_advisory,
+        ) as create_notify_request, mock.patch.object(
+            service,
+            "create_reviewed_tracking_ticket_request_from_advisory",
+            wraps=service.create_reviewed_tracking_ticket_request_from_advisory,
+        ) as create_ticket_request:
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+                base_url = f"http://127.0.0.1:{servers[0].server_port}"
+
+                def post_invalid(payload: dict[str, object]) -> dict[str, object]:
+                    with self.assertRaises(error.HTTPError) as request_error:
+                        request.urlopen(  # noqa: S310 - local in-process test HTTP server
+                            request.Request(  # noqa: S310 - local in-process test HTTP server
+                                f"{base_url}/operator/create-reviewed-action-request",
+                                data=json.dumps(payload).encode("utf-8"),
+                                headers={"Content-Type": "application/json"},
+                                method="POST",
+                            ),
+                            timeout=2,
+                        )
+                    self.assertEqual(request_error.exception.code, 400)
+                    return json.loads(request_error.exception.read().decode("utf-8"))
+
+                blank_action_type_error = post_invalid(
+                    {
+                        "action_type": " ",
+                        "family": "recommendation",
+                        "record_id": "recommendation-blank-action-type",
+                        "requester_identity": "analyst-001",
+                    }
+                )
+                self.assertIn(
+                    "action_type must be a non-empty string",
+                    blank_action_type_error["message"],
+                )
+
+                blank_ticket_severity_error = post_invalid(
+                    {
+                        "action_type": "create_tracking_ticket",
+                        "coordination_reference_id": "coord-ref-reviewed-ticket-003",
+                        "coordination_target_type": "zammad",
+                        "expires_at": (
+                            datetime.now(timezone.utc) + timedelta(hours=4)
+                        ).isoformat(),
+                        "family": "recommendation",
+                        "record_id": "recommendation-blank-ticket-severity",
+                        "requester_identity": "analyst-001",
+                        "ticket_description": "Track one reviewed daily follow-up.",
+                        "ticket_severity": " ",
+                        "ticket_title": "Track reviewed follow-up",
+                    }
+                )
+                self.assertIn(
+                    "ticket_severity must be a non-empty string",
+                    blank_ticket_severity_error["message"],
+                )
+                create_notify_request.assert_not_called()
+                create_ticket_request.assert_not_called()
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(timeout=2)
+
 
 if __name__ == "__main__":
     unittest.main()

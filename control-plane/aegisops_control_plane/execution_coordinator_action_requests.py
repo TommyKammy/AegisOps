@@ -13,6 +13,9 @@ from .execution_coordinator import (
 from .models import ActionRequestRecord
 
 
+_PHASE26_REVIEWED_TICKET_SEVERITIES = frozenset(("low", "medium"))
+
+
 class ReviewedActionRequestCoordinator:
     def __init__(self, service: ExecutionCoordinatorServiceDependencies) -> None:
         self._service = service
@@ -231,6 +234,10 @@ class ReviewedActionRequestCoordinator:
             ticket_severity,
             "ticket_severity",
         )
+        if ticket_severity not in _PHASE26_REVIEWED_TICKET_SEVERITIES:
+            raise ValueError(
+                "ticket_severity is outside the reviewed tracking-ticket scope"
+            )
         expires_at = self._service._require_aware_datetime(expires_at, "expires_at")
 
         with self._service._store.transaction():

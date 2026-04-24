@@ -695,9 +695,11 @@ def build_handler_class(
                             principal.identity,
                             require_json_string(payload, "requester_identity"),
                         )
-                    action_type = normalize_optional_string(
-                        payload.get("action_type")
-                    ) or "notify_identity_owner"
+                    action_type = (
+                        require_json_string(payload, "action_type")
+                        if "action_type" in payload
+                        else "notify_identity_owner"
+                    )
                     if action_type == "notify_identity_owner":
                         action_request = service.create_reviewed_action_request_from_advisory(
                             record_family=require_json_string(payload, "family"),
@@ -741,10 +743,11 @@ def build_handler_class(
                                 payload,
                                 "ticket_description",
                             ),
-                            ticket_severity=normalize_optional_string(
-                                payload.get("ticket_severity")
-                            )
-                            or "medium",
+                            ticket_severity=(
+                                require_json_string(payload, "ticket_severity")
+                                if "ticket_severity" in payload
+                                else "medium"
+                            ),
                             expires_at=require_json_datetime(payload, "expires_at"),
                             action_request_id=normalize_optional_string(
                                 payload.get("action_request_id")

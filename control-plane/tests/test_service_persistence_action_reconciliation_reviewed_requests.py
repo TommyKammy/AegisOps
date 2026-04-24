@@ -479,6 +479,54 @@ class ReviewedActionRequestPersistenceTests(ServicePersistenceTestBase):
             ("zammad",),
         )
 
+    def test_service_rejects_out_of_scope_reviewed_tracking_ticket_severity(
+        self,
+    ) -> None:
+        store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Observed repository permission change requires tracked review.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            triage_owner="analyst-001",
+            triage_rationale="Privilege-impacting change needs a bounded tracking ticket.",
+            observation_id=observation.observation_id,
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Open one reviewed tracking ticket for daily operator follow-up.",
+            lead_id=lead.lead_id,
+        )
+        baseline_requests = store.list(ActionRequestRecord)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "ticket_severity is outside the reviewed tracking-ticket scope",
+        ):
+            service.create_reviewed_tracking_ticket_request_from_advisory(
+                record_family="recommendation",
+                record_id=recommendation.recommendation_id,
+                requester_identity="analyst-001",
+                coordination_reference_id="coord-ref-reviewed-ticket-002",
+                coordination_target_type="zammad",
+                ticket_title="Review repository owner change",
+                ticket_description=(
+                    "Open one reviewed tracking ticket for the repository owner change."
+                ),
+                ticket_severity="high",
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+                action_request_id="action-request-reviewed-ticket-002",
+            )
+
+        self.assertEqual(store.list(ActionRequestRecord), baseline_requests)
+
     def test_service_phase20_first_live_action_fail_closes_on_downstream_execution_surface_mismatch(
         self,
     ) -> None:
