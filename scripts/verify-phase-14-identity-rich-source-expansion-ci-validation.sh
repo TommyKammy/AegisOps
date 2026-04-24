@@ -196,7 +196,16 @@ done
 require_fixed_string "${github_onboarding_doc}" "Parser ownership remains with IT Operations, Information Systems Department."
 require_fixed_string "${github_onboarding_doc}" "The reviewed fixture is sufficient for future parser and mapping validation without claiming that live source onboarding is approved."
 require_fixed_string "${github_onboarding_doc}" "This package does not approve live GitHub API actioning, response automation, source-side credentials, or non-audit GitHub telemetry families."
+require_fixed_string "${github_onboarding_doc}" 'Readiness state: `detection-ready`'
+require_fixed_string "${github_onboarding_doc}" "Reviewed detection-ready scope: GitHub audit records admitted through the reviewed Wazuh-backed intake boundary for repository and organization privilege, access, and workflow-administration review signals."
+require_fixed_string "${github_onboarding_doc}" "Reviewed parser evidence source: Wazuh \`github_audit\` decoder evidence represented by \`decoder.name\`, Wazuh rule metadata, the reviewed \`github-audit-alert.json\` fixture, and the parser ownership boundary in this package."
+require_fixed_string "${github_onboarding_doc}" "Provenance Evidence: GitHub audit records remain detection-ready only when the Wazuh intake boundary preserves \`rule.id\`, \`rule.level\`, \`rule.description\`, \`decoder.name\`, \`location\`, \`timestamp\`, \`manager.name\`, and the GitHub audit \`data.request_id\` or equivalent source request context when present."
+require_fixed_string "${github_onboarding_doc}" "Detector-Use Approval and Limits: GitHub audit is approved as a detection-ready source family only for future detection content whose source prerequisites fit the reviewed repository and organization audit scope documented here."
+require_fixed_string "${github_onboarding_doc}" "Detector activation still requires separate rule review, rollout review, and Wazuh rule lifecycle validation."
 require_fixed_string "${github_runbook_doc}" "The runbook keeps GitHub audit handling inside the control-plane-first analyst workflow and makes the family-specific false-positive expectations, evidence requirements, and business-hours handling explicit."
+require_fixed_string "${github_runbook_doc}" "GitHub audit may support detector review only within the approved detection-ready scope in the onboarding package."
+require_fixed_string "${github_runbook_doc}" "Analysts must treat GitHub audit as source evidence for AegisOps review, not as GitHub-owned workflow truth or direct action authority."
+require_fixed_string "${github_runbook_doc}" "If accountable source identity, actor identity, target identity, repository or organization context, timestamp quality, parser evidence, or Wazuh provenance is missing or malformed, the analyst keeps the item out of detector-ready handling until the prerequisite is repaired or a documented exception path applies."
 
 require_fixed_string "${microsoft_onboarding_doc}" "Parser ownership remains with IT Operations, Information Systems Department."
 require_fixed_string "${microsoft_onboarding_doc}" "The reviewed fixture is sufficient for future parser and mapping validation without claiming that live source onboarding is approved."
@@ -210,6 +219,7 @@ require_fixed_string "${entra_runbook_doc}" "The runbook keeps Entra ID handling
 
 require_test_name "${profile_tests}" "test_phase14_onboarding_packages_define_reviewed_ownership_and_prerequisites"
 require_test_name "${profile_tests}" "test_phase14_family_triage_runbooks_define_the_reviewed_posture"
+require_test_name "${profile_tests}" "test_github_audit_detection_ready_package_requires_reviewed_evidence"
 require_test_name "${wazuh_tests}" "test_adapter_builds_reviewed_source_profile_for_github_audit_fixture"
 require_test_name "${wazuh_tests}" "test_adapter_builds_reviewed_source_profile_for_microsoft_365_audit_fixture"
 require_test_name "${wazuh_tests}" "test_adapter_builds_reviewed_source_profile_for_entra_id_fixture"
