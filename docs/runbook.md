@@ -180,7 +180,90 @@ VM snapshots may support infrastructure recovery tasks, but they do not replace 
 
 This contract stays aligned with `docs/smb-footprint-and-deployment-profile-baseline.md` by requiring operator-led same-day rollback readiness, PostgreSQL-aware backup custody, and reconciliation-preserving restore validation instead of HA overbuild or snapshot-only recovery claims.
 
-## 5. Approval Handling
+## 5. Secret Rotation and Break-Glass Custody
+
+This section defines the reviewed operator contract for rotating actively managed runtime secrets and handling bootstrap or break-glass material without widening the current fail-closed boundary.
+
+It supplements `docs/auth-baseline.md`, `docs/phase-27-day-2-hardening-validation.md`, and `control-plane/tests/test_runtime_secret_boundary.py` by turning the approved secret boundary into one explicit day-2 checklist.
+
+Operators must treat this contract as subordinate to the approved SMB ownership model. It does not authorize a new secret platform, alternate human approval path, or any emergency bypass that leaves missing provenance, guessed bindings, or untracked credentials behind.
+
+### 5.1 Reviewed Secret Sources and Actively Managed Bindings
+
+The approved secret sources for the current reviewed path are:
+
+- OpenBao references remain the preferred reviewed managed-secret boundary when a shared runtime secret source is required;
+- mounted secret files remain the reviewed first-boot and local bootstrap path for container startup and controlled local handling; and
+- narrowly controlled direct environment values remain limited to reviewed local bootstrap or review situations and must not become the standing delivery path for shared runtime operation.
+
+The actively managed runtime bindings that operators must track as reviewed operational inputs are:
+
+- the PostgreSQL DSN;
+- the Wazuh ingest shared secret;
+- the reverse-proxy boundary secret;
+- the admin bootstrap token; and
+- the break-glass token.
+
+If future reviewed machine credentials for Shuffle delegation, assistant-provider access, or reviewed ticketing integrations are admitted, they must be added to this checklist with the same ownership, validation, and evidence expectations before operators treat them as normal rotation targets.
+
+Every actively managed binding must keep a named owner, a reviewed source reference, a bounded consumer set, and a documented rotation trigger. Operators must not infer secret scope from path shape, nearby notes, or stale local copies when the reviewed source reference says otherwise.
+
+### 5.2 Reviewed Secret Rotation Checklist
+
+Use this checklist for scheduled rotation, emergency rotation, and any ownership-change or scope-change rotation event affecting the reviewed runtime:
+
+1. Confirm the trigger for rotation, the named owner for the affected secret, and the exact binding being rotated before any value is changed.
+2. Capture the exact repository revision or release identifier, the reviewed maintenance or incident context, and the current approved secret source reference for the affected binding.
+3. Prepare the replacement value only in the reviewed source for that binding: update the OpenBao entry or replace the reviewed mounted secret file without storing the live value in Git, tickets, or operator notes.
+4. Perform a fresh OpenBao read or remount the reviewed secret file before restarting or reloading the affected runtime so the new value is sourced from the approved boundary rather than a cached copy.
+5. Re-run the reviewed startup, reload, or readiness path needed for the affected surface and confirm the system still binds through the approved reverse-proxy-first and reviewed secret-delivery boundaries.
+6. Capture validation evidence showing the rotated runtime path works with the new secret and that the old binding no longer defines the admitted state.
+
+Operators must not treat a cached prior secret read, placeholder credential, or ad hoc copied value as proof of rotation success.
+
+Validation after rotation must confirm all of the following:
+
+- the affected runtime surface still reports readiness only after the reviewed binding is present and readable;
+- the runtime has consumed the rotated value through a fresh source read rather than continuing on a stale cached secret;
+- the affected secret remains attributable to the same reviewed owner and consumer scope, unless the rotation itself intentionally rebounded the scope under approved change control; and
+- the resulting evidence bundle omits secret values while preserving the time window, affected binding, owner, and reviewed source reference.
+
+If the reviewed backend secret source is unavailable, unreadable, stale, or resolves to an empty value, rotation must stop and remain failed closed. Operators must preserve the refusal evidence, keep the prior admitted boundary blocked or in maintenance, and escalate for backend recovery instead of substituting guessed context or copied emergency values.
+
+The minimum evidence set for each reviewed rotation event is:
+
+- the rotation trigger and approving maintenance or incident context;
+- the named owner and bounded consumer set for the affected binding;
+- the reviewed source reference that was updated;
+- the restart, reload, or readiness command outputs needed to show the runtime consumed the rotated binding; and
+- the final readiness or refusal result after the fresh read attempt.
+
+### 5.3 Bootstrap Token and Break-Glass Custody Checklist
+
+Bootstrap and break-glass material are recovery exceptions only. They must not become the routine operator path for administration, approval, or day-to-day secret handling.
+
+Break-glass material must remain separately custodied from routine operator credentials, must have named primary and backup custodians, and must stay attributable to a reviewed environment and maintenance posture.
+
+Operators must confirm all of the following before using bootstrap or break-glass material:
+
+1. the normal reviewed operator path failed or is unavailable for a documented reason;
+2. the requested action fits the documented recovery purpose of the bootstrap or break-glass material rather than ordinary platform administration;
+3. the use is attributable to a named operator and one reviewed custodian for the window; and
+4. the evidence record can capture the exception without recording the live secret material itself.
+
+After any break-glass use, operators must rotate the exposed bootstrap or break-glass material before the environment returns to normal operation and must preserve evidence showing the exception was closed.
+
+The minimum post-use evidence set is:
+
+- the trigger for break-glass use, including the failed reviewed path that made the exception necessary;
+- the named operator, custodian, environment, and time window for the exception;
+- the exact recovery action performed under break-glass authority;
+- the follow-up rotation record for the exposed bootstrap or break-glass material; and
+- the confirmation that the environment returned to the normal reviewed operator path without leaving the exception as standing access.
+
+If custody, attribution, scope, or follow-up rotation evidence is missing, the break-glass event must remain open and unresolved rather than being treated as successfully closed.
+
+## 6. Approval Handling
 
 The approved baseline requires explicit approval for SOAR workflows that perform write or destructive actions by default.
 
@@ -195,7 +278,7 @@ Future approval guidance should describe:
 
 This section must remain consistent with the business-hours-oriented operating model and must not imply unrestricted autonomous response.
 
-## 6. Validation
+## 7. Validation
 
 Validation steps must be documented and repeatable before this runbook can be treated as an operational procedure beyond the reviewed startup and shutdown path.
 
@@ -254,7 +337,7 @@ The selected Phase 6 validation slice is limited to the Windows security and end
 
 This runbook section is limited to replay validation, staging-only detector review, and read-only or notify-only workflow review during business hours.
 
-### 6.1 Selected Slice and Preconditions
+### 7.1 Selected Slice and Preconditions
 
 The selected replay-to-detection-to-notify slice covers these reviewed use cases only:
 
@@ -276,7 +359,7 @@ The operator should treat the slice as ready for analyst validation only when al
 
 This slice is not a production activation checklist. It does not authorize live source onboarding, detector enablement against production indexes, response execution, or after-hours operation promises.
 
-### 6.2 Analyst Validation Path
+### 7.2 Analyst Validation Path
 
 The analyst validation path for this slice is review-first and replay-oriented:
 
@@ -288,7 +371,7 @@ The analyst validation path for this slice is review-first and replay-oriented:
 
 Validation is incomplete if the slice depends on missing actor attribution, forwarded-event timing ambiguity, hidden field remapping, threshold logic, or any workflow behavior beyond the approved read-only and notify-only boundaries.
 
-### 6.3 Required Evidence Review
+### 7.3 Required Evidence Review
 
 Operators must review replay evidence from `ingest/replay/windows-security-and-endpoint/normalized/success.ndjson`, the staging-only detector metadata, and the read-only or notify-only workflow assets before treating the slice as validated.
 
@@ -301,7 +384,7 @@ The minimum evidence review for each exercise is:
 
 Any validation record should note whether the slice produced an explainable analyst work item, whether the evidence was sufficient for same-day review, and whether the output should stay staged, be revised, or be withdrawn.
 
-### 6.4 Disable and Rollback Path
+### 7.4 Disable and Rollback Path
 
 If validation fails, disable the selected slice by keeping the detector artifacts out of production activation and by withdrawing `aegisops_enrich_windows_selected_detector_outputs.json` and `aegisops_notify_windows_selected_detector_outputs.json` from the active workflow set until the issue is corrected and re-reviewed.
 
