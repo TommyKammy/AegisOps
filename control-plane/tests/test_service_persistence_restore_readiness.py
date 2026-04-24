@@ -83,16 +83,27 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         )
 
         parsed = ast.parse(module_path.read_text())
-        imported_modules: list[str] = []
+        imported_modules: set[str] = set()
         for node in ast.walk(parsed):
             if isinstance(node, ast.Import):
-                imported_modules.extend(alias.name for alias in node.names)
+                imported_modules.update(alias.name for alias in node.names)
             elif isinstance(node, ast.ImportFrom) and node.module is not None:
-                imported_modules.append(node.module)
+                imported_modules.add(node.module)
+                imported_modules.update(
+                    f"{node.module}.{alias.name}"
+                    for alias in node.names
+                    if alias.name != "*"
+                )
 
-        self.assertNotIn(
-            "adapters.postgres",
-            imported_modules,
+        def _is_postgres_adapter_import(module_name: str) -> bool:
+            parts = module_name.split(".")
+            return any(
+                parts[index : index + 2] == ["adapters", "postgres"]
+                for index in range(len(parts) - 1)
+            )
+
+        self.assertFalse(
+            any(_is_postgres_adapter_import(name) for name in imported_modules),
             "backup/restore validation should use a shared record-validation boundary, not the PostgreSQL adapter",
         )
 
