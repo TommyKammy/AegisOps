@@ -16,6 +16,14 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 import main
 from aegisops_control_plane.config import RuntimeConfig
+from aegisops_control_plane.http_protected_surface import (
+    OPERATOR_ANALYST_PATHS,
+    OPERATOR_APPROVER_PATHS,
+    PROTECTED_READ_ROLES_BY_PATH,
+    authenticate_protected_write,
+    protected_read_roles,
+    protected_write_roles,
+)
 from aegisops_control_plane.operations import (
     RestoreReadinessService,
     RuntimeBoundaryService,
@@ -65,6 +73,62 @@ def _build_service(*, host: str = "127.0.0.1") -> AegisOpsControlPlaneService:
 
 
 class Phase21RuntimeAuthValidationTests(unittest.TestCase):
+    def test_http_protected_surface_route_roles_are_declared_outside_handler_dispatch(
+        self,
+    ) -> None:
+        self.assertEqual(protected_read_roles("/runtime"), ("platform_admin",))
+        self.assertEqual(
+            protected_read_roles("/inspect-case-detail"),
+            ("analyst", "approver", "platform_admin"),
+        )
+        self.assertEqual(
+            protected_write_roles("/operator/promote-alert-to-case"),
+            ("analyst",),
+        )
+        self.assertEqual(
+            protected_write_roles("/operator/record-action-approval-decision"),
+            ("approver",),
+        )
+        self.assertEqual(
+            protected_write_roles("/admin/bootstrap/claim"),
+            ("platform_admin",),
+        )
+        self.assertIsNone(protected_read_roles("/healthz"))
+        self.assertIsNone(protected_write_roles("/intake/wazuh"))
+        self.assertIn("/operator/create-reviewed-action-request", OPERATOR_ANALYST_PATHS)
+        self.assertIn(
+            "/operator/record-action-approval-decision",
+            OPERATOR_APPROVER_PATHS,
+        )
+        self.assertIn("/diagnostics/readiness", PROTECTED_READ_ROLES_BY_PATH)
+
+    def test_operator_write_auth_invokes_loopback_gate_before_surface_auth(
+        self,
+    ) -> None:
+        service = mock.Mock()
+        handler = mock.Mock()
+        handler.client_address = ("203.0.113.10", 44321)
+        handler.headers.get.return_value = None
+        loopback_gate = mock.Mock(
+            side_effect=PermissionError(
+                "operator write surface only accepts loopback callers until a reviewed operator auth boundary exists"
+            )
+        )
+
+        with self.assertRaisesRegex(
+            PermissionError,
+            "operator write surface only accepts loopback callers",
+        ):
+            authenticate_protected_write(
+                service=service,
+                handler=handler,
+                request_path="/operator/promote-alert-to-case",
+                require_loopback_operator_request_fn=loopback_gate,
+            )
+
+        loopback_gate.assert_called_once_with(handler)
+        service.authenticate_protected_surface_request.assert_not_called()
+
     def test_operational_runtime_surfaces_are_extracted_into_dedicated_collaborators(
         self,
     ) -> None:
