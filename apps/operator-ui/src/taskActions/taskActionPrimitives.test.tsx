@@ -69,6 +69,39 @@ function TestTaskActionForm() {
   );
 }
 
+function TestTaskActionFormWithRefreshMeta() {
+  const submission = useTaskActionSubmission<{ action_request_id: string }>();
+
+  return (
+    <TaskActionSubmissionForm
+      refreshTargets={(acknowledgement) => [
+        {
+          id: acknowledgement.action_request_id,
+          label: "Action review detail",
+          meta: {
+            includeTimeline: true,
+          },
+          resource: "actionReview",
+        },
+      ]}
+      run={() => Promise.resolve({ action_request_id: "action-request-123" })}
+      submission={submission}
+    >
+      <TaskActionFormCard
+        actor={[["Identity", "approver@example.com"]]}
+        binding={[["Action request id", "action-request-123"]]}
+        provenance={[["Refresh target", "action review detail"]]}
+        submission={submission}
+        submitLabel="Refresh action review"
+        subtitle="Refresh target metadata stays attached to the authoritative reread."
+        title="Refresh action review"
+      >
+        <div>Action review body</div>
+      </TaskActionFormCard>
+    </TaskActionSubmissionForm>
+  );
+}
+
 describe("taskActionPrimitives", () => {
   it("submits through the bounded task-action client and re-reads authoritative state", async () => {
     const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
@@ -140,6 +173,54 @@ describe("taskActionPrimitives", () => {
     expect(
       await screen.findByText(
         "Authoritative refresh completed from the reviewed backend record. Refreshed: Case detail.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("passes refresh target metadata through the authoritative reread", async () => {
+    const dataProvider = {
+      create: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+      getList: vi.fn(),
+      getMany: vi.fn(),
+      getManyReference: vi.fn(),
+      getOne: vi.fn().mockResolvedValue({
+        data: {
+          action_request_id: "action-request-123",
+          id: "action-request-123",
+          timeline: [],
+        },
+      }),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+    };
+    const user = userEvent.setup();
+
+    render(
+      <AdminContext dataProvider={dataProvider}>
+        <TaskActionClientProvider
+          client={createOperatorTaskActionClient({ fetchFn: vi.fn() })}
+        >
+          <TestTaskActionFormWithRefreshMeta />
+        </TaskActionClientProvider>
+      </AdminContext>,
+    );
+
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Refresh action review" }));
+
+    await waitFor(() => {
+      expect(dataProvider.getOne).toHaveBeenCalledWith("actionReview", {
+        id: "action-request-123",
+        meta: {
+          includeTimeline: true,
+        },
+      });
+    });
+    expect(
+      await screen.findByText(
+        "Authoritative refresh completed from the reviewed backend record. Refreshed: Action review detail.",
       ),
     ).toBeInTheDocument();
   });
