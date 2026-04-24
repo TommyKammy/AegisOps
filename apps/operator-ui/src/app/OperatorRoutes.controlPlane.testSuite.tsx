@@ -80,6 +80,97 @@ export function registerOperatorRoutesControlPlaneTests() {
       });
     });
 
+    it("renders reviewed tracking-ticket posture on case detail without making the ticket authoritative", async () => {
+      const dependencies = createDefaultDependencies({
+        fetchFn: createAuthorizedFetch({
+          "/inspect-case-detail": {
+            case_id: "case-ticket-456",
+            case_record: {
+              case_id: "case-ticket-456",
+              lifecycle_state: "pending_action",
+            },
+            linked_alert_ids: ["alert-ticket-456"],
+            linked_observation_ids: [],
+            linked_recommendation_ids: ["recommendation-ticket-456"],
+            linked_evidence_ids: ["evidence-ticket-456"],
+            linked_reconciliation_ids: ["recon-ticket-456"],
+            provenance_summary: {
+              authoritative_anchor: {
+                record_family: "case",
+                record_id: "case-ticket-456",
+                source_family: "github_audit",
+                provenance_classification: "authoritative",
+              },
+            },
+            linked_alert_records: [],
+            linked_evidence_records: [],
+            linked_reconciliation_records: [],
+            cross_source_timeline: [],
+            external_ticket_reference: {
+              authority: "non_authoritative",
+              status: "present",
+              coordination_reference_id: "coord-ref-case-ticket-456",
+              coordination_target_type: "zammad",
+              coordination_target_id: "ZM-456",
+              ticket_reference_url: "https://tickets.example.invalid/tickets/ZM-456",
+            },
+            current_action_review: {
+              action_request_id: "action-request-ticket-456",
+              review_state: "approved",
+              next_expected_action: "review_created_ticket",
+              target_scope: {
+                coordination_reference_id: "coord-ref-case-ticket-456",
+                coordination_target_type: "zammad",
+              },
+              coordination_ticket_outcome: {
+                authority: "authoritative_aegisops_review",
+                status: "created",
+                summary:
+                  "reviewed create-ticket outcome recorded from authoritative execution and reconciliation",
+                action_request_id: "action-request-ticket-456",
+                action_execution_id: "action-execution-ticket-456",
+                reconciliation_id: "recon-ticket-456",
+                coordination_reference_id: "coord-ref-case-ticket-456",
+                coordination_target_type: "zammad",
+                coordination_target_id: "ZM-456",
+                external_receipt_id: "receipt-ticket-456",
+                ticket_reference_url: "https://tickets.example.invalid/tickets/ZM-456",
+              },
+            },
+          },
+        }),
+      });
+
+      render(
+        <MemoryRouter initialEntries={["/operator/cases/case-ticket-456"]}>
+          <OperatorRoutes dependencies={dependencies} />
+        </MemoryRouter>,
+      );
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("heading", { name: "Case Detail" }),
+        ).toBeInTheDocument();
+      });
+
+      expect(screen.getByText("Coordination visibility")).toBeInTheDocument();
+      expect(screen.getByText("Coordination: created")).toBeInTheDocument();
+      expect(screen.getByText("Authority: authoritative_aegisops_review")).toBeInTheDocument();
+      expect(screen.getAllByText("coord-ref-case-ticket-456").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("zammad").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("ZM-456").length).toBeGreaterThan(0);
+      expect(screen.getByText("receipt-ticket-456")).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Open downstream coordination reference" })).toHaveAttribute(
+        "href",
+        "https://tickets.example.invalid/tickets/ZM-456",
+      );
+      expect(
+        screen.getByText(
+          "External tickets remain non-authoritative coordination context for this case.",
+        ),
+      ).toBeInTheDocument();
+    });
+
     it("promotes an alert into a case from alert detail and re-renders authoritative state", async () => {
       const user = userEvent.setup();
       let alertDetailPayload: Record<string, unknown> = {
