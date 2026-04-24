@@ -1298,31 +1298,6 @@ def _phase24_live_assistant_snapshot(
     )
 
 
-def _assistant_advisory_draft_without_revision_history(
-    draft: Mapping[str, object],
-) -> dict[str, object]:
-    return {
-        str(key): value
-        for key, value in draft.items()
-        if str(key) != "revision_history"
-    }
-
-
-def _assistant_advisory_draft_revision_history(
-    draft: Mapping[str, object],
-) -> tuple[dict[str, object], ...]:
-    raw_history = draft.get("revision_history", ())
-    if not isinstance(raw_history, (list, tuple)):
-        return ()
-    revision_history: list[dict[str, object]] = []
-    for entry in raw_history:
-        if isinstance(entry, Mapping):
-            revision_history.append(
-                _assistant_advisory_draft_without_revision_history(entry)
-            )
-    return tuple(revision_history)
-
-
 class AegisOpsControlPlaneService:
     """Minimal local runtime skeleton for the first control-plane service."""
 
@@ -4661,54 +4636,9 @@ class AegisOpsControlPlaneService:
         record_family: str,
         record_id: str,
     ) -> RecommendationRecord | AITraceRecord:
-        record_family = self._require_non_empty_string(record_family, "record_family")
-        record_id = self._require_non_empty_string(record_id, "record_id")
-        if record_family not in {"recommendation", "ai_trace"}:
-            raise ValueError(
-                "assistant advisory drafts may only be attached to "
-                "'recommendation' or 'ai_trace' records"
-            )
-
-        record_type = RECORD_TYPES_BY_FAMILY[record_family]
-        record = self._store.get(record_type, record_id)
-        if record is None:
-            raise LookupError(
-                f"Missing {record_family} record {record_id!r} for advisory draft attachment"
-            )
-        if not isinstance(record, (RecommendationRecord, AITraceRecord)):
-            raise TypeError(
-                "assistant advisory drafts may only be attached to recommendation "
-                "or ai_trace records"
-            )
-
-        draft_snapshot = self.render_recommendation_draft(record_family, record_id)
-        attached_draft = {
-            "draft_id": f"assistant-advisory-draft:{record_family}:{record_id}",
-            "source_record_family": record_family,
-            "source_record_id": record_id,
-            "review_lifecycle_state": record.lifecycle_state,
-            **draft_snapshot.recommendation_draft,
-            "linked_alert_ids": draft_snapshot.linked_alert_ids,
-            "linked_case_ids": draft_snapshot.linked_case_ids,
-            "linked_evidence_ids": draft_snapshot.linked_evidence_ids,
-            "linked_recommendation_ids": draft_snapshot.linked_recommendation_ids,
-            "linked_reconciliation_ids": draft_snapshot.linked_reconciliation_ids,
-        }
-        current_attached_draft = _assistant_advisory_draft_without_revision_history(
-            record.assistant_advisory_draft
-        )
-        if current_attached_draft == attached_draft:
-            return record
-        revision_history = _assistant_advisory_draft_revision_history(
-            record.assistant_advisory_draft
-        )
-        if current_attached_draft:
-            attached_draft["revision_history"] = (
-                *revision_history,
-                current_attached_draft,
-            )
-        return self.persist_record(
-            replace(record, assistant_advisory_draft=attached_draft)
+        return self._assistant_context_assembler.attach_assistant_advisory_draft(
+            record_family,
+            record_id,
         )
 
     def _reconciliation_has_detection_lineage(

@@ -52,6 +52,9 @@ class AssistantAdvisoryPersistenceTests(ServicePersistenceTestBase):
         service._assistant_context_assembler.render_recommendation_draft.return_value = (
             mock.sentinel.recommendation_draft_snapshot
         )
+        service._assistant_context_assembler.attach_assistant_advisory_draft.return_value = (
+            mock.sentinel.attached_advisory_draft_record
+        )
 
         self.assertIs(
             service.inspect_assistant_context("case", "case-delegated-001"),
@@ -65,6 +68,13 @@ class AssistantAdvisoryPersistenceTests(ServicePersistenceTestBase):
             service.render_recommendation_draft("case", "case-delegated-001"),
             mock.sentinel.recommendation_draft_snapshot,
         )
+        self.assertIs(
+            service.attach_assistant_advisory_draft(
+                "recommendation",
+                "recommendation-delegated-001",
+            ),
+            mock.sentinel.attached_advisory_draft_record,
+        )
         service._assistant_context_assembler.inspect_assistant_context.assert_called_once_with(
             "case",
             "case-delegated-001",
@@ -76,6 +86,13 @@ class AssistantAdvisoryPersistenceTests(ServicePersistenceTestBase):
         service._assistant_context_assembler.render_recommendation_draft.assert_called_once_with(
             "case",
             "case-delegated-001",
+        )
+        (
+            service._assistant_context_assembler.attach_assistant_advisory_draft
+            .assert_called_once_with(
+                "recommendation",
+                "recommendation-delegated-001",
+            )
         )
 
     def test_service_routes_reviewed_slice_checks_through_policy_module(self) -> None:
