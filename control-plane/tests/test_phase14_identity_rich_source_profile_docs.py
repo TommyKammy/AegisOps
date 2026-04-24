@@ -192,17 +192,17 @@ class Phase14IdentityRichSourceProfileDocsTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         shared_terms = (
-            "Readiness state: `schema-reviewed`",
             "Parser ownership remains with IT Operations, Information Systems Department.",
             "Representative raw payload references are stored in `control-plane/tests/fixtures/wazuh/`.",
             "The reviewed fixture is sufficient for future parser and mapping validation without claiming that live source onboarding is approved.",
-            "Versioned parser changes remain future implementation work.",
         )
         family_specific_terms = (
             (
                 "github-audit",
                 github_text,
                 (
+                    "Readiness state: `detection-ready`",
+                    "Reviewed parser evidence source",
                     "This package does not approve live GitHub API actioning, response automation, source-side credentials, or non-audit GitHub telemetry families.",
                     "GitHub repository privilege change",
                     "GitHub audit",
@@ -212,6 +212,8 @@ class Phase14IdentityRichSourceProfileDocsTests(unittest.TestCase):
                 "microsoft-365-audit",
                 microsoft_text,
                 (
+                    "Readiness state: `schema-reviewed`",
+                    "Versioned parser changes remain future implementation work.",
                     "This package does not approve direct Microsoft 365 actioning, non-audit Microsoft 365 telemetry families, source-side credentials, or runtime automation.",
                     "Microsoft 365 mailbox permission change",
                     "Microsoft 365 audit",
@@ -221,6 +223,8 @@ class Phase14IdentityRichSourceProfileDocsTests(unittest.TestCase):
                 "entra-id",
                 entra_text,
                 (
+                    "Readiness state: `schema-reviewed`",
+                    "Versioned parser changes remain future implementation work.",
                     "This package does not approve direct Entra ID actioning, non-audit Entra ID telemetry families, source-side credentials, or runtime automation.",
                     "Entra ID privileged role assignment",
                     "Entra ID",
@@ -232,6 +236,50 @@ class Phase14IdentityRichSourceProfileDocsTests(unittest.TestCase):
             with self.subTest(family=family_name):
                 for term in shared_terms + terms:
                     self.assertIn(term, text)
+
+    def test_github_audit_detection_ready_package_requires_reviewed_evidence(
+        self,
+    ) -> None:
+        onboarding_text = (
+            REPO_ROOT
+            / "docs"
+            / "source-families"
+            / "github-audit"
+            / "onboarding-package.md"
+        ).read_text(encoding="utf-8")
+        runbook_text = (
+            REPO_ROOT
+            / "docs"
+            / "source-families"
+            / "github-audit"
+            / "analyst-triage-runbook.md"
+        ).read_text(encoding="utf-8")
+
+        required_onboarding_terms = (
+            "Readiness state: `detection-ready`",
+            "Reviewed detection-ready scope",
+            "Parser and Version Evidence",
+            "Reviewed parser evidence source",
+            "Field Coverage Verification",
+            "Provenance Evidence",
+            "Detector-Use Approval and Limits",
+            "Future detection content may reference GitHub audit only for repository and organization privilege, access, and workflow-administration review signals that preserve accountable source identity, actor identity, target identity, repository or organization context, privilege-change or workflow-administration metadata, timestamp quality, and Wazuh provenance.",
+            "Detector activation still requires separate rule review, rollout review, and Wazuh rule lifecycle validation.",
+            "This package does not approve live GitHub API actioning, response automation, source-side credentials, GitHub-owned case authority, direct vendor workflow truth, non-audit GitHub telemetry families, or detector activation without separate detector review.",
+        )
+        required_runbook_terms = (
+            "Detector-use handling",
+            "GitHub audit may support detector review only within the approved detection-ready scope in the onboarding package.",
+            "Analysts must treat GitHub audit as source evidence for AegisOps review, not as GitHub-owned workflow truth or direct action authority.",
+            "Family-specific false-positive review",
+            "Provenance handling",
+            "If accountable source identity, actor identity, target identity, repository or organization context, timestamp quality, parser evidence, or Wazuh provenance is missing or malformed, the analyst keeps the item out of detector-ready handling until the prerequisite is repaired or a documented exception path applies.",
+        )
+
+        for term in required_onboarding_terms:
+            self.assertIn(term, onboarding_text)
+        for term in required_runbook_terms:
+            self.assertIn(term, runbook_text)
 
 
 if __name__ == "__main__":
