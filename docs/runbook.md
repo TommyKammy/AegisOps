@@ -117,6 +117,8 @@ Operators should run that bundle after startup, upgrade, rollback, or handoff wi
 
 The Phase 33 operational evidence handoff pack in `docs/deployment/operational-evidence-handoff-pack.md` is the reviewed minimum package for deployment, upgrade, restore, approval, execution, and reconciliation handoff evidence.
 
+The customer-like rehearsal environment in `docs/deployment/customer-like-rehearsal-environment.md` is the reviewed disposable topology for replaying the first-boot to single-customer path before a pilot readiness decision.
+
 ## 3. Shutdown
 
 The reviewed shutdown path exists to return the platform to a clean, operator-confirmed safe state without leaving ambiguous runtime ownership or half-stopped ingress.

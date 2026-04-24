@@ -26,6 +26,8 @@ The pack may reference external substrate receipts, backup custody notes, or bou
 
 For deployment-only handoff where no approval, execution, or reconciliation event occurred, retain the startup, readiness, runtime inspection, smoke, backup custody, and named-operator evidence required by the runbook and single-customer profile.
 
+For Phase 37 customer-like rehearsal, include the verifier result from `scripts/verify-customer-like-rehearsal-environment.sh --env-file <runtime-env-file>` with the startup, smoke, backup-custody, and clean-state evidence.
+
 For failed, rejected, or refused events, retain the refusal reason and the clean-state confirmation. Do not replace a failed path with a later successful retry summary unless the failed outcome remains reviewable.
 
 ## 3. Operator-Visible Handoff Artifacts

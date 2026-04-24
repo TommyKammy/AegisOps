@@ -22,6 +22,8 @@ The operator has a prepared untracked runtime env file copied from `control-plan
 
 The operator has a named repository revision or release identifier for the handoff record.
 
+For Phase 37 rehearsal, run this bundle after `scripts/verify-customer-like-rehearsal-environment.sh --env-file <runtime-env-file>` passes for the disposable customer-like environment.
+
 The operator has the reviewed proxy authentication headers or equivalent trusted proxy session needed for protected read-only inspection without writing those secret values into the evidence record.
 
 The approved reverse proxy is the user-facing ingress path for the smoke window, and the backend control-plane port remains internal.
