@@ -15,13 +15,20 @@ class GitHubAuditSourceProfileDocsTests(unittest.TestCase):
 
         for term in (
             "GitHub Audit Wazuh-Backed Source Profile Onboarding Package",
-            "Readiness state: `schema-reviewed`",
+            "Readiness state: `detection-ready`",
             "Wazuh-backed source profile",
+            "Reviewed detection-ready scope",
+            "Parser and Version Evidence",
+            "Reviewed parser evidence source",
+            "Field Coverage Verification",
+            "Provenance Evidence",
+            "Detector-Use Approval and Limits",
             "accountable source identity",
             "actor identity",
             "target identity",
             "repository or organization context",
             "privilege-change metadata",
+            "Detector activation still requires separate rule review, rollout review, and Wazuh rule lifecycle validation.",
             "Direct GitHub API actioning",
             "Non-audit GitHub telemetry families",
         ):
