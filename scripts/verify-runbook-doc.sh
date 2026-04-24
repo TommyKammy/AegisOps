@@ -53,6 +53,17 @@ required_phrases=(
   "Before a reviewed platform change, operators must confirm the latest PostgreSQL-aware backup completed successfully, the reviewed configuration backup set is current, and the backup custody record identifies the named operator or break-glass owner for the window."
   "The approved backup set for restore and rollback readiness includes the PostgreSQL-aware backup, the reviewed repository revision or release identifier, the untracked runtime env file or equivalent reviewed configuration export, and any reviewed secret-source references needed to recreate runtime bindings without storing live secret values in Git."
   "Restore must stop and remain failed closed if backup provenance, custody, completeness, or reviewed scope cannot be demonstrated from the evidence set."
+  'The reviewed upgrade path is the one approved platform-change sequence for the current first-boot and single-customer operating posture.'
+  'Before a reviewed upgrade begins, operators must confirm all of the following:'
+  'Operators must not treat optional OpenSearch, n8n, Shuffle, assistant, or executor surfaces as upgrade prerequisites, upgrade success gates, or reasons to widen the current approved runtime floor.'
+  'The reviewed upgrade sequence is:'
+  'Capture the pre-upgrade readiness, runtime, compose status, and bounded logs through the approved reverse-proxy-first boundary before changing the running stack.'
+  'Apply the reviewed repository revision or release through the repo-owned first-boot compose path without widening ingress, publishing the backend port directly, or introducing HA or multi-node choreography.'
+  'Re-run the documented startup path from Section 2 and confirm migration bootstrap, PostgreSQL reachability, and reverse-proxy admission complete under the reviewed first-boot contract.'
+  'Compare the post-upgrade `/runtime` output, readiness evidence, and operator-visible queue state against the pre-change evidence before ending maintenance.'
+  'Rollback must begin the same day if the upgraded environment cannot satisfy the reviewed readiness path, preserve the approved reverse-proxy-first boundary, or keep the operator-visible record chain trustworthy before the maintenance window expires.'
+  'The minimum evidence set for a reviewed upgrade window is:'
+  'This reviewed upgrade path stays aligned with `docs/smb-footprint-and-deployment-profile-baseline.md` by keeping upgrades inside one business-hours maintenance window, preserving same-day rollback readiness, and avoiding HA or fleet-orchestration claims.'
   "Restore validation before normal operations resume must confirm that:"
   "Rollback is the same-day operator path for returning from a reviewed change window to the prior known-good state when restore validation, readiness, or operator evidence shows the changed state is no longer trustworthy."
   "Operators must retain rollback evidence showing the trigger, the backup set or configuration revision used, the restoration point selected, the post-rollback readiness results, and the confirmation that the prior known-good approval, evidence, execution, and reconciliation chain was restored."
