@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import copy
 import pathlib
 import sys
@@ -72,6 +73,38 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         self.assertTrue(
             hasattr(restore_readiness_service, "_readiness_health_projection"),
             "RestoreReadinessService should delegate readiness projection to a dedicated collaborator",
+        )
+
+    def test_backup_restore_validation_does_not_import_postgres_adapter(self) -> None:
+        module_path = (
+            pathlib.Path(__file__).resolve().parents[1]
+            / "aegisops_control_plane"
+            / "restore_readiness_backup_restore.py"
+        )
+
+        parsed = ast.parse(module_path.read_text())
+        imported_modules: set[str] = set()
+        for node in ast.walk(parsed):
+            if isinstance(node, ast.Import):
+                imported_modules.update(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                imported_modules.add(node.module)
+                imported_modules.update(
+                    f"{node.module}.{alias.name}"
+                    for alias in node.names
+                    if alias.name != "*"
+                )
+
+        def _is_postgres_adapter_import(module_name: str) -> bool:
+            parts = module_name.split(".")
+            return any(
+                parts[index : index + 2] == ["adapters", "postgres"]
+                for index in range(len(parts) - 1)
+            )
+
+        self.assertFalse(
+            any(_is_postgres_adapter_import(name) for name in imported_modules),
+            "backup/restore validation should use a shared record-validation boundary, not the PostgreSQL adapter",
         )
 
     def test_runtime_snapshot_reports_postgresql_authoritative_persistence_mode(self) -> None:
