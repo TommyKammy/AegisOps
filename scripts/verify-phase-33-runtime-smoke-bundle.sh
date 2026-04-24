@@ -62,11 +62,22 @@ required_phrases=(
   'docker compose --env-file <runtime-env-file> -f control-plane/deployment/first-boot/docker-compose.yml logs --tail=200'
   'curl -fsS http://127.0.0.1:<proxy-port>/healthz'
   'curl -fsS http://127.0.0.1:<proxy-port>/readyz'
-  'curl -fsS http://127.0.0.1:<proxy-port>/runtime'
-  'curl -fsS "http://127.0.0.1:<proxy-port>/inspect-records?family=alerts"'
-  'curl -fsS "http://127.0.0.1:<proxy-port>/inspect-records?family=cases"'
-  'curl -fsS "http://127.0.0.1:<proxy-port>/inspect-records?family=action_requests"'
-  'curl -fsS http://127.0.0.1:<proxy-port>/inspect-reconciliation-status'
+  "For protected surfaces, substitute \`<trusted-platform-admin-proxy-auth-headers>\` or \`<trusted-operator-read-only-proxy-auth-headers>\` with the reviewed proxy session header arguments."
+  "Those arguments must come from the trusted proxy or equivalent reviewed operator session, not from sample, fake, or operator-invented values."
+  'X-Forwarded-Proto: https'
+  'X-AegisOps-Proxy-Secret: <reviewed-proxy-secret>'
+  'X-AegisOps-Proxy-Service-Account: <reviewed-proxy-service-account>'
+  'X-AegisOps-Authenticated-IdP: <reviewed-identity-provider>'
+  'X-AegisOps-Authenticated-Subject: <reviewed-operator-subject>'
+  'X-AegisOps-Authenticated-Identity: <reviewed-operator-identity>'
+  'X-AegisOps-Authenticated-Role: <reviewed-operator-role>'
+  'Use a reviewed `platform_admin` role for `<trusted-platform-admin-proxy-auth-headers>` because `/runtime` is platform-admin protected.'
+  'Use a reviewed `analyst`, `approver`, or `platform_admin` role for `<trusted-operator-read-only-proxy-auth-headers>` because the read-only inspection routes accept those operator roles.'
+  'curl -fsS <trusted-platform-admin-proxy-auth-headers> http://127.0.0.1:<proxy-port>/runtime'
+  'curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-records?family=alerts"'
+  'curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-records?family=cases"'
+  'curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-records?family=action_requests"'
+  'curl -fsS <trusted-operator-read-only-proxy-auth-headers> http://127.0.0.1:<proxy-port>/inspect-reconciliation-status'
   'Confirm the operator console can render `/operator/queue` or the configured operator-console base path with the same reviewed backend session, then keep the check read-only.'
   "Confirm the first candidate low-risk action remains in precondition review only: a reviewed alert or case is selected, an allowed low-risk action type is identified, approver ownership is known, and no action request, approval decision, delegation, executor dispatch, or reconciliation write is performed by this smoke bundle."
   "The smoke result must be attached to the deployment, upgrade, or handoff record and referenced by the next daily queue and health review."

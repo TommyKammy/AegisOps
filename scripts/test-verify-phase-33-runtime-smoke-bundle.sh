@@ -89,15 +89,37 @@ Use `curl -fsS http://127.0.0.1:<proxy-port>/healthz`.
 
 Use `curl -fsS http://127.0.0.1:<proxy-port>/readyz`.
 
-Use `curl -fsS http://127.0.0.1:<proxy-port>/runtime`.
+For protected surfaces, substitute `<trusted-platform-admin-proxy-auth-headers>` or `<trusted-operator-read-only-proxy-auth-headers>` with the reviewed proxy session header arguments.
 
-Use `curl -fsS "http://127.0.0.1:<proxy-port>/inspect-records?family=alerts"`.
+Those arguments must come from the trusted proxy or equivalent reviewed operator session, not from sample, fake, or operator-invented values.
 
-Use `curl -fsS "http://127.0.0.1:<proxy-port>/inspect-records?family=cases"`.
+Use `X-Forwarded-Proto: https`.
 
-Use `curl -fsS "http://127.0.0.1:<proxy-port>/inspect-records?family=action_requests"`.
+Use `X-AegisOps-Proxy-Secret: <reviewed-proxy-secret>`.
 
-Use `curl -fsS http://127.0.0.1:<proxy-port>/inspect-reconciliation-status`.
+Use `X-AegisOps-Proxy-Service-Account: <reviewed-proxy-service-account>`.
+
+Use `X-AegisOps-Authenticated-IdP: <reviewed-identity-provider>`.
+
+Use `X-AegisOps-Authenticated-Subject: <reviewed-operator-subject>`.
+
+Use `X-AegisOps-Authenticated-Identity: <reviewed-operator-identity>`.
+
+Use `X-AegisOps-Authenticated-Role: <reviewed-operator-role>`.
+
+Use a reviewed `platform_admin` role for `<trusted-platform-admin-proxy-auth-headers>` because `/runtime` is platform-admin protected.
+
+Use a reviewed `analyst`, `approver`, or `platform_admin` role for `<trusted-operator-read-only-proxy-auth-headers>` because the read-only inspection routes accept those operator roles.
+
+Use `curl -fsS <trusted-platform-admin-proxy-auth-headers> http://127.0.0.1:<proxy-port>/runtime`.
+
+Use `curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-records?family=alerts"`.
+
+Use `curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-records?family=cases"`.
+
+Use `curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-records?family=action_requests"`.
+
+Use `curl -fsS <trusted-operator-read-only-proxy-auth-headers> http://127.0.0.1:<proxy-port>/inspect-reconciliation-status`.
 
 ## 4. Handoff Checklist
 
@@ -179,6 +201,22 @@ perl -0pi -e 's/It does not require optional OpenSearch, n8n, Shuffle, endpoint 
 commit_fixture "${missing_optional_scope_repo}"
 assert_fails_with "${missing_optional_scope_repo}" "Missing Phase 33 runtime smoke bundle statement: It does not require optional OpenSearch"
 
+missing_protected_auth_repo="${workdir}/missing-protected-auth"
+create_repo "${missing_protected_auth_repo}"
+write_shared_docs "${missing_protected_auth_repo}"
+write_valid_bundle "${missing_protected_auth_repo}"
+perl -0pi -e 's/curl -fsS <trusted-platform-admin-proxy-auth-headers> http:\/\/127\.0\.0\.1:<proxy-port>\/runtime/curl -fsS http:\/\/127.0.0.1:<proxy-port>\/runtime/' "${missing_protected_auth_repo}/docs/deployment/runtime-smoke-bundle.md"
+commit_fixture "${missing_protected_auth_repo}"
+assert_fails_with "${missing_protected_auth_repo}" "Missing Phase 33 runtime smoke bundle statement: curl -fsS <trusted-platform-admin-proxy-auth-headers> http://127.0.0.1:<proxy-port>/runtime"
+
+missing_runbook_link_repo="${workdir}/missing-runbook-link"
+create_repo "${missing_runbook_link_repo}"
+write_shared_docs "${missing_runbook_link_repo}"
+write_valid_bundle "${missing_runbook_link_repo}"
+printf '# AegisOps Runbook\n' > "${missing_runbook_link_repo}/docs/runbook.md"
+commit_fixture "${missing_runbook_link_repo}"
+assert_fails_with "${missing_runbook_link_repo}" "Missing runbook Phase 33 smoke bundle link:"
+
 missing_profile_link_repo="${workdir}/missing-profile-link"
 create_repo "${missing_profile_link_repo}"
 write_shared_docs "${missing_profile_link_repo}"
@@ -186,6 +224,14 @@ write_valid_bundle "${missing_profile_link_repo}"
 printf '# Single-Customer Deployment Profile\n' > "${missing_profile_link_repo}/docs/deployment/single-customer-profile.md"
 commit_fixture "${missing_profile_link_repo}"
 assert_fails_with "${missing_profile_link_repo}" "Missing single-customer profile Phase 33 smoke bundle link:"
+
+missing_proxy_route_repo="${workdir}/missing-proxy-route"
+create_repo "${missing_proxy_route_repo}"
+write_shared_docs "${missing_proxy_route_repo}"
+write_valid_bundle "${missing_proxy_route_repo}"
+perl -0pi -e 's/location = \/inspect-reconciliation-status \{\n\}\n//' "${missing_proxy_route_repo}/proxy/nginx/conf.d-first-boot/control-plane.conf"
+commit_fixture "${missing_proxy_route_repo}"
+assert_fails_with "${missing_proxy_route_repo}" "Missing first-boot proxy smoke route: location = /inspect-reconciliation-status"
 
 forbidden_low_risk_write_repo="${workdir}/forbidden-low-risk-write"
 create_repo "${forbidden_low_risk_write_repo}"

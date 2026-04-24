@@ -56,34 +56,48 @@ Confirm readiness through the reviewed reverse proxy:
 curl -fsS http://127.0.0.1:<proxy-port>/readyz
 ```
 
+For protected surfaces, substitute `<trusted-platform-admin-proxy-auth-headers>` or `<trusted-operator-read-only-proxy-auth-headers>` with the reviewed proxy session header arguments. Those arguments must come from the trusted proxy or equivalent reviewed operator session, not from sample, fake, or operator-invented values.
+
+The protected header set is:
+
+- `X-Forwarded-Proto: https`
+- `X-AegisOps-Proxy-Secret: <reviewed-proxy-secret>`
+- `X-AegisOps-Proxy-Service-Account: <reviewed-proxy-service-account>`
+- `X-AegisOps-Authenticated-IdP: <reviewed-identity-provider>`
+- `X-AegisOps-Authenticated-Subject: <reviewed-operator-subject>`
+- `X-AegisOps-Authenticated-Identity: <reviewed-operator-identity>`
+- `X-AegisOps-Authenticated-Role: <reviewed-operator-role>`
+
+Use a reviewed `platform_admin` role for `<trusted-platform-admin-proxy-auth-headers>` because `/runtime` is platform-admin protected. Use a reviewed `analyst`, `approver`, or `platform_admin` role for `<trusted-operator-read-only-proxy-auth-headers>` because the read-only inspection routes accept those operator roles.
+
 Confirm protected runtime inspection through the reviewed proxy and trusted operator boundary:
 
 ```sh
-curl -fsS http://127.0.0.1:<proxy-port>/runtime
+curl -fsS <trusted-platform-admin-proxy-auth-headers> http://127.0.0.1:<proxy-port>/runtime
 ```
 
 Confirm read-only alert visibility through the reviewed proxy:
 
 ```sh
-curl -fsS "http://127.0.0.1:<proxy-port>/inspect-records?family=alerts"
+curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-records?family=alerts"
 ```
 
 Confirm read-only case visibility through the reviewed proxy:
 
 ```sh
-curl -fsS "http://127.0.0.1:<proxy-port>/inspect-records?family=cases"
+curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-records?family=cases"
 ```
 
 Confirm action-review records are inspectable without creating a new request:
 
 ```sh
-curl -fsS "http://127.0.0.1:<proxy-port>/inspect-records?family=action_requests"
+curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-records?family=action_requests"
 ```
 
 Confirm reconciliation status remains readable from the protected mainline surface:
 
 ```sh
-curl -fsS http://127.0.0.1:<proxy-port>/inspect-reconciliation-status
+curl -fsS <trusted-operator-read-only-proxy-auth-headers> http://127.0.0.1:<proxy-port>/inspect-reconciliation-status
 ```
 
 If a command returns an authentication refusal, readiness refusal, route refusal, or contradictory runtime scope, preserve that exact result in the handoff record and stop instead of retrying through an unreviewed path.
