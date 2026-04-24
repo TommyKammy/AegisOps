@@ -37,6 +37,24 @@ required_phrases=(
   "It does not authorize environment-specific secrets in version control, optional-extension startup blockers, direct backend exposure, HA or multi-node operating patterns, or unsupported emergency shortcuts."
   "The reviewed procedure is limited to the current first-boot runtime floor:"
   'Startup, restore, and operator-load assumptions referenced by this runbook must stay aligned with `docs/smb-footprint-and-deployment-profile-baseline.md`.'
+  "### 1.1 Reviewed Lab and Single-Customer Operator Profile Map"
+  "Operators must use this profile map to decide which reviewed cadence, backup review, restore rehearsal, upgrade-window, and secret-custody expectations apply before a startup, maintenance, or recovery window begins."
+  "Shared expectations that stay the same across the reviewed lab and single-customer profiles are:"
+  "- both profiles remain business-hours oriented, operator-led, and limited to the reviewed control-plane, PostgreSQL, reverse-proxy, and Wazuh-facing path rather than HA, multi-node, or multi-customer expansion;"
+  "- both profiles require PostgreSQL-aware backup custody, configuration backup, restore validation for the approval, evidence, execution, and reconciliation record chain, and rollback to a prior known-good state; and"
+  "- both profiles require named ownership for approval and secret handling, with break-glass use kept documented, explicit, and subordinate to the reviewed fail-closed boundary."
+  "For the reviewed lab profile, operators should plan for:"
+  "- startup, queue, backup, and reverse-proxy health review at least three times per business week, with one operator capturing the readiness result;"
+  "- daily PostgreSQL-aware backup plus configuration backup after reviewed changes, with one named operator verifying the backup job outcome;"
+  "- at least one restore rehearsal per quarter against the reviewed lab path, including confirmation that approval, evidence, action-execution, and reconciliation records remain intact after recovery;"
+  "- upgrades that fit one business-hours maintenance window, with rollback returning to the prior known-good backup without extra platform staff or high-availability failover machinery; and"
+  "- one named approver owner, one reviewed secret rotation touch point, and a documented break-glass contact list as sufficient custody for the lab path."
+  "For the reviewed single-customer profile, operators should plan for:"
+  "- daily queue and health review on business days plus weekly platform hygiene review for certificates, storage growth, and backup drift;"
+  "- daily PostgreSQL-aware backup, weekly backup review, and reviewed configuration backup before platform changes that affect customer operations;"
+  "- monthly restore rehearsal against a reviewed single-customer recovery target, including validation that customer-scoped workflow truth and linked evidence return cleanly;"
+  "- one planned maintenance window per month, with rollback remaining operator-led and free of cluster failover tooling or multi-customer coordination assumptions; and"
+  "- named customer-scoped approver ownership, a reviewed secret rotation checklist, and explicit break-glass custody for customer credentials."
   "Until implementation-specific commands are approved, operators must treat first boot as limited to the AegisOps control-plane service, PostgreSQL, the approved reverse proxy boundary, and reviewed Wazuh-facing analytic-signal intake expectations."
   "Operators must not treat optional OpenSearch, n8n, the full analyst-assistant surface, or the high-risk executor path as first-boot prerequisites."
   "The reviewed startup path is business-hours oriented and must begin from a change-aware operator session with repository access, the approved runtime env file, and access to the reviewed secret source referenced by that env file."
@@ -119,14 +137,14 @@ if [[ ! -f "${doc_path}" ]]; then
 fi
 
 for heading in "${required_headings[@]}"; do
-  if ! grep -Fq "${heading}" "${doc_path}"; then
+  if ! grep -Fq -- "${heading}" "${doc_path}"; then
     echo "Missing runbook heading: ${heading}" >&2
     exit 1
   fi
 done
 
 for phrase in "${required_phrases[@]}"; do
-  if ! grep -Fq "${phrase}" "${doc_path}"; then
+  if ! grep -Fq -- "${phrase}" "${doc_path}"; then
     echo "Missing runbook statement: ${phrase}" >&2
     exit 1
   fi
@@ -153,7 +171,7 @@ if ! sed -n "$((rollback_trigger_line + 1))p" "${doc_path}" | grep -Eq '^[[:spac
 fi
 
 for phrase in "${forbidden_phrases[@]}"; do
-  if grep -Fq "${phrase}" "${doc_path}"; then
+  if grep -Fq -- "${phrase}" "${doc_path}"; then
     echo "Forbidden runbook statement still present: ${phrase}" >&2
     exit 1
   fi
