@@ -99,7 +99,7 @@ The rehearsal assumes one planned business-hours maintenance window for the name
 
 Rollback decision review happens before the maintenance window closes and must choose one of two recorded outcomes: keep the upgraded revision only if post-upgrade checks pass, or start same-day rollback to the selected restore point if readiness, runtime inspection, reverse-proxy boundary, or record-chain trust cannot be proven.
 
-Post-upgrade smoke checks are the reviewed runtime smoke bundle: reverse-proxy `/readyz`, reverse-proxy `/runtime`, repo-owned compose status, bounded upgrade-window logs, and operator-visible queue or alert review from the mainline surface.
+Post-upgrade smoke checks are the reviewed runtime smoke bundle in `docs/deployment/runtime-smoke-bundle.md`: reverse-proxy `/readyz`, reverse-proxy `/runtime`, repo-owned compose status, bounded upgrade-window logs, and operator-visible queue or alert review from the mainline surface.
 
 Restore compatibility for the rehearsal is inherited from the Phase 32 runbook baseline: approval, evidence, execution, and reconciliation records must return cleanly from the selected PostgreSQL-aware restore point before normal operation resumes.
 
