@@ -111,6 +111,10 @@ The platform may be treated as ready for the reviewed operational baseline only 
 
 If readiness fails, operators must stop at evidence capture and correction review. They must not admit normal traffic, widen ingress, or substitute optional-extension health for first-boot readiness.
 
+The Phase 33 runtime smoke bundle in `docs/deployment/runtime-smoke-bundle.md` is the reviewed post-deployment and post-upgrade handoff check for this runbook.
+
+Operators should run that bundle after startup, upgrade, rollback, or handoff windows when they need a bounded confidence check for startup status, readiness, protected read-only reachability, queue sanity, and first low-risk action preconditions without running exhaustive E2E validation.
+
 ## 3. Shutdown
 
 The reviewed shutdown path exists to return the platform to a clean, operator-confirmed safe state without leaving ambiguous runtime ownership or half-stopped ingress.
