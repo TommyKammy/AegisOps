@@ -89,6 +89,10 @@ Representative methods include:
 
 This cluster builds citation-grounded assistant context, advisory output, recommendation drafts, and advisory attachments from reviewed control-plane records.
 
+Current extraction status as of issue `#760`:
+
+- assistant context, advisory output, recommendation draft rendering, and advisory draft attachment now delegate from `AegisOpsControlPlaneService` into `AssistantContextAssembler`.
+
 Representative methods include:
 
 - `inspect_assistant_context`

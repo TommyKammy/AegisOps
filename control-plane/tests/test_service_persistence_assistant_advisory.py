@@ -24,6 +24,7 @@ from _service_persistence_support import (
     _approved_binding_hash,
     _load_wazuh_fixture,
     _phase20_notify_identity_owner_payload,
+    _TransactionMutationStore,
     datetime,
     make_store,
     mock,
@@ -52,6 +53,9 @@ class AssistantAdvisoryPersistenceTests(ServicePersistenceTestBase):
         service._assistant_context_assembler.render_recommendation_draft.return_value = (
             mock.sentinel.recommendation_draft_snapshot
         )
+        service._assistant_context_assembler.attach_assistant_advisory_draft.return_value = (
+            mock.sentinel.attached_advisory_draft_record
+        )
 
         self.assertIs(
             service.inspect_assistant_context("case", "case-delegated-001"),
@@ -65,6 +69,13 @@ class AssistantAdvisoryPersistenceTests(ServicePersistenceTestBase):
             service.render_recommendation_draft("case", "case-delegated-001"),
             mock.sentinel.recommendation_draft_snapshot,
         )
+        self.assertIs(
+            service.attach_assistant_advisory_draft(
+                "recommendation",
+                "recommendation-delegated-001",
+            ),
+            mock.sentinel.attached_advisory_draft_record,
+        )
         service._assistant_context_assembler.inspect_assistant_context.assert_called_once_with(
             "case",
             "case-delegated-001",
@@ -76,6 +87,13 @@ class AssistantAdvisoryPersistenceTests(ServicePersistenceTestBase):
         service._assistant_context_assembler.render_recommendation_draft.assert_called_once_with(
             "case",
             "case-delegated-001",
+        )
+        (
+            service._assistant_context_assembler.attach_assistant_advisory_draft
+            .assert_called_once_with(
+                "recommendation",
+                "recommendation-delegated-001",
+            )
         )
 
     def test_service_routes_reviewed_slice_checks_through_policy_module(self) -> None:
@@ -767,6 +785,83 @@ class AssistantAdvisoryPersistenceTests(ServicePersistenceTestBase):
             updated_attachment.assistant_advisory_draft["citations"],
         )
         self.assertEqual(
+            updated_attachment.assistant_advisory_draft["revision_history"][0],
+            initial_snapshot,
+        )
+
+    def test_service_merges_advisory_draft_revision_after_transactional_race(
+        self,
+    ) -> None:
+        inner_store, base_service, promoted_case, _, first_seen_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = base_service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-advisory-race-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id=None,
+                review_owner="reviewer-001",
+                intended_outcome="review the draft race handling",
+                lifecycle_state="under_review",
+                reviewed_context=promoted_case.reviewed_context,
+            )
+        )
+        initial_attachment = base_service.attach_assistant_advisory_draft(
+            "recommendation",
+            recommendation.recommendation_id,
+        )
+        initial_snapshot = dict(initial_attachment.assistant_advisory_draft)
+        raced_draft = {
+            **initial_snapshot,
+            "summary": "Concurrent advisory update persisted before draft merge.",
+        }
+        base_service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-advisory-race-001",
+                source_record_id="artifact-advisory-race-001",
+                alert_id=recommendation.alert_id,
+                case_id=recommendation.case_id,
+                source_system="reviewed-source",
+                collector_identity="control-plane-test",
+                acquired_at=first_seen_at,
+                derivation_relationship="original",
+                lifecycle_state="collected",
+            )
+        )
+        racing_store = _TransactionMutationStore(
+            inner=inner_store,
+            mutate_once=lambda transactional_store: transactional_store.save(
+                replace(
+                    transactional_store.get(
+                        RecommendationRecord,
+                        recommendation.recommendation_id,
+                    ),
+                    assistant_advisory_draft=raced_draft,
+                )
+            ),
+        )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=racing_store,
+        )
+
+        updated_attachment = service.attach_assistant_advisory_draft(
+            "recommendation",
+            recommendation.recommendation_id,
+        )
+
+        self.assertIn(
+            "evidence-advisory-race-001",
+            updated_attachment.assistant_advisory_draft["citations"],
+        )
+        self.assertEqual(
+            updated_attachment.assistant_advisory_draft["revision_history"][0],
+            raced_draft,
+        )
+        self.assertNotEqual(
             updated_attachment.assistant_advisory_draft["revision_history"][0],
             initial_snapshot,
         )
