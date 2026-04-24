@@ -19,12 +19,16 @@ required_headings=(
   "### 3.3 Shutdown Evidence Capture"
   "### 3.4 Safe-State Confirmation"
   "## 4. Restore"
-  "## 5. Approval Handling"
-  "## 6. Validation"
-  "### 6.1 Selected Slice and Preconditions"
-  "### 6.2 Analyst Validation Path"
-  "### 6.3 Required Evidence Review"
-  "### 6.4 Disable and Rollback Path"
+  "## 5. Secret Rotation and Break-Glass Custody"
+  "### 5.1 Reviewed Secret Sources and Actively Managed Bindings"
+  "### 5.2 Reviewed Secret Rotation Checklist"
+  "### 5.3 Bootstrap Token and Break-Glass Custody Checklist"
+  "## 6. Approval Handling"
+  "## 7. Validation"
+  "### 7.1 Selected Slice and Preconditions"
+  "### 7.2 Analyst Validation Path"
+  "### 7.3 Required Evidence Review"
+  "### 7.4 Disable and Rollback Path"
 )
 
 required_phrases=(
@@ -53,6 +57,14 @@ required_phrases=(
   "Rollback is the same-day operator path for returning from a reviewed change window to the prior known-good state when restore validation, readiness, or operator evidence shows the changed state is no longer trustworthy."
   "Operators must retain rollback evidence showing the trigger, the backup set or configuration revision used, the restoration point selected, the post-rollback readiness results, and the confirmation that the prior known-good approval, evidence, execution, and reconciliation chain was restored."
   'This contract stays aligned with `docs/smb-footprint-and-deployment-profile-baseline.md` by requiring operator-led same-day rollback readiness, PostgreSQL-aware backup custody, and reconciliation-preserving restore validation instead of HA overbuild or snapshot-only recovery claims.'
+  "This section defines the reviewed operator contract for rotating actively managed runtime secrets and handling bootstrap or break-glass material without widening the current fail-closed boundary."
+  'It supplements `docs/auth-baseline.md`, `docs/phase-27-day-2-hardening-validation.md`, and `control-plane/tests/test_runtime_secret_boundary.py` by turning the approved secret boundary into one explicit day-2 checklist.'
+  "The approved secret sources for the current reviewed path are:"
+  "The actively managed runtime bindings that operators must track as reviewed operational inputs are:"
+  "Use this checklist for scheduled rotation, emergency rotation, and any ownership-change or scope-change rotation event affecting the reviewed runtime:"
+  "If the reviewed backend secret source is unavailable, unreadable, stale, or resolves to an empty value, rotation must stop and remain failed closed."
+  "Bootstrap and break-glass material are recovery exceptions only."
+  "After any break-glass use, operators must rotate the exposed bootstrap or break-glass material before the environment returns to normal operation and must preserve evidence showing the exception was closed."
   "The approved baseline requires explicit approval for SOAR workflows that perform write or destructive actions by default."
   "Approval handling procedures must preserve human review, auditability, and the separation between detection and execution."
   "Validation steps must be documented and repeatable before this runbook can be treated as an operational procedure beyond the reviewed startup and shutdown path."

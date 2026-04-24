@@ -63,6 +63,52 @@ if block.strip() not in text:
 PY
 }
 
+inject_secret_rotation_contract() {
+  local target="$1"
+
+  python3 - <<'PY' "${target}/docs/runbook.md"
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+old_heading = "## 5. Approval Handling"
+new_block = """## 5. Secret Rotation and Break-Glass Custody
+
+This section defines the reviewed operator contract for rotating actively managed runtime secrets and handling bootstrap or break-glass material without widening the current fail-closed boundary.
+
+It supplements `docs/auth-baseline.md`, `docs/phase-27-day-2-hardening-validation.md`, and `control-plane/tests/test_runtime_secret_boundary.py` by turning the approved secret boundary into one explicit day-2 checklist.
+
+### 5.1 Reviewed Secret Sources and Actively Managed Bindings
+
+The approved secret sources for the current reviewed path are:
+
+The actively managed runtime bindings that operators must track as reviewed operational inputs are:
+
+### 5.2 Reviewed Secret Rotation Checklist
+
+Use this checklist for scheduled rotation, emergency rotation, and any ownership-change or scope-change rotation event affecting the reviewed runtime:
+
+If the reviewed backend secret source is unavailable, unreadable, stale, or resolves to an empty value, rotation must stop and remain failed closed.
+
+### 5.3 Bootstrap Token and Break-Glass Custody Checklist
+
+Bootstrap and break-glass material are recovery exceptions only.
+
+After any break-glass use, operators must rotate the exposed bootstrap or break-glass material before the environment returns to normal operation and must preserve evidence showing the exception was closed.
+
+## 6. Approval Handling"""
+if "## 5. Secret Rotation and Break-Glass Custody" not in text:
+    text = text.replace(old_heading, new_block)
+text = text.replace("## 6. Validation", "## 7. Validation")
+text = text.replace("### 6.1 Selected Slice and Preconditions", "### 7.1 Selected Slice and Preconditions")
+text = text.replace("### 6.2 Analyst Validation Path", "### 7.2 Analyst Validation Path")
+text = text.replace("### 6.3 Required Evidence Review", "### 7.3 Required Evidence Review")
+text = text.replace("### 6.4 Disable and Rollback Path", "### 7.4 Disable and Rollback Path")
+path.write_text(text)
+PY
+}
+
 assert_passes() {
   local target="$1"
 
@@ -231,6 +277,7 @@ Operators must review replay evidence from `ingest/replay/windows-security-and-e
 If validation fails, disable the selected slice by keeping the detector artifacts out of production activation and by withdrawing `aegisops_enrich_windows_selected_detector_outputs.json` and `aegisops_notify_windows_selected_detector_outputs.json` from the active workflow set until the issue is corrected and re-reviewed.
 
 The selected slice remains business-hours oriented and does not imply 24x7 monitoring, production write behavior, or uncontrolled activation.'
+inject_secret_rotation_contract "${valid_repo}"
 inject_validation_contract "${valid_repo}"
 assert_passes "${valid_repo}"
 
@@ -356,6 +403,7 @@ Operators must review replay evidence from `ingest/replay/windows-security-and-e
 If validation fails, disable the selected slice by keeping the detector artifacts out of production activation and by withdrawing `aegisops_enrich_windows_selected_detector_outputs.json` and `aegisops_notify_windows_selected_detector_outputs.json` from the active workflow set until the issue is corrected and re-reviewed.
 
 The selected slice remains business-hours oriented and does not imply 24x7 monitoring, production write behavior, or uncontrolled activation.'
+inject_secret_rotation_contract "${missing_shutdown_repo}"
 inject_validation_contract "${missing_shutdown_repo}"
 assert_fails_with "${missing_shutdown_repo}" 'Missing runbook statement: Stop the reviewed first-boot runtime surface with `docker compose --env-file <runtime-env-file> -f control-plane/deployment/first-boot/docker-compose.yml down`.'
 
@@ -483,6 +531,7 @@ Operators must review replay evidence from `ingest/replay/windows-security-and-e
 If validation fails, disable the selected slice by keeping the detector artifacts out of production activation and by withdrawing `aegisops_enrich_windows_selected_detector_outputs.json` and `aegisops_notify_windows_selected_detector_outputs.json` from the active workflow set until the issue is corrected and re-reviewed.
 
 The selected slice remains business-hours oriented and does not imply 24x7 monitoring, production write behavior, or uncontrolled activation.'
+inject_secret_rotation_contract "${deferred_startup_repo}"
 inject_validation_contract "${deferred_startup_repo}"
 assert_fails_with "${deferred_startup_repo}" "Forbidden runbook statement still present: Detailed startup steps are intentionally deferred until implementation artifacts and validation procedures exist."
 
@@ -611,6 +660,7 @@ Operators must review replay evidence from `ingest/replay/windows-security-and-e
 If validation fails, disable the selected slice by keeping the detector artifacts out of production activation and by withdrawing `aegisops_enrich_windows_selected_detector_outputs.json` and `aegisops_notify_windows_selected_detector_outputs.json` from the active workflow set until the issue is corrected and re-reviewed.
 
 The selected slice remains business-hours oriented and does not imply 24x7 monitoring, production write behavior, or uncontrolled activation.'
+inject_secret_rotation_contract "${missing_rollback_evidence_repo}"
 inject_validation_contract "${missing_rollback_evidence_repo}"
 assert_fails_with "${missing_rollback_evidence_repo}" "Missing runbook statement: Operators must retain rollback evidence showing the trigger, the backup set or configuration revision used, the restoration point selected, the post-rollback readiness results, and the confirmation that the prior known-good approval, evidence, execution, and reconciliation chain was restored."
 
@@ -735,6 +785,7 @@ Operators must review replay evidence from `ingest/replay/windows-security-and-e
 If validation fails, disable the selected slice by keeping the detector artifacts out of production activation and by withdrawing `aegisops_enrich_windows_selected_detector_outputs.json` and `aegisops_notify_windows_selected_detector_outputs.json` from the active workflow set until the issue is corrected and re-reviewed.
 
 The selected slice remains business-hours oriented and does not imply 24x7 monitoring, production write behavior, or uncontrolled activation.'
+inject_secret_rotation_contract "${missing_rollback_trigger_bullet_repo}"
 inject_validation_contract "${missing_rollback_trigger_bullet_repo}"
 assert_fails_with "${missing_rollback_trigger_bullet_repo}" "Rollback trigger block must include a bullet immediately after header: Rollback must begin when any of the following apply:"
 
