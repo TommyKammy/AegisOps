@@ -17,12 +17,16 @@ from .entrypoint_support import (
     normalize_optional_string,
     normalize_record_family,
     normalize_record_id,
-    peer_addr_is_loopback,
     read_json_request_body,
     require_json_datetime,
     require_json_string,
     require_json_string_sequence,
     require_loopback_operator_request,
+)
+from .http_protected_surface import (
+    authenticate_protected_read,
+    authenticate_protected_write,
+    protected_read_roles,
 )
 from .service import AegisOpsControlPlaneService
 
@@ -51,23 +55,9 @@ def build_handler_class(
             *,
             allowed_roles: tuple[str, ...],
         ) -> object:
-            return service.authenticate_protected_surface_request(
-                peer_addr=self.client_address[0] if self.client_address else None,
-                forwarded_proto=self.headers.get("X-Forwarded-Proto"),
-                reverse_proxy_secret_header=self.headers.get("X-AegisOps-Proxy-Secret"),
-                proxy_service_account_header=self.headers.get(
-                    "X-AegisOps-Proxy-Service-Account"
-                ),
-                authenticated_identity_provider_header=self.headers.get(
-                    "X-AegisOps-Authenticated-IdP"
-                ),
-                authenticated_subject_header=self.headers.get(
-                    "X-AegisOps-Authenticated-Subject"
-                ),
-                authenticated_identity_header=self.headers.get(
-                    "X-AegisOps-Authenticated-Identity"
-                ),
-                authenticated_role_header=self.headers.get("X-AegisOps-Authenticated-Role"),
+            return authenticate_protected_read(
+                service=service,
+                handler=self,
                 allowed_roles=allowed_roles,
             )
 
@@ -106,25 +96,20 @@ def build_handler_class(
                 )
                 return
 
-            if request_path == "/runtime":
+            if allowed_roles := protected_read_roles(request_path):
                 try:
                     self._require_authenticated_surface_access(
-                        allowed_roles=("platform_admin",),
+                        allowed_roles=allowed_roles,
                     )
                 except PermissionError as exc:
                     self._write_forbidden(str(exc))
                     return
+
+            if request_path == "/runtime":
                 self._write_json(HTTPStatus.OK, service.describe_runtime().to_dict())
                 return
 
             if request_path == "/diagnostics/readiness":
-                try:
-                    self._require_authenticated_surface_access(
-                        allowed_roles=("analyst", "approver", "platform_admin"),
-                    )
-                except PermissionError as exc:
-                    self._write_forbidden(str(exc))
-                    return
                 self._write_json(
                     HTTPStatus.OK,
                     service.inspect_readiness_diagnostics().to_dict(),
@@ -132,13 +117,6 @@ def build_handler_class(
                 return
 
             if request_path == "/admin/bootstrap-status":
-                try:
-                    self._require_authenticated_surface_access(
-                        allowed_roles=("platform_admin",),
-                    )
-                except PermissionError as exc:
-                    self._write_forbidden(str(exc))
-                    return
                 self._write_json(
                     HTTPStatus.OK,
                     {
@@ -156,25 +134,6 @@ def build_handler_class(
                     },
                 )
                 return
-
-            if request_path in {
-                "/inspect-records",
-                "/inspect-reconciliation-status",
-                "/inspect-analyst-queue",
-                "/inspect-alert-detail",
-                "/inspect-case-detail",
-                "/inspect-action-review",
-                "/inspect-assistant-context",
-                "/inspect-advisory-output",
-                "/render-recommendation-draft",
-            }:
-                try:
-                    self._require_authenticated_surface_access(
-                        allowed_roles=("analyst", "approver", "platform_admin"),
-                    )
-                except PermissionError as exc:
-                    self._write_forbidden(str(exc))
-                    return
 
             if request_path == "/inspect-records":
                 family = parse_qs(request_target.query).get("family", [""])[0]
@@ -398,47 +357,18 @@ def build_handler_class(
             request_target = urlsplit(self.path)
             request_path = request_target.path
 
-            operator_analyst_paths = {
-                "/operator/promote-alert-to-case",
-                "/operator/record-case-observation",
-                "/operator/record-case-lead",
-                "/operator/record-case-recommendation",
-                "/operator/record-case-handoff",
-                "/operator/record-case-disposition",
-                "/operator/record-action-review-manual-fallback",
-                "/operator/record-action-review-escalation-note",
-                "/operator/create-reviewed-action-request",
-            }
-            operator_approver_paths = {
-                "/operator/record-action-approval-decision",
-            }
-
-            if request_path in operator_analyst_paths | operator_approver_paths:
-                try:
-                    peer_addr = self.client_address[0] if self.client_address else None
-                    if peer_addr_is_loopback(peer_addr):
-                        require_loopback_operator_request_fn(self)
-                    allowed_roles = (
-                        ("analyst",)
-                        if request_path in operator_analyst_paths
-                        else ("approver",)
-                    )
-                    principal = self._require_authenticated_surface_access(
-                        allowed_roles=allowed_roles,
-                    )
-                except PermissionError as exc:
-                    self._write_forbidden(str(exc))
-                    return
-            elif request_path.startswith("/admin/"):
-                try:
-                    principal = self._require_authenticated_surface_access(
-                        allowed_roles=("platform_admin",),
-                    )
-                except PermissionError as exc:
-                    self._write_forbidden(str(exc))
-                    return
-            else:
-                principal = None
+            try:
+                principal = authenticate_protected_write(
+                    service=service,
+                    handler=self,
+                    request_path=request_path,
+                    require_loopback_operator_request_fn=(
+                        require_loopback_operator_request_fn
+                    ),
+                )
+            except PermissionError as exc:
+                self._write_forbidden(str(exc))
+                return
 
             if request_path == "/operator/promote-alert-to-case":
                 try:
