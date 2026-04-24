@@ -72,6 +72,8 @@ export function advisoryUncertaintyMessage(flag: string): string {
       return "Linked evidence citations required for this advisory output are missing.";
     case "conflicting_reviewed_context":
       return "Reviewed context conflicts remain unresolved and must stay visible before any operator action.";
+    case "provider_generation_failed":
+      return "The bounded assistant provider did not return a trusted summary, so the reviewed advisory remains unresolved.";
     case "ambiguous_identity_alias_only":
       return "Alias-style identity context is still unresolved; stable reviewed identifiers are still required.";
     case "reviewed_casework_identity_ambiguity":
@@ -99,6 +101,8 @@ export function advisoryUncertaintyLabel(flag: string): string {
       return "Missing evidence citation";
     case "conflicting_reviewed_context":
       return "Conflicting reviewed context";
+    case "provider_generation_failed":
+      return "Provider degraded";
     case "ambiguous_identity_alias_only":
       return "Alias-only identity ambiguity";
     case "reviewed_casework_identity_ambiguity":

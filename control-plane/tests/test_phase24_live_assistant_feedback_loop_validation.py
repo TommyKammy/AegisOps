@@ -222,6 +222,45 @@ class Phase24LiveAssistantFeedbackLoopValidationTests(ServicePersistenceTestBase
             recommendation.assistant_advisory_draft["unresolved_reasons"][0],
         )
 
+    def test_live_assistant_provider_failure_stays_visible_on_recommendation_advisory_inspection(
+        self,
+    ) -> None:
+        store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        service._assistant_provider_adapter = mock.Mock()
+        service._assistant_provider_adapter.generate.side_effect = RuntimeError(
+            "provider transport failed"
+        )
+
+        snapshot = service.run_live_assistant_workflow(
+            workflow_task="case_summary",
+            record_family="case",
+            record_id=promoted_case.case_id,
+        )
+
+        self.assertEqual(snapshot.status, "unresolved")
+        recommendations = store.list(RecommendationRecord)
+        self.assertEqual(len(recommendations), 1)
+
+        advisory_snapshot = service.inspect_assistant_context(
+            "recommendation",
+            recommendations[0].recommendation_id,
+        )
+
+        self.assertEqual(advisory_snapshot.advisory_output["status"], "unresolved")
+        self.assertIn(
+            "provider_generation_failed",
+            advisory_snapshot.advisory_output["uncertainty_flags"],
+        )
+        self.assertTrue(
+            any(
+                "bounded live assistant did not return a trusted summary"
+                in question["text"]
+                for question in advisory_snapshot.advisory_output["unresolved_questions"]
+            )
+        )
+
     def test_live_assistant_workflow_persists_already_unresolved_advisory_feedback_loop(
         self,
     ) -> None:

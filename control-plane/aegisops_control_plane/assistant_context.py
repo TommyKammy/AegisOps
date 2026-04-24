@@ -121,6 +121,32 @@ def _normalized_optional_string(value: object) -> str | None:
     return normalized or None
 
 
+def _normalized_string_tuple(value: object) -> tuple[str, ...]:
+    if not isinstance(value, (list, tuple)):
+        return ()
+    normalized: list[str] = []
+    for item in value:
+        normalized_item = _normalized_optional_string(item)
+        if normalized_item is not None and normalized_item not in normalized:
+            normalized.append(normalized_item)
+    return tuple(normalized)
+
+
+def _assistant_draft_failure_flags(unresolved_reasons: tuple[str, ...]) -> tuple[str, ...]:
+    flags: list[str] = []
+    for reason in unresolved_reasons:
+        lowered = reason.lower()
+        if "bounded live assistant did not return a trusted summary" in lowered:
+            flags.append("provider_generation_failed")
+        elif "provider" in lowered and "trusted summary" in lowered:
+            flags.append("provider_generation_failed")
+        elif "citation" in lowered:
+            flags.append("missing_supporting_citations")
+        elif "conflict" in lowered:
+            flags.append("conflicting_reviewed_context")
+    return _dedupe_strings(tuple(flags))
+
+
 def _linked_casework_identity_ambiguity_records(
     linked_evidence_records: tuple[dict[str, object], ...],
 ) -> tuple[dict[str, str], ...]:
@@ -311,6 +337,39 @@ def _build_assistant_advisory_output(
     unsafe_intended_outcome_flags = _advisory_text_claims_authority_or_scope_expansion(
         intended_outcome
     )
+    assistant_advisory_draft = record.get("assistant_advisory_draft")
+    if isinstance(assistant_advisory_draft, Mapping):
+        draft_status = _normalized_optional_string(assistant_advisory_draft.get("status"))
+        draft_unresolved_reasons = _normalized_string_tuple(
+            assistant_advisory_draft.get("unresolved_reasons")
+        )
+        if draft_status == "unresolved" and draft_unresolved_reasons:
+            fail_closed = True
+            draft_failure_flags = _assistant_draft_failure_flags(draft_unresolved_reasons)
+            uncertainty_flags.extend(draft_failure_flags or ("assistant_advisory_unresolved",))
+            draft_cited_summary = assistant_advisory_draft.get("cited_summary")
+            if isinstance(draft_cited_summary, Mapping):
+                unresolved_summary_override = _normalized_optional_string(
+                    draft_cited_summary.get("text")
+                )
+            unresolved_questions.append(
+                {
+                    "text": (
+                        "Which reviewed provider result, retry evidence, or citation repair "
+                        "resolves this advisory failure: "
+                        + "; ".join(draft_unresolved_reasons)
+                        + "?"
+                    ),
+                    "citations": _dedupe_strings(
+                        (
+                            record_id,
+                            _normalized_optional_string(
+                                assistant_advisory_draft.get("source_ai_trace_id")
+                            ),
+                        )
+                    ),
+                }
+            )
 
     if not supporting_citations:
         fail_closed = True
