@@ -170,6 +170,33 @@ class ExecutionCoordinator:
             action_request_id=action_request_id,
         )
 
+    def create_reviewed_tracking_ticket_request_from_advisory(
+        self,
+        *,
+        record_family: str,
+        record_id: str,
+        requester_identity: str,
+        coordination_reference_id: str,
+        coordination_target_type: str,
+        ticket_title: str,
+        ticket_description: str,
+        expires_at: datetime,
+        ticket_severity: str = "medium",
+        action_request_id: str | None = None,
+    ) -> ActionRequestRecord:
+        return self._action_requests.create_reviewed_tracking_ticket_request_from_advisory(
+            record_family=record_family,
+            record_id=record_id,
+            requester_identity=requester_identity,
+            coordination_reference_id=coordination_reference_id,
+            coordination_target_type=coordination_target_type,
+            ticket_title=ticket_title,
+            ticket_description=ticket_description,
+            expires_at=expires_at,
+            ticket_severity=ticket_severity,
+            action_request_id=action_request_id,
+        )
+
     def delegate_approved_action_to_shuffle(
         self,
         *,

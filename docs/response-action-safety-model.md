@@ -78,6 +78,8 @@ At minimum, the action-request lifecycle must distinguish `draft`, `pending_appr
 
 The future reviewed create-ticket path remains a `Soft Write` coordination action, not a transfer of case, approval, execution, or reconciliation authority into the external ticket system.
 
+The reviewed `create_tracking_ticket` path is the second low-risk candidate after `notify_identity_owner`.
+
 ## 5. Execution Safeguards
 
 Every execution attempt must carry an idempotency key that is unique for the approved action request and execution intent.

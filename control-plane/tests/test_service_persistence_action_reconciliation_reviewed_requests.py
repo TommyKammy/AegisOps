@@ -278,6 +278,255 @@ class ReviewedActionRequestPersistenceTests(ServicePersistenceTestBase):
             reconciliation.subject_linkage["evidence_ids"],
             (evidence_id,),
         )
+
+    def test_service_executes_second_low_risk_tracking_ticket_action_from_reviewed_recommendation(
+        self,
+    ) -> None:
+        store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Observed repository permission change requires tracked review.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            triage_owner="analyst-001",
+            triage_rationale="Privilege-impacting change needs a bounded tracking ticket.",
+            observation_id=observation.observation_id,
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Open one reviewed tracking ticket for daily operator follow-up.",
+            lead_id=lead.lead_id,
+        )
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=4)
+
+        action_request = service.create_reviewed_tracking_ticket_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            coordination_reference_id="coord-ref-reviewed-ticket-001",
+            coordination_target_type="zammad",
+            ticket_title="Review repository owner change",
+            ticket_description=(
+                "Open one reviewed tracking ticket for the repository owner change."
+            ),
+            expires_at=expires_at,
+            action_request_id="action-request-reviewed-ticket-001",
+        )
+
+        self.assertIsNone(action_request.approval_decision_id)
+        self.assertEqual(action_request.case_id, promoted_case.case_id)
+        self.assertEqual(action_request.alert_id, promoted_case.alert_id)
+        self.assertEqual(action_request.finding_id, promoted_case.finding_id)
+        self.assertEqual(action_request.lifecycle_state, "pending_approval")
+        self.assertEqual(action_request.requester_identity, "analyst-001")
+        self.assertEqual(
+            action_request.target_scope,
+            {
+                "record_family": "recommendation",
+                "record_id": recommendation.recommendation_id,
+                "case_id": promoted_case.case_id,
+                "alert_id": promoted_case.alert_id,
+                "finding_id": promoted_case.finding_id,
+                "coordination_reference_id": "coord-ref-reviewed-ticket-001",
+                "coordination_target_type": "zammad",
+            },
+        )
+        self.assertEqual(
+            action_request.requested_payload,
+            {
+                "action_type": "create_tracking_ticket",
+                "case_id": promoted_case.case_id,
+                "alert_id": promoted_case.alert_id,
+                "finding_id": promoted_case.finding_id,
+                "coordination_reference_id": "coord-ref-reviewed-ticket-001",
+                "coordination_target_type": "zammad",
+                "ticket_title": "Review repository owner change",
+                "ticket_description": (
+                    "Open one reviewed tracking ticket for the repository owner change."
+                ),
+                "ticket_severity": "medium",
+                "source_record_family": "recommendation",
+                "source_record_id": recommendation.recommendation_id,
+                "recommendation_id": recommendation.recommendation_id,
+                "linked_evidence_ids": (evidence_id,),
+            },
+        )
+        self.assertEqual(
+            action_request.payload_hash,
+            _approved_binding_hash(
+                target_scope=dict(action_request.target_scope),
+                approved_payload=dict(action_request.requested_payload),
+                execution_surface_type="automation_substrate",
+                execution_surface_id="shuffle",
+            ),
+        )
+        self.assertEqual(action_request.expires_at, expires_at)
+        self.assertEqual(
+            action_request.policy_evaluation,
+            {
+                "approval_requirement": "human_required",
+                "approval_requirement_override": "human_required",
+                "routing_target": "approval",
+                "execution_surface_type": "automation_substrate",
+                "execution_surface_id": "shuffle",
+            },
+        )
+        self.assertEqual(
+            service.get_record(ActionRequestRecord, action_request.action_request_id),
+            action_request,
+        )
+        self.assertEqual(store.list(ActionExecutionRecord), ())
+        approval_decision = service.record_action_approval_decision(
+            action_request_id=action_request.action_request_id,
+            approver_identity="approver-001",
+            authenticated_approver_identity="approver-001",
+            decision="grant",
+            decision_rationale="Reviewed low-risk tracking ticket remains bounded to one case.",
+            decided_at=action_request.requested_at + timedelta(minutes=5),
+            approval_decision_id="approval-reviewed-ticket-001",
+        )
+        approved_request = service.get_record(
+            ActionRequestRecord,
+            action_request.action_request_id,
+        )
+        self.assertIsNotNone(approved_request)
+        assert approved_request is not None
+        self.assertEqual(approval_decision.lifecycle_state, "approved")
+        self.assertEqual(approved_request.lifecycle_state, "approved")
+        self.assertEqual(
+            approved_request.approval_decision_id,
+            approval_decision.approval_decision_id,
+        )
+
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id=approved_request.action_request_id,
+            approved_payload=dict(approved_request.requested_payload),
+            delegated_at=action_request.requested_at + timedelta(minutes=10),
+            delegation_issuer="control-plane-service",
+            evidence_ids=(evidence_id,),
+        )
+        downstream_binding = execution.provenance["downstream_binding"]
+        reconciliation = service.reconcile_action_execution(
+            action_request_id=approved_request.action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(
+                {
+                    "execution_run_id": execution.execution_run_id,
+                    "execution_surface_id": "shuffle",
+                    "idempotency_key": approved_request.idempotency_key,
+                    "approval_decision_id": execution.approval_decision_id,
+                    "delegation_id": execution.delegation_id,
+                    "payload_hash": execution.payload_hash,
+                    "coordination_reference_id": downstream_binding[
+                        "coordination_reference_id"
+                    ],
+                    "coordination_target_type": downstream_binding[
+                        "coordination_target_type"
+                    ],
+                    "external_receipt_id": downstream_binding["external_receipt_id"],
+                    "coordination_target_id": downstream_binding[
+                        "coordination_target_id"
+                    ],
+                    "ticket_reference_url": downstream_binding["ticket_reference_url"],
+                    "observed_at": action_request.requested_at + timedelta(minutes=15),
+                    "status": "success",
+                },
+            ),
+            compared_at=action_request.requested_at + timedelta(minutes=16),
+            stale_after=action_request.requested_at + timedelta(hours=1),
+        )
+
+        stored_execution = service.get_record(
+            ActionExecutionRecord,
+            execution.action_execution_id,
+        )
+        self.assertIsNotNone(stored_execution)
+        assert stored_execution is not None
+        self.assertEqual(stored_execution.lifecycle_state, "succeeded")
+        self.assertEqual(
+            execution.approval_decision_id,
+            approval_decision.approval_decision_id,
+        )
+        self.assertEqual(execution.action_request_id, action_request.action_request_id)
+        self.assertEqual(reconciliation.lifecycle_state, "matched")
+        self.assertEqual(reconciliation.ingest_disposition, "matched")
+        self.assertEqual(
+            reconciliation.subject_linkage["action_request_ids"],
+            (action_request.action_request_id,),
+        )
+        self.assertEqual(
+            reconciliation.subject_linkage["approval_decision_ids"],
+            (approval_decision.approval_decision_id,),
+        )
+        self.assertEqual(
+            reconciliation.subject_linkage["action_execution_ids"],
+            (execution.action_execution_id,),
+        )
+        self.assertEqual(
+            reconciliation.subject_linkage["coordination_reference_ids"],
+            ("coord-ref-reviewed-ticket-001",),
+        )
+        self.assertEqual(
+            reconciliation.subject_linkage["coordination_target_types"],
+            ("zammad",),
+        )
+
+    def test_service_rejects_out_of_scope_reviewed_tracking_ticket_severity(
+        self,
+    ) -> None:
+        store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Observed repository permission change requires tracked review.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            triage_owner="analyst-001",
+            triage_rationale="Privilege-impacting change needs a bounded tracking ticket.",
+            observation_id=observation.observation_id,
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Open one reviewed tracking ticket for daily operator follow-up.",
+            lead_id=lead.lead_id,
+        )
+        baseline_requests = store.list(ActionRequestRecord)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "ticket_severity is outside the reviewed tracking-ticket scope",
+        ):
+            service.create_reviewed_tracking_ticket_request_from_advisory(
+                record_family="recommendation",
+                record_id=recommendation.recommendation_id,
+                requester_identity="analyst-001",
+                coordination_reference_id="coord-ref-reviewed-ticket-002",
+                coordination_target_type="zammad",
+                ticket_title="Review repository owner change",
+                ticket_description=(
+                    "Open one reviewed tracking ticket for the repository owner change."
+                ),
+                ticket_severity="high",
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+                action_request_id="action-request-reviewed-ticket-002",
+            )
+
+        self.assertEqual(store.list(ActionRequestRecord), baseline_requests)
+
     def test_service_phase20_first_live_action_fail_closes_on_downstream_execution_surface_mismatch(
         self,
     ) -> None:
