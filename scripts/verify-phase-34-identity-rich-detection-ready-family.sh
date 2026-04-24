@@ -8,6 +8,7 @@ repo_root="${1:-${default_repo_root}}"
 
 entra_onboarding_doc="${repo_root}/docs/source-families/entra-id/onboarding-package.md"
 entra_runbook_doc="${repo_root}/docs/source-families/entra-id/analyst-triage-runbook.md"
+github_onboarding_doc="${repo_root}/docs/source-families/github-audit/onboarding-package.md"
 microsoft_onboarding_doc="${repo_root}/docs/source-families/microsoft-365-audit/onboarding-package.md"
 profile_tests="${repo_root}/control-plane/tests/test_phase14_identity_rich_source_profile_docs.py"
 
@@ -90,9 +91,11 @@ PY
 
 require_file "${entra_onboarding_doc}" "Missing Entra ID onboarding package"
 require_file "${entra_runbook_doc}" "Missing Entra ID triage runbook"
+require_file "${github_onboarding_doc}" "Missing GitHub audit onboarding package"
 require_file "${microsoft_onboarding_doc}" "Missing Microsoft 365 audit onboarding package"
 require_file "${profile_tests}" "Missing identity-rich source profile docs tests"
 
+require_fixed_string "${github_onboarding_doc}" 'Readiness state: `detection-ready`'
 require_fixed_string "${entra_onboarding_doc}" 'Readiness state: `detection-ready`'
 require_fixed_string "${microsoft_onboarding_doc}" 'Readiness state: `schema-reviewed`'
 
