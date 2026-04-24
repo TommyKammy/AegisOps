@@ -109,6 +109,42 @@ path.write_text(text)
 PY
 }
 
+inject_upgrade_contract() {
+  local target="$1"
+
+  python3 - <<'PY' "${target}/docs/runbook.md"
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+marker = "Restore validation before normal operations resume must confirm that:"
+block = """The reviewed upgrade path is the one approved platform-change sequence for the current first-boot and single-customer operating posture.
+
+Before a reviewed upgrade begins, operators must confirm all of the following:
+
+Operators must not treat optional OpenSearch, n8n, Shuffle, assistant, or executor surfaces as upgrade prerequisites, upgrade success gates, or reasons to widen the current approved runtime floor.
+
+The reviewed upgrade sequence is:
+
+1. Capture the pre-upgrade readiness, runtime, compose status, and bounded logs through the approved reverse-proxy-first boundary before changing the running stack.
+2. Apply the reviewed repository revision or release through the repo-owned first-boot compose path without widening ingress, publishing the backend port directly, or introducing HA or multi-node choreography.
+3. Re-run the documented startup path from Section 2 and confirm migration bootstrap, PostgreSQL reachability, and reverse-proxy admission complete under the reviewed first-boot contract.
+4. Compare the post-upgrade `/runtime` output, readiness evidence, and operator-visible queue state against the pre-change evidence before ending maintenance.
+
+Rollback must begin the same day if the upgraded environment cannot satisfy the reviewed readiness path, preserve the approved reverse-proxy-first boundary, or keep the operator-visible record chain trustworthy before the maintenance window expires.
+
+The minimum evidence set for a reviewed upgrade window is:
+
+This reviewed upgrade path stays aligned with `docs/smb-footprint-and-deployment-profile-baseline.md` by keeping upgrades inside one business-hours maintenance window, preserving same-day rollback readiness, and avoiding HA or fleet-orchestration claims.
+
+"""
+if block.strip() not in text:
+    text = text.replace(marker, block + marker)
+    path.write_text(text)
+PY
+}
+
 assert_passes() {
   local target="$1"
 
@@ -278,6 +314,7 @@ If validation fails, disable the selected slice by keeping the detector artifact
 
 The selected slice remains business-hours oriented and does not imply 24x7 monitoring, production write behavior, or uncontrolled activation.'
 inject_secret_rotation_contract "${valid_repo}"
+inject_upgrade_contract "${valid_repo}"
 inject_validation_contract "${valid_repo}"
 assert_passes "${valid_repo}"
 
@@ -404,6 +441,7 @@ If validation fails, disable the selected slice by keeping the detector artifact
 
 The selected slice remains business-hours oriented and does not imply 24x7 monitoring, production write behavior, or uncontrolled activation.'
 inject_secret_rotation_contract "${missing_shutdown_repo}"
+inject_upgrade_contract "${missing_shutdown_repo}"
 inject_validation_contract "${missing_shutdown_repo}"
 assert_fails_with "${missing_shutdown_repo}" 'Missing runbook statement: Stop the reviewed first-boot runtime surface with `docker compose --env-file <runtime-env-file> -f control-plane/deployment/first-boot/docker-compose.yml down`.'
 
@@ -532,6 +570,7 @@ If validation fails, disable the selected slice by keeping the detector artifact
 
 The selected slice remains business-hours oriented and does not imply 24x7 monitoring, production write behavior, or uncontrolled activation.'
 inject_secret_rotation_contract "${deferred_startup_repo}"
+inject_upgrade_contract "${deferred_startup_repo}"
 inject_validation_contract "${deferred_startup_repo}"
 assert_fails_with "${deferred_startup_repo}" "Forbidden runbook statement still present: Detailed startup steps are intentionally deferred until implementation artifacts and validation procedures exist."
 
@@ -661,6 +700,7 @@ If validation fails, disable the selected slice by keeping the detector artifact
 
 The selected slice remains business-hours oriented and does not imply 24x7 monitoring, production write behavior, or uncontrolled activation.'
 inject_secret_rotation_contract "${missing_rollback_evidence_repo}"
+inject_upgrade_contract "${missing_rollback_evidence_repo}"
 inject_validation_contract "${missing_rollback_evidence_repo}"
 assert_fails_with "${missing_rollback_evidence_repo}" "Missing runbook statement: Operators must retain rollback evidence showing the trigger, the backup set or configuration revision used, the restoration point selected, the post-rollback readiness results, and the confirmation that the prior known-good approval, evidence, execution, and reconciliation chain was restored."
 
@@ -786,6 +826,7 @@ If validation fails, disable the selected slice by keeping the detector artifact
 
 The selected slice remains business-hours oriented and does not imply 24x7 monitoring, production write behavior, or uncontrolled activation.'
 inject_secret_rotation_contract "${missing_rollback_trigger_bullet_repo}"
+inject_upgrade_contract "${missing_rollback_trigger_bullet_repo}"
 inject_validation_contract "${missing_rollback_trigger_bullet_repo}"
 assert_fails_with "${missing_rollback_trigger_bullet_repo}" "Rollback trigger block must include a bullet immediately after header: Rollback must begin when any of the following apply:"
 

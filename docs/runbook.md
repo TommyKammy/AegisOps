@@ -148,6 +148,46 @@ Backup artifacts must remain separately custodied from the active runtime mounts
 
 Restore must stop and remain failed closed if backup provenance, custody, completeness, or reviewed scope cannot be demonstrated from the evidence set.
 
+The reviewed upgrade path is the one approved platform-change sequence for the current first-boot and single-customer operating posture.
+
+Before a reviewed upgrade begins, operators must confirm all of the following:
+
+- an approved maintenance window, a named operator, and the reviewed repository revision or release identifier selected for the change window;
+- the latest PostgreSQL-aware backup completed successfully before the upgrade begins and the restore point for same-day rollback is recorded;
+- the reviewed runtime env file still matches the approved Phase 17 runtime contract, keeps `AEGISOPS_CONTROL_PLANE_BOOT_MODE=first-boot`, and continues to source live secrets from the reviewed boundary rather than from Git or copied notes;
+- the approved reverse-proxy-first ingress posture remains in force, with no plan to publish the control-plane backend port directly during or after the change; and
+- the operator evidence record for the maintenance window has a place for pre-change and post-change readiness, runtime, compose status, bounded logs, and rollback decision notes.
+
+Operators must not treat optional OpenSearch, n8n, Shuffle, assistant, or executor surfaces as upgrade prerequisites, upgrade success gates, or reasons to widen the current approved runtime floor.
+
+The reviewed upgrade sequence is:
+
+1. Capture the pre-upgrade readiness, runtime, compose status, and bounded logs through the approved reverse-proxy-first boundary before changing the running stack.
+2. Confirm the pre-change backup custody evidence, the restore point selected for same-day rollback, and the exact repository revision or release identifier that is about to be introduced.
+3. Apply the reviewed repository revision or release through the repo-owned first-boot compose path without widening ingress, publishing the backend port directly, or introducing HA or multi-node choreography.
+4. Re-run the documented startup path from Section 2 and confirm migration bootstrap, PostgreSQL reachability, and reverse-proxy admission complete under the reviewed first-boot contract.
+5. Compare the post-upgrade `/runtime` output, readiness evidence, and operator-visible queue state against the pre-change evidence before ending maintenance.
+6. Keep the environment in maintenance and move immediately to rollback if the upgraded state cannot satisfy the reviewed post-upgrade checks inside the approved window without widening scope.
+
+Post-upgrade checks before maintenance closes must confirm all of the following:
+
+- `curl -fsS http://127.0.0.1:<proxy-port>/readyz` succeeds through the approved reverse proxy;
+- `curl -fsS http://127.0.0.1:<proxy-port>/runtime` still reports the reviewed first-boot surface rather than an optional-extension or broadened deployment claim;
+- `docker compose --env-file <runtime-env-file> -f control-plane/deployment/first-boot/docker-compose.yml ps` shows the reviewed stack in the expected admitted state;
+- bounded upgrade-window logs do not show unresolved migration, PostgreSQL reachability, or reverse-proxy admission failures; and
+- the operator-visible queue and alert review path remains inspectable without contradictory readiness or scope signals.
+
+Rollback must begin the same day if the upgraded environment cannot satisfy the reviewed readiness path, preserve the approved reverse-proxy-first boundary, or keep the operator-visible record chain trustworthy before the maintenance window expires.
+
+The minimum evidence set for a reviewed upgrade window is:
+
+- the approved maintenance window, named operator, and reason for change;
+- the pre-change backup custody confirmation and restore point selected for rollback readiness;
+- the repository revision or release identifier before and after the change;
+- the pre-change and post-change results for `curl -fsS http://127.0.0.1:<proxy-port>/readyz`, `curl -fsS http://127.0.0.1:<proxy-port>/runtime`, and `docker compose --env-file <runtime-env-file> -f control-plane/deployment/first-boot/docker-compose.yml ps`;
+- the bounded compose-log capture for the upgrade window; and
+- the rollback decision, including whether rollback was not needed or which restore point was used.
+
 The reviewed restore sequence is:
 
 1. Capture the pre-restore state, including the last available readiness result, compose status, bounded logs, and the exact maintenance or failure reason that triggered recovery.
@@ -179,6 +219,8 @@ Operators must retain rollback evidence showing the trigger, the backup set or c
 VM snapshots may support infrastructure recovery tasks, but they do not replace the reviewed PostgreSQL-aware backup, restore validation, or record-chain checks required by this contract.
 
 This contract stays aligned with `docs/smb-footprint-and-deployment-profile-baseline.md` by requiring operator-led same-day rollback readiness, PostgreSQL-aware backup custody, and reconciliation-preserving restore validation instead of HA overbuild or snapshot-only recovery claims.
+
+This reviewed upgrade path stays aligned with `docs/smb-footprint-and-deployment-profile-baseline.md` by keeping upgrades inside one business-hours maintenance window, preserving same-day rollback readiness, and avoiding HA or fleet-orchestration claims.
 
 ## 5. Secret Rotation and Break-Glass Custody
 
