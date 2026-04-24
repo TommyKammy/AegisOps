@@ -89,7 +89,23 @@ If an optional surface is displayed, it must remain subordinate to the authorita
 
 Operators must not repair optional-extension absence by adding endpoint, network, assistant, ML, or automation prerequisites to this deployment package.
 
-## 7. Day-2 Operating Shape
+## 7. Upgrade and Same-Day Rollback Rehearsal Contract
+
+The Phase 33 upgrade rehearsal is the single-customer maintenance-window exercise that proves a reviewed repository revision can be introduced and, if needed, returned to the prior known-good state the same day.
+
+Before the rehearsal begins, operators must confirm the daily PostgreSQL-aware backup is current, the pre-change configuration backup has been captured, the restore point for rollback is named, and the backup custody record identifies the operator or break-glass owner for the window.
+
+The rehearsal assumes one planned business-hours maintenance window for the named customer environment, not zero-downtime rollout, HA failover, multi-region recovery, or infrastructure-vendor-specific upgrade tooling.
+
+Rollback decision review happens before the maintenance window closes and must choose one of two recorded outcomes: keep the upgraded revision only if post-upgrade checks pass, or start same-day rollback to the selected restore point if readiness, runtime inspection, reverse-proxy boundary, or record-chain trust cannot be proven.
+
+Post-upgrade smoke checks are the reviewed runtime smoke bundle: reverse-proxy `/readyz`, reverse-proxy `/runtime`, repo-owned compose status, bounded upgrade-window logs, and operator-visible queue or alert review from the mainline surface.
+
+Restore compatibility for the rehearsal is inherited from the Phase 32 runbook baseline: approval, evidence, execution, and reconciliation records must return cleanly from the selected PostgreSQL-aware restore point before normal operation resumes.
+
+The rehearsal evidence must retain the maintenance-window approval, named operator, pre-change backup custody confirmation, selected restore point, before-and-after repository revisions, pre-change and post-change smoke results, rollback decision, and any post-rollback restore validation.
+
+## 8. Day-2 Operating Shape
 
 Day-2 operation follows the cadence in `docs/runbook.md` and `docs/smb-footprint-and-deployment-profile-baseline.md` for the reviewed single-customer profile.
 
@@ -99,7 +115,7 @@ Backup, restore, export, readiness, and detail rollup evidence must represent on
 
 Rejected startup, rotation, restore, upgrade, or intake attempts must leave no new authoritative customer-scoped record, partial durable write, orphan evidence item, or half-restored state that later operators could mistake for truth.
 
-## 8. Out of Scope
+## 9. Out of Scope
 
 HA topology, multi-customer packaging, optional-service auto-installation, vendor-specific deployment automation, direct browser authority, direct substrate authority, and endpoint, network, assistant, or ML shadow paths as deployment prerequisites are out of scope.
 
