@@ -66,7 +66,7 @@ if ! grep -Fq \"Validation steps must be documented and repeatable before this r
   exit 1
 fi
 
-echo \"Runbook document is present and limited to an approved skeleton.\""
+echo \"Runbook document is present and captures a reviewed operator contract.\""
 }
 
 write_valid_docs() {
@@ -76,7 +76,7 @@ write_valid_docs() {
 
 This overview reflects the current approved baseline and must not be used to infer unapproved architecture changes."
 
-  write_file "${target}" "docs/runbook.md" "# AegisOps Runbook Skeleton
+  write_file "${target}" "docs/runbook.md" "# AegisOps Runbook
 
 Validation steps must be documented and repeatable before this runbook can be treated as an operational procedure."
 }
@@ -86,14 +86,18 @@ write_valid_report() {
 
   write_file "${target}" "docs/architecture-runbook-validation.md" "# Architecture and Runbook Validation
 
-- Validation date: 2026-04-02
+- Validation date: 2026-04-24
 - Baseline references: \`docs/architecture.md\`, \`docs/runbook.md\`, \`docs/requirements-baseline.md\`
 - Verification commands: \`bash scripts/verify-architecture-doc.sh\`, \`bash scripts/verify-runbook-doc.sh\`
 - Validation status: PASS
 
 ## Result
 
-The approved architecture overview and runbook skeleton remain aligned with the repository after the compose skeleton introduction.
+The approved architecture overview and concrete runbook contract remain aligned with the repository after the Phase 32 runbook refresh.
+
+The current repository artifacts preserve the documented role boundaries, the reverse-proxy-only access model, and the reviewed repo-owned operator contract for startup, shutdown, restore, rollback, secret rotation, and business-hours health review.
+
+The refreshed runbook narrative does not widen the approved architecture boundary, infer direct backend exposure, or silently authorize runtime scope beyond the current reviewed first-boot posture.
 
 ## Deviations
 
@@ -148,7 +152,7 @@ write_runbook_verifier "${missing_phrase_repo}"
 write_valid_docs "${missing_phrase_repo}"
 write_file "${missing_phrase_repo}" "docs/architecture-runbook-validation.md" "# Architecture and Runbook Validation
 
-- Validation date: 2026-04-02
+- Validation date: 2026-04-24
 - Baseline references: \`docs/architecture.md\`, \`docs/runbook.md\`, \`docs/requirements-baseline.md\`
 - Verification commands: \`bash scripts/verify-architecture-doc.sh\`, \`bash scripts/verify-runbook-doc.sh\`
 - Validation status: PASS
@@ -156,6 +160,6 @@ write_file "${missing_phrase_repo}" "docs/architecture-runbook-validation.md" "#
 ## Result
 
 Incomplete record."
-assert_fails_with "${missing_phrase_repo}" "The approved architecture overview and runbook skeleton remain aligned with the repository after the compose skeleton introduction."
+assert_fails_with "${missing_phrase_repo}" "The approved architecture overview and concrete runbook contract remain aligned with the repository after the Phase 32 runbook refresh."
 
 echo "verify-architecture-runbook-validation tests passed"
