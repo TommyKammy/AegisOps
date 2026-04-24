@@ -283,6 +283,51 @@ export function registerOperatorRoutesAssistantTests() {
       ).toBeInTheDocument();
     });
 
+    it("renders provider-degraded advisory visibility for unresolved assistant output", async () => {
+      const dependencies = createDefaultDependencies({
+        fetchFn: createAuthorizedFetch({
+          "/inspect-advisory-output": {
+            read_only: true,
+            record_family: "recommendation",
+            record_id: "recommendation-789",
+            output_kind: "recommendation_draft",
+            status: "unresolved",
+            cited_summary: {
+              text: "Reviewed recommendation recommendation-789 remains bounded to the last trusted summary.",
+              citations: ["recommendation-789", "case-456"],
+            },
+            unresolved_questions: [
+              {
+                text: "Which reviewed provider result, retry evidence, or citation repair resolves this advisory failure?",
+                citations: ["recommendation-789", "ai-trace-789"],
+              },
+            ],
+            uncertainty_flags: ["advisory_only", "provider_generation_failed"],
+            citations: ["recommendation-789", "case-456", "ai-trace-789"],
+          },
+        }),
+      });
+
+      render(
+        <MemoryRouter initialEntries={["/operator/assistant/recommendation/recommendation-789"]}>
+          <OperatorRoutes dependencies={dependencies} />
+        </MemoryRouter>,
+      );
+
+      expect(await screen.findByRole("heading", { name: "Advisory failure visibility" })).toBeInTheDocument();
+      expect(screen.getByText("Provider degraded")).toBeInTheDocument();
+      expect(
+        screen.getByText(/Provider degraded state is visible here/i),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "The bounded assistant provider did not return a trusted summary, so the reviewed advisory remains unresolved.",
+        ),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /approve/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /execute/i })).not.toBeInTheDocument();
+    });
+
     it("fails closed on unsupported assistant advisory route families", async () => {
       const fetchFn = createAuthorizedFetch({});
       const dependencies = createDefaultDependencies({

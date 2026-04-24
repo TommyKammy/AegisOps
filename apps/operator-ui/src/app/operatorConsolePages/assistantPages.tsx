@@ -112,10 +112,11 @@ function AssistantAdvisoryPageBody({
   const hasCitationFailure =
     uncertaintyFlags.includes("missing_supporting_citations") ||
     uncertaintyFlags.includes("missing_evidence_citation");
+  const hasProviderFailure = uncertaintyFlags.includes("provider_generation_failed");
   const hasUnresolvedState = asString(data.status) === "unresolved";
   const hasReviewedContextConflict = uncertaintyFlags.includes("conflicting_reviewed_context");
   const hasFailureVisibility =
-    hasCitationFailure || hasUnresolvedState || hasReviewedContextConflict;
+    hasCitationFailure || hasProviderFailure || hasUnresolvedState || hasReviewedContextConflict;
 
   return (
     <Stack spacing={3}>
@@ -172,6 +173,11 @@ function AssistantAdvisoryPageBody({
             {hasCitationFailure ? (
               <Alert severity="error" variant="outlined">
                 Missing citation support is visible here so uncited assistant prose does not resemble reviewed workflow truth.
+              </Alert>
+            ) : null}
+            {hasProviderFailure ? (
+              <Alert severity="error" variant="outlined">
+                Provider degraded state is visible here so a timeout or failed assistant response does not resemble reviewed workflow truth.
               </Alert>
             ) : null}
             {hasReviewedContextConflict ? (
