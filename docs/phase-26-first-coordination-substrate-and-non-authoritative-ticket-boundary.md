@@ -62,7 +62,15 @@ Missing ticket links, stale coordination URLs, or absent downstream receipts mus
 
 Operator convenience does not justify inferring authority from whichever ticket status or comment was updated last.
 
-## 7. Downstream Follow-On Scope
+## 7. Daily Operator Visibility
+
+Daily operator surfaces may show the reviewed coordination reference, create-ticket posture, external receipt id, and downstream ticket link when those values come from the reviewed AegisOps action-review projection or the non-authoritative coordination reference recorded on the case or alert.
+
+Those surfaces must keep the authority label explicit. The reviewed `create_tracking_ticket` posture describes the AegisOps-owned request, approval, execution, and reconciliation chain; the external ticket remains coordination context only.
+
+The daily path must not ask operators to treat ticket lifecycle, queue status, assignee, or closure as case or action truth. If the reviewed action outcome and the external coordination reference disagree, the mismatch remains visible and the authoritative AegisOps record chain wins.
+
+## 8. Downstream Follow-On Scope
 
 This decision is intended to unblock later issues that define:
 

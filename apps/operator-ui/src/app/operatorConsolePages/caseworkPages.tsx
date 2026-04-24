@@ -16,6 +16,7 @@ import {
   asString,
   asStringArray,
   AuditedRouteButton,
+  CoordinationVisibilitySection,
   EmptyState,
   ErrorState,
   formatValue,
@@ -286,6 +287,8 @@ function CaseDetailPageBody({
           </AuditedRouteButton>
         </Stack>
       </SectionCard>
+
+      <CoordinationVisibilitySection actionReview={currentActionReview} />
 
       <SectionCard
         subtitle="Cross-source lineage stays anchored to the reviewed case record. Only directly linked context is pulled into this surface."

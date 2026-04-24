@@ -213,6 +213,9 @@ export function CoordinationVisibilitySection({
             ["Authority", asString(coordinationOutcome?.authority)],
           ]}
         />
+        <Alert severity="info" variant="outlined">
+          External tickets remain non-authoritative coordination context for this case.
+        </Alert>
         {asString(coordinationOutcome?.summary) ? (
           <Alert severity="info" variant="outlined">
             {asString(coordinationOutcome?.summary)}
