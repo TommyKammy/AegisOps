@@ -115,6 +115,8 @@ The Phase 33 runtime smoke bundle in `docs/deployment/runtime-smoke-bundle.md` i
 
 Operators should run that bundle after startup, upgrade, rollback, or handoff windows when they need a bounded confidence check for startup status, readiness, protected read-only reachability, queue sanity, and first low-risk action preconditions without running exhaustive E2E validation.
 
+The Phase 33 operational evidence handoff pack in `docs/deployment/operational-evidence-handoff-pack.md` is the reviewed minimum package for deployment, upgrade, restore, approval, execution, and reconciliation handoff evidence.
+
 ## 3. Shutdown
 
 The reviewed shutdown path exists to return the platform to a clean, operator-confirmed safe state without leaving ambiguous runtime ownership or half-stopped ingress.
