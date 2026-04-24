@@ -103,7 +103,14 @@ is_placeholder_value() {
   local lowered
 
   lowered="$(printf '%s' "${value}" | tr '[:upper:]' '[:lower:]')"
-  [[ "${value}" == *"<"*">"* ]] || [[ "${lowered}" == *"todo"* ]] || [[ "${lowered}" == *"sample"* ]] || [[ "${lowered}" == *"fake"* ]] || [[ "${lowered}" == *"placeholder"* ]] || [[ "${lowered}" == *"change-me"* ]]
+  [[ "${value}" == *"<"*">"* ]] || \
+    [[ "${lowered}" == *"todo"* ]] || \
+    [[ "${lowered}" == *"sample"* ]] || \
+    [[ "${lowered}" == *"fake"* ]] || \
+    [[ "${lowered}" == *"placeholder"* ]] || \
+    [[ "${lowered}" == *"change-me"* ]] || \
+    [[ "${lowered}" == *"guess"* ]] || \
+    [[ "${lowered}" == *"unsigned"* ]]
 }
 
 require_env_value() {
@@ -235,6 +242,11 @@ for forbidden in "requires OpenSearch" "requires n8n" "requires Shuffle" "requir
     exit 1
   fi
 done
+
+if grep -Eq '(^|[^[:alnum:]_./-])(~[/\\]|/Users/[^[:space:])>]+|/home/[^[:space:])>]+|[A-Za-z]:\\Users\\[^[:space:])>]+)' "${doc_path}"; then
+  echo "Forbidden customer-like rehearsal environment statement: workstation-local absolute path detected" >&2
+  exit 1
+fi
 
 if [[ -n "${env_file}" ]]; then
   if [[ ! -f "${env_file}" ]]; then

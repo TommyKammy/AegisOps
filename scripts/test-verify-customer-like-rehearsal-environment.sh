@@ -65,6 +65,22 @@ assert_fails_with() {
   fi
 }
 
+assert_repo_fails_with() {
+  local repo_path="$1"
+  local expected="$2"
+
+  if bash "${verifier}" "${repo_path}" >"${fail_stdout}" 2>"${fail_stderr}"; then
+    echo "Expected verifier to fail for ${repo_path}" >&2
+    exit 1
+  fi
+
+  if ! grep -F -- "${expected}" "${fail_stderr}" >/dev/null; then
+    echo "Expected failure output to contain: ${expected}" >&2
+    cat "${fail_stderr}" >&2
+    exit 1
+  fi
+}
+
 valid_env="${workdir}/valid.env"
 write_valid_env "${valid_env}"
 assert_passes "${valid_env}"
@@ -79,6 +95,16 @@ write_valid_env "${placeholder_env}"
 perl -0pi -e 's|^AEGISOPS_CONTROL_PLANE_POSTGRES_DSN_FILE=.*$|AEGISOPS_CONTROL_PLANE_POSTGRES_DSN=postgresql://<user>:<password>@postgres:5432/aegisops_control_plane|m' "${placeholder_env}"
 assert_fails_with "${placeholder_env}" "Placeholder rehearsal input is not allowed: AEGISOPS_CONTROL_PLANE_POSTGRES_DSN"
 
+guessed_env="${workdir}/guessed.env"
+write_valid_env "${guessed_env}"
+perl -0pi -e 's|^AEGISOPS_CONTROL_PLANE_POSTGRES_DSN_FILE=.*$|AEGISOPS_CONTROL_PLANE_POSTGRES_DSN=postgresql://guessed-user:reviewed-password@postgres:5432/aegisops_control_plane|m' "${guessed_env}"
+assert_fails_with "${guessed_env}" "Placeholder rehearsal input is not allowed: AEGISOPS_CONTROL_PLANE_POSTGRES_DSN"
+
+unsigned_env="${workdir}/unsigned.env"
+write_valid_env "${unsigned_env}"
+perl -0pi -e 's|^AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET_FILE=.*$|AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET_FILE=/run/aegisops-secrets/unsigned-wazuh-shared-secret|m' "${unsigned_env}"
+assert_fails_with "${unsigned_env}" "Placeholder rehearsal input is not allowed: AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET_FILE"
+
 wrong_boot_mode_env="${workdir}/wrong-boot-mode.env"
 write_valid_env "${wrong_boot_mode_env}"
 perl -0pi -e 's/^AEGISOPS_CONTROL_PLANE_BOOT_MODE=first-boot$/AEGISOPS_CONTROL_PLANE_BOOT_MODE=single-customer/m' "${wrong_boot_mode_env}"
@@ -88,5 +114,14 @@ openbao_env="${workdir}/openbao.env"
 write_valid_env "${openbao_env}"
 perl -0pi -e 's/^AEGISOPS_CONTROL_PLANE_BREAK_GLASS_TOKEN_FILE=.*\n/AEGISOPS_CONTROL_PLANE_BREAK_GLASS_TOKEN_OPENBAO_PATH=kv\/aegisops\/break-glass-token\n/m' "${openbao_env}"
 assert_fails_with "${openbao_env}" "Missing required rehearsal input: AEGISOPS_OPENBAO_ADDRESS"
+
+path_hygiene_repo="${workdir}/path-hygiene-repo"
+mkdir -p "${path_hygiene_repo}"
+cp -R "${repo_root}/docs" "${path_hygiene_repo}/docs"
+cat >> "${path_hygiene_repo}/docs/deployment/customer-like-rehearsal-environment.md" <<'EOF'
+
+Invalid workstation-local example: /Users/example/AegisOps
+EOF
+assert_repo_fails_with "${path_hygiene_repo}" "Forbidden customer-like rehearsal environment statement: workstation-local absolute path detected"
 
 echo "verify-customer-like-rehearsal-environment tests passed"
