@@ -85,8 +85,9 @@ class Phase14IdentityRichSourceProfileDocsTests(unittest.TestCase):
 
         for term in (
             "Entra ID Wazuh-Backed Source Profile Onboarding Package",
-            "Readiness state: `schema-reviewed`",
+            "Readiness state: `detection-ready`",
             "Wazuh-backed source profile",
+            "Reviewed detection-ready scope",
             "tenant context",
             "actor identity",
             "target identity",
@@ -223,9 +224,9 @@ class Phase14IdentityRichSourceProfileDocsTests(unittest.TestCase):
                 "entra-id",
                 entra_text,
                 (
-                    "Readiness state: `schema-reviewed`",
-                    "Versioned parser changes remain future implementation work.",
-                    "This package does not approve direct Entra ID actioning, non-audit Entra ID telemetry families, source-side credentials, or runtime automation.",
+                    "Readiness state: `detection-ready`",
+                    "Reviewed parser evidence source",
+                    "This package does not approve direct Entra ID actioning, directory changes, credential changes, source-side credentials, Entra ID-owned case authority, non-audit Entra ID telemetry families, or detector activation without separate detector review.",
                     "Entra ID privileged role assignment",
                     "Entra ID",
                 ),
@@ -280,6 +281,61 @@ class Phase14IdentityRichSourceProfileDocsTests(unittest.TestCase):
             self.assertIn(term, onboarding_text)
         for term in required_runbook_terms:
             self.assertIn(term, runbook_text)
+
+    def test_phase34_entra_id_is_the_only_second_detection_ready_family(
+        self,
+    ) -> None:
+        entra_onboarding_text = (
+            REPO_ROOT
+            / "docs"
+            / "source-families"
+            / "entra-id"
+            / "onboarding-package.md"
+        ).read_text(encoding="utf-8")
+        entra_runbook_text = (
+            REPO_ROOT
+            / "docs"
+            / "source-families"
+            / "entra-id"
+            / "analyst-triage-runbook.md"
+        ).read_text(encoding="utf-8")
+        microsoft_onboarding_text = (
+            REPO_ROOT
+            / "docs"
+            / "source-families"
+            / "microsoft-365-audit"
+            / "onboarding-package.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("Readiness state: `detection-ready`", entra_onboarding_text)
+        self.assertIn("Readiness state: `schema-reviewed`", microsoft_onboarding_text)
+        self.assertNotIn("Readiness state: `detection-ready`", microsoft_onboarding_text)
+
+        required_onboarding_terms = (
+            "Phase 34 selects Entra ID as the second detection-ready family because it already has the clearer reviewed multi-source evidence path from the approved Entra ID case-admission slice.",
+            "Reviewed detection-ready scope",
+            "Parser and Version Evidence",
+            "Reviewed parser evidence source",
+            "Field Coverage Verification",
+            "Provenance Evidence",
+            "Detector-Use Approval and Limits",
+            "Future detection content may reference Entra ID only for tenant, directory, authentication, and privilege-change review signals that preserve accountable source identity, actor identity, target identity, timestamp quality, and Wazuh provenance.",
+            "Detector activation still requires separate rule review, rollout review, and Wazuh rule lifecycle validation.",
+            "This package does not approve direct Entra ID actioning, directory changes, credential changes, source-side credentials, Entra ID-owned case authority, non-audit Entra ID telemetry families, or detector activation without separate detector review.",
+        )
+        required_runbook_terms = (
+            "Detector-use handling",
+            "Entra ID may support detector review only within the approved detection-ready scope in the onboarding package.",
+            "Analysts must treat Entra ID as source evidence for AegisOps review, not as Entra ID-owned workflow truth or direct action authority.",
+            "Family-specific false-positive review",
+            "Provenance handling",
+            "If accountable source identity, actor identity, target identity, tenant context, timestamp quality, parser evidence, or Wazuh provenance is missing or malformed, the analyst keeps the item out of detector-ready handling until the prerequisite is repaired or a documented exception path applies.",
+        )
+
+        for term in required_onboarding_terms:
+            self.assertIn(term, entra_onboarding_text)
+        for term in required_runbook_terms:
+            self.assertIn(term, entra_runbook_text)
 
 
 if __name__ == "__main__":
