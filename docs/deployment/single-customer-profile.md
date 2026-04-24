@@ -105,6 +105,8 @@ Restore compatibility for the rehearsal is inherited from the Phase 32 runbook b
 
 The rehearsal evidence must retain the maintenance-window approval, named operator, pre-change backup custody confirmation, selected restore point, before-and-after repository revisions, pre-change and post-change smoke results, rollback decision, and any post-rollback restore validation.
 
+The Phase 33 operational evidence handoff pack in `docs/deployment/operational-evidence-handoff-pack.md` defines the minimal retained audit package for upgrade, restore, approval, execution, and reconciliation events.
+
 ## 8. Day-2 Operating Shape
 
 Day-2 operation follows the cadence in `docs/runbook.md` and `docs/smb-footprint-and-deployment-profile-baseline.md` for the reviewed single-customer profile.

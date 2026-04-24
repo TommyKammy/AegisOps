@@ -117,6 +117,8 @@ If a command returns an authentication refusal, readiness refusal, route refusal
 
 The smoke result must be attached to the deployment, upgrade, or handoff record and referenced by the next daily queue and health review.
 
+The smoke result is one input to the Phase 33 operational evidence handoff pack in `docs/deployment/operational-evidence-handoff-pack.md`; it does not replace approval, execution, restore, or reconciliation record evidence.
+
 For daily business-day health review, the smoke result is a recent handoff checkpoint only. Operators still review readiness, runtime scope, the queue and alert surfaces, degraded-state markers, and escalation conditions under `docs/runbook.md`.
 
 The weekly platform hygiene review still owns certificate expiry, storage growth, backup drift, and restore-readiness evidence.

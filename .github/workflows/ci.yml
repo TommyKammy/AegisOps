@@ -76,6 +76,7 @@ jobs:
           bash scripts/verify-sigma-n8n-skeleton-validation.sh
           bash scripts/verify-sigma-to-opensearch-translation-strategy-doc.sh
           bash scripts/verify-phase-33-runtime-smoke-bundle.sh
+          bash scripts/verify-phase-33-operational-evidence-handoff-pack.sh
           bash scripts/verify-single-customer-deployment-profile.sh
           bash scripts/verify-storage-policy-doc.sh
           bash scripts/verify-source-onboarding-contract-doc.sh
@@ -298,6 +299,7 @@ jobs:
           bash scripts/test-verify-sigma-n8n-skeleton-validation.sh
           bash scripts/test-verify-sigma-to-opensearch-translation-strategy-doc.sh
           bash scripts/test-verify-phase-33-runtime-smoke-bundle.sh
+          bash scripts/test-verify-phase-33-operational-evidence-handoff-pack.sh
           bash scripts/test-verify-single-customer-deployment-profile.sh
           bash scripts/test-verify-source-onboarding-contract-doc.sh
           bash scripts/test-verify-wazuh-rule-lifecycle-runbook.sh
