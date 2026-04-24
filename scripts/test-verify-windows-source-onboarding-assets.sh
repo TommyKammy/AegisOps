@@ -69,11 +69,26 @@ The field coverage matrix below classifies the reviewed Windows semantic areas a
 | Related user, host, IP, and process correlation fields | Required derived coverage | related.user and related.hosts are present where supported, and related.ip or related.process are omitted because the reviewed source records do not credibly expose them. |
 | AegisOps-specific provenance annotations under aegisops.* | Required derived coverage | Covered by aegisops.provenance.* and aegisops.validation.* in the normalized fixtures. |
 
-## 6. Replay Fixture Plan
+## 6. Detection-Ready Blocker Inventory
+
+Detection-ready approval remains blocked for this family until the reviewed blockers below are resolved or a separately approved exception path states the bounded detector-use scope.
+
+| Blocker | Detector-use impact | Resolution required before approval |
+| ---- | ---- | ---- |
+| Missing actor attribution for edge-case records | Blocks actor-dependent detections | Parser and mapping evidence must preserve authoritative actor identity when present and must explicitly reject or mark records where the actor cannot be trusted. |
+| Process lineage and command-line gap | Blocks process-dependent detections | Reviewed Windows endpoint evidence must provide credible process.*, process.parent.*, process.command_line, and related.process coverage before detections depend on lineage or command execution context. |
+| Remote-network context gap | Blocks remote-access and lateral-movement detections | Reviewed source evidence must provide credible source.*, destination.*, and related.ip coverage before detections depend on remote origin, destination, or lateral movement network context. |
+| Parser version and broader Windows event coverage evidence | Blocks source-family detection-ready promotion | A reviewed parser/version anchor and field-by-field sign-off across the intended Windows event range must be documented before this family can move beyond schema-reviewed. |
+
+Downstream detections must not depend on unresolved `user.*` actor fields, `process.*` lineage fields, `related.process`, `source.*`, `destination.*`, or `related.ip` coverage from this family until the blocker inventory is updated by review.
+
+The existing Phase 6 detector artifacts remain staging-only review artifacts and do not approve production detector use for any unresolved blocker above.
+
+## 7. Replay Fixture Plan
 
 Replay fixtures are stored under `ingest/replay/windows-security-and-endpoint/normalized/`.
 
-## 7. Known Gaps and Non-Goals
+## 8. Known Gaps and Non-Goals
 
 No live rollout is included in this review package.' >"${target}/docs/source-families/windows-security-and-endpoint/onboarding-package.md"
 
@@ -176,11 +191,43 @@ import sys
 path = Path(sys.argv[1])
 text = path.read_text()
 start = text.index("## 5. Field Coverage Verification")
-end = text.index("## 6. Replay Fixture Plan")
+end = text.index("## 6. Detection-Ready Blocker Inventory")
 path.write_text(text[:start] + text[end:])
 PY
 git -C "${missing_coverage_repo}" add .
 commit_fixture "${missing_coverage_repo}"
 assert_fails_with "${missing_coverage_repo}" "Missing Windows onboarding package heading: ## 5. Field Coverage Verification"
+
+missing_blocker_inventory_repo="${workdir}/missing-blocker-inventory"
+create_repo "${missing_blocker_inventory_repo}"
+write_valid_assets "${missing_blocker_inventory_repo}"
+python3 - <<'PY' "${missing_blocker_inventory_repo}/docs/source-families/windows-security-and-endpoint/onboarding-package.md"
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+start = text.index("## 6. Detection-Ready Blocker Inventory")
+end = text.index("## 7. Replay Fixture Plan")
+path.write_text(text[:start] + text[end:])
+PY
+git -C "${missing_blocker_inventory_repo}" add .
+commit_fixture "${missing_blocker_inventory_repo}"
+assert_fails_with "${missing_blocker_inventory_repo}" "Missing Windows onboarding package heading: ## 6. Detection-Ready Blocker Inventory"
+
+detection_ready_claim_repo="${workdir}/detection-ready-claim"
+create_repo "${detection_ready_claim_repo}"
+write_valid_assets "${detection_ready_claim_repo}"
+python3 - <<'PY' "${detection_ready_claim_repo}/docs/source-families/windows-security-and-endpoint/onboarding-package.md"
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text().replace("Readiness state: `schema-reviewed`", "Readiness state: `detection-ready`")
+path.write_text(text)
+PY
+git -C "${detection_ready_claim_repo}" add .
+commit_fixture "${detection_ready_claim_repo}"
+assert_fails_with "${detection_ready_claim_repo}" "Windows security and endpoint must remain schema-reviewed unless blocker resolution or approved exception paths are documented."
 
 echo "Windows source onboarding asset verifier tests passed."

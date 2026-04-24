@@ -26,8 +26,9 @@ required_doc_headings=(
   "## 3. Raw Payload References"
   "## 4. Normalization Mapping Summary"
   "## 5. Field Coverage Verification"
-  "## 6. Replay Fixture Plan"
-  "## 7. Known Gaps and Non-Goals"
+  "## 6. Detection-Ready Blocker Inventory"
+  "## 7. Replay Fixture Plan"
+  "## 8. Known Gaps and Non-Goals"
 )
 
 required_doc_phrases=(
@@ -52,6 +53,12 @@ required_doc_phrases=(
   "The missing-actor edge fixture documents that absent actor identity is a detection-ready blocker for actor-dependent detections but remains an allowed schema-reviewed exception path for fixture validation"
   "Windows security records in this narrow fixture set do not yet provide reviewed process lineage evidence, so broader process-context validation remains future work before detection-ready approval."
   "The reviewed administrative-security fixture set does not credibly supply remote network context and therefore cannot claim it without fabrication."
+  "Detection-ready approval remains blocked for this family until the reviewed blockers below are resolved or a separately approved exception path states the bounded detector-use scope."
+  "| Missing actor attribution for edge-case records | Blocks actor-dependent detections |"
+  "| Process lineage and command-line gap | Blocks process-dependent detections |"
+  "| Remote-network context gap | Blocks remote-access and lateral-movement detections |"
+  "| Parser version and broader Windows event coverage evidence | Blocks source-family detection-ready promotion |"
+  'Downstream detections must not depend on unresolved `user.*` actor fields, `process.*` lineage fields, `related.process`, `source.*`, `destination.*`, or `related.ip` coverage from this family until the blocker inventory is updated by review.'
 )
 
 required_replay_phrases=(
@@ -73,6 +80,11 @@ for required_file in "${required_files[@]}"; do
     exit 1
   fi
 done
+
+if grep -Fqx 'Readiness state: `detection-ready`' "${doc_path}"; then
+  echo "Windows security and endpoint must remain schema-reviewed unless blocker resolution or approved exception paths are documented." >&2
+  exit 1
+fi
 
 for heading in "${required_doc_headings[@]}"; do
   if ! grep -Fq "${heading}" "${doc_path}"; then

@@ -73,7 +73,22 @@ This package remains `schema-reviewed`, so the classifications above are evidenc
 
 Within the reviewed Phase 6 slice, `schema-reviewed` evidence is sufficient only for staging translation review against the documented success-path fixtures. Production activation remains blocked until the family reaches `detection-ready` for any rule dependency classified as activation-gating.
 
-## 6. Replay Fixture Plan
+## 6. Detection-Ready Blocker Inventory
+
+Detection-ready approval remains blocked for this family until the reviewed blockers below are resolved or a separately approved exception path states the bounded detector-use scope.
+
+| Blocker | Detector-use impact | Resolution required before approval |
+| ---- | ---- | ---- |
+| Missing actor attribution for edge-case records | Blocks actor-dependent detections | Parser and mapping evidence must preserve authoritative actor identity when present and must explicitly reject or mark records where the actor cannot be trusted. |
+| Process lineage and command-line gap | Blocks process-dependent detections | Reviewed Windows endpoint evidence must provide credible `process.*`, `process.parent.*`, `process.command_line`, and `related.process` coverage before detections depend on lineage or command execution context. |
+| Remote-network context gap | Blocks remote-access and lateral-movement detections | Reviewed source evidence must provide credible `source.*`, `destination.*`, and `related.ip` coverage before detections depend on remote origin, destination, or lateral movement network context. |
+| Parser version and broader Windows event coverage evidence | Blocks source-family detection-ready promotion | A reviewed parser/version anchor and field-by-field sign-off across the intended Windows event range must be documented before this family can move beyond `schema-reviewed`. |
+
+Downstream detections must not depend on unresolved `user.*` actor fields, `process.*` lineage fields, `related.process`, `source.*`, `destination.*`, or `related.ip` coverage from this family until the blocker inventory is updated by review.
+
+The existing Phase 6 detector artifacts remain staging-only review artifacts and do not approve production detector use for any unresolved blocker above.
+
+## 7. Replay Fixture Plan
 
 Replay fixtures are stored under `ingest/replay/windows-security-and-endpoint/normalized/`.
 
@@ -90,7 +105,7 @@ The `edge.ndjson` corpus contains reviewed edge cases that future parser validat
 
 The raw and normalized fixtures together are sufficient for future parser and mapping validation without claiming that the family is already detection-ready.
 
-## 7. Known Gaps and Non-Goals
+## 8. Known Gaps and Non-Goals
 
 This package remains `schema-reviewed` rather than `detection-ready` because parser version evidence, field-by-field coverage sign-off across a broader Windows event range, and explicit detector-use approval remain future work.
 
