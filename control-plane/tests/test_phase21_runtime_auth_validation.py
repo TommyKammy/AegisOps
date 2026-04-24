@@ -20,6 +20,7 @@ from aegisops_control_plane.http_protected_surface import (
     OPERATOR_ANALYST_PATHS,
     OPERATOR_APPROVER_PATHS,
     PROTECTED_READ_ROLES_BY_PATH,
+    authenticate_protected_write,
     protected_read_roles,
     protected_write_roles,
 )
@@ -100,6 +101,33 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
             OPERATOR_APPROVER_PATHS,
         )
         self.assertIn("/diagnostics/readiness", PROTECTED_READ_ROLES_BY_PATH)
+
+    def test_operator_write_auth_invokes_loopback_gate_before_surface_auth(
+        self,
+    ) -> None:
+        service = mock.Mock()
+        handler = mock.Mock()
+        handler.client_address = ("203.0.113.10", 44321)
+        handler.headers.get.return_value = None
+        loopback_gate = mock.Mock(
+            side_effect=PermissionError(
+                "operator write surface only accepts loopback callers until a reviewed operator auth boundary exists"
+            )
+        )
+
+        with self.assertRaisesRegex(
+            PermissionError,
+            "operator write surface only accepts loopback callers",
+        ):
+            authenticate_protected_write(
+                service=service,
+                handler=handler,
+                request_path="/operator/promote-alert-to-case",
+                require_loopback_operator_request_fn=loopback_gate,
+            )
+
+        loopback_gate.assert_called_once_with(handler)
+        service.authenticate_protected_surface_request.assert_not_called()
 
     def test_operational_runtime_surfaces_are_extracted_into_dedicated_collaborators(
         self,
