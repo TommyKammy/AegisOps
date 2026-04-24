@@ -26,6 +26,43 @@ write_doc() {
   printf '%s\n' "${doc_content}" >"${target}/docs/runbook.md"
 }
 
+inject_validation_contract() {
+  local target="$1"
+
+  python3 - <<'PY' "${target}/docs/runbook.md"
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+marker = "The selected Phase 6 validation slice is limited to the Windows security and endpoint telemetry family and the three reviewed detector artifacts under `opensearch/detectors/windows-security-and-endpoint/`."
+block = """The operator health review contract is the reviewed business-hours cadence for deciding whether the mainline path is ready, safely degraded, or escalation-bound.
+
+Each business day, operators must review `curl -fsS http://127.0.0.1:<proxy-port>/readyz`, `curl -fsS http://127.0.0.1:<proxy-port>/runtime`, the reviewed queue and alert surfaces, and any explicit degraded-state markers before treating the platform as ready for normal work.
+
+The daily review must classify each degraded condition as safe for continued business-hours inspection, requiring same-day follow-up, or requiring escalation before normal operation continues.
+
+At least once per business week, operators must review storage growth, certificate expiry horizon, backup drift, and restore-readiness evidence against the reviewed SMB baseline instead of inferring platform hygiene from startup success alone.
+
+Weekly review findings must remain operator-visible and must not redefine optional or degraded surfaces as startup blockers when the reviewed mainline path remains healthy.
+
+Assistant optional path: `enabled` and `ready` means the bounded advisory surface is available; `degraded` means advisory outputs or receipts are lagging and require operator follow-up without widening authority.
+
+Endpoint evidence optional path: `disabled_by_default` means no reviewed endpoint evidence request is active; `enabled` means a reviewed request is active; `degraded` means receipts or review-state updates are lagging and require follow-up without making endpoint evidence authoritative.
+
+Optional network evidence path: `disabled_by_default` or `unavailable` means the reviewed runtime is operating without that optional path and the mainline queue, approval, execution, and reconciliation path remains valid.
+
+ML shadow path: `disabled_by_default` or `unavailable` means the reviewed runtime is operating without ML shadow mode; any future `enabled` or `degraded` state must remain explicitly shadow-only, audit-focused, and non-blocking.
+
+Escalation is required when readiness is not green on the reviewed ingress path, when queue or alert review cannot be completed from the reviewed mainline surface, when storage or certificate drift threatens the next business-hours window, when backup drift exceeds the reviewed cadence, or when any degraded condition could hide missing provenance or widen authority.
+
+"""
+if block.strip() not in text:
+    text = text.replace(marker, block + marker)
+    path.write_text(text)
+PY
+}
+
 assert_passes() {
   local target="$1"
 
@@ -153,6 +190,26 @@ Approval handling procedures must preserve human review, auditability, and the s
 
 Validation steps must be documented and repeatable before this runbook can be treated as an operational procedure beyond the reviewed startup and shutdown path.
 
+The operator health review contract is the reviewed business-hours cadence for deciding whether the mainline path is ready, safely degraded, or escalation-bound.
+
+Each business day, operators must review `curl -fsS http://127.0.0.1:<proxy-port>/readyz`, `curl -fsS http://127.0.0.1:<proxy-port>/runtime`, the reviewed queue and alert surfaces, and any explicit degraded-state markers before treating the platform as ready for normal work.
+
+The daily review must classify each degraded condition as safe for continued business-hours inspection, requiring same-day follow-up, or requiring escalation before normal operation continues.
+
+At least once per business week, operators must review storage growth, certificate expiry horizon, backup drift, and restore-readiness evidence against the reviewed SMB baseline instead of inferring platform hygiene from startup success alone.
+
+Weekly review findings must remain operator-visible and must not redefine optional or degraded surfaces as startup blockers when the reviewed mainline path remains healthy.
+
+Assistant optional path: `enabled` and `ready` means the bounded advisory surface is available; `degraded` means advisory outputs or receipts are lagging and require operator follow-up without widening authority.
+
+Endpoint evidence optional path: `disabled_by_default` means no reviewed endpoint evidence request is active; `enabled` means a reviewed request is active; `degraded` means receipts or review-state updates are lagging and require follow-up without making endpoint evidence authoritative.
+
+Optional network evidence path: `disabled_by_default` or `unavailable` means the reviewed runtime is operating without that optional path and the mainline queue, approval, execution, and reconciliation path remains valid.
+
+ML shadow path: `disabled_by_default` or `unavailable` means the reviewed runtime is operating without ML shadow mode; any future `enabled` or `degraded` state must remain explicitly shadow-only, audit-focused, and non-blocking.
+
+Escalation is required when readiness is not green on the reviewed ingress path, when queue or alert review cannot be completed from the reviewed mainline surface, when storage or certificate drift threatens the next business-hours window, when backup drift exceeds the reviewed cadence, or when any degraded condition could hide missing provenance or widen authority.
+
 The selected Phase 6 validation slice is limited to the Windows security and endpoint telemetry family and the three reviewed detector artifacts under `opensearch/detectors/windows-security-and-endpoint/`.
 
 This runbook section is limited to replay validation, staging-only detector review, and read-only or notify-only workflow review during business hours.
@@ -174,6 +231,7 @@ Operators must review replay evidence from `ingest/replay/windows-security-and-e
 If validation fails, disable the selected slice by keeping the detector artifacts out of production activation and by withdrawing `aegisops_enrich_windows_selected_detector_outputs.json` and `aegisops_notify_windows_selected_detector_outputs.json` from the active workflow set until the issue is corrected and re-reviewed.
 
 The selected slice remains business-hours oriented and does not imply 24x7 monitoring, production write behavior, or uncontrolled activation.'
+inject_validation_contract "${valid_repo}"
 assert_passes "${valid_repo}"
 
 missing_shutdown_repo="${workdir}/missing-shutdown"
@@ -298,6 +356,7 @@ Operators must review replay evidence from `ingest/replay/windows-security-and-e
 If validation fails, disable the selected slice by keeping the detector artifacts out of production activation and by withdrawing `aegisops_enrich_windows_selected_detector_outputs.json` and `aegisops_notify_windows_selected_detector_outputs.json` from the active workflow set until the issue is corrected and re-reviewed.
 
 The selected slice remains business-hours oriented and does not imply 24x7 monitoring, production write behavior, or uncontrolled activation.'
+inject_validation_contract "${missing_shutdown_repo}"
 assert_fails_with "${missing_shutdown_repo}" 'Missing runbook statement: Stop the reviewed first-boot runtime surface with `docker compose --env-file <runtime-env-file> -f control-plane/deployment/first-boot/docker-compose.yml down`.'
 
 deferred_startup_repo="${workdir}/deferred-startup"
@@ -424,6 +483,7 @@ Operators must review replay evidence from `ingest/replay/windows-security-and-e
 If validation fails, disable the selected slice by keeping the detector artifacts out of production activation and by withdrawing `aegisops_enrich_windows_selected_detector_outputs.json` and `aegisops_notify_windows_selected_detector_outputs.json` from the active workflow set until the issue is corrected and re-reviewed.
 
 The selected slice remains business-hours oriented and does not imply 24x7 monitoring, production write behavior, or uncontrolled activation.'
+inject_validation_contract "${deferred_startup_repo}"
 assert_fails_with "${deferred_startup_repo}" "Forbidden runbook statement still present: Detailed startup steps are intentionally deferred until implementation artifacts and validation procedures exist."
 
 missing_restore_validation_bullet_repo="${workdir}/missing-restore-validation-bullet"
@@ -551,6 +611,7 @@ Operators must review replay evidence from `ingest/replay/windows-security-and-e
 If validation fails, disable the selected slice by keeping the detector artifacts out of production activation and by withdrawing `aegisops_enrich_windows_selected_detector_outputs.json` and `aegisops_notify_windows_selected_detector_outputs.json` from the active workflow set until the issue is corrected and re-reviewed.
 
 The selected slice remains business-hours oriented and does not imply 24x7 monitoring, production write behavior, or uncontrolled activation.'
+inject_validation_contract "${missing_rollback_evidence_repo}"
 assert_fails_with "${missing_rollback_evidence_repo}" "Missing runbook statement: Operators must retain rollback evidence showing the trigger, the backup set or configuration revision used, the restoration point selected, the post-rollback readiness results, and the confirmation that the prior known-good approval, evidence, execution, and reconciliation chain was restored."
 
 missing_rollback_trigger_bullet_repo="${workdir}/missing-rollback-trigger-bullet"
@@ -674,6 +735,7 @@ Operators must review replay evidence from `ingest/replay/windows-security-and-e
 If validation fails, disable the selected slice by keeping the detector artifacts out of production activation and by withdrawing `aegisops_enrich_windows_selected_detector_outputs.json` and `aegisops_notify_windows_selected_detector_outputs.json` from the active workflow set until the issue is corrected and re-reviewed.
 
 The selected slice remains business-hours oriented and does not imply 24x7 monitoring, production write behavior, or uncontrolled activation.'
+inject_validation_contract "${missing_rollback_trigger_bullet_repo}"
 assert_fails_with "${missing_rollback_trigger_bullet_repo}" "Rollback trigger block must include a bullet immediately after header: Rollback must begin when any of the following apply:"
 
 echo "Runbook verifier tests passed."
