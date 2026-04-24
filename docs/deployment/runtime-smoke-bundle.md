@@ -26,6 +26,8 @@ For Phase 37 rehearsal, run this bundle after `scripts/verify-customer-like-rehe
 
 The operator has the reviewed proxy authentication headers or equivalent trusted proxy session needed for protected read-only inspection without writing those secret values into the evidence record.
 
+The smoke-only authentication and precondition inputs are `AEGISOPS_SMOKE_PLATFORM_ADMIN_SUBJECT`, `AEGISOPS_SMOKE_PLATFORM_ADMIN_IDENTITY`, `AEGISOPS_SMOKE_READONLY_SUBJECT`, `AEGISOPS_SMOKE_READONLY_IDENTITY`, `AEGISOPS_SMOKE_READONLY_ROLE`, `AEGISOPS_SMOKE_REVIEWED_ACTION_SCOPE_ID`, `AEGISOPS_SMOKE_LOW_RISK_ACTION_TYPE`, and `AEGISOPS_SMOKE_APPROVER_OWNER` in the untracked runtime env file.
+
 The approved reverse proxy is the user-facing ingress path for the smoke window, and the backend control-plane port remains internal.
 
 Optional extension URLs, tokens, sidecars, or packages may remain unset.
@@ -33,6 +35,10 @@ Optional extension URLs, tokens, sidecars, or packages may remain unset.
 Stop the smoke and keep the handoff blocked if required runtime config, trusted proxy authentication, readiness, or record-scope signals are missing, malformed, or contradictory.
 
 ## 3. Smoke Commands
+
+For Phase 37 rehearsal, run the executable gate with `scripts/run-phase-37-runtime-smoke-gate.sh --env-file <runtime-env-file> --evidence-dir <evidence-dir>` after the customer-like rehearsal preflight passes and the first-boot stack is running.
+
+The gate writes `manifest.md` plus bounded startup, readiness, runtime, protected read-only, and reconciliation evidence files for handoff review.
 
 Capture startup status from the repo-owned compose surface:
 

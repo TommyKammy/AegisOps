@@ -219,7 +219,7 @@ required_phrases=(
   "PostgreSQL state uses a dedicated runtime mount"
   "Wazuh remains an upstream detection substrate"
   'Run `scripts/verify-customer-like-rehearsal-environment.sh --env-file <runtime-env-file>` before startup.'
-  'Run the Phase 33 runtime smoke bundle in `docs/deployment/runtime-smoke-bundle.md` through the reverse proxy.'
+  'Run `scripts/run-phase-37-runtime-smoke-gate.sh --env-file <runtime-env-file> --evidence-dir <evidence-dir>` through the reverse proxy and retain its `manifest.md`.'
   'Capture the evidence required by `docs/deployment/operational-evidence-handoff-pack.md`.'
   "Assistant, ML shadow, endpoint evidence, optional network evidence, OpenSearch, n8n, Shuffle, and isolated-executor paths remain disabled by default, unavailable, or explicitly non-blocking."
   "Optional extensions must not become startup prerequisites, readiness gates, smoke prerequisites, upgrade success gates, evidence handoff prerequisites, or reasons to widen the control-plane, PostgreSQL, reverse-proxy, or Wazuh-facing boundary."
@@ -234,7 +234,7 @@ done
 require_phrase "${runbook_path}" 'The customer-like rehearsal environment in `docs/deployment/customer-like-rehearsal-environment.md` is the reviewed disposable topology for replaying the first-boot to single-customer path before a pilot readiness decision.' "runbook customer-like rehearsal link"
 require_phrase "${profile_path}" 'The customer-like rehearsal environment in `docs/deployment/customer-like-rehearsal-environment.md` defines the disposable topology and preflight validation used to rehearse this profile without private customer context.' "single-customer profile customer-like rehearsal link"
 require_phrase "${smoke_path}" 'For Phase 37 rehearsal, run this bundle after `scripts/verify-customer-like-rehearsal-environment.sh --env-file <runtime-env-file>` passes for the disposable customer-like environment.' "runtime smoke customer-like rehearsal link"
-require_phrase "${handoff_path}" 'For Phase 37 customer-like rehearsal, include the verifier result from `scripts/verify-customer-like-rehearsal-environment.sh --env-file <runtime-env-file>` with the startup, smoke, backup-custody, and clean-state evidence.' "handoff customer-like rehearsal link"
+require_phrase "${handoff_path}" 'For Phase 37 customer-like rehearsal, include the verifier result from `scripts/verify-customer-like-rehearsal-environment.sh --env-file <runtime-env-file>` and the executable smoke gate manifest from `scripts/run-phase-37-runtime-smoke-gate.sh --env-file <runtime-env-file> --evidence-dir <evidence-dir>` with the startup, backup-custody, and clean-state evidence.' "handoff customer-like rehearsal link"
 
 for forbidden in "requires OpenSearch" "requires n8n" "requires Shuffle" "requires ML shadow" "requires Kubernetes" "requires customer-private credential"; do
   if grep -Fqi -- "${forbidden}" "${doc_path}"; then
