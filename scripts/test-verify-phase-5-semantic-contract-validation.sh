@@ -54,7 +54,7 @@ write_valid_report() {
 
   write_file "${target}" "docs/phase-5-semantic-contract-validation.md" "# Phase 5 Semantic Contract Validation
 
-- Validation date: 2026-04-07
+- Validation date: 2026-04-24
 - Validation scope: Telemetry schema, SecOps domain semantics, detection lifecycle, approval binding, approved automation delegation, control-plane state, operating model, identity boundaries, retention and replay readiness, source onboarding, and Sigma translation boundary
 - Baseline references: \`docs/requirements-baseline.md\`, \`docs/architecture.md\`, \`docs/runbook.md\`
 - Reviewed Phase 5 artifacts:
@@ -86,7 +86,7 @@ write_valid_report() {
 
 ## Result
 
-The reviewed Phase 5 semantic-contract documents and verifier set remain aligned with the approved requirements baseline, architecture overview, and runbook skeleton.
+The reviewed Phase 5 semantic-contract documents and verifier set remain aligned with the approved requirements baseline, architecture overview, and concrete runbook contract.
 
 Telemetry, detection, approval, delegation, control-plane, operating-model, identity, retention, source-onboarding, and Sigma-translation terminology remain consistent about record boundaries, evidence expectations, and the separation between analytics, approval, and execution.
 
@@ -139,7 +139,7 @@ create_repo "${missing_phrase_repo}"
 write_stub_verifiers "${missing_phrase_repo}"
 write_file "${missing_phrase_repo}" "docs/phase-5-semantic-contract-validation.md" "# Phase 5 Semantic Contract Validation
 
-- Validation date: 2026-04-07
+- Validation date: 2026-04-24
 - Validation scope: Telemetry schema, SecOps domain semantics, detection lifecycle, approval binding, approved automation delegation, control-plane state, operating model, identity boundaries, retention and replay readiness, source onboarding, and Sigma translation boundary
 - Baseline references: \`docs/requirements-baseline.md\`, \`docs/architecture.md\`, \`docs/runbook.md\`
 - Reviewed Phase 5 artifacts:
@@ -175,7 +175,7 @@ create_repo "${missing_phase_5_artifact_repo}"
 write_stub_verifiers "${missing_phase_5_artifact_repo}"
 write_file "${missing_phase_5_artifact_repo}" "docs/phase-5-semantic-contract-validation.md" "# Phase 5 Semantic Contract Validation
 
-- Validation date: 2026-04-07
+- Validation date: 2026-04-24
 - Validation scope: Telemetry schema, SecOps domain semantics, detection lifecycle, approval binding, approved automation delegation, control-plane state, operating model, identity boundaries, retention and replay readiness, source onboarding, and Sigma translation boundary
 - Baseline references: \`docs/requirements-baseline.md\`, \`docs/architecture.md\`, \`docs/runbook.md\`
 - Reviewed Phase 5 artifacts:
@@ -202,7 +202,7 @@ write_file "${missing_phase_5_artifact_repo}" "docs/phase-5-semantic-contract-va
 
 ## Result
 
-The reviewed Phase 5 semantic-contract documents and verifier set remain aligned with the approved requirements baseline, architecture overview, and runbook skeleton.
+The reviewed Phase 5 semantic-contract documents and verifier set remain aligned with the approved requirements baseline, architecture overview, and concrete runbook contract.
 
 Telemetry, detection, approval, control-plane, operating-model, identity, retention, source-onboarding, and Sigma-translation terminology remain consistent about record boundaries, evidence expectations, and the separation between analytics, approval, and execution.
 

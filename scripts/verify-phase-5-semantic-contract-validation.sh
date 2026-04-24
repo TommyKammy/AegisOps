@@ -50,7 +50,7 @@ required_phrases=(
   "Confirmed identity boundaries keep human, approver, executor, and service-account responsibilities separate and do not treat shared credentials or workflow convenience roles as sufficient authorization."
   "Confirmed retention and replay expectations remain policy-level, preserve evidence and approval lineage, and do not imply live ILM, snapshot-based recovery, or production storage settings."
   "Confirmed source onboarding and Sigma translation remain evidence-bound review contracts and do not imply live ingestion approval, automatic detector generation, or unsupported multi-event translation semantics."
-  "The reviewed Phase 5 semantic-contract documents and verifier set remain aligned with the approved requirements baseline, architecture overview, and runbook skeleton."
+  "The reviewed Phase 5 semantic-contract documents and verifier set remain aligned with the approved requirements baseline, architecture overview, and concrete runbook contract."
   "Telemetry, detection, approval, delegation, control-plane, operating-model, identity, retention, source-onboarding, and Sigma-translation terminology remain consistent about record boundaries, evidence expectations, and the separation between analytics, approval, and execution."
   "The reviewed artifacts do not silently authorize live detection rollout, uncontrolled write behavior, new exposed service boundaries, or runtime implementation beyond the approved baseline."
   "No deviations found."
