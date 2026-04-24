@@ -12,6 +12,8 @@ CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
+import aegisops_control_plane.adapters.postgres as postgres_adapter
+import aegisops_control_plane.record_validation as record_validation
 from aegisops_control_plane.adapters.postgres import (
     PostgresControlPlaneStore,
     _LIFECYCLE_STATES_BY_FAMILY,
@@ -85,6 +87,20 @@ class _TupleRowClosingCursor(FakePostgresCursor):
 
 
 class PostgresControlPlaneStoreTests(unittest.TestCase):
+    def test_postgres_adapter_uses_shared_record_validation_boundary(self) -> None:
+        self.assertIs(
+            postgres_adapter._validate_record,
+            record_validation._validate_record,
+        )
+        self.assertIs(
+            postgres_adapter._validate_lifecycle_state,
+            record_validation._validate_lifecycle_state,
+        )
+        self.assertIs(
+            postgres_adapter._normalize_coordination_reference_record,
+            record_validation._normalize_coordination_reference_record,
+        )
+
     def test_store_reports_postgresql_authoritative_persistence_mode(self) -> None:
         store = PostgresControlPlaneStore("postgresql://control-plane.local/aegisops")
 

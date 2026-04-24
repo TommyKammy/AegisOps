@@ -4,7 +4,6 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Iterator, Mapping, Type
 
-from .adapters.postgres import _validate_lifecycle_state, _validate_record
 from .models import (
     AITraceRecord,
     ActionExecutionRecord,
@@ -23,6 +22,7 @@ from .models import (
     ReconciliationRecord,
     RecommendationRecord,
 )
+from .record_validation import _validate_lifecycle_state, _validate_record
 from .runtime_boundary import ControlPlaneStore
 
 
