@@ -10,11 +10,14 @@ The package is anchored to `docs/runbook.md`, `docs/smb-footprint-and-deployment
 
 This package is operational guidance for the reviewed single-customer profile. It does not store customer-specific values, live secrets, DSNs, certificates, tokens, or vendor automation settings.
 
+The customer-like rehearsal environment in `docs/deployment/customer-like-rehearsal-environment.md` defines the disposable topology and preflight validation used to rehearse this profile without private customer context.
+
 Package inventory:
 
 | Artifact | Role in this package |
 | --- | --- |
 | `docs/deployment/single-customer-profile.md` | Reviewed operator-facing package boundary for one customer environment |
+| `docs/deployment/customer-like-rehearsal-environment.md` | Disposable customer-like rehearsal topology and fail-closed preflight validation |
 | `control-plane/deployment/first-boot/docker-compose.yml` | Repo-owned startup surface for the current control-plane, PostgreSQL, and proxy stack |
 | `control-plane/deployment/first-boot/bootstrap.env.sample` | Approved runtime input template to copy into an untracked customer-specific env file |
 | `docs/runbook.md` | Startup, shutdown, upgrade, restore, rollback, secret-rotation, and evidence procedure |
