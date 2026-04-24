@@ -76,7 +76,7 @@ Approval reuse is prohibited across materially different targets, payloads, or t
 
 At minimum, the action-request lifecycle must distinguish `draft`, `pending_approval`, `approved`, `rejected`, `expired`, `canceled`, `superseded`, `executing`, `completed`, `failed`, and `unresolved`, while the approval-decision lifecycle must distinguish `pending`, `approved`, `rejected`, `expired`, `canceled`, and `superseded`.
 
-The future reviewed create-ticket path remains a `Soft Write` coordination action, not a transfer of case, approval, execution, or reconciliation authority into the external ticket system.
+The reviewed `create_tracking_ticket` path is the second low-risk candidate after `notify_identity_owner`. It remains a `Soft Write` coordination action, not a transfer of case, approval, execution, or reconciliation authority into the external ticket system.
 
 ## 5. Execution Safeguards
 

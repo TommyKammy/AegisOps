@@ -695,27 +695,65 @@ def build_handler_class(
                             principal.identity,
                             require_json_string(payload, "requester_identity"),
                         )
-                    action_request = service.create_reviewed_action_request_from_advisory(
-                        record_family=require_json_string(payload, "family"),
-                        record_id=require_json_string(payload, "record_id"),
-                        requester_identity=require_json_string(
-                            payload,
-                            "requester_identity",
-                        ),
-                        recipient_identity=require_json_string(
-                            payload,
-                            "recipient_identity",
-                        ),
-                        message_intent=require_json_string(payload, "message_intent"),
-                        escalation_reason=require_json_string(
-                            payload,
-                            "escalation_reason",
-                        ),
-                        expires_at=require_json_datetime(payload, "expires_at"),
-                        action_request_id=normalize_optional_string(
-                            payload.get("action_request_id")
-                        ),
-                    )
+                    action_type = normalize_optional_string(
+                        payload.get("action_type")
+                    ) or "notify_identity_owner"
+                    if action_type == "notify_identity_owner":
+                        action_request = service.create_reviewed_action_request_from_advisory(
+                            record_family=require_json_string(payload, "family"),
+                            record_id=require_json_string(payload, "record_id"),
+                            requester_identity=require_json_string(
+                                payload,
+                                "requester_identity",
+                            ),
+                            recipient_identity=require_json_string(
+                                payload,
+                                "recipient_identity",
+                            ),
+                            message_intent=require_json_string(payload, "message_intent"),
+                            escalation_reason=require_json_string(
+                                payload,
+                                "escalation_reason",
+                            ),
+                            expires_at=require_json_datetime(payload, "expires_at"),
+                            action_request_id=normalize_optional_string(
+                                payload.get("action_request_id")
+                            ),
+                        )
+                    elif action_type == "create_tracking_ticket":
+                        action_request = service.create_reviewed_tracking_ticket_request_from_advisory(
+                            record_family=require_json_string(payload, "family"),
+                            record_id=require_json_string(payload, "record_id"),
+                            requester_identity=require_json_string(
+                                payload,
+                                "requester_identity",
+                            ),
+                            coordination_reference_id=require_json_string(
+                                payload,
+                                "coordination_reference_id",
+                            ),
+                            coordination_target_type=require_json_string(
+                                payload,
+                                "coordination_target_type",
+                            ),
+                            ticket_title=require_json_string(payload, "ticket_title"),
+                            ticket_description=require_json_string(
+                                payload,
+                                "ticket_description",
+                            ),
+                            ticket_severity=normalize_optional_string(
+                                payload.get("ticket_severity")
+                            )
+                            or "medium",
+                            expires_at=require_json_datetime(payload, "expires_at"),
+                            action_request_id=normalize_optional_string(
+                                payload.get("action_request_id")
+                            ),
+                        )
+                    else:
+                        raise ValueError(
+                            "action_type is outside the reviewed action request scope"
+                        )
                 except RequestTooLargeError as exc:
                     self._write_json(
                         HTTPStatus.REQUEST_ENTITY_TOO_LARGE,

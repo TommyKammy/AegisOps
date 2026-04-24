@@ -31,12 +31,18 @@ interface RecordCaseRecommendationPayload {
 }
 
 interface CreateReviewedActionRequestPayload {
+  action_type?: string;
   family: string;
   record_id: string;
   requester_identity: string;
-  recipient_identity: string;
-  message_intent: string;
-  escalation_reason: string;
+  recipient_identity?: string;
+  message_intent?: string;
+  escalation_reason?: string;
+  coordination_reference_id?: string;
+  coordination_target_type?: string;
+  ticket_title?: string;
+  ticket_description?: string;
+  ticket_severity?: string;
   expires_at: string;
   action_request_id?: string;
 }
