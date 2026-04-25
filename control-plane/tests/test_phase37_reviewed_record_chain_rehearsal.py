@@ -30,6 +30,8 @@ FIXTURE_PATH = (
     / "phase37"
     / "reviewed-record-chain-rehearsal.json"
 )
+REVIEWED_SHARED_SECRET = "phase37-reviewed-shared-secret"  # noqa: S105 - test fixture secret
+REVIEWED_PROXY_SECRET = "phase37-reviewed-proxy-secret"  # noqa: S105 - test fixture secret
 
 
 def _load_rehearsal_fixture() -> dict[str, object]:
@@ -136,8 +138,8 @@ class Phase37ReviewedRecordChainRehearsalTests(ServicePersistenceTestBase):
         service = support.AegisOpsControlPlaneService(
             support.RuntimeConfig(
                 postgres_dsn="postgresql://control-plane.local/aegisops",
-                wazuh_ingest_shared_secret="phase37-reviewed-shared-secret",
-                wazuh_ingest_reverse_proxy_secret="phase37-reviewed-proxy-secret",
+                wazuh_ingest_shared_secret=REVIEWED_SHARED_SECRET,
+                wazuh_ingest_reverse_proxy_secret=REVIEWED_PROXY_SECRET,
             ),
             store=store,
         )
@@ -150,9 +152,9 @@ class Phase37ReviewedRecordChainRehearsalTests(ServicePersistenceTestBase):
             raw_alert=support._load_wazuh_fixture(
                 _require_string(detection.get("source_fixture"), "source_fixture")
             ),
-            authorization_header="Bearer phase37-reviewed-shared-secret",
+            authorization_header=f"Bearer {REVIEWED_SHARED_SECRET}",
             forwarded_proto="https",
-            reverse_proxy_secret_header="phase37-reviewed-proxy-secret",
+            reverse_proxy_secret_header=REVIEWED_PROXY_SECRET,
             peer_addr="127.0.0.1",
         )
         source_evidence = tuple(
