@@ -8,6 +8,8 @@ The rehearsal is anchored to `docs/deployment/single-customer-release-bundle-inv
 
 The Phase 38 release bundle inventory in `docs/deployment/single-customer-release-bundle-inventory.md` uses this rehearsal as the required release-gate evidence index for restore, rollback, upgrade, smoke, reviewed-record, and clean-state handoff.
 
+The release handoff evidence package in `docs/deployment/release-handoff-evidence-package.md` consumes the verified restore, rollback, and upgrade release-gate manifest as the authoritative recovery evidence reference for the handoff window.
+
 The release gate proves that backup, restore, rollback, upgrade, smoke, and reviewed-record evidence stay explainable against the AegisOps authoritative record chain. It does not create a vendor backup integration, zero-downtime promise, HA design, cluster failover plan, or multi-customer operating model.
 
 ## 2. Prerequisites

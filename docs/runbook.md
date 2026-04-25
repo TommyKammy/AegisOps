@@ -127,6 +127,8 @@ The customer-like rehearsal environment in `docs/deployment/customer-like-rehear
 
 The Phase 37 restore, rollback, and upgrade evidence rehearsal in `docs/deployment/restore-rollback-upgrade-evidence-rehearsal.md` is the reviewed release-gate path for tying pre-change backup custody, restore validation, rollback decision evidence, post-upgrade smoke, and retained handoff evidence together.
 
+Before launch, upgrade, rollback, restore, or operator handoff closes, assemble the Phase 38 release handoff evidence package in `docs/deployment/release-handoff-evidence-package.md` and verify its manifest with `scripts/verify-release-handoff-evidence-package.sh --manifest <release-handoff-manifest.md>`.
+
 ## 3. Shutdown
 
 The reviewed shutdown path exists to return the platform to a clean, operator-confirmed safe state without leaving ambiguous runtime ownership or half-stopped ingress.

@@ -10,6 +10,8 @@ It is anchored to `docs/deployment/single-customer-release-bundle-inventory.md`,
 
 The Phase 38 release bundle inventory in `docs/deployment/single-customer-release-bundle-inventory.md` treats this customer-like rehearsal preflight as required launch-gate evidence for the single-customer package.
 
+The release handoff evidence package in `docs/deployment/release-handoff-evidence-package.md` records the install preflight and customer-like rehearsal result before launch handoff can close.
+
 The rehearsal environment must be disposable, customer-like, and free of private customer context. It must not add HA, Kubernetes, multi-customer packaging, customer-private credentials, direct backend exposure, optional extension requirements, or vendor-specific automation.
 
 ## 2. Disposable Topology
