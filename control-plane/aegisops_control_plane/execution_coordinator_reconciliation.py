@@ -5,6 +5,10 @@ from datetime import datetime
 import logging
 from typing import Mapping
 
+from .action_receipt_validation import (
+    MissingReceiptValueError,
+    require_receipt_string_value,
+)
 from .execution_coordinator import ExecutionCoordinatorServiceDependencies
 from .models import (
     ActionExecutionRecord,
@@ -480,41 +484,31 @@ class ActionExecutionReconciliationCoordinator:
                 if not isinstance(payload_hash, str):
                     raise ValueError("observed execution must include string payload_hash")
             if require_coordination_receipt_identifiers:
-                if (
-                    not isinstance(coordination_reference_id, str)
-                    or not coordination_reference_id.strip()
-                ):
-                    raise ValueError(
-                        "observed execution must include string coordination_reference_id"
+                try:
+                    coordination_reference_id = require_receipt_string_value(
+                        coordination_reference_id,
+                        "coordination_reference_id",
                     )
-                if (
-                    not isinstance(coordination_target_type, str)
-                    or not coordination_target_type.strip()
-                ):
-                    raise ValueError(
-                        "observed execution must include string coordination_target_type"
+                    coordination_target_type = require_receipt_string_value(
+                        coordination_target_type,
+                        "coordination_target_type",
                     )
-                if (
-                    not isinstance(external_receipt_id, str)
-                    or not external_receipt_id.strip()
-                ):
-                    raise ValueError(
-                        "observed execution must include string external_receipt_id"
+                    external_receipt_id = require_receipt_string_value(
+                        external_receipt_id,
+                        "external_receipt_id",
                     )
-                if (
-                    not isinstance(coordination_target_id, str)
-                    or not coordination_target_id.strip()
-                ):
-                    raise ValueError(
-                        "observed execution must include string coordination_target_id"
+                    coordination_target_id = require_receipt_string_value(
+                        coordination_target_id,
+                        "coordination_target_id",
                     )
-                if (
-                    not isinstance(ticket_reference_url, str)
-                    or not ticket_reference_url.strip()
-                ):
-                    raise ValueError(
-                        "observed execution must include string ticket_reference_url"
+                    ticket_reference_url = require_receipt_string_value(
+                        ticket_reference_url,
+                        "ticket_reference_url",
                     )
+                except MissingReceiptValueError as exc:
+                    raise ValueError(
+                        f"observed execution must include string {exc.field_name}"
+                    ) from exc
             normalized.append(
                 {
                     "execution_run_id": execution_run_id,
