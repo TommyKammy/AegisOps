@@ -27,7 +27,10 @@ from .http_protected_surface import (
     authenticate_protected_read,
     authenticate_protected_write,
     protected_read_roles,
+    require_matching_authenticated_identity,
+    require_reviewed_proxy_identity_match,
 )
+from .http_runtime_surface import runtime_read_response
 from .service import AegisOpsControlPlaneService
 
 
@@ -60,16 +63,6 @@ def build_handler_class(
                 handler=self,
                 allowed_roles=allowed_roles,
             )
-
-        @staticmethod
-        def _require_matching_identity(
-            authenticated_identity: str,
-            asserted_identity: str,
-        ) -> None:
-            if authenticated_identity.strip() != asserted_identity.strip():
-                raise PermissionError(
-                    "authenticated identity header must match the asserted control-plane identity"
-                )
 
         def do_GET(self) -> None:  # noqa: N802
             request_target = urlsplit(self.path)
@@ -105,34 +98,12 @@ def build_handler_class(
                     self._write_forbidden(str(exc))
                     return
 
-            if request_path == "/runtime":
-                self._write_json(HTTPStatus.OK, service.describe_runtime().to_dict())
-                return
-
-            if request_path == "/diagnostics/readiness":
-                self._write_json(
-                    HTTPStatus.OK,
-                    service.inspect_readiness_diagnostics().to_dict(),
-                )
-                return
-
-            if request_path == "/admin/bootstrap-status":
-                self._write_json(
-                    HTTPStatus.OK,
-                    {
-                        "contract": "reviewed_admin_bootstrap",
-                        "bootstrap_token_configured": bool(
-                            service._config.admin_bootstrap_token.strip()
-                        ),
-                        "break_glass_token_configured": bool(
-                            service._config.break_glass_token.strip()
-                        ),
-                        "protected_surface_proxy_service_account": (
-                            service._config.protected_surface_proxy_service_account
-                        ),
-                        "break_glass_max_ttl_minutes": 60,
-                    },
-                )
+            if runtime_response := runtime_read_response(
+                service=service,
+                request_path=request_path,
+            ):
+                status, payload = runtime_response
+                self._write_json(status, payload)
                 return
 
             if request_path == "/inspect-records":
@@ -401,11 +372,10 @@ def build_handler_class(
             if request_path == "/operator/record-case-observation":
                 try:
                     payload = read_json_request_body(self)
-                    if getattr(principal, "access_path", "") == "reviewed_reverse_proxy":
-                        self._require_matching_identity(
-                            principal.identity,
-                            require_json_string(payload, "author_identity"),
-                        )
+                    require_reviewed_proxy_identity_match(
+                        principal=principal,
+                        asserted_identity=require_json_string(payload, "author_identity"),
+                    )
                     observation = service.record_case_observation(
                         case_id=normalize_case_id(require_json_string(payload, "case_id")),
                         author_identity=require_json_string(payload, "author_identity"),
@@ -434,11 +404,10 @@ def build_handler_class(
             if request_path == "/operator/record-case-lead":
                 try:
                     payload = read_json_request_body(self)
-                    if getattr(principal, "access_path", "") == "reviewed_reverse_proxy":
-                        self._require_matching_identity(
-                            principal.identity,
-                            require_json_string(payload, "triage_owner"),
-                        )
+                    require_reviewed_proxy_identity_match(
+                        principal=principal,
+                        asserted_identity=require_json_string(payload, "triage_owner"),
+                    )
                     lead = service.record_case_lead(
                         case_id=normalize_case_id(require_json_string(payload, "case_id")),
                         triage_owner=require_json_string(payload, "triage_owner"),
@@ -465,11 +434,10 @@ def build_handler_class(
             if request_path == "/operator/record-case-recommendation":
                 try:
                     payload = read_json_request_body(self)
-                    if getattr(principal, "access_path", "") == "reviewed_reverse_proxy":
-                        self._require_matching_identity(
-                            principal.identity,
-                            require_json_string(payload, "review_owner"),
-                        )
+                    require_reviewed_proxy_identity_match(
+                        principal=principal,
+                        asserted_identity=require_json_string(payload, "review_owner"),
+                    )
                     recommendation = service.record_case_recommendation(
                         case_id=normalize_case_id(require_json_string(payload, "case_id")),
                         review_owner=require_json_string(payload, "review_owner"),
@@ -494,11 +462,10 @@ def build_handler_class(
             if request_path == "/operator/record-case-handoff":
                 try:
                     payload = read_json_request_body(self)
-                    if getattr(principal, "access_path", "") == "reviewed_reverse_proxy":
-                        self._require_matching_identity(
-                            principal.identity,
-                            require_json_string(payload, "handoff_owner"),
-                        )
+                    require_reviewed_proxy_identity_match(
+                        principal=principal,
+                        asserted_identity=require_json_string(payload, "handoff_owner"),
+                    )
                     case_record = service.record_case_handoff(
                         case_id=normalize_case_id(require_json_string(payload, "case_id")),
                         handoff_at=require_json_datetime(payload, "handoff_at"),
@@ -551,11 +518,13 @@ def build_handler_class(
             if request_path == "/operator/record-action-review-manual-fallback":
                 try:
                     payload = read_json_request_body(self)
-                    if getattr(principal, "access_path", "") == "reviewed_reverse_proxy":
-                        self._require_matching_identity(
-                            principal.identity,
-                            require_json_string(payload, "fallback_actor_identity"),
-                        )
+                    require_reviewed_proxy_identity_match(
+                        principal=principal,
+                        asserted_identity=require_json_string(
+                            payload,
+                            "fallback_actor_identity",
+                        ),
+                    )
                     context_record = service.record_action_review_manual_fallback(
                         action_request_id=require_json_string(payload, "action_request_id"),
                         fallback_at=require_json_datetime(payload, "fallback_at"),
@@ -598,11 +567,13 @@ def build_handler_class(
             if request_path == "/operator/record-action-review-escalation-note":
                 try:
                     payload = read_json_request_body(self)
-                    if getattr(principal, "access_path", "") == "reviewed_reverse_proxy":
-                        self._require_matching_identity(
-                            principal.identity,
-                            require_json_string(payload, "escalated_by_identity"),
-                        )
+                    require_reviewed_proxy_identity_match(
+                        principal=principal,
+                        asserted_identity=require_json_string(
+                            payload,
+                            "escalated_by_identity",
+                        ),
+                    )
                     context_record = service.record_action_review_escalation_note(
                         action_request_id=require_json_string(payload, "action_request_id"),
                         escalated_at=require_json_datetime(payload, "escalated_at"),
@@ -651,9 +622,9 @@ def build_handler_class(
                         raise PermissionError(
                             "approval decisions require an authenticated approver identity"
                         )
-                    self._require_matching_identity(
-                        authenticated_approver_identity,
-                        approver_identity,
+                    require_matching_authenticated_identity(
+                        authenticated_identity=authenticated_approver_identity,
+                        asserted_identity=approver_identity,
                     )
                     approval_decision = service.record_action_approval_decision(
                         action_request_id=require_json_string(payload, "action_request_id"),
@@ -690,11 +661,13 @@ def build_handler_class(
             if request_path == "/operator/create-reviewed-action-request":
                 try:
                     payload = read_json_request_body(self)
-                    if getattr(principal, "access_path", "") == "reviewed_reverse_proxy":
-                        self._require_matching_identity(
-                            principal.identity,
-                            require_json_string(payload, "requester_identity"),
-                        )
+                    require_reviewed_proxy_identity_match(
+                        principal=principal,
+                        asserted_identity=require_json_string(
+                            payload,
+                            "requester_identity",
+                        ),
+                    )
                     action_type = (
                         require_json_string(payload, "action_type")
                         if "action_type" in payload
@@ -776,8 +749,10 @@ def build_handler_class(
                 try:
                     payload = read_json_request_body(self)
                     admin_identity = require_json_string(payload, "admin_identity")
-                    if getattr(principal, "access_path", "") == "reviewed_reverse_proxy":
-                        self._require_matching_identity(principal.identity, admin_identity)
+                    require_reviewed_proxy_identity_match(
+                        principal=principal,
+                        asserted_identity=admin_identity,
+                    )
                     service.require_admin_bootstrap_token(
                         require_json_string(payload, "bootstrap_token")
                     )
@@ -815,8 +790,10 @@ def build_handler_class(
                 try:
                     payload = read_json_request_body(self)
                     admin_identity = require_json_string(payload, "admin_identity")
-                    if getattr(principal, "access_path", "") == "reviewed_reverse_proxy":
-                        self._require_matching_identity(principal.identity, admin_identity)
+                    require_reviewed_proxy_identity_match(
+                        principal=principal,
+                        asserted_identity=admin_identity,
+                    )
                     service.require_break_glass_token(
                         require_json_string(payload, "break_glass_token")
                     )
