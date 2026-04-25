@@ -1,0 +1,86 @@
+{
+  "rehearsal_id": "phase37-reviewed-record-chain-001",
+  "detection": {
+    "source_fixture": "github-audit-alert.json",
+    "reviewed_source_family": "wazuh_github_audit",
+    "reviewed_context": {
+      "customer_scope": {
+        "customer_id": "rehearsal-customer-001",
+        "scope_binding": "reviewed_rehearsal_fixture"
+      },
+      "source": {
+        "source_family": "synthetic_detection_rehearsal",
+        "source_authority": "subordinate_signal_evidence"
+      },
+      "identity": {
+        "identity_id": "identity-owner-001",
+        "owner": "identity-operations"
+      }
+    }
+  },
+  "evidence": {
+    "evidence_id": "evidence-phase37-reviewed-chain-001",
+    "source_system": "synthetic-rehearsal-signal",
+    "collector_identity": "collector://phase37/rehearsal",
+    "derivation_relationship": "admitted_analytic_signal",
+    "content": {
+      "summary": "Synthetic identity ownership signal used to rehearse the reviewed record chain.",
+      "external_ticket_reference": "coordination-only-ticket-001",
+      "external_ticket_authority": "subordinate_evidence_only"
+    }
+  },
+  "case_workflow": {
+    "observation_scope_statement": "Synthetic identity ownership signal requires reviewed notification before customer-like release gate sign-off.",
+    "triage_owner": "analyst-phase37",
+    "triage_rationale": "The signal is low risk but must remain approval-bound for launch-gate evidence.",
+    "review_owner": "analyst-phase37",
+    "intended_outcome": "Notify the accountable identity owner after a separate human approval decision."
+  },
+  "action": {
+    "requester_identity": "analyst-phase37",
+    "recipient_identity": "identity-owner-001",
+    "message_intent": "Notify the accountable identity owner about the reviewed rehearsal signal.",
+    "escalation_reason": "Phase 37 customer-like release gate requires one approval-bound low-risk action replay.",
+    "expires_in_hours": 4
+  },
+  "approval": {
+    "approval_decision_id": "approval-phase37-reviewed-chain-001",
+    "approver_identity": "approver-phase37",
+    "decision": "grant",
+    "decision_rationale": "Synthetic rehearsal chain is in reviewed low-risk scope.",
+    "decision_offset_minutes": 5
+  },
+  "execution": {
+    "delegation_offset_minutes": 10,
+    "delegation_issuer": "control-plane-service"
+  },
+  "reconciliation": {
+    "observed_offset_minutes": 15,
+    "compared_offset_minutes": 16,
+    "stale_after_offset_hours": 1,
+    "status": "success"
+  },
+  "manifest": {
+    "authority_chain": [
+      "analytic_signal",
+      "alert",
+      "case",
+      "evidence",
+      "recommendation",
+      "action_request",
+      "approval_decision",
+      "action_execution",
+      "reconciliation"
+    ],
+    "subordinate_context": [
+      "synthetic detection source",
+      "external ticket reference",
+      "shuffle execution receipt"
+    ],
+    "required_release_gate_records": [
+      "approval_decision",
+      "action_execution",
+      "reconciliation"
+    ]
+  }
+}

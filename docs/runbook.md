@@ -117,6 +117,8 @@ Operators should run that bundle after startup, upgrade, rollback, or handoff wi
 
 For Phase 37 customer-like rehearsal, operators run `scripts/run-phase-37-runtime-smoke-gate.sh --env-file <runtime-env-file> --evidence-dir <evidence-dir>` after startup to turn the Phase 33 bundle into an executable release gate with retained smoke evidence.
 
+Before the runtime smoke gate, operators run `scripts/verify-phase-37-reviewed-record-chain-rehearsal.sh` to prove the seeded reviewed chain still separates detection evidence, AegisOps-owned alert and case truth, reviewed action request, approval decision, execution receipt, reconciliation, and handoff evidence.
+
 The Phase 33 operational evidence handoff pack in `docs/deployment/operational-evidence-handoff-pack.md` is the reviewed minimum package for deployment, upgrade, restore, approval, execution, and reconciliation handoff evidence.
 
 The customer-like rehearsal environment in `docs/deployment/customer-like-rehearsal-environment.md` is the reviewed disposable topology for replaying the first-boot to single-customer path before a pilot readiness decision.
