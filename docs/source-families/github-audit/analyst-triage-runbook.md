@@ -111,7 +111,19 @@ Any new reviewed GitHub audit rule shape, provenance expectation, or identity br
 
 The analyst triage record should note whether the current fixture set still explains the alert clearly, whether the event remains compatible with the control-plane-first analyst workflow, and whether a new fixture or mapping update is required.
 
-## 11. Baseline Alignment Notes
+## 11. Detector Activation Handoff Alignment
+
+Detector activation evidence handoff must use `docs/detector-activation-evidence-handoff.md` as the manifest for rule review evidence, fixture and parser evidence, activation evidence, rollback evidence, alert or case admission sanity, and known limitations.
+
+The handoff must cite AegisOps-owned alert, case, evidence, reconciliation, or release-gate records; source-family output, Wazuh status, OpenSearch status, GitHub status, Entra ID status, and external ticket fields are evidence only.
+
+Missing provenance, missing parser evidence, missing reviewer ownership, inferred scope linkage, placeholder credentials, or mixed-snapshot admission evidence blocks activation handoff until the prerequisite is supplied.
+
+The GitHub audit handoff must preserve the reviewed repository, organization, actor, target, request, and privilege context from the source-family package and fixture before a candidate moves beyond staging review.
+
+It must not promote GitHub tickets, GitHub UI state, repository names, team names, workflow names, or external ticket references into handoff authority for case admission, activation, disable, or rollback completion.
+
+## 12. Baseline Alignment Notes
 
 This runbook remains aligned with `docs/source-onboarding-contract.md`, `docs/detection-lifecycle-and-rule-qa-framework.md`, `docs/wazuh-rule-lifecycle-runbook.md`, and `docs/secops-business-hours-operating-model.md`.
 
