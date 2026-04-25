@@ -51,6 +51,10 @@ require_file "${handoff_path}" "operational evidence handoff pack"
 
 required_gate_phrases=(
   'Usage: scripts/run-phase-37-runtime-smoke-gate.sh --env-file <runtime-env-file> [--evidence-dir <evidence-dir>]'
+  'AEGISOPS_FIRST_BOOT_PROXY_PORT'
+  'AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_PROXY_SERVICE_ACCOUNT'
+  'AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVIEWED_IDENTITY_PROVIDER'
+  'AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVERSE_PROXY_SECRET_FILE'
   'AEGISOPS_SMOKE_PLATFORM_ADMIN_SUBJECT'
   'AEGISOPS_SMOKE_PLATFORM_ADMIN_IDENTITY'
   'AEGISOPS_SMOKE_READONLY_SUBJECT'
@@ -59,6 +63,10 @@ required_gate_phrases=(
   'AEGISOPS_SMOKE_REVIEWED_ACTION_SCOPE_ID'
   'AEGISOPS_SMOKE_LOW_RISK_ACTION_TYPE'
   'AEGISOPS_SMOKE_APPROVER_OWNER'
+  'Missing protected surface proxy secret file:'
+  'Empty protected surface proxy secret file:'
+  'Placeholder protected surface proxy secret is not allowed'
+  'Invalid smoke read-only role: AEGISOPS_SMOKE_READONLY_ROLE must be analyst, approver, or platform_admin'
   'Invalid smoke low-risk action type: AEGISOPS_SMOKE_LOW_RISK_ACTION_TYPE must be notify_identity_owner'
   'bash "${repo_root}/scripts/verify-customer-like-rehearsal-environment.sh" --env-file "${env_file}"'
   'docker compose --env-file "${env_file}" -f "${compose_file}" ps'
