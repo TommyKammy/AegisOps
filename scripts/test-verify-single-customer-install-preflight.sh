@@ -46,6 +46,7 @@ AEGISOPS_CONTROL_PLANE_BREAK_GLASS_TOKEN_OPENBAO_PATH=
 AEGISOPS_OPENBAO_ADDRESS=
 AEGISOPS_OPENBAO_TOKEN=
 AEGISOPS_OPENBAO_TOKEN_FILE=
+AEGISOPS_OPENBAO_TOKEN_OPENBAO_PATH=
 AEGISOPS_OPENBAO_KV_MOUNT=secret
 AEGISOPS_INGRESS_TLS_CERT_CHAIN_FILE=/run/aegisops-secrets/ingress-tls-chain.pem
 AEGISOPS_INGRESS_TLS_CERT_CHAIN_OPENBAO_PATH=
@@ -177,10 +178,25 @@ copy_env "${valid_env}" "${storage_drift_env}"
 perl -0pi -e 's|^AEGISOPS_INSTALL_BACKUP_ROOT=.*$|AEGISOPS_INSTALL_BACKUP_ROOT=/srv/aegisops/runtime/backups|m' "${storage_drift_env}"
 assert_fails_with "${storage_drift_env}" "Unsafe storage path contract: AEGISOPS_INSTALL_BACKUP_ROOT"
 
+restore_target_env="${workdir}/restore-target.env"
+copy_env "${valid_env}" "${restore_target_env}"
+perl -0pi -e 's/^AEGISOPS_INSTALL_RESTORE_TARGET_ENVIRONMENT=.*$/AEGISOPS_INSTALL_RESTORE_TARGET_ENVIRONMENT=live/m' "${restore_target_env}"
+assert_fails_with "${restore_target_env}" "Unsafe restore target contract: AEGISOPS_INSTALL_RESTORE_TARGET_ENVIRONMENT"
+
 migration_drift_env="${workdir}/migration-drift.env"
 copy_env "${valid_env}" "${migration_drift_env}"
 perl -0pi -e 's/^AEGISOPS_INSTALL_MIGRATION_BOOTSTRAP_MODE=.*$/AEGISOPS_INSTALL_MIGRATION_BOOTSTRAP_MODE=recreate-schema/m' "${migration_drift_env}"
 assert_fails_with "${migration_drift_env}" "Invalid migration bootstrap contract: AEGISOPS_INSTALL_MIGRATION_BOOTSTRAP_MODE"
+
+invalid_release_env="${workdir}/invalid-release.env"
+copy_env "${valid_env}" "${invalid_release_env}"
+perl -0pi -e 's/^AEGISOPS_INSTALL_RELEASE_IDENTIFIER=.*$/AEGISOPS_INSTALL_RELEASE_IDENTIFIER=customer-release/m' "${invalid_release_env}"
+assert_fails_with "${invalid_release_env}" "Invalid release identifier contract: AEGISOPS_INSTALL_RELEASE_IDENTIFIER"
+
+invalid_smoke_readonly_env="${workdir}/invalid-smoke-readonly.env"
+copy_env "${valid_env}" "${invalid_smoke_readonly_env}"
+perl -0pi -e 's/^AEGISOPS_SMOKE_READONLY_ROLE=.*$/AEGISOPS_SMOKE_READONLY_ROLE=owner/m' "${invalid_smoke_readonly_env}"
+assert_fails_with "${invalid_smoke_readonly_env}" "Invalid smoke read-only role: AEGISOPS_SMOKE_READONLY_ROLE"
 
 smoke_drift_env="${workdir}/smoke-drift.env"
 copy_env "${valid_env}" "${smoke_drift_env}"
