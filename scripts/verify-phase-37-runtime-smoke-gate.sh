@@ -98,8 +98,9 @@ require_phrase "${runbook_path}" 'For Phase 37 customer-like rehearsal, operator
 require_phrase "${rehearsal_path}" 'Run `scripts/run-phase-37-runtime-smoke-gate.sh --env-file <runtime-env-file> --evidence-dir <evidence-dir>` through the reverse proxy and retain its `manifest.md`.' "customer-like rehearsal executable gate step"
 require_phrase "${handoff_path}" 'For Phase 37 customer-like rehearsal, include the verifier result from `scripts/verify-customer-like-rehearsal-environment.sh --env-file <runtime-env-file>` and the executable smoke gate manifest from `scripts/run-phase-37-runtime-smoke-gate.sh --env-file <runtime-env-file> --evidence-dir <evidence-dir>` with the startup, backup-custody, and clean-state evidence.' "handoff Phase 37 executable gate evidence"
 
-if grep -Fq 'POST /operator/create-reviewed-action-request' "${gate_path}"; then
-  echo "Forbidden Phase 37 runtime smoke gate write path: POST /operator/create-reviewed-action-request" >&2
+reviewed_action_write_path='/operator/create-reviewed-action-request'
+if grep -Eq -- "${reviewed_action_write_path}([^[:alnum:]_/-]|$)" "${gate_path}"; then
+  echo "Forbidden Phase 37 runtime smoke gate write path: ${reviewed_action_write_path}" >&2
   exit 1
 fi
 
