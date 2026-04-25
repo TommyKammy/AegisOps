@@ -82,4 +82,11 @@ create_repo \
   "control-plane/tests/test_docs.py" "EXPECTED_PATH = 'docs/phase-25.md'"
 assert_fails_with "${failing_repo}" "docs/phase-25.md:1:"
 
+script_failing_repo="${workdir}/script-failing"
+create_repo \
+  "${script_failing_repo}" \
+  "README.md" "# Script failing fixture" \
+  "scripts/leaky.sh" "echo ${HOME}/private"
+assert_fails_with "${script_failing_repo}" "scripts/leaky.sh:1:"
+
 echo "verify-publishable-path-hygiene tests passed"

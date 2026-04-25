@@ -96,7 +96,11 @@ if grep -Fq 'POST /operator/create-reviewed-action-request' "${gate_path}"; then
   exit 1
 fi
 
-if grep -Eq '(^|[^[:alnum:]_./-])(~[/\\]|/Users/[^[:space:])>]+|/home/[^[:space:])>]+|[A-Za-z]:\\Users\\[^[:space:])>]+)' "${smoke_path}" "${runbook_path}" "${rehearsal_path}" "${handoff_path}"; then
+macos_home_pattern='/'"Users"'/[^[:space:])>]+'
+linux_home_pattern='/'"home"'/[^[:space:])>]+'
+windows_home_pattern='[A-Za-z]:\\'"Users"'\\[^[:space:])>]+'
+workstation_local_path_pattern="(^|[^[:alnum:]_./-])(~[/\\\\]|${macos_home_pattern}|${linux_home_pattern}|${windows_home_pattern})"
+if grep -Eq "${workstation_local_path_pattern}" "${smoke_path}" "${runbook_path}" "${rehearsal_path}" "${handoff_path}"; then
   echo "Forbidden Phase 37 runtime smoke gate guidance: workstation-local absolute path detected" >&2
   exit 1
 fi

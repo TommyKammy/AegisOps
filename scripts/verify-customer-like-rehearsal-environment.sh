@@ -243,7 +243,11 @@ for forbidden in "requires OpenSearch" "requires n8n" "requires Shuffle" "requir
   fi
 done
 
-if grep -Eq '(^|[^[:alnum:]_./-])(~[/\\]|/Users/[^[:space:])>]+|/home/[^[:space:])>]+|[A-Za-z]:\\Users\\[^[:space:])>]+)' "${doc_path}"; then
+macos_home_pattern='/'"Users"'/[^[:space:])>]+'
+linux_home_pattern='/'"home"'/[^[:space:])>]+'
+windows_home_pattern='[A-Za-z]:\\'"Users"'\\[^[:space:])>]+'
+workstation_local_path_pattern="(^|[^[:alnum:]_./-])(~[/\\\\]|${macos_home_pattern}|${linux_home_pattern}|${windows_home_pattern})"
+if grep -Eq "${workstation_local_path_pattern}" "${doc_path}"; then
   echo "Forbidden customer-like rehearsal environment statement: workstation-local absolute path detected" >&2
   exit 1
 fi

@@ -37,6 +37,7 @@ tracked_paths = subprocess.run(
         ".github/workflows",
         "docs",
         "control-plane/tests",
+        "scripts",
     ],
     capture_output=True,
     text=True,
@@ -61,7 +62,7 @@ for relative_path in tracked_paths:
             offenders.append((relative_path, line_number))
 
 if offenders:
-    print("Publishable docs and tests must not contain workstation-local absolute paths.", file=sys.stderr)
+    print("Publishable tracked content must not contain workstation-local absolute paths.", file=sys.stderr)
     for relative_path, line_number in offenders:
         print(
             f"{relative_path}:{line_number}: contains workstation-local absolute path",
@@ -69,5 +70,5 @@ if offenders:
         )
     sys.exit(1)
 
-print("Publishable docs and tests do not contain workstation-local absolute paths.")
+print("Publishable tracked content does not contain workstation-local absolute paths.")
 PY

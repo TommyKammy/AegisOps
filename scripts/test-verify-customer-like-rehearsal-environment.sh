@@ -120,7 +120,7 @@ mkdir -p "${path_hygiene_repo}"
 cp -R "${repo_root}/docs" "${path_hygiene_repo}/docs"
 cat >> "${path_hygiene_repo}/docs/deployment/customer-like-rehearsal-environment.md" <<'EOF'
 
-Invalid workstation-local example: /Users/example/AegisOps
+Invalid workstation-local example: /Users/example/AegisOps  # publishable-path-hygiene: allowlist fixture
 EOF
 assert_repo_fails_with "${path_hygiene_repo}" "Forbidden customer-like rehearsal environment statement: workstation-local absolute path detected"
 
