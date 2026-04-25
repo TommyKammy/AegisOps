@@ -21,11 +21,7 @@ from .adapters.endpoint_evidence import EndpointEvidencePackAdapter
 from .adapters.misp import MispContextAdapter
 from .adapters.n8n import N8NReconciliationAdapter
 from .adapters.osquery import OsqueryHostContextAdapter
-from .adapters.postgres import (
-    PostgresControlPlaneStore,
-    ReadinessDiagnosticsAggregates,
-    ReadinessReviewPathRecords,
-)
+from .adapters.postgres import PostgresControlPlaneStore
 from .adapters.shuffle import ShuffleActionAdapter
 from .adapters.wazuh import WazuhAlertAdapter
 from .assistant_provider import (
@@ -65,6 +61,10 @@ from .models import (
     RecommendationRecord,
 )
 from .operator_inspection import OperatorInspectionReadSurface
+from .readiness_contracts import (
+    ReadinessDiagnosticsAggregates,
+    ReadinessReviewPathRecords,
+)
 from .restore_readiness import RestoreReadinessService
 from .runtime_boundary import RuntimeBoundaryService, _is_missing_runtime_binding
 from .assistant_context import (

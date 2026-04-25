@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any, Callable
 
-from .adapters.postgres import ReadinessDiagnosticsAggregates
 from .config import RuntimeConfig
 from .models import (
     ActionExecutionRecord,
@@ -12,6 +11,7 @@ from .models import (
     CaseRecord,
     ReconciliationRecord,
 )
+from .readiness_contracts import ReadinessDiagnosticsAggregates
 from .runtime_boundary import ControlPlaneStore, RuntimeBoundaryService, _is_missing_runtime_binding
 
 

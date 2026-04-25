@@ -107,6 +107,38 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             "backup/restore validation should use a shared record-validation boundary, not the PostgreSQL adapter",
         )
 
+    def test_readiness_projection_does_not_import_postgres_adapter(self) -> None:
+        module_path = (
+            pathlib.Path(__file__).resolve().parents[1]
+            / "aegisops_control_plane"
+            / "restore_readiness_projection.py"
+        )
+
+        parsed = ast.parse(module_path.read_text())
+        imported_modules: set[str] = set()
+        for node in ast.walk(parsed):
+            if isinstance(node, ast.Import):
+                imported_modules.update(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                imported_modules.add(node.module)
+                imported_modules.update(
+                    f"{node.module}.{alias.name}"
+                    for alias in node.names
+                    if alias.name != "*"
+                )
+
+        def _is_postgres_adapter_import(module_name: str) -> bool:
+            parts = module_name.split(".")
+            return any(
+                parts[index : index + 2] == ["adapters", "postgres"]
+                for index in range(len(parts) - 1)
+            )
+
+        self.assertFalse(
+            any(_is_postgres_adapter_import(name) for name in imported_modules),
+            "readiness projection should use the shared readiness contract, not the PostgreSQL adapter",
+        )
+
     def test_runtime_snapshot_reports_postgresql_authoritative_persistence_mode(self) -> None:
         service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops")

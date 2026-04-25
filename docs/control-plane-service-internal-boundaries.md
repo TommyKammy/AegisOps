@@ -128,6 +128,13 @@ Representative methods include:
 
 This cluster owns startup/readiness/shutdown views, authoritative backup export, restore validation, and restore-drill proof.
 
+Current extraction status as of issue `#794`:
+
+- public startup, shutdown, readiness, backup, restore, and restore-drill entrypoints delegate from `AegisOpsControlPlaneService` into `RestoreReadinessService`;
+- readiness projection is isolated in `restore_readiness_projection.py`;
+- backup export, restore validation, restore execution, and restore-drill proof are isolated in `restore_readiness_backup_restore.py`; and
+- readiness aggregate DTOs live in `readiness_contracts.py` so runtime/readiness collaborators and persistence adapters share an explicit contract instead of importing PostgreSQL adapter internals.
+
 Representative methods include:
 
 - `describe_startup_status`
