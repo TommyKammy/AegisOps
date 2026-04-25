@@ -112,6 +112,11 @@ EOF
 exit 0
 EOF
 
+  cat <<'EOF' > "${target}/scripts/verify-customer-like-rehearsal-environment.sh"
+#!/usr/bin/env bash
+exit 0
+EOF
+
   cat <<'EOF' > "${target}/scripts/run-phase-37-runtime-smoke-gate.sh"
 #!/usr/bin/env bash
 exit 0
@@ -130,6 +135,7 @@ EOF
   touch "${target}/scripts/test-verify-single-customer-release-bundle-inventory.sh"
   chmod +x \
     "${target}/scripts/verify-phase-37-reviewed-record-chain-rehearsal.sh" \
+    "${target}/scripts/verify-customer-like-rehearsal-environment.sh" \
     "${target}/scripts/run-phase-37-runtime-smoke-gate.sh" \
     "${target}/scripts/verify-phase-37-restore-rollback-upgrade-evidence.sh" \
     "${target}/scripts/verify-single-customer-release-bundle-inventory.sh"
@@ -267,6 +273,22 @@ write_valid_manifest "${missing_smoke_entry_repo}"
 perl -0pi -e 's/^\| Runtime smoke bundle .*?\n//m' "${missing_smoke_entry_repo}/docs/deployment/single-customer-release-bundle-inventory.md"
 commit_fixture "${missing_smoke_entry_repo}"
 assert_fails_with "${missing_smoke_entry_repo}" "Missing single-customer release bundle inventory statement: | Runtime smoke bundle"
+
+missing_customer_like_verifier_repo="${workdir}/missing-customer-like-verifier"
+create_repo "${missing_customer_like_verifier_repo}"
+write_shared_files "${missing_customer_like_verifier_repo}"
+write_valid_manifest "${missing_customer_like_verifier_repo}"
+rm "${missing_customer_like_verifier_repo}/scripts/verify-customer-like-rehearsal-environment.sh"
+commit_fixture "${missing_customer_like_verifier_repo}"
+assert_fails_with "${missing_customer_like_verifier_repo}" "Missing customer-like rehearsal environment verifier:"
+
+non_executable_customer_like_verifier_repo="${workdir}/non-executable-customer-like-verifier"
+create_repo "${non_executable_customer_like_verifier_repo}"
+write_shared_files "${non_executable_customer_like_verifier_repo}"
+write_valid_manifest "${non_executable_customer_like_verifier_repo}"
+chmod -x "${non_executable_customer_like_verifier_repo}/scripts/verify-customer-like-rehearsal-environment.sh"
+commit_fixture "${non_executable_customer_like_verifier_repo}"
+assert_fails_with "${non_executable_customer_like_verifier_repo}" "Missing executable bit for customer-like rehearsal environment verifier:"
 
 missing_image_tag_repo="${workdir}/missing-image-tag"
 create_repo "${missing_image_tag_repo}"
