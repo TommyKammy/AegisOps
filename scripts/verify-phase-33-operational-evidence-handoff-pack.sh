@@ -53,7 +53,7 @@ required_phrases=(
   "This document defines the Phase 33 operational evidence retention and audit handoff pack for the reviewed single-customer profile."
   "The handoff pack is a small-team operational package, not a new archive platform, SIEM replacement, or external authority source."
   'The authoritative record chain remains inside AegisOps reviewed records for approval, evidence, execution, and reconciliation truth.'
-  'The pack is anchored to `docs/runbook.md`, `docs/deployment/single-customer-profile.md`, and `docs/deployment/runtime-smoke-bundle.md`.'
+  'The pack is anchored to `docs/deployment/single-customer-release-bundle-inventory.md`, `docs/runbook.md`, `docs/deployment/single-customer-profile.md`, and `docs/deployment/runtime-smoke-bundle.md`.'
   '| Event category | Retained evidence | Authority boundary |'
   '| Upgrade | Approved maintenance window, named operator, pre-change backup custody confirmation, selected restore point, before-and-after repository revisions, pre-change and post-change smoke results, bounded upgrade-window logs, and rollback decision. | Handoff evidence only; upgrade success is accepted only when the reviewed runtime checks and AegisOps record chain remain trustworthy. |'
   '| Restore | Triggering reason, selected restore point, backup custody confirmation, repository revision or release identifier, post-restore readiness checks, and approval, evidence, execution, and reconciliation record-chain validation outcome. | Restore evidence supports return-to-service review but does not redefine record truth outside AegisOps. |'

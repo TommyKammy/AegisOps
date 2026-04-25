@@ -197,7 +197,7 @@ done
 required_phrases=(
   "This document defines the disposable customer-like rehearsal environment for the Phase 37 single-customer live rehearsal gate."
   "The rehearsal exists to replay the reviewed first-boot to single-customer operating path before AegisOps is treated as ready for a single-customer pilot."
-  'It is anchored to `docs/runbook.md`, `docs/deployment/single-customer-profile.md`, `docs/deployment/runtime-smoke-bundle.md`, `docs/deployment/operational-evidence-handoff-pack.md`, `docs/network-exposure-and-access-path-policy.md`, `docs/storage-layout-and-mount-policy.md`, and `control-plane/deployment/first-boot/`.'
+  'It is anchored to `docs/deployment/single-customer-release-bundle-inventory.md`, `docs/runbook.md`, `docs/deployment/single-customer-profile.md`, `docs/deployment/runtime-smoke-bundle.md`, `docs/deployment/operational-evidence-handoff-pack.md`, `docs/network-exposure-and-access-path-policy.md`, `docs/storage-layout-and-mount-policy.md`, and `control-plane/deployment/first-boot/`.'
   "The rehearsal environment must be disposable, customer-like, and free of private customer context."
   "The smallest approved rehearsal topology is:"
   'the repo-owned first-boot compose surface in `control-plane/deployment/first-boot/docker-compose.yml`'

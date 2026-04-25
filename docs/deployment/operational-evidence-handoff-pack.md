@@ -8,7 +8,9 @@ The handoff pack is a small-team operational package, not a new archive platform
 
 The authoritative record chain remains inside AegisOps reviewed records for approval, evidence, execution, and reconciliation truth.
 
-The pack is anchored to `docs/runbook.md`, `docs/deployment/single-customer-profile.md`, and `docs/deployment/runtime-smoke-bundle.md`.
+The pack is anchored to `docs/deployment/single-customer-release-bundle-inventory.md`, `docs/runbook.md`, `docs/deployment/single-customer-profile.md`, and `docs/deployment/runtime-smoke-bundle.md`.
+
+For the Phase 38 single-customer launch package, `docs/deployment/single-customer-release-bundle-inventory.md` is the reviewed bundle manifest that names this handoff pack as required retained evidence guidance.
 
 Use this pack when an operator needs a compact, reviewable evidence bundle after deployment, upgrade, restore, approval, execution, reconciliation review, rollback, or a planned handoff window.
 
