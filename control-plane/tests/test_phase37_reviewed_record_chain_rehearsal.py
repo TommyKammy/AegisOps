@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import replace
 from datetime import datetime, timedelta
 import json
@@ -86,7 +87,12 @@ def _validate_release_gate_manifest(
         raise ValueError("release-gate chain requires an approved action request")
     if approval_decision is None or approval_decision.lifecycle_state != "approved":
         raise ValueError("release-gate chain requires a recorded approval decision")
-    if execution is None or execution.execution_run_id.startswith("pending-dispatch-"):
+    execution_run_id = (
+        ""
+        if execution is None or not isinstance(execution.execution_run_id, str)
+        else execution.execution_run_id.strip()
+    )
+    if not execution_run_id or execution_run_id.startswith("pending-dispatch-"):
         raise ValueError("release-gate chain requires an execution receipt")
     if reconciliation is None or reconciliation.lifecycle_state != "matched":
         raise ValueError("release-gate chain requires matched reconciliation")
@@ -104,7 +110,10 @@ def _validate_release_gate_manifest(
 
     if evidence.content.get("external_ticket_authority") != "subordinate_evidence_only":
         raise ValueError("external ticket references must remain subordinate evidence")
-    if "external_ticket_reference" in action_request.target_scope:
+    target_scope = action_request.target_scope
+    if not isinstance(target_scope, Mapping):
+        raise ValueError("external ticket reference must not become action authority")
+    if "external_ticket_reference" in target_scope:
         raise ValueError("external ticket reference must not become action authority")
 
 
@@ -416,6 +425,114 @@ class Phase37ReviewedRecordChainRehearsalTests(ServicePersistenceTestBase):
                 approval_decision=None,
                 execution=None,
                 reconciliation=None,
+            )
+
+    def test_release_gate_manifest_rejects_missing_receipts_and_authority_drift(
+        self,
+    ) -> None:
+        fixture = _load_rehearsal_fixture()
+        manifest = _require_mapping(fixture.get("manifest"), "manifest")
+        acquired_at = datetime.fromisoformat("2026-04-24T09:00:00+00:00")
+        requested_at = datetime.fromisoformat("2026-04-24T09:05:00+00:00")
+        evidence = EvidenceRecord(
+            evidence_id="evidence-phase37-guarded-001",
+            source_record_id="substrate-phase37-guarded-001",
+            alert_id="alert-phase37-guarded-001",
+            case_id="case-phase37-guarded-001",
+            source_system="synthetic-rehearsal-signal",
+            collector_identity="collector://phase37/rehearsal",
+            acquired_at=acquired_at,
+            derivation_relationship="admitted_analytic_signal",
+            lifecycle_state="collected",
+            content={"external_ticket_authority": "subordinate_evidence_only"},
+        )
+        action_request = ActionRequestRecord(
+            action_request_id="action-request-phase37-guarded-001",
+            approval_decision_id="approval-phase37-guarded-001",
+            case_id=evidence.case_id,
+            alert_id=evidence.alert_id,
+            finding_id=None,
+            idempotency_key="idempotency-phase37-guarded-001",
+            target_scope={"asset_id": "asset-phase37-guarded-001"},
+            payload_hash="payload-hash-phase37-guarded-001",
+            requested_at=requested_at,
+            expires_at=None,
+            lifecycle_state="approved",
+        )
+        approval_decision = ApprovalDecisionRecord(
+            approval_decision_id="approval-phase37-guarded-001",
+            action_request_id=action_request.action_request_id,
+            approver_identities=("analyst://phase37/approver",),
+            target_snapshot=action_request.target_scope,
+            payload_hash=action_request.payload_hash,
+            decided_at=requested_at + timedelta(minutes=5),
+            lifecycle_state="approved",
+        )
+        execution = ActionExecutionRecord(
+            action_execution_id="action-execution-phase37-guarded-001",
+            action_request_id=action_request.action_request_id,
+            approval_decision_id=approval_decision.approval_decision_id,
+            delegation_id="delegation-phase37-guarded-001",
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            execution_run_id="shuffle-run-phase37-guarded-001",
+            idempotency_key=action_request.idempotency_key,
+            target_scope=action_request.target_scope,
+            approved_payload={"action": "notify_identity_owner"},
+            payload_hash=action_request.payload_hash,
+            delegated_at=requested_at + timedelta(minutes=7),
+            expires_at=None,
+            provenance={"downstream_binding": {}},
+            lifecycle_state="delegated",
+        )
+        reconciliation = ReconciliationRecord(
+            reconciliation_id="reconciliation-phase37-guarded-001",
+            subject_linkage={
+                "approval_decision_ids": (approval_decision.approval_decision_id,),
+                "action_request_ids": (action_request.action_request_id,),
+                "action_execution_ids": (execution.action_execution_id,),
+                "evidence_ids": (evidence.evidence_id,),
+            },
+            alert_id=evidence.alert_id,
+            finding_id=None,
+            analytic_signal_id=None,
+            execution_run_id=execution.execution_run_id,
+            linked_execution_run_ids=(execution.execution_run_id,),
+            correlation_key=action_request.idempotency_key,
+            first_seen_at=requested_at,
+            last_seen_at=requested_at + timedelta(minutes=8),
+            ingest_disposition="matched",
+            mismatch_summary="none",
+            compared_at=requested_at + timedelta(minutes=10),
+            lifecycle_state="matched",
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "release-gate chain requires an execution receipt",
+        ):
+            _validate_release_gate_manifest(
+                manifest=manifest,
+                evidence=evidence,
+                action_request=action_request,
+                approval_decision=approval_decision,
+                execution=replace(execution, execution_run_id="   "),
+                reconciliation=replace(reconciliation, execution_run_id="   "),
+            )
+
+        bad_scope_request = replace(action_request)
+        object.__setattr__(bad_scope_request, "target_scope", None)
+        with self.assertRaisesRegex(
+            ValueError,
+            "external ticket reference must not become action authority",
+        ):
+            _validate_release_gate_manifest(
+                manifest=manifest,
+                evidence=evidence,
+                action_request=bad_scope_request,
+                approval_decision=approval_decision,
+                execution=execution,
+                reconciliation=reconciliation,
             )
 
 
