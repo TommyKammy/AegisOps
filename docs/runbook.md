@@ -115,6 +115,8 @@ The Phase 33 runtime smoke bundle in `docs/deployment/runtime-smoke-bundle.md` i
 
 Operators should run that bundle after startup, upgrade, rollback, or handoff windows when they need a bounded confidence check for startup status, readiness, protected read-only reachability, queue sanity, and first low-risk action preconditions without running exhaustive E2E validation.
 
+For Phase 37 customer-like rehearsal, operators run `scripts/run-phase-37-runtime-smoke-gate.sh --env-file <runtime-env-file> --evidence-dir <evidence-dir>` after startup to turn the Phase 33 bundle into an executable release gate with retained smoke evidence.
+
 The Phase 33 operational evidence handoff pack in `docs/deployment/operational-evidence-handoff-pack.md` is the reviewed minimum package for deployment, upgrade, restore, approval, execution, and reconciliation handoff evidence.
 
 The customer-like rehearsal environment in `docs/deployment/customer-like-rehearsal-environment.md` is the reviewed disposable topology for replaying the first-boot to single-customer path before a pilot readiness decision.

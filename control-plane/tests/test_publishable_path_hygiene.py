@@ -51,6 +51,8 @@ class PublishablePathHygieneTests(unittest.TestCase):
 
             docs_dir = repo_root / "docs"
             docs_dir.mkdir()
+            scripts_dir = repo_root / "scripts"
+            scripts_dir.mkdir()
             (repo_root / "control-plane" / "tests").mkdir(parents=True)
             (repo_root / ".github" / "workflows").mkdir(parents=True)
 
@@ -58,6 +60,10 @@ class PublishablePathHygieneTests(unittest.TestCase):
             (docs_dir / "binary.bin").write_bytes(b"\x00\x01\x02/home/alice/private")  # publishable-path-hygiene: allowlist
             (docs_dir / "offender.md").write_text(
                 f"operator note: {OFFENDER_PATH}\n",
+                encoding="utf-8",
+            )
+            (scripts_dir / "clean.sh").write_text(
+                "echo no local paths here\n",
                 encoding="utf-8",
             )
 
@@ -68,6 +74,7 @@ class PublishablePathHygieneTests(unittest.TestCase):
                     "README.md",
                     "docs/binary.bin",
                     "docs/offender.md",
+                    "scripts/clean.sh",
                 ],
                 cwd=repo_root,
                 check=True,
@@ -99,6 +106,47 @@ class PublishablePathHygieneTests(unittest.TestCase):
             )
             self.assertNotIn(OFFENDER_PATH, result.stderr)
             self.assertNotIn("binary.bin", result.stderr)
+
+    def test_verify_script_scans_scripts_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = pathlib.Path(tmpdir)
+            subprocess.run(["git", "init"], cwd=repo_root, check=True, capture_output=True)
+
+            (repo_root / "scripts").mkdir()
+            (repo_root / "scripts" / "offender.sh").write_text(
+                f"echo {OFFENDER_PATH}\n",
+                encoding="utf-8",
+            )
+            subprocess.run(
+                ["git", "add", "scripts/offender.sh"],
+                cwd=repo_root,
+                check=True,
+                capture_output=True,
+            )
+
+            env = os.environ.copy()
+            existing_pythonpath = env.get("PYTHONPATH")
+            control_plane_path = str(REPO_ROOT / "control-plane")
+            env["PYTHONPATH"] = (
+                f"{control_plane_path}:{existing_pythonpath}"
+                if existing_pythonpath
+                else control_plane_path
+            )
+
+            result = subprocess.run(
+                ["bash", str(VERIFY_SCRIPT), str(repo_root)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                env=env,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(
+                "scripts/offender.sh:1: contains workstation-local absolute path",
+                result.stderr,
+            )
 
 
 if __name__ == "__main__":

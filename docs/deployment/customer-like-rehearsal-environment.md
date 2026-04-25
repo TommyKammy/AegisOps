@@ -121,7 +121,7 @@ The reviewed rehearsal sequence is:
 3. Replace placeholders with reviewed rehearsal values and trusted secret references without storing live values in Git.
 4. Run `scripts/verify-customer-like-rehearsal-environment.sh --env-file <runtime-env-file>` before startup.
 5. Start the stack through the repo-owned first-boot compose command.
-6. Run the Phase 33 runtime smoke bundle in `docs/deployment/runtime-smoke-bundle.md` through the reverse proxy.
+6. Run `scripts/run-phase-37-runtime-smoke-gate.sh --env-file <runtime-env-file> --evidence-dir <evidence-dir>` through the reverse proxy and retain its `manifest.md`.
 7. Capture the evidence required by `docs/deployment/operational-evidence-handoff-pack.md`.
 8. Shut down the disposable stack through the runbook and confirm no rehearsal state is treated as customer production truth.
 
