@@ -6,6 +6,7 @@ from typing import Mapping
 
 from .action_receipt_validation import (
     MissingReceiptValueError,
+    require_receipt_https_url_value,
     require_receipt_string_value,
 )
 from .execution_coordinator import (
@@ -340,7 +341,7 @@ class ApprovedActionDelegationCoordinator:
                 )
             self._require_receipt_string_attribute(receipt, "external_receipt_id")
             self._require_receipt_string_attribute(receipt, "coordination_target_id")
-            self._require_receipt_string_attribute(receipt, "ticket_reference_url")
+            self._require_receipt_https_url_attribute(receipt, "ticket_reference_url")
 
     def _finalized_execution_provenance(
         self,
@@ -391,7 +392,7 @@ class ApprovedActionDelegationCoordinator:
                             receipt,
                             "coordination_target_id",
                         ),
-                        "ticket_reference_url": self._require_receipt_string_attribute(
+                        "ticket_reference_url": self._require_receipt_https_url_attribute(
                             receipt,
                             "ticket_reference_url",
                         ),
@@ -403,6 +404,16 @@ class ApprovedActionDelegationCoordinator:
     def _require_receipt_string_attribute(receipt: object, field_name: str) -> str:
         try:
             return require_receipt_string_value(
+                getattr(receipt, field_name, None),
+                field_name,
+            )
+        except MissingReceiptValueError as exc:
+            raise ValueError(str(exc)) from exc
+
+    @staticmethod
+    def _require_receipt_https_url_attribute(receipt: object, field_name: str) -> str:
+        try:
+            return require_receipt_https_url_value(
                 getattr(receipt, field_name, None),
                 field_name,
             )

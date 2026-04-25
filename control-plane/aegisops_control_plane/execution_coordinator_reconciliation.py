@@ -7,6 +7,7 @@ from typing import Mapping
 
 from .action_receipt_validation import (
     MissingReceiptValueError,
+    require_receipt_https_url_value,
     require_receipt_string_value,
 )
 from .execution_coordinator import ExecutionCoordinatorServiceDependencies
@@ -70,6 +71,9 @@ class ActionExecutionReconciliationCoordinator:
             execution["execution_run_id"] for execution in normalized_executions
         )
         unique_execution_run_ids = tuple(dict.fromkeys(linked_execution_run_ids))
+        has_duplicate_observations = len(linked_execution_run_ids) != len(
+            unique_execution_run_ids
+        )
         latest_execution = normalized_executions[-1] if normalized_executions else None
         authoritative_execution = self._find_authoritative_action_execution(
             action_request_id=action_request.action_request_id,
@@ -154,6 +158,12 @@ class ActionExecutionReconciliationCoordinator:
                 ingest_disposition = "stale"
                 lifecycle_state = "stale"
                 mismatch_summary = "stale downstream execution observation requires refresh"
+            elif has_duplicate_observations and require_coordination_receipt_identifiers:
+                ingest_disposition = "duplicate"
+                lifecycle_state = "mismatched"
+                mismatch_summary = (
+                    "duplicate coordination receipts observed for one approved request"
+                )
             elif len(unique_execution_run_ids) > 1:
                 ingest_disposition = "duplicate"
                 lifecycle_state = "mismatched"
@@ -501,7 +511,7 @@ class ActionExecutionReconciliationCoordinator:
                         coordination_target_id,
                         "coordination_target_id",
                     )
-                    ticket_reference_url = require_receipt_string_value(
+                    ticket_reference_url = require_receipt_https_url_value(
                         ticket_reference_url,
                         "ticket_reference_url",
                     )
