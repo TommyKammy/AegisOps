@@ -93,9 +93,14 @@ for expected in "${required_candidate_text[@]}"; do
   require_contains "${candidate_doc}" "${expected}"
 done
 
-require_contains "${microsoft_onboarding_doc}" 'Readiness state: `schema-reviewed`'
-if grep -Eq -- '^[[:space:]]*Readiness state:[[:space:]]*`detection-ready`[[:space:]]*$' "${microsoft_onboarding_doc}"; then
-  echo "Microsoft 365 audit must not be silently uplifted by the Entra ID detector candidate." >&2
+readiness_line_count="$(grep -Ec -- '^[[:space:]]*Readiness state:' "${microsoft_onboarding_doc}" || true)"
+if [[ "${readiness_line_count}" != "1" ]]; then
+  echo "Microsoft 365 audit onboarding package must contain exactly one readiness state line." >&2
+  exit 1
+fi
+
+if ! grep -Eq -- '^[[:space:]]*Readiness state:[[:space:]]*`schema-reviewed`[[:space:]]*$' "${microsoft_onboarding_doc}"; then
+  echo "Microsoft 365 audit onboarding package must remain exactly at readiness state \`schema-reviewed\`." >&2
   exit 1
 fi
 
