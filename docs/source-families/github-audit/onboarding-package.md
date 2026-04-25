@@ -100,6 +100,8 @@ Detector-Use Approval and Limits: GitHub audit is approved as a detection-ready 
 
 Detector activation still requires separate rule review, rollout review, and Wazuh rule lifecycle validation.
 
+The only currently documented activation candidate for this package is `docs/source-families/github-audit/detector-activation-candidates/repository-admin-membership-change.md`.
+
 Approved detector-use prerequisites:
 
 - source family is GitHub audit through the Wazuh-backed intake boundary;
