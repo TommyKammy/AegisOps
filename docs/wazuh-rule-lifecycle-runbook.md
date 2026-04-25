@@ -144,6 +144,8 @@ If false-positive review depends on missing parser evidence, missing Wazuh prove
 
 Detector evidence handoff must land in AegisOps-owned records and the retained release-gate evidence package before activation is treated as complete.
 
+`docs/detector-activation-evidence-handoff.md` is the reviewed detector activation evidence handoff manifest for Phase 40 activation, disable, rollback, alert or case admission sanity, and known limitations.
+
 The handoff package must name:
 
 - the Wazuh candidate rule and source-family package;

@@ -44,6 +44,7 @@ jobs:
           bash scripts/verify-control-plane-state-model-doc.sh
           bash scripts/verify-automation-substrate-contract-doc.sh
           bash scripts/verify-control-plane-schema-skeleton.sh
+          bash scripts/verify-detector-activation-evidence-handoff.sh
           bash scripts/verify-detection-lifecycle-and-rule-qa-framework.sh
           bash scripts/verify-documentation-ownership-map.sh
           bash scripts/verify-secops-domain-model-doc.sh
@@ -287,6 +288,7 @@ jobs:
           bash scripts/test-verify-automation-substrate-contract-doc.sh
           bash scripts/test-verify-control-plane-state-model-doc.sh
           bash scripts/test-verify-control-plane-schema-skeleton.sh
+          bash scripts/test-verify-detector-activation-evidence-handoff.sh
           bash scripts/test-verify-detection-lifecycle-and-rule-qa-framework.sh
           bash scripts/test-verify-positive-smb-value-proposition.sh
           bash scripts/run-ci-phase-contract.sh all-shell-tests

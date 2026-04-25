@@ -56,6 +56,10 @@ Staging activation expectations are:
 
 This document does not approve active OpenSearch detector deployment, live Wazuh rule rollout, GitHub API credentials, direct GitHub mutation, automated response, or production write-capable behavior.
 
+Activation handoff must follow `docs/detector-activation-evidence-handoff.md` before this candidate moves beyond staging review.
+
+The handoff must retain rule review evidence, fixture and parser evidence, activation evidence, rollback evidence, alert or case admission sanity, and known limitations while keeping GitHub audit evidence subordinate to AegisOps-owned records.
+
 ## False-Positive Review Expectations
 
 False-positive review expectations must cover routine repository administration, approved maintainer activity, access review cleanup, automation identity behavior, scheduled change windows, onboarding or offboarding work, and expected team membership maintenance.

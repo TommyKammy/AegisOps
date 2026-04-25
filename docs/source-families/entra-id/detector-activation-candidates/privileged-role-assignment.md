@@ -61,6 +61,10 @@ Staging activation expectations are:
 
 This document does not approve active OpenSearch detector deployment, live Wazuh rule rollout, Entra ID API credentials, direct directory mutation, automated response, Microsoft 365 audit detector activation, or production write-capable behavior.
 
+Activation handoff must follow `docs/detector-activation-evidence-handoff.md` before this candidate moves beyond staging review.
+
+The handoff must retain rule review evidence, fixture and parser evidence, activation evidence, rollback evidence, alert or case admission sanity, and known limitations while keeping Entra ID evidence subordinate to AegisOps-owned records.
+
 ## False-Positive Review Expectations
 
 False-positive review expectations must cover routine directory administration, approved identity operations, reviewed service identity behavior, privileged role assignment maintenance, scheduled change windows, emergency access procedure review, and expected automation-path maintenance.
