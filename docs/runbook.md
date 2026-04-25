@@ -123,6 +123,8 @@ The Phase 33 operational evidence handoff pack in `docs/deployment/operational-e
 
 The customer-like rehearsal environment in `docs/deployment/customer-like-rehearsal-environment.md` is the reviewed disposable topology for replaying the first-boot to single-customer path before a pilot readiness decision.
 
+The Phase 37 restore, rollback, and upgrade evidence rehearsal in `docs/deployment/restore-rollback-upgrade-evidence-rehearsal.md` is the reviewed release-gate path for tying pre-change backup custody, restore validation, rollback decision evidence, post-upgrade smoke, and retained handoff evidence together.
+
 ## 3. Shutdown
 
 The reviewed shutdown path exists to return the platform to a clean, operator-confirmed safe state without leaving ambiguous runtime ownership or half-stopped ingress.

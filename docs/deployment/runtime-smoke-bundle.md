@@ -137,6 +137,8 @@ For post-upgrade checks, compare the post-change smoke result with the pre-chang
 
 For rollback checks, run this bundle after the documented restore or rollback path and keep normal operation blocked if the restored state cannot prove the same first-boot scope, protected ingress, and read-only record-chain visibility.
 
+For restore, rollback, and upgrade release-gate rehearsal, the smoke manifest is one referenced artifact in the retained release-gate manifest verified by `scripts/verify-phase-37-restore-rollback-upgrade-evidence.sh --manifest <release-gate-manifest.md>`.
+
 ## 6. Out of Scope
 
 Full workflow regression, optional-extension full-path validation, broad source coverage, destructive action validation, and exhaustive E2E validation are out of scope.

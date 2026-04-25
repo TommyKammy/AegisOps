@@ -28,6 +28,8 @@ For deployment-only handoff where no approval, execution, or reconciliation even
 
 For Phase 37 customer-like rehearsal, include the verifier result from `scripts/verify-customer-like-rehearsal-environment.sh --env-file <runtime-env-file>`, the reviewed record-chain replay result from `scripts/verify-phase-37-reviewed-record-chain-rehearsal.sh`, and the executable smoke gate manifest from `scripts/run-phase-37-runtime-smoke-gate.sh --env-file <runtime-env-file> --evidence-dir <evidence-dir>` with the startup, backup-custody, and clean-state evidence.
 
+For Phase 37 restore, rollback, and upgrade rehearsal, retain the release-gate manifest verified by `scripts/verify-phase-37-restore-rollback-upgrade-evidence.sh --manifest <release-gate-manifest.md>` so backup, restore, rollback, upgrade, smoke, reviewed-record, and clean-state evidence remain linked in one handoff index.
+
 For failed, rejected, or refused events, retain the refusal reason and the clean-state confirmation. Do not replace a failed path with a later successful retry summary unless the failed outcome remains reviewable.
 
 ## 3. Operator-Visible Handoff Artifacts
