@@ -38,6 +38,8 @@ Stop the smoke and keep the handoff blocked if required runtime config, trusted 
 
 For Phase 37 rehearsal, run the executable gate with `scripts/run-phase-37-runtime-smoke-gate.sh --env-file <runtime-env-file> --evidence-dir <evidence-dir>` after the customer-like rehearsal preflight passes and the first-boot stack is running.
 
+Before the runtime smoke gate, run `scripts/verify-phase-37-reviewed-record-chain-rehearsal.sh` to replay the seeded fixture in `control-plane/tests/fixtures/phase37/reviewed-record-chain-rehearsal.json` through the authoritative reviewed record chain.
+
 The gate writes `manifest.md` plus bounded startup, readiness, runtime, protected read-only, and reconciliation evidence files for handoff review.
 
 Capture startup status from the repo-owned compose surface:

@@ -5,6 +5,9 @@ set -euo pipefail
 repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 gate_path="${repo_root}/scripts/run-phase-37-runtime-smoke-gate.sh"
 test_path="${repo_root}/scripts/test-run-phase-37-runtime-smoke-gate.sh"
+record_chain_gate_path="${repo_root}/scripts/verify-phase-37-reviewed-record-chain-rehearsal.sh"
+record_chain_test_path="${repo_root}/control-plane/tests/test_phase37_reviewed_record_chain_rehearsal.py"
+record_chain_fixture_path="${repo_root}/control-plane/tests/fixtures/phase37/reviewed-record-chain-rehearsal.json"
 smoke_path="${repo_root}/docs/deployment/runtime-smoke-bundle.md"
 runbook_path="${repo_root}/docs/runbook.md"
 rehearsal_path="${repo_root}/docs/deployment/customer-like-rehearsal-environment.md"
@@ -44,6 +47,9 @@ require_phrase() {
 
 require_executable "${gate_path}" "Phase 37 runtime smoke gate"
 require_executable "${test_path}" "Phase 37 runtime smoke gate test"
+require_executable "${record_chain_gate_path}" "Phase 37 reviewed record-chain rehearsal verifier"
+require_file "${record_chain_test_path}" "Phase 37 reviewed record-chain rehearsal test"
+require_file "${record_chain_fixture_path}" "Phase 37 reviewed record-chain rehearsal fixture"
 require_file "${smoke_path}" "runtime smoke bundle"
 require_file "${runbook_path}" "runbook"
 require_file "${rehearsal_path}" "customer-like rehearsal environment"
@@ -94,6 +100,7 @@ done
 
 required_doc_phrases=(
   'For Phase 37 rehearsal, run the executable gate with `scripts/run-phase-37-runtime-smoke-gate.sh --env-file <runtime-env-file> --evidence-dir <evidence-dir>` after the customer-like rehearsal preflight passes and the first-boot stack is running.'
+  'Before the runtime smoke gate, run `scripts/verify-phase-37-reviewed-record-chain-rehearsal.sh` to replay the seeded fixture in `control-plane/tests/fixtures/phase37/reviewed-record-chain-rehearsal.json` through the authoritative reviewed record chain.'
   'The gate writes `manifest.md` plus bounded startup, readiness, runtime, protected read-only, and reconciliation evidence files for handoff review.'
   'The smoke-only authentication and precondition inputs are `AEGISOPS_SMOKE_PLATFORM_ADMIN_SUBJECT`, `AEGISOPS_SMOKE_PLATFORM_ADMIN_IDENTITY`, `AEGISOPS_SMOKE_READONLY_SUBJECT`, `AEGISOPS_SMOKE_READONLY_IDENTITY`, `AEGISOPS_SMOKE_READONLY_ROLE`, `AEGISOPS_SMOKE_REVIEWED_ACTION_SCOPE_ID`, `AEGISOPS_SMOKE_LOW_RISK_ACTION_TYPE`, and `AEGISOPS_SMOKE_APPROVER_OWNER` in the untracked runtime env file.'
 )
@@ -103,8 +110,10 @@ for phrase in "${required_doc_phrases[@]}"; do
 done
 
 require_phrase "${runbook_path}" 'For Phase 37 customer-like rehearsal, operators run `scripts/run-phase-37-runtime-smoke-gate.sh --env-file <runtime-env-file> --evidence-dir <evidence-dir>` after startup to turn the Phase 33 bundle into an executable release gate with retained smoke evidence.' "runbook Phase 37 executable gate link"
+require_phrase "${runbook_path}" 'Before the runtime smoke gate, operators run `scripts/verify-phase-37-reviewed-record-chain-rehearsal.sh` to prove the seeded reviewed chain still separates detection evidence, AegisOps-owned alert and case truth, reviewed action request, approval decision, execution receipt, reconciliation, and handoff evidence.' "runbook Phase 37 record-chain rehearsal link"
+require_phrase "${rehearsal_path}" 'Run `scripts/verify-phase-37-reviewed-record-chain-rehearsal.sh` to replay the seeded reviewed record-chain fixture through detection admission, case ownership, reviewed action request, separate approval, Shuffle execution receipt, reconciliation, and manifest validation.' "customer-like rehearsal record-chain replay step"
 require_phrase "${rehearsal_path}" 'Run `scripts/run-phase-37-runtime-smoke-gate.sh --env-file <runtime-env-file> --evidence-dir <evidence-dir>` through the reverse proxy and retain its `manifest.md`.' "customer-like rehearsal executable gate step"
-require_phrase "${handoff_path}" 'For Phase 37 customer-like rehearsal, include the verifier result from `scripts/verify-customer-like-rehearsal-environment.sh --env-file <runtime-env-file>` and the executable smoke gate manifest from `scripts/run-phase-37-runtime-smoke-gate.sh --env-file <runtime-env-file> --evidence-dir <evidence-dir>` with the startup, backup-custody, and clean-state evidence.' "handoff Phase 37 executable gate evidence"
+require_phrase "${handoff_path}" 'For Phase 37 customer-like rehearsal, include the verifier result from `scripts/verify-customer-like-rehearsal-environment.sh --env-file <runtime-env-file>`, the reviewed record-chain replay result from `scripts/verify-phase-37-reviewed-record-chain-rehearsal.sh`, and the executable smoke gate manifest from `scripts/run-phase-37-runtime-smoke-gate.sh --env-file <runtime-env-file> --evidence-dir <evidence-dir>` with the startup, backup-custody, and clean-state evidence.' "handoff Phase 37 executable gate evidence"
 
 reviewed_action_write_path='/operator/create-reviewed-action-request'
 if grep -Eq -- "${reviewed_action_write_path}([/?#[:space:]\"']|$)" "${gate_path}"; then

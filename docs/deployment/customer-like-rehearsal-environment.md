@@ -120,12 +120,13 @@ The reviewed rehearsal sequence is:
 2. Copy `control-plane/deployment/first-boot/bootstrap.env.sample` into an untracked `<runtime-env-file>`.
 3. Replace placeholders with reviewed rehearsal values and trusted secret references without storing live values in Git.
 4. Run `scripts/verify-customer-like-rehearsal-environment.sh --env-file <runtime-env-file>` before startup.
-5. Start the stack through the repo-owned first-boot compose command.
-6. Run `scripts/run-phase-37-runtime-smoke-gate.sh --env-file <runtime-env-file> --evidence-dir <evidence-dir>` through the reverse proxy and retain its `manifest.md`.
-7. Capture the evidence required by `docs/deployment/operational-evidence-handoff-pack.md`.
-8. Shut down the disposable stack through the runbook and confirm no rehearsal state is treated as customer production truth.
+5. Run `scripts/verify-phase-37-reviewed-record-chain-rehearsal.sh` to replay the seeded reviewed record-chain fixture through detection admission, case ownership, reviewed action request, separate approval, Shuffle execution receipt, reconciliation, and manifest validation.
+6. Start the stack through the repo-owned first-boot compose command.
+7. Run `scripts/run-phase-37-runtime-smoke-gate.sh --env-file <runtime-env-file> --evidence-dir <evidence-dir>` through the reverse proxy and retain its `manifest.md`.
+8. Capture the evidence required by `docs/deployment/operational-evidence-handoff-pack.md`.
+9. Shut down the disposable stack through the runbook and confirm no rehearsal state is treated as customer production truth.
 
-The rehearsal passes only when startup, readiness, runtime inspection, protected read-only inspection, backup custody, customer-scoped ownership, and clean-state evidence can be shown without widening the reviewed boundary.
+The rehearsal passes only when the seeded reviewed record-chain fixture, startup, readiness, runtime inspection, protected read-only inspection, backup custody, customer-scoped ownership, and clean-state evidence can be shown without widening the reviewed boundary.
 
 ## 7. Optional Extensions
 
