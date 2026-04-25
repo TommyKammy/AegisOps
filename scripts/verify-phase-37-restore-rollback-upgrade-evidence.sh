@@ -135,7 +135,7 @@ done
 
 required_doc_phrases=(
   "This document defines the Phase 37 release-gate rehearsal for pre-change backup capture, restore validation, same-day rollback decision evidence, post-upgrade smoke, and retained handoff evidence."
-  'The rehearsal is anchored to `docs/runbook.md`, `docs/deployment/customer-like-rehearsal-environment.md`, `docs/deployment/runtime-smoke-bundle.md`, and `docs/deployment/operational-evidence-handoff-pack.md`.'
+  'The rehearsal is anchored to `docs/deployment/single-customer-release-bundle-inventory.md`, `docs/runbook.md`, `docs/deployment/customer-like-rehearsal-environment.md`, `docs/deployment/runtime-smoke-bundle.md`, and `docs/deployment/operational-evidence-handoff-pack.md`.'
   "The release gate proves that backup, restore, rollback, upgrade, smoke, and reviewed-record evidence stay explainable against the AegisOps authoritative record chain."
   "- a PostgreSQL-aware pre-change backup custody record;"
   "- the restore target and restore point selected for same-day rollback;"

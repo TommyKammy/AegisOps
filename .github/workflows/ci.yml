@@ -80,6 +80,7 @@ jobs:
           bash scripts/verify-phase-37-restore-rollback-upgrade-evidence.sh
           bash scripts/verify-phase-33-operational-evidence-handoff-pack.sh
           bash scripts/verify-single-customer-deployment-profile.sh
+          bash scripts/verify-single-customer-release-bundle-inventory.sh
           bash scripts/verify-storage-policy-doc.sh
           bash scripts/verify-source-onboarding-contract-doc.sh
           bash scripts/verify-wazuh-rule-lifecycle-runbook.sh
@@ -305,6 +306,7 @@ jobs:
           bash scripts/test-verify-phase-37-restore-rollback-upgrade-evidence.sh
           bash scripts/test-verify-phase-33-operational-evidence-handoff-pack.sh
           bash scripts/test-verify-single-customer-deployment-profile.sh
+          bash scripts/test-verify-single-customer-release-bundle-inventory.sh
           bash scripts/test-verify-source-onboarding-contract-doc.sh
           bash scripts/test-verify-wazuh-rule-lifecycle-runbook.sh
           bash scripts/test-verify-windows-source-onboarding-assets.sh

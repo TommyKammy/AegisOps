@@ -58,7 +58,7 @@ The handoff pack is a small-team operational package, not a new archive platform
 
 The authoritative record chain remains inside AegisOps reviewed records for approval, evidence, execution, and reconciliation truth.
 
-The pack is anchored to `docs/runbook.md`, `docs/deployment/single-customer-profile.md`, and `docs/deployment/runtime-smoke-bundle.md`.
+The pack is anchored to `docs/deployment/single-customer-release-bundle-inventory.md`, `docs/runbook.md`, `docs/deployment/single-customer-profile.md`, and `docs/deployment/runtime-smoke-bundle.md`.
 
 ## 2. Retained Evidence Categories
 

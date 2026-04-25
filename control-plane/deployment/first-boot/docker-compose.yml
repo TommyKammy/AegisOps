@@ -1,4 +1,7 @@
 name: aegisops-first-boot
+# This compose surface is inventoried by
+# docs/deployment/single-customer-release-bundle-inventory.md for the
+# versioned single-customer launch package.
 
 services:
   control-plane:

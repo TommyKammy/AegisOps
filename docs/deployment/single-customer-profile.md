@@ -6,7 +6,9 @@ This document is the repo-owned single-customer deployment profile package for t
 
 It packages the current first-boot runtime surface into the default reviewed deployment shape for one customer environment without adding multi-customer, HA, or optional-service prerequisites.
 
-The package is anchored to `docs/runbook.md`, `docs/smb-footprint-and-deployment-profile-baseline.md`, `docs/network-exposure-and-access-path-policy.md`, `docs/storage-layout-and-mount-policy.md`, and `control-plane/deployment/first-boot/`.
+The package is anchored to `docs/deployment/single-customer-release-bundle-inventory.md`, `docs/runbook.md`, `docs/smb-footprint-and-deployment-profile-baseline.md`, `docs/network-exposure-and-access-path-policy.md`, `docs/storage-layout-and-mount-policy.md`, and `control-plane/deployment/first-boot/`.
+
+Before install, upgrade, rollback, or handoff, operators must read `docs/deployment/single-customer-release-bundle-inventory.md` as the reviewed versioned inventory for the single-customer launch package, including required artefacts, release binding, image tag expectations, optional-extension exclusions, and verifier ownership.
 
 This package is operational guidance for the reviewed single-customer profile. It does not store customer-specific values, live secrets, DSNs, certificates, tokens, or vendor automation settings.
 
@@ -16,6 +18,7 @@ Package inventory:
 
 | Artifact | Role in this package |
 | --- | --- |
+| `docs/deployment/single-customer-release-bundle-inventory.md` | Versioned release bundle manifest for the reviewed single-customer launch package |
 | `docs/deployment/single-customer-profile.md` | Reviewed operator-facing package boundary for one customer environment |
 | `docs/deployment/customer-like-rehearsal-environment.md` | Disposable customer-like rehearsal topology and fail-closed preflight validation |
 | `control-plane/deployment/first-boot/docker-compose.yml` | Repo-owned startup surface for the current control-plane, PostgreSQL, and proxy stack |

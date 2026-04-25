@@ -63,7 +63,7 @@ This document is the reviewed Phase 33 runtime smoke bundle for single-customer 
 
 It is intentionally smaller than exhaustive E2E validation and proves only the post-deployment confidence path needed before normal business-hours operation resumes.
 
-The bundle is anchored to `docs/runbook.md`, `docs/deployment/single-customer-profile.md`, and `control-plane/deployment/first-boot/`.
+The bundle is anchored to `docs/deployment/single-customer-release-bundle-inventory.md`, `docs/runbook.md`, `docs/deployment/single-customer-profile.md`, and `control-plane/deployment/first-boot/`.
 
 The reviewed smoke path covers startup status, readiness, protected-surface reachability, operator-console read-only sanity, queue/read-only surface sanity, and first low-risk action preconditions.
 

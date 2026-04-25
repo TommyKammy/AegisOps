@@ -52,7 +52,7 @@ This document is the repo-owned single-customer deployment profile package for t
 
 It packages the current first-boot runtime surface into the default reviewed deployment shape for one customer environment without adding multi-customer, HA, or optional-service prerequisites.
 
-The package is anchored to `docs/runbook.md`, `docs/smb-footprint-and-deployment-profile-baseline.md`, `docs/network-exposure-and-access-path-policy.md`, `docs/storage-layout-and-mount-policy.md`, and `control-plane/deployment/first-boot/`.
+The package is anchored to `docs/deployment/single-customer-release-bundle-inventory.md`, `docs/runbook.md`, `docs/smb-footprint-and-deployment-profile-baseline.md`, `docs/network-exposure-and-access-path-policy.md`, `docs/storage-layout-and-mount-policy.md`, and `control-plane/deployment/first-boot/`.
 
 ## 2. Deployable Shape
 
