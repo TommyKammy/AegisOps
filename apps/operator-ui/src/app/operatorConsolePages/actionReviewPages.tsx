@@ -1,7 +1,7 @@
 import { Alert, Stack, Table, TableBody, TableCell, TableHead, TableRow } from "@mui/material";
 import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { RecordActionApprovalDecisionCard } from "../../taskActions/caseworkActionCards";
+import { RecordActionApprovalDecisionCard } from "../../taskActions/actionReviewActionCards";
 import {
   approvalLifecycleExplanation,
   approvalLifecycleSeverity,
