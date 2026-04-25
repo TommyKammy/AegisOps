@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pathlib
+import shutil
 import subprocess
 import unittest
 
@@ -63,8 +64,9 @@ class Issue812ZammadLivePilotBoundaryDocsTests(unittest.TestCase):
             "Operators must not trust raw `X-Forwarded-*`, `Forwarded`, host, proto, tenant, or user identity hints from Zammad",
             "The AegisOps backend and operator UI must not expose a direct inbound Zammad webhook authority path for this pilot.",
             "## 5. Unavailable and Degraded Operator Behavior",
-            "unavailable",
-            "degraded",
+            "`available`",
+            "`degraded`",
+            "`unavailable`",
             "When Zammad is unavailable or credentials fail custody validation, operators may continue AegisOps case review, approval, execution, and reconciliation from AegisOps records.",
             "Operators must not infer ticket existence, approval, execution, reconciliation, closure, or customer notification from a missing, stale, unreachable, or mismatched Zammad record.",
             "No failed Zammad write, stale read, timeout, proxy failure, auth failure, or degraded ticket payload may create an orphan AegisOps authority record or mark an AegisOps lifecycle step complete.",
@@ -76,8 +78,10 @@ class Issue812ZammadLivePilotBoundaryDocsTests(unittest.TestCase):
 
         self.assertTrue(verifier.exists(), f"expected verifier at {verifier}")
 
+        bash_path = shutil.which("bash")
+        self.assertIsNotNone(bash_path, "bash executable not found in PATH")
         result = subprocess.run(
-            ["bash", str(verifier), str(REPO_ROOT)],
+            [bash_path, str(verifier), str(REPO_ROOT)],
             check=False,
             capture_output=True,
             text=True,

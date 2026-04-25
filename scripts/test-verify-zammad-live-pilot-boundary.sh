@@ -37,12 +37,12 @@ bash "${fixture_repo}/scripts/verify-zammad-live-pilot-boundary.sh" "${fixture_r
 
 missing_degraded_repo="${workdir}/missing-degraded"
 cp -R "${source_repo}" "${missing_degraded_repo}"
-perl -0pi -e 's/- `degraded`: AegisOps authoritative records remain usable, but the Zammad coordination path is stale, partially unavailable, slow, missing optional fields, or returns a non-authoritative mismatch that must be visible\.\n//' "${missing_degraded_repo}/docs/operations-zammad-live-pilot-boundary.md"
+perl -0pi -e 's/`degraded`//' "${missing_degraded_repo}/docs/operations-zammad-live-pilot-boundary.md"
 assert_fails_with "${missing_degraded_repo}" 'Missing Zammad live pilot boundary statement: `degraded`'
 
 missing_unavailable_repo="${workdir}/missing-unavailable"
 cp -R "${source_repo}" "${missing_unavailable_repo}"
-perl -0pi -e 's/If the reviewed secret source is unavailable, unreadable, empty, stale, or only placeholder-backed, the pilot remains unavailable and fails closed\.\n//' "${missing_unavailable_repo}/docs/operations-zammad-live-pilot-boundary.md"
+perl -0pi -e 's/pilot remains unavailable//' "${missing_unavailable_repo}/docs/operations-zammad-live-pilot-boundary.md"
 assert_fails_with "${missing_unavailable_repo}" "Missing Zammad live pilot boundary statement: If the reviewed secret source is unavailable, unreadable, empty, stale, or only placeholder-backed, the pilot remains unavailable and fails closed."
 
 authority_drift_repo="${workdir}/authority-drift"
