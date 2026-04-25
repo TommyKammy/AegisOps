@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Callable, Iterator, Mapping, Type
 
-from .adapters.postgres import ReadinessDiagnosticsAggregates
 from .config import RuntimeConfig
 from .models import (
     ControlPlaneRecord,
@@ -12,6 +11,7 @@ from .models import (
 )
 from .restore_readiness_backup_restore import _BackupRestoreFlow
 from .restore_readiness_projection import _ReadinessHealthProjection
+from .readiness_contracts import ReadinessDiagnosticsAggregates
 from .runtime_boundary import ControlPlaneStore, RuntimeBoundaryService
 
 
