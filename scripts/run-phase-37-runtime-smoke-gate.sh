@@ -252,24 +252,26 @@ readonly_headers=(
   -H "X-AegisOps-Authenticated-Role: ${readonly_role}"
 )
 
+curl_flags=(-fsS --connect-timeout 5 --max-time 20)
+
 run_capture "compose status" "${evidence_dir}/compose-ps.txt" \
   docker compose --env-file "${env_file}" -f "${compose_file}" ps
 run_capture "bounded startup logs" "${evidence_dir}/compose-logs-tail-200.txt" \
   docker compose --env-file "${env_file}" -f "${compose_file}" logs --tail=200
 run_capture "healthz" "${evidence_dir}/healthz.json" \
-  curl -fsS "${base_url}/healthz"
+  curl "${curl_flags[@]}" "${base_url}/healthz"
 run_capture "readyz" "${evidence_dir}/readyz.json" \
-  curl -fsS "${base_url}/readyz"
+  curl "${curl_flags[@]}" "${base_url}/readyz"
 run_capture "runtime" "${evidence_dir}/runtime.json" \
-  curl -fsS "${platform_headers[@]}" "${base_url}/runtime"
+  curl "${curl_flags[@]}" "${platform_headers[@]}" "${base_url}/runtime"
 run_capture "alerts read-only inspection" "${evidence_dir}/inspect-records-alerts.json" \
-  curl -fsS "${readonly_headers[@]}" "${base_url}/inspect-records?family=alerts"
+  curl "${curl_flags[@]}" "${readonly_headers[@]}" "${base_url}/inspect-records?family=alerts"
 run_capture "cases read-only inspection" "${evidence_dir}/inspect-records-cases.json" \
-  curl -fsS "${readonly_headers[@]}" "${base_url}/inspect-records?family=cases"
+  curl "${curl_flags[@]}" "${readonly_headers[@]}" "${base_url}/inspect-records?family=cases"
 run_capture "action request read-only inspection" "${evidence_dir}/inspect-records-action-requests.json" \
-  curl -fsS "${readonly_headers[@]}" "${base_url}/inspect-records?family=action_requests"
+  curl "${curl_flags[@]}" "${readonly_headers[@]}" "${base_url}/inspect-records?family=action_requests"
 run_capture "reconciliation status inspection" "${evidence_dir}/inspect-reconciliation-status.json" \
-  curl -fsS "${readonly_headers[@]}" "${base_url}/inspect-reconciliation-status"
+  curl "${curl_flags[@]}" "${readonly_headers[@]}" "${base_url}/inspect-reconciliation-status"
 
 cat > "${evidence_dir}/manifest.md" <<EOF
 # Phase 37 Runtime Smoke Gate Evidence
@@ -280,11 +282,12 @@ cat > "${evidence_dir}/manifest.md" <<EOF
 - Proxy endpoint: http://127.0.0.1:<proxy-port>
 - Runtime env file: <runtime-env-file>
 - Compose file: control-plane/deployment/first-boot/docker-compose.yml
-- Protected runtime inspection: evidence/runtime.json
-- Readiness inspection: evidence/readyz.json
-- Startup status: evidence/compose-ps.txt
-- Bounded logs: evidence/compose-logs-tail-200.txt
-- Read-only operator sanity: evidence/inspect-records-alerts.json, evidence/inspect-records-cases.json, evidence/inspect-records-action-requests.json, evidence/inspect-reconciliation-status.json
+- Evidence artifact paths are relative to this manifest directory.
+- Protected runtime inspection: runtime.json
+- Readiness inspection: readyz.json
+- Startup status: compose-ps.txt
+- Bounded logs: compose-logs-tail-200.txt
+- Read-only operator sanity: inspect-records-alerts.json, inspect-records-cases.json, inspect-records-action-requests.json, inspect-reconciliation-status.json
 - First low-risk action preconditions: reviewed scope ${reviewed_action_scope_id}, low-risk action type ${low_risk_action_type}, approver owner ${approver_owner}; read-only inspection only; no reviewed action request, approval decision, delegation, executor dispatch, or reconciliation write was performed by this gate.
 - Optional extension validation: out of scope for this mainline gate.
 EOF

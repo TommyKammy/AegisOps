@@ -169,6 +169,29 @@ if ! grep -F "Phase 37 Runtime Smoke Gate Evidence" "${valid_evidence}/manifest.
   exit 1
 fi
 
+if grep -F "evidence/" "${valid_evidence}/manifest.md" >/dev/null; then
+  echo "Evidence manifest must list artifact paths relative to the manifest directory" >&2
+  exit 1
+fi
+
+if ! grep -F -- "- Protected runtime inspection: runtime.json" "${valid_evidence}/manifest.md" >/dev/null; then
+  echo "Expected runtime artifact path to be relative to the manifest directory" >&2
+  exit 1
+fi
+
+actual_curl_count="$(wc -l < "${curl_log}" | tr -d '[:space:]')"
+if [[ "${actual_curl_count}" != "7" ]]; then
+  echo "Expected 7 curl smoke calls, saw ${actual_curl_count}" >&2
+  cat "${curl_log}" >&2
+  exit 1
+fi
+
+if grep -v -- "-fsS --connect-timeout 5 --max-time 20" "${curl_log}" >/dev/null; then
+  echo "Expected every curl smoke call to use bounded timeout flags" >&2
+  cat "${curl_log}" >&2
+  exit 1
+fi
+
 if grep -F "/operator/create-reviewed-action-request" "${curl_log}" >/dev/null; then
   echo "Smoke gate must not create reviewed action requests" >&2
   exit 1
