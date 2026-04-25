@@ -218,7 +218,7 @@ create_repo "${absolute_path_manifest_repo}"
 write_shared_docs "${absolute_path_manifest_repo}"
 write_valid_doc "${absolute_path_manifest_repo}"
 write_valid_manifest "${absolute_path_manifest_repo}/manifest.md"
-printf '\nLocal output: /Users/example/evidence/manifest.md\n' >> "${absolute_path_manifest_repo}/manifest.md"
+printf '\nLocal output: /%s/%s/evidence/manifest.md\n' "Users" "example" >> "${absolute_path_manifest_repo}/manifest.md"
 commit_fixture "${absolute_path_manifest_repo}"
 assert_fails_with "${absolute_path_manifest_repo}" "${absolute_path_manifest_repo}/manifest.md" "Forbidden Phase 37 release-gate evidence manifest: workstation-local absolute path detected"
 
