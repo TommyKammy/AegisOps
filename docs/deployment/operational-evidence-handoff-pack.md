@@ -12,6 +12,8 @@ The pack is anchored to `docs/deployment/single-customer-release-bundle-inventor
 
 For the Phase 38 single-customer launch package, `docs/deployment/single-customer-release-bundle-inventory.md` is the reviewed bundle manifest that names this handoff pack as required retained evidence guidance.
 
+For Phase 38 release handoff, use `docs/deployment/release-handoff-evidence-package.md` as the one launch or upgrade handoff index; this operational pack remains retained evidence guidance and does not become workflow authority.
+
 Use this pack when an operator needs a compact, reviewable evidence bundle after deployment, upgrade, restore, approval, execution, reconciliation review, rollback, or a planned handoff window.
 
 The pack may reference external substrate receipts, backup custody notes, or bounded logs, but those references remain evidence attached to reviewed AegisOps records. They do not create a parallel source of authority.

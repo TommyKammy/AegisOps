@@ -18,6 +18,8 @@ Bundle handoff owner: the named single-customer operator or maintainer who accep
 
 This manifest is the first inventory operators read before install, upgrade, rollback, or handoff. It is anchored to `docs/runbook.md`, `docs/deployment/single-customer-profile.md`, `docs/deployment/runtime-smoke-bundle.md`, `docs/deployment/customer-like-rehearsal-environment.md`, `docs/deployment/restore-rollback-upgrade-evidence-rehearsal.md`, `docs/deployment/operational-evidence-handoff-pack.md`, and `control-plane/deployment/first-boot/`.
 
+The release handoff evidence package in `docs/deployment/release-handoff-evidence-package.md` is the Phase 38 handoff index that ties the release bundle identifier, install preflight result, runtime smoke, restore, rollback, upgrade, known limitations, rollback instructions, handoff owner, and next health review to one bounded record.
+
 ## 2. Required Launch Bundle Inventory
 
 | Bundle entry | Owner | Source path | Release binding | Handoff relevance |
