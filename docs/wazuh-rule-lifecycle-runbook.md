@@ -89,7 +89,27 @@ If `wazuh-logtest` output does not preserve the reviewed rule metadata or accoun
 
 If the rule only validates with ad hoc field rewrites, undocumented parser assumptions, or missing provenance, onboarding is not complete.
 
-## 6. Rollout, Fixture Review, and Rollback
+## 6. Phase 40 Detector Activation Gate
+
+Phase 40 detector activation must remain a reviewed AegisOps release-gate decision, not a Wazuh-owned workflow transition.
+
+Staging activation is allowed only after rule review, fixture review, expected-volume review, false-positive review, rollback owner, disable owner, and next-review date are recorded.
+
+Staging activation is a controlled observation step for candidate detector behavior. It may use reviewed replay data, a controlled validation environment, or a test index, but it must not be treated as production activation, AegisOps workflow authority, or a live executor wiring approval.
+
+Before a candidate moves from staging to activation review, the reviewer must confirm:
+
+- the Wazuh rule identity, source family, parser assumptions, and reviewed fixture set are explicit;
+- the candidate has a named reviewer, activation owner, disable owner, rollback owner, and next-review date;
+- expected alert volume, expected benign cases, false-positive review notes, and analyst load expectations are recorded;
+- the detector evidence handoff path names the AegisOps-owned alert, case, reconciliation, and release-gate evidence records that will carry the operational truth; and
+- rollback can restore the last reviewed rule revision and fixture set without relying on Wazuh as the authority for downstream workflow state.
+
+Activation evidence must identify the candidate rule, reviewed fixture set, staging validation result, reviewer, activation window, expected alert volume, and release-gate evidence record.
+
+The gate must fail closed when provenance, scope, reviewer, owner, fixture, validation, false-positive, disable, rollback, or release-gate evidence is missing, malformed, placeholder, or inferred.
+
+## 7. Rollout, Disable, and Rollback
 
 Controlled rollout review must happen only after the `wazuh-logtest` result, fixture updates, and local tests all agree on the intended alert behavior.
 
@@ -102,6 +122,45 @@ Before any separate activation decision, reviewers should confirm:
 
 Rollback means disabling or reverting the custom rule, restoring the last reviewed rule revision, and withdrawing any dependent fixture or workflow assumptions until validation is rerun.
 
+Disable evidence must identify the disabled rule or candidate, disable owner, disable reason, affected fixture or parser evidence, operator notification path, and follow-up review.
+
+Rollback evidence must identify the last reviewed rule revision, restored fixture set, rollback owner, rollback reason, validation rerun result, and AegisOps release-gate evidence record.
+
 If rollback is required, reviewers should also record whether the previous fixture set must be restored, whether any adapter logic depends on the reverted rule shape, and whether analyst-facing expectations need to move back to `staging` or `candidate`.
 
 Rollback must remain non-destructive and reviewable. It is a documentation, rule-set, fixture, and validation reset path rather than an approval for live destructive response or undocumented hotfixes.
+
+## 8. False-Positive Handling
+
+False-positive handling must keep benign, suspicious, deferred, and ambiguous outcomes tied to AegisOps-owned alert, case, approval, action, execution, or reconciliation records.
+
+The false-positive review must record the specific benign explanation, reviewed evidence source, affected rule or candidate, reviewer, follow-up owner, and whether the candidate remains in staging, moves toward activation review, returns to `candidate`, or is disabled.
+
+A benign conclusion requires explicit linkage to an AegisOps-owned record, approved change-management path, or reviewed read-only source evidence. Familiar actor names, hostnames, repository names, tenant names, Wazuh manager labels, expected-looking groups, comments, or nearby metadata are not enough to suppress a candidate or declare the signal safe.
+
+If false-positive review depends on missing parser evidence, missing Wazuh provenance, raw forwarded identity, placeholder credentials, sample secrets, unsigned tokens, TODO values, or inferred tenant, repository, account, issue, or environment linkage, the candidate remains blocked until the prerequisite is supplied.
+
+## 9. Detector Evidence Handoff
+
+Detector evidence handoff must land in AegisOps-owned records and the retained release-gate evidence package before activation is treated as complete.
+
+The handoff package must name:
+
+- the Wazuh candidate rule and source-family package;
+- the reviewed fixture set and validation command result;
+- the AegisOps alert, case, or reconciliation record identifiers that received detector evidence;
+- the reviewer, activation owner, disable owner, rollback owner, and next-review date;
+- the false-positive review disposition and expected alert volume; and
+- the release-gate evidence record that binds activation, disable, and rollback evidence to the current repository revision.
+
+The handoff is evidence custody only. It does not let Wazuh decide case truth, approval truth, execution truth, reconciliation truth, or release readiness.
+
+## 10. Authority Boundary
+
+Wazuh remains detection substrate only and is not the authority for AegisOps alert lifecycle, case state, approval state, action state, execution state, reconciliation outcome, or release-gate truth.
+
+Wazuh may provide analytic signal evidence, rule metadata, parser output, and source provenance for AegisOps review. AegisOps-owned records remain authoritative for workflow state, analyst disposition, approval decisions, action delegation, execution reconciliation, release-gate acceptance, disable decisions, and rollback completion.
+
+Operators must not infer activation success, disable completion, rollback completion, case closure, approval state, or reconciliation outcome from Wazuh rule state, alert count, source names, manager labels, or detector status alone.
+
+When Wazuh substrate evidence and AegisOps-owned records disagree, repair the derived substrate-facing projection or block the gate for review. Do not redefine AegisOps workflow truth around Wazuh status.
