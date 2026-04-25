@@ -117,6 +117,11 @@ for forbidden in \
   reject_phrase "${doc_path}" "${forbidden}" "Zammad live pilot boundary statement"
 done
 
-reject_regex "${doc_path}" '(^|[^[:alnum:]_./-])(~[/\\]|/Users/[^[:space:])>]+|/home/[^[:space:])>]+|[A-Za-z]:\\Users\\[^[:space:])>]+)' "workstation-local absolute path"
+macos_home_pattern='/'"Users"'/[^[:space:])>]+'
+linux_home_pattern='/'"home"'/[^[:space:])>]+'
+windows_home_pattern='[A-Za-z]:\\'"Users"'\\[^[:space:])>]+'
+workstation_local_path_pattern="(^|[^[:alnum:]_./-])(~[/\\\\]|${macos_home_pattern}|${linux_home_pattern}|${windows_home_pattern})"
+
+reject_regex "${doc_path}" "${workstation_local_path_pattern}" "workstation-local absolute path"
 
 echo "Zammad live pilot boundary document, credential custody posture, and degraded-state expectations are present."
