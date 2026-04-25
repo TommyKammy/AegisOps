@@ -10,7 +10,7 @@ It does not authorize environment-specific secrets in version control, optional-
 
 This document exists to define one reviewed startup and shutdown path that operators can rehearse without reconstructing the sequence from multiple phase notes.
 
-Before install, upgrade, rollback, restore, or launch handoff, operators must read the Phase 38 release bundle inventory in `docs/deployment/single-customer-release-bundle-inventory.md` to confirm the reviewed single-customer package, release identifier, repository revision, image tag expectations, required artefacts, and optional-extension exclusions.
+Before install, upgrade, rollback, restore, or launch handoff, operators must read the Phase 38 release bundle inventory in `docs/deployment/single-customer-release-bundle-inventory.md` to confirm the reviewed single-customer package, release identifier, repository revision, image tag expectations, secret, certificate, and proxy custody checklist expectations, required artefacts, and optional-extension exclusions.
 
 The reviewed procedure is limited to the current first-boot runtime floor:
 
