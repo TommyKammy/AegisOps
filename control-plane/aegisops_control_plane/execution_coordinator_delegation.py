@@ -4,6 +4,10 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Mapping
 
+from .action_receipt_validation import (
+    MissingReceiptValueError,
+    require_receipt_string_value,
+)
 from .execution_coordinator import (
     ExecutionCoordinatorServiceDependencies,
     _PHASE26_REVIEWED_COORDINATION_TARGET_TYPES,
@@ -397,12 +401,13 @@ class ApprovedActionDelegationCoordinator:
 
     @staticmethod
     def _require_receipt_string_attribute(receipt: object, field_name: str) -> str:
-        value = getattr(receipt, field_name, None)
-        if not isinstance(value, str) or value.strip() == "":
-            raise ValueError(
-                f"adapter receipt missing required '{field_name}' attribute"
+        try:
+            return require_receipt_string_value(
+                getattr(receipt, field_name, None),
+                field_name,
             )
-        return value
+        except MissingReceiptValueError as exc:
+            raise ValueError(str(exc)) from exc
 
     def _mark_dispatch_failure(
         self,
