@@ -94,6 +94,30 @@ def authenticate_protected_write(
     )
 
 
+def require_matching_authenticated_identity(
+    *,
+    authenticated_identity: str | None,
+    asserted_identity: str,
+) -> None:
+    if (authenticated_identity or "").strip() != asserted_identity.strip():
+        raise PermissionError(
+            "authenticated identity header must match the asserted control-plane identity"
+        )
+
+
+def require_reviewed_proxy_identity_match(
+    *,
+    principal: object,
+    asserted_identity: str,
+) -> None:
+    if getattr(principal, "access_path", "") != "reviewed_reverse_proxy":
+        return
+    require_matching_authenticated_identity(
+        authenticated_identity=getattr(principal, "identity", None),
+        asserted_identity=asserted_identity,
+    )
+
+
 def _authenticate_protected_surface(
     *,
     service: AegisOpsControlPlaneService,
@@ -130,4 +154,6 @@ __all__ = [
     "authenticate_protected_write",
     "protected_read_roles",
     "protected_write_roles",
+    "require_matching_authenticated_identity",
+    "require_reviewed_proxy_identity_match",
 ]

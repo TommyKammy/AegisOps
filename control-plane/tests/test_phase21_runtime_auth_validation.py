@@ -24,6 +24,7 @@ from aegisops_control_plane.http_protected_surface import (
     protected_read_roles,
     protected_write_roles,
 )
+from aegisops_control_plane.http_runtime_surface import RUNTIME_READ_PATHS
 from aegisops_control_plane.operations import (
     RestoreReadinessService,
     RuntimeBoundaryService,
@@ -101,6 +102,20 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
             OPERATOR_APPROVER_PATHS,
         )
         self.assertIn("/diagnostics/readiness", PROTECTED_READ_ROLES_BY_PATH)
+
+    def test_http_runtime_status_routes_are_declared_outside_handler_dispatch(
+        self,
+    ) -> None:
+        self.assertEqual(
+            RUNTIME_READ_PATHS,
+            frozenset(
+                {
+                    "/runtime",
+                    "/diagnostics/readiness",
+                    "/admin/bootstrap-status",
+                }
+            ),
+        )
 
     def test_operator_write_auth_invokes_loopback_gate_before_surface_auth(
         self,
