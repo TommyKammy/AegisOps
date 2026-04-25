@@ -94,7 +94,7 @@ for expected in "${required_candidate_text[@]}"; do
 done
 
 require_contains "${microsoft_onboarding_doc}" 'Readiness state: `schema-reviewed`'
-if grep -Fqx -- 'Readiness state: `detection-ready`' "${microsoft_onboarding_doc}" >/dev/null; then
+if grep -Eq -- '^[[:space:]]*Readiness state:[[:space:]]*`detection-ready`[[:space:]]*$' "${microsoft_onboarding_doc}"; then
   echo "Microsoft 365 audit must not be silently uplifted by the Entra ID detector candidate." >&2
   exit 1
 fi
