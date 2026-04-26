@@ -46,6 +46,46 @@ function setTextboxValue(name: string, value: string) {
   });
 }
 
+function renderCaseworkResetHarness() {
+  return renderWithTaskActionProviders(
+    <CaseworkCardsHarness
+      actionRequestId="action-request-456"
+      actionRequestState="pending_approval"
+      approvalState="pending"
+      caseId="case-456"
+      decisionRationale="Pending review"
+      expiresAt="2026-05-01T00:00:00Z"
+      linkedEvidenceIds={["evidence-123"]}
+      linkedLeadIds={["lead-123"]}
+      linkedObservationIds={["observation-123"]}
+      linkedRecommendationIds={["recommendation-123"]}
+    />,
+  );
+}
+
+function rerenderCaseworkResetHarness(rerender: ReturnType<typeof render>["rerender"]) {
+  rerender(
+    <AdminContext dataProvider={testDataProvider}>
+      <TaskActionClientProvider
+        client={createOperatorTaskActionClient({ fetchFn: vi.fn<typeof fetch>() })}
+      >
+        <CaseworkCardsHarness
+          actionRequestId="action-request-789"
+          actionRequestState="granted"
+          approvalState="approved"
+          caseId="case-789"
+          decisionRationale="Already granted"
+          expiresAt="2026-06-01T00:00:00Z"
+          linkedEvidenceIds={["evidence-789"]}
+          linkedLeadIds={["lead-789"]}
+          linkedObservationIds={["observation-789"]}
+          linkedRecommendationIds={["recommendation-789"]}
+        />
+      </TaskActionClientProvider>
+    </AdminContext>,
+  );
+}
+
 function PromoteAlertCardHarness({
   alertId,
   currentCaseId,
@@ -222,20 +262,7 @@ describe("caseworkActionCards", () => {
   });
 
   it("resets observation, lead, and recommendation drafts when the bound case id changes", async () => {
-    const { rerender } = renderWithTaskActionProviders(
-      <CaseworkCardsHarness
-        actionRequestId="action-request-456"
-        actionRequestState="pending_approval"
-        approvalState="pending"
-        caseId="case-456"
-        decisionRationale="Pending review"
-        expiresAt="2026-05-01T00:00:00Z"
-        linkedEvidenceIds={["evidence-123"]}
-        linkedLeadIds={["lead-123"]}
-        linkedObservationIds={["observation-123"]}
-        linkedRecommendationIds={["recommendation-123"]}
-      />,
-    );
+    const { rerender } = renderCaseworkResetHarness();
 
     setTextboxValue("Observed at", "2026");
     setTextboxValue("Scope statement", "scope");
@@ -245,42 +272,8 @@ describe("caseworkActionCards", () => {
     setTextboxValue("Lead id", "stale-lead");
     setTextboxValue("Intended outcome", "stale-outcome");
     setTextboxValue("Recommendation id", "stale-recommendation");
-    setTextboxValue("Recipient identity", "owner-stale@example.com");
-    setTextboxValue("Message intent", "stale-intent");
-    setTextboxValue("Escalation reason", "stale-escalation");
-    setTextboxValue("Expires at", "2026-05");
-    setTextboxValue("Action request id override", "stale-request");
-    setTextboxValue("Decided at", "2026-04");
-    setTextboxValue("Decision rationale", "stale-decision-rationale");
-    setTextboxValue("Fallback at", "2026-04");
-    setTextboxValue("Reason", "stale-reason");
-    setTextboxValue("Action taken", "stale-action");
-    setTextboxValue("Verification evidence ids", "stale-evidence-list");
-    setTextboxValue("Residual uncertainty", "stale-uncertainty");
-    setTextboxValue("Escalated at", "2026-04");
-    setTextboxValue("Escalated to", "stale-manager");
-    setTextboxValue("Note", "stale-note");
 
-    rerender(
-      <AdminContext dataProvider={testDataProvider}>
-        <TaskActionClientProvider
-          client={createOperatorTaskActionClient({ fetchFn: vi.fn<typeof fetch>() })}
-        >
-          <CaseworkCardsHarness
-            actionRequestId="action-request-789"
-            actionRequestState="granted"
-            approvalState="approved"
-            caseId="case-789"
-            decisionRationale="Already granted"
-            expiresAt="2026-06-01T00:00:00Z"
-            linkedEvidenceIds={["evidence-789"]}
-            linkedLeadIds={["lead-789"]}
-            linkedObservationIds={["observation-789"]}
-            linkedRecommendationIds={["recommendation-789"]}
-          />
-        </TaskActionClientProvider>
-      </AdminContext>,
-    );
+    rerenderCaseworkResetHarness(rerender);
 
     expect(screen.getByRole("textbox", { name: "Observed at" })).toHaveValue("");
     expect(screen.getByRole("textbox", { name: "Scope statement" })).toHaveValue("");
@@ -294,6 +287,24 @@ describe("caseworkActionCards", () => {
     expect(screen.getByRole("textbox", { name: "Recommendation id" })).toHaveValue(
       "recommendation-789",
     );
+    expect(screen.getByText("Known observation ids: observation-789")).toBeInTheDocument();
+    expect(screen.getByText("Known lead ids: lead-789")).toBeInTheDocument();
+    expect(screen.getByText("Known recommendation ids: recommendation-789")).toBeInTheDocument();
+  }, 15000);
+
+  it("resets action request and approval drafts when the bound case id changes", async () => {
+    const { rerender } = renderCaseworkResetHarness();
+
+    setTextboxValue("Recipient identity", "owner-stale@example.com");
+    setTextboxValue("Message intent", "stale-intent");
+    setTextboxValue("Escalation reason", "stale-escalation");
+    setTextboxValue("Expires at", "2026-05");
+    setTextboxValue("Action request id override", "stale-request");
+    setTextboxValue("Decided at", "2026-04");
+    setTextboxValue("Decision rationale", "stale-decision-rationale");
+
+    rerenderCaseworkResetHarness(rerender);
+
     expect(screen.getByRole("textbox", { name: "Recipient identity" })).toHaveValue("");
     expect(screen.getByRole("textbox", { name: "Message intent" })).toHaveValue("");
     expect(screen.getByRole("textbox", { name: "Escalation reason" })).toHaveValue("");
@@ -303,6 +314,22 @@ describe("caseworkActionCards", () => {
     expect(screen.getByRole("textbox", { name: "Decision rationale" })).toHaveValue(
       "Already granted",
     );
+  }, 15000);
+
+  it("resets manual follow-up drafts when the bound case id changes", async () => {
+    const { rerender } = renderCaseworkResetHarness();
+
+    setTextboxValue("Fallback at", "2026-04");
+    setTextboxValue("Reason", "stale-reason");
+    setTextboxValue("Action taken", "stale-action");
+    setTextboxValue("Verification evidence ids", "stale-evidence-list");
+    setTextboxValue("Residual uncertainty", "stale-uncertainty");
+    setTextboxValue("Escalated at", "2026-04");
+    setTextboxValue("Escalated to", "stale-manager");
+    setTextboxValue("Note", "stale-note");
+
+    rerenderCaseworkResetHarness(rerender);
+
     expect(screen.getByRole("textbox", { name: "Fallback at" })).toHaveValue("");
     expect(screen.getByRole("textbox", { name: "Reason" })).toHaveValue("");
     expect(screen.getByRole("textbox", { name: "Action taken" })).toHaveValue("");
@@ -313,8 +340,5 @@ describe("caseworkActionCards", () => {
     expect(screen.getByRole("textbox", { name: "Escalated at" })).toHaveValue("");
     expect(screen.getByRole("textbox", { name: "Escalated to" })).toHaveValue("");
     expect(screen.getByRole("textbox", { name: "Note" })).toHaveValue("");
-    expect(screen.getByText("Known observation ids: observation-789")).toBeInTheDocument();
-    expect(screen.getByText("Known lead ids: lead-789")).toBeInTheDocument();
-    expect(screen.getByText("Known recommendation ids: recommendation-789")).toBeInTheDocument();
   }, 15000);
 });
