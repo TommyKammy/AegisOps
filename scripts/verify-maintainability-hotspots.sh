@@ -67,7 +67,7 @@ def tracked_python_files() -> list[str]:
             str(repo_root),
             "ls-files",
             "--",
-            "control-plane/aegisops_control_plane/*.py",
+            ":(glob)control-plane/aegisops_control_plane/**/*.py",
         ],
         capture_output=True,
         text=True,

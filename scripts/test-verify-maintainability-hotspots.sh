@@ -141,6 +141,24 @@ if ! grep -F "control-plane/aegisops_control_plane/new_facade.py" "${fail_stderr
   exit 1
 fi
 
+nested_hotspot_repo="${workdir}/nested-hotspot"
+create_repo \
+  "${nested_hotspot_repo}" \
+  "control-plane/aegisops_control_plane/facades/operator_facade.py" "class OperatorFacade:
+    def expand(self):
+        auth_principal = 'trusted-runtime-boundary'
+        operator_detail_snapshot = {'principal': auth_principal}
+        case_lifecycle_transition = operator_detail_snapshot
+        assistant_advisory_recommendation = case_lifecycle_transition
+        action_approval_reconciliation = assistant_advisory_recommendation
+        restore_readiness_export = action_approval_reconciliation
+        evidence_ingest_admission = restore_readiness_export
+        return evidence_ingest_admission"
+append_repeated_lines "${nested_hotspot_repo}" "control-plane/aegisops_control_plane/facades/operator_facade.py" "mixed_line" 950
+git -C "${nested_hotspot_repo}" add .
+git -C "${nested_hotspot_repo}" commit -q -m "nested hotspot"
+assert_fails_with "${nested_hotspot_repo}" "control-plane/aegisops_control_plane/facades/operator_facade.py"
+
 missing_doc_repo="${workdir}/missing-doc"
 create_repo \
   "${missing_doc_repo}" \
