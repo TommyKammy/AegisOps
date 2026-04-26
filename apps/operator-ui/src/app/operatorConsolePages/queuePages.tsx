@@ -1,6 +1,17 @@
-import { Table, TableBody, TableCell, TableHead, TableRow, Typography } from "@mui/material";
+import {
+  Alert,
+  Chip,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  Typography,
+} from "@mui/material";
 import { useMemo } from "react";
 import {
+  asRecordArray,
   asString,
   asStringArray,
   AuditedRouteLink,
@@ -14,9 +25,116 @@ import {
   RecordWarnings,
   SectionCard,
   StatusStrip,
+  statusTone,
   useOperatorList,
   ValueList,
 } from "./shared";
+
+function aiTraceReviewStateLabel(state: string) {
+  switch (state) {
+    case "provider_degraded":
+      return "Provider degraded";
+    case "citation_failure":
+      return "Citation failure";
+    case "conflict":
+      return "Conflict";
+    case "unresolved":
+      return "Unresolved";
+    default:
+      return state
+        .replace(/[_-]+/g, " ")
+        .replace(/\b\w/g, (character) => character.toUpperCase());
+  }
+}
+
+function QueueAiTraceReviewGroups({ records }: { records: Record<string, unknown>[] }) {
+  const groups = records.flatMap((record) =>
+    asRecordArray(record.ai_trace_review_groups).map((group) => ({
+      alertId: asString(group.alert_id) ?? asString(record.alert_id),
+      caseId: asString(group.case_id) ?? asString(record.case_id),
+      states: asStringArray(group.states),
+      traceCount: typeof group.trace_count === "number" ? group.trace_count : null,
+      traceLink: asString(group.trace_link),
+      traces: asRecordArray(group.traces),
+    })),
+  );
+
+  if (groups.length === 0) {
+    return null;
+  }
+
+  return (
+    <SectionCard
+      subtitle="Unresolved assistant trace states stay grouped by authoritative alert or case scope for daily review. These links open read-only trace context only."
+      title="AI Trace review queue"
+    >
+      <Stack spacing={2}>
+        <Alert severity="warning" variant="outlined">
+          AI Trace review is advisory-only; it cannot approve, execute, reconcile, or override reviewed records.
+        </Alert>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Scope</TableCell>
+              <TableCell>Trace states</TableCell>
+              <TableCell>Trace count</TableCell>
+              <TableCell>Review link</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {groups.map((group) => {
+              const traceKey =
+                group.traceLink ??
+                group.traces
+                  .map((trace) => asString(trace.ai_trace_id))
+                  .find((traceId): traceId is string => traceId !== null) ??
+                `${group.alertId ?? "alert"}:${group.caseId ?? "case"}`;
+              return (
+                <TableRow hover key={traceKey}>
+                  <TableCell>
+                    <Stack spacing={0.5}>
+                      <Typography variant="body2">
+                        Alert: {group.alertId ?? "Not available"}
+                      </Typography>
+                      <Typography color="text.secondary" variant="body2">
+                        Case: {group.caseId ?? "No case anchor"}
+                      </Typography>
+                    </Stack>
+                  </TableCell>
+                  <TableCell>
+                    <Stack direction="row" flexWrap="wrap" gap={1}>
+                      {group.states.map((state) => (
+                        <Chip
+                          color={statusTone(state)}
+                          key={`${traceKey}-${state}`}
+                          label={aiTraceReviewStateLabel(state)}
+                          size="small"
+                          variant={state === "unresolved" ? "outlined" : "filled"}
+                        />
+                      ))}
+                    </Stack>
+                  </TableCell>
+                  <TableCell>{group.traceCount ?? group.traces.length}</TableCell>
+                  <TableCell>
+                    {group.traceLink ? (
+                      <AuditedRouteLink label="Open AI trace review" to={group.traceLink}>
+                        Open AI trace review
+                      </AuditedRouteLink>
+                    ) : (
+                      <Typography color="text.secondary" variant="body2">
+                        No trace link
+                      </Typography>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </Stack>
+    </SectionCard>
+  );
+}
 
 export function QueuePage() {
   const filter = useMemo(() => ({}), []);
@@ -39,70 +157,73 @@ export function QueuePage() {
       {data ? <QueryStateNotice error={error} refreshing={refreshing} /> : null}
       {data ? (
         data.length > 0 ? (
-          <SectionCard
-            subtitle="Explicit degraded, pending, and mismatch states remain visible instead of being smoothed away."
-            title="Queue records"
-          >
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Alert</TableCell>
-                  <TableCell>Review state</TableCell>
-                  <TableCell>Case</TableCell>
-                  <TableCell>Source family</TableCell>
-                  <TableCell>Action review</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {data.map((record) => {
-                  const alertId = asString(record.alert_id) ?? "Unknown alert";
-                  const caseId = asString(record.case_id);
-                  const sourceFamily = asString(
-                    getPath(record, "reviewed_context.source.source_family"),
-                  );
-                  const actionReviewState = asString(
-                    getPath(record, "current_action_review.review_state"),
-                  );
-                  return (
-                    <TableRow hover key={String(record.id ?? alertId)}>
-                      <TableCell>
-                        <Typography component="div">
-                          <AuditedRouteLink
-                            label="Open alert detail"
-                            to={`/operator/alerts/${alertId}`}
-                          >
-                            {alertId}
-                          </AuditedRouteLink>
-                        </Typography>
-                        <Typography color="text.secondary" variant="caption">
-                          {formatValue(record.queue_selection)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <StatusStrip values={[["Review", asString(record.review_state)]]} />
-                      </TableCell>
-                      <TableCell>
-                        {caseId ? (
-                          <AuditedRouteLink
-                            label="Open case detail"
-                            to={`/operator/cases/${caseId}`}
-                          >
-                            {caseId}
-                          </AuditedRouteLink>
-                        ) : (
-                          <Typography color="text.secondary" variant="body2">
-                            No case anchor
+          <Stack spacing={3}>
+            <QueueAiTraceReviewGroups records={data} />
+            <SectionCard
+              subtitle="Explicit degraded, pending, and mismatch states remain visible instead of being smoothed away."
+              title="Queue records"
+            >
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Alert</TableCell>
+                    <TableCell>Review state</TableCell>
+                    <TableCell>Case</TableCell>
+                    <TableCell>Source family</TableCell>
+                    <TableCell>Action review</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {data.map((record) => {
+                    const alertId = asString(record.alert_id) ?? "Unknown alert";
+                    const caseId = asString(record.case_id);
+                    const sourceFamily = asString(
+                      getPath(record, "reviewed_context.source.source_family"),
+                    );
+                    const actionReviewState = asString(
+                      getPath(record, "current_action_review.review_state"),
+                    );
+                    return (
+                      <TableRow hover key={String(record.id ?? alertId)}>
+                        <TableCell>
+                          <Typography component="div">
+                            <AuditedRouteLink
+                              label="Open alert detail"
+                              to={`/operator/alerts/${alertId}`}
+                            >
+                              {alertId}
+                            </AuditedRouteLink>
                           </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell>{sourceFamily ?? "Not available"}</TableCell>
-                      <TableCell>{actionReviewState ?? "No active review"}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </SectionCard>
+                          <Typography color="text.secondary" variant="caption">
+                            {formatValue(record.queue_selection)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <StatusStrip values={[["Review", asString(record.review_state)]]} />
+                        </TableCell>
+                        <TableCell>
+                          {caseId ? (
+                            <AuditedRouteLink
+                              label="Open case detail"
+                              to={`/operator/cases/${caseId}`}
+                            >
+                              {caseId}
+                            </AuditedRouteLink>
+                          ) : (
+                            <Typography color="text.secondary" variant="body2">
+                              No case anchor
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>{sourceFamily ?? "Not available"}</TableCell>
+                        <TableCell>{actionReviewState ?? "No active review"}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </SectionCard>
+          </Stack>
         ) : (
           <EmptyState message="The reviewed analyst queue is empty." />
         )

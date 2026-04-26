@@ -7,6 +7,7 @@ from .models import (
     ActionRequestRecord,
     AlertRecord,
     AnalyticSignalRecord,
+    AITraceRecord,
     CaseRecord,
     ControlPlaneRecord,
     EvidenceRecord,
@@ -158,6 +159,157 @@ class OperatorInspectionReadSurface:
         self._coordination_reference_signature = coordination_reference_signature
         self._dedupe_strings = dedupe_strings
 
+    @staticmethod
+    def _optional_string_from_mapping(
+        mapping: Mapping[str, object],
+        key: str,
+    ) -> str | None:
+        value = mapping.get(key)
+        return value.strip() if isinstance(value, str) and value.strip() else None
+
+    @staticmethod
+    def _string_tuple_from_object(value: object) -> tuple[str, ...]:
+        if isinstance(value, str) and value.strip():
+            return (value.strip(),)
+        if isinstance(value, (tuple, list)):
+            return tuple(
+                entry.strip()
+                for entry in value
+                if isinstance(entry, str) and entry.strip()
+            )
+        return ()
+
+    def _ai_trace_review_states(
+        self,
+        *,
+        lifecycle_state: str,
+        provider_status: str | None,
+        provider_operational_quality: str | None,
+        draft_status: str | None,
+        unresolved_reasons: tuple[str, ...],
+    ) -> tuple[str, ...]:
+        states: list[str] = []
+        if "conflicting_reviewed_context" in unresolved_reasons:
+            states.append("conflict")
+        if (
+            "missing_supporting_citations" in unresolved_reasons
+            or "missing_evidence_citation" in unresolved_reasons
+        ):
+            states.append("citation_failure")
+        if (
+            provider_status in {"failed", "timeout"}
+            or provider_operational_quality == "degraded"
+            or "provider_generation_failed" in unresolved_reasons
+        ):
+            states.append("provider_degraded")
+        if lifecycle_state == "under_review" or draft_status == "unresolved":
+            states.append("unresolved")
+        return tuple(dict.fromkeys(states))
+
+    def _ai_trace_review_groups_for_queue_record(
+        self,
+        *,
+        alert_id: str,
+        case_id: str | None,
+        ai_trace_records: tuple[AITraceRecord, ...],
+    ) -> tuple[dict[str, object], ...]:
+        groups_by_scope: dict[str, dict[str, object]] = {}
+        for ai_trace in ai_trace_records:
+            subject_linkage = ai_trace.subject_linkage
+            linked_alert_id = self._optional_string_from_mapping(
+                subject_linkage,
+                "source_alert_id",
+            )
+            linked_case_id = self._optional_string_from_mapping(
+                subject_linkage,
+                "source_case_id",
+            )
+            if linked_alert_id != alert_id and (
+                case_id is None or linked_case_id != case_id
+            ):
+                continue
+
+            assistant_advisory_draft = ai_trace.assistant_advisory_draft
+            draft_status = self._optional_string_from_mapping(
+                assistant_advisory_draft,
+                "status",
+            )
+            unresolved_reasons = self._string_tuple_from_object(
+                assistant_advisory_draft.get("unresolved_reasons")
+            )
+            provider_status = self._optional_string_from_mapping(
+                subject_linkage,
+                "provider_status",
+            )
+            provider_operational_quality = self._optional_string_from_mapping(
+                subject_linkage,
+                "provider_operational_quality",
+            )
+            states = self._ai_trace_review_states(
+                lifecycle_state=ai_trace.lifecycle_state,
+                provider_status=provider_status,
+                provider_operational_quality=provider_operational_quality,
+                draft_status=draft_status,
+                unresolved_reasons=unresolved_reasons,
+            )
+            if not states:
+                continue
+
+            group_case_id = linked_case_id or case_id
+            group_key = group_case_id or alert_id
+            group = groups_by_scope.setdefault(
+                group_key,
+                {
+                    "alert_id": alert_id,
+                    "case_id": group_case_id,
+                    "states": [],
+                    "traces": [],
+                },
+            )
+            group["states"] = list(
+                dict.fromkeys([*group["states"], *states])  # type: ignore[arg-type]
+            )
+            traces = group["traces"]
+            if not isinstance(traces, list):
+                continue
+            traces.append(
+                {
+                    "ai_trace_id": ai_trace.ai_trace_id,
+                    "lifecycle_state": ai_trace.lifecycle_state,
+                    "draft_status": draft_status,
+                    "provider_status": provider_status,
+                    "provider_operational_quality": provider_operational_quality,
+                    "unresolved_reasons": unresolved_reasons,
+                    "material_input_refs": ai_trace.material_input_refs,
+                    "trace_link": f"/operator/assistant/ai_trace/{ai_trace.ai_trace_id}",
+                }
+            )
+
+        groups: list[dict[str, object]] = []
+        for group in groups_by_scope.values():
+            traces = group["traces"]
+            if not isinstance(traces, list) or not traces:
+                continue
+            sorted_traces = sorted(
+                traces,
+                key=lambda trace: str(trace.get("ai_trace_id", "")),
+            )
+            first_trace = sorted_traces[0]
+            group["traces"] = tuple(sorted_traces)
+            group["trace_count"] = len(sorted_traces)
+            group["trace_link"] = first_trace.get("trace_link")
+            groups.append(group)
+
+        return tuple(
+            sorted(
+                groups,
+                key=lambda group: (
+                    str(group.get("case_id") or ""),
+                    str(group.get("alert_id") or ""),
+                ),
+            )
+        )
+
     def inspect_analyst_queue(self) -> object:
         active_alert_states = {
             "new",
@@ -170,6 +322,7 @@ class OperatorInspectionReadSurface:
             self._service._latest_detection_reconciliations_by_alert_id()
         )
         action_review_index = self._service._build_action_review_record_index()
+        ai_trace_records = self._service._store.list(AITraceRecord)
         queue_records: list[dict[str, object]] = []
         for alert in self._service._store.list(AlertRecord):
             if alert.lifecycle_state not in active_alert_states:
@@ -199,6 +352,11 @@ class OperatorInspectionReadSurface:
                 record_index=action_review_index,
             )
             review_state = self._service._alert_review_state(alert)
+            ai_trace_review_groups = self._ai_trace_review_groups_for_queue_record(
+                alert_id=alert.alert_id,
+                case_id=alert.case_id,
+                ai_trace_records=ai_trace_records,
+            )
             queue_records.append(
                 {
                     "alert_id": alert.alert_id,
@@ -237,6 +395,7 @@ class OperatorInspectionReadSurface:
                     "current_action_review": (
                         dict(action_reviews[0]) if action_reviews else None
                     ),
+                    "ai_trace_review_groups": ai_trace_review_groups,
                 }
             )
 

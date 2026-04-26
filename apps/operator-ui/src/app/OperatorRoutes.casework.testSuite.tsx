@@ -169,6 +169,82 @@ export function registerOperatorRoutesCaseworkTests() {
       });
     });
 
+    it("renders grouped AI trace review states in the analyst queue", async () => {
+      const fetchFn = createAuthorizedFetch({
+        "/inspect-analyst-queue": {
+          queue_name: "analyst_review",
+          read_only: true,
+          records: [
+            {
+              alert_id: "alert-123",
+              review_state: "degraded",
+              case_id: "case-456",
+              case_lifecycle_state: "open",
+              ai_trace_review_groups: [
+                {
+                  alert_id: "alert-123",
+                  case_id: "case-456",
+                  trace_count: 1,
+                  states: [
+                    "conflict",
+                    "citation_failure",
+                    "provider_degraded",
+                    "unresolved",
+                  ],
+                  trace_link: "/operator/assistant/ai_trace/ai-trace-queue-unresolved-001",
+                  traces: [
+                    {
+                      ai_trace_id: "ai-trace-queue-unresolved-001",
+                      lifecycle_state: "under_review",
+                      draft_status: "unresolved",
+                      provider_status: "failed",
+                      provider_operational_quality: "degraded",
+                      unresolved_reasons: [
+                        "provider_generation_failed",
+                        "missing_supporting_citations",
+                        "conflicting_reviewed_context",
+                      ],
+                    },
+                  ],
+                },
+              ],
+              reviewed_context: {
+                source: {
+                  source_family: "github_audit",
+                },
+              },
+            },
+          ],
+          total_records: 1,
+        },
+      });
+      const dependencies = createDefaultDependencies({
+        fetchFn,
+      });
+
+      render(
+        <MemoryRouter initialEntries={["/operator/queue"]}>
+          <OperatorRoutes dependencies={dependencies} />
+        </MemoryRouter>,
+      );
+
+      expect(
+        await screen.findByRole("heading", { name: "AI Trace review queue" }),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Provider degraded")).toBeInTheDocument();
+      expect(screen.getByText("Citation failure")).toBeInTheDocument();
+      expect(screen.getByText("Conflict")).toBeInTheDocument();
+      expect(screen.getByText("Unresolved")).toBeInTheDocument();
+      expect(
+        screen.getByRole("link", { name: "Open AI trace review" }),
+      ).toHaveAttribute(
+        "href",
+        "/operator/assistant/ai_trace/ai-trace-queue-unresolved-001",
+      );
+      expect(screen.queryByRole("button", { name: /approve/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /execute/i })).not.toBeInTheDocument();
+    });
+
     it("renders alert detail with authoritative and subordinate sections separated", async () => {
       const dependencies = createDefaultDependencies({
         fetchFn: createAuthorizedFetch({

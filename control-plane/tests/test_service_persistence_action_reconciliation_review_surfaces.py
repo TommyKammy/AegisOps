@@ -510,7 +510,7 @@ class ActionReviewSurfacePersistenceTests(ServicePersistenceTestBase):
             queue_snapshot["records"][0]["current_action_review"]["action_request_id"],
             second_request.action_request_id,
         )
-        self.assertLessEqual(store.list_calls, 6)
+        self.assertLessEqual(store.list_calls, 7)
         self.assertEqual(store.reconciliation_list_calls, 2)
         self.assertNotEqual(first_request.action_request_id, second_request.action_request_id)
     def test_service_action_review_surfaces_prefer_live_approval_and_execution_records(

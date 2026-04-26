@@ -30,6 +30,7 @@ export const SUPPORTED_ADVISORY_RECORD_FAMILIES = new Set([
   "recommendation",
   "approval_decision",
   "reconciliation",
+  "ai_trace",
 ]);
 
 export function advisorySummary(record: UnknownRecord) {
