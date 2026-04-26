@@ -50,7 +50,7 @@ append_repeated_lines() {
   local prefix="$3"
   local count="$4"
 
-  for index in $(seq 1 "${count}"); do
+  for ((index = 1; index <= count; index++)); do
     printf '    %s_%03d = %03d\n' "${prefix}" "${index}" "${index}" >>"${target}/${path}"
   done
 }

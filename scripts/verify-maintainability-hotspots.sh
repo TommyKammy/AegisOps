@@ -90,6 +90,7 @@ def read_baseline() -> set[str]:
 
 
 def effective_line_count(text: str) -> int:
+    """Return maintained non-comment lines; docstrings intentionally count."""
     count = 0
     for line in text.splitlines():
         stripped = line.strip()
