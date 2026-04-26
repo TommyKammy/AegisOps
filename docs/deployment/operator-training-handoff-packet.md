@@ -46,6 +46,8 @@ If any segment is missing, stale, mixed across release identifiers, or only impl
 
 ## 4. Approval, Execution, and Reconciliation Split
 
+The approval role matrix in `docs/runbook.md` is the reviewed handoff reference for approver, fallback approver, platform admin, operator, and support owner responsibilities.
+
 Approval answers whether a specific AegisOps action request is allowed for the reviewed scope.
 
 Execution answers what the approved execution surface actually attempted or refused and which receipt or correlation identifier came back.
@@ -53,6 +55,8 @@ Execution answers what the approved execution surface actually attempted or refu
 Reconciliation answers whether authoritative AegisOps review accepted, rejected, or escalated the observed execution against the approved intent.
 
 Execution success is not reconciliation success, and a ticket closure is neither execution success nor reconciliation success.
+
+Denied approvals, approval timeouts, fallback approver use, and break-glass closeout must be explained from the AegisOps approval record and directly linked evidence before the operator handoff treats the path as blocked, escalated, or returned to normal.
 
 When explaining this split to the next operator, use three separate sentences: who approved what, what surface attempted or refused it, and what reconciliation decided or still needs. Do not summarize the three surfaces as one green, done, or closed state unless the reviewed reconciliation record itself supports that terminal outcome.
 
@@ -95,6 +99,7 @@ Use repo-relative commands and placeholders in handoff notes, such as `scripts/v
 - Can the operator explain the queue item, case detail, action-review detail, approval, execution, reconciliation, and handoff path without using external ticket status as authority?
 - Can the operator point to the exact reviewed record identifiers that make up the record chain?
 - Can the operator explain why approval, execution, and reconciliation are separate decisions?
+- Can the operator point to the runbook approval role matrix and explain denial, timeout, fallback approver, and break-glass closeout evidence without widening authority?
 - Can the operator state that external tickets and assistant output are non-authoritative?
 - Can the operator assemble the evidence handoff with repo-relative commands, placeholders, and no workstation-local absolute paths?
 

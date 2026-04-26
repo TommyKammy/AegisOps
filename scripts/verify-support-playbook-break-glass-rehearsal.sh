@@ -91,6 +91,7 @@ required_playbook_phrases=(
   "| Coordination degradation |"
   "| Assistant degradation |"
   "| Runtime degradation |"
+  "| Approval handling degradation |"
   "| Rollback degradation |"
   "| Restore degradation |"
   "Source handling: inspect the reviewed source-family evidence, ingest custody, replay or fixture proof, source timestamp, and explicit linkage to the AegisOps alert, case, or evidence record before widening source scope."
@@ -98,6 +99,7 @@ required_playbook_phrases=(
   'Coordination handling: inspect `docs/operations-zammad-live-pilot-boundary.md`, `AEGISOPS_ZAMMAD_BASE_URL`, the reviewed token source reference, endpoint reachability, and explicit AegisOps linkage before treating a ticket pointer as usable coordination context.'
   "Assistant handling: inspect the assistant boundary, citations, reviewed record ids, linked evidence ids, uncertainty flags, and disabled or limited assistant surfaces before relying on an advisory summary."
   "Runtime handling: inspect the reverse-proxy health, readiness, runtime inspection, compose status, bounded logs, runtime env contract, and migration bootstrap evidence before admitting normal operator use."
+  'Approval handling: inspect `docs/runbook.md`, the AegisOps action request, approval decision record, approver or fallback approver name, denial or timeout reason, unchanged action scope, directly linked evidence, and any break-glass closeout proof before treating approval handling as complete or escalation-ready.'
   "Rollback handling: inspect the same-day rollback decision owner, selected restore point, pre-change backup custody, before-and-after repository revision, smoke result, and clean-state evidence before closing the maintenance window."
   "Restore handling: inspect backup provenance, selected restore point, empty restore target expectation, post-restore readiness, record-chain validation, and clean-state proof before returning to service."
   "Break-glass custody is a documented recovery exception, not an alternate approval path, permanent operator shortcut, or way to bypass reviewed AegisOps authority."

@@ -21,6 +21,7 @@ Pilot pause, rollback, and exit decisions must use `docs/deployment/pilot-pause-
 | Coordination degradation | Zammad boundary, endpoint, reviewed token source, reachability, and explicit AegisOps linkage. | Ticket state, comments, assignee, queue, priority, SLA, escalation, or closure as AegisOps authority. |
 | Assistant degradation | Assistant citations, reviewed record ids, linked evidence ids, uncertainty flags, and limited surfaces. | Advisory text as approval, execution, reconciliation, closure, detector activation, or support-coverage authority. |
 | Runtime degradation | Reverse-proxy health, readiness, runtime inspection, compose state, bounded logs, env contract, and migration bootstrap. | Direct backend health, optional-extension health, raw forwarded headers, or partial container state as readiness. |
+| Approval handling degradation | AegisOps action request, approval decision record, approver or fallback approver name, denial or timeout reason, unchanged scope, linked evidence, and break-glass closeout evidence when relevant. | Ticket comments, support notes, downstream receipts, browser state, or break-glass custody as approval, execution, reconciliation, or closure authority. |
 | Rollback degradation | Rollback decision owner, selected restore point, backup custody, before-and-after revisions, smoke result, and clean-state proof. | A clean retry summary as proof that the failed path disappeared. |
 | Restore degradation | Backup provenance, restore point, empty target expectation, readiness, record-chain validation, and clean-state proof. | Exception text alone as durable-state proof. |
 
@@ -35,6 +36,8 @@ Coordination handling: inspect `docs/operations-zammad-live-pilot-boundary.md`, 
 Assistant handling: inspect the assistant boundary, citations, reviewed record ids, linked evidence ids, uncertainty flags, and disabled or limited assistant surfaces before relying on an advisory summary.
 
 Runtime handling: inspect the reverse-proxy health, readiness, runtime inspection, compose status, bounded logs, runtime env contract, and migration bootstrap evidence before admitting normal operator use.
+
+Approval handling: inspect `docs/runbook.md`, the AegisOps action request, approval decision record, approver or fallback approver name, denial or timeout reason, unchanged action scope, directly linked evidence, and any break-glass closeout proof before treating approval handling as complete or escalation-ready.
 
 Rollback handling: inspect the same-day rollback decision owner, selected restore point, pre-change backup custody, before-and-after repository revision, smoke result, and clean-state evidence before closing the maintenance window.
 

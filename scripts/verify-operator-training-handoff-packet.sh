@@ -91,10 +91,12 @@ required_packet_phrases=(
   "Action review is the reviewed family that keeps the action request, approval decision, execution receipt, and reconciliation outcome visible without collapsing them into one status badge."
   "The reviewed record chain is the authoritative sequence of AegisOps-owned records that explains why work entered the queue, what case owns it, what evidence supports it, what action was requested, who approved or rejected it, what execution surface reported, and how reconciliation closed or escalated the outcome."
   'Operators must follow explicit record identifiers such as `alert_id`, `case_id`, `evidence_id`, `action_request_id`, `approval_decision_id`, `action_execution_id`, and `reconciliation_id` instead of inferring linkage from names, ticket titles, dashboard order, or nearby notes.'
+  'The approval role matrix in `docs/runbook.md` is the reviewed handoff reference for approver, fallback approver, platform admin, operator, and support owner responsibilities.'
   "Approval answers whether a specific AegisOps action request is allowed for the reviewed scope."
   "Execution answers what the approved execution surface actually attempted or refused and which receipt or correlation identifier came back."
   "Reconciliation answers whether authoritative AegisOps review accepted, rejected, or escalated the observed execution against the approved intent."
   "Execution success is not reconciliation success, and a ticket closure is neither execution success nor reconciliation success."
+  "Denied approvals, approval timeouts, fallback approver use, and break-glass closeout must be explained from the AegisOps approval record and directly linked evidence before the operator handoff treats the path as blocked, escalated, or returned to normal."
   "External tickets are coordination references only; they may carry ticket identifiers, URLs, comments, or assignee context, but they do not own AegisOps case, approval, execution, or reconciliation truth."
   "If an external ticket disagrees with the AegisOps reviewed record chain, operators keep the AegisOps record authoritative and preserve the disagreement for review."
   "Assistant output is advisory-only and must remain grounded in reviewed AegisOps records and linked evidence."
@@ -105,6 +107,7 @@ required_packet_phrases=(
   "- Can the operator explain the queue item, case detail, action-review detail, approval, execution, reconciliation, and handoff path without using external ticket status as authority?"
   "- Can the operator point to the exact reviewed record identifiers that make up the record chain?"
   "- Can the operator explain why approval, execution, and reconciliation are separate decisions?"
+  "- Can the operator point to the runbook approval role matrix and explain denial, timeout, fallback approver, and break-glass closeout evidence without widening authority?"
   "- Can the operator state that external tickets and assistant output are non-authoritative?"
   "- Can the operator assemble the evidence handoff with repo-relative commands, placeholders, and no workstation-local absolute paths?"
   "Generic SOC curriculum, broad SIEM or SOAR administration, assistant prompt engineering, multi-customer operating model, compliance certification, and ticket-system workflow ownership are out of scope."

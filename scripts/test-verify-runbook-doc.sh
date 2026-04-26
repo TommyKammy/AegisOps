@@ -140,7 +140,37 @@ Bootstrap and break-glass material are recovery exceptions only.
 
 After any break-glass use, operators must rotate the exposed bootstrap or break-glass material before the environment returns to normal operation and must preserve evidence showing the exception was closed.
 
-## 6. Approval Handling"""
+## 6. Approval Handling
+
+The approved baseline requires explicit approval for SOAR workflows that perform write or destructive actions by default.
+
+Approval handling procedures must preserve human review, auditability, and the separation between detection and execution.
+
+### 6.1 Approval Role Matrix
+
+| Role | Reviewed responsibility |
+| --- | --- |
+| Approver | Reviews the exact AegisOps action request, linked case, requested scope, evidence, risk, and expiry window before recording approve or deny on the AegisOps approval decision record. |
+| Fallback approver | Acts only when the primary approver is unavailable or the approval window would otherwise expire, and must preserve the fallback reason, time window, and same scope limits as the original request. |
+| Platform admin | Maintains reviewed identity, role binding, runtime, and secret-custody plumbing, but does not approve an action unless separately named as the approver for that request. |
+| Operator | Prepares the action request, evidence bundle, and routing note, then waits for the reviewed approval outcome instead of self-approving, executing, or treating a ticket comment as approval. |
+| Support owner | Coordinates degradation, denial, timeout, fallback, or break-glass follow-up evidence and next-owner handoff, but does not approve, execute, reconcile, or redefine AegisOps workflow truth. |
+
+### 6.2 Denial, Timeout, Fallback, and Break-Glass Closeout
+
+A denied approval keeps the action request blocked from execution, records the denial reason on the AegisOps approval decision record, and preserves any external ticket or support note only as subordinate coordination context.
+
+An approval timeout or expired approval window keeps execution blocked until a new reviewed request is created or the documented fallback approver path records the same scope, reason, and evidence in AegisOps.
+
+Fallback approval handling requires a named fallback approver, the reason the primary approver could not decide inside the reviewed window, the unchanged action scope, and evidence that the fallback did not widen authority.
+
+Break-glass closeout is a recovery closeout path only: it must document trigger, custodian, approving reviewer, bounded access window, affected binding, rotation or invalidation evidence, readiness or refusal check, clean-state proof, and return-to-normal owner without converting break-glass use into approval, execution, or reconciliation authority.
+
+### 6.3 Approval Evidence and Authority Boundary
+
+Approval truth remains the AegisOps approval decision record; external ticket comments, assistant output, browser state, downstream execution receipts, optional evidence, or support notes must not approve, deny, expire, supersede, execute, or reconcile an action.
+
+Approval, execution, and reconciliation evidence must stay visibly separated: the approval record says whether the exact request is allowed, the execution record says what was attempted or refused, and the reconciliation record says whether the observed outcome matches the approved intent."""
 if "## 5. Secret Rotation and Break-Glass Custody" not in text:
     text = text.replace(old_heading, new_block)
 text = text.replace("## 6. Validation", "## 7. Validation")
