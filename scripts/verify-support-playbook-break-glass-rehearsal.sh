@@ -129,12 +129,27 @@ for forbidden in \
   "SLA support is provided" \
   "customer-specific support contract is provided" \
   "emergency authority bypass is approved" \
+  "break-glass may approve rollback acceptance" \
   "break-glass may approve" \
   "break-glass may execute" \
   "break-glass may reconcile" \
+  "break-glass may close tickets" \
+  "break-glass may close" \
+  "break-glass may activate detectors" \
+  "break-glass may deactivate detectors" \
+  "break-glass may enable detectors" \
+  "break-glass may mark tickets authoritative" \
+  "break-glass may mark ticket state authoritative" \
+  "break-glass may change rollback acceptance" \
+  "break-glass may override rollback acceptance" \
   "ticket state is authoritative" \
+  "tickets are authoritative" \
+  "mark ticket state authoritative" \
   "detector output is authoritative" \
+  "detector activation is approved by break-glass" \
   "assistant output is authoritative" \
+  "rollback acceptance is approved" \
+  "rollback acceptance is authoritative" \
   "direct backend access is approved" \
   "personal session credential is acceptable" \
   "placeholder credential is acceptable"; do

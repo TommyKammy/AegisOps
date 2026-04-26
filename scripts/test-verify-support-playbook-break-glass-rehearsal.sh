@@ -169,6 +169,26 @@ assert_fails_with() {
   fi
 }
 
+forbidden_phrase_case_index=0
+
+assert_rejects_forbidden_playbook_phrase() {
+  local phrase="$1"
+  local target
+
+  forbidden_phrase_case_index=$((forbidden_phrase_case_index + 1))
+  target="${workdir}/forbidden-playbook-phrase-${forbidden_phrase_case_index}"
+
+  create_repo "${target}"
+  write_shared_files "${target}"
+  write_valid_playbook "${target}"
+  {
+    printf '\n'
+    printf '%s.\n' "${phrase}"
+  } >> "${target}/docs/deployment/support-playbook-break-glass-rehearsal.md"
+  commit_fixture "${target}"
+  assert_fails_with "${target}" "Forbidden support playbook statement: ${phrase}"
+}
+
 valid_repo="${workdir}/valid"
 create_repo "${valid_repo}"
 write_shared_files "${valid_repo}"
@@ -206,16 +226,31 @@ printf '# Phase 37 Restore Rollback Upgrade Evidence Rehearsal\n' > "${missing_r
 commit_fixture "${missing_restore_link_repo}"
 assert_fails_with "${missing_restore_link_repo}" "Missing restore rehearsal support playbook link:"
 
-forbidden_bypass_repo="${workdir}/forbidden-bypass"
-create_repo "${forbidden_bypass_repo}"
-write_shared_files "${forbidden_bypass_repo}"
-write_valid_playbook "${forbidden_bypass_repo}"
-cat <<'EOF' >> "${forbidden_bypass_repo}/docs/deployment/support-playbook-break-glass-rehearsal.md"
-
-Emergency authority bypass is approved for unrecoverable incidents.
-EOF
-commit_fixture "${forbidden_bypass_repo}"
-assert_fails_with "${forbidden_bypass_repo}" "Forbidden support playbook statement: emergency authority bypass is approved"
+for forbidden_phrase in \
+  "emergency authority bypass is approved" \
+  "break-glass may approve" \
+  "break-glass may execute" \
+  "break-glass may reconcile" \
+  "break-glass may close" \
+  "break-glass may close tickets" \
+  "break-glass may activate detectors" \
+  "break-glass may deactivate detectors" \
+  "break-glass may enable detectors" \
+  "break-glass may mark tickets authoritative" \
+  "break-glass may mark ticket state authoritative" \
+  "break-glass may change rollback acceptance" \
+  "break-glass may approve rollback acceptance" \
+  "break-glass may override rollback acceptance" \
+  "ticket state is authoritative" \
+  "tickets are authoritative" \
+  "mark ticket state authoritative" \
+  "detector output is authoritative" \
+  "detector activation is approved by break-glass" \
+  "assistant output is authoritative" \
+  "rollback acceptance is approved" \
+  "rollback acceptance is authoritative"; do
+  assert_rejects_forbidden_playbook_phrase "${forbidden_phrase}"
+done
 
 workstation_path_repo="${workdir}/workstation-path"
 create_repo "${workstation_path_repo}"
