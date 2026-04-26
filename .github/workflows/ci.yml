@@ -49,6 +49,7 @@ jobs:
           bash scripts/verify-documentation-ownership-map.sh
           bash scripts/verify-secops-domain-model-doc.sh
           bash scripts/verify-ingest-compose-skeleton.sh
+          bash scripts/verify-maintainability-hotspots.sh
           bash scripts/verify-naming-conventions-doc.sh
           bash scripts/verify-network-exposure-policy-doc.sh
           bash scripts/verify-n8n-compose-skeleton.sh
@@ -317,6 +318,7 @@ jobs:
           bash scripts/test-verify-control-plane-schema-skeleton.sh
           bash scripts/test-verify-detector-activation-evidence-handoff.sh
           bash scripts/test-verify-detection-lifecycle-and-rule-qa-framework.sh
+          bash scripts/test-verify-maintainability-hotspots.sh
           bash scripts/test-verify-positive-smb-value-proposition.sh
           bash scripts/run-ci-phase-contract.sh all-shell-tests
           bash scripts/test-verify-ci-phase-contract-runner.sh

@@ -192,3 +192,20 @@ Future roadmap planning should cite this document when deciding whether a hotspo
 Pull-request review should cite this document when a supposedly narrow change is actually landing on a module that already crossed the decomposition threshold.
 
 If a reviewer can point to the threshold rule and the backlog triggers above, the repo should prefer explicit backlog creation over "one more change" reasoning.
+
+## 9. How To Interpret Verifier Output
+
+The maintainability hotspot verifier is `scripts/verify-maintainability-hotspots.sh`.
+Its focused regression test is `scripts/test-verify-maintainability-hotspots.sh`.
+
+The verifier is a responsibility-growth guard, not a line-count-only gate.
+It reports a candidate only when a tracked control-plane Python module is both large enough to be review-heavy and carries several responsibility signals such as runtime or auth boundary handling, operator surfaces, casework mutation, assistant or advisory assembly, action or reconciliation governance, readiness or restore behavior, and source or evidence admission.
+
+Known current candidates are recorded in `docs/maintainability-hotspot-baseline.txt`.
+If the verifier reports only known baseline entries, maintainers should treat the output as a reminder that those files remain reviewed hotspots and should not absorb unrelated responsibility growth without a decomposition decision.
+
+If the verifier fails with a new candidate, reviewers should use the threshold rule above before extending the file further.
+The expected response is either a narrow justification that the current change stays inside one cohesive responsibility or a follow-up maintainability backlog that preserves public behavior while extracting the next coherent cluster.
+
+If the verifier fails because a baseline entry is stale, update the baseline only after confirming the listed file no longer crosses the responsibility-growth threshold.
+That stale-baseline failure is a cleanup prompt, not permission to redefine the threshold around a summary field or convenience projection.

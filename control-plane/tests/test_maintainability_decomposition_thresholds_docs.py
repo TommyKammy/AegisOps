@@ -36,6 +36,9 @@ class MaintainabilityDecompositionThresholdsDocsTests(unittest.TestCase):
             "`control-plane/aegisops_control_plane/restore_readiness.py`",
             "A hotspot should move to backlog creation when",
             "A hotspot can stay in place for the current issue only when",
+            "How To Interpret Verifier Output",
+            "`scripts/verify-maintainability-hotspots.sh`",
+            "`docs/maintainability-hotspot-baseline.txt`",
             "backlog trigger",
             "decomposition threshold",
         ):
@@ -57,6 +60,10 @@ class MaintainabilityDecompositionThresholdsDocsTests(unittest.TestCase):
         text = self._read("docs/documentation-ownership-map.md")
         self.assertIn(
             "| `docs/maintainability-decomposition-thresholds.md` | Maintainability decomposition thresholds and backlog triggers | IT Operations, Information Systems Department |",
+            text,
+        )
+        self.assertIn(
+            "| `docs/maintainability-hotspot-baseline.txt` | Reviewed maintainability hotspot verifier baseline | IT Operations, Information Systems Department |",
             text,
         )
 
