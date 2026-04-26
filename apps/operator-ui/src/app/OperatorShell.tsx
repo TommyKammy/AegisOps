@@ -147,12 +147,12 @@ function OperatorMenu({
       <Menu.Item
         leftIcon={<WarningAmberOutlinedIcon />}
         primaryText="Alerts"
-        to={buildOperatorShellPath(basePath, "queue")}
+        to={buildOperatorShellPath(basePath, "alerts")}
       />
       <Menu.Item
         leftIcon={<InsightsOutlinedIcon />}
         primaryText="Cases"
-        to={buildOperatorShellPath(basePath, "queue")}
+        to={buildOperatorShellPath(basePath, "cases")}
       />
       <Menu.Item
         leftIcon={<LinkOutlinedIcon />}
