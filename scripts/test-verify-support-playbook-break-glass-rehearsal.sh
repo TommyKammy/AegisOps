@@ -221,10 +221,11 @@ workstation_path_repo="${workdir}/workstation-path"
 create_repo "${workstation_path_repo}"
 write_shared_files "${workstation_path_repo}"
 write_valid_playbook "${workstation_path_repo}"
-cat <<'EOF' >> "${workstation_path_repo}/docs/deployment/support-playbook-break-glass-rehearsal.md"
+{
+  printf '\n'
+  printf 'Use %sUsers/example/private/support-note.md for local evidence.\n' '/'
+} >> "${workstation_path_repo}/docs/deployment/support-playbook-break-glass-rehearsal.md"
 
-Use /Users/example/private/support-note.md for local evidence.
-EOF
 commit_fixture "${workstation_path_repo}"
 assert_fails_with "${workstation_path_repo}" "Forbidden support playbook guidance: workstation-local absolute path detected"
 
