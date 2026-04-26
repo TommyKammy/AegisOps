@@ -30,6 +30,7 @@ from .assistant_provider import (
     AssistantProviderResult,
     AssistantProviderTransport,
 )
+from .action_lifecycle_write_coordinator import ActionLifecycleWriteCoordinator
 from .action_review_write_surface import ActionReviewWriteSurface
 from .case_workflow import CaseWorkflowService
 from .config import OpenBaoKVv2SecretTransport, RuntimeConfig
@@ -1384,6 +1385,7 @@ class AegisOpsControlPlaneService:
             normalize_admission_provenance=_normalize_admission_provenance,
         )
         self._execution_coordinator = ExecutionCoordinator(self)
+        self._action_lifecycle_write_coordinator = ActionLifecycleWriteCoordinator(self)
         self._endpoint_evidence_pack_adapter = EndpointEvidencePackAdapter()
         self._misp_context_adapter = MispContextAdapter(
             enabled=config.misp_enrichment_enabled
@@ -2059,7 +2061,7 @@ class AegisOpsControlPlaneService:
         delegation_issuer: str,
         evidence_ids: tuple[str, ...] = (),
     ) -> ActionExecutionRecord:
-        return self._execution_coordinator.delegate_approved_action_to_shuffle(
+        return self._action_lifecycle_write_coordinator.delegate_approved_action_to_shuffle(
             action_request_id=action_request_id,
             approved_payload=approved_payload,
             delegated_at=delegated_at,
@@ -2076,7 +2078,7 @@ class AegisOpsControlPlaneService:
         delegation_issuer: str,
         evidence_ids: tuple[str, ...] = (),
     ) -> ActionExecutionRecord:
-        return self._execution_coordinator.delegate_approved_action_to_isolated_executor(
+        return self._action_lifecycle_write_coordinator.delegate_approved_action_to_isolated_executor(
             action_request_id=action_request_id,
             approved_payload=approved_payload,
             delegated_at=delegated_at,
@@ -4588,7 +4590,7 @@ class AegisOpsControlPlaneService:
         expires_at: datetime,
         action_request_id: str | None = None,
     ) -> ActionRequestRecord:
-        return self._execution_coordinator.create_reviewed_action_request_from_advisory(
+        return self._action_lifecycle_write_coordinator.create_reviewed_action_request_from_advisory(
             record_family=record_family,
             record_id=record_id,
             requester_identity=requester_identity,
@@ -4613,7 +4615,7 @@ class AegisOpsControlPlaneService:
         ticket_severity: str = "medium",
         action_request_id: str | None = None,
     ) -> ActionRequestRecord:
-        return self._execution_coordinator.create_reviewed_tracking_ticket_request_from_advisory(
+        return self._action_lifecycle_write_coordinator.create_reviewed_tracking_ticket_request_from_advisory(
             record_family=record_family,
             record_id=record_id,
             requester_identity=requester_identity,
@@ -4677,7 +4679,7 @@ class AegisOpsControlPlaneService:
         decided_at: datetime,
         approval_decision_id: str | None = None,
     ) -> ApprovalDecisionRecord:
-        return self._action_review_write_surface.record_action_approval_decision(
+        return self._action_lifecycle_write_coordinator.record_action_approval_decision(
             action_request_id=action_request_id,
             approver_identity=approver_identity,
             authenticated_approver_identity=authenticated_approver_identity,
@@ -5509,7 +5511,7 @@ class AegisOpsControlPlaneService:
         compared_at: datetime,
         stale_after: datetime,
     ) -> ReconciliationRecord:
-        return self._execution_coordinator.reconcile_action_execution(
+        return self._action_lifecycle_write_coordinator.reconcile_action_execution(
             action_request_id=action_request_id,
             execution_surface_type=execution_surface_type,
             execution_surface_id=execution_surface_id,
