@@ -347,33 +347,19 @@ class OperatorInspectionReadSurface:
 
         return "medium"
 
-    def _latest_transition_at(
-        self,
-        *,
-        alert_id: str,
-        case_id: str | None,
-    ) -> datetime | None:
-        candidate_subjects = {("alert", alert_id)}
-        if case_id is not None:
-            candidate_subjects.add(("case", case_id))
-        transitions = [
-            transition.transitioned_at
-            for transition in self._service._store.list(LifecycleTransitionRecord)
-            if (
-                transition.subject_record_family,
-                transition.subject_record_id,
-            )
-            in candidate_subjects
-        ]
-        return max(transitions) if transitions else None
-
     def _queue_owner(
         self,
         *,
         alert_id: str,
         case_id: str | None,
         reviewed_context: Mapping[str, object],
+        action_reviews: tuple[dict[str, object], ...],
     ) -> str | None:
+        if action_reviews:
+            requester_identity = action_reviews[0].get("requester_identity")
+            if isinstance(requester_identity, str) and requester_identity.strip():
+                return requester_identity.strip()
+
         recommendations = [
             recommendation
             for recommendation in self._service._store.list(RecommendationRecord)
@@ -391,7 +377,8 @@ class OperatorInspectionReadSurface:
         leads = [
             lead
             for lead in self._service._store.list(LeadRecord)
-            if lead.alert_id == alert_id or (case_id is not None and lead.case_id == case_id)
+            if lead.alert_id == alert_id
+            or (case_id is not None and lead.case_id == case_id)
         ]
         if leads:
             latest_lead = sorted(
@@ -496,17 +483,7 @@ class OperatorInspectionReadSurface:
                 if first_seen_at is not None
                 else 0
             )
-            last_activity_at = max(
-                candidate
-                for candidate in (
-                    reconciliation.last_seen_at,
-                    self._latest_transition_at(
-                        alert_id=alert.alert_id,
-                        case_id=alert.case_id,
-                    ),
-                )
-                if candidate is not None
-            )
+            last_activity_at = reconciliation.last_seen_at or first_seen_at
             owner_reviewed_context = (
                 case_record.reviewed_context if case_record is not None else alert.reviewed_context
             )
@@ -549,6 +526,7 @@ class OperatorInspectionReadSurface:
                         alert_id=alert.alert_id,
                         case_id=alert.case_id,
                         reviewed_context=owner_reviewed_context,
+                        action_reviews=action_reviews,
                     ),
                     "age_seconds": age_seconds,
                     "age_bucket": self._queue_age_bucket(age_seconds),
