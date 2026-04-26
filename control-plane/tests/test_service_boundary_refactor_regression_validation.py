@@ -53,7 +53,8 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
             self.assertIn(term, workflow_and_cli_tests)
 
         for term in (
-            "test_service_delegates_assistant_context_and_advisory_rendering_to_assembler",
+            "test_service_delegates_assistant_context_to_assembler_and_advisory_to_coordinator",
+            "test_assistant_advisory_coordinator_exposes_no_authority_bearing_methods",
             "test_service_routes_reviewed_slice_checks_through_policy_module",
             "test_service_rejects_case_scoped_advisory_reads_without_linked_case",
         ):
