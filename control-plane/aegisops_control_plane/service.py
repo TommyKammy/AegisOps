@@ -65,6 +65,7 @@ from .operator_inspection import OperatorInspectionReadSurface
 from .readiness_contracts import (
     ReadinessDiagnosticsAggregates,
     ReadinessReviewPathRecords,
+    resolve_current_readiness_runtime_status,
 )
 from .restore_readiness import RestoreReadinessService
 from .runtime_boundary import RuntimeBoundaryService, _is_missing_runtime_binding
@@ -660,15 +661,11 @@ def _derive_readiness_status(
     reconciliation_lifecycle_counts: Mapping[str, int],
     review_path_health_overall_state: str | None = None,
 ) -> str:
-    if not startup_ready:
-        return "failing_closed"
-    if reconciliation_lifecycle_counts.get("stale", 0):
-        return "stale"
-    if reconciliation_lifecycle_counts.get("mismatched", 0):
-        return "degraded"
-    if review_path_health_overall_state in {"degraded", "failed"}:
-        return "degraded"
-    return "ready"
+    return resolve_current_readiness_runtime_status(
+        startup_ready=startup_ready,
+        reconciliation_lifecycle_counts=reconciliation_lifecycle_counts,
+        review_path_health_overall_state=review_path_health_overall_state,
+    ).status
 
 
 RECORD_TYPES_BY_FAMILY: dict[str, Type[ControlPlaneRecord]] = {

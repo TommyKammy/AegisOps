@@ -31,6 +31,7 @@ from .http_protected_surface import (
     require_reviewed_proxy_identity_match,
 )
 from .http_runtime_surface import runtime_read_response
+from .readiness_contracts import resolve_readyz_runtime_status
 from .service import AegisOpsControlPlaneService
 
 
@@ -79,13 +80,14 @@ def build_handler_class(
                 return
 
             if request_path == "/readyz":
+                readiness_payload = service.inspect_readiness_diagnostics().to_dict()
+                runtime_status = resolve_readyz_runtime_status(readiness_payload)
                 self._write_json(
-                    HTTPStatus.OK,
-                    {
-                        "service_name": runtime_snapshot["service_name"],
-                        "status": "ready",
-                        "persistence_mode": runtime_snapshot["persistence_mode"],
-                    },
+                    runtime_status.http_status,
+                    runtime_status.to_readyz_payload(
+                        service_name=str(runtime_snapshot["service_name"]),
+                        persistence_mode=str(runtime_snapshot["persistence_mode"]),
+                    ),
                 )
                 return
 

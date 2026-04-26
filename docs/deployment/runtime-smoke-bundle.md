@@ -72,6 +72,8 @@ Confirm readiness through the reviewed reverse proxy:
 curl -fsS http://127.0.0.1:<proxy-port>/readyz
 ```
 
+`/readyz` is the reviewed current dependency readiness source for this smoke bundle. It reflects the current control-plane readiness diagnostics status, admits runtime traffic only when that status is `ready`, and returns refusal for `degraded`, `stale`, or `failing_closed` status instead of treating admitted startup state or optional-extension posture as sufficient.
+
 For protected surfaces, substitute `<trusted-platform-admin-proxy-auth-headers>` or `<trusted-operator-read-only-proxy-auth-headers>` with the reviewed proxy session header arguments. Those arguments must come from the trusted proxy or equivalent reviewed operator session, not from sample, fake, or operator-invented values.
 
 The protected header set is:
@@ -157,7 +159,7 @@ If a command returns an authentication refusal, readiness refusal, route refusal
 ## 4. Handoff Checklist
 
 - Startup status: the repo-owned compose stack shows the expected first-boot services and the bounded logs do not contain unresolved runtime-config, PostgreSQL reachability, migration, or reverse-proxy admission failures.
-- Readiness: `/healthz` and `/readyz` succeed through the approved reverse proxy, and readiness is not inferred from container existence alone.
+- Readiness: `/healthz` and `/readyz` succeed through the approved reverse proxy, and readiness is not inferred from container existence, admitted startup state alone, or optional-extension health.
 - Protected surface: `/runtime` succeeds only through the reviewed trusted-proxy or equivalent operator boundary, and missing or fake authentication remains blocked.
 - Runtime scope: `/runtime` still describes the reviewed first-boot and single-customer surface rather than optional-extension, HA, multi-customer, or direct-backend expansion.
 - Queue/read-only sanity: alert, case, action-request, and reconciliation inspection commands return bounded read-only data or an explicit empty state from the protected mainline surface.
