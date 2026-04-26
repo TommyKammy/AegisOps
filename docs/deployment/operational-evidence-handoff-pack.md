@@ -14,6 +14,8 @@ For the Phase 38 single-customer launch package, `docs/deployment/single-custome
 
 For Phase 38 release handoff, use `docs/deployment/release-handoff-evidence-package.md` as the one launch or upgrade handoff index; this operational pack remains retained evidence guidance and does not become workflow authority.
 
+The pilot readiness checklist in `docs/deployment/pilot-readiness-checklist.md` is the reviewed entry decision surface that points operators to the retained release, smoke, detector, coordination, limitation, and evidence handoff records before pilot start.
+
 Use this pack when an operator needs a compact, reviewable evidence bundle after deployment, upgrade, restore, approval, execution, reconciliation review, rollback, or a planned handoff window.
 
 The pack may reference external substrate receipts, backup custody notes, or bounded logs, but those references remain evidence attached to reviewed AegisOps records. They do not create a parallel source of authority.

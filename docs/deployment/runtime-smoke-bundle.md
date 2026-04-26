@@ -12,6 +12,8 @@ For the Phase 38 single-customer launch package, the smoke result is one require
 
 The release handoff evidence package in `docs/deployment/release-handoff-evidence-package.md` must retain the runtime smoke manifest reference for launch, upgrade, rollback, restore restart, and operator handoff readiness.
 
+The pilot readiness checklist in `docs/deployment/pilot-readiness-checklist.md` treats the retained runtime smoke `manifest.md` from `scripts/run-phase-37-runtime-smoke-gate.sh --env-file <runtime-env-file> --evidence-dir <evidence-dir>` as required entry evidence.
+
 The reviewed smoke path covers startup status, readiness, protected-surface reachability, operator-console read-only sanity, queue/read-only surface sanity, and first low-risk action preconditions.
 
 It does not require optional OpenSearch, n8n, Shuffle, endpoint evidence, optional network evidence, assistant, ML shadow, or isolated-executor extensions to be enabled.

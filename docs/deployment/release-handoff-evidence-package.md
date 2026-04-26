@@ -10,6 +10,8 @@ AegisOps approval, evidence, execution, reconciliation, readiness, and recovery 
 
 Use this package after the release bundle inventory, install preflight, runtime smoke, and restore, rollback, and upgrade evidence have been assembled for the same release identifier.
 
+The pilot readiness checklist in `docs/deployment/pilot-readiness-checklist.md` consumes this release handoff package as the reviewed release-readiness and known-limitations evidence source for the pilot entry decision.
+
 ## 2. Required Handoff Entries
 
 Every release handoff manifest must include release readiness summary, release bundle identifier, install preflight result, runtime smoke result, backup, restore, rollback, and upgrade rehearsal reference, known limitations, rollback instructions, handoff owner, and next health review.

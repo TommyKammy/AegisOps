@@ -129,6 +129,8 @@ The Phase 37 restore, rollback, and upgrade evidence rehearsal in `docs/deployme
 
 Before launch, upgrade, rollback, restore, or operator handoff closes, assemble the Phase 38 release handoff evidence package in `docs/deployment/release-handoff-evidence-package.md` and verify its manifest with `scripts/verify-release-handoff-evidence-package.sh --manifest <release-handoff-manifest.md>`.
 
+Before starting a single-customer pilot, review `docs/deployment/pilot-readiness-checklist.md` and verify it with `scripts/verify-pilot-readiness-checklist.sh` so release readiness, runtime smoke, detector activation scope, Zammad coordination scope, assistant limitations, data retention, known limitations, and evidence handoff are decided together.
+
 ## 3. Shutdown
 
 The reviewed shutdown path exists to return the platform to a clean, operator-confirmed safe state without leaving ambiguous runtime ownership or half-stopped ingress.

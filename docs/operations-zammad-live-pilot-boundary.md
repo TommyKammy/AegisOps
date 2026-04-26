@@ -8,6 +8,8 @@ It supplements `docs/phase-26-first-coordination-substrate-and-non-authoritative
 
 This document defines policy and verification expectations only. It does not provision Zammad, mint credentials, create a bidirectional synchronization service, authorize ticket-system workflow truth, or store live secrets.
 
+The pilot readiness checklist in `docs/deployment/pilot-readiness-checklist.md` consumes this Zammad-first boundary as the coordination pilot scope and credential-custody prerequisite for pilot entry.
+
 ## 2. Pilot Scope and Non-Authority Boundary
 
 Zammad is the only approved live coordination substrate for the first pilot.
