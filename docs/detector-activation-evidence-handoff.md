@@ -10,6 +10,8 @@ It must not become a compliance archive platform, unlimited detector history sys
 
 The package keeps rule review evidence, fixture and parser evidence, activation evidence, rollback evidence, alert or case admission sanity, and known limitations visible to operators, maintainers, and auditors without turning detector activation into a parallel archive or workflow authority.
 
+The pilot readiness checklist in `docs/deployment/pilot-readiness-checklist.md` consumes this detector activation evidence handoff as the bounded detector scope, owner, rollback, disable, expected-volume, false-positive, and known-limitation evidence for pilot entry.
+
 ## 2. Manifest Fields
 
 | Field | Required evidence | Authority boundary |

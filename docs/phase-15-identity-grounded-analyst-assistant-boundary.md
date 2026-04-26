@@ -131,6 +131,8 @@ If identity ambiguity remains, the assistant must report that ambiguity directly
 
 The assistant is advisory-only.
 
+The pilot readiness checklist in `docs/deployment/pilot-readiness-checklist.md` must keep this assistant boundary advisory-only and non-authoritative for pilot entry.
+
 It may summarize reviewed records, compare reviewed evidence, explain reviewed mismatch state, and draft candidate next steps.
 
 It must not approve actions, execute actions, mutate authoritative records, or present its own output as reconciliation truth.

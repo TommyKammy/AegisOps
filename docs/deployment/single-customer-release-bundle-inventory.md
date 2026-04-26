@@ -20,6 +20,8 @@ This manifest is the first inventory operators read before install, upgrade, rol
 
 The release handoff evidence package in `docs/deployment/release-handoff-evidence-package.md` is the Phase 38 handoff index that ties the release bundle identifier, install preflight result, runtime smoke, restore, rollback, upgrade, known limitations, rollback instructions, handoff owner, and next health review to one bounded record.
 
+Pilot entry must use `docs/deployment/pilot-readiness-checklist.md` after the single-customer release bundle inventory is bound to the same `aegisops-single-customer-<repository-revision>` release identifier.
+
 ## 2. Required Launch Bundle Inventory
 
 | Bundle entry | Owner | Source path | Release binding | Handoff relevance |
