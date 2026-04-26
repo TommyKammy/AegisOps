@@ -78,7 +78,7 @@ This document defines policy and ownership expectations only. It does not create
 | ---- | ---- | ---- | ---- |
 | `Analyst` | Investigates alerts, findings, and cases; prepares recommendations and action requests. | Read-oriented investigation access, case updates, and ability to submit approval-bound requests within assigned scope. | Must not approve their own approval-sensitive actions or administer shared platform identity controls. |
 | `Approver` | Reviews approval-bound requests and accepts or rejects execution within delegated authority. | Access to approval context, target evidence, and approval decision recording for authorized action classes. | Must remain distinct from the original requester for approval-sensitive actions and must not rely on informal side-channel approval alone. |
-| `Platform Administrator` | Operates AegisOps infrastructure, platform configuration, connectivity, and credential plumbing. | Administrative access to platform components, secret delivery paths, service-account provisioning workflows, and recovery procedures. | Must not use platform-administrator access as a substitute approval path for response actions and must avoid routine use of shared human credentials. |
+| `Platform Administrator` | Operates AegisOps infrastructure, platform configuration, connectivity, and credential plumbing. | Administrative access to platform components, secret delivery paths, service-account provisioning workflows, and recovery procedures. | Must not use `platform_admin` access as a substitute approval path for response actions and must avoid routine use of shared human credentials. |
 
 ## 3. Authorization and Separation-of-Duties Baseline
 
@@ -177,7 +177,7 @@ This document defines policy and ownership expectations only. It does not create
 | ---- | ---- | ---- | ---- |
 | `Analyst` | Investigates alerts, findings, and cases; prepares recommendations and action requests. | Read-oriented investigation access, case updates, and ability to submit approval-bound requests within assigned scope. | Must not approve their own approval-sensitive actions or administer shared platform identity controls. |
 | `Approver` | Reviews approval-bound requests and accepts or rejects execution within delegated authority. | Access to approval context, target evidence, and approval decision recording for authorized action classes. | Must remain distinct from the original requester for approval-sensitive actions and must not rely on informal side-channel approval alone. |
-| `Platform Administrator` | Operates AegisOps infrastructure, platform configuration, connectivity, and credential plumbing. | Administrative access to platform components, secret delivery paths, service-account provisioning workflows, and recovery procedures. | Must not use platform-administrator access as a substitute approval path for response actions and must avoid routine use of shared human credentials. |
+| `Platform Administrator` | Operates AegisOps infrastructure, platform configuration, connectivity, and credential plumbing. | Administrative access to platform components, secret delivery paths, service-account provisioning workflows, and recovery procedures. | Must not use `platform_admin` access as a substitute approval path for response actions and must avoid routine use of shared human credentials. |
 
 ## 3. Authorization and Separation-of-Duties Baseline
 
