@@ -105,7 +105,7 @@ class Phase17FirstBootRuntimeArtifactTests(unittest.TestCase):
         self.assertTrue(proxy_config.exists(), f"expected first-boot proxy config at {proxy_config}")
 
         text = proxy_config.read_text(encoding="utf-8")
-        for term in (
+        reviewed_routes = (
             "upstream aegisops_control_plane {",
             "server control-plane:8080;",
             "location = /healthz {",
@@ -118,13 +118,29 @@ class Phase17FirstBootRuntimeArtifactTests(unittest.TestCase):
             "proxy_pass http://aegisops_control_plane/inspect-records$is_args$args;",
             "location = /inspect-reconciliation-status {",
             "proxy_pass http://aegisops_control_plane/inspect-reconciliation-status;",
-        ):
+            "location = /inspect-analyst-queue {",
+            "proxy_pass http://aegisops_control_plane/inspect-analyst-queue$is_args$args;",
+            "location = /inspect-alert-detail {",
+            "proxy_pass http://aegisops_control_plane/inspect-alert-detail$is_args$args;",
+            "location = /inspect-case-detail {",
+            "proxy_pass http://aegisops_control_plane/inspect-case-detail$is_args$args;",
+            "location = /inspect-action-review {",
+            "proxy_pass http://aegisops_control_plane/inspect-action-review$is_args$args;",
+            "location = /inspect-advisory-output {",
+            "proxy_pass http://aegisops_control_plane/inspect-advisory-output$is_args$args;",
+            "location = /operator/queue {",
+            "proxy_pass http://aegisops_control_plane/inspect-analyst-queue$is_args$args;",
+        )
+        for term in reviewed_routes:
             self.assertIn(term, text)
 
         for forbidden in (
-            "inspect-assistant-context",
-            "inspect-advisory-output",
             "render-recommendation-draft",
+            "/operator/promote-alert-to-case",
+            "/operator/record-case-observation",
+            "/operator/record-action-approval-decision",
+            "/operator/create-reviewed-action-request",
+            "/admin/bootstrap",
         ):
             self.assertNotIn(forbidden, text)
 

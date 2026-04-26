@@ -67,4 +67,4 @@ services:
       - ../../../proxy/nginx/conf.d-first-boot:/etc/nginx/conf.d:ro
       - /srv/aegisops/proxy-certs-placeholder:/etc/nginx/certs:ro
     # approved reverse-proxy boundary only; backend services remain internal
-    # reviewed user-facing route implementation is limited to health, readiness, and runtime inspection
+    # reviewed route implementation is limited to health, readiness, runtime, and protected read-only operator inspection

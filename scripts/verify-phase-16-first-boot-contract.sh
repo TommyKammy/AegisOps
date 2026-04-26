@@ -196,7 +196,7 @@ compose_lines=(
   '    # reviewed image-backed first-boot control-plane runtime only'
   '    # optional extensions remain out of scope for this first-boot path'
   '    # do not add OpenSearch, n8n, analyst-assistant UI, or executor services here'
-  '    # reviewed user-facing route implementation is limited to health, readiness, and runtime inspection'
+  '    # reviewed route implementation is limited to health, readiness, runtime, and protected read-only operator inspection'
 )
 for line in "${compose_lines[@]}"; do
   require_fixed_string "${compose_file}" "${line}"

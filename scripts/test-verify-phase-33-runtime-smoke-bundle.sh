@@ -48,6 +48,18 @@ location = /inspect-records {
 }
 location = /inspect-reconciliation-status {
 }
+location = /inspect-analyst-queue {
+}
+location = /inspect-alert-detail {
+}
+location = /inspect-case-detail {
+}
+location = /inspect-action-review {
+}
+location = /inspect-advisory-output {
+}
+location = /operator/queue {
+}
 EOF
 }
 
@@ -113,11 +125,23 @@ Use a reviewed `analyst`, `approver`, or `platform_admin` role for `<trusted-ope
 
 Use `curl -fsS <trusted-platform-admin-proxy-auth-headers> http://127.0.0.1:<proxy-port>/runtime`.
 
+Use `curl -fsS <trusted-operator-read-only-proxy-auth-headers> http://127.0.0.1:<proxy-port>/inspect-analyst-queue`.
+
+Use `curl -fsS <trusted-operator-read-only-proxy-auth-headers> http://127.0.0.1:<proxy-port>/operator/queue`.
+
 Use `curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-records?family=alerts"`.
+
+Use `curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-alert-detail?alert_id=<reviewed-alert-id>"`.
 
 Use `curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-records?family=cases"`.
 
+Use `curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-case-detail?case_id=<reviewed-case-id>"`.
+
 Use `curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-records?family=action_requests"`.
+
+Use `curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-action-review?action_request_id=<reviewed-action-request-id>"`.
+
+Use `curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-advisory-output?family=case&record_id=<reviewed-case-id>"`.
 
 Use `curl -fsS <trusted-operator-read-only-proxy-auth-headers> http://127.0.0.1:<proxy-port>/inspect-reconciliation-status`.
 
