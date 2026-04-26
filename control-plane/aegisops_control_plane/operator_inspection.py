@@ -600,7 +600,7 @@ class OperatorInspectionReadSurface:
                 if "action_required" not in lanes:
                     lanes.append("action_required")
 
-        if reconciliation.lifecycle_state not in {"matched"}:
+        if reconciliation.lifecycle_state == "mismatched":
             lanes.append("reconciliation_mismatch")
             details["reconciliation_mismatch"] = {
                 "state": reconciliation.lifecycle_state,
