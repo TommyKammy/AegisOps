@@ -211,9 +211,10 @@ class OperatorInspectionReadSurface:
         *,
         alert_id: str,
         case_id: str | None,
+        ai_trace_records: tuple[AITraceRecord, ...],
     ) -> tuple[dict[str, object], ...]:
         groups_by_scope: dict[str, dict[str, object]] = {}
-        for ai_trace in self._service._store.list(AITraceRecord):
+        for ai_trace in ai_trace_records:
             subject_linkage = ai_trace.subject_linkage
             linked_alert_id = self._optional_string_from_mapping(
                 subject_linkage,
@@ -321,6 +322,7 @@ class OperatorInspectionReadSurface:
             self._service._latest_detection_reconciliations_by_alert_id()
         )
         action_review_index = self._service._build_action_review_record_index()
+        ai_trace_records = self._service._store.list(AITraceRecord)
         queue_records: list[dict[str, object]] = []
         for alert in self._service._store.list(AlertRecord):
             if alert.lifecycle_state not in active_alert_states:
@@ -353,6 +355,7 @@ class OperatorInspectionReadSurface:
             ai_trace_review_groups = self._ai_trace_review_groups_for_queue_record(
                 alert_id=alert.alert_id,
                 case_id=alert.case_id,
+                ai_trace_records=ai_trace_records,
             )
             queue_records.append(
                 {
