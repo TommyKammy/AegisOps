@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from http import HTTPStatus
+from typing import Mapping
 
 from .models import (
     ActionExecutionRecord,
     ReconciliationRecord,
+)
+
+_READINESS_RUNTIME_STATUSES = frozenset(
+    {"ready", "degraded", "stale", "failing_closed"}
 )
 
 
@@ -38,7 +44,84 @@ class ReadinessReviewPathRecords:
     reconciliations: tuple[ReconciliationRecord, ...]
 
 
+@dataclass(frozen=True)
+class ReadinessRuntimeStatus:
+    status: str
+    readiness_source: str
+    http_status: HTTPStatus
+    admits_runtime_traffic: bool
+
+    def to_readyz_payload(
+        self,
+        *,
+        service_name: str,
+        persistence_mode: str,
+    ) -> dict[str, object]:
+        return {
+            "service_name": service_name,
+            "status": self.status,
+            "readiness_source": self.readiness_source,
+            "admits_runtime_traffic": self.admits_runtime_traffic,
+            "persistence_mode": persistence_mode,
+        }
+
+
+def resolve_current_readiness_runtime_status(
+    *,
+    startup_ready: bool,
+    reconciliation_lifecycle_counts: Mapping[str, int],
+    review_path_health_overall_state: str | None = None,
+) -> ReadinessRuntimeStatus:
+    if not startup_ready:
+        status = "failing_closed"
+    elif reconciliation_lifecycle_counts.get("stale", 0):
+        status = "stale"
+    elif reconciliation_lifecycle_counts.get("mismatched", 0):
+        status = "degraded"
+    elif review_path_health_overall_state in {"degraded", "failed"}:
+        status = "degraded"
+    else:
+        status = "ready"
+
+    admits_runtime_traffic = status == "ready"
+    return ReadinessRuntimeStatus(
+        status=status,
+        readiness_source="current_dependency_status",
+        http_status=(
+            HTTPStatus.OK
+            if admits_runtime_traffic
+            else HTTPStatus.SERVICE_UNAVAILABLE
+        ),
+        admits_runtime_traffic=admits_runtime_traffic,
+    )
+
+
+def resolve_readyz_runtime_status(
+    readiness_payload: Mapping[str, object],
+) -> ReadinessRuntimeStatus:
+    raw_status = readiness_payload.get("status")
+    status = (
+        raw_status
+        if isinstance(raw_status, str) and raw_status in _READINESS_RUNTIME_STATUSES
+        else "failing_closed"
+    )
+    admits_runtime_traffic = status == "ready"
+    return ReadinessRuntimeStatus(
+        status=status,
+        readiness_source="current_dependency_status",
+        http_status=(
+            HTTPStatus.OK
+            if admits_runtime_traffic
+            else HTTPStatus.SERVICE_UNAVAILABLE
+        ),
+        admits_runtime_traffic=admits_runtime_traffic,
+    )
+
+
 __all__ = [
     "ReadinessDiagnosticsAggregates",
     "ReadinessReviewPathRecords",
+    "ReadinessRuntimeStatus",
+    "resolve_current_readiness_runtime_status",
+    "resolve_readyz_runtime_status",
 ]

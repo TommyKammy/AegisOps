@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import json
 import pathlib
 import sys
 import tempfile
+import threading
 import unittest
+from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
+from unittest import mock
+from urllib import error, request
 
 
 CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -198,6 +203,68 @@ class RuntimeSkeletonTests(unittest.TestCase):
         )
 
         self.assertTrue(issubclass(handler_class, BaseHTTPRequestHandler))
+
+    def test_readyz_uses_current_readiness_diagnostics_status(self) -> None:
+        from http.server import ThreadingHTTPServer
+
+        from aegisops_control_plane import http_surface
+
+        readiness_snapshot = mock.Mock()
+        readiness_snapshot.to_dict.return_value = {
+            "read_only": True,
+            "booted": True,
+            "status": "degraded",
+            "startup": {"startup_ready": True},
+            "shutdown": {"shutdown_ready": False},
+            "metrics": {
+                "review_path_health": {"overall_state": "degraded"},
+                "optional_extensions": {"overall_state": "degraded"},
+            },
+            "latest_reconciliation": None,
+        }
+        service = mock.Mock()
+        service.inspect_readiness_diagnostics.return_value = readiness_snapshot
+
+        handler_class = http_surface.build_handler_class(
+            service=service,
+            runtime_snapshot={
+                "service_name": "aegisops-control-plane",
+                "persistence_mode": "postgresql",
+            },
+            stderr=sys.stderr,
+        )
+        server = ThreadingHTTPServer(("127.0.0.1", 0), handler_class)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with self.assertRaises(error.HTTPError) as raised:
+                request.urlopen(  # noqa: S310 - local in-process test HTTP server
+                    f"http://127.0.0.1:{server.server_port}/readyz",
+                    timeout=2,
+                )
+            payload = json.loads(raised.exception.read().decode("utf-8"))
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+        self.assertEqual(raised.exception.code, 503)
+        self.assertEqual(payload["status"], "degraded")
+        self.assertEqual(payload["readiness_source"], "current_dependency_status")
+        service.inspect_readiness_diagnostics.assert_called_once_with()
+
+    def test_readyz_runtime_status_fails_closed_for_unknown_status(self) -> None:
+        from aegisops_control_plane.readiness_contracts import (
+            resolve_readyz_runtime_status,
+        )
+
+        runtime_status = resolve_readyz_runtime_status(
+            {"status": "shadow-ready", "readiness_source": "current_dependency_status"}
+        )
+
+        self.assertEqual(runtime_status.status, "failing_closed")
+        self.assertEqual(runtime_status.http_status, HTTPStatus.SERVICE_UNAVAILABLE)
+        self.assertFalse(runtime_status.admits_runtime_traffic)
 
 
 if __name__ == "__main__":

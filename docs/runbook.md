@@ -96,6 +96,8 @@ The minimum startup evidence set is:
 - the reverse-proxy readiness result from `curl -fsS http://127.0.0.1:<proxy-port>/readyz`; and
 - the runtime inspection snapshot from `curl -fsS http://127.0.0.1:<proxy-port>/runtime`.
 
+The `/readyz` result is the current dependency readiness source, not just an admitted-startup marker. It is expected to refuse normal traffic when the current readiness diagnostics status is `degraded`, `stale`, or `failing_closed`; optional-extension degradation remains subordinate and cannot be used to make `/readyz` ready.
+
 Evidence capture must record whether any startup step initially failed, what was corrected, and whether the final ready state was achieved without changing the approved boundary or adding new prerequisites.
 
 Operators must redact or omit secret material from saved evidence.
@@ -107,6 +109,7 @@ The platform may be treated as ready for the reviewed operational baseline only 
 - the control-plane service has not failed closed on missing runtime config, missing migration assets, PostgreSQL connection failure, partial migration application, or readiness-proof failure;
 - `/healthz` succeeds through the reverse proxy;
 - `/readyz` succeeds through the reverse proxy, proving required bootstrap state, PostgreSQL reachability, and the expected reviewed schema state;
+- `/readyz` reflects current dependency status from the readiness diagnostics contract and is not inferred from optional-extension health or startup admission alone;
 - `/runtime` shows the reviewed first-boot surface rather than an expanded optional-extension claim;
 - the operator can confirm the startup remained limited to the control-plane, PostgreSQL, reverse proxy, and reviewed Wazuh-facing first-boot boundary; and
 - optional extensions, if shown at all, remain explicitly subordinate and non-blocking rather than being inferred as part of mainline readiness.

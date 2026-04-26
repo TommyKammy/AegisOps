@@ -54,7 +54,9 @@ export function registerOperatorRoutesCaseworkTests() {
         expect(screen.getByRole("heading", { name: "Readiness" })).toBeInTheDocument();
       });
 
-      expect(screen.getByText("Route: /operator/readiness")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText("Route: /operator/readiness")).toBeInTheDocument();
+      });
     });
 
     it("renders the reviewed queue route from backend-authoritative queue records", async () => {
