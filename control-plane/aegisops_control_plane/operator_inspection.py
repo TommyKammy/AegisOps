@@ -22,6 +22,15 @@ from .models import (
 RecordT = TypeVar("RecordT", bound=ControlPlaneRecord)
 
 
+_QUEUE_LANES = (
+    "action_required",
+    "reconciliation_mismatch",
+    "stale_receipt",
+    "optional_extension_degraded",
+    "clean",
+)
+
+
 class InspectionStore(Protocol):
     def get(self, record_type: Type[RecordT], record_id: str) -> RecordT | None:
         ...
@@ -476,6 +485,12 @@ class OperatorInspectionReadSurface:
                 case_id=alert.case_id,
                 ai_trace_records=ai_trace_records,
             )
+            queue_lanes, queue_lane_details = self._queue_lanes_for_record(
+                alert=alert,
+                reconciliation=reconciliation,
+                review_state=review_state,
+                action_reviews=action_reviews,
+            )
             now = datetime.now(timezone.utc)
             first_seen_at = reconciliation.first_seen_at
             age_seconds = (
@@ -540,6 +555,8 @@ class OperatorInspectionReadSurface:
                         review_state=review_state,
                         action_reviews=action_reviews,
                     ),
+                    "queue_lanes": queue_lanes,
+                    "queue_lane_details": queue_lane_details,
                     "current_action_review": (
                         dict(action_reviews[0]) if action_reviews else None
                     ),
@@ -559,8 +576,87 @@ class OperatorInspectionReadSurface:
             read_only=True,
             queue_name="analyst_review",
             total_records=len(queue_records),
+            lane_counts=self._queue_lane_counts(queue_records),
             records=tuple(queue_records),
         )
+
+    def _queue_lanes_for_record(
+        self,
+        *,
+        alert: AlertRecord,
+        reconciliation: ReconciliationRecord,
+        review_state: str,
+        action_reviews: tuple[dict[str, object], ...],
+    ) -> tuple[tuple[str, ...], dict[str, object]]:
+        lanes: list[str] = []
+        details: dict[str, object] = {}
+
+        if review_state in {"pending_review", "case_required", "investigating", "degraded"}:
+            lanes.append("action_required")
+
+        if action_reviews:
+            current_review_state = action_reviews[0].get("review_state")
+            if current_review_state not in {None, "approved", "completed", "matched"}:
+                if "action_required" not in lanes:
+                    lanes.append("action_required")
+
+        if reconciliation.lifecycle_state not in {"matched"}:
+            lanes.append("reconciliation_mismatch")
+            details["reconciliation_mismatch"] = {
+                "state": reconciliation.lifecycle_state,
+                "summary": reconciliation.mismatch_summary,
+            }
+
+        if (
+            reconciliation.ingest_disposition == "stale"
+            or reconciliation.lifecycle_state == "stale"
+            or "stale downstream execution observation" in reconciliation.mismatch_summary
+        ):
+            lanes.append("stale_receipt")
+            details["stale_receipt"] = {
+                "state": reconciliation.ingest_disposition,
+                "summary": reconciliation.mismatch_summary,
+            }
+
+        degraded_optional_extensions = self._degraded_optional_extensions(alert.reviewed_context)
+        if degraded_optional_extensions:
+            lanes.append("optional_extension_degraded")
+            details["optional_extension_degraded"] = degraded_optional_extensions
+
+        if not lanes:
+            lanes.append("clean")
+
+        return tuple(lanes), details
+
+    @staticmethod
+    def _degraded_optional_extensions(
+        reviewed_context: Mapping[str, object],
+    ) -> dict[str, object]:
+        optional_extensions = reviewed_context.get("optional_extensions")
+        if not isinstance(optional_extensions, Mapping):
+            return {}
+
+        degraded_extensions: dict[str, object] = {}
+        for extension_name, extension_state in optional_extensions.items():
+            if not isinstance(extension_state, Mapping):
+                continue
+            if extension_state.get("readiness") == "degraded":
+                degraded_extensions[str(extension_name)] = dict(extension_state)
+        return degraded_extensions
+
+    @staticmethod
+    def _queue_lane_counts(
+        queue_records: list[dict[str, object]],
+    ) -> dict[str, int]:
+        lane_counts = {lane: 0 for lane in _QUEUE_LANES}
+        for record in queue_records:
+            queue_lanes = record.get("queue_lanes")
+            if not isinstance(queue_lanes, tuple):
+                continue
+            for lane in queue_lanes:
+                if isinstance(lane, str) and lane in lane_counts:
+                    lane_counts[lane] += 1
+        return lane_counts
 
     def inspect_alert_detail(self, alert_id: str) -> object:
         alert_id = self._service._require_non_empty_string(alert_id, "alert_id")

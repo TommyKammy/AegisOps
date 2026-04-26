@@ -11,9 +11,11 @@ import {
 } from "@mui/material";
 import { useMemo } from "react";
 import {
+  asRecord,
   asRecordArray,
   asString,
   asStringArray,
+  formatLabel,
   AuditedRouteLink,
   EmptyState,
   ErrorState,
@@ -29,6 +31,14 @@ import {
   useOperatorList,
   ValueList,
 } from "./shared";
+
+const QUEUE_LANE_LABELS: Record<string, string> = {
+  action_required: "Action required",
+  reconciliation_mismatch: "Reconciliation mismatch",
+  stale_receipt: "Stale receipt",
+  optional_extension_degraded: "Optional extension degraded",
+  clean: "Clean",
+};
 
 function aiTraceReviewStateLabel(state: string) {
   switch (state) {
@@ -136,6 +146,94 @@ function QueueAiTraceReviewGroups({ records }: { records: Record<string, unknown
   );
 }
 
+function queueLaneLabel(lane: string) {
+  return QUEUE_LANE_LABELS[lane] ?? formatLabel(lane);
+}
+
+function QueueLaneSummary({ records }: { records: Record<string, unknown>[] }) {
+  const counts = Object.keys(QUEUE_LANE_LABELS).map((lane) => {
+    const count = records.filter((record) =>
+      asStringArray(record.queue_lanes).includes(lane),
+    ).length;
+    return [lane, count] as const;
+  });
+
+  return (
+    <SectionCard
+      subtitle="These lanes make mismatch and degraded state visible for review without making receipts or optional extensions authoritative."
+      title="Queue lanes"
+    >
+      <Stack direction="row" flexWrap="wrap" gap={1}>
+        {counts.map(([lane, count]) => (
+          <Chip
+            color={statusTone(lane)}
+            key={lane}
+            label={`${queueLaneLabel(lane)}: ${count}`}
+            size="small"
+            variant={count > 0 ? "filled" : "outlined"}
+          />
+        ))}
+      </Stack>
+    </SectionCard>
+  );
+}
+
+function QueueLaneDetails({ record }: { record: Record<string, unknown> }) {
+  const lanes = asStringArray(record.queue_lanes);
+  const details = asRecord(record.queue_lane_details);
+  const degradedExtensions = asRecord(details?.optional_extension_degraded);
+  const reconciliationMismatch = asRecord(details?.reconciliation_mismatch);
+  const staleReceipt = asRecord(details?.stale_receipt);
+  const detailLines: string[] = [];
+
+  const mismatchSummary = asString(reconciliationMismatch?.summary);
+  if (mismatchSummary) {
+    detailLines.push(mismatchSummary);
+  }
+
+  const staleSummary = asString(staleReceipt?.summary);
+  if (staleSummary && staleSummary !== mismatchSummary) {
+    detailLines.push(staleSummary);
+  }
+
+  if (degradedExtensions) {
+    for (const [extensionName, extensionState] of Object.entries(degradedExtensions)) {
+      const extensionRecord = asRecord(extensionState);
+      const reason = asString(extensionRecord?.reason);
+      if (reason) {
+        detailLines.push(
+          `${formatLabel(extensionName).toLowerCase()}: ${reason.replace(/_/g, " ")}`,
+        );
+      }
+    }
+  }
+
+  if (lanes.length === 0 && detailLines.length === 0) {
+    return null;
+  }
+
+  return (
+    <Stack spacing={0.75}>
+      <Stack direction="row" flexWrap="wrap" gap={1}>
+        {lanes.map((lane) => (
+          <Chip
+            color={statusTone(lane)}
+            key={lane}
+            label={queueLaneLabel(lane)}
+            size="small"
+            variant={lane === "clean" ? "outlined" : "filled"}
+          />
+        ))}
+      </Stack>
+      {detailLines.map((line) => (
+        <Typography color="text.secondary" key={line} variant="caption">
+          {line}
+        </Typography>
+      ))}
+    </Stack>
+  );
+}
+
 export function QueuePage() {
   const filter = useMemo(() => ({}), []);
   const sort = useMemo(
@@ -158,6 +256,7 @@ export function QueuePage() {
       {data ? (
         data.length > 0 ? (
           <Stack spacing={3}>
+            <QueueLaneSummary records={data} />
             <QueueAiTraceReviewGroups records={data} />
             <SectionCard
               subtitle="Explicit degraded, pending, and mismatch states remain visible instead of being smoothed away."
@@ -174,6 +273,7 @@ export function QueuePage() {
                     <TableCell>Case</TableCell>
                     <TableCell>Source family</TableCell>
                     <TableCell>Action review</TableCell>
+                    <TableCell>Lanes</TableCell>
                     <TableCell>Next action</TableCell>
                   </TableRow>
                 </TableHead>
@@ -228,6 +328,9 @@ export function QueuePage() {
                         </TableCell>
                         <TableCell>{sourceFamily ?? "Not available"}</TableCell>
                         <TableCell>{actionReviewState ?? "No active review"}</TableCell>
+                        <TableCell>
+                          <QueueLaneDetails record={record} />
+                        </TableCell>
                         <TableCell>{nextAction ?? "Review queue record"}</TableCell>
                       </TableRow>
                     );
@@ -258,6 +361,7 @@ export function QueuePage() {
               ["Action review", asString(getPath(record, "current_action_review.review_state"))],
             ]}
           />
+          <QueueLaneDetails record={record} />
           <RecordWarnings record={record} />
           <ValueList
             entries={[

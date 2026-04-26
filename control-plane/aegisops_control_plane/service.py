@@ -296,6 +296,7 @@ class AnalystQueueSnapshot:
     read_only: bool
     queue_name: str
     total_records: int
+    lane_counts: dict[str, int]
     records: tuple[dict[str, object], ...]
 
     def to_dict(self) -> dict[str, object]:
@@ -304,6 +305,7 @@ class AnalystQueueSnapshot:
                 "read_only": self.read_only,
                 "queue_name": self.queue_name,
                 "total_records": self.total_records,
+                "lane_counts": self.lane_counts,
                 "records": self.records,
             }
         )
