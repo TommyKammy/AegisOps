@@ -8,6 +8,8 @@ The entry decision is a reviewed go, no-go, or go-with-explicit-limitations deci
 
 This checklist is the reviewed entry decision surface above the release bundle, runtime smoke, detector activation, Zammad coordination, assistant boundary, known-limitations review, retention expectation, and evidence handoff material. It does not provision runtime services, activate detectors by itself, mint Zammad credentials, create customer-private production access, or make external tickets or assistant output authoritative.
 
+Operator training and handoff for the pilot must use `docs/deployment/operator-training-handoff-packet.md` and verify it with `scripts/verify-operator-training-handoff-packet.sh` before treating the pilot operator handoff as ready.
+
 ## 2. Entry Decision Summary
 
 The pilot may start only when release readiness, runtime smoke, detector activation scope, coordination pilot scope, assistant limitations, data retention, and evidence handoff are reviewed together for the same release identifier.
