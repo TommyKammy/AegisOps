@@ -275,6 +275,7 @@ done
 
 assert_rejects_workstation_path "$(printf '%sUsers/example/private/support-note.md' '/')"
 assert_rejects_workstation_path "$(printf 'C:%sUsers%sexample%sprivate%ssupport-note.md' '/' '/' '/' '/')"
+assert_rejects_workstation_path "$(printf 'C:%sUSERS%sexample%sprivate%ssupport-note.md' '/' '/' '/' '/')"
 assert_rejects_workstation_path "$(printf 'C:%bUsers%bexample%bprivate%bsupport-note.md' '\\' '\\' '\\' '\\')"
 
 echo "Support playbook and break-glass rehearsal verifier tests passed."
