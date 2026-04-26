@@ -64,6 +64,7 @@ jobs:
           bash scripts/verify-postgres-compose-skeleton.sh
           bash scripts/verify-publishable-path-hygiene.sh
           bash scripts/verify-proxy-compose-skeleton.sh
+          bash scripts/verify-support-playbook-break-glass-rehearsal.sh
           bash scripts/verify-response-action-safety-model-doc.sh
           bash scripts/verify-requirements-baseline-control-plane-thesis.sh
           bash scripts/verify-readme-and-repository-structure-control-plane-thesis.sh
@@ -309,6 +310,7 @@ jobs:
           bash scripts/test-verify-single-customer-install-preflight.sh
           bash scripts/test-verify-phase-37-restore-rollback-upgrade-evidence.sh
           bash scripts/test-verify-phase-33-operational-evidence-handoff-pack.sh
+          bash scripts/test-verify-support-playbook-break-glass-rehearsal.sh
           bash scripts/test-verify-single-customer-deployment-profile.sh
           bash scripts/test-verify-single-customer-release-bundle-inventory.sh
           bash scripts/test-verify-release-handoff-evidence-package.sh

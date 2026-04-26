@@ -131,6 +131,8 @@ Before launch, upgrade, rollback, restore, or operator handoff closes, assemble 
 
 Before starting a single-customer pilot, review `docs/deployment/pilot-readiness-checklist.md` and verify it with `scripts/verify-pilot-readiness-checklist.sh` so release readiness, runtime smoke, detector activation scope, Zammad coordination scope, assistant limitations, data retention, known limitations, and evidence handoff are decided together.
 
+For pilot support degradation, break-glass rehearsal, and operator-readable evidence expectations, use `docs/deployment/support-playbook-break-glass-rehearsal.md` and verify it with `scripts/verify-support-playbook-break-glass-rehearsal.sh`.
+
 ## 3. Shutdown
 
 The reviewed shutdown path exists to return the platform to a clean, operator-confirmed safe state without leaving ambiguous runtime ownership or half-stopped ingress.

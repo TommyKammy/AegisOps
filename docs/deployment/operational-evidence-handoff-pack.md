@@ -18,6 +18,8 @@ The pilot readiness checklist in `docs/deployment/pilot-readiness-checklist.md` 
 
 Use this pack when an operator needs a compact, reviewable evidence bundle after deployment, upgrade, restore, approval, execution, reconciliation review, rollback, or a planned handoff window.
 
+Support playbook evidence from `docs/deployment/support-playbook-break-glass-rehearsal.md` may be retained in this handoff pack only as operator-readable evidence attached to reviewed AegisOps records.
+
 The pack may reference external substrate receipts, backup custody notes, or bounded logs, but those references remain evidence attached to reviewed AegisOps records. They do not create a parallel source of authority.
 
 ## 2. Retained Evidence Categories
