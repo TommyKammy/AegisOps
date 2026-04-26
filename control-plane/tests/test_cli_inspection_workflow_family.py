@@ -167,6 +167,93 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             ["wazuh:1731595300.1234567"],
         )
 
+    def test_cli_groups_unresolved_ai_trace_review_state_in_analyst_queue(self) -> None:
+        _, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.persist_record(
+            RecommendationRecord(
+                recommendation_id="recommendation-queue-trace-001",
+                lead_id=None,
+                hunt_run_id=None,
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                ai_trace_id="ai-trace-queue-unresolved-001",
+                review_owner="analyst-001",
+                intended_outcome="Keep unresolved assistant trace review visible.",
+                lifecycle_state="under_review",
+                reviewed_context=promoted_case.reviewed_context,
+                assistant_advisory_draft={
+                    "status": "unresolved",
+                    "unresolved_reasons": (
+                        "provider_generation_failed",
+                        "missing_supporting_citations",
+                        "conflicting_reviewed_context",
+                    ),
+                    "citations": (promoted_case.case_id, evidence_id),
+                },
+            )
+        )
+        service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-queue-unresolved-001",
+                subject_linkage={
+                    "source_record_family": "recommendation",
+                    "source_record_id": recommendation.recommendation_id,
+                    "source_alert_id": promoted_case.alert_id,
+                    "source_case_id": promoted_case.case_id,
+                    "provider_status": "failed",
+                    "provider_operational_quality": "degraded",
+                    "trace_governance": {
+                        "authority_mode": "advisory_only",
+                        "approval_authority": "none",
+                        "execution_authority": "none",
+                        "reconciliation_authority": "none",
+                    },
+                },
+                model_identity="gpt-5.4",
+                prompt_version="phase24-queue-summary-v1",
+                generated_at=reviewed_at,
+                material_input_refs=(promoted_case.alert_id, promoted_case.case_id, evidence_id),
+                reviewer_identity="analyst-001",
+                lifecycle_state="under_review",
+                assistant_advisory_draft={
+                    "status": "unresolved",
+                    "unresolved_reasons": (
+                        "provider_generation_failed",
+                        "missing_supporting_citations",
+                        "conflicting_reviewed_context",
+                    ),
+                    "citations": (promoted_case.case_id, evidence_id),
+                },
+            )
+        )
+
+        stdout = io.StringIO()
+        main.main(["inspect-analyst-queue"], stdout=stdout, service=service)
+
+        payload = json.loads(stdout.getvalue())
+        trace_review_groups = payload["records"][0]["ai_trace_review_groups"]
+        self.assertEqual(len(trace_review_groups), 1)
+        self.assertEqual(trace_review_groups[0]["case_id"], promoted_case.case_id)
+        self.assertEqual(trace_review_groups[0]["trace_count"], 1)
+        self.assertEqual(
+            trace_review_groups[0]["states"],
+            ["conflict", "citation_failure", "provider_degraded", "unresolved"],
+        )
+        self.assertEqual(
+            trace_review_groups[0]["trace_link"],
+            f"/operator/assistant/ai_trace/ai-trace-queue-unresolved-001",
+        )
+        self.assertEqual(
+            trace_review_groups[0]["traces"][0]["unresolved_reasons"],
+            [
+                "provider_generation_failed",
+                "missing_supporting_citations",
+                "conflicting_reviewed_context",
+            ],
+        )
+
     def test_cli_renders_reviewed_wazuh_alert_detail_view(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
