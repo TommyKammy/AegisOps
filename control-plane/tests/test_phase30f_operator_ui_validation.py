@@ -171,7 +171,7 @@ class Phase30FOperatorUiValidationTests(unittest.TestCase):
                 lifecycle_state="under_review",
                 assistant_advisory_draft={
                     "status": "unresolved",
-                    "unresolved_reasons": ("required citations are missing",),
+                    "unresolved_reasons": ("Required Citations Are Missing",),
                 },
             )
         )
@@ -184,7 +184,7 @@ class Phase30FOperatorUiValidationTests(unittest.TestCase):
         self.assertEqual(assistant["reason"], "assistant_citation_failure")
         self.assertEqual(
             assistant["unresolved_reasons"],
-            ("required citations are missing",),
+            ("Required Citations Are Missing",),
         )
 
     def test_phase30f_frontend_tests_lock_taxonomy_and_non_authority_rendering(

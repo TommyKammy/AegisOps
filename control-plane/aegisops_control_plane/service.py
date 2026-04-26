@@ -3182,7 +3182,7 @@ class AegisOpsControlPlaneService:
         reason = (
             "assistant_citation_failure"
             if any(
-                "citation" in unresolved_reason
+                "citation" in unresolved_reason.casefold()
                 for unresolved_reason in unresolved_reasons
             )
             else "assistant_advisory_unresolved"

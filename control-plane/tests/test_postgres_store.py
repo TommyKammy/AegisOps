@@ -387,6 +387,34 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
         )
         self.assertIn("where alert_id is not null", schema_sql)
 
+    def test_ai_trace_latest_lookup_index_migration_asset_exists(self) -> None:
+        migration_path = (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0012_phase_32_ai_trace_latest_lookup_index.sql"
+        )
+
+        self.assertTrue(
+            migration_path.exists(),
+            f"Missing AI trace latest lookup migration asset: {migration_path}",
+        )
+
+        migration_sql = migration_path.read_text(encoding="utf-8").lower()
+        schema_sql = (
+            CONTROL_PLANE_ROOT.parent / "postgres" / "control-plane" / "schema.sql"
+        ).read_text(encoding="utf-8").lower()
+
+        for sql in (migration_sql, schema_sql):
+            self.assertIn("create index if not exists ai_trace_records_latest_idx", sql)
+            self.assertIn("on aegisops_control.ai_trace_records", sql)
+            self.assertIn("generated_at desc", sql)
+            self.assertIn("ai_trace_id desc", sql)
+
+        self.assertIn("begin;", migration_sql)
+        self.assertIn("commit;", migration_sql)
+
     def test_phase23_lifecycle_transition_forward_migration_asset_exists(self) -> None:
         migration_path = (
             CONTROL_PLANE_ROOT.parent
