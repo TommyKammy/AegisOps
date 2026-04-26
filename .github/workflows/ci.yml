@@ -261,6 +261,31 @@ jobs:
       - name: Run control-plane runtime unit tests
         run: python3 -m unittest discover -s control-plane/tests -p 'test_*.py'
 
+  operator-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: .
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Run operator UI merge-gate checks
+        run: |
+          npm ci
+          npm run typecheck --workspace @aegisops/operator-ui
+          npm run test --workspace @aegisops/operator-ui
+          npm run build --workspace @aegisops/operator-ui
+
   focused-shell-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -320,3 +345,6 @@ jobs:
           bash scripts/test-verify-wazuh-rule-lifecycle-runbook.sh
           bash scripts/test-verify-windows-source-onboarding-assets.sh
           bash scripts/test-verify-ci-phase-29-workflow-coverage.sh
+
+      - name: Run operator UI workflow coverage guard
+        run: bash scripts/test-verify-ci-operator-ui-workflow-coverage.sh
