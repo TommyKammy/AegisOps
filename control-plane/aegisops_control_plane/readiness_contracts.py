@@ -9,6 +9,10 @@ from .models import (
     ReconciliationRecord,
 )
 
+_READINESS_RUNTIME_STATUSES = frozenset(
+    {"ready", "degraded", "stale", "failing_closed"}
+)
+
 
 @dataclass(frozen=True)
 class ReadinessDiagnosticsAggregates:
@@ -97,7 +101,9 @@ def resolve_readyz_runtime_status(
 ) -> ReadinessRuntimeStatus:
     raw_status = readiness_payload.get("status")
     status = (
-        raw_status if isinstance(raw_status, str) and raw_status else "failing_closed"
+        raw_status
+        if isinstance(raw_status, str) and raw_status in _READINESS_RUNTIME_STATUSES
+        else "failing_closed"
     )
     admits_runtime_traffic = status == "ready"
     return ReadinessRuntimeStatus(

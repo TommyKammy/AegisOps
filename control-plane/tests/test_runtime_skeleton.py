@@ -6,6 +6,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 from unittest import mock
 from urllib import error, request
@@ -251,6 +252,19 @@ class RuntimeSkeletonTests(unittest.TestCase):
         self.assertEqual(payload["status"], "degraded")
         self.assertEqual(payload["readiness_source"], "current_dependency_status")
         service.inspect_readiness_diagnostics.assert_called_once_with()
+
+    def test_readyz_runtime_status_fails_closed_for_unknown_status(self) -> None:
+        from aegisops_control_plane.readiness_contracts import (
+            resolve_readyz_runtime_status,
+        )
+
+        runtime_status = resolve_readyz_runtime_status(
+            {"status": "shadow-ready", "readiness_source": "current_dependency_status"}
+        )
+
+        self.assertEqual(runtime_status.status, "failing_closed")
+        self.assertEqual(runtime_status.http_status, HTTPStatus.SERVICE_UNAVAILABLE)
+        self.assertFalse(runtime_status.admits_runtime_traffic)
 
 
 if __name__ == "__main__":
