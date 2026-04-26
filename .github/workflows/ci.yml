@@ -60,6 +60,7 @@ jobs:
           bash scripts/verify-parameter-category-docs.sh
           bash scripts/verify-parameter-config-files.sh
           bash scripts/run-ci-phase-contract.sh all-verifiers
+          bash scripts/verify-pilot-pause-rollback-exit-criteria.sh
           bash scripts/verify-positive-smb-value-proposition.sh
           bash scripts/verify-postgres-compose-skeleton.sh
           bash scripts/verify-publishable-path-hygiene.sh
@@ -311,6 +312,7 @@ jobs:
           bash scripts/test-verify-phase-37-restore-rollback-upgrade-evidence.sh
           bash scripts/test-verify-phase-33-operational-evidence-handoff-pack.sh
           bash scripts/test-verify-support-playbook-break-glass-rehearsal.sh
+          bash scripts/test-verify-pilot-pause-rollback-exit-criteria.sh
           bash scripts/test-verify-single-customer-deployment-profile.sh
           bash scripts/test-verify-single-customer-release-bundle-inventory.sh
           bash scripts/test-verify-release-handoff-evidence-package.sh

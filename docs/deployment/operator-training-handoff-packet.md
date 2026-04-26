@@ -10,6 +10,8 @@ Use it before pilot handoff, during operator shadowing, and when a daily owner n
 
 Verify the packet with `scripts/verify-operator-training-handoff-packet.sh`.
 
+For pilot pause, rollback, continue, or exit signoff, operators must use `docs/deployment/pilot-pause-rollback-exit-criteria.md` after completing the queue, case, action-review, reviewed-record, non-authority, and evidence handoff walkthrough.
+
 ## 2. Daily Queue, Case, and Action-Review Path
 
 Daily work starts from the AegisOps queue, not from Wazuh, OpenSearch, Zammad, Shuffle, n8n, or assistant output.

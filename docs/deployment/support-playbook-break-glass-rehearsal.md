@@ -10,6 +10,8 @@ The playbook covers source, detector, coordination, assistant, runtime, rollback
 
 It does not create 24x7 on-call coverage, a customer-specific support contract, direct backend access, direct substrate authority, or emergency authority bypass.
 
+Pilot pause, rollback, and exit decisions must use `docs/deployment/pilot-pause-rollback-exit-criteria.md` so support degradation, break-glass evidence, rollback escalation, unresolved limitations, and next-roadmap input remain reviewed and bounded.
+
 ## 2. Common Pilot Failure Modes
 
 | Failure mode | Inspect first | Do not infer |

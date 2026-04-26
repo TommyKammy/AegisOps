@@ -14,6 +14,8 @@ The release gate proves that backup, restore, rollback, upgrade, smoke, and revi
 
 Support escalation from `docs/deployment/support-playbook-break-glass-rehearsal.md` must route rollback and restore decisions back to this release-gate rehearsal and retain refusal reason plus clean-state evidence for failed paths.
 
+Pilot rollback acceptance must stay aligned to `docs/deployment/pilot-pause-rollback-exit-criteria.md`; a same-day rollback decision is not accepted for pilot continuation or exit until operator/support signoff, refusal reason when applicable, and clean-state evidence are retained.
+
 ## 2. Prerequisites
 
 Before the rehearsal starts, operators must have:

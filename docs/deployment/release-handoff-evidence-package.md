@@ -12,6 +12,8 @@ Use this package after the release bundle inventory, install preflight, runtime 
 
 The pilot readiness checklist in `docs/deployment/pilot-readiness-checklist.md` consumes this release handoff package as the reviewed release-readiness and known-limitations evidence source for the pilot entry decision.
 
+Pilot exit-success, exit-no-go, pause, continue, and rollback decisions must point to `docs/deployment/pilot-pause-rollback-exit-criteria.md` instead of treating release handoff alone as pilot success.
+
 ## 2. Required Handoff Entries
 
 Every release handoff manifest must include release readiness summary, release bundle identifier, install preflight result, runtime smoke result, backup, restore, rollback, and upgrade rehearsal reference, known limitations, rollback instructions, handoff owner, and next health review.

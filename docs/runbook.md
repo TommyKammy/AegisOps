@@ -133,6 +133,8 @@ Before starting a single-customer pilot, review `docs/deployment/pilot-readiness
 
 For pilot support degradation, break-glass rehearsal, and operator-readable evidence expectations, use `docs/deployment/support-playbook-break-glass-rehearsal.md` and verify it with `scripts/verify-support-playbook-break-glass-rehearsal.sh`.
 
+Before continuing, pausing, rolling back, or exiting a single-customer pilot, review `docs/deployment/pilot-pause-rollback-exit-criteria.md` and verify it with `scripts/verify-pilot-pause-rollback-exit-criteria.sh` so pause criteria, rollback criteria, exit criteria, unresolved limitations, next-roadmap input, and operator/support signoff remain bounded to Phase 43.
+
 ## 3. Shutdown
 
 The reviewed shutdown path exists to return the platform to a clean, operator-confirmed safe state without leaving ambiguous runtime ownership or half-stopped ingress.
