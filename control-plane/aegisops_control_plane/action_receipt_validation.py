@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
 
 _PLACEHOLDER_RECEIPT_VALUES = frozenset(
     (
@@ -33,3 +35,11 @@ def require_receipt_string_value(value: object, field_name: str) -> str:
         raise MissingReceiptValueError(field_name)
 
     return value
+
+
+def require_receipt_https_url_value(value: object, field_name: str) -> str:
+    normalized_value = require_receipt_string_value(value, field_name).strip()
+    parsed_value = urlparse(normalized_value)
+    if parsed_value.scheme != "https" or not parsed_value.netloc:
+        raise MissingReceiptValueError(field_name)
+    return normalized_value
