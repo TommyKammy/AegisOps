@@ -93,6 +93,74 @@ class Phase28ExternalEvidenceBoundaryRefactorTests(unittest.TestCase):
             },
         )
 
+    def test_attach_osquery_host_context_delegates_to_external_evidence_boundary(
+        self,
+    ) -> None:
+        service = self._build_service()
+        collected_at = datetime(2026, 4, 18, 0, 0, tzinfo=timezone.utc)
+        rows = (
+            {
+                "pid": "123",
+                "name": "sshd",
+                "path": "/usr/sbin/sshd",
+            },
+        )
+        query_context = {"pack": "osquery-defense", "platform": "linux"}
+        sentinel = (object(), object())
+        observed: dict[str, object] = {}
+
+        def fake_attach_osquery_host_context(**kwargs: object) -> tuple[object, object]:
+            observed.update(kwargs)
+            return sentinel
+
+        service._external_evidence_boundary.attach_osquery_host_context = (
+            fake_attach_osquery_host_context
+        )
+
+        result = service.attach_osquery_host_context(
+            case_id="case-001",
+            host_identifier="host-001",
+            query_name="running_processes",
+            query_sql="SELECT pid, name, path FROM processes;",
+            result_kind="process",
+            rows=rows,
+            collected_at=collected_at,
+            reviewed_by="analyst-001",
+            source_id="query-result-001",
+            collection_path="pack/osquery-defense/processes/running_processes",
+            query_context=query_context,
+            evidence_id="evidence-osquery-001",
+            observation_scope_statement=(
+                "Observed reviewed osquery host context on the explicitly scoped host."
+            ),
+            observation_id="observation-osquery-001",
+        )
+
+        self.assertIs(result, sentinel)
+        self.assertEqual(
+            observed,
+            {
+                "case_id": "case-001",
+                "host_identifier": "host-001",
+                "query_name": "running_processes",
+                "query_sql": "SELECT pid, name, path FROM processes;",
+                "result_kind": "process",
+                "rows": rows,
+                "collected_at": collected_at,
+                "reviewed_by": "analyst-001",
+                "source_id": "query-result-001",
+                "collection_path": (
+                    "pack/osquery-defense/processes/running_processes"
+                ),
+                "query_context": query_context,
+                "evidence_id": "evidence-osquery-001",
+                "observation_scope_statement": (
+                    "Observed reviewed osquery host context on the explicitly scoped host."
+                ),
+                "observation_id": "observation-osquery-001",
+            },
+        )
+
     def test_create_endpoint_request_delegates_to_external_evidence_boundary(self) -> None:
         service = self._build_service()
         expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
