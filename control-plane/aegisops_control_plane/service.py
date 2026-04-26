@@ -30,6 +30,7 @@ from .assistant_provider import (
     AssistantProviderResult,
     AssistantProviderTransport,
 )
+from .assistant_advisory import AssistantAdvisoryCoordinator
 from .action_lifecycle_write_coordinator import ActionLifecycleWriteCoordinator
 from .action_review_write_surface import ActionReviewWriteSurface
 from .case_workflow import CaseWorkflowService
@@ -1337,6 +1338,9 @@ class AegisOpsControlPlaneService:
             recommendation_draft_snapshot_from_context=(
                 _recommendation_draft_snapshot_from_context
             ),
+        )
+        self._assistant_advisory_coordinator = AssistantAdvisoryCoordinator(
+            self._assistant_context_assembler
         )
         self._live_assistant_workflow_coordinator = LiveAssistantWorkflowCoordinator(
             self,
@@ -4464,7 +4468,7 @@ class AegisOpsControlPlaneService:
         record_family: str,
         record_id: str,
     ) -> AdvisoryInspectionSnapshot:
-        return self._assistant_context_assembler.inspect_advisory_output(
+        return self._assistant_advisory_coordinator.inspect_advisory_output(
             record_family,
             record_id,
         )
@@ -4474,7 +4478,7 @@ class AegisOpsControlPlaneService:
         record_family: str,
         record_id: str,
     ) -> RecommendationDraftSnapshot:
-        return self._assistant_context_assembler.render_recommendation_draft(
+        return self._assistant_advisory_coordinator.render_recommendation_draft(
             record_family,
             record_id,
         )
@@ -4676,7 +4680,7 @@ class AegisOpsControlPlaneService:
         record_family: str,
         record_id: str,
     ) -> RecommendationRecord | AITraceRecord:
-        return self._assistant_context_assembler.attach_assistant_advisory_draft(
+        return self._assistant_advisory_coordinator.attach_assistant_advisory_draft(
             record_family,
             record_id,
         )

@@ -32,10 +32,38 @@ from _service_persistence_support import (
     timedelta,
     timezone,
 )
+from aegisops_control_plane.assistant_advisory import AssistantAdvisoryCoordinator
 
 
 class AssistantAdvisoryPersistenceTests(ServicePersistenceTestBase):
-    def test_service_delegates_assistant_context_and_advisory_rendering_to_assembler(
+    def test_assistant_advisory_coordinator_exposes_no_authority_bearing_methods(
+        self,
+    ) -> None:
+        coordinator = AssistantAdvisoryCoordinator(mock.Mock())
+        public_methods = {
+            name
+            for name in dir(coordinator)
+            if not name.startswith("_") and callable(getattr(coordinator, name))
+        }
+
+        self.assertEqual(
+            public_methods,
+            {
+                "attach_assistant_advisory_draft",
+                "inspect_advisory_output",
+                "render_recommendation_draft",
+            },
+        )
+        authority_terms = ("approval", "execution", "reconciliation", "closure")
+        self.assertFalse(
+            any(
+                authority_term in method_name
+                for method_name in public_methods
+                for authority_term in authority_terms
+            )
+        )
+
+    def test_service_delegates_assistant_context_to_assembler_and_advisory_to_coordinator(
         self,
     ) -> None:
         store, _ = make_store()
@@ -47,13 +75,14 @@ class AssistantAdvisoryPersistenceTests(ServicePersistenceTestBase):
         service._assistant_context_assembler.inspect_assistant_context.return_value = (
             mock.sentinel.assistant_context_snapshot
         )
-        service._assistant_context_assembler.inspect_advisory_output.return_value = (
+        service._assistant_advisory_coordinator = mock.Mock()
+        service._assistant_advisory_coordinator.inspect_advisory_output.return_value = (
             mock.sentinel.advisory_output_snapshot
         )
-        service._assistant_context_assembler.render_recommendation_draft.return_value = (
+        service._assistant_advisory_coordinator.render_recommendation_draft.return_value = (
             mock.sentinel.recommendation_draft_snapshot
         )
-        service._assistant_context_assembler.attach_assistant_advisory_draft.return_value = (
+        service._assistant_advisory_coordinator.attach_assistant_advisory_draft.return_value = (
             mock.sentinel.attached_advisory_draft_record
         )
 
@@ -80,16 +109,19 @@ class AssistantAdvisoryPersistenceTests(ServicePersistenceTestBase):
             "case",
             "case-delegated-001",
         )
-        service._assistant_context_assembler.inspect_advisory_output.assert_called_once_with(
+        service._assistant_context_assembler.inspect_advisory_output.assert_not_called()
+        service._assistant_context_assembler.render_recommendation_draft.assert_not_called()
+        service._assistant_context_assembler.attach_assistant_advisory_draft.assert_not_called()
+        service._assistant_advisory_coordinator.inspect_advisory_output.assert_called_once_with(
             "case",
             "case-delegated-001",
         )
-        service._assistant_context_assembler.render_recommendation_draft.assert_called_once_with(
+        service._assistant_advisory_coordinator.render_recommendation_draft.assert_called_once_with(
             "case",
             "case-delegated-001",
         )
         (
-            service._assistant_context_assembler.attach_assistant_advisory_draft
+            service._assistant_advisory_coordinator.attach_assistant_advisory_draft
             .assert_called_once_with(
                 "recommendation",
                 "recommendation-delegated-001",
