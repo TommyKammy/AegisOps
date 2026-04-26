@@ -3559,6 +3559,203 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             ("alert-known-last-seen", "alert-unknown-last-seen"),
         )
 
+    def test_service_marks_queue_lanes_for_mismatch_stale_and_degraded_context(
+        self,
+    ) -> None:
+        store, _ = support.make_store()
+        service = support.AegisOpsControlPlaneService(
+            support.RuntimeConfig(
+                postgres_dsn="postgresql://control-plane.local/aegisops"
+            ),
+            store=store,
+        )
+        seen_at = support.datetime(2026, 4, 5, 12, 15, tzinfo=support.timezone.utc)
+
+        service.persist_record(
+            AlertRecord(
+                alert_id="alert-queue-lanes",
+                finding_id="finding-queue-lanes",
+                analytic_signal_id="signal-queue-lanes",
+                case_id=None,
+                lifecycle_state="new",
+                reviewed_context={
+                    "optional_extensions": {
+                        "endpoint_evidence": {
+                            "readiness": "degraded",
+                            "reason": "receipt_lag_requires_review",
+                        }
+                    }
+                },
+            )
+        )
+        service.persist_record(
+            support.ReconciliationRecord(
+                reconciliation_id="reconciliation-queue-lanes",
+                subject_linkage={
+                    "alert_ids": ("alert-queue-lanes",),
+                    "analytic_signal_ids": ("signal-queue-lanes",),
+                    "substrate_detection_record_ids": ("wazuh:queue-lanes",),
+                    "source_systems": ("wazuh",),
+                },
+                alert_id="alert-queue-lanes",
+                finding_id="finding-queue-lanes",
+                analytic_signal_id="signal-queue-lanes",
+                execution_run_id="execution-run-queue-lanes",
+                linked_execution_run_ids=("execution-run-queue-lanes",),
+                correlation_key="wazuh:queue-lanes",
+                first_seen_at=seen_at,
+                last_seen_at=seen_at,
+                ingest_disposition="created",
+                mismatch_summary="stale downstream execution observation requires refresh",
+                compared_at=seen_at,
+                lifecycle_state="mismatched",
+            )
+        )
+        service.persist_record(
+            AlertRecord(
+                alert_id="alert-queue-clean",
+                finding_id="finding-queue-clean",
+                analytic_signal_id="signal-queue-clean",
+                case_id=None,
+                lifecycle_state="triaged",
+            )
+        )
+        service.persist_record(
+            support.ReconciliationRecord(
+                reconciliation_id="reconciliation-queue-clean",
+                subject_linkage={
+                    "alert_ids": ("alert-queue-clean",),
+                    "analytic_signal_ids": ("signal-queue-clean",),
+                    "substrate_detection_record_ids": ("wazuh:queue-clean",),
+                    "source_systems": ("wazuh",),
+                },
+                alert_id="alert-queue-clean",
+                finding_id="finding-queue-clean",
+                analytic_signal_id="signal-queue-clean",
+                execution_run_id=None,
+                linked_execution_run_ids=(),
+                correlation_key="wazuh:queue-clean",
+                first_seen_at=seen_at - timedelta(minutes=5),
+                last_seen_at=seen_at - timedelta(minutes=5),
+                ingest_disposition="created",
+                mismatch_summary="matched upstream signal into alert lifecycle",
+                compared_at=seen_at,
+                lifecycle_state="matched",
+            )
+        )
+
+        queue_view = service.inspect_analyst_queue()
+
+        self.assertEqual(queue_view.total_records, 2)
+        record = queue_view.records[0]
+        self.assertEqual(
+            record["queue_lanes"],
+            (
+                "action_required",
+                "reconciliation_mismatch",
+                "stale_receipt",
+                "optional_extension_degraded",
+            ),
+        )
+        self.assertEqual(
+            record["queue_lane_details"]["reconciliation_mismatch"],
+            {
+                "state": "mismatched",
+                "summary": "stale downstream execution observation requires refresh",
+            },
+        )
+        self.assertEqual(
+            record["queue_lane_details"]["stale_receipt"],
+            {
+                "state": "stale_downstream_observed",
+                "lifecycle_state": "mismatched",
+                "ingest_disposition": "created",
+                "summary": "stale downstream execution observation requires refresh",
+            },
+        )
+        self.assertEqual(
+            record["queue_lane_details"]["optional_extension_degraded"],
+            {
+                "endpoint_evidence": {
+                    "readiness": "degraded",
+                    "reason": "receipt_lag_requires_review",
+                }
+            },
+        )
+        self.assertEqual(
+            queue_view.to_dict()["lane_counts"],
+            {
+                "action_required": 1,
+                "reconciliation_mismatch": 1,
+                "stale_receipt": 1,
+                "optional_extension_degraded": 1,
+                "clean": 1,
+            },
+        )
+        self.assertEqual(queue_view.records[1]["queue_lanes"], ("clean",))
+
+    def test_service_does_not_mark_pending_reconciliation_as_mismatch_lane(
+        self,
+    ) -> None:
+        store, _ = support.make_store()
+        service = support.AegisOpsControlPlaneService(
+            support.RuntimeConfig(
+                postgres_dsn="postgresql://control-plane.local/aegisops"
+            ),
+            store=store,
+        )
+        seen_at = support.datetime(2026, 4, 5, 12, 20, tzinfo=support.timezone.utc)
+
+        service.persist_record(
+            AlertRecord(
+                alert_id="alert-queue-pending-reconciliation",
+                finding_id="finding-queue-pending-reconciliation",
+                analytic_signal_id="signal-queue-pending-reconciliation",
+                case_id=None,
+                lifecycle_state="triaged",
+            )
+        )
+        service.persist_record(
+            support.ReconciliationRecord(
+                reconciliation_id="reconciliation-queue-pending",
+                subject_linkage={
+                    "alert_ids": ("alert-queue-pending-reconciliation",),
+                    "analytic_signal_ids": ("signal-queue-pending-reconciliation",),
+                    "substrate_detection_record_ids": ("wazuh:queue-pending",),
+                    "source_systems": ("wazuh",),
+                },
+                alert_id="alert-queue-pending-reconciliation",
+                finding_id="finding-queue-pending-reconciliation",
+                analytic_signal_id="signal-queue-pending-reconciliation",
+                execution_run_id="execution-run-queue-pending",
+                linked_execution_run_ids=("execution-run-queue-pending",),
+                correlation_key="wazuh:queue-pending",
+                first_seen_at=seen_at,
+                last_seen_at=seen_at,
+                ingest_disposition="created",
+                mismatch_summary="reconciliation pending downstream receipt review",
+                compared_at=seen_at,
+                lifecycle_state="pending",
+            )
+        )
+
+        queue_view = service.inspect_analyst_queue()
+
+        self.assertEqual(queue_view.total_records, 1)
+        record = queue_view.records[0]
+        self.assertEqual(record["queue_lanes"], ("clean",))
+        self.assertNotIn("reconciliation_mismatch", record["queue_lane_details"])
+        self.assertEqual(
+            queue_view.to_dict()["lane_counts"],
+            {
+                "action_required": 0,
+                "reconciliation_mismatch": 0,
+                "stale_receipt": 0,
+                "optional_extension_degraded": 0,
+                "clean": 1,
+            },
+        )
+
     def test_service_rejects_schema_invalid_records_before_they_are_inspectable(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(

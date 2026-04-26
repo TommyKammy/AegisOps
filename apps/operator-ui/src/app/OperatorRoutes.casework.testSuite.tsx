@@ -185,6 +185,87 @@ export function registerOperatorRoutesCaseworkTests() {
       });
     });
 
+    it("renders mismatch, stale receipt, degraded extension, action-required, and clean queue lanes", async () => {
+      const fetchFn = createAuthorizedFetch({
+        "/inspect-analyst-queue": {
+          queue_name: "analyst_review",
+          read_only: true,
+          lane_counts: {
+            action_required: 1,
+            reconciliation_mismatch: 1,
+            stale_receipt: 1,
+            optional_extension_degraded: 1,
+            clean: 1,
+          },
+          records: [
+            {
+              alert_id: "alert-lanes-mismatch",
+              review_state: "new",
+              queue_lanes: [
+                "action_required",
+                "reconciliation_mismatch",
+                "stale_receipt",
+                "optional_extension_degraded",
+              ],
+              queue_lane_details: {
+                reconciliation_mismatch: {
+                  state: "mismatched",
+                  summary: "stale downstream execution observation requires refresh",
+                },
+                stale_receipt: {
+                  state: "stale",
+                  summary: "stale downstream execution observation requires refresh",
+                },
+                optional_extension_degraded: {
+                  endpoint_evidence: {
+                    readiness: "degraded",
+                    reason: "receipt_lag_requires_review",
+                  },
+                },
+              },
+            },
+            {
+              alert_id: "alert-lanes-clean",
+              review_state: "triaged",
+              queue_lanes: ["clean"],
+            },
+          ],
+          total_records: 2,
+        },
+      });
+      const dependencies = createDefaultDependencies({
+        fetchFn,
+      });
+
+      render(
+        <MemoryRouter initialEntries={["/operator/queue"]}>
+          <OperatorRoutes dependencies={dependencies} />
+        </MemoryRouter>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByRole("heading", { name: "Queue lanes" })).toBeInTheDocument();
+      });
+
+      expect(screen.getByText("Action required: 1")).toBeInTheDocument();
+      expect(screen.getByText("Reconciliation mismatch: 1")).toBeInTheDocument();
+      expect(screen.getByText("Stale receipt: 1")).toBeInTheDocument();
+      expect(screen.getByText("Optional extension degraded: 1")).toBeInTheDocument();
+      expect(screen.getByText("Clean: 1")).toBeInTheDocument();
+      expect(screen.getByText("alert-lanes-mismatch")).toBeInTheDocument();
+      expect(screen.getAllByText("Reconciliation mismatch").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Stale receipt").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Optional extension degraded").length).toBeGreaterThan(0);
+      expect(
+        screen.getAllByText("stale downstream execution observation requires refresh").length,
+      ).toBeGreaterThan(0);
+      expect(
+        screen.getAllByText("endpoint evidence: receipt lag requires review").length,
+      ).toBeGreaterThan(0);
+      expect(screen.getByText("alert-lanes-clean")).toBeInTheDocument();
+      expect(screen.getAllByText("Clean").length).toBeGreaterThan(0);
+    });
+
     it("renders grouped AI trace review states in the analyst queue", async () => {
       const fetchFn = createAuthorizedFetch({
         "/inspect-analyst-queue": {
