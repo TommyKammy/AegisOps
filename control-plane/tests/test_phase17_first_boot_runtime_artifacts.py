@@ -119,23 +119,43 @@ class Phase17FirstBootRuntimeArtifactTests(unittest.TestCase):
             "location = /inspect-reconciliation-status {",
             "proxy_pass http://aegisops_control_plane/inspect-reconciliation-status;",
             "location = /inspect-analyst-queue {",
-            "proxy_pass http://aegisops_control_plane/inspect-analyst-queue$is_args$args;",
             "location = /inspect-alert-detail {",
-            "proxy_pass http://aegisops_control_plane/inspect-alert-detail$is_args$args;",
             "location = /inspect-case-detail {",
-            "proxy_pass http://aegisops_control_plane/inspect-case-detail$is_args$args;",
             "location = /inspect-action-review {",
-            "proxy_pass http://aegisops_control_plane/inspect-action-review$is_args$args;",
             "location = /inspect-advisory-output {",
-            "proxy_pass http://aegisops_control_plane/inspect-advisory-output$is_args$args;",
             "location = /operator/queue {",
-            "proxy_pass http://aegisops_control_plane/inspect-analyst-queue$is_args$args;",
         )
         for term in reviewed_routes:
             self.assertIn(term, text)
 
+        read_only_route_targets = {
+            "/inspect-analyst-queue": (
+                "proxy_pass http://aegisops_control_plane/inspect-analyst-queue$is_args$args;"
+            ),
+            "/inspect-alert-detail": (
+                "proxy_pass http://aegisops_control_plane/inspect-alert-detail$is_args$args;"
+            ),
+            "/inspect-case-detail": (
+                "proxy_pass http://aegisops_control_plane/inspect-case-detail$is_args$args;"
+            ),
+            "/inspect-action-review": (
+                "proxy_pass http://aegisops_control_plane/inspect-action-review$is_args$args;"
+            ),
+            "/inspect-advisory-output": (
+                "proxy_pass http://aegisops_control_plane/inspect-advisory-output$is_args$args;"
+            ),
+            "/operator/queue": (
+                "proxy_pass http://aegisops_control_plane/inspect-analyst-queue$is_args$args;"
+            ),
+        }
+        for route, target in read_only_route_targets.items():
+            block = self._nginx_location_block(text, route)
+            self.assertIn("limit_except GET { deny all; }", block)
+            self.assertIn(target, block)
+
         for forbidden in (
             "render-recommendation-draft",
+            "/inspect-assistant-context",
             "/operator/promote-alert-to-case",
             "/operator/record-case-observation",
             "/operator/record-action-approval-decision",
@@ -150,6 +170,16 @@ class Phase17FirstBootRuntimeArtifactTests(unittest.TestCase):
             compose_text,
             "control-plane",
         )
+
+    @staticmethod
+    def _nginx_location_block(config_text: str, route: str) -> str:
+        match = re.search(
+            rf"(?ms)^  location = {re.escape(route)} \{{\n(.*?)(?=^  \}})",
+            config_text,
+        )
+        if match is None:
+            raise AssertionError(f"expected first-boot proxy location block for {route}")
+        return match.group(1)
 
     @staticmethod
     def _service_block(compose_text: str, service_name: str) -> str:

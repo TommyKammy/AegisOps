@@ -98,19 +98,30 @@ done
 require_phrase "${runbook_path}" 'The Phase 33 runtime smoke bundle in `docs/deployment/runtime-smoke-bundle.md` is the reviewed post-deployment and post-upgrade handoff check for this runbook.' "runbook Phase 33 smoke bundle link"
 require_phrase "${profile_path}" 'Post-upgrade smoke checks are the reviewed runtime smoke bundle in `docs/deployment/runtime-smoke-bundle.md`:' "single-customer profile Phase 33 smoke bundle link"
 
-for proxy_path_fragment in \
-  "/healthz" \
-  "/readyz" \
-  "/runtime" \
-  "/inspect-records" \
-  "/inspect-reconciliation-status" \
-  "/inspect-analyst-queue" \
-  "/inspect-alert-detail" \
-  "/inspect-case-detail" \
-  "/inspect-action-review" \
-  "/inspect-advisory-output" \
-  "/operator/queue"; do
-  require_phrase "${proxy_path}" "location = ${proxy_path_fragment}" "first-boot proxy smoke route"
+for required_proxy_line in \
+  "location = /healthz {" \
+  "proxy_pass http://aegisops_control_plane/healthz;" \
+  "location = /readyz {" \
+  "proxy_pass http://aegisops_control_plane/readyz;" \
+  "location = /runtime {" \
+  "proxy_pass http://aegisops_control_plane/runtime;" \
+  "location = /inspect-records {" \
+  "proxy_pass http://aegisops_control_plane/inspect-records\$is_args\$args;" \
+  "location = /inspect-reconciliation-status {" \
+  "proxy_pass http://aegisops_control_plane/inspect-reconciliation-status;" \
+  "location = /inspect-analyst-queue {" \
+  "proxy_pass http://aegisops_control_plane/inspect-analyst-queue\$is_args\$args;" \
+  "location = /inspect-alert-detail {" \
+  "proxy_pass http://aegisops_control_plane/inspect-alert-detail\$is_args\$args;" \
+  "location = /inspect-case-detail {" \
+  "proxy_pass http://aegisops_control_plane/inspect-case-detail\$is_args\$args;" \
+  "location = /inspect-action-review {" \
+  "proxy_pass http://aegisops_control_plane/inspect-action-review\$is_args\$args;" \
+  "location = /inspect-advisory-output {" \
+  "proxy_pass http://aegisops_control_plane/inspect-advisory-output\$is_args\$args;" \
+  "location = /operator/queue {" \
+  "proxy_pass http://aegisops_control_plane/inspect-analyst-queue\$is_args\$args;"; do
+  require_phrase "${proxy_path}" "${required_proxy_line}" "first-boot proxy smoke route"
 done
 
 for forbidden in "requires OpenSearch" "requires n8n" "requires Shuffle" "requires ML shadow" "execute the low-risk action" "POST /operator/create-reviewed-action-request"; do
