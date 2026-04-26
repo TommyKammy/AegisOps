@@ -112,6 +112,8 @@ Assistant output is advisory-only and must remain grounded in reviewed AegisOps 
 
 The assistant must not approve, execute, reconcile, close a case, widen pilot scope, or replace missing evidence with generated text.
 
+Optional evidence, downstream substrate receipts, browser state, and external tickets are subordinate context only; they may support the handoff but cannot override the reviewed AegisOps record chain.
+
 ## 7. Evidence Handoff Walkthrough
 
 A handoff starts by naming the reviewed event, operator, release or repository revision when runtime state changed, customer-scoped reference without secrets, and the directly linked AegisOps record identifiers.
@@ -196,6 +198,14 @@ write_valid_packet "${missing_non_authority_repo}"
 perl -0pi -e 's/External tickets are coordination references only; they may carry ticket identifiers, URLs, comments, or assignee context, but they do not own AegisOps case, approval, execution, or reconciliation truth\.\n//' "${missing_non_authority_repo}/docs/deployment/operator-training-handoff-packet.md"
 commit_fixture "${missing_non_authority_repo}"
 assert_fails_with "${missing_non_authority_repo}" "Missing operator training packet statement: External tickets are coordination references only"
+
+missing_subordinate_context_repo="${workdir}/missing-subordinate-context"
+create_repo "${missing_subordinate_context_repo}"
+write_shared_docs "${missing_subordinate_context_repo}"
+write_valid_packet "${missing_subordinate_context_repo}"
+perl -0pi -e 's/Optional evidence, downstream substrate receipts, browser state, and external tickets are subordinate context only; they may support the handoff but cannot override the reviewed AegisOps record chain\.\n//' "${missing_subordinate_context_repo}/docs/deployment/operator-training-handoff-packet.md"
+commit_fixture "${missing_subordinate_context_repo}"
+assert_fails_with "${missing_subordinate_context_repo}" "Missing operator training packet statement: Optional evidence, downstream substrate receipts, browser state, and external tickets are subordinate context only"
 
 forbidden_authority_repo="${workdir}/forbidden-authority"
 create_repo "${forbidden_authority_repo}"

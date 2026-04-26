@@ -101,6 +101,7 @@ required_packet_phrases=(
   "If an external ticket disagrees with the AegisOps reviewed record chain, operators keep the AegisOps record authoritative and preserve the disagreement for review."
   "Assistant output is advisory-only and must remain grounded in reviewed AegisOps records and linked evidence."
   "The assistant must not approve, execute, reconcile, close a case, widen pilot scope, or replace missing evidence with generated text."
+  "Optional evidence, downstream substrate receipts, browser state, and external tickets are subordinate context only; they may support the handoff but cannot override the reviewed AegisOps record chain."
   "A handoff starts by naming the reviewed event, operator, release or repository revision when runtime state changed, customer-scoped reference without secrets, and the directly linked AegisOps record identifiers."
   "The handoff must include the release handoff record, runtime smoke manifest when relevant, detector activation handoff when relevant, external coordination reference when present, assistant limitation statement when assistant output was used, known-limitations review, handoff owner, and next health review or queue owner."
   "For failed, rejected, forbidden, rollback, restore, or no-go paths, the handoff must preserve the refusal reason and clean-state evidence instead of overwriting the failed attempt with a later success summary."
