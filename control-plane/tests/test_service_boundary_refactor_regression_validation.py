@@ -93,6 +93,9 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
             self.assertIn(term, action_tests)
 
         for term in (
+            "test_service_initializes_dedicated_action_lifecycle_write_coordinator",
+            "test_service_routes_action_lifecycle_write_entrypoints_through_coordinator",
+            "test_action_lifecycle_write_coordinator_preserves_internal_boundaries",
             "test_service_initializes_dedicated_execution_coordinator",
             "test_service_delegates_reviewed_action_request_creation_to_execution_coordinator",
             "test_service_delegates_shuffle_and_isolated_executor_flows_to_execution_coordinator",
