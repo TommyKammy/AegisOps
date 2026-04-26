@@ -1,0 +1,3 @@
+# Reviewed maintainability hotspot baseline for scripts/verify-maintainability-hotspots.sh.
+# One repo-relative Python path per line. Entries are not exemptions for new responsibility growth.
+control-plane/aegisops_control_plane/service.py

@@ -49,6 +49,7 @@ jobs:
           bash scripts/verify-documentation-ownership-map.sh
           bash scripts/verify-secops-domain-model-doc.sh
           bash scripts/verify-ingest-compose-skeleton.sh
+          bash scripts/verify-maintainability-hotspots.sh
           bash scripts/verify-naming-conventions-doc.sh
           bash scripts/verify-network-exposure-policy-doc.sh
           bash scripts/verify-n8n-compose-skeleton.sh

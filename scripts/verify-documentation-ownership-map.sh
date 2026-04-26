@@ -27,6 +27,7 @@ required_phrases=(
   '| `docs/response-action-safety-model.md` | Response action safety and approval binding baseline | IT Operations, Information Systems Department |'
   '| `docs/automation-substrate-contract.md` | Approved automation delegation contract baseline | IT Operations, Information Systems Department |'
   '| `docs/control-plane-state-model.md` | Control-plane state and reconciliation baseline | IT Operations, Information Systems Department |'
+  '| `docs/maintainability-hotspot-baseline.txt` | Reviewed maintainability hotspot verifier baseline | IT Operations, Information Systems Department |'
   '| `docs/retention-evidence-and-replay-readiness-baseline.md` | Retention, evidence lifecycle, and replay readiness baseline | IT Operations, Information Systems Department |'
   '| `docs/adr/` | Architecture Decision Records (ADRs) | IT Operations, Information Systems Department |'
   '| `docs/parameters/` | Parameter documentation | IT Operations, Information Systems Department |'
