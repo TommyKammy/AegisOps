@@ -49,7 +49,7 @@ reject_workstation_paths() {
   local macos_home_pattern linux_home_pattern windows_home_pattern workstation_local_path_pattern
   macos_home_pattern='/'"Users"'/[^[:space:])>]+'
   linux_home_pattern='/'"home"'/[^[:space:])>]+'
-  windows_home_pattern='[A-Za-z]:\\'"Users"'\\[^[:space:])>]+'
+  windows_home_pattern='[A-Za-z]:[\\/][Uu]sers[\\/][^[:space:])>]+'
   workstation_local_path_pattern="(^|[^[:alnum:]_./-])(~[/\\\\]|${macos_home_pattern}|${linux_home_pattern}|${windows_home_pattern})"
 
   if grep -Eq "${workstation_local_path_pattern}" "$@"; then

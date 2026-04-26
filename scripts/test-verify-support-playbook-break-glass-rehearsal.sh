@@ -189,6 +189,27 @@ assert_rejects_forbidden_playbook_phrase() {
   assert_fails_with "${target}" "Forbidden support playbook statement: ${phrase}"
 }
 
+workstation_path_case_index=0
+
+assert_rejects_workstation_path() {
+  local path_fragment="$1"
+  local target
+
+  workstation_path_case_index=$((workstation_path_case_index + 1))
+  target="${workdir}/workstation-path-${workstation_path_case_index}"
+
+  create_repo "${target}"
+  write_shared_files "${target}"
+  write_valid_playbook "${target}"
+  {
+    printf '\n'
+    printf 'Use %s for local evidence.\n' "${path_fragment}"
+  } >> "${target}/docs/deployment/support-playbook-break-glass-rehearsal.md"
+
+  commit_fixture "${target}"
+  assert_fails_with "${target}" "Forbidden support playbook guidance: workstation-local absolute path detected"
+}
+
 valid_repo="${workdir}/valid"
 create_repo "${valid_repo}"
 write_shared_files "${valid_repo}"
@@ -252,16 +273,8 @@ for forbidden_phrase in \
   assert_rejects_forbidden_playbook_phrase "${forbidden_phrase}"
 done
 
-workstation_path_repo="${workdir}/workstation-path"
-create_repo "${workstation_path_repo}"
-write_shared_files "${workstation_path_repo}"
-write_valid_playbook "${workstation_path_repo}"
-{
-  printf '\n'
-  printf 'Use %sUsers/example/private/support-note.md for local evidence.\n' '/'
-} >> "${workstation_path_repo}/docs/deployment/support-playbook-break-glass-rehearsal.md"
-
-commit_fixture "${workstation_path_repo}"
-assert_fails_with "${workstation_path_repo}" "Forbidden support playbook guidance: workstation-local absolute path detected"
+assert_rejects_workstation_path "$(printf '%sUsers/example/private/support-note.md' '/')"
+assert_rejects_workstation_path "$(printf 'C:%sUsers%sexample%sprivate%ssupport-note.md' '/' '/' '/' '/')"
+assert_rejects_workstation_path "$(printf 'C:%bUsers%bexample%bprivate%bsupport-note.md' '\\' '\\' '\\' '\\')"
 
 echo "Support playbook and break-glass rehearsal verifier tests passed."
