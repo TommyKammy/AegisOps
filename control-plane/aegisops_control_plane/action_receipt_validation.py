@@ -42,4 +42,4 @@ def require_receipt_https_url_value(value: object, field_name: str) -> str:
     parsed_value = urlparse(normalized_value)
     if parsed_value.scheme != "https" or not parsed_value.netloc:
         raise MissingReceiptValueError(field_name)
-    return value
+    return normalized_value
