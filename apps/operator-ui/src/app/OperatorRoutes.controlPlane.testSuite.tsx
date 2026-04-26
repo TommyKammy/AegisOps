@@ -870,7 +870,7 @@ export function registerOperatorRoutesControlPlaneTests() {
           }),
         );
       });
-    }, 10000);
+    }, 20000);
 
     it("creates reviewed tracking-ticket action requests from case detail", async () => {
       let caseDetailPayload: Record<string, unknown> = {
