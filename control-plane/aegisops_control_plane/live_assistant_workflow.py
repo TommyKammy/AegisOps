@@ -378,13 +378,20 @@ class LiveAssistantWorkflowCoordinator:
                 "status": workflow_snapshot.status,
             },
         }
-        subject_linkage.update(
-            self._provider_operability_linkage(
-                adapter=adapter,
-                provider_result=provider_result,
-                workflow_snapshot=workflow_snapshot,
-            )
+        provider_operability_linkage = self._provider_operability_linkage(
+            adapter=adapter,
+            provider_result=provider_result,
+            workflow_snapshot=workflow_snapshot,
         )
+        subject_linkage.update(provider_operability_linkage)
+        trace_governance = self._trace_governance_evidence(
+            context_snapshot=context_snapshot,
+            workflow_snapshot=workflow_snapshot,
+            provider_result=provider_result,
+            provider_operability_linkage=provider_operability_linkage,
+            adapter=adapter,
+        )
+        subject_linkage["trace_governance"] = trace_governance
         build_ai_trace_record = getattr(adapter, "build_ai_trace_record", None)
         ai_trace_record: AITraceRecord | None = None
         if provider_result is not None and callable(build_ai_trace_record):
@@ -458,6 +465,7 @@ class LiveAssistantWorkflowCoordinator:
                 "review_lifecycle_state": "under_review",
                 "subject_linkage": canonical_subject_linkage,
                 "reviewed_input_refs": reviewed_input_refs,
+                "trace_governance": trace_governance,
             }
         )
 
@@ -468,6 +476,110 @@ class LiveAssistantWorkflowCoordinator:
             lifecycle_state="under_review",
             assistant_advisory_draft=advisory_draft,
         )
+
+    def _trace_governance_evidence(
+        self,
+        *,
+        context_snapshot: object,
+        workflow_snapshot: Any,
+        provider_result: AssistantProviderResult | AssistantProviderFailure | None,
+        provider_operability_linkage: dict[str, object],
+        adapter: object,
+    ) -> dict[str, object]:
+        advisory_output = dict(getattr(context_snapshot, "advisory_output"))
+        unresolved_reasons = tuple(workflow_snapshot.unresolved_reasons)
+        provider_response_provenance = (
+            dict(provider_result.response_provenance)
+            if provider_result is not None
+            else {}
+        )
+        provider_model_version = provider_response_provenance.get("model_version")
+        if (
+            not isinstance(provider_model_version, str)
+            or not provider_model_version.strip()
+        ):
+            provider_model_version = None
+
+        citation_failure_state = self._citation_failure_state(
+            unresolved_reasons=unresolved_reasons,
+            advisory_output=advisory_output,
+            workflow_status=workflow_snapshot.status,
+        )
+        return {
+            "prompt_version_evidence": {
+                "prompt_version": (
+                    provider_result.prompt_version
+                    if provider_result is not None
+                    else self._adapter_identity(
+                        adapter,
+                        "_prompt_version",
+                        self._workflow_prompt_versions[workflow_snapshot.workflow_task],
+                    )
+                ),
+                "workflow_family": workflow_snapshot.workflow_family,
+                "workflow_task": workflow_snapshot.workflow_task,
+                "source": "configured_live_assistant_prompt_manifest",
+            },
+            "model_provider_evidence": {
+                "provider_identity": provider_operability_linkage["provider_identity"],
+                "model_identity": provider_operability_linkage[
+                    "provider_model_identity"
+                ],
+                "provider_status": provider_operability_linkage["provider_status"],
+                "provider_model_version": provider_model_version,
+            },
+            "citation_state": {
+                "completeness": (
+                    "complete" if citation_failure_state is None else "incomplete"
+                ),
+                "failure_state": citation_failure_state,
+                "citation_count": len(tuple(workflow_snapshot.citations)),
+                "unresolved_reasons": unresolved_reasons,
+            },
+            "reviewed_context_conflicts": self._reviewed_context_conflicts(
+                advisory_output
+            ),
+            "authority_mode": "advisory_only",
+        }
+
+    @staticmethod
+    def _reviewed_context_conflicts(
+        advisory_output: dict[str, object],
+    ) -> tuple[str, ...]:
+        raw_conflicts = advisory_output.get("reviewed_context_conflicts")
+        if not isinstance(raw_conflicts, (list, tuple)):
+            return ()
+        conflicts: list[str] = []
+        for conflict in raw_conflicts:
+            if not isinstance(conflict, str):
+                continue
+            normalized_conflict = conflict.strip()
+            if normalized_conflict and normalized_conflict not in conflicts:
+                conflicts.append(normalized_conflict)
+        return tuple(conflicts)
+
+    @staticmethod
+    def _citation_failure_state(
+        *,
+        unresolved_reasons: tuple[str, ...],
+        advisory_output: dict[str, object],
+        workflow_status: str,
+    ) -> str | None:
+        raw_uncertainty_flags = advisory_output.get("uncertainty_flags", ())
+        uncertainty_flags = (
+            tuple(str(flag) for flag in raw_uncertainty_flags)
+            if isinstance(raw_uncertainty_flags, (list, tuple, set))
+            else ()
+        )
+        if any("citation" in reason.casefold() for reason in unresolved_reasons):
+            return "missing_supporting_citations"
+        if "missing_supporting_citations" in uncertainty_flags:
+            return "missing_supporting_citations"
+        if "missing_evidence_citation" in uncertainty_flags:
+            return "missing_evidence_citation"
+        if workflow_status != "ready":
+            return "unresolved"
+        return None
 
     @staticmethod
     def _adapter_identity(
@@ -685,5 +797,6 @@ class LiveAssistantWorkflowCoordinator:
                 "linked_reconciliation_ids": getattr(
                     context_snapshot, "linked_reconciliation_ids"
                 ),
+                "trace_governance": ai_trace_record.subject_linkage["trace_governance"],
             },
         )
