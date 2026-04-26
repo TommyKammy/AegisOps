@@ -550,6 +550,7 @@ def _build_assistant_advisory_output(
         "candidate_recommendations": tuple(candidate_recommendations),
         "citations": citations,
         "uncertainty_flags": _dedupe_strings(tuple(uncertainty_flags)),
+        "reviewed_context_conflicts": context_conflicts,
     }
 
 

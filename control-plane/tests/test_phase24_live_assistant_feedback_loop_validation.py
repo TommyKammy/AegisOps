@@ -161,6 +161,30 @@ class Phase24LiveAssistantFeedbackLoopValidationTests(ServicePersistenceTestBase
             ai_trace.assistant_advisory_draft["subject_linkage"]["recommendation_ids"],
             (recommendation.recommendation_id,),
         )
+        trace_governance = ai_trace.subject_linkage["trace_governance"]
+        self.assertEqual(
+            trace_governance["prompt_version_evidence"]["prompt_version"],
+            "phase24-case-summary-v1",
+        )
+        self.assertEqual(
+            trace_governance["model_provider_evidence"],
+            {
+                "provider_identity": "openai",
+                "model_identity": "gpt-5.4",
+                "provider_status": "ready",
+                "provider_model_version": "model-version-2026-04-17",
+            },
+        )
+        self.assertEqual(
+            trace_governance["citation_state"]["completeness"],
+            "complete",
+        )
+        self.assertIsNone(trace_governance["citation_state"]["failure_state"])
+        self.assertEqual(trace_governance["authority_mode"], "advisory_only")
+        self.assertEqual(
+            recommendation.assistant_advisory_draft["trace_governance"],
+            trace_governance,
+        )
         self.assertEqual(recommendation.ai_trace_id, ai_trace.ai_trace_id)
         self.assertEqual(recommendation.case_id, promoted_case.case_id)
         self.assertEqual(recommendation.alert_id, promoted_case.alert_id)
@@ -391,12 +415,16 @@ class Phase24LiveAssistantFeedbackLoopValidationTests(ServicePersistenceTestBase
                     "citations": (promoted_case.case_id,),
                 },
                 "uncertainty_flags": ("missing_supporting_citations",),
+                "reviewed_context_conflicts": ("triage.disposition",),
             },
         )
         expected_citations = _phase24_live_assistant_citations_from_context(
             unresolved_context
         )
         service._assistant_provider_adapter = mock.Mock()
+        service._assistant_provider_adapter._provider_identity = "openai"
+        service._assistant_provider_adapter._model_identity = "gpt-5.4"
+        service._assistant_provider_adapter._prompt_version = "phase24-case-summary-v1"
 
         with mock.patch.object(
             service,
@@ -424,6 +452,63 @@ class Phase24LiveAssistantFeedbackLoopValidationTests(ServicePersistenceTestBase
         self.assertEqual(
             ai_trace.assistant_advisory_draft["summary"],
             expected_summary,
+        )
+        trace_governance = ai_trace.subject_linkage["trace_governance"]
+        self.assertEqual(
+            trace_governance["prompt_version_evidence"]["prompt_version"],
+            "phase24-case-summary-v1",
+        )
+        self.assertEqual(
+            trace_governance["prompt_version_evidence"]["workflow_family"],
+            "first_live_assistant_summary_family",
+        )
+        self.assertEqual(
+            trace_governance["prompt_version_evidence"]["workflow_task"],
+            "case_summary",
+        )
+        self.assertEqual(
+            trace_governance["prompt_version_evidence"]["source"],
+            "configured_live_assistant_prompt_manifest",
+        )
+        self.assertEqual(
+            trace_governance["model_provider_evidence"]["provider_identity"],
+            "openai",
+        )
+        self.assertEqual(
+            trace_governance["model_provider_evidence"]["model_identity"],
+            "gpt-5.4",
+        )
+        self.assertEqual(
+            trace_governance["model_provider_evidence"]["provider_status"],
+            "not_requested",
+        )
+        self.assertIsNone(
+            trace_governance["model_provider_evidence"]["provider_model_version"]
+        )
+        self.assertEqual(
+            trace_governance["citation_state"]["completeness"],
+            "incomplete",
+        )
+        self.assertEqual(
+            trace_governance["citation_state"]["failure_state"],
+            "missing_supporting_citations",
+        )
+        self.assertEqual(
+            trace_governance["citation_state"]["citation_count"],
+            len(expected_citations),
+        )
+        self.assertEqual(
+            trace_governance["citation_state"]["unresolved_reasons"],
+            ("required citations are missing",),
+        )
+        self.assertEqual(
+            trace_governance["reviewed_context_conflicts"],
+            ("triage.disposition",),
+        )
+        self.assertEqual(trace_governance["authority_mode"], "advisory_only")
+        self.assertEqual(
+            ai_trace.assistant_advisory_draft["trace_governance"],
+            ai_trace.subject_linkage["trace_governance"],
         )
 
         recommendations = store.list(RecommendationRecord)
