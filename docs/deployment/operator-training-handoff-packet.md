@@ -76,6 +76,8 @@ The assistant must not approve, execute, reconcile, close a case, widen pilot sc
 
 Use assistant summaries only as cited decision support. If citations are missing, identity context is ambiguous, optional enrichment conflicts with reviewed records, or the output asserts authority it does not have, keep the item unresolved and return to the reviewed record chain.
 
+Optional evidence, downstream substrate receipts, browser state, and external tickets are subordinate context only; they may support the handoff but cannot override the reviewed AegisOps record chain.
+
 ## 7. Evidence Handoff Walkthrough
 
 A handoff starts by naming the reviewed event, operator, release or repository revision when runtime state changed, customer-scoped reference without secrets, and the directly linked AegisOps record identifiers.
