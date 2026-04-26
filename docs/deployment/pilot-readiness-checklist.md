@@ -40,6 +40,8 @@ Data retention for the pilot is bounded to the current release handoff, runtime 
 
 Evidence handoff must name the release handoff record, runtime smoke manifest, detector activation handoff, coordination pilot status, assistant limitation statement, known-limitations review, handoff owner, and next health review.
 
+The support playbook in `docs/deployment/support-playbook-break-glass-rehearsal.md` is the reviewed pilot degradation and break-glass rehearsal reference; pilot entry remains blocked if support expectations would require 24x7 coverage, customer-specific support terms, or emergency authority bypass.
+
 ## 4. Required Entry Evidence
 
 | Entry area | Required entry evidence | Blocking condition |

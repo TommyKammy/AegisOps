@@ -12,6 +12,8 @@ The release handoff evidence package in `docs/deployment/release-handoff-evidenc
 
 The release gate proves that backup, restore, rollback, upgrade, smoke, and reviewed-record evidence stay explainable against the AegisOps authoritative record chain. It does not create a vendor backup integration, zero-downtime promise, HA design, cluster failover plan, or multi-customer operating model.
 
+Support escalation from `docs/deployment/support-playbook-break-glass-rehearsal.md` must route rollback and restore decisions back to this release-gate rehearsal and retain refusal reason plus clean-state evidence for failed paths.
+
 ## 2. Prerequisites
 
 Before the rehearsal starts, operators must have:
