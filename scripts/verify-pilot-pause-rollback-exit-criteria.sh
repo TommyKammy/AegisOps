@@ -130,6 +130,7 @@ require_phrase "${restore_path}" 'Pilot rollback acceptance must stay aligned to
 
 for doc_path in \
   "${criteria_path}" \
+  "${runbook_path}" \
   "${pilot_checklist_path}" \
   "${support_path}" \
   "${operator_packet_path}" \

@@ -131,6 +131,12 @@ write_valid_docs "${forbidden_scope_repo}"
 printf '\nThe public launch checklist is approved by pilot exit.\n' >> "${forbidden_scope_repo}/docs/deployment/pilot-pause-rollback-exit-criteria.md"
 assert_fails_with "${forbidden_scope_repo}" "Forbidden pilot pause rollback exit criteria statement: public launch checklist is approved"
 
+forbidden_runbook_scope_repo="${workdir}/forbidden-runbook-scope"
+create_repo "${forbidden_runbook_scope_repo}"
+write_valid_docs "${forbidden_runbook_scope_repo}"
+printf '\nThe multi-tenant expansion is approved by pilot exit.\n' >> "${forbidden_runbook_scope_repo}/docs/runbook.md"
+assert_fails_with "${forbidden_runbook_scope_repo}" "Forbidden pilot pause rollback exit criteria statement: multi-tenant expansion is approved"
+
 absolute_path_repo="${workdir}/absolute-path"
 create_repo "${absolute_path_repo}"
 write_valid_docs "${absolute_path_repo}"
