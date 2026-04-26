@@ -168,9 +168,13 @@ export function QueuePage() {
                   <TableRow>
                     <TableCell>Alert</TableCell>
                     <TableCell>Review state</TableCell>
+                    <TableCell>Owner</TableCell>
+                    <TableCell>Severity</TableCell>
+                    <TableCell>Age</TableCell>
                     <TableCell>Case</TableCell>
                     <TableCell>Source family</TableCell>
                     <TableCell>Action review</TableCell>
+                    <TableCell>Next action</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -183,6 +187,10 @@ export function QueuePage() {
                     const actionReviewState = asString(
                       getPath(record, "current_action_review.review_state"),
                     );
+                    const owner = asString(record.owner);
+                    const severity = asString(record.severity);
+                    const ageBucket = asString(record.age_bucket);
+                    const nextAction = asString(record.next_action);
                     return (
                       <TableRow hover key={String(record.id ?? alertId)}>
                         <TableCell>
@@ -201,6 +209,9 @@ export function QueuePage() {
                         <TableCell>
                           <StatusStrip values={[["Review", asString(record.review_state)]]} />
                         </TableCell>
+                        <TableCell>{owner ?? "Unassigned"}</TableCell>
+                        <TableCell>{severity ?? "Not available"}</TableCell>
+                        <TableCell>{ageBucket ?? "Not available"}</TableCell>
                         <TableCell>
                           {caseId ? (
                             <AuditedRouteLink
@@ -217,6 +228,7 @@ export function QueuePage() {
                         </TableCell>
                         <TableCell>{sourceFamily ?? "Not available"}</TableCell>
                         <TableCell>{actionReviewState ?? "No active review"}</TableCell>
+                        <TableCell>{nextAction ?? "Review queue record"}</TableCell>
                       </TableRow>
                     );
                   })}
@@ -240,12 +252,17 @@ export function QueuePage() {
               ["Review", asString(record.review_state)],
               ["Case", asString(record.case_lifecycle_state)],
               ["Escalation", asString(record.escalation_boundary)],
+              ["Owner", asString(record.owner)],
+              ["Severity", asString(record.severity)],
+              ["Age", asString(record.age_bucket)],
               ["Action review", asString(getPath(record, "current_action_review.review_state"))],
             ]}
           />
           <RecordWarnings record={record} />
           <ValueList
             entries={[
+              ["Last activity", record.last_activity_at],
+              ["Next action", record.next_action],
               ["Accountable identities", asStringArray(record.accountable_source_identities)],
               ["Subordinate detection ids", asStringArray(record.substrate_detection_record_ids)],
               ["Correlation key", record.correlation_key],

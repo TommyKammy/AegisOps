@@ -14,6 +14,7 @@ from .models import (
     LifecycleTransitionRecord,
     ObservationRecord,
     LeadRecord,
+    RecommendationRecord,
     ReconciliationRecord,
 )
 
@@ -310,6 +311,124 @@ class OperatorInspectionReadSurface:
             )
         )
 
+    @staticmethod
+    def _queue_age_bucket(age_seconds: int) -> str:
+        if age_seconds >= 24 * 60 * 60:
+            return "stale"
+        return "fresh"
+
+    @staticmethod
+    def _queue_severity_from_reviewed_context(
+        reviewed_context: Mapping[str, object],
+    ) -> str:
+        provenance = reviewed_context.get("provenance")
+        rule_level = (
+            provenance.get("rule_level")
+            if isinstance(provenance, Mapping)
+            else None
+        )
+        if isinstance(rule_level, int):
+            if rule_level >= 12:
+                return "critical"
+            if rule_level >= 7:
+                return "high"
+            if rule_level >= 4:
+                return "medium"
+            return "low"
+
+        explicit_severity = reviewed_context.get("severity")
+        if isinstance(explicit_severity, str) and explicit_severity in {
+            "low",
+            "medium",
+            "high",
+            "critical",
+        }:
+            return explicit_severity
+
+        return "medium"
+
+    def _queue_owner(
+        self,
+        *,
+        alert_id: str,
+        case_id: str | None,
+        reviewed_context: Mapping[str, object],
+        action_reviews: tuple[dict[str, object], ...],
+    ) -> str | None:
+        if action_reviews:
+            requester_identity = action_reviews[0].get("requester_identity")
+            if isinstance(requester_identity, str) and requester_identity.strip():
+                return requester_identity.strip()
+
+        recommendations = [
+            recommendation
+            for recommendation in self._service._store.list(RecommendationRecord)
+            if recommendation.alert_id == alert_id
+            or (case_id is not None and recommendation.case_id == case_id)
+        ]
+        if recommendations:
+            latest_recommendation = sorted(
+                recommendations,
+                key=lambda recommendation: recommendation.recommendation_id,
+                reverse=True,
+            )[0]
+            return latest_recommendation.review_owner
+
+        leads = [
+            lead
+            for lead in self._service._store.list(LeadRecord)
+            if lead.alert_id == alert_id
+            or (case_id is not None and lead.case_id == case_id)
+        ]
+        if leads:
+            latest_lead = sorted(
+                leads,
+                key=lambda lead: lead.lead_id,
+                reverse=True,
+            )[0]
+            return latest_lead.triage_owner
+
+        handoff = reviewed_context.get("handoff")
+        if isinstance(handoff, Mapping):
+            handoff_owner = handoff.get("handoff_owner")
+            if isinstance(handoff_owner, str) and handoff_owner.strip():
+                return handoff_owner.strip()
+
+        return None
+
+    def _queue_next_action(
+        self,
+        *,
+        alert_id: str,
+        case_id: str | None,
+        review_state: str,
+        action_reviews: tuple[dict[str, object], ...],
+    ) -> str:
+        if action_reviews:
+            next_expected_action = action_reviews[0].get("next_expected_action")
+            if isinstance(next_expected_action, str) and next_expected_action.strip():
+                return next_expected_action.strip()
+
+        recommendations = [
+            recommendation
+            for recommendation in self._service._store.list(RecommendationRecord)
+            if recommendation.alert_id == alert_id
+            or (case_id is not None and recommendation.case_id == case_id)
+        ]
+        if recommendations:
+            latest_recommendation = sorted(
+                recommendations,
+                key=lambda recommendation: recommendation.recommendation_id,
+                reverse=True,
+            )[0]
+            return latest_recommendation.intended_outcome
+
+        if case_id is None:
+            return "Promote alert to case"
+        if review_state == "case_required":
+            return "Review linked case"
+        return "Review queue record"
+
     def inspect_analyst_queue(self) -> object:
         active_alert_states = {
             "new",
@@ -357,6 +476,17 @@ class OperatorInspectionReadSurface:
                 case_id=alert.case_id,
                 ai_trace_records=ai_trace_records,
             )
+            now = datetime.now(timezone.utc)
+            first_seen_at = reconciliation.first_seen_at
+            age_seconds = (
+                max(0, int((now - first_seen_at).total_seconds()))
+                if first_seen_at is not None
+                else 0
+            )
+            last_activity_at = reconciliation.last_seen_at or first_seen_at
+            owner_reviewed_context = (
+                case_record.reviewed_context if case_record is not None else alert.reviewed_context
+            )
             queue_records.append(
                 {
                     "alert_id": alert.alert_id,
@@ -392,6 +522,24 @@ class OperatorInspectionReadSurface:
                     "correlation_key": reconciliation.correlation_key,
                     "first_seen_at": reconciliation.first_seen_at,
                     "last_seen_at": reconciliation.last_seen_at,
+                    "owner": self._queue_owner(
+                        alert_id=alert.alert_id,
+                        case_id=alert.case_id,
+                        reviewed_context=owner_reviewed_context,
+                        action_reviews=action_reviews,
+                    ),
+                    "age_seconds": age_seconds,
+                    "age_bucket": self._queue_age_bucket(age_seconds),
+                    "severity": self._queue_severity_from_reviewed_context(
+                        alert.reviewed_context,
+                    ),
+                    "last_activity_at": last_activity_at,
+                    "next_action": self._queue_next_action(
+                        alert_id=alert.alert_id,
+                        case_id=alert.case_id,
+                        review_state=review_state,
+                        action_reviews=action_reviews,
+                    ),
                     "current_action_review": (
                         dict(action_reviews[0]) if action_reviews else None
                     ),

@@ -70,6 +70,12 @@ export function registerOperatorRoutesCaseworkTests() {
               review_state: "degraded",
               case_id: "case-456",
               case_lifecycle_state: "open",
+              owner: "analyst-review-001",
+              age_seconds: 3600,
+              age_bucket: "fresh",
+              severity: "high",
+              last_activity_at: "2026-04-26T22:16:17Z",
+              next_action: "Review the queue projection before any approval-bound response.",
               accountable_source_identities: [
                 "manager:wazuh-manager-github-1",
               ],
@@ -106,6 +112,14 @@ export function registerOperatorRoutesCaseworkTests() {
       await waitFor(() => {
         expect(screen.getByText("alert-123")).toBeInTheDocument();
         expect(screen.getAllByText(/Review: degraded/i).length).toBeGreaterThan(0);
+        expect(screen.getByText("analyst-review-001")).toBeInTheDocument();
+        expect(screen.getByText("fresh")).toBeInTheDocument();
+        expect(screen.getByText("high")).toBeInTheDocument();
+        expect(screen.getByText("2026-04-26T22:16:17Z")).toBeInTheDocument();
+        expect(
+          screen.getAllByText("Review the queue projection before any approval-bound response.")
+            .length,
+        ).toBeGreaterThan(0);
         expect(
           screen.getByText(/Primary review surface/i),
         ).toBeInTheDocument();
