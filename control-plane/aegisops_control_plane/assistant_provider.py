@@ -9,6 +9,19 @@ from typing import Mapping, Protocol
 
 from .models import AITraceRecord
 
+_ALLOWED_PROVIDER_FAILURE_KINDS = frozenset(
+    {
+        "timeout",
+        "provider_error",
+    }
+)
+_ALLOWED_PROVIDER_POSTURES = frozenset(
+    {
+        "timeout",
+        "unavailable",
+    }
+)
+
 
 class AssistantProviderTransport(Protocol):
     def send_request(self, *, request: Mapping[str, object]) -> Mapping[str, object]:
@@ -48,6 +61,48 @@ class AssistantProviderResult:
 @dataclass(frozen=True)
 class AssistantProviderFailure(AssistantProviderResult):
     pass
+
+
+def sanitized_provider_exception_detail(exc: Exception) -> str:
+    return type(exc).__name__
+
+
+def provider_exception_failure_metadata(exc: Exception) -> Mapping[str, str]:
+    is_timeout = isinstance(exc, (AssistantProviderTimeout, TimeoutError))
+    failure_kind = _safe_provider_metadata_value(
+        getattr(exc, "failure_kind", None),
+        allowed_values=_ALLOWED_PROVIDER_FAILURE_KINDS,
+    )
+    if failure_kind is None:
+        failure_kind = "timeout" if is_timeout else "provider_error"
+
+    posture = _safe_provider_metadata_value(
+        getattr(exc, "posture", None),
+        allowed_values=_ALLOWED_PROVIDER_POSTURES,
+    )
+    if posture is None:
+        posture = "timeout" if is_timeout or failure_kind == "timeout" else "unavailable"
+
+    status = "timeout" if posture == "timeout" or failure_kind == "timeout" else "failed"
+    return {
+        "failure_kind": failure_kind,
+        "detail": sanitized_provider_exception_detail(exc),
+        "posture": posture,
+        "status": status,
+    }
+
+
+def _safe_provider_metadata_value(
+    value: object,
+    *,
+    allowed_values: frozenset[str],
+) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().lower()
+    if normalized in allowed_values:
+        return normalized
+    return None
 
 
 class AssistantProviderAdapter:
@@ -140,19 +195,21 @@ class AssistantProviderAdapter:
                     ),
                 )
             except AssistantProviderTimeout as exc:
+                failure_metadata = provider_exception_failure_metadata(exc)
                 failures.append(
                     AssistantProviderAttemptFailure(
                         attempt_number=attempt_number,
-                        failure_kind="timeout",
-                        detail=str(exc),
+                        failure_kind=failure_metadata["failure_kind"],
+                        detail=failure_metadata["detail"],
                     )
                 )
             except Exception as exc:  # noqa: BLE001
+                failure_metadata = provider_exception_failure_metadata(exc)
                 failures.append(
                     AssistantProviderAttemptFailure(
                         attempt_number=attempt_number,
-                        failure_kind="provider_error",
-                        detail=str(exc),
+                        failure_kind=failure_metadata["failure_kind"],
+                        detail=failure_metadata["detail"],
                     )
                 )
 

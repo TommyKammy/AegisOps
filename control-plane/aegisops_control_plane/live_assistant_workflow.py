@@ -11,6 +11,7 @@ from .assistant_provider import (
     AssistantProviderAttemptFailure,
     AssistantProviderFailure,
     AssistantProviderResult,
+    provider_exception_failure_metadata,
 )
 from .models import AITraceRecord, RecommendationRecord
 
@@ -502,13 +503,16 @@ class LiveAssistantWorkflowCoordinator:
             "_prompt_version",
             self._workflow_prompt_versions[workflow_task],
         )
+        failure_metadata = provider_exception_failure_metadata(exc)
+        failure_kind = failure_metadata["failure_kind"]
+        failure_detail = failure_metadata["detail"]
         failure = AssistantProviderAttemptFailure(
             attempt_number=1,
-            failure_kind="provider_error",
-            detail=str(exc),
+            failure_kind=failure_kind,
+            detail=failure_detail,
         )
         return AssistantProviderFailure(
-            status="failed",
+            status=failure_metadata["status"],
             provider_identity=provider_identity,
             model_identity=model_identity,
             prompt_version=prompt_version,
@@ -535,13 +539,13 @@ class LiveAssistantWorkflowCoordinator:
             failures=(failure,),
             failure_summary=(
                 f"attempt {failure.attempt_number}: "
-                f"{failure.failure_kind}: {failure.detail}"
+                f"{failure_kind}: {failure_detail}"
             ),
             operational_quality={
                 "availability": "unavailable",
-                "posture": "unavailable",
+                "posture": failure_metadata["posture"],
                 "retry_policy": "retry_exhausted",
-                "terminal_failure_kind": failure.failure_kind,
+                "terminal_failure_kind": failure_kind,
             },
         )
 

@@ -221,9 +221,19 @@ class Phase24LiveAssistantFeedbackLoopValidationTests(ServicePersistenceTestBase
                 "terminal_failure_kind": "provider_error",
             },
         )
-        self.assertIn(
-            "provider transport failed",
+        self.assertEqual(
             ai_trace.subject_linkage["provider_failure_summary"],
+            "attempt 1: provider_error: RuntimeError",
+        )
+        self.assertEqual(
+            ai_trace.subject_linkage["provider_failures"],
+            (
+                {
+                    "attempt_number": 1,
+                    "failure_kind": "provider_error",
+                    "detail": "RuntimeError",
+                },
+            ),
         )
         self.assertEqual(recommendation.ai_trace_id, ai_trace.ai_trace_id)
         self.assertEqual(recommendation.lifecycle_state, "under_review")
@@ -235,6 +245,89 @@ class Phase24LiveAssistantFeedbackLoopValidationTests(ServicePersistenceTestBase
             "reviewed retry budget",
             recommendation.assistant_advisory_draft["unresolved_reasons"][0],
         )
+
+    def test_live_assistant_workflow_sanitizes_provider_exception_trace_detail(
+        self,
+    ) -> None:
+        store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        service._assistant_provider_adapter = mock.Mock()
+        service._assistant_provider_adapter.generate.side_effect = RuntimeError(
+            "POST https://provider.example/v1/chat?api_key=secret-token "
+            "Authorization: Bearer secret-token"
+        )
+
+        snapshot = service.run_live_assistant_workflow(
+            workflow_task="case_summary",
+            record_family="case",
+            record_id=promoted_case.case_id,
+        )
+
+        self.assertEqual(snapshot.status, "unresolved")
+        ai_traces = store.list(AITraceRecord)
+        self.assertEqual(len(ai_traces), 1)
+        provider_failures = ai_traces[0].subject_linkage["provider_failures"]
+        failure_summary = ai_traces[0].subject_linkage["provider_failure_summary"]
+
+        self.assertEqual(
+            provider_failures,
+            (
+                {
+                    "attempt_number": 1,
+                    "failure_kind": "provider_error",
+                    "detail": "RuntimeError",
+                },
+            ),
+        )
+        self.assertEqual(failure_summary, "attempt 1: provider_error: RuntimeError")
+        self.assertNotIn("https://provider.example", failure_summary)
+        self.assertNotIn("secret-token", failure_summary)
+        self.assertNotIn("Bearer", failure_summary)
+
+    def test_live_assistant_workflow_preserves_raised_timeout_provider_posture(
+        self,
+    ) -> None:
+        store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        service._assistant_provider_adapter = mock.Mock()
+        service._assistant_provider_adapter.generate.side_effect = TimeoutError(
+            "provider call to https://provider.example/v1 timed out "
+            "with token=secret-token"
+        )
+
+        snapshot = service.run_live_assistant_workflow(
+            workflow_task="case_summary",
+            record_family="case",
+            record_id=promoted_case.case_id,
+        )
+
+        self.assertEqual(snapshot.status, "unresolved")
+        ai_traces = store.list(AITraceRecord)
+        self.assertEqual(len(ai_traces), 1)
+        ai_trace = ai_traces[0]
+        readiness = service.inspect_readiness_diagnostics()
+        assistant_extension = readiness.metrics["optional_extensions"]["extensions"][
+            "assistant"
+        ]
+
+        self.assertEqual(ai_trace.subject_linkage["provider_status"], "timeout")
+        self.assertEqual(
+            ai_trace.subject_linkage["provider_operational_quality"],
+            {
+                "availability": "unavailable",
+                "posture": "timeout",
+                "retry_policy": "retry_exhausted",
+                "terminal_failure_kind": "timeout",
+            },
+        )
+        self.assertEqual(
+            ai_trace.subject_linkage["provider_failure_summary"],
+            "attempt 1: timeout: TimeoutError",
+        )
+        self.assertEqual(assistant_extension["reason"], "assistant_provider_timeout")
+        self.assertEqual(assistant_extension["provider_status"], "timeout")
 
     def test_live_assistant_provider_failure_stays_visible_on_recommendation_advisory_inspection(
         self,

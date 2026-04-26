@@ -60,8 +60,11 @@ class AssistantProviderAdapterValidationTests(unittest.TestCase):
         self.assertEqual(result.operational_quality["retry_policy"], "retry_exhausted")
         self.assertEqual(len(result.failures), 1)
         self.assertEqual(result.failures[0].failure_kind, "timeout")
-        self.assertIn("timed out", result.failures[0].detail)
-        self.assertIn("attempt 1: timeout", result.failure_summary)
+        self.assertEqual(result.failures[0].detail, "AssistantProviderTimeout")
+        self.assertIn(
+            "attempt 1: timeout: AssistantProviderTimeout",
+            result.failure_summary,
+        )
         self.assertLess(elapsed, 0.15)
 
     def test_adapter_retries_bounded_timeout_failures_and_records_no_memory_provenance(
@@ -208,7 +211,15 @@ class AssistantProviderAdapterValidationTests(unittest.TestCase):
         self.assertTrue(
             all(failure.failure_kind == "provider_error" for failure in result.failures)
         )
-        self.assertIn("malformed provider output", result.failure_summary)
+        self.assertEqual(
+            tuple(failure.detail for failure in result.failures),
+            ("RuntimeError", "RuntimeError"),
+        )
+        self.assertIn(
+            "attempt 1: provider_error: RuntimeError",
+            result.failure_summary,
+        )
+        self.assertNotIn("malformed provider output", result.failure_summary)
 
     def test_adapter_builds_ai_trace_with_request_response_and_failure_provenance(
         self,
