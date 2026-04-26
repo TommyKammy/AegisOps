@@ -74,9 +74,15 @@ required_phrases=(
   'Use a reviewed `platform_admin` role for `<trusted-platform-admin-proxy-auth-headers>` because `/runtime` is platform-admin protected.'
   'Use a reviewed `analyst`, `approver`, or `platform_admin` role for `<trusted-operator-read-only-proxy-auth-headers>` because the read-only inspection routes accept those operator roles.'
   'curl -fsS <trusted-platform-admin-proxy-auth-headers> http://127.0.0.1:<proxy-port>/runtime'
+  'curl -fsS <trusted-operator-read-only-proxy-auth-headers> http://127.0.0.1:<proxy-port>/inspect-analyst-queue'
+  'curl -fsS <trusted-operator-read-only-proxy-auth-headers> http://127.0.0.1:<proxy-port>/operator/queue'
   'curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-records?family=alerts"'
+  'curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-alert-detail?alert_id=<reviewed-alert-id>"'
   'curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-records?family=cases"'
+  'curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-case-detail?case_id=<reviewed-case-id>"'
   'curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-records?family=action_requests"'
+  'curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-action-review?action_request_id=<reviewed-action-request-id>"'
+  'curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-advisory-output?family=case&record_id=<reviewed-case-id>"'
   'curl -fsS <trusted-operator-read-only-proxy-auth-headers> http://127.0.0.1:<proxy-port>/inspect-reconciliation-status'
   'Confirm the operator console can render `/operator/queue` or the configured operator-console base path with the same reviewed backend session, then keep the check read-only.'
   "Confirm the first candidate low-risk action remains in precondition review only: a reviewed alert or case is selected, an allowed low-risk action type is identified, approver ownership is known, and no action request, approval decision, delegation, executor dispatch, or reconciliation write is performed by this smoke bundle."
@@ -92,8 +98,30 @@ done
 require_phrase "${runbook_path}" 'The Phase 33 runtime smoke bundle in `docs/deployment/runtime-smoke-bundle.md` is the reviewed post-deployment and post-upgrade handoff check for this runbook.' "runbook Phase 33 smoke bundle link"
 require_phrase "${profile_path}" 'Post-upgrade smoke checks are the reviewed runtime smoke bundle in `docs/deployment/runtime-smoke-bundle.md`:' "single-customer profile Phase 33 smoke bundle link"
 
-for proxy_path_fragment in "/healthz" "/readyz" "/runtime" "/inspect-records" "/inspect-reconciliation-status"; do
-  require_phrase "${proxy_path}" "location = ${proxy_path_fragment}" "first-boot proxy smoke route"
+for required_proxy_line in \
+  "location = /healthz {" \
+  "proxy_pass http://aegisops_control_plane/healthz;" \
+  "location = /readyz {" \
+  "proxy_pass http://aegisops_control_plane/readyz;" \
+  "location = /runtime {" \
+  "proxy_pass http://aegisops_control_plane/runtime;" \
+  "location = /inspect-records {" \
+  "proxy_pass http://aegisops_control_plane/inspect-records\$is_args\$args;" \
+  "location = /inspect-reconciliation-status {" \
+  "proxy_pass http://aegisops_control_plane/inspect-reconciliation-status;" \
+  "location = /inspect-analyst-queue {" \
+  "proxy_pass http://aegisops_control_plane/inspect-analyst-queue\$is_args\$args;" \
+  "location = /inspect-alert-detail {" \
+  "proxy_pass http://aegisops_control_plane/inspect-alert-detail\$is_args\$args;" \
+  "location = /inspect-case-detail {" \
+  "proxy_pass http://aegisops_control_plane/inspect-case-detail\$is_args\$args;" \
+  "location = /inspect-action-review {" \
+  "proxy_pass http://aegisops_control_plane/inspect-action-review\$is_args\$args;" \
+  "location = /inspect-advisory-output {" \
+  "proxy_pass http://aegisops_control_plane/inspect-advisory-output\$is_args\$args;" \
+  "location = /operator/queue {" \
+  "proxy_pass http://aegisops_control_plane/inspect-analyst-queue\$is_args\$args;"; do
+  require_phrase "${proxy_path}" "${required_proxy_line}" "first-boot proxy smoke route"
 done
 
 for forbidden in "requires OpenSearch" "requires n8n" "requires Shuffle" "requires ML shadow" "execute the low-risk action" "POST /operator/create-reviewed-action-request"; do

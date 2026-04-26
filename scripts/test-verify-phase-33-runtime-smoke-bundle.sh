@@ -39,14 +39,43 @@ EOF
 
   cat <<'EOF' > "${target}/proxy/nginx/conf.d-first-boot/control-plane.conf"
 location = /healthz {
+  proxy_pass http://aegisops_control_plane/healthz;
 }
 location = /readyz {
+  proxy_pass http://aegisops_control_plane/readyz;
 }
 location = /runtime {
+  proxy_pass http://aegisops_control_plane/runtime;
 }
 location = /inspect-records {
+  proxy_pass http://aegisops_control_plane/inspect-records$is_args$args;
 }
 location = /inspect-reconciliation-status {
+  proxy_pass http://aegisops_control_plane/inspect-reconciliation-status;
+}
+location = /inspect-analyst-queue {
+  limit_except GET HEAD { deny all; }
+  proxy_pass http://aegisops_control_plane/inspect-analyst-queue$is_args$args;
+}
+location = /inspect-alert-detail {
+  limit_except GET HEAD { deny all; }
+  proxy_pass http://aegisops_control_plane/inspect-alert-detail$is_args$args;
+}
+location = /inspect-case-detail {
+  limit_except GET HEAD { deny all; }
+  proxy_pass http://aegisops_control_plane/inspect-case-detail$is_args$args;
+}
+location = /inspect-action-review {
+  limit_except GET HEAD { deny all; }
+  proxy_pass http://aegisops_control_plane/inspect-action-review$is_args$args;
+}
+location = /inspect-advisory-output {
+  limit_except GET HEAD { deny all; }
+  proxy_pass http://aegisops_control_plane/inspect-advisory-output$is_args$args;
+}
+location = /operator/queue {
+  limit_except GET HEAD { deny all; }
+  proxy_pass http://aegisops_control_plane/inspect-analyst-queue$is_args$args;
 }
 EOF
 }
@@ -113,11 +142,23 @@ Use a reviewed `analyst`, `approver`, or `platform_admin` role for `<trusted-ope
 
 Use `curl -fsS <trusted-platform-admin-proxy-auth-headers> http://127.0.0.1:<proxy-port>/runtime`.
 
+Use `curl -fsS <trusted-operator-read-only-proxy-auth-headers> http://127.0.0.1:<proxy-port>/inspect-analyst-queue`.
+
+Use `curl -fsS <trusted-operator-read-only-proxy-auth-headers> http://127.0.0.1:<proxy-port>/operator/queue`.
+
 Use `curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-records?family=alerts"`.
+
+Use `curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-alert-detail?alert_id=<reviewed-alert-id>"`.
 
 Use `curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-records?family=cases"`.
 
+Use `curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-case-detail?case_id=<reviewed-case-id>"`.
+
 Use `curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-records?family=action_requests"`.
+
+Use `curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-action-review?action_request_id=<reviewed-action-request-id>"`.
+
+Use `curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-advisory-output?family=case&record_id=<reviewed-case-id>"`.
 
 Use `curl -fsS <trusted-operator-read-only-proxy-auth-headers> http://127.0.0.1:<proxy-port>/inspect-reconciliation-status`.
 
@@ -229,9 +270,17 @@ missing_proxy_route_repo="${workdir}/missing-proxy-route"
 create_repo "${missing_proxy_route_repo}"
 write_shared_docs "${missing_proxy_route_repo}"
 write_valid_bundle "${missing_proxy_route_repo}"
-perl -0pi -e 's/location = \/inspect-reconciliation-status \{\n\}\n//' "${missing_proxy_route_repo}/proxy/nginx/conf.d-first-boot/control-plane.conf"
+perl -0pi -e 's/location = \/inspect-reconciliation-status \{\n  proxy_pass http:\/\/aegisops_control_plane\/inspect-reconciliation-status;\n\}\n//' "${missing_proxy_route_repo}/proxy/nginx/conf.d-first-boot/control-plane.conf"
 commit_fixture "${missing_proxy_route_repo}"
 assert_fails_with "${missing_proxy_route_repo}" "Missing first-boot proxy smoke route: location = /inspect-reconciliation-status"
+
+miswired_proxy_route_repo="${workdir}/miswired-proxy-route"
+create_repo "${miswired_proxy_route_repo}"
+write_shared_docs "${miswired_proxy_route_repo}"
+write_valid_bundle "${miswired_proxy_route_repo}"
+perl -0pi -e 's/proxy_pass http:\/\/aegisops_control_plane\/inspect-action-review\$is_args\$args;/proxy_pass http:\/\/aegisops_control_plane\/inspect-records\$is_args\$args;/' "${miswired_proxy_route_repo}/proxy/nginx/conf.d-first-boot/control-plane.conf"
+commit_fixture "${miswired_proxy_route_repo}"
+assert_fails_with "${miswired_proxy_route_repo}" 'Missing first-boot proxy smoke route: proxy_pass http://aegisops_control_plane/inspect-action-review$is_args$args;'
 
 forbidden_low_risk_write_repo="${workdir}/forbidden-low-risk-write"
 create_repo "${forbidden_low_risk_write_repo}"

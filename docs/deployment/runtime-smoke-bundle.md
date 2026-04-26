@@ -92,10 +92,28 @@ Confirm protected runtime inspection through the reviewed proxy and trusted oper
 curl -fsS <trusted-platform-admin-proxy-auth-headers> http://127.0.0.1:<proxy-port>/runtime
 ```
 
+Confirm the reviewed analyst queue read surface through the protected boundary:
+
+```sh
+curl -fsS <trusted-operator-read-only-proxy-auth-headers> http://127.0.0.1:<proxy-port>/inspect-analyst-queue
+```
+
+Confirm the reviewed `/operator/queue` route reaches the same backend-authoritative queue read surface:
+
+```sh
+curl -fsS <trusted-operator-read-only-proxy-auth-headers> http://127.0.0.1:<proxy-port>/operator/queue
+```
+
 Confirm read-only alert visibility through the reviewed proxy:
 
 ```sh
 curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-records?family=alerts"
+```
+
+Confirm reviewed alert detail visibility through the reviewed proxy:
+
+```sh
+curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-alert-detail?alert_id=<reviewed-alert-id>"
 ```
 
 Confirm read-only case visibility through the reviewed proxy:
@@ -104,10 +122,28 @@ Confirm read-only case visibility through the reviewed proxy:
 curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-records?family=cases"
 ```
 
+Confirm reviewed case detail visibility through the reviewed proxy:
+
+```sh
+curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-case-detail?case_id=<reviewed-case-id>"
+```
+
 Confirm action-review records are inspectable without creating a new request:
 
 ```sh
 curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-records?family=action_requests"
+```
+
+Confirm the reviewed action-review detail surface remains read-only:
+
+```sh
+curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-action-review?action_request_id=<reviewed-action-request-id>"
+```
+
+Confirm the assistant advisory read surface stays subordinate to the reviewed record:
+
+```sh
+curl -fsS <trusted-operator-read-only-proxy-auth-headers> "http://127.0.0.1:<proxy-port>/inspect-advisory-output?family=case&record_id=<reviewed-case-id>"
 ```
 
 Confirm reconciliation status remains readable from the protected mainline surface:
