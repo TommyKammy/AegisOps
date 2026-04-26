@@ -18,6 +18,9 @@ Required smoke-only env values in <runtime-env-file>:
   AEGISOPS_SMOKE_READONLY_SUBJECT
   AEGISOPS_SMOKE_READONLY_IDENTITY
   AEGISOPS_SMOKE_READONLY_ROLE
+  AEGISOPS_SMOKE_REVIEWED_ALERT_ID
+  AEGISOPS_SMOKE_REVIEWED_CASE_ID
+  AEGISOPS_SMOKE_REVIEWED_ACTION_REQUEST_ID
   AEGISOPS_SMOKE_REVIEWED_ACTION_SCOPE_ID
   AEGISOPS_SMOKE_LOW_RISK_ACTION_TYPE
   AEGISOPS_SMOKE_APPROVER_OWNER
@@ -179,6 +182,9 @@ require_env_value AEGISOPS_SMOKE_PLATFORM_ADMIN_IDENTITY
 require_env_value AEGISOPS_SMOKE_READONLY_SUBJECT
 require_env_value AEGISOPS_SMOKE_READONLY_IDENTITY
 require_env_value AEGISOPS_SMOKE_READONLY_ROLE
+require_env_value AEGISOPS_SMOKE_REVIEWED_ALERT_ID
+require_env_value AEGISOPS_SMOKE_REVIEWED_CASE_ID
+require_env_value AEGISOPS_SMOKE_REVIEWED_ACTION_REQUEST_ID
 require_env_value AEGISOPS_SMOKE_REVIEWED_ACTION_SCOPE_ID
 require_env_value AEGISOPS_SMOKE_LOW_RISK_ACTION_TYPE
 require_env_value AEGISOPS_SMOKE_APPROVER_OWNER
@@ -225,6 +231,9 @@ platform_subject="$(load_env_value AEGISOPS_SMOKE_PLATFORM_ADMIN_SUBJECT)"
 platform_identity="$(load_env_value AEGISOPS_SMOKE_PLATFORM_ADMIN_IDENTITY)"
 readonly_subject="$(load_env_value AEGISOPS_SMOKE_READONLY_SUBJECT)"
 readonly_identity="$(load_env_value AEGISOPS_SMOKE_READONLY_IDENTITY)"
+reviewed_alert_id="$(load_env_value AEGISOPS_SMOKE_REVIEWED_ALERT_ID)"
+reviewed_case_id="$(load_env_value AEGISOPS_SMOKE_REVIEWED_CASE_ID)"
+reviewed_action_request_id="$(load_env_value AEGISOPS_SMOKE_REVIEWED_ACTION_REQUEST_ID)"
 reviewed_action_scope_id="$(load_env_value AEGISOPS_SMOKE_REVIEWED_ACTION_SCOPE_ID)"
 approver_owner="$(load_env_value AEGISOPS_SMOKE_APPROVER_OWNER)"
 timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -264,12 +273,24 @@ run_capture "readyz" "${evidence_dir}/readyz.json" \
   curl "${curl_flags[@]}" "${base_url}/readyz"
 run_capture "runtime" "${evidence_dir}/runtime.json" \
   curl "${curl_flags[@]}" "${platform_headers[@]}" "${base_url}/runtime"
+run_capture "analyst queue ingress" "${evidence_dir}/inspect-analyst-queue.json" \
+  curl "${curl_flags[@]}" "${readonly_headers[@]}" "${base_url}/inspect-analyst-queue"
+run_capture "operator queue ingress" "${evidence_dir}/operator-queue.json" \
+  curl "${curl_flags[@]}" "${readonly_headers[@]}" "${base_url}/operator/queue"
 run_capture "alerts read-only inspection" "${evidence_dir}/inspect-records-alerts.json" \
   curl "${curl_flags[@]}" "${readonly_headers[@]}" "${base_url}/inspect-records?family=alerts"
+run_capture "alert detail inspection" "${evidence_dir}/inspect-alert-detail.json" \
+  curl "${curl_flags[@]}" "${readonly_headers[@]}" "${base_url}/inspect-alert-detail?alert_id=${reviewed_alert_id}"
 run_capture "cases read-only inspection" "${evidence_dir}/inspect-records-cases.json" \
   curl "${curl_flags[@]}" "${readonly_headers[@]}" "${base_url}/inspect-records?family=cases"
+run_capture "case detail inspection" "${evidence_dir}/inspect-case-detail.json" \
+  curl "${curl_flags[@]}" "${readonly_headers[@]}" "${base_url}/inspect-case-detail?case_id=${reviewed_case_id}"
 run_capture "action request read-only inspection" "${evidence_dir}/inspect-records-action-requests.json" \
   curl "${curl_flags[@]}" "${readonly_headers[@]}" "${base_url}/inspect-records?family=action_requests"
+run_capture "action review detail inspection" "${evidence_dir}/inspect-action-review.json" \
+  curl "${curl_flags[@]}" "${readonly_headers[@]}" "${base_url}/inspect-action-review?action_request_id=${reviewed_action_request_id}"
+run_capture "assistant advisory inspection" "${evidence_dir}/inspect-advisory-output-case.json" \
+  curl "${curl_flags[@]}" "${readonly_headers[@]}" "${base_url}/inspect-advisory-output?family=case&record_id=${reviewed_case_id}"
 run_capture "reconciliation status inspection" "${evidence_dir}/inspect-reconciliation-status.json" \
   curl "${curl_flags[@]}" "${readonly_headers[@]}" "${base_url}/inspect-reconciliation-status"
 
@@ -287,8 +308,10 @@ cat > "${evidence_dir}/manifest.md" <<EOF
 - Readiness inspection: readyz.json
 - Startup status: compose-ps.txt
 - Bounded logs: compose-logs-tail-200.txt
+- Protected operator-console ingress: inspect-analyst-queue.json, operator-queue.json
+- Protected detail ingress: inspect-alert-detail.json, inspect-case-detail.json, inspect-action-review.json, inspect-advisory-output-case.json
 - Read-only operator sanity: inspect-records-alerts.json, inspect-records-cases.json, inspect-records-action-requests.json, inspect-reconciliation-status.json
-- First low-risk action preconditions: reviewed scope ${reviewed_action_scope_id}, low-risk action type ${low_risk_action_type}, approver owner ${approver_owner}; read-only inspection only; no reviewed action request, approval decision, delegation, executor dispatch, or reconciliation write was performed by this gate.
+- First low-risk action preconditions: reviewed scope ${reviewed_action_scope_id}, reviewed alert ${reviewed_alert_id}, reviewed case ${reviewed_case_id}, reviewed action request ${reviewed_action_request_id}, low-risk action type ${low_risk_action_type}, approver owner ${approver_owner}; read-only inspection only; no reviewed action request, approval decision, delegation, executor dispatch, or reconciliation write was performed by this gate.
 - Optional extension validation: out of scope for this mainline gate.
 EOF
 

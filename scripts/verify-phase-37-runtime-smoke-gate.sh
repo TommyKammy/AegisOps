@@ -66,6 +66,9 @@ required_gate_phrases=(
   'AEGISOPS_SMOKE_READONLY_SUBJECT'
   'AEGISOPS_SMOKE_READONLY_IDENTITY'
   'AEGISOPS_SMOKE_READONLY_ROLE'
+  'AEGISOPS_SMOKE_REVIEWED_ALERT_ID'
+  'AEGISOPS_SMOKE_REVIEWED_CASE_ID'
+  'AEGISOPS_SMOKE_REVIEWED_ACTION_REQUEST_ID'
   'AEGISOPS_SMOKE_REVIEWED_ACTION_SCOPE_ID'
   'AEGISOPS_SMOKE_LOW_RISK_ACTION_TYPE'
   'AEGISOPS_SMOKE_APPROVER_OWNER'
@@ -81,17 +84,25 @@ required_gate_phrases=(
   'curl "${curl_flags[@]}" "${base_url}/healthz"'
   'curl "${curl_flags[@]}" "${base_url}/readyz"'
   'curl "${curl_flags[@]}" "${platform_headers[@]}" "${base_url}/runtime"'
+  'curl "${curl_flags[@]}" "${readonly_headers[@]}" "${base_url}/inspect-analyst-queue"'
+  'curl "${curl_flags[@]}" "${readonly_headers[@]}" "${base_url}/operator/queue"'
   'curl "${curl_flags[@]}" "${readonly_headers[@]}" "${base_url}/inspect-records?family=alerts"'
+  'curl "${curl_flags[@]}" "${readonly_headers[@]}" "${base_url}/inspect-alert-detail?alert_id=${reviewed_alert_id}"'
   'curl "${curl_flags[@]}" "${readonly_headers[@]}" "${base_url}/inspect-records?family=cases"'
+  'curl "${curl_flags[@]}" "${readonly_headers[@]}" "${base_url}/inspect-case-detail?case_id=${reviewed_case_id}"'
   'curl "${curl_flags[@]}" "${readonly_headers[@]}" "${base_url}/inspect-records?family=action_requests"'
+  'curl "${curl_flags[@]}" "${readonly_headers[@]}" "${base_url}/inspect-action-review?action_request_id=${reviewed_action_request_id}"'
+  'curl "${curl_flags[@]}" "${readonly_headers[@]}" "${base_url}/inspect-advisory-output?family=case&record_id=${reviewed_case_id}"'
   'curl "${curl_flags[@]}" "${readonly_headers[@]}" "${base_url}/inspect-reconciliation-status"'
   '- Evidence artifact paths are relative to this manifest directory.'
   '- Protected runtime inspection: runtime.json'
   '- Readiness inspection: readyz.json'
   '- Startup status: compose-ps.txt'
   '- Bounded logs: compose-logs-tail-200.txt'
+  '- Protected operator-console ingress: inspect-analyst-queue.json, operator-queue.json'
+  '- Protected detail ingress: inspect-alert-detail.json, inspect-case-detail.json, inspect-action-review.json, inspect-advisory-output-case.json'
   '- Read-only operator sanity: inspect-records-alerts.json, inspect-records-cases.json, inspect-records-action-requests.json, inspect-reconciliation-status.json'
-  'First low-risk action preconditions: reviewed scope ${reviewed_action_scope_id}, low-risk action type ${low_risk_action_type}, approver owner ${approver_owner}; read-only inspection only; no reviewed action request, approval decision, delegation, executor dispatch, or reconciliation write was performed by this gate.'
+  'First low-risk action preconditions: reviewed scope ${reviewed_action_scope_id}, reviewed alert ${reviewed_alert_id}, reviewed case ${reviewed_case_id}, reviewed action request ${reviewed_action_request_id}, low-risk action type ${low_risk_action_type}, approver owner ${approver_owner}; read-only inspection only; no reviewed action request, approval decision, delegation, executor dispatch, or reconciliation write was performed by this gate.'
 )
 
 for phrase in "${required_gate_phrases[@]}"; do
@@ -101,8 +112,8 @@ done
 required_doc_phrases=(
   'For Phase 37 rehearsal, run the executable gate with `scripts/run-phase-37-runtime-smoke-gate.sh --env-file <runtime-env-file> --evidence-dir <evidence-dir>` after the customer-like rehearsal preflight passes and the first-boot stack is running.'
   'Before the runtime smoke gate, run `scripts/verify-phase-37-reviewed-record-chain-rehearsal.sh` to replay the seeded fixture in `control-plane/tests/fixtures/phase37/reviewed-record-chain-rehearsal.json` through the authoritative reviewed record chain.'
-  'The gate writes `manifest.md` plus bounded startup, readiness, runtime, protected read-only, and reconciliation evidence files for handoff review.'
-  'The smoke-only authentication and precondition inputs are `AEGISOPS_SMOKE_PLATFORM_ADMIN_SUBJECT`, `AEGISOPS_SMOKE_PLATFORM_ADMIN_IDENTITY`, `AEGISOPS_SMOKE_READONLY_SUBJECT`, `AEGISOPS_SMOKE_READONLY_IDENTITY`, `AEGISOPS_SMOKE_READONLY_ROLE`, `AEGISOPS_SMOKE_REVIEWED_ACTION_SCOPE_ID`, `AEGISOPS_SMOKE_LOW_RISK_ACTION_TYPE`, and `AEGISOPS_SMOKE_APPROVER_OWNER` in the untracked runtime env file.'
+  'The gate writes `manifest.md` plus bounded startup, readiness, runtime, protected operator-console ingress, protected detail, protected read-only, and reconciliation evidence files for handoff review.'
+  'The smoke-only authentication and precondition inputs are `AEGISOPS_SMOKE_PLATFORM_ADMIN_SUBJECT`, `AEGISOPS_SMOKE_PLATFORM_ADMIN_IDENTITY`, `AEGISOPS_SMOKE_READONLY_SUBJECT`, `AEGISOPS_SMOKE_READONLY_IDENTITY`, `AEGISOPS_SMOKE_READONLY_ROLE`, `AEGISOPS_SMOKE_REVIEWED_ALERT_ID`, `AEGISOPS_SMOKE_REVIEWED_CASE_ID`, `AEGISOPS_SMOKE_REVIEWED_ACTION_REQUEST_ID`, `AEGISOPS_SMOKE_REVIEWED_ACTION_SCOPE_ID`, `AEGISOPS_SMOKE_LOW_RISK_ACTION_TYPE`, and `AEGISOPS_SMOKE_APPROVER_OWNER` in the untracked runtime env file.'
 )
 
 for phrase in "${required_doc_phrases[@]}"; do

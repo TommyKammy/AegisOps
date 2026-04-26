@@ -32,7 +32,7 @@ For Phase 37 rehearsal, run this bundle after `scripts/verify-customer-like-rehe
 
 The operator has the reviewed proxy authentication headers or equivalent trusted proxy session needed for protected read-only inspection without writing those secret values into the evidence record.
 
-The smoke-only authentication and precondition inputs are `AEGISOPS_SMOKE_PLATFORM_ADMIN_SUBJECT`, `AEGISOPS_SMOKE_PLATFORM_ADMIN_IDENTITY`, `AEGISOPS_SMOKE_READONLY_SUBJECT`, `AEGISOPS_SMOKE_READONLY_IDENTITY`, `AEGISOPS_SMOKE_READONLY_ROLE`, `AEGISOPS_SMOKE_REVIEWED_ACTION_SCOPE_ID`, `AEGISOPS_SMOKE_LOW_RISK_ACTION_TYPE`, and `AEGISOPS_SMOKE_APPROVER_OWNER` in the untracked runtime env file.
+The smoke-only authentication and precondition inputs are `AEGISOPS_SMOKE_PLATFORM_ADMIN_SUBJECT`, `AEGISOPS_SMOKE_PLATFORM_ADMIN_IDENTITY`, `AEGISOPS_SMOKE_READONLY_SUBJECT`, `AEGISOPS_SMOKE_READONLY_IDENTITY`, `AEGISOPS_SMOKE_READONLY_ROLE`, `AEGISOPS_SMOKE_REVIEWED_ALERT_ID`, `AEGISOPS_SMOKE_REVIEWED_CASE_ID`, `AEGISOPS_SMOKE_REVIEWED_ACTION_REQUEST_ID`, `AEGISOPS_SMOKE_REVIEWED_ACTION_SCOPE_ID`, `AEGISOPS_SMOKE_LOW_RISK_ACTION_TYPE`, and `AEGISOPS_SMOKE_APPROVER_OWNER` in the untracked runtime env file.
 
 The approved reverse proxy is the user-facing ingress path for the smoke window, and the backend control-plane port remains internal.
 
@@ -46,7 +46,7 @@ For Phase 37 rehearsal, run the executable gate with `scripts/run-phase-37-runti
 
 Before the runtime smoke gate, run `scripts/verify-phase-37-reviewed-record-chain-rehearsal.sh` to replay the seeded fixture in `control-plane/tests/fixtures/phase37/reviewed-record-chain-rehearsal.json` through the authoritative reviewed record chain.
 
-The gate writes `manifest.md` plus bounded startup, readiness, runtime, protected read-only, and reconciliation evidence files for handoff review.
+The gate writes `manifest.md` plus bounded startup, readiness, runtime, protected operator-console ingress, protected detail, protected read-only, and reconciliation evidence files for handoff review.
 
 Capture startup status from the repo-owned compose surface:
 
