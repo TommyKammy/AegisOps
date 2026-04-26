@@ -164,6 +164,52 @@ class Phase17FirstBootRuntimeArtifactTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, text)
 
+    def test_first_boot_proxy_normalizes_protected_identity_headers(self) -> None:
+        proxy_config = REPO_ROOT / "proxy" / "nginx" / "conf.d-first-boot" / "control-plane.conf"
+        self.assertTrue(proxy_config.exists(), f"expected first-boot proxy config at {proxy_config}")
+
+        text = proxy_config.read_text(encoding="utf-8")
+        protected_identity_headers = (
+            "X-AegisOps-Proxy-Secret",
+            "X-AegisOps-Proxy-Service-Account",
+            "X-AegisOps-Authenticated-IdP",
+            "X-AegisOps-Authenticated-Subject",
+            "X-AegisOps-Authenticated-Identity",
+            "X-AegisOps-Authenticated-Role",
+        )
+
+        for header in protected_identity_headers:
+            self.assertIn(
+                f'proxy_set_header {header} "";',
+                text,
+                f"first-boot proxy must strip caller-supplied {header}",
+            )
+            nginx_client_header_var = "$http_" + header.lower().replace("-", "_")
+            self.assertNotIn(
+                nginx_client_header_var,
+                text,
+                f"first-boot proxy must not pass caller-supplied {header} through",
+            )
+
+        for route in (
+            "/runtime",
+            "/inspect-records",
+            "/inspect-reconciliation-status",
+            "/inspect-analyst-queue",
+            "/inspect-alert-detail",
+            "/inspect-case-detail",
+            "/inspect-action-review",
+            "/inspect-advisory-output",
+            "/operator/queue",
+        ):
+            block = self._nginx_location_block(text, route)
+            for header in protected_identity_headers:
+                self.assertNotIn(
+                    f"proxy_set_header {header} $http_",
+                    block,
+                    f"{route} must not override normalization with caller-supplied {header}",
+                )
+
     @staticmethod
     def _control_plane_service_block(compose_text: str) -> str:
         return Phase17FirstBootRuntimeArtifactTests._service_block(
