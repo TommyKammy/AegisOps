@@ -121,16 +121,24 @@ require_phrase "${record_chain_path}" "The minimum control-plane record families
 require_phrase "${coordination_path}" "The selected coordination substrate is a non-authoritative coordination target." "external ticket non-authority baseline"
 require_phrase "${assistant_path}" "The assistant is advisory-only." "assistant advisory-only baseline"
 
-for forbidden in \
-  "ticket status is authoritative" \
-  "ticket closure is authoritative" \
-  "assistant may approve" \
-  "assistant may execute" \
-  "assistant may reconcile" \
-  "execution success is reconciliation success" \
-  "generic SOC training is required" \
-  "prompt engineering training is required"; do
-  reject_phrase "${packet_path}" "${forbidden}" "operator training packet statement"
+handoff_boundary_paths=(
+  "${packet_path}"
+  "${pilot_checklist_path}"
+  "${operational_handoff_path}"
+)
+
+for doc_path in "${handoff_boundary_paths[@]}"; do
+  for forbidden in \
+    "ticket status is authoritative" \
+    "ticket closure is authoritative" \
+    "assistant may approve" \
+    "assistant may execute" \
+    "assistant may reconcile" \
+    "execution success is reconciliation success" \
+    "generic SOC training is required" \
+    "prompt engineering training is required"; do
+    reject_phrase "${doc_path}" "${forbidden}" "operator training handoff statement"
+  done
 done
 
 reject_workstation_paths "operator training handoff guidance" \
