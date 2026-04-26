@@ -22,6 +22,8 @@ Operator training and handoff for the pilot uses `docs/deployment/operator-train
 
 Support playbook evidence from `docs/deployment/support-playbook-break-glass-rehearsal.md` may be retained in this handoff pack only as operator-readable evidence attached to reviewed AegisOps records.
 
+Pilot pause, rollback, continue, and exit evidence must use `docs/deployment/pilot-pause-rollback-exit-criteria.md` as the reviewed operator/support decision surface for unresolved limitations and next-roadmap input capture.
+
 The pack may reference external substrate receipts, backup custody notes, or bounded logs, but those references remain evidence attached to reviewed AegisOps records. They do not create a parallel source of authority.
 
 ## 2. Retained Evidence Categories

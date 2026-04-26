@@ -10,6 +10,8 @@ This checklist is the reviewed entry decision surface above the release bundle, 
 
 Operator training and handoff for the pilot must use `docs/deployment/operator-training-handoff-packet.md` and verify it with `scripts/verify-operator-training-handoff-packet.sh` before treating the pilot operator handoff as ready.
 
+Pilot pause, rollback, and exit decisions must use `docs/deployment/pilot-pause-rollback-exit-criteria.md`; entry readiness alone is not exit-success, rollback acceptance, or permission to continue after a paused or degraded pilot.
+
 ## 2. Entry Decision Summary
 
 The pilot may start only when release readiness, runtime smoke, detector activation scope, coordination pilot scope, assistant limitations, data retention, and evidence handoff are reviewed together for the same release identifier.
