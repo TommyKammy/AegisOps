@@ -337,26 +337,58 @@ class ExecutionCoordinatorBoundaryTests(unittest.TestCase):
             reconciliation_result,
         )
 
-        service._action_review_write_surface.record_action_approval_decision.assert_called_once()
-        self.assertEqual(
-            service._execution_coordinator.create_reviewed_action_request_from_advisory.call_count,
-            1,
+        service._execution_coordinator.create_reviewed_action_request_from_advisory.assert_called_once_with(
+            record_family="recommendation",
+            record_id="recommendation-001",
+            requester_identity="analyst-001",
+            recipient_identity="owner-001",
+            message_intent="notify",
+            escalation_reason="bounded reason",
+            expires_at=expires_at,
+            action_request_id="action-request-001",
         )
-        self.assertEqual(
-            service._execution_coordinator.create_reviewed_tracking_ticket_request_from_advisory.call_count,
-            1,
+        service._execution_coordinator.create_reviewed_tracking_ticket_request_from_advisory.assert_called_once_with(
+            record_family="recommendation",
+            record_id="recommendation-002",
+            requester_identity="analyst-001",
+            coordination_reference_id="case-001",
+            coordination_target_type="zammad",
+            ticket_title="Review bounded case",
+            ticket_description="Open a link-first coordination ticket.",
+            expires_at=expires_at,
+            ticket_severity="medium",
+            action_request_id="action-request-002",
         )
-        self.assertEqual(
-            service._execution_coordinator.delegate_approved_action_to_shuffle.call_count,
-            1,
+        service._action_review_write_surface.record_action_approval_decision.assert_called_once_with(
+            action_request_id="action-request-001",
+            approver_identity="approver-001",
+            authenticated_approver_identity="approver-001",
+            decision="grant",
+            decision_rationale="Reviewed action remains bounded.",
+            decided_at=decided_at,
+            approval_decision_id="approval-001",
         )
-        self.assertEqual(
-            service._execution_coordinator.delegate_approved_action_to_isolated_executor.call_count,
-            1,
+        service._execution_coordinator.delegate_approved_action_to_shuffle.assert_called_once_with(
+            action_request_id="action-request-001",
+            approved_payload={"action": "notify"},
+            delegated_at=delegated_at,
+            delegation_issuer="control-plane-service",
+            evidence_ids=("evidence-001",),
         )
-        self.assertEqual(
-            service._execution_coordinator.reconcile_action_execution.call_count,
-            1,
+        service._execution_coordinator.delegate_approved_action_to_isolated_executor.assert_called_once_with(
+            action_request_id="action-request-002",
+            approved_payload={"action": "notify"},
+            delegated_at=delegated_at,
+            delegation_issuer="control-plane-service",
+            evidence_ids=("evidence-002",),
+        )
+        service._execution_coordinator.reconcile_action_execution.assert_called_once_with(
+            action_request_id="action-request-001",
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=observed_executions,
+            compared_at=compared_at,
+            stale_after=stale_after,
         )
 
     def test_service_delegates_reviewed_action_request_creation_to_execution_coordinator(
