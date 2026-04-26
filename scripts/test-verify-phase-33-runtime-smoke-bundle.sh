@@ -54,27 +54,27 @@ location = /inspect-reconciliation-status {
   proxy_pass http://aegisops_control_plane/inspect-reconciliation-status;
 }
 location = /inspect-analyst-queue {
-  limit_except GET { deny all; }
+  limit_except GET HEAD { deny all; }
   proxy_pass http://aegisops_control_plane/inspect-analyst-queue$is_args$args;
 }
 location = /inspect-alert-detail {
-  limit_except GET { deny all; }
+  limit_except GET HEAD { deny all; }
   proxy_pass http://aegisops_control_plane/inspect-alert-detail$is_args$args;
 }
 location = /inspect-case-detail {
-  limit_except GET { deny all; }
+  limit_except GET HEAD { deny all; }
   proxy_pass http://aegisops_control_plane/inspect-case-detail$is_args$args;
 }
 location = /inspect-action-review {
-  limit_except GET { deny all; }
+  limit_except GET HEAD { deny all; }
   proxy_pass http://aegisops_control_plane/inspect-action-review$is_args$args;
 }
 location = /inspect-advisory-output {
-  limit_except GET { deny all; }
+  limit_except GET HEAD { deny all; }
   proxy_pass http://aegisops_control_plane/inspect-advisory-output$is_args$args;
 }
 location = /operator/queue {
-  limit_except GET { deny all; }
+  limit_except GET HEAD { deny all; }
   proxy_pass http://aegisops_control_plane/inspect-analyst-queue$is_args$args;
 }
 EOF

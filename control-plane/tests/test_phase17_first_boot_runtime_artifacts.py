@@ -150,7 +150,7 @@ class Phase17FirstBootRuntimeArtifactTests(unittest.TestCase):
         }
         for route, target in read_only_route_targets.items():
             block = self._nginx_location_block(text, route)
-            self.assertIn("limit_except GET { deny all; }", block)
+            self.assertIn("limit_except GET HEAD { deny all; }", block)
             self.assertIn(target, block)
 
         for forbidden in (
