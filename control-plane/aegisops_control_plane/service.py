@@ -176,6 +176,9 @@ class ControlPlaneStore(Protocol):
     def list(self, record_type: Type[RecordT]) -> tuple[RecordT, ...]:
         ...
 
+    def latest_ai_trace_record(self) -> AITraceRecord | None:
+        ...
+
     def latest_reconciliation_for_correlation_key(
         self,
         correlation_key: str,
@@ -3097,10 +3100,9 @@ class AegisOpsControlPlaneService:
         }
 
     def _build_assistant_provider_operability(self) -> dict[str, object]:
-        latest_trace = max(
-            self._store.list(AITraceRecord),
-            key=lambda record: record.generated_at,
-            default=None,
+        latest_trace_reader = getattr(self._store, "latest_ai_trace_record", None)
+        latest_trace = (
+            latest_trace_reader() if callable(latest_trace_reader) else None
         )
         base = {
             "enablement": "enabled",
