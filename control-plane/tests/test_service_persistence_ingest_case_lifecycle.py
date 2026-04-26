@@ -3562,12 +3562,14 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
     def test_service_marks_queue_lanes_for_mismatch_stale_and_degraded_context(
         self,
     ) -> None:
-        store, _ = make_store()
-        service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+        store, _ = support.make_store()
+        service = support.AegisOpsControlPlaneService(
+            support.RuntimeConfig(
+                postgres_dsn="postgresql://control-plane.local/aegisops"
+            ),
             store=store,
         )
-        seen_at = datetime(2026, 4, 5, 12, 15, tzinfo=timezone.utc)
+        seen_at = support.datetime(2026, 4, 5, 12, 15, tzinfo=support.timezone.utc)
 
         service.persist_record(
             AlertRecord(
@@ -3587,7 +3589,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             )
         )
         service.persist_record(
-            ReconciliationRecord(
+            support.ReconciliationRecord(
                 reconciliation_id="reconciliation-queue-lanes",
                 subject_linkage={
                     "alert_ids": ("alert-queue-lanes",),
@@ -3603,7 +3605,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
                 correlation_key="wazuh:queue-lanes",
                 first_seen_at=seen_at,
                 last_seen_at=seen_at,
-                ingest_disposition="stale",
+                ingest_disposition="created",
                 mismatch_summary="stale downstream execution observation requires refresh",
                 compared_at=seen_at,
                 lifecycle_state="mismatched",
@@ -3619,7 +3621,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             )
         )
         service.persist_record(
-            ReconciliationRecord(
+            support.ReconciliationRecord(
                 reconciliation_id="reconciliation-queue-clean",
                 subject_linkage={
                     "alert_ids": ("alert-queue-clean",),
@@ -3665,7 +3667,9 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
         self.assertEqual(
             record["queue_lane_details"]["stale_receipt"],
             {
-                "state": "stale",
+                "state": "stale_downstream_observed",
+                "lifecycle_state": "mismatched",
+                "ingest_disposition": "created",
                 "summary": "stale downstream execution observation requires refresh",
             },
         )
