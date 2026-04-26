@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AdminContext } from "react-admin";
 import type { ReactNode } from "react";
@@ -38,6 +38,12 @@ function renderWithTaskActionProviders(ui: ReactNode) {
       </TaskActionClientProvider>
     </AdminContext>,
   );
+}
+
+function setTextboxValue(name: string, value: string) {
+  fireEvent.change(screen.getByRole("textbox", { name }), {
+    target: { value },
+  });
 }
 
 function PromoteAlertCardHarness({
@@ -216,7 +222,6 @@ describe("caseworkActionCards", () => {
   });
 
   it("resets observation, lead, and recommendation drafts when the bound case id changes", async () => {
-    const user = userEvent.setup();
     const { rerender } = renderWithTaskActionProviders(
       <CaseworkCardsHarness
         actionRequestId="action-request-456"
@@ -232,72 +237,29 @@ describe("caseworkActionCards", () => {
       />,
     );
 
-    await user.type(screen.getByRole("textbox", { name: "Observed at" }), "2026");
-    await user.type(screen.getByRole("textbox", { name: "Scope statement" }), "scope");
-    await user.clear(screen.getByRole("textbox", { name: "Supporting evidence ids" }));
-    await user.type(
-      screen.getByRole("textbox", { name: "Supporting evidence ids" }),
-      "stale-evidence",
-    );
-    await user.type(
-      screen.getByRole("textbox", { name: "Observation id" }),
-      "stale-observation",
-    );
-    await user.type(
-      screen.getByRole("textbox", { name: "Triage rationale" }),
-      "stale-rationale",
-    );
-    await user.type(screen.getByRole("textbox", { name: "Lead id" }), "stale-lead");
-    await user.type(
-      screen.getByRole("textbox", { name: "Intended outcome" }),
-      "stale-outcome",
-    );
-    await user.type(
-      screen.getByRole("textbox", { name: "Recommendation id" }),
-      "stale-recommendation",
-    );
-    await user.type(
-      screen.getByRole("textbox", { name: "Recipient identity" }),
-      "owner-stale@example.com",
-    );
-    await user.type(
-      screen.getByRole("textbox", { name: "Message intent" }),
-      "stale-intent",
-    );
-    await user.type(
-      screen.getByRole("textbox", { name: "Escalation reason" }),
-      "stale-escalation",
-    );
-    await user.type(screen.getByRole("textbox", { name: "Expires at" }), "2026-05");
-    await user.type(
-      screen.getByRole("textbox", { name: "Action request id override" }),
-      "stale-request",
-    );
-    await user.type(screen.getByRole("textbox", { name: "Decided at" }), "2026-04");
-    await user.type(
-      screen.getByRole("textbox", { name: "Decision rationale" }),
-      "stale-decision-rationale",
-    );
-    await user.type(screen.getByRole("textbox", { name: "Fallback at" }), "2026-04");
-    await user.type(screen.getByRole("textbox", { name: "Reason" }), "stale-reason");
-    await user.type(
-      screen.getByRole("textbox", { name: "Action taken" }),
-      "stale-action",
-    );
-    await user.clear(
-      screen.getByRole("textbox", { name: "Verification evidence ids" }),
-    );
-    await user.type(
-      screen.getByRole("textbox", { name: "Verification evidence ids" }),
-      "stale-evidence-list",
-    );
-    await user.type(
-      screen.getByRole("textbox", { name: "Residual uncertainty" }),
-      "stale-uncertainty",
-    );
-    await user.type(screen.getByRole("textbox", { name: "Escalated at" }), "2026-04");
-    await user.type(screen.getByRole("textbox", { name: "Escalated to" }), "stale-manager");
-    await user.type(screen.getByRole("textbox", { name: "Note" }), "stale-note");
+    setTextboxValue("Observed at", "2026");
+    setTextboxValue("Scope statement", "scope");
+    setTextboxValue("Supporting evidence ids", "stale-evidence");
+    setTextboxValue("Observation id", "stale-observation");
+    setTextboxValue("Triage rationale", "stale-rationale");
+    setTextboxValue("Lead id", "stale-lead");
+    setTextboxValue("Intended outcome", "stale-outcome");
+    setTextboxValue("Recommendation id", "stale-recommendation");
+    setTextboxValue("Recipient identity", "owner-stale@example.com");
+    setTextboxValue("Message intent", "stale-intent");
+    setTextboxValue("Escalation reason", "stale-escalation");
+    setTextboxValue("Expires at", "2026-05");
+    setTextboxValue("Action request id override", "stale-request");
+    setTextboxValue("Decided at", "2026-04");
+    setTextboxValue("Decision rationale", "stale-decision-rationale");
+    setTextboxValue("Fallback at", "2026-04");
+    setTextboxValue("Reason", "stale-reason");
+    setTextboxValue("Action taken", "stale-action");
+    setTextboxValue("Verification evidence ids", "stale-evidence-list");
+    setTextboxValue("Residual uncertainty", "stale-uncertainty");
+    setTextboxValue("Escalated at", "2026-04");
+    setTextboxValue("Escalated to", "stale-manager");
+    setTextboxValue("Note", "stale-note");
 
     rerender(
       <AdminContext dataProvider={testDataProvider}>

@@ -298,7 +298,6 @@ export function registerOperatorRoutesControlPlaneTests() {
     });
 
     it("records bounded case observations, leads, and recommendations from case detail", async () => {
-      const user = userEvent.setup();
       let caseDetailPayload: Record<string, unknown> = {
         case_id: "case-456",
         case_record: {
@@ -430,17 +429,21 @@ export function registerOperatorRoutesControlPlaneTests() {
       });
       const observationCard = observationSection.closest(".MuiCard-root");
       expect(observationCard).not.toBeNull();
-      await user.type(
+      fireEvent.change(
         within(observationCard as HTMLElement).getByRole("textbox", {
           name: "Observed at",
         }),
-        "2026-04-22T00:00",
+        { target: { value: "2026-04-22T00:00" } },
       );
-      await user.type(
+      fireEvent.change(
         within(observationCard as HTMLElement).getByRole("textbox", {
           name: "Scope statement",
         }),
-        "Observed repository permission change requires tracked review.",
+        {
+          target: {
+            value: "Observed repository permission change requires tracked review.",
+          },
+        },
       );
       const supportingEvidenceField = within(observationCard as HTMLElement).getByRole(
         "textbox",
@@ -448,10 +451,11 @@ export function registerOperatorRoutesControlPlaneTests() {
           name: "Supporting evidence ids",
         },
       );
-      await user.clear(supportingEvidenceField);
-      await user.type(supportingEvidenceField, "evidence-123, evidence-456");
-      await user.click(within(observationCard as HTMLElement).getByRole("checkbox"));
-      await user.click(
+      fireEvent.change(supportingEvidenceField, {
+        target: { value: "evidence-123, evidence-456" },
+      });
+      fireEvent.click(within(observationCard as HTMLElement).getByRole("checkbox"));
+      fireEvent.click(
         within(observationCard as HTMLElement).getByRole("button", { name: "Record observation" }),
       );
       await waitFor(() => {
@@ -467,20 +471,24 @@ export function registerOperatorRoutesControlPlaneTests() {
       const leadSection = screen.getByRole("heading", { name: "Record case lead" });
       const leadCard = leadSection.closest(".MuiCard-root");
       expect(leadCard).not.toBeNull();
-      await user.type(
+      fireEvent.change(
         within(leadCard as HTMLElement).getByRole("textbox", {
           name: "Observation id",
         }),
-        "observation-123",
+        { target: { value: "observation-123" } },
       );
-      await user.type(
+      fireEvent.change(
         within(leadCard as HTMLElement).getByRole("textbox", {
           name: "Triage rationale",
         }),
-        "Privilege-impacting change needs durable follow-up.",
+        {
+          target: {
+            value: "Privilege-impacting change needs durable follow-up.",
+          },
+        },
       );
-      await user.click(within(leadCard as HTMLElement).getByRole("checkbox"));
-      await user.click(
+      fireEvent.click(within(leadCard as HTMLElement).getByRole("checkbox"));
+      fireEvent.click(
         within(leadCard as HTMLElement).getByRole("button", { name: "Record lead" }),
       );
       await waitFor(() => {
@@ -498,20 +506,24 @@ export function registerOperatorRoutesControlPlaneTests() {
       });
       const recommendationCard = recommendationSection.closest(".MuiCard-root");
       expect(recommendationCard).not.toBeNull();
-      await user.type(
+      fireEvent.change(
         within(recommendationCard as HTMLElement).getByRole("textbox", {
           name: "Lead id",
         }),
-        "lead-123",
+        { target: { value: "lead-123" } },
       );
-      await user.type(
+      fireEvent.change(
         within(recommendationCard as HTMLElement).getByRole("textbox", {
           name: "Intended outcome",
         }),
-        "Review repository owner change evidence before approval.",
+        {
+          target: {
+            value: "Review repository owner change evidence before approval.",
+          },
+        },
       );
-      await user.click(within(recommendationCard as HTMLElement).getByRole("checkbox"));
-      await user.click(
+      fireEvent.click(within(recommendationCard as HTMLElement).getByRole("checkbox"));
+      fireEvent.click(
         within(recommendationCard as HTMLElement).getByRole("button", {
           name: "Record recommendation",
         }),
