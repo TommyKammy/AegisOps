@@ -211,6 +211,20 @@ class Phase24LiveAssistantFeedbackLoopValidationTests(ServicePersistenceTestBase
         ai_trace = ai_traces[0]
         recommendation = recommendations[0]
         self.assertEqual(ai_trace.lifecycle_state, "under_review")
+        self.assertEqual(ai_trace.subject_linkage["provider_status"], "failed")
+        self.assertEqual(
+            ai_trace.subject_linkage["provider_operational_quality"],
+            {
+                "availability": "unavailable",
+                "posture": "unavailable",
+                "retry_policy": "retry_exhausted",
+                "terminal_failure_kind": "provider_error",
+            },
+        )
+        self.assertIn(
+            "provider transport failed",
+            ai_trace.subject_linkage["provider_failure_summary"],
+        )
         self.assertEqual(recommendation.ai_trace_id, ai_trace.ai_trace_id)
         self.assertEqual(recommendation.lifecycle_state, "under_review")
         self.assertEqual(

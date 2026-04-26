@@ -8,6 +8,7 @@ from typing import Any, Callable, Protocol
 
 from .assistant_provider import (
     AssistantProviderAdapter,
+    AssistantProviderAttemptFailure,
     AssistantProviderFailure,
     AssistantProviderResult,
 )
@@ -223,9 +224,14 @@ class LiveAssistantWorkflowCoordinator:
                     "bounded_summary_text": trusted_summary,
                 },
             )
-        except Exception:  # noqa: BLE001
-            unresolved_reasons.extend(
-                self._unresolved_reasons_from_flags(("provider_generation_failed",))
+        except Exception as exc:  # noqa: BLE001
+            provider_result = self._build_provider_exception_failure(
+                adapter=adapter,
+                workflow_task=workflow_task,
+                record_family=record_family,
+                record_id=record_id,
+                reviewed_input_refs=reviewed_input_refs,
+                exc=exc,
             )
         candidate_summary = trusted_summary
         provider_output_text: str | None = None
@@ -371,6 +377,13 @@ class LiveAssistantWorkflowCoordinator:
                 "status": workflow_snapshot.status,
             },
         }
+        subject_linkage.update(
+            self._provider_operability_linkage(
+                adapter=adapter,
+                provider_result=provider_result,
+                workflow_snapshot=workflow_snapshot,
+            )
+        )
         build_ai_trace_record = getattr(adapter, "build_ai_trace_record", None)
         ai_trace_record: AITraceRecord | None = None
         if provider_result is not None and callable(build_ai_trace_record):
@@ -454,6 +467,161 @@ class LiveAssistantWorkflowCoordinator:
             lifecycle_state="under_review",
             assistant_advisory_draft=advisory_draft,
         )
+
+    @staticmethod
+    def _adapter_identity(
+        adapter: object,
+        attribute_name: str,
+        default: str,
+    ) -> str:
+        value = getattr(adapter, attribute_name, default)
+        return value if isinstance(value, str) and value.strip() else default
+
+    def _build_provider_exception_failure(
+        self,
+        *,
+        adapter: object,
+        workflow_task: str,
+        record_family: str,
+        record_id: str,
+        reviewed_input_refs: tuple[str, ...],
+        exc: Exception,
+    ) -> AssistantProviderFailure:
+        provider_identity = self._adapter_identity(
+            adapter,
+            "_provider_identity",
+            "unknown_provider",
+        )
+        model_identity = self._adapter_identity(
+            adapter,
+            "_model_identity",
+            "unknown_model",
+        )
+        prompt_version = self._adapter_identity(
+            adapter,
+            "_prompt_version",
+            self._workflow_prompt_versions[workflow_task],
+        )
+        failure = AssistantProviderAttemptFailure(
+            attempt_number=1,
+            failure_kind="provider_error",
+            detail=str(exc),
+        )
+        return AssistantProviderFailure(
+            status="failed",
+            provider_identity=provider_identity,
+            model_identity=model_identity,
+            prompt_version=prompt_version,
+            workflow_family=self._workflow_family,
+            workflow_task=workflow_task,
+            generated_at=datetime.now(timezone.utc),
+            reviewed_input_refs=reviewed_input_refs,
+            output_text=None,
+            attempt_count=1,
+            request_provenance={
+                "provider_identity": provider_identity,
+                "model_identity": model_identity,
+                "prompt_version": prompt_version,
+                "workflow_family": self._workflow_family,
+                "workflow_task": workflow_task,
+                "reviewed_input_refs": reviewed_input_refs,
+                "request_metadata": {
+                    "record_family": record_family,
+                    "record_id": record_id,
+                },
+                "error_source": "adapter.generate",
+            },
+            response_provenance={},
+            failures=(failure,),
+            failure_summary=(
+                f"attempt {failure.attempt_number}: "
+                f"{failure.failure_kind}: {failure.detail}"
+            ),
+            operational_quality={
+                "availability": "unavailable",
+                "posture": "unavailable",
+                "retry_policy": "retry_exhausted",
+                "terminal_failure_kind": failure.failure_kind,
+            },
+        )
+
+    def _provider_operability_linkage(
+        self,
+        *,
+        adapter: object,
+        provider_result: AssistantProviderResult | AssistantProviderFailure | None,
+        workflow_snapshot: Any,
+    ) -> dict[str, object]:
+        if provider_result is None:
+            return {
+                "provider_identity": self._adapter_identity(
+                    adapter,
+                    "_provider_identity",
+                    "not_configured",
+                ),
+                "provider_model_identity": self._adapter_identity(
+                    adapter,
+                    "_model_identity",
+                    "not_configured",
+                ),
+                "provider_status": "not_requested",
+                "provider_failure_summary": None,
+                "provider_failures": (),
+                "provider_operational_quality": {
+                    "availability": "available",
+                    "posture": "ready",
+                    "retry_policy": "not_applicable",
+                    "terminal_failure_kind": None,
+                },
+                "provider_workflow_family": self._workflow_family,
+                "provider_workflow_task": workflow_snapshot.workflow_task,
+            }
+
+        operational_quality = dict(provider_result.operational_quality)
+        if not operational_quality:
+            if provider_result.status == "ready":
+                operational_quality = {
+                    "availability": "available",
+                    "posture": "ready",
+                    "retry_policy": "not_needed",
+                    "terminal_failure_kind": None,
+                }
+            else:
+                terminal_failure_kind = (
+                    "timeout"
+                    if provider_result.status == "timeout"
+                    else "provider_error"
+                )
+                operational_quality = {
+                    "availability": "unavailable",
+                    "posture": (
+                        "timeout"
+                        if terminal_failure_kind == "timeout"
+                        else "unavailable"
+                    ),
+                    "retry_policy": "retry_exhausted",
+                    "terminal_failure_kind": terminal_failure_kind,
+                }
+
+        return {
+            "provider_identity": provider_result.provider_identity,
+            "provider_model_identity": provider_result.model_identity,
+            "provider_request_provenance": dict(provider_result.request_provenance),
+            "provider_response_provenance": dict(provider_result.response_provenance),
+            "provider_failures": tuple(
+                {
+                    "attempt_number": failure.attempt_number,
+                    "failure_kind": failure.failure_kind,
+                    "detail": failure.detail,
+                }
+                for failure in provider_result.failures
+            ),
+            "provider_failure_summary": provider_result.failure_summary,
+            "provider_status": provider_result.status,
+            "provider_operational_quality": operational_quality,
+            "provider_workflow_family": provider_result.workflow_family,
+            "provider_workflow_task": provider_result.workflow_task,
+        }
 
     def _build_live_assistant_recommendation_record(
         self,
