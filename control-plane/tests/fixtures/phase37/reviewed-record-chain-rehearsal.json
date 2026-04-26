@@ -50,6 +50,64 @@
     "decision_rationale": "Synthetic rehearsal chain is in reviewed low-risk scope.",
     "decision_offset_minutes": 5
   },
+  "review_outcomes": {
+    "approved": {
+      "description": "Approved path records a human approval decision before the execution receipt and reconciliation evidence.",
+      "evidence_distinctions": [
+        "approval_decision",
+        "execution_receipt"
+      ]
+    },
+    "denied": {
+      "action_request_id": "action-request-phase46-denied-rehearsal-001",
+      "approval_decision_id": "approval-phase46-denied-rehearsal-001",
+      "review_owner": "analyst-phase46",
+      "requester_identity": "analyst-phase46",
+      "recipient_identity": "identity-owner-denied-001",
+      "message_intent": "Document the denied owner notification rehearsal without dispatch.",
+      "escalation_reason": "Phase 46.2 denial rehearsal must preserve the rejection decision as the terminal review evidence.",
+      "intended_outcome": "Notify the accountable identity owner only when the reviewed decision permits follow-up.",
+      "expires_in_hours": 4,
+      "approver_identity": "approver-phase46",
+      "decision": "reject",
+      "decision_rationale": "The synthetic request is intentionally denied for fallback rehearsal evidence.",
+      "decision_offset_minutes": 5
+    },
+    "fallback": {
+      "action_request_id": "action-request-phase46-fallback-rehearsal-001",
+      "approval_decision_id": "approval-phase46-fallback-rehearsal-001",
+      "review_owner": "analyst-phase46",
+      "requester_identity": "analyst-phase46",
+      "recipient_identity": "identity-owner-fallback-001",
+      "message_intent": "Record the approved fallback rehearsal without dispatching the execution surface.",
+      "escalation_reason": "Phase 46.2 fallback rehearsal needs clean manual follow-up evidence after approval.",
+      "intended_outcome": "Notify the accountable identity owner only when the reviewed fallback record preserves follow-up evidence.",
+      "expires_in_hours": 4,
+      "approver_identity": "approver-phase46",
+      "decision_rationale": "The synthetic fallback request remains in reviewed low-risk scope.",
+      "decision_offset_minutes": 5,
+      "fallback_offset_minutes": 20,
+      "fallback_actor_identity": "analyst-phase46",
+      "authority_boundary": "approved_human_fallback_rehearsal",
+      "reason": "The rehearsal simulates downstream timeout before any execution receipt exists.",
+      "action_taken": "Recorded manual fallback evidence only; no high-risk action or executor dispatch was performed.",
+      "residual_uncertainty": "Awaiting a future explicit execution receipt before reconciliation can be considered matched."
+    },
+    "escalation": {
+      "action_request_id": "action-request-phase46-escalation-rehearsal-001",
+      "review_owner": "analyst-phase46",
+      "requester_identity": "analyst-phase46",
+      "recipient_identity": "identity-owner-escalation-001",
+      "message_intent": "Escalate the pending approval rehearsal without approving or dispatching the action.",
+      "escalation_reason": "Phase 46.2 escalation rehearsal preserves pending review state and explicit human accountability.",
+      "intended_outcome": "Notify the accountable identity owner only after the escalated human review is complete.",
+      "expires_in_hours": 4,
+      "escalated_offset_minutes": 12,
+      "escalated_by_identity": "analyst-phase46",
+      "escalated_to": "on-call-manager-phase46",
+      "note": "Pending approval rehearsal escalated for explicit human ownership; no approval or execution receipt exists."
+    }
+  },
   "execution": {
     "delegation_offset_minutes": 10,
     "delegation_issuer": "control-plane-service"
