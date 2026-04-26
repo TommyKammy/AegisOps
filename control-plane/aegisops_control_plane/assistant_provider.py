@@ -1,13 +1,26 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from queue import Queue
 import threading
 from typing import Mapping, Protocol
 
 from .models import AITraceRecord
+
+_ALLOWED_PROVIDER_FAILURE_KINDS = frozenset(
+    {
+        "timeout",
+        "provider_error",
+    }
+)
+_ALLOWED_PROVIDER_POSTURES = frozenset(
+    {
+        "timeout",
+        "unavailable",
+    }
+)
 
 
 class AssistantProviderTransport(Protocol):
@@ -42,11 +55,54 @@ class AssistantProviderResult:
     response_provenance: Mapping[str, object]
     failures: tuple[AssistantProviderAttemptFailure, ...]
     failure_summary: str | None
+    operational_quality: Mapping[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class AssistantProviderFailure(AssistantProviderResult):
     pass
+
+
+def sanitized_provider_exception_detail(exc: Exception) -> str:
+    return type(exc).__name__
+
+
+def provider_exception_failure_metadata(exc: Exception) -> Mapping[str, str]:
+    is_timeout = isinstance(exc, (AssistantProviderTimeout, TimeoutError))
+    failure_kind = _safe_provider_metadata_value(
+        getattr(exc, "failure_kind", None),
+        allowed_values=_ALLOWED_PROVIDER_FAILURE_KINDS,
+    )
+    if failure_kind is None:
+        failure_kind = "timeout" if is_timeout else "provider_error"
+
+    posture = _safe_provider_metadata_value(
+        getattr(exc, "posture", None),
+        allowed_values=_ALLOWED_PROVIDER_POSTURES,
+    )
+    if posture is None:
+        posture = "timeout" if is_timeout or failure_kind == "timeout" else "unavailable"
+
+    status = "timeout" if posture == "timeout" or failure_kind == "timeout" else "failed"
+    return {
+        "failure_kind": failure_kind,
+        "detail": sanitized_provider_exception_detail(exc),
+        "posture": posture,
+        "status": status,
+    }
+
+
+def _safe_provider_metadata_value(
+    value: object,
+    *,
+    allowed_values: frozenset[str],
+) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().lower()
+    if normalized in allowed_values:
+        return normalized
+    return None
 
 
 class AssistantProviderAdapter:
@@ -134,21 +190,26 @@ class AssistantProviderAdapter:
                     response_provenance=response_provenance,
                     failures=tuple(failures),
                     failure_summary=None,
+                    operational_quality=self._operational_quality_for_success(
+                        failures=tuple(failures)
+                    ),
                 )
             except AssistantProviderTimeout as exc:
+                failure_metadata = provider_exception_failure_metadata(exc)
                 failures.append(
                     AssistantProviderAttemptFailure(
                         attempt_number=attempt_number,
-                        failure_kind="timeout",
-                        detail=str(exc),
+                        failure_kind=failure_metadata["failure_kind"],
+                        detail=failure_metadata["detail"],
                     )
                 )
             except Exception as exc:  # noqa: BLE001
+                failure_metadata = provider_exception_failure_metadata(exc)
                 failures.append(
                     AssistantProviderAttemptFailure(
                         attempt_number=attempt_number,
-                        failure_kind="provider_error",
-                        detail=str(exc),
+                        failure_kind=failure_metadata["failure_kind"],
+                        detail=failure_metadata["detail"],
                     )
                 )
 
@@ -156,8 +217,12 @@ class AssistantProviderAdapter:
             f"attempt {failure.attempt_number}: {failure.failure_kind}: {failure.detail}"
             for failure in failures
         )
+        terminal_failure_kind = (
+            failures[-1].failure_kind if failures else "provider_error"
+        )
+        status = "timeout" if terminal_failure_kind == "timeout" else "failed"
         return AssistantProviderFailure(
-            status="failed",
+            status=status,
             provider_identity=self._provider_identity,
             model_identity=self._model_identity,
             prompt_version=self._prompt_version,
@@ -171,6 +236,9 @@ class AssistantProviderAdapter:
             response_provenance={},
             failures=tuple(failures),
             failure_summary=failure_summary,
+            operational_quality=self._operational_quality_for_failure(
+                terminal_failure_kind=terminal_failure_kind
+            ),
         )
 
     def _send_request_with_timeout(
@@ -232,6 +300,7 @@ class AssistantProviderAdapter:
                 ),
                 "provider_failure_summary": result.failure_summary,
                 "provider_status": result.status,
+                "provider_operational_quality": dict(result.operational_quality),
                 "provider_workflow_family": result.workflow_family,
                 "provider_workflow_task": result.workflow_task,
             }
@@ -244,8 +313,40 @@ class AssistantProviderAdapter:
             generated_at=generated_at,
             material_input_refs=result.reviewed_input_refs,
             reviewer_identity=reviewer_identity,
-            lifecycle_state="generated" if result.status == "ready" else "failed",
+            lifecycle_state="generated" if result.status == "ready" else "under_review",
         )
+
+    @staticmethod
+    def _operational_quality_for_success(
+        *,
+        failures: tuple[AssistantProviderAttemptFailure, ...],
+    ) -> Mapping[str, object]:
+        if failures:
+            return {
+                "availability": "available",
+                "posture": "degraded",
+                "retry_policy": "retried",
+                "terminal_failure_kind": None,
+            }
+        return {
+            "availability": "available",
+            "posture": "ready",
+            "retry_policy": "not_needed",
+            "terminal_failure_kind": None,
+        }
+
+    @staticmethod
+    def _operational_quality_for_failure(
+        *,
+        terminal_failure_kind: str,
+    ) -> Mapping[str, object]:
+        posture = "timeout" if terminal_failure_kind == "timeout" else "unavailable"
+        return {
+            "availability": "unavailable",
+            "posture": posture,
+            "retry_policy": "retry_exhausted",
+            "terminal_failure_kind": terminal_failure_kind,
+        }
 
     @staticmethod
     def _require_non_empty_string(value: object, field_name: str) -> str:

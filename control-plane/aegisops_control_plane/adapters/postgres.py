@@ -526,6 +526,27 @@ class PostgresControlPlaneStore:
             for row in rows
         )
 
+    def latest_ai_trace_record(self) -> AITraceRecord | None:
+        table = self._table_config(AITraceRecord)
+        query = (
+            f"select {', '.join(table.record_fields)} "
+            f"from aegisops_control.{table.table_name} "
+            "order by generated_at desc, ai_trace_id desc limit 1"
+        )
+
+        with self._borrow_connection() as connection:
+            cursor = connection.cursor()
+            try:
+                cursor.execute(query)
+                row = cursor.fetchone()
+                mapping = None if row is None else _row_to_mapping(cursor, row)
+            finally:
+                cursor.close()
+
+        if mapping is None:
+            return None
+        return self._row_to_record(AITraceRecord, mapping)
+
     def latest_reconciliation_for_correlation_key(
         self,
         correlation_key: str,

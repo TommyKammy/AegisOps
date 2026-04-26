@@ -87,6 +87,11 @@ _SELECT_LATEST_RECONCILIATION_RE = re.compile(
     r"order by compared_at desc, reconciliation_id desc limit 1",
     re.IGNORECASE,
 )
+_SELECT_LATEST_AI_TRACE_RE = re.compile(
+    r"select (?P<columns>.+) from aegisops_control\.ai_trace_records "
+    r"order by generated_at desc, ai_trace_id desc limit 1",
+    re.IGNORECASE,
+)
 _SELECT_LATEST_RECONCILIATION_BY_CORRELATION_KEY_RE = re.compile(
     r"select (?P<columns>.+) from aegisops_control\.reconciliation_records "
     r"where correlation_key = %s(?P<require_alert_id> and alert_id is not null)? "
@@ -286,6 +291,12 @@ class FakePostgresCursor:
         if select_latest_reconciliation_match is not None:
             self._execute_select_latest_reconciliation(
                 select_latest_reconciliation_match.group("columns")
+            )
+            return
+        select_latest_ai_trace_match = _SELECT_LATEST_AI_TRACE_RE.fullmatch(normalized)
+        if select_latest_ai_trace_match is not None:
+            self._execute_select_latest_ai_trace(
+                select_latest_ai_trace_match.group("columns")
             )
             return
         select_latest_reconciliation_by_correlation_key_match = (
@@ -542,6 +553,19 @@ class FakePostgresCursor:
         rows = list(self.tables.get("reconciliation_records", {}).values())
         rows.sort(
             key=lambda row: (row["compared_at"], row["reconciliation_id"]),
+            reverse=True,
+        )
+        self.description = tuple((name,) for name in column_names)
+        if not rows:
+            self._rows = []
+            return
+        self._rows = [self._project_row(rows[0], column_names)]
+
+    def _execute_select_latest_ai_trace(self, columns: str) -> None:
+        column_names = [column.strip() for column in columns.split(",")]
+        rows = list(self.tables.get("ai_trace_records", {}).values())
+        rows.sort(
+            key=lambda row: (row["generated_at"], row["ai_trace_id"]),
             reverse=True,
         )
         self.description = tuple((name,) for name in column_names)

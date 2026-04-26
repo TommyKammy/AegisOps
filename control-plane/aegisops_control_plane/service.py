@@ -176,6 +176,9 @@ class ControlPlaneStore(Protocol):
     def list(self, record_type: Type[RecordT]) -> tuple[RecordT, ...]:
         ...
 
+    def latest_ai_trace_record(self) -> AITraceRecord | None:
+        ...
+
     def latest_reconciliation_for_correlation_key(
         self,
         correlation_key: str,
@@ -3060,14 +3063,7 @@ class AegisOpsControlPlaneService:
             )
 
         extensions = {
-            "assistant": {
-                "enablement": "enabled",
-                "availability": "available",
-                "readiness": "ready",
-                "authority_mode": "advisory_only",
-                "mainline_dependency": "non_blocking",
-                "reason": "bounded_reviewed_summary_provider_available",
-            },
+            "assistant": self._build_assistant_provider_operability(),
             "endpoint_evidence": self._build_endpoint_evidence_operability(
                 readiness_review_snapshots
             ),
@@ -3101,6 +3097,103 @@ class AegisOpsControlPlaneService:
                 overall_state=overall_state,
             ),
             "extensions": extensions,
+        }
+
+    def _build_assistant_provider_operability(self) -> dict[str, object]:
+        latest_trace_reader = getattr(self._store, "latest_ai_trace_record", None)
+        latest_trace = (
+            latest_trace_reader() if callable(latest_trace_reader) else None
+        )
+        base = {
+            "enablement": "enabled",
+            "availability": "available",
+            "readiness": "ready",
+            "authority_mode": "advisory_only",
+            "mainline_dependency": "non_blocking",
+            "reason": "bounded_reviewed_summary_provider_available",
+        }
+        if latest_trace is None:
+            return base
+
+        subject_linkage = latest_trace.subject_linkage
+        quality = subject_linkage.get("provider_operational_quality")
+        advisory_draft = latest_trace.assistant_advisory_draft
+        unresolved_reasons = ()
+        if isinstance(advisory_draft, Mapping):
+            unresolved_reasons = tuple(
+                str(reason)
+                for reason in advisory_draft.get("unresolved_reasons", ())
+                if isinstance(reason, str) and reason.strip()
+            )
+        if not isinstance(quality, Mapping):
+            if unresolved_reasons:
+                return self._assistant_unresolved_operability(
+                    base=base,
+                    latest_trace=latest_trace,
+                    unresolved_reasons=unresolved_reasons,
+                )
+            return base
+
+        availability = str(quality.get("availability") or "available")
+        posture = str(quality.get("posture") or "ready")
+        retry_policy = str(quality.get("retry_policy") or "not_recorded")
+        if availability == "available" and posture == "ready":
+            if unresolved_reasons:
+                return self._assistant_unresolved_operability(
+                    base={
+                        **base,
+                        "provider_status": str(
+                            subject_linkage.get("provider_status") or "ready"
+                        ),
+                        "retry_policy": retry_policy,
+                    },
+                    latest_trace=latest_trace,
+                    unresolved_reasons=unresolved_reasons,
+                )
+            return {
+                **base,
+                "provider_status": str(subject_linkage.get("provider_status") or "ready"),
+                "retry_policy": retry_policy,
+            }
+
+        reason_by_posture = {
+            "timeout": "assistant_provider_timeout",
+            "degraded": "assistant_provider_degraded",
+            "unavailable": "assistant_provider_unavailable",
+        }
+        return {
+            **base,
+            "availability": availability,
+            "readiness": "degraded",
+            "reason": reason_by_posture.get(posture, "assistant_provider_degraded"),
+            "provider_status": str(subject_linkage.get("provider_status") or posture),
+            "retry_policy": retry_policy,
+            "failure_summary": subject_linkage.get("provider_failure_summary"),
+            "latest_ai_trace_id": latest_trace.ai_trace_id,
+        }
+
+    @staticmethod
+    def _assistant_unresolved_operability(
+        *,
+        base: Mapping[str, object],
+        latest_trace: AITraceRecord,
+        unresolved_reasons: tuple[str, ...],
+    ) -> dict[str, object]:
+        reason = (
+            "assistant_citation_failure"
+            if any(
+                "citation" in unresolved_reason.casefold()
+                for unresolved_reason in unresolved_reasons
+            )
+            else "assistant_advisory_unresolved"
+        )
+        return {
+            **base,
+            "availability": str(base.get("availability") or "available"),
+            "readiness": "degraded",
+            "reason": reason,
+            "unresolved_reasons": unresolved_reasons,
+            "latest_ai_trace_id": latest_trace.ai_trace_id,
         }
 
     def _build_endpoint_evidence_operability(

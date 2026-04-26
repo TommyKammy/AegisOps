@@ -325,6 +325,12 @@ create table if not exists aegisops_control.ai_trace_records (
   check (lifecycle_state in ('generated','under_review','accepted_for_reference','rejected_for_reference','superseded','withdrawn'))
 );
 
+create index if not exists ai_trace_records_latest_idx
+  on aegisops_control.ai_trace_records (
+    generated_at desc,
+    ai_trace_id desc
+  );
+
 create table if not exists aegisops_control.reconciliation_records (
   reconciliation_id text primary key,
   subject_linkage jsonb not null,

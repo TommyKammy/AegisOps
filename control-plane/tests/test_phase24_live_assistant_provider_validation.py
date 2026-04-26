@@ -52,13 +52,19 @@ class AssistantProviderAdapterValidationTests(unittest.TestCase):
         )
         elapsed = time.perf_counter() - started_at
 
-        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.status, "timeout")
         self.assertIsNone(result.output_text)
         self.assertEqual(result.attempt_count, 1)
+        self.assertEqual(result.operational_quality["availability"], "unavailable")
+        self.assertEqual(result.operational_quality["posture"], "timeout")
+        self.assertEqual(result.operational_quality["retry_policy"], "retry_exhausted")
         self.assertEqual(len(result.failures), 1)
         self.assertEqual(result.failures[0].failure_kind, "timeout")
-        self.assertIn("timed out", result.failures[0].detail)
-        self.assertIn("attempt 1: timeout", result.failure_summary)
+        self.assertEqual(result.failures[0].detail, "AssistantProviderTimeout")
+        self.assertIn(
+            "attempt 1: timeout: AssistantProviderTimeout",
+            result.failure_summary,
+        )
         self.assertLess(elapsed, 0.15)
 
     def test_adapter_retries_bounded_timeout_failures_and_records_no_memory_provenance(
@@ -96,6 +102,9 @@ class AssistantProviderAdapterValidationTests(unittest.TestCase):
         )
 
         self.assertEqual(result.status, "ready")
+        self.assertEqual(result.operational_quality["availability"], "available")
+        self.assertEqual(result.operational_quality["posture"], "degraded")
+        self.assertEqual(result.operational_quality["retry_policy"], "retried")
         self.assertEqual(result.output_text, "Reviewed case summary.")
         self.assertEqual(result.attempt_count, 2)
         self.assertEqual(
@@ -195,11 +204,22 @@ class AssistantProviderAdapterValidationTests(unittest.TestCase):
         self.assertEqual(result.status, "failed")
         self.assertIsNone(result.output_text)
         self.assertEqual(result.attempt_count, 2)
+        self.assertEqual(result.operational_quality["availability"], "unavailable")
+        self.assertEqual(result.operational_quality["posture"], "unavailable")
+        self.assertEqual(result.operational_quality["retry_policy"], "retry_exhausted")
         self.assertEqual(len(result.failures), 2)
         self.assertTrue(
             all(failure.failure_kind == "provider_error" for failure in result.failures)
         )
-        self.assertIn("malformed provider output", result.failure_summary)
+        self.assertEqual(
+            tuple(failure.detail for failure in result.failures),
+            ("RuntimeError", "RuntimeError"),
+        )
+        self.assertIn(
+            "attempt 1: provider_error: RuntimeError",
+            result.failure_summary,
+        )
+        self.assertNotIn("malformed provider output", result.failure_summary)
 
     def test_adapter_builds_ai_trace_with_request_response_and_failure_provenance(
         self,
@@ -261,8 +281,53 @@ class AssistantProviderAdapterValidationTests(unittest.TestCase):
             "provider-response-003",
         )
         self.assertEqual(
+            ai_trace.subject_linkage["provider_operational_quality"]["posture"],
+            "ready",
+        )
+        self.assertEqual(
             ai_trace.subject_linkage["provider_failures"],
             (),
+        )
+
+    def test_adapter_builds_ai_trace_with_timeout_quality_signal(self) -> None:
+        adapter = AssistantProviderAdapter(
+            provider_identity="openai",
+            model_identity="gpt-5.4",
+            prompt_version="phase24-case-summary-v1",
+            request_timeout_seconds=5.0,
+            max_attempts=1,
+            transport=mock.Mock(
+                send_request=mock.Mock(
+                    side_effect=AssistantProviderTimeout("provider timed out")
+                )
+            ),
+        )
+
+        result = adapter.generate(
+            workflow_family="first_live_assistant_summary_family",
+            workflow_task="case_summary",
+            transcript=[{"role": "user", "content": "Summarize case-001."}],
+            reviewed_input_refs=("case-001",),
+            metadata={"record_family": "case", "record_id": "case-001"},
+        )
+        ai_trace = adapter.build_ai_trace_record(
+            ai_trace_id="ai-trace-provider-timeout-001",
+            reviewer_identity="reviewer-001",
+            generated_at=result.generated_at,
+            result=result,
+            subject_linkage={"case_ids": ("case-001",)},
+        )
+
+        self.assertEqual(result.status, "timeout")
+        self.assertEqual(ai_trace.lifecycle_state, "under_review")
+        self.assertEqual(
+            ai_trace.subject_linkage["provider_operational_quality"],
+            {
+                "availability": "unavailable",
+                "posture": "timeout",
+                "retry_policy": "retry_exhausted",
+                "terminal_failure_kind": "timeout",
+            },
         )
 
 

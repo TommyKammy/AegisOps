@@ -487,6 +487,9 @@ class ListCountingStore:
         self.lifecycle_transition_history_calls += 1
         return self.inner.list_lifecycle_transitions(record_family, record_id)
 
+    def latest_ai_trace_record(self) -> object | None:
+        return self.inner.latest_ai_trace_record()
+
     def inspect_readiness_aggregates(self) -> object:
         return self.inner.inspect_readiness_aggregates()
 
