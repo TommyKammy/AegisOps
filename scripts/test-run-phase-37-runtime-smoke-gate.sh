@@ -49,6 +49,9 @@ AEGISOPS_SMOKE_PLATFORM_ADMIN_IDENTITY=platform-admin@example.invalid
 AEGISOPS_SMOKE_READONLY_SUBJECT=analyst@example.invalid
 AEGISOPS_SMOKE_READONLY_IDENTITY=analyst@example.invalid
 AEGISOPS_SMOKE_READONLY_ROLE=analyst
+AEGISOPS_SMOKE_REVIEWED_ALERT_ID=alert-rehearsal-001
+AEGISOPS_SMOKE_REVIEWED_CASE_ID=case-rehearsal-001
+AEGISOPS_SMOKE_REVIEWED_ACTION_REQUEST_ID=action-request-rehearsal-001
 AEGISOPS_SMOKE_REVIEWED_ACTION_SCOPE_ID=case-rehearsal-001
 AEGISOPS_SMOKE_LOW_RISK_ACTION_TYPE=notify_identity_owner
 AEGISOPS_SMOKE_APPROVER_OWNER=approver@example.invalid
@@ -95,14 +98,32 @@ case "\${target}" in
   *"/runtime")
     printf '{"service_name":"aegisops-control-plane","boot_mode":"first-boot","deployment_profile":"single-customer"}\n'
     ;;
+  *"/inspect-analyst-queue"*)
+    printf '{"queue_name":"analyst_review","records":[{"alert_id":"alert-rehearsal-001","case_id":"case-rehearsal-001","review_state":"degraded"}]}\n'
+    ;;
+  *"/operator/queue"*)
+    printf '{"queue_name":"analyst_review","records":[{"alert_id":"alert-rehearsal-001","case_id":"case-rehearsal-001","review_state":"degraded"}]}\n'
+    ;;
   *"family=alerts")
     printf '{"family":"alerts","records":[]}\n'
+    ;;
+  *"/inspect-alert-detail?alert_id=alert-rehearsal-001")
+    printf '{"alert_id":"alert-rehearsal-001","case_id":"case-rehearsal-001","review_state":"degraded"}\n'
     ;;
   *"family=cases")
     printf '{"family":"cases","records":[]}\n'
     ;;
+  *"/inspect-case-detail?case_id=case-rehearsal-001")
+    printf '{"case_id":"case-rehearsal-001","authoritative_state":"open","coordination_mismatch_visible":true}\n'
+    ;;
   *"family=action_requests")
     printf '{"family":"action_requests","records":[]}\n'
+    ;;
+  *"/inspect-action-review?action_request_id=action-request-rehearsal-001")
+    printf '{"action_request_id":"action-request-rehearsal-001","case_id":"case-rehearsal-001","review_state":"pending"}\n'
+    ;;
+  *"/inspect-advisory-output?family=case&record_id=case-rehearsal-001")
+    printf '{"family":"case","record_id":"case-rehearsal-001","authority":"subordinate_advisory"}\n'
     ;;
   *"/inspect-reconciliation-status")
     printf '{"status":"readable"}\n'
@@ -179,9 +200,19 @@ if ! grep -F -- "- Protected runtime inspection: runtime.json" "${valid_evidence
   exit 1
 fi
 
+if ! grep -F -- "- Protected operator-console ingress: inspect-analyst-queue.json, operator-queue.json" "${valid_evidence}/manifest.md" >/dev/null; then
+  echo "Expected operator-console ingress artifacts in the manifest" >&2
+  exit 1
+fi
+
+if ! grep -F -- "- Protected detail ingress: inspect-alert-detail.json, inspect-case-detail.json, inspect-action-review.json, inspect-advisory-output-case.json" "${valid_evidence}/manifest.md" >/dev/null; then
+  echo "Expected protected detail ingress artifacts in the manifest" >&2
+  exit 1
+fi
+
 actual_curl_count="$(wc -l < "${curl_log}" | tr -d '[:space:]')"
-if [[ "${actual_curl_count}" != "7" ]]; then
-  echo "Expected 7 curl smoke calls, saw ${actual_curl_count}" >&2
+if [[ "${actual_curl_count}" != "13" ]]; then
+  echo "Expected 13 curl smoke calls, saw ${actual_curl_count}" >&2
   cat "${curl_log}" >&2
   exit 1
 fi
@@ -206,6 +237,11 @@ missing_auth_env="${workdir}/missing-auth.env"
 write_valid_env "${missing_auth_env}" "${secret_path}"
 perl -0pi -e 's/^AEGISOPS_SMOKE_READONLY_IDENTITY=.*\n//m' "${missing_auth_env}"
 assert_fails_with "${missing_auth_env}" "${workdir}/evidence-missing-auth" "${bin_dir}" "Missing required smoke input: AEGISOPS_SMOKE_READONLY_IDENTITY"
+
+missing_detail_env="${workdir}/missing-detail.env"
+write_valid_env "${missing_detail_env}" "${secret_path}"
+perl -0pi -e 's/^AEGISOPS_SMOKE_REVIEWED_ACTION_REQUEST_ID=.*\n//m' "${missing_detail_env}"
+assert_fails_with "${missing_detail_env}" "${workdir}/evidence-missing-detail" "${bin_dir}" "Missing required smoke input: AEGISOPS_SMOKE_REVIEWED_ACTION_REQUEST_ID"
 
 invalid_action_type_env="${workdir}/invalid-action-type.env"
 write_valid_env "${invalid_action_type_env}" "${secret_path}"
