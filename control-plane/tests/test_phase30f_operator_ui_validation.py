@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import pathlib
 import sys
 import unittest
@@ -14,6 +15,7 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
 from aegisops_control_plane.config import RuntimeConfig
+from aegisops_control_plane.models import AITraceRecord
 from aegisops_control_plane.service import AegisOpsControlPlaneService
 from postgres_test_support import make_store
 from support.operator_ui_sources import read_operator_routes_test_bundle
@@ -90,6 +92,100 @@ class Phase30FOperatorUiValidationTests(unittest.TestCase):
                     optional_extensions[extension_name]["authority_mode"],
                     authority_mode,
                 )
+
+    def test_phase30f_readiness_exposes_assistant_provider_timeout_posture(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-timeout-001",
+                subject_linkage={
+                    "provider_identity": "openai",
+                    "provider_status": "timeout",
+                    "provider_failure_summary": "attempt 1: timeout: provider timed out",
+                    "provider_failures": (
+                        {
+                            "attempt_number": 1,
+                            "failure_kind": "timeout",
+                            "detail": "provider timed out",
+                        },
+                    ),
+                    "provider_operational_quality": {
+                        "availability": "unavailable",
+                        "posture": "timeout",
+                        "retry_policy": "retry_exhausted",
+                        "terminal_failure_kind": "timeout",
+                    },
+                },
+                model_identity="openai/gpt-5.4",
+                prompt_version="phase24-case-summary-v1",
+                generated_at=datetime(2026, 4, 26, 9, 0, tzinfo=timezone.utc),
+                material_input_refs=("case-001",),
+                reviewer_identity="system://bounded-live-assistant",
+                lifecycle_state="under_review",
+            )
+        )
+
+        readiness = service.inspect_readiness_diagnostics()
+        assistant = readiness.metrics["optional_extensions"]["extensions"]["assistant"]
+
+        self.assertEqual(readiness.metrics["optional_extensions"]["overall_state"], "degraded")
+        self.assertEqual(assistant["availability"], "unavailable")
+        self.assertEqual(assistant["readiness"], "degraded")
+        self.assertEqual(assistant["reason"], "assistant_provider_timeout")
+        self.assertEqual(assistant["provider_status"], "timeout")
+        self.assertEqual(assistant["retry_policy"], "retry_exhausted")
+        self.assertIn("attempt 1: timeout", assistant["failure_summary"])
+
+    def test_phase30f_readiness_exposes_unresolved_assistant_citation_posture(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-citation-001",
+                subject_linkage={
+                    "provider_identity": "openai",
+                    "provider_status": "ready",
+                    "provider_operational_quality": {
+                        "availability": "available",
+                        "posture": "ready",
+                        "retry_policy": "not_needed",
+                        "terminal_failure_kind": None,
+                    },
+                },
+                model_identity="openai/gpt-5.4",
+                prompt_version="phase24-case-summary-v1",
+                generated_at=datetime(2026, 4, 26, 9, 5, tzinfo=timezone.utc),
+                material_input_refs=("case-001",),
+                reviewer_identity="system://bounded-live-assistant",
+                lifecycle_state="under_review",
+                assistant_advisory_draft={
+                    "status": "unresolved",
+                    "unresolved_reasons": ("required citations are missing",),
+                },
+            )
+        )
+
+        readiness = service.inspect_readiness_diagnostics()
+        assistant = readiness.metrics["optional_extensions"]["extensions"]["assistant"]
+
+        self.assertEqual(assistant["availability"], "available")
+        self.assertEqual(assistant["readiness"], "degraded")
+        self.assertEqual(assistant["reason"], "assistant_citation_failure")
+        self.assertEqual(
+            assistant["unresolved_reasons"],
+            ("required citations are missing",),
+        )
 
     def test_phase30f_frontend_tests_lock_taxonomy_and_non_authority_rendering(
         self,
