@@ -123,9 +123,9 @@ class Phase31OperatorUiValidationTests(unittest.TestCase):
             'to={buildOperatorShellPath(basePath, "forbidden")}',
             'path="assistant/:recordFamily/:recordId"',
             'path="action-review/:actionRequestId"',
+            'path="provenance/:family"',
             'path="*"',
             "Unsupported operator route",
-            "Open provenance from alert or case detail so the page stays anchored to an authoritative record.",
         ):
             self.assertIn(term, operator_shell)
 

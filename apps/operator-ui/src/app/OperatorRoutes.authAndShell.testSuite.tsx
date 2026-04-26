@@ -293,6 +293,14 @@ export function registerOperatorRoutesAuthAndShellTests() {
       "href",
       expect.stringContaining("/reviewed-operator/queue"),
     );
+    expect(screen.getByRole("menuitem", { name: "Alerts" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("/reviewed-operator/alerts"),
+    );
+    expect(screen.getByRole("menuitem", { name: "Cases" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("/reviewed-operator/cases"),
+    );
     expect(screen.getByRole("menuitem", { name: "Action Review" })).toHaveAttribute(
       "href",
       expect.stringContaining("/reviewed-operator/action-review"),

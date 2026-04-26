@@ -67,10 +67,16 @@ const AssistantAdvisoryPage =
   lazyOperatorConsolePage("AssistantAdvisoryPage") as unknown as typeof import("./operatorConsolePages").AssistantAdvisoryPage;
 const AlertDetailPage =
   lazyOperatorConsolePage("AlertDetailPage") as unknown as typeof import("./operatorConsolePages").AlertDetailPage;
+const AlertIndexPage =
+  lazyOperatorConsolePage("AlertIndexPage") as unknown as typeof import("./operatorConsolePages").AlertIndexPage;
 const CaseDetailPage =
   lazyOperatorConsolePage("CaseDetailPage") as unknown as typeof import("./operatorConsolePages").CaseDetailPage;
+const CaseIndexPage =
+  lazyOperatorConsolePage("CaseIndexPage") as unknown as typeof import("./operatorConsolePages").CaseIndexPage;
 const ProvenancePage =
   lazyOperatorConsolePage("ProvenancePage") as unknown as typeof import("./operatorConsolePages").ProvenancePage;
+const ProvenanceIndexPage =
+  lazyOperatorConsolePage("ProvenanceIndexPage") as unknown as typeof import("./operatorConsolePages").ProvenanceIndexPage;
 const QueuePage =
   lazyOperatorConsolePage("QueuePage") as unknown as typeof import("./operatorConsolePages").QueuePage;
 const ReadinessPage =
@@ -141,12 +147,12 @@ function OperatorMenu({
       <Menu.Item
         leftIcon={<WarningAmberOutlinedIcon />}
         primaryText="Alerts"
-        to={buildOperatorShellPath(basePath, "queue")}
+        to={buildOperatorShellPath(basePath, "alerts")}
       />
       <Menu.Item
         leftIcon={<InsightsOutlinedIcon />}
         primaryText="Cases"
-        to={buildOperatorShellPath(basePath, "queue")}
+        to={buildOperatorShellPath(basePath, "cases")}
       />
       <Menu.Item
         leftIcon={<LinkOutlinedIcon />}
@@ -324,29 +330,6 @@ function UnsupportedOperatorRoutePage() {
   );
 }
 
-function PlaceholderPage({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <Stack spacing={2} sx={{ p: 3 }}>
-      <Typography component="h1" variant="h4">
-        {title}
-      </Typography>
-      <Typography color="text.secondary" variant="body1">
-        {description}
-      </Typography>
-      <Typography variant="body2">
-        This route exists so later adapter and page work can land without
-        replacing the approved auth boundary.
-      </Typography>
-    </Stack>
-  );
-}
-
 function DeferredPageFallback() {
   return (
     <Stack
@@ -402,14 +385,18 @@ function OperatorShellContent({
         <Routes>
           <Route element={<OverviewPage operatorRoles={operatorRoles} />} index />
           <Route element={<QueuePage />} path="queue" />
+          <Route element={<AlertIndexPage />} path="alerts" />
           <Route
             element={<AlertDetailPage operatorIdentity={operatorIdentity} />}
             path="alerts/:alertId"
           />
+          <Route element={<CaseIndexPage />} path="cases" />
           <Route
             element={<CaseDetailPage operatorIdentity={operatorIdentity} />}
             path="cases/:caseId"
           />
+          <Route element={<ProvenanceIndexPage />} path="provenance" />
+          <Route element={<ProvenanceIndexPage />} path="provenance/:family" />
           <Route element={<ProvenancePage />} path="provenance/:family/:recordId" />
           <Route element={<ReadinessPage />} path="readiness" />
           <Route element={<ReconciliationPage />} path="reconciliation" />
@@ -449,33 +436,6 @@ function OperatorShellContent({
               )
             }
             path="action-review/:actionRequestId"
-          />
-          <Route
-            element={
-              <PlaceholderPage
-                description="Use the queue as the primary route into alert detail."
-                title="Alerts"
-              />
-            }
-            path="alerts"
-          />
-          <Route
-            element={
-              <PlaceholderPage
-                description="Use the queue or linked alert detail to open a specific case."
-                title="Cases"
-              />
-            }
-            path="cases"
-          />
-          <Route
-            element={
-              <PlaceholderPage
-                description="Open provenance from alert or case detail so the page stays anchored to an authoritative record."
-                title="Provenance"
-              />
-            }
-            path="provenance/*"
           />
           <Route element={<UnsupportedOperatorRoutePage />} path="*" />
         </Routes>
