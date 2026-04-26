@@ -72,7 +72,7 @@ export function registerOperatorRoutesActionReviewTests() {
           allowedRoles: [
             "analyst",
             "approver",
-            "platform-administrator",
+            "platform_admin",
             "security-auditor",
           ],
           basePath: "/reviewed-operator",

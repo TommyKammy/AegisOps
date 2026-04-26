@@ -93,7 +93,7 @@ function hasReviewedOperatorRole(
 
 function canBrowseActionReview(operatorRoles: readonly string[]) {
   return operatorRoles.some((role) =>
-    ["approver", "platform-administrator"].includes(role),
+    ["approver", "platform_admin"].includes(role),
   );
 }
 

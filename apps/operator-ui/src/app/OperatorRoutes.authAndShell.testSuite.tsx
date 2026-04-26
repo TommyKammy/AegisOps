@@ -233,6 +233,34 @@ export function registerOperatorRoutesAuthAndShellTests() {
     expect(screen.getAllByText(/action review/i).length).toBeGreaterThan(0);
     });
 
+    it("shows action-review navigation for backend canonical platform_admin sessions", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch(
+        {},
+        {
+          identity: "platform.admin@example.com",
+          provider: "authentik",
+          roles: ["platform_admin"],
+          subject: "operator-44",
+        },
+      ),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Protected operator shell" }),
+      ).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText(/action review/i).length).toBeGreaterThan(0);
+    });
+
     it("uses the configured base path for reviewed operator navigation links", async () => {
     const dependencies = createDefaultDependencies({
       config: {

@@ -18,7 +18,7 @@ The baseline personas for approval-sensitive and platform-sensitive work are:
 | ---- | ---- | ---- | ---- |
 | `Analyst` | Investigates alerts, findings, and cases; prepares recommendations and action requests. | Read-oriented investigation access, case updates, and ability to submit approval-bound requests within assigned scope. | Must not approve their own approval-sensitive actions or administer shared platform identity controls. |
 | `Approver` | Reviews approval-bound requests and accepts or rejects execution within delegated authority. | Access to approval context, target evidence, and approval decision recording for authorized action classes. | Must remain distinct from the original requester for approval-sensitive actions and must not rely on informal side-channel approval alone. |
-| `Platform Administrator` | Operates AegisOps infrastructure, platform configuration, connectivity, and credential plumbing. | Administrative access to platform components, secret delivery paths, service-account provisioning workflows, and recovery procedures. | Must not use platform-administrator access as a substitute approval path for response actions and must avoid routine use of shared human credentials. |
+| `Platform Administrator` | Operates AegisOps infrastructure, platform configuration, connectivity, and credential plumbing. | Administrative access to platform components, secret delivery paths, service-account provisioning workflows, and recovery procedures. | Must not use `platform_admin` access as a substitute approval path for response actions and must avoid routine use of shared human credentials. |
 
 Additional future personas may be defined later, but they must inherit from this least-privilege model rather than weakening it.
 
@@ -35,7 +35,7 @@ At minimum, the reviewed reverse-proxy boundary must inject and protect all of t
 - the reviewed identity-provider identifier;
 - an attributable provider subject for the authenticated human session;
 - the reviewed human identity string used inside the control plane; and
-- the reviewed role assertion used for analyst, approver, or platform-administrator separation.
+- the reviewed role assertion used for `analyst`, `approver`, or `platform_admin` separation.
 
 If any of those claims are missing, malformed, or do not match the reviewed provider boundary, the runtime must fail closed rather than inferring identity from partial headers or local naming conventions.
 

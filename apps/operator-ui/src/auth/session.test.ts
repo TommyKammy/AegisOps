@@ -34,6 +34,25 @@ describe("createSessionStore", () => {
     });
   });
 
+  it("accepts the backend canonical platform_admin role by default", async () => {
+    const config = createOperatorUiConfig();
+    const sessionStore = createSessionStore({
+      config,
+      fetchFn: vi.fn<typeof fetch>().mockResolvedValue(
+        jsonResponse({
+          identity: "platform.admin@example.com",
+          provider: "authentik",
+          roles: ["platform_admin"],
+          subject: "operator-44",
+        }),
+      ),
+    });
+
+    await expect(sessionStore.getSession()).resolves.toMatchObject({
+      roles: ["platform_admin"],
+    });
+  });
+
   it("clears a cached session when a forced refresh returns unauthenticated", async () => {
     const config = createOperatorUiConfig({
       allowedRoles: ["analyst"],

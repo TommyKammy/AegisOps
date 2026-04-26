@@ -9,7 +9,7 @@ export interface OperatorUiConfig {
 const DEFAULT_ALLOWED_ROLES = [
   "analyst",
   "approver",
-  "platform-administrator",
+  "platform_admin",
 ];
 
 export function createOperatorUiConfig(

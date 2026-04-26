@@ -18,7 +18,7 @@ Phase 21 keeps the completed first live path anchored to:
 
 The reviewed Phase 21 hardening scope is limited to:
 
-- authentication and authorization controls for the reviewed operator, approver, and platform-administrator personas already defined in `docs/auth-baseline.md`;
+- authentication and authorization controls for the reviewed operator, approver, and platform administrator personas already defined in `docs/auth-baseline.md`;
 - service-account ownership, credential scoping, and secret-delivery boundaries for the reviewed reverse proxy, control-plane service, Wazuh ingest path, PostgreSQL access, and reviewed Shuffle delegation path;
 - reverse-proxy protections that preserve the approved ingress model, including TLS termination, access logging, authenticated webhook forwarding, and backend-only boundary credential injection;
 - administrative bootstrap and break-glass access documentation narrow enough to recover or re-establish the reviewed runtime without turning direct service exposure or shared human credentials into the normal operating path;
