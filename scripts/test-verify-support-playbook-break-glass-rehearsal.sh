@@ -248,6 +248,9 @@ commit_fixture "${missing_restore_link_repo}"
 assert_fails_with "${missing_restore_link_repo}" "Missing restore rehearsal support playbook link:"
 
 for forbidden_phrase in \
+  "24x7 on-call is provided" \
+  "SLA support is provided" \
+  "customer-specific support contract is provided" \
   "emergency authority bypass is approved" \
   "break-glass may approve" \
   "break-glass may execute" \
@@ -269,10 +272,15 @@ for forbidden_phrase in \
   "detector activation is approved by break-glass" \
   "assistant output is authoritative" \
   "rollback acceptance is approved" \
-  "rollback acceptance is authoritative"; do
+  "rollback acceptance is authoritative" \
+  "direct backend access is approved" \
+  "personal session credential is acceptable" \
+  "placeholder credential is acceptable"; do
   assert_rejects_forbidden_playbook_phrase "${forbidden_phrase}"
 done
 
+assert_rejects_workstation_path "$(printf '~%ssupport-note.md' '/')"
+assert_rejects_workstation_path "$(printf '%shome%sexample%sprivate%ssupport-note.md' '/' '/' '/' '/')"
 assert_rejects_workstation_path "$(printf '%sUsers/example/private/support-note.md' '/')"
 assert_rejects_workstation_path "$(printf 'C:%sUsers%sexample%sprivate%ssupport-note.md' '/' '/' '/' '/')"
 assert_rejects_workstation_path "$(printf 'C:%sUSERS%sexample%sprivate%ssupport-note.md' '/' '/' '/' '/')"
