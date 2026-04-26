@@ -279,7 +279,7 @@ for forbidden_phrase in \
   assert_rejects_forbidden_playbook_phrase "${forbidden_phrase}"
 done
 
-assert_rejects_workstation_path "$(printf '~%ssupport-note.md' '/')"
+assert_rejects_workstation_path "$(printf '~%sexample%sprivate%ssupport-note.md' '/' '/' '/')"
 assert_rejects_workstation_path "$(printf '%shome%sexample%sprivate%ssupport-note.md' '/' '/' '/' '/')"
 assert_rejects_workstation_path "$(printf '%sUsers/example/private/support-note.md' '/')"
 assert_rejects_workstation_path "$(printf 'C:%sUsers%sexample%sprivate%ssupport-note.md' '/' '/' '/' '/')"
