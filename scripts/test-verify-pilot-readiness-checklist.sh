@@ -61,6 +61,8 @@ Evidence handoff must name the release handoff record, runtime smoke manifest, d
 
 Known limitations must be explicit, reviewed, and tied to the entry decision, including whether each limitation blocks pilot start, allows pilot start with a follow-up owner, or requires rollback or disable evidence.
 
+Pilot owners must record the known-limitation and retention decision in `docs/deployment/known-limitations-retention-decision-template.md` before the entry decision is treated as reviewed.
+
 Data retention for the pilot is bounded to the current release handoff, runtime smoke manifest, detector activation evidence handoff, Zammad coordination reference, assistant limitation note, and next health review expectation; it is not an unlimited archive.
 
 ## 6. Blocking Outcomes
@@ -94,6 +96,8 @@ EOF
 # Phase 38 Release Handoff Evidence Package
 
 The pilot readiness checklist in `docs/deployment/pilot-readiness-checklist.md` consumes this release handoff package as the reviewed release-readiness and known-limitations evidence source for the pilot entry decision.
+
+For pilot launch review, record the known-limitation and retention decision with `docs/deployment/known-limitations-retention-decision-template.md` so `accepted-with-owner`, blocking, rollback, disable, follow-up, and not-reviewed states, plus owners, operator-visible behavior, revisit dates, and bounded retention decisions, are reviewed in one place.
 EOF
 
   cat <<'EOF' > "${target}/docs/deployment/runtime-smoke-bundle.md"
@@ -130,6 +134,26 @@ EOF
 # Phase 33 Operational Evidence Retention and Audit Handoff Pack
 
 The pilot readiness checklist in `docs/deployment/pilot-readiness-checklist.md` is the reviewed entry decision surface that points operators to the retained release, smoke, detector, coordination, limitation, and evidence handoff records before pilot start.
+EOF
+
+  cat <<'EOF' > "${target}/docs/deployment/known-limitations-retention-decision-template.md"
+# Known Limitations and Retention Decision Template
+
+This template is the reviewed decision record for a bounded single-customer pilot go/no-go review.
+
+A completed template must distinguish no known blocking limitation from not reviewed.
+
+Disposition values: blocking, accepted-with-owner, rollback, disable, follow-up, not-reviewed.
+
+Every accepted-with-owner limitation must name the owner, expected operator-visible behavior, revisit date, affected surface, and retention decision.
+
+Retention decisions must be bounded to reviewed pilot evidence, not unlimited raw-log retention.
+
+Do not include secrets, live credentials, customer-private raw logs, raw forwarded-header values, unsigned identity hints, workstation-local paths, or customer-private ticket content.
+
+Subordinate systems, optional extensions, external tickets, detector substrates, assistant output, and bounded logs are context only; they do not own AegisOps approval, execution, reconciliation, readiness, release, or pilot-entry truth.
+
+Unsupported compliance certification, SLA commitments, 24x7 support promises, public launch approval, multi-customer rollout, multi-tenant expansion, legal hold automation, and runtime retention enforcement are out of scope.
 EOF
 
   mkdir -p "${target}/scripts"
@@ -190,6 +214,42 @@ create_repo "${missing_detector_exemplar_file_repo}"
 write_valid_docs "${missing_detector_exemplar_file_repo}"
 rm "${missing_detector_exemplar_file_repo}/docs/deployment/detector-activation-evidence.single-customer-pilot.example.md"
 assert_fails_with "${missing_detector_exemplar_file_repo}" "Missing filled redacted detector activation evidence exemplar:"
+
+missing_known_limitations_template_repo="${workdir}/missing-known-limitations-template"
+create_repo "${missing_known_limitations_template_repo}"
+write_valid_docs "${missing_known_limitations_template_repo}"
+rm "${missing_known_limitations_template_repo}/docs/deployment/known-limitations-retention-decision-template.md"
+assert_fails_with "${missing_known_limitations_template_repo}" "Missing known limitations and retention decision template:"
+
+missing_known_limitations_template_link_repo="${workdir}/missing-known-limitations-template-link"
+create_repo "${missing_known_limitations_template_link_repo}"
+write_valid_docs "${missing_known_limitations_template_link_repo}"
+perl -0pi -e 's/^Pilot owners must record the known-limitation.*\n//m' "${missing_known_limitations_template_link_repo}/docs/deployment/pilot-readiness-checklist.md"
+assert_fails_with "${missing_known_limitations_template_link_repo}" 'Missing pilot readiness checklist statement: Pilot owners must record the known-limitation and retention decision in `docs/deployment/known-limitations-retention-decision-template.md`'
+
+missing_release_handoff_template_link_repo="${workdir}/missing-release-handoff-template-link"
+create_repo "${missing_release_handoff_template_link_repo}"
+write_valid_docs "${missing_release_handoff_template_link_repo}"
+perl -0pi -e 's/^For pilot launch review, record the known-limitation.*\n//m' "${missing_release_handoff_template_link_repo}/docs/deployment/release-handoff-evidence-package.md"
+assert_fails_with "${missing_release_handoff_template_link_repo}" 'Missing release handoff known-limitation template link: For pilot launch review, record the known-limitation and retention decision with `docs/deployment/known-limitations-retention-decision-template.md`'
+
+missing_disposition_values_repo="${workdir}/missing-disposition-values"
+create_repo "${missing_disposition_values_repo}"
+write_valid_docs "${missing_disposition_values_repo}"
+perl -0pi -e 's/^Disposition values: blocking, accepted-with-owner, rollback, disable, follow-up, not-reviewed\.\n//m' "${missing_disposition_values_repo}/docs/deployment/known-limitations-retention-decision-template.md"
+assert_fails_with "${missing_disposition_values_repo}" "Missing known limitations retention template statement: Disposition values: blocking, accepted-with-owner, rollback, disable, follow-up, not-reviewed."
+
+missing_accepted_limitation_owner_repo="${workdir}/missing-accepted-limitation-owner"
+create_repo "${missing_accepted_limitation_owner_repo}"
+write_valid_docs "${missing_accepted_limitation_owner_repo}"
+perl -0pi -e 's/^Every accepted-with-owner limitation must.*\n//m' "${missing_accepted_limitation_owner_repo}/docs/deployment/known-limitations-retention-decision-template.md"
+assert_fails_with "${missing_accepted_limitation_owner_repo}" "Missing known limitations retention template statement: Every accepted-with-owner limitation must name the owner, expected operator-visible behavior, revisit date, affected surface, and retention decision."
+
+missing_bounded_retention_repo="${workdir}/missing-bounded-retention"
+create_repo "${missing_bounded_retention_repo}"
+write_valid_docs "${missing_bounded_retention_repo}"
+perl -0pi -e 's/^Retention decisions must be bounded.*\n//m' "${missing_bounded_retention_repo}/docs/deployment/known-limitations-retention-decision-template.md"
+assert_fails_with "${missing_bounded_retention_repo}" "Missing known limitations retention template statement: Retention decisions must be bounded to reviewed pilot evidence, not unlimited raw-log retention."
 
 missing_coordination_link_repo="${workdir}/missing-coordination-link"
 create_repo "${missing_coordination_link_repo}"

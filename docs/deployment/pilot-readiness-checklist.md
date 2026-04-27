@@ -46,6 +46,8 @@ Assistant output remains advisory-only and non-authoritative; it must stay groun
 
 Known limitations must be explicit, reviewed, and tied to the entry decision, including whether each limitation blocks pilot start, allows pilot start with a follow-up owner, or requires rollback or disable evidence.
 
+Pilot owners must record the known-limitation and retention decision in `docs/deployment/known-limitations-retention-decision-template.md` before the entry decision is treated as reviewed.
+
 Data retention for the pilot is bounded to the current release handoff, runtime smoke manifest, detector activation evidence handoff, Zammad coordination reference, assistant limitation note, and next health review expectation; it is not an unlimited archive.
 
 Evidence handoff must name the release handoff record, runtime smoke manifest, detector activation handoff, coordination pilot status, assistant limitation statement, known-limitations review, handoff owner, and next health review.
@@ -61,7 +63,7 @@ The support playbook in `docs/deployment/support-playbook-break-glass-rehearsal.
 | Detector activation | Detector activation evidence handoff for the reviewed candidate set, fixture and parser evidence, owner set, expected volume, false-positive review, disable and rollback evidence, and next-review date. | Inferred source scope, missing provenance, missing owner, missing rollback path, placeholder credentials, or detector status treated as workflow truth. |
 | Coordination pilot | Zammad-first coordination scope, reviewed endpoint, credential custody source, checked available, degraded, and unavailable rehearsal evidence, and explicit AegisOps linkage for any ticket pointer. | Missing `AEGISOPS_ZAMMAD_BASE_URL`, missing reviewed token source, placeholder credential, stale ticket read, mismatched ticket identifier, missing rehearsal fixture, or ticket state treated as AegisOps authority. |
 | Assistant limitations | Advisory-only statement linked to the reviewed assistant boundary and any pilot-specific disabled or limited assistant surfaces. | Assistant output treated as approval, execution, reconciliation, case closure, detector activation, release readiness, or support-coverage authority. |
-| Known limitations | Reviewed limitation list with block, accept-with-owner, rollback, disable, or follow-up disposition for each limitation. | Empty or absent limitation review, TODO-only note, sample limitation, no owner, or unclear effect on entry. |
+| Known limitations | Reviewed limitation list with blocking, accepted-with-owner, rollback, disable, follow-up, or not-reviewed disposition for each limitation. | Empty or absent limitation review, TODO-only note, sample limitation, no owner, or unclear effect on entry. |
 | Evidence handoff and retention | Release handoff record, smoke manifest, detector handoff, coordination status, assistant limitation statement, known-limitations review, handoff owner, and next health review. | Missing evidence owner, mixed snapshots, unlimited retention claim, customer-secret exposure, workstation-local paths, or no next review. |
 
 ## 5. Known Limitations, Retention, and Evidence Handoff
@@ -69,6 +71,8 @@ The support playbook in `docs/deployment/support-playbook-break-glass-rehearsal.
 Known limitations must preserve the difference between no known blocking limitation and not yet reviewed. A pilot entry decision may record no known blocking limitation only when the limitation review itself is present and names the reviewer, release identifier, scope, and next review.
 
 For accepted limitations, the decision record must name the follow-up owner, expected operator-visible behavior, whether the limitation affects launch, normal operation, rollback acceptance, detector disable, Zammad coordination, assistant output, or evidence handoff, and the review date when the limitation must be revisited.
+
+The known-limitation and retention decision template in `docs/deployment/known-limitations-retention-decision-template.md` is the required pilot review surface for recording blocking, accepted-with-owner, rollback, disable, follow-up, and not-reviewed states.
 
 Retention is bounded to reviewed small-team operating needs. Keep the current pilot entry decision, the release handoff record, runtime smoke manifest, detector activation evidence handoff, Zammad coordination status, assistant limitation statement, known-limitations review, handoff owner, and next health review expectation. Do not promise to retain every raw log line, external ticket field, detector event, assistant prompt, substrate receipt, or historical smoke sample forever.
 
