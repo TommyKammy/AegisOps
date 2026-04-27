@@ -47,6 +47,7 @@ fi
 
 doc_path="${repo_root}/docs/deployment/release-handoff-evidence-package.md"
 template_path="${repo_root}/docs/deployment/release-handoff-evidence-manifest.template.md"
+exemplar_path="${repo_root}/docs/deployment/release-handoff-evidence-manifest.single-customer-pilot.example.md"
 runbook_path="${repo_root}/docs/runbook.md"
 inventory_path="${repo_root}/docs/deployment/single-customer-release-bundle-inventory.md"
 smoke_path="${repo_root}/docs/deployment/runtime-smoke-bundle.md"
@@ -117,6 +118,7 @@ reject_workstation_paths() {
 
 require_file "${doc_path}" "Phase 38 release handoff evidence package"
 require_file "${template_path}" "Phase 38 release handoff evidence manifest template"
+require_file "${exemplar_path}" "Phase 38 filled redacted release handoff evidence exemplar"
 require_file "${runbook_path}" "runbook document"
 require_file "${inventory_path}" "single-customer release bundle inventory"
 require_file "${smoke_path}" "runtime smoke bundle"
@@ -181,6 +183,28 @@ for phrase in "${required_template_phrases[@]}"; do
   require_phrase "${template_path}" "${phrase}" "Phase 38 release handoff evidence manifest template entry"
 done
 
+required_exemplar_phrases=(
+  "# Phase 38 Release Handoff Evidence Manifest - Filled Redacted Single-Customer Pilot Example"
+  "Release readiness summary:"
+  "Release bundle identifier: aegisops-single-customer-pilot-2026-04-27-c4527e5"
+  "Install preflight result:"
+  "Runtime smoke result:"
+  "Backup restore rollback upgrade rehearsal:"
+  "Known limitations:"
+  "Rollback instructions:"
+  "Handoff owner:"
+  "Next health review:"
+  "Refused or missing evidence handling:"
+  "Subordinate context only:"
+  "Authority boundary: AegisOps approval, evidence, execution, reconciliation, readiness, and recovery records remain authoritative; external records are subordinate context only."
+)
+
+for phrase in "${required_exemplar_phrases[@]}"; do
+  require_phrase "${exemplar_path}" "${phrase}" "Phase 38 filled redacted release handoff exemplar entry"
+done
+
+reject_placeholders "${exemplar_path}" "Phase 38 filled redacted release handoff exemplar"
+
 require_phrase "${runbook_path}" 'Before launch, upgrade, rollback, restore, or operator handoff closes, assemble the Phase 38 release handoff evidence package in `docs/deployment/release-handoff-evidence-package.md` and verify its manifest with `scripts/verify-release-handoff-evidence-package.sh --manifest <release-handoff-manifest.md>`.' "runbook release handoff package link"
 require_phrase "${inventory_path}" 'The release handoff evidence package in `docs/deployment/release-handoff-evidence-package.md` is the Phase 38 handoff index that ties the release bundle identifier, install preflight result, runtime smoke, restore, rollback, upgrade, known limitations, rollback instructions, handoff owner, and next health review to one bounded record.' "release bundle inventory release handoff package link"
 require_phrase "${smoke_path}" 'The release handoff evidence package in `docs/deployment/release-handoff-evidence-package.md` must retain the runtime smoke manifest reference for launch, upgrade, rollback, restore restart, and operator handoff readiness.' "runtime smoke release handoff package link"
@@ -204,6 +228,7 @@ done
 reject_workstation_paths "Phase 38 release handoff evidence package guidance" \
   "${doc_path}" \
   "${template_path}" \
+  "${exemplar_path}" \
   "${runbook_path}" \
   "${inventory_path}" \
   "${smoke_path}" \

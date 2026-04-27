@@ -145,6 +145,23 @@ Handoff owner: <replace-with-named-operator-or-maintainer>
 Next health review: <replace-with-next-business-review-reference>
 Authority boundary: AegisOps approval, evidence, execution, reconciliation, readiness, and recovery records remain authoritative; external records are subordinate context only.
 EOF
+
+  cat <<'EOF' > "${target}/docs/deployment/release-handoff-evidence-manifest.single-customer-pilot.example.md"
+# Phase 38 Release Handoff Evidence Manifest - Filled Redacted Single-Customer Pilot Example
+
+Release readiness summary: Pilot release accepted for one redacted customer environment after reviewed preflight, smoke, restore, rollback, upgrade, and known-limitations evidence all referenced the same release identifier.
+Release bundle identifier: aegisops-single-customer-pilot-2026-04-27-c4527e5
+Install preflight result: docs/deployment/evidence-examples/single-customer-pilot/install-preflight-result.redacted.md records PASS for the reviewed runtime env shape with secret values omitted.
+Runtime smoke result: docs/deployment/evidence-examples/single-customer-pilot/runtime-smoke/manifest.md records PASS for readiness, protected read-only reachability, queue sanity, and first low-risk action preconditions.
+Backup restore rollback upgrade rehearsal: docs/deployment/evidence-examples/single-customer-pilot/release-gate-manifest.md records backup custody, restore validation, rollback-not-needed decision, post-upgrade smoke, and clean-state evidence.
+Known limitations: docs/deployment/evidence-examples/single-customer-pilot/known-limitations.redacted.md records accepted limitations, non-blocking follow-up owners, and rollback acceptance criteria.
+Rollback instructions: docs/runbook.md#43-rollback-and-restore references the reviewed rollback path and selected restore point for this release identifier.
+Handoff owner: pilot-owner-redacted, IT Operations, Information Systems Department.
+Next health review: 2026-04-28 business-day health review, queue review, and backup-drift check owned by pilot-owner-redacted.
+Refused or missing evidence handling: Customer-private raw log payloads and live credential screenshots were refused for the retained packet; the packet retains redacted evidence summaries and clean-state validation instead of substituting private data.
+Subordinate context only: Wazuh alert references, Shuffle execution receipts, Zammad ticket links, assistant notes, ML shadow observations, downstream receipts, and optional evidence fields are retained as context only and do not own release readiness, case state, approval, execution, reconciliation, restore, rollback, or handoff truth.
+Authority boundary: AegisOps approval, evidence, execution, reconciliation, readiness, and recovery records remain authoritative; external records are subordinate context only.
+EOF
 }
 
 write_valid_manifest() {
@@ -208,6 +225,15 @@ write_valid_package_doc "${valid_repo}"
 write_valid_manifest "${valid_repo}/manifest.md"
 commit_fixture "${valid_repo}"
 assert_passes "${valid_repo}" "${valid_repo}/manifest.md"
+
+missing_exemplar_repo="${workdir}/missing-exemplar"
+create_repo "${missing_exemplar_repo}"
+write_shared_docs "${missing_exemplar_repo}"
+write_valid_package_doc "${missing_exemplar_repo}"
+write_valid_manifest "${missing_exemplar_repo}/manifest.md"
+rm "${missing_exemplar_repo}/docs/deployment/release-handoff-evidence-manifest.single-customer-pilot.example.md"
+commit_fixture "${missing_exemplar_repo}"
+assert_fails_with "${missing_exemplar_repo}" "${missing_exemplar_repo}/manifest.md" "Missing Phase 38 filled redacted release handoff evidence exemplar:"
 
 for missing_entry in \
   "Release readiness summary:" \
