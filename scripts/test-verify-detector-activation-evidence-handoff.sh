@@ -255,4 +255,11 @@ printf '\nDirect GitHub API actioning is approved for activation handoff.\n' >> 
 commit_fixture "${forbidden_authority_repo}"
 assert_fails_with "${forbidden_authority_repo}" "Forbidden GitHub authority statement: direct GitHub API actioning is approved"
 
+exemplar_forbidden_authority_repo="${workdir}/exemplar-forbidden-authority"
+create_repo "${exemplar_forbidden_authority_repo}"
+write_valid_docs "${exemplar_forbidden_authority_repo}"
+printf '\nDirect GitHub API actioning is approved for activation handoff.\n' >> "${exemplar_forbidden_authority_repo}/docs/deployment/detector-activation-evidence.single-customer-pilot.example.md"
+commit_fixture "${exemplar_forbidden_authority_repo}"
+assert_fails_with "${exemplar_forbidden_authority_repo}" "Forbidden GitHub authority statement: direct GitHub API actioning is approved"
+
 echo "verify-detector-activation-evidence-handoff tests passed"

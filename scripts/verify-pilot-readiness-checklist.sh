@@ -9,6 +9,7 @@ release_inventory_path="${repo_root}/docs/deployment/single-customer-release-bun
 release_handoff_path="${repo_root}/docs/deployment/release-handoff-evidence-package.md"
 smoke_path="${repo_root}/docs/deployment/runtime-smoke-bundle.md"
 detector_handoff_path="${repo_root}/docs/detector-activation-evidence-handoff.md"
+detector_exemplar_path="${repo_root}/docs/deployment/detector-activation-evidence.single-customer-pilot.example.md"
 coordination_path="${repo_root}/docs/operations-zammad-live-pilot-boundary.md"
 assistant_path="${repo_root}/docs/phase-15-identity-grounded-analyst-assistant-boundary.md"
 operational_handoff_path="${repo_root}/docs/deployment/operational-evidence-handoff-pack.md"
@@ -68,6 +69,7 @@ require_file "${release_inventory_path}" "single-customer release bundle invento
 require_file "${release_handoff_path}" "release handoff evidence package"
 require_file "${smoke_path}" "runtime smoke bundle"
 require_file "${detector_handoff_path}" "detector activation evidence handoff manifest"
+require_file "${detector_exemplar_path}" "filled redacted detector activation evidence exemplar"
 require_file "${coordination_path}" "Zammad live pilot boundary"
 require_file "${assistant_path}" "assistant boundary"
 require_file "${operational_handoff_path}" "operational evidence handoff pack"
@@ -143,6 +145,7 @@ reject_workstation_paths "pilot readiness guidance" \
   "${release_handoff_path}" \
   "${smoke_path}" \
   "${detector_handoff_path}" \
+  "${detector_exemplar_path}" \
   "${coordination_path}" \
   "${assistant_path}" \
   "${operational_handoff_path}"

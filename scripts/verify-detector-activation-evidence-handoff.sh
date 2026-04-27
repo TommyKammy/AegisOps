@@ -172,7 +172,7 @@ require_phrase "${wazuh_runbook}" '`docs/detector-activation-evidence-handoff.md
 require_phrase "${github_candidate}" 'Activation handoff must follow `docs/detector-activation-evidence-handoff.md` before this candidate moves beyond staging review.' "GitHub candidate detector handoff link"
 require_phrase "${entra_candidate}" 'Activation handoff must follow `docs/detector-activation-evidence-handoff.md` before this candidate moves beyond staging review.' "Entra ID candidate detector handoff link"
 
-for path in "${manifest_doc}" "${github_runbook}" "${entra_runbook}" "${github_candidate}" "${entra_candidate}"; do
+for path in "${manifest_doc}" "${exemplar_doc}" "${github_runbook}" "${entra_runbook}" "${github_candidate}" "${entra_candidate}"; do
   require_absent_case_insensitive "${path}" "requires unlimited retention" "detector handoff boundary statement"
   require_absent_case_insensitive "${path}" "optional extension prerequisite" "detector handoff prerequisite statement"
   require_absent_case_insensitive "${path}" "direct GitHub API actioning is approved" "GitHub authority statement"

@@ -108,6 +108,12 @@ EOF
 The pilot readiness checklist in `docs/deployment/pilot-readiness-checklist.md` consumes this detector activation evidence handoff as the bounded detector scope, owner, rollback, disable, expected-volume, false-positive, and known-limitation evidence for pilot entry.
 EOF
 
+  cat <<'EOF' > "${target}/docs/deployment/detector-activation-evidence.single-customer-pilot.example.md"
+# Detector Activation Evidence Handoff - Filled Redacted Single-Customer Pilot Example
+
+Authority boundary: Wazuh rule state remains substrate evidence; AegisOps-owned alert, case, evidence, reconciliation, and release-gate records remain workflow truth.
+EOF
+
   cat <<'EOF' > "${target}/docs/operations-zammad-live-pilot-boundary.md"
 # Operations Zammad-First Live Pilot Boundary and Credential Custody
 
@@ -178,6 +184,12 @@ create_repo "${missing_detector_example_repo}"
 write_valid_docs "${missing_detector_example_repo}"
 perl -0pi -e 's/^For the filled single-customer packet shape.*\n\n^The provided single-customer example.*\n//m' "${missing_detector_example_repo}/docs/deployment/pilot-readiness-checklist.md"
 assert_fails_with "${missing_detector_example_repo}" "Missing pilot readiness checklist statement: For the filled single-customer packet shape, pilot owners must compare retained detector activation evidence against the provided single-customer example before accepting detector scope into the entry decision."
+
+missing_detector_exemplar_file_repo="${workdir}/missing-detector-exemplar-file"
+create_repo "${missing_detector_exemplar_file_repo}"
+write_valid_docs "${missing_detector_exemplar_file_repo}"
+rm "${missing_detector_exemplar_file_repo}/docs/deployment/detector-activation-evidence.single-customer-pilot.example.md"
+assert_fails_with "${missing_detector_exemplar_file_repo}" "Missing filled redacted detector activation evidence exemplar:"
 
 missing_coordination_link_repo="${workdir}/missing-coordination-link"
 create_repo "${missing_coordination_link_repo}"
