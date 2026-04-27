@@ -92,6 +92,10 @@ Verify this checklist with `scripts/verify-pilot-readiness-checklist.sh`.
 
 Negative validation for the verifier is `scripts/test-verify-pilot-readiness-checklist.sh`.
 
+Verify a retained pilot go/no-go decision packet with `scripts/verify-pilot-go-no-go-decision-packet.sh --packet <pilot-go-no-go-packet.md>`.
+
+Negative validation for the go/no-go packet verifier is `scripts/test-verify-pilot-go-no-go-decision-packet.sh`.
+
 Run the checklist verifier after changing this checklist, the runbook, release bundle inventory, release handoff package, runtime smoke bundle, detector activation evidence handoff, Zammad live pilot boundary, assistant boundary, or operational evidence handoff pack.
 
 ## 8. Out of Scope

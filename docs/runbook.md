@@ -134,6 +134,8 @@ Before launch, upgrade, rollback, restore, or operator handoff closes, assemble 
 
 Before starting a single-customer pilot, review `docs/deployment/pilot-readiness-checklist.md` and verify it with `scripts/verify-pilot-readiness-checklist.sh` so release readiness, runtime smoke, detector activation scope, Zammad coordination scope, assistant limitations, data retention, known limitations, and evidence handoff are decided together.
 
+Before a pilot launch decision is treated as reviewed, verify the retained go/no-go packet with `scripts/verify-pilot-go-no-go-decision-packet.sh --packet <pilot-go-no-go-packet.md>` so release handoff, detector activation, known limitations, retention, Zammad/non-authority posture, assistant limitations, owner, and next health review evidence bind to one release identifier.
+
 For pilot support degradation, break-glass rehearsal, and operator-readable evidence expectations, use `docs/deployment/support-playbook-break-glass-rehearsal.md` and verify it with `scripts/verify-support-playbook-break-glass-rehearsal.sh`.
 
 Before continuing, pausing, rolling back, or exiting a single-customer pilot, review `docs/deployment/pilot-pause-rollback-exit-criteria.md` and verify it with `scripts/verify-pilot-pause-rollback-exit-criteria.sh` so pause criteria, rollback criteria, exit criteria, unresolved limitations, next-roadmap input, and operator/support signoff remain bounded to Phase 43.
