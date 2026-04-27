@@ -13,6 +13,7 @@ detector_exemplar_path="${repo_root}/docs/deployment/detector-activation-evidenc
 coordination_path="${repo_root}/docs/operations-zammad-live-pilot-boundary.md"
 assistant_path="${repo_root}/docs/phase-15-identity-grounded-analyst-assistant-boundary.md"
 operational_handoff_path="${repo_root}/docs/deployment/operational-evidence-handoff-pack.md"
+known_limitations_template_path="${repo_root}/docs/deployment/known-limitations-retention-decision-template.md"
 verifier_test_path="${repo_root}/scripts/test-verify-pilot-readiness-checklist.sh"
 
 require_file() {
@@ -73,6 +74,7 @@ require_file "${detector_exemplar_path}" "filled redacted detector activation ev
 require_file "${coordination_path}" "Zammad live pilot boundary"
 require_file "${assistant_path}" "assistant boundary"
 require_file "${operational_handoff_path}" "operational evidence handoff pack"
+require_file "${known_limitations_template_path}" "known limitations and retention decision template"
 require_file "${verifier_test_path}" "pilot readiness checklist verifier tests"
 
 required_headings=(
@@ -104,6 +106,7 @@ required_checklist_phrases=(
   'Zammad coordination rehearsal evidence must include the checked available, degraded, and unavailable scenarios from `control-plane/tests/fixtures/zammad/non-authority-coordination-rehearsal.json` so stale reads, mismatched ticket identifiers, and missing or placeholder credentials remain visible without becoming AegisOps truth.'
   'Assistant output remains advisory-only and non-authoritative; it must stay grounded in reviewed control-plane records and linked evidence and must not approve, execute, reconcile, close, or widen pilot scope.'
   "Known limitations must be explicit, reviewed, and tied to the entry decision, including whether each limitation blocks pilot start, allows pilot start with a follow-up owner, or requires rollback or disable evidence."
+  'Pilot owners must record the known-limitation and retention decision in `docs/deployment/known-limitations-retention-decision-template.md` before the entry decision is treated as reviewed.'
   "Data retention for the pilot is bounded to the current release handoff, runtime smoke manifest, detector activation evidence handoff, Zammad coordination reference, assistant limitation note, and next health review expectation; it is not an unlimited archive."
   "Evidence handoff must name the release handoff record, runtime smoke manifest, detector activation handoff, coordination pilot status, assistant limitation statement, known-limitations review, handoff owner, and next health review."
   "Missing release readiness, failed runtime smoke, missing detector activation owner, missing disable or rollback owner, missing Zammad credential custody, missing assistant limitation statement, missing known-limitations review, missing evidence handoff owner, or mixed release identifiers blocks pilot entry."
@@ -114,6 +117,22 @@ required_checklist_phrases=(
 
 for phrase in "${required_checklist_phrases[@]}"; do
   require_phrase "${checklist_path}" "${phrase}" "pilot readiness checklist statement"
+done
+
+required_template_phrases=(
+  "# Known Limitations and Retention Decision Template"
+  "This template is the reviewed decision record for a bounded single-customer pilot go/no-go review."
+  "A completed template must distinguish no known blocking limitation from not reviewed."
+  "Disposition values: blocking, accepted-with-owner, rollback, disable, follow-up, not-reviewed."
+  "Every accepted-with-owner limitation must name the owner, expected operator-visible behavior, revisit date, affected surface, and retention decision."
+  "Retention decisions must be bounded to reviewed pilot evidence, not unlimited raw-log retention."
+  "Do not include secrets, live credentials, customer-private raw logs, raw forwarded-header values, unsigned identity hints, workstation-local paths, or customer-private ticket content."
+  "Subordinate systems, optional extensions, external tickets, detector substrates, assistant output, and bounded logs are context only; they do not own AegisOps approval, execution, reconciliation, readiness, release, or pilot-entry truth."
+  "Unsupported compliance certification, SLA commitments, 24x7 support promises, public launch approval, multi-customer rollout, multi-tenant expansion, legal hold automation, and runtime retention enforcement are out of scope."
+)
+
+for phrase in "${required_template_phrases[@]}"; do
+  require_phrase "${known_limitations_template_path}" "${phrase}" "known limitations retention template statement"
 done
 
 require_phrase "${runbook_path}" 'Before starting a single-customer pilot, review `docs/deployment/pilot-readiness-checklist.md` and verify it with `scripts/verify-pilot-readiness-checklist.sh` so release readiness, runtime smoke, detector activation scope, Zammad coordination scope, assistant limitations, data retention, known limitations, and evidence handoff are decided together.' "runbook pilot readiness link"
@@ -148,6 +167,7 @@ reject_workstation_paths "pilot readiness guidance" \
   "${detector_exemplar_path}" \
   "${coordination_path}" \
   "${assistant_path}" \
-  "${operational_handoff_path}"
+  "${operational_handoff_path}" \
+  "${known_limitations_template_path}"
 
 echo "Pilot readiness checklist, entry criteria, cross-links, limitations, and evidence handoff expectations are present and bounded."
