@@ -4,6 +4,7 @@ set -euo pipefail
 
 repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 manifest_doc="${repo_root}/docs/detector-activation-evidence-handoff.md"
+exemplar_doc="${repo_root}/docs/deployment/detector-activation-evidence.single-customer-pilot.example.md"
 wazuh_runbook="${repo_root}/docs/wazuh-rule-lifecycle-runbook.md"
 github_runbook="${repo_root}/docs/source-families/github-audit/analyst-triage-runbook.md"
 entra_runbook="${repo_root}/docs/source-families/entra-id/analyst-triage-runbook.md"
@@ -42,7 +43,34 @@ require_absent_case_insensitive() {
   fi
 }
 
+reject_placeholders() {
+  local path="$1"
+  local description="$2"
+
+  if grep -Eiq 'TODO|sample secret|fake secret|placeholder credential|change-me|replace-with|guess(ed)? scope|unsigned token|<replace-[^>]+>|secret=[^[:space:]]+|token=[^[:space:]]+|password=[^[:space:]]+' "${path}"; then
+    echo "Placeholder or untrusted ${description} value detected: ${path}" >&2
+    exit 1
+  fi
+}
+
+reject_workstation_paths() {
+  local description="$1"
+  shift
+
+  local macos_home_pattern linux_home_pattern windows_home_pattern workstation_local_path_pattern
+  macos_home_pattern='/'"Users"'/[^[:space:])>]+'
+  linux_home_pattern='/'"home"'/[^[:space:])>]+'
+  windows_home_pattern='[A-Za-z]:\\'"Users"'\\[^[:space:])>]+'
+  workstation_local_path_pattern="(^|[^[:alnum:]_./-])(~[/\\\\]|${macos_home_pattern}|${linux_home_pattern}|${windows_home_pattern})"
+
+  if grep -Eq "${workstation_local_path_pattern}" "$@"; then
+    echo "Forbidden ${description}: workstation-local absolute path detected" >&2
+    exit 1
+  fi
+}
+
 require_file "${manifest_doc}" "detector activation evidence handoff manifest"
+require_file "${exemplar_doc}" "filled redacted detector activation evidence exemplar"
 require_file "${wazuh_runbook}" "Wazuh rule lifecycle runbook"
 require_file "${github_runbook}" "GitHub audit analyst triage runbook"
 require_file "${entra_runbook}" "Entra ID analyst triage runbook"
@@ -62,6 +90,7 @@ required_manifest_text=(
   "| Rollback and disable evidence | Disable reason, rollback reason, restored rule revision, restored fixture set, validation rerun result, operator notification path, follow-up owner, and release-gate evidence record. | Rollback is a non-destructive content, rule-set, fixture, and validation reset path; it does not authorize direct source-side mutation or undocumented hotfixes. |"
   "| Alert or case admission sanity | AegisOps alert, case, evidence, or reconciliation identifiers, admission result, reviewed linkage to the source-family record, and clean-state outcome for failed or rejected paths. | Case admission remains control-plane-owned and must fail closed when provenance, scope, linkage, or snapshot consistency is missing. |"
   "| Known limitations | Deferred detector behavior, unsupported source fields, parser gaps, expected false-positive limits, retention limit, optional-extension non-requirements, and follow-up owner. | Limitations preserve review context without creating an unlimited history system or expanding detector authority. |"
+  'The filled redacted single-customer exemplar in `docs/deployment/detector-activation-evidence.single-customer-pilot.example.md` shows how one GitHub audit detector activation handoff connects Wazuh substrate evidence to AegisOps analytic signal admission without making Wazuh rule state workflow truth.'
   "## 3. Required Review Questions"
   "- Does the handoff name the exact candidate rule, source-family package, fixture set, validation command result, reviewer, activation owner, disable owner, rollback owner, and next-review date?"
   "- Does the handoff cite AegisOps-owned alert, case, evidence, reconciliation, or release-gate records for activation and rollback evidence?"
@@ -77,6 +106,35 @@ required_manifest_text=(
 for phrase in "${required_manifest_text[@]}"; do
   require_phrase "${manifest_doc}" "${phrase}" "detector activation evidence handoff manifest statement"
 done
+
+required_exemplar_text=(
+  "# Detector Activation Evidence Handoff - Filled Redacted Single-Customer Pilot Example"
+  "Release identifier: aegisops-single-customer-pilot-2026-04-27-c4527e5"
+  "Candidate rule identifier: github-audit-privilege-change"
+  "Source-family package: GitHub audit via reviewed Wazuh-backed intake boundary"
+  "Lifecycle state: staging-review-accepted"
+  "Activation owner: pilot-detector-owner-redacted"
+  "Disable owner: pilot-disable-owner-redacted"
+  "Rollback owner: pilot-rollback-owner-redacted"
+  "Expected alert volume: 0-3 alerts per business day during the first pilot week"
+  "False-positive review: Routine repository administration, access review cleanup, automation identity behavior, and scheduled maintenance were reviewed as expected benign cases"
+  "Next-review date: 2026-05-04"
+  "Fixture evidence: control-plane/tests/fixtures/wazuh/github-audit-alert.json"
+  'Parser evidence: decoder.name `github_audit`, rule.id `github-audit-privilege-change`, and source-family parser coverage verified by the GitHub audit detector activation candidate tests'
+  'Validation command result: PASS for `bash scripts/verify-github-audit-detector-activation-candidate.sh`'
+  'Wazuh substrate evidence: Wazuh manager `wazuh-manager-github-1`, decoder `github_audit`, rule `github-audit-privilege-change`, and fixture-backed GitHub audit fields are evidence for admission review only'
+  'AegisOps analytic signal admission: AegisOps alert `alert-redacted-github-admin-0001`, case `case-redacted-github-admin-0001`, evidence `evidence-redacted-github-admin-0001`, and release-gate record `release-gate-redacted-2026-04-27` are the control-plane records used for handoff review'
+  "Authority boundary: Wazuh rule state, raw Wazuh alerts, GitHub audit fields, OpenSearch state, Zammad tickets, and downstream detector receipts remain subordinate evidence; AegisOps-owned alert, case, evidence, reconciliation, and release-gate records remain workflow truth."
+  'Disable path: Move the candidate back to `candidate`, remove it from the reviewed pilot detector scope, and preserve the refused or disabled outcome in the release-gate evidence record before the next health review.'
+  'Rollback path: Restore the last reviewed fixture set and candidate revision, rerun `bash scripts/verify-github-audit-detector-activation-candidate.sh`, and keep pilot entry blocked if parser evidence, Wazuh provenance, or AegisOps record linkage is missing.'
+  "Clean-state outcome: Rejected activation attempts must leave no orphan alert, partial case, partial durable write, or misleading handoff evidence."
+)
+
+for phrase in "${required_exemplar_text[@]}"; do
+  require_phrase "${exemplar_doc}" "${phrase}" "filled redacted detector activation evidence exemplar entry"
+done
+
+reject_placeholders "${exemplar_doc}" "filled redacted detector activation evidence exemplar"
 
 required_alignment_text=(
   'Detector activation evidence handoff must use `docs/detector-activation-evidence-handoff.md` as the manifest for rule review evidence, fixture and parser evidence, activation evidence, rollback evidence, alert or case admission sanity, and known limitations.'
@@ -99,5 +157,14 @@ for path in "${manifest_doc}" "${github_runbook}" "${entra_runbook}" "${github_c
   require_absent_case_insensitive "${path}" "direct GitHub API actioning is approved" "GitHub authority statement"
   require_absent_case_insensitive "${path}" "direct Entra ID actioning is approved" "Entra ID authority statement"
 done
+
+reject_workstation_paths "detector activation evidence handoff guidance" \
+  "${manifest_doc}" \
+  "${exemplar_doc}" \
+  "${wazuh_runbook}" \
+  "${github_runbook}" \
+  "${entra_runbook}" \
+  "${github_candidate}" \
+  "${entra_candidate}"
 
 echo "Detector activation evidence handoff manifest and source-family runbook alignment are present and bounded."
