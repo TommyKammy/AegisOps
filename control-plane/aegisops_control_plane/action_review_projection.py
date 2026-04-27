@@ -319,6 +319,7 @@ def build_action_review_chain_snapshot(
         reconciliation=reconciliation,
     )
     mismatch_inspection = action_review_mismatch_inspection(reconciliation)
+    reconciliation_detail = action_review_reconciliation_detail(reconciliation)
     replacement_action_request = service._replacement_action_request(
         action_request,
         record_index=record_index,
@@ -394,6 +395,7 @@ def build_action_review_chain_snapshot(
             else action_request.policy_evaluation.get("execution_surface_id")
         ),
         "timeline": timeline,
+        "reconciliation_detail": reconciliation_detail,
         "mismatch_inspection": mismatch_inspection,
         "action_execution_id": (
             action_execution.action_execution_id if action_execution is not None else None
@@ -726,6 +728,72 @@ def action_review_mismatch_inspection(
         "first_seen_at": reconciliation.first_seen_at,
         "last_seen_at": reconciliation.last_seen_at,
         "compared_at": reconciliation.compared_at,
+    }
+
+
+def action_review_reconciliation_detail(
+    reconciliation: ReconciliationRecord | None,
+) -> dict[str, object]:
+    if reconciliation is None:
+        return {
+            "authority": "aegisops_reconciliation_record",
+            "expected_aegisops_state": "matched",
+            "authoritative_aegisops_state": "missing",
+            "received_receipt": {
+                "ingest_disposition": "missing",
+                "execution_run_id": None,
+                "linked_execution_run_ids": (),
+                "correlation_key": None,
+                "first_seen_at": None,
+                "last_seen_at": None,
+            },
+            "closeout_evidence": {
+                "reconciliation_id": None,
+                "compared_at": None,
+                "mismatch_summary": (
+                    "No authoritative reconciliation record is visible for this "
+                    "reviewed request yet."
+                ),
+            },
+            "action_required": True,
+            "next_step": "obtain_authoritative_receipt_before_closeout",
+        }
+
+    action_required = reconciliation.lifecycle_state != "matched"
+    if reconciliation.lifecycle_state == "matched":
+        next_step = "record_closeout_evidence"
+    elif (
+        reconciliation.lifecycle_state == "stale"
+        or reconciliation.ingest_disposition == "stale"
+    ):
+        next_step = "refresh_downstream_receipt_before_closeout"
+    elif (
+        reconciliation.lifecycle_state == "mismatched"
+        or reconciliation.ingest_disposition == "mismatch"
+    ):
+        next_step = "review_mismatch_before_closeout"
+    else:
+        next_step = "obtain_authoritative_receipt_before_closeout"
+
+    return {
+        "authority": "aegisops_reconciliation_record",
+        "expected_aegisops_state": "matched",
+        "authoritative_aegisops_state": reconciliation.lifecycle_state,
+        "received_receipt": {
+            "ingest_disposition": reconciliation.ingest_disposition,
+            "execution_run_id": reconciliation.execution_run_id,
+            "linked_execution_run_ids": reconciliation.linked_execution_run_ids,
+            "correlation_key": reconciliation.correlation_key,
+            "first_seen_at": reconciliation.first_seen_at,
+            "last_seen_at": reconciliation.last_seen_at,
+        },
+        "closeout_evidence": {
+            "reconciliation_id": reconciliation.reconciliation_id,
+            "compared_at": reconciliation.compared_at,
+            "mismatch_summary": reconciliation.mismatch_summary,
+        },
+        "action_required": action_required,
+        "next_step": next_step,
     }
 
 

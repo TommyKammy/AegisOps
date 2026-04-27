@@ -30,6 +30,111 @@ from _service_persistence_support import (
 )
 
 class ActionReviewSurfacePersistenceTests(ServicePersistenceTestBase):
+    def test_action_review_reconciliation_detail_names_expected_received_and_closeout_guidance(
+        self,
+    ) -> None:
+        compared_at = datetime(2026, 4, 27, 9, 0, tzinfo=timezone.utc)
+        mismatch_detail = action_review_projection.action_review_reconciliation_detail(
+            support.ReconciliationRecord(
+                reconciliation_id="reconciliation-detail-mismatch-001",
+                subject_linkage={
+                    "action_request_ids": ("action-request-detail-mismatch-001",),
+                    "action_execution_ids": ("action-execution-detail-mismatch-001",),
+                },
+                alert_id="alert-detail-mismatch-001",
+                finding_id="finding-detail-mismatch-001",
+                analytic_signal_id=None,
+                execution_run_id="execution-run-observed-mismatch-001",
+                linked_execution_run_ids=("execution-run-observed-mismatch-001",),
+                correlation_key="correlation-detail-mismatch-001",
+                first_seen_at=compared_at - timedelta(minutes=5),
+                last_seen_at=compared_at - timedelta(minutes=1),
+                ingest_disposition="mismatch",
+                mismatch_summary="receipt payload disagrees with AegisOps expected ticket state",
+                compared_at=compared_at,
+                lifecycle_state="mismatched",
+            )
+        )
+        stale_detail = action_review_projection.action_review_reconciliation_detail(
+            support.ReconciliationRecord(
+                reconciliation_id="reconciliation-detail-stale-001",
+                subject_linkage={
+                    "action_request_ids": ("action-request-detail-stale-001",),
+                    "action_execution_ids": ("action-execution-detail-stale-001",),
+                },
+                alert_id="alert-detail-stale-001",
+                finding_id="finding-detail-stale-001",
+                analytic_signal_id=None,
+                execution_run_id="execution-run-observed-stale-001",
+                linked_execution_run_ids=("execution-run-observed-stale-001",),
+                correlation_key="correlation-detail-stale-001",
+                first_seen_at=compared_at - timedelta(minutes=10),
+                last_seen_at=compared_at - timedelta(minutes=9),
+                ingest_disposition="stale",
+                mismatch_summary="receipt is older than the reviewed action state",
+                compared_at=compared_at,
+                lifecycle_state="stale",
+            )
+        )
+        matched_detail = action_review_projection.action_review_reconciliation_detail(
+            support.ReconciliationRecord(
+                reconciliation_id="reconciliation-detail-matched-001",
+                subject_linkage={
+                    "action_request_ids": ("action-request-detail-matched-001",),
+                    "action_execution_ids": ("action-execution-detail-matched-001",),
+                },
+                alert_id="alert-detail-matched-001",
+                finding_id="finding-detail-matched-001",
+                analytic_signal_id=None,
+                execution_run_id="execution-run-observed-matched-001",
+                linked_execution_run_ids=("execution-run-observed-matched-001",),
+                correlation_key="correlation-detail-matched-001",
+                first_seen_at=compared_at - timedelta(minutes=3),
+                last_seen_at=compared_at - timedelta(minutes=1),
+                ingest_disposition="matched",
+                mismatch_summary="receipt matches the reviewed action state",
+                compared_at=compared_at,
+                lifecycle_state="matched",
+            )
+        )
+        missing_detail = action_review_projection.action_review_reconciliation_detail(None)
+
+        self.assertEqual(
+            mismatch_detail["expected_aegisops_state"],
+            "matched",
+        )
+        self.assertEqual(
+            mismatch_detail["authoritative_aegisops_state"],
+            "mismatched",
+        )
+        self.assertEqual(
+            mismatch_detail["received_receipt"]["ingest_disposition"],
+            "mismatch",
+        )
+        self.assertTrue(mismatch_detail["action_required"])
+        self.assertEqual(
+            mismatch_detail["next_step"],
+            "review_mismatch_before_closeout",
+        )
+        self.assertEqual(
+            mismatch_detail["closeout_evidence"]["reconciliation_id"],
+            "reconciliation-detail-mismatch-001",
+        )
+
+        self.assertEqual(
+            stale_detail["next_step"],
+            "refresh_downstream_receipt_before_closeout",
+        )
+        self.assertTrue(stale_detail["action_required"])
+        self.assertEqual(matched_detail["next_step"], "record_closeout_evidence")
+        self.assertFalse(matched_detail["action_required"])
+        self.assertEqual(missing_detail["authoritative_aegisops_state"], "missing")
+        self.assertEqual(
+            missing_detail["next_step"],
+            "obtain_authoritative_receipt_before_closeout",
+        )
+        self.assertTrue(missing_detail["action_required"])
+
     def test_service_inspect_action_review_detail_anchors_selected_and_current_review(
         self,
     ) -> None:

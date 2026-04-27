@@ -292,6 +292,25 @@ export function registerOperatorRoutesActionReviewTests() {
                   execution_run_id: "shuffle-run-789",
                   linked_execution_run_ids: ["shuffle-run-789"],
                 },
+                reconciliation_detail: {
+                  authority: "aegisops_reconciliation_record",
+                  expected_aegisops_state: "matched",
+                  authoritative_aegisops_state: "mismatched",
+                  received_receipt: {
+                    ingest_disposition: "mismatch",
+                    execution_run_id: "shuffle-run-789",
+                    linked_execution_run_ids: ["shuffle-run-789"],
+                    correlation_key: "coord-ref-789",
+                  },
+                  closeout_evidence: {
+                    reconciliation_id: "recon-789",
+                    compared_at: "2026-04-27T09:00:00Z",
+                    mismatch_summary:
+                      "receipt payload disagrees with the reconciled ticket state",
+                  },
+                  action_required: true,
+                  next_step: "review_mismatch_before_closeout",
+                },
                 coordination_ticket_outcome: {
                   authority: "authoritative_aegisops_review",
                   status: "mismatch",
@@ -364,6 +383,14 @@ export function registerOperatorRoutesActionReviewTests() {
       expect(screen.getByText("Coordination visibility")).toBeInTheDocument();
       expect(screen.getAllByText("action-execution-789").length).toBeGreaterThan(0);
       expect(screen.getAllByText("shuffle-run-789").length).toBeGreaterThan(0);
+      expect(screen.getByText("Expected AegisOps state")).toBeInTheDocument();
+      expect(screen.getAllByText("matched").length).toBeGreaterThan(0);
+      expect(screen.getByText("Authoritative AegisOps state")).toBeInTheDocument();
+      expect(screen.getAllByText("mismatched").length).toBeGreaterThan(0);
+      expect(screen.getByText("Received receipt ingest")).toBeInTheDocument();
+      expect(screen.getByText("review_mismatch_before_closeout")).toBeInTheDocument();
+      expect(screen.getByText("Closeout compared at")).toBeInTheDocument();
+      expect(screen.getByText("2026-04-27T09:00:00Z")).toBeInTheDocument();
       expect(
         screen.getAllByText(
           "receipt payload disagrees with the reconciled ticket state",
