@@ -53,6 +53,12 @@ def _require_mapping(value: object, field_name: str) -> dict[str, object]:
     return value
 
 
+def _require_sequence(value: object, field_name: str) -> list[object]:
+    if not isinstance(value, list):
+        raise ValueError(f"{field_name} must be an array")
+    return value
+
+
 def _require_string(value: object, field_name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field_name} must be a non-empty string")
@@ -378,6 +384,262 @@ class Phase37ReviewedRecordChainRehearsalTests(ServicePersistenceTestBase):
             execution.provenance["downstream_binding"]["approval_decision_id"],
             approval_decision.approval_decision_id,
         )
+
+    def test_rehearsal_fixture_covers_denial_fallback_and_escalation_without_dispatch(
+        self,
+    ) -> None:
+        fixture = _load_rehearsal_fixture()
+        review_outcomes = _require_mapping(
+            fixture.get("review_outcomes"),
+            "review_outcomes",
+        )
+        required_outcomes = {"approved", "denied", "fallback", "escalation"}
+        self.assertTrue(
+            required_outcomes.issubset(set(review_outcomes)),
+            "rehearsal fixture must name approved, denied, fallback, and escalation outcomes",
+        )
+        approved = _require_mapping(review_outcomes.get("approved"), "approved")
+        denied = _require_mapping(review_outcomes.get("denied"), "denied")
+        fallback = _require_mapping(review_outcomes.get("fallback"), "fallback")
+        escalation = _require_mapping(review_outcomes.get("escalation"), "escalation")
+        self.assertIn(
+            "approval_decision",
+            _require_sequence(
+                approved.get("evidence_distinctions"),
+                "evidence_distinctions",
+            ),
+        )
+        self.assertIn(
+            "execution_receipt",
+            _require_sequence(
+                approved.get("evidence_distinctions"),
+                "evidence_distinctions",
+            ),
+        )
+
+        store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+
+        def create_request(outcome: dict[str, object]) -> ActionRequestRecord:
+            observation = service.record_case_observation(
+                case_id=promoted_case.case_id,
+                author_identity=_require_string(
+                    outcome.get("requester_identity"),
+                    "requester_identity",
+                ),
+                observed_at=reviewed_at,
+                scope_statement=_require_string(
+                    outcome.get("message_intent"),
+                    "message_intent",
+                ),
+                supporting_evidence_ids=(evidence_id,),
+            )
+            lead = service.record_case_lead(
+                case_id=promoted_case.case_id,
+                triage_owner=_require_string(
+                    outcome.get("requester_identity"),
+                    "requester_identity",
+                ),
+                triage_rationale=_require_string(
+                    outcome.get("escalation_reason"),
+                    "escalation_reason",
+                ),
+                observation_id=observation.observation_id,
+            )
+            recommendation = service.record_case_recommendation(
+                case_id=promoted_case.case_id,
+                review_owner=_require_string(
+                    outcome.get("review_owner"),
+                    "review_owner",
+                ),
+                intended_outcome=_require_string(
+                    outcome.get("intended_outcome"),
+                    "intended_outcome",
+                ),
+                lead_id=lead.lead_id,
+            )
+            return service.create_reviewed_action_request_from_advisory(
+                record_family="recommendation",
+                record_id=recommendation.recommendation_id,
+                requester_identity=_require_string(
+                    outcome.get("requester_identity"),
+                    "requester_identity",
+                ),
+                recipient_identity=_require_string(
+                    outcome.get("recipient_identity"),
+                    "recipient_identity",
+                ),
+                message_intent=_require_string(
+                    outcome.get("message_intent"),
+                    "message_intent",
+                ),
+                escalation_reason=_require_string(
+                    outcome.get("escalation_reason"),
+                    "escalation_reason",
+                ),
+                expires_at=reviewed_at
+                + timedelta(
+                    hours=_require_number(
+                        outcome.get("expires_in_hours"),
+                        "expires_in_hours",
+                    )
+                ),
+                action_request_id=_require_string(
+                    outcome.get("action_request_id"),
+                    "action_request_id",
+                ),
+            )
+
+        denied_request = create_request(denied)
+        denied_decision = service.record_action_approval_decision(
+            action_request_id=denied_request.action_request_id,
+            approver_identity=_require_string(
+                denied.get("approver_identity"),
+                "approver_identity",
+            ),
+            authenticated_approver_identity=_require_string(
+                denied.get("approver_identity"),
+                "approver_identity",
+            ),
+            decision=_require_string(denied.get("decision"), "decision"),
+            decision_rationale=_require_string(
+                denied.get("decision_rationale"),
+                "decision_rationale",
+            ),
+            decided_at=reviewed_at
+            + timedelta(
+                minutes=_require_number(
+                    denied.get("decision_offset_minutes"),
+                    "decision_offset_minutes",
+                )
+            ),
+            approval_decision_id=_require_string(
+                denied.get("approval_decision_id"),
+                "approval_decision_id",
+            ),
+        )
+        denied_request = service.get_record(
+            ActionRequestRecord,
+            denied_request.action_request_id,
+        )
+        self.assertIsNotNone(denied_request)
+        assert denied_request is not None
+        self.assertEqual(denied_decision.lifecycle_state, "rejected")
+        self.assertEqual(denied_request.lifecycle_state, "rejected")
+        self.assertEqual(store.list(ActionExecutionRecord), ())
+
+        fallback_request = create_request(fallback)
+        fallback_decision = service.record_action_approval_decision(
+            action_request_id=fallback_request.action_request_id,
+            approver_identity=_require_string(
+                fallback.get("approver_identity"),
+                "approver_identity",
+            ),
+            authenticated_approver_identity=_require_string(
+                fallback.get("approver_identity"),
+                "approver_identity",
+            ),
+            decision="grant",
+            decision_rationale=_require_string(
+                fallback.get("decision_rationale"),
+                "decision_rationale",
+            ),
+            decided_at=reviewed_at
+            + timedelta(
+                minutes=_require_number(
+                    fallback.get("decision_offset_minutes"),
+                    "decision_offset_minutes",
+                )
+            ),
+            approval_decision_id=_require_string(
+                fallback.get("approval_decision_id"),
+                "approval_decision_id",
+            ),
+        )
+        fallback_request = service.get_record(
+            ActionRequestRecord,
+            fallback_request.action_request_id,
+        )
+        self.assertIsNotNone(fallback_request)
+        assert fallback_request is not None
+        service.record_action_review_manual_fallback(
+            action_request_id=fallback_request.action_request_id,
+            fallback_at=reviewed_at
+            + timedelta(
+                minutes=_require_number(
+                    fallback.get("fallback_offset_minutes"),
+                    "fallback_offset_minutes",
+                )
+            ),
+            fallback_actor_identity=_require_string(
+                fallback.get("fallback_actor_identity"),
+                "fallback_actor_identity",
+            ),
+            authority_boundary=_require_string(
+                fallback.get("authority_boundary"),
+                "authority_boundary",
+            ),
+            reason=_require_string(fallback.get("reason"), "reason"),
+            action_taken=_require_string(
+                fallback.get("action_taken"),
+                "action_taken",
+            ),
+            verification_evidence_ids=(evidence_id,),
+            residual_uncertainty=_require_string(
+                fallback.get("residual_uncertainty"),
+                "residual_uncertainty",
+            ),
+        )
+        fallback_review = service.inspect_case_detail(
+            promoted_case.case_id
+        ).current_action_review
+        fallback_visibility = fallback_review["runtime_visibility"]["manual_fallback"]
+        self.assertEqual(
+            fallback_visibility["approval_decision_id"],
+            fallback_decision.approval_decision_id,
+        )
+        self.assertEqual(
+            fallback_visibility["verification_evidence_ids"],
+            (evidence_id,),
+        )
+        self.assertEqual(store.list(ActionExecutionRecord), ())
+
+        escalation_request = create_request(escalation)
+        service.record_action_review_escalation_note(
+            action_request_id=escalation_request.action_request_id,
+            escalated_at=reviewed_at
+            + timedelta(
+                minutes=_require_number(
+                    escalation.get("escalated_offset_minutes"),
+                    "escalated_offset_minutes",
+                )
+            ),
+            escalated_by_identity=_require_string(
+                escalation.get("escalated_by_identity"),
+                "escalated_by_identity",
+            ),
+            escalated_to=_require_string(
+                escalation.get("escalated_to"),
+                "escalated_to",
+            ),
+            note=_require_string(escalation.get("note"), "note"),
+        )
+        escalation_review = service.inspect_case_detail(
+            promoted_case.case_id
+        ).current_action_review
+        escalation_visibility = escalation_review["runtime_visibility"][
+            "escalation_notes"
+        ]
+        self.assertEqual(escalation_visibility["review_state"], "pending")
+        self.assertEqual(
+            escalation_visibility["escalated_by_identity"],
+            _require_string(
+                escalation.get("escalated_by_identity"),
+                "escalated_by_identity",
+            ),
+        )
+        self.assertEqual(store.list(ActionExecutionRecord), ())
 
     def test_release_gate_manifest_fails_closed_without_required_chain_records(
         self,
