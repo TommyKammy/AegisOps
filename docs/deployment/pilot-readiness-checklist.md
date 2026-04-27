@@ -34,7 +34,9 @@ Runtime smoke must pass through `scripts/run-phase-37-runtime-smoke-gate.sh --en
 
 Detector activation scope must follow `docs/detector-activation-evidence-handoff.md` and name only the reviewed candidate rules, fixture evidence, activation owner, disable owner, rollback owner, expected alert volume, false-positive review, and next-review date accepted for the pilot.
 
-For the filled single-customer packet shape, pilot owners should compare retained detector activation evidence against `docs/deployment/detector-activation-evidence.single-customer-pilot.example.md` before accepting detector scope into the entry decision.
+For the filled single-customer packet shape, pilot owners must compare retained detector activation evidence against the provided single-customer example before accepting detector scope into the entry decision.
+
+The provided single-customer example is `docs/deployment/detector-activation-evidence.single-customer-pilot.example.md`.
 
 Coordination scope must follow `docs/operations-zammad-live-pilot-boundary.md`; Zammad remains link-first, coordination-only, and non-authoritative for AegisOps case, action, approval, execution, and reconciliation records.
 

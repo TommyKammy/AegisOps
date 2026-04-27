@@ -43,6 +43,10 @@ Runtime smoke must pass through `scripts/run-phase-37-runtime-smoke-gate.sh --en
 
 Detector activation scope must follow `docs/detector-activation-evidence-handoff.md` and name only the reviewed candidate rules, fixture evidence, activation owner, disable owner, rollback owner, expected alert volume, false-positive review, and next-review date accepted for the pilot.
 
+For the filled single-customer packet shape, pilot owners must compare retained detector activation evidence against the provided single-customer example before accepting detector scope into the entry decision.
+
+The provided single-customer example is `docs/deployment/detector-activation-evidence.single-customer-pilot.example.md`.
+
 Coordination scope must follow `docs/operations-zammad-live-pilot-boundary.md`; Zammad remains link-first, coordination-only, and non-authoritative for AegisOps case, action, approval, execution, and reconciliation records.
 
 Zammad coordination rehearsal evidence must include the checked available, degraded, and unavailable scenarios from `control-plane/tests/fixtures/zammad/non-authority-coordination-rehearsal.json` so stale reads, mismatched ticket identifiers, and missing or placeholder credentials remain visible without becoming AegisOps truth.
@@ -168,6 +172,12 @@ create_repo "${missing_smoke_repo}"
 write_valid_docs "${missing_smoke_repo}"
 perl -0pi -e 's/^Runtime smoke must pass.*\n//m' "${missing_smoke_repo}/docs/deployment/pilot-readiness-checklist.md"
 assert_fails_with "${missing_smoke_repo}" 'Missing pilot readiness checklist statement: Runtime smoke must pass through `scripts/run-phase-37-runtime-smoke-gate.sh --env-file <runtime-env-file> --evidence-dir <evidence-dir>`'
+
+missing_detector_example_repo="${workdir}/missing-detector-example"
+create_repo "${missing_detector_example_repo}"
+write_valid_docs "${missing_detector_example_repo}"
+perl -0pi -e 's/^For the filled single-customer packet shape.*\n\n^The provided single-customer example.*\n//m' "${missing_detector_example_repo}/docs/deployment/pilot-readiness-checklist.md"
+assert_fails_with "${missing_detector_example_repo}" "Missing pilot readiness checklist statement: For the filled single-customer packet shape, pilot owners must compare retained detector activation evidence against the provided single-customer example before accepting detector scope into the entry decision."
 
 missing_coordination_link_repo="${workdir}/missing-coordination-link"
 create_repo "${missing_coordination_link_repo}"
