@@ -5,6 +5,7 @@ set -euo pipefail
 repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 doc_path="${repo_root}/docs/operations-zammad-live-pilot-boundary.md"
 test_path="${repo_root}/control-plane/tests/test_issue812_zammad_live_pilot_boundary_docs.py"
+rehearsal_fixture_path="${repo_root}/control-plane/tests/fixtures/zammad/non-authority-coordination-rehearsal.json"
 
 require_file() {
   local path="$1"
@@ -51,6 +52,7 @@ reject_regex() {
 
 require_file "${doc_path}" "Zammad live pilot boundary document"
 require_file "${test_path}" "issue 812 Zammad live pilot docs unittest"
+require_file "${rehearsal_fixture_path}" "Zammad non-authority coordination rehearsal fixture"
 
 required_headings=(
   "# Operations Zammad-First Live Pilot Boundary and Credential Custody"
@@ -59,7 +61,8 @@ required_headings=(
   "## 3. Credential Custody and Rotation"
   "## 4. Endpoint and Proxy Assumptions"
   "## 5. Unavailable and Degraded Operator Behavior"
-  "## 6. Verification Expectations"
+  "## 6. Rehearsal Evidence"
+  "## 7. Verification Expectations"
 )
 
 for heading in "${required_headings[@]}"; do
@@ -93,6 +96,11 @@ required_phrases=(
   "Operators must not infer ticket existence, approval, execution, reconciliation, closure, or customer notification from a missing, stale, unreachable, or mismatched Zammad record."
   "No failed Zammad write, stale read, timeout, proxy failure, auth failure, or degraded ticket payload may create an orphan AegisOps authority record or mark an AegisOps lifecycle step complete."
   "missing credential source, placeholder credential source, unreachable endpoint, stale ticket read, mismatched ticket identifier, and missing explicit AegisOps linkage"
+  "\`control-plane/tests/fixtures/zammad/non-authority-coordination-rehearsal.json\`"
+  "The rehearsal fixture covers available, degraded, and unavailable Zammad coordination states."
+  "A stale or mismatched ticket identifier must be retained as degraded or unavailable coordination evidence only."
+  "A missing, placeholder, fake, sample, TODO, empty, stale, or unsigned credential must block the live-available posture."
+  "Every rehearsal scenario must keep AegisOps records authoritative and must not create an orphan case, action, approval, execution, or reconciliation record from ticket state."
   "bash scripts/verify-zammad-live-pilot-boundary.sh"
   "python3 -m unittest control-plane.tests.test_issue812_zammad_live_pilot_boundary_docs"
 )
@@ -124,4 +132,63 @@ workstation_local_path_pattern="(^|[^[:alnum:]_./-])(~[/\\\\]|${macos_home_patte
 
 reject_regex "${doc_path}" "${workstation_local_path_pattern}" "workstation-local absolute path"
 
-echo "Zammad live pilot boundary document, credential custody posture, and degraded-state expectations are present."
+python3 - "${rehearsal_fixture_path}" <<'PY'
+import json
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+fixture = json.loads(path.read_text(encoding="utf-8"))
+
+if fixture.get("fixture") != "zammad-non-authority-coordination-rehearsal":
+    raise SystemExit("Invalid Zammad rehearsal fixture name")
+
+scenarios = fixture.get("scenarios")
+if not isinstance(scenarios, list):
+    raise SystemExit("Invalid Zammad rehearsal fixture scenarios")
+
+by_posture = {scenario.get("posture"): scenario for scenario in scenarios}
+expected_postures = {"available", "degraded", "unavailable"}
+if set(by_posture) != expected_postures:
+    raise SystemExit(
+        "Zammad rehearsal fixture must cover available, degraded, and unavailable"
+    )
+
+for posture, scenario in by_posture.items():
+    if scenario.get("ticket_state_authoritative") is not False:
+        raise SystemExit(f"{posture} scenario promotes ticket state authority")
+    if scenario.get("case_truth_source") != "aegisops":
+        raise SystemExit(f"{posture} scenario changes case truth source")
+    if scenario.get("action_truth_source") != "aegisops":
+        raise SystemExit(f"{posture} scenario changes action truth source")
+    if scenario.get("explicit_aegisops_linkage") is not True:
+        raise SystemExit(f"{posture} scenario lacks explicit AegisOps linkage")
+    if scenario.get("creates_orphan_authority_record") is not False:
+        raise SystemExit(f"{posture} scenario creates orphan authority state")
+
+available = by_posture["available"]
+if available.get("credential_custody_reviewed") is not True:
+    raise SystemExit("Available Zammad scenario lacks reviewed credential custody")
+if available.get("live_available_allowed") is not True:
+    raise SystemExit("Available Zammad scenario does not allow available posture")
+if available.get("ticket_evidence") != "current":
+    raise SystemExit("Available Zammad scenario must use current ticket evidence")
+
+degraded = by_posture["degraded"]
+if degraded.get("live_available_allowed") is not False:
+    raise SystemExit("Degraded Zammad scenario must not allow available posture")
+if degraded.get("ticket_evidence") not in {"stale", "mismatched"}:
+    raise SystemExit("Degraded Zammad scenario must preserve stale or mismatched evidence")
+if degraded.get("operator_visible_outcome") != "preserve as degraded evidence":
+    raise SystemExit("Degraded Zammad scenario must stay visibly degraded")
+
+unavailable = by_posture["unavailable"]
+if unavailable.get("credential_custody_reviewed") is not False:
+    raise SystemExit("Unavailable Zammad scenario must block unreviewed credentials")
+if unavailable.get("live_available_allowed") is not False:
+    raise SystemExit("Unavailable Zammad scenario must not allow available posture")
+if unavailable.get("operator_visible_outcome") != "block live-available posture":
+    raise SystemExit("Unavailable Zammad scenario must block live-available posture")
+PY
+
+echo "Zammad live pilot boundary document, credential custody posture, degraded-state expectations, and non-authority rehearsal fixture are present."

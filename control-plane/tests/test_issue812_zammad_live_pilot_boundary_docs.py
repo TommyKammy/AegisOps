@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import pathlib
 import shutil
 import subprocess
@@ -7,6 +8,14 @@ import unittest
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+REHEARSAL_FIXTURE_PATH = (
+    REPO_ROOT
+    / "control-plane"
+    / "tests"
+    / "fixtures"
+    / "zammad"
+    / "non-authority-coordination-rehearsal.json"
+)
 
 
 class Issue812ZammadLivePilotBoundaryDocsTests(unittest.TestCase):
@@ -91,6 +100,56 @@ class Issue812ZammadLivePilotBoundaryDocsTests(unittest.TestCase):
             result.returncode,
             0,
             f"verifier failed\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}",
+        )
+
+    def test_zammad_non_authority_rehearsal_fixture_covers_failure_modes(
+        self,
+    ) -> None:
+        self.assertTrue(
+            REHEARSAL_FIXTURE_PATH.exists(),
+            f"expected rehearsal fixture at {REHEARSAL_FIXTURE_PATH}",
+        )
+        fixture = json.loads(REHEARSAL_FIXTURE_PATH.read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            fixture["fixture"],
+            "zammad-non-authority-coordination-rehearsal",
+        )
+        self.assertEqual(
+            {scenario["posture"] for scenario in fixture["scenarios"]},
+            {"available", "degraded", "unavailable"},
+        )
+
+        for scenario in fixture["scenarios"]:
+            with self.subTest(posture=scenario["posture"]):
+                self.assertTrue(scenario["explicit_aegisops_linkage"])
+                self.assertFalse(scenario["ticket_state_authoritative"])
+                self.assertEqual(scenario["case_truth_source"], "aegisops")
+                self.assertEqual(scenario["action_truth_source"], "aegisops")
+                self.assertFalse(scenario["creates_orphan_authority_record"])
+
+        by_posture = {
+            scenario["posture"]: scenario for scenario in fixture["scenarios"]
+        }
+        self.assertTrue(by_posture["available"]["credential_custody_reviewed"])
+        self.assertTrue(by_posture["available"]["live_available_allowed"])
+        self.assertEqual(by_posture["available"]["ticket_evidence"], "current")
+
+        self.assertFalse(by_posture["degraded"]["live_available_allowed"])
+        self.assertIn(
+            by_posture["degraded"]["ticket_evidence"],
+            {"stale", "mismatched"},
+        )
+        self.assertEqual(
+            by_posture["degraded"]["operator_visible_outcome"],
+            "preserve as degraded evidence",
+        )
+
+        self.assertFalse(by_posture["unavailable"]["credential_custody_reviewed"])
+        self.assertFalse(by_posture["unavailable"]["live_available_allowed"])
+        self.assertEqual(
+            by_posture["unavailable"]["operator_visible_outcome"],
+            "block live-available posture",
         )
 
 

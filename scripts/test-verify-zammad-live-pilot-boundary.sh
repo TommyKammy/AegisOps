@@ -45,6 +45,25 @@ cp -R "${source_repo}" "${missing_unavailable_repo}"
 perl -0pi -e 's/pilot remains unavailable//' "${missing_unavailable_repo}/docs/operations-zammad-live-pilot-boundary.md"
 assert_fails_with "${missing_unavailable_repo}" "Missing Zammad live pilot boundary statement: If the reviewed secret source is unavailable, unreadable, empty, stale, or only placeholder-backed, the pilot remains unavailable and fails closed."
 
+missing_rehearsal_fixture_repo="${workdir}/missing-rehearsal-fixture"
+cp -R "${source_repo}" "${missing_rehearsal_fixture_repo}"
+rm "${missing_rehearsal_fixture_repo}/control-plane/tests/fixtures/zammad/non-authority-coordination-rehearsal.json"
+assert_fails_with "${missing_rehearsal_fixture_repo}" "Missing Zammad non-authority coordination rehearsal fixture:"
+
+fixture_authority_drift_repo="${workdir}/fixture-authority-drift"
+cp -R "${source_repo}" "${fixture_authority_drift_repo}"
+python3 - "${fixture_authority_drift_repo}/control-plane/tests/fixtures/zammad/non-authority-coordination-rehearsal.json" <<'PY'
+import json
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+fixture = json.loads(path.read_text(encoding="utf-8"))
+fixture["scenarios"][1]["ticket_state_authoritative"] = True
+path.write_text(json.dumps(fixture, indent=2) + "\n", encoding="utf-8")
+PY
+assert_fails_with "${fixture_authority_drift_repo}" "degraded scenario promotes ticket state authority"
+
 authority_drift_repo="${workdir}/authority-drift"
 cp -R "${source_repo}" "${authority_drift_repo}"
 printf '\nZammad is authoritative for closure.\n' >>"${authority_drift_repo}/docs/operations-zammad-live-pilot-boundary.md"

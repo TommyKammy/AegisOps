@@ -1,0 +1,57 @@
+{
+  "fixture": "zammad-non-authority-coordination-rehearsal",
+  "purpose": "Rehearse Zammad available, degraded, and unavailable coordination states without making ticket state authoritative.",
+  "scenarios": [
+    {
+      "id": "zammad-available-reviewed-linkage",
+      "posture": "available",
+      "base_url_present": true,
+      "credential_custody_reviewed": true,
+      "credential_value": "<managed-secret-reference>",
+      "endpoint_result": "reachable",
+      "ticket_evidence": "current",
+      "ticket_id_matches_aegisops_link": true,
+      "explicit_aegisops_linkage": true,
+      "ticket_state_authoritative": false,
+      "case_truth_source": "aegisops",
+      "action_truth_source": "aegisops",
+      "live_available_allowed": true,
+      "operator_visible_outcome": "show current non-authoritative coordination reference",
+      "creates_orphan_authority_record": false
+    },
+    {
+      "id": "zammad-degraded-stale-or-mismatched-ticket",
+      "posture": "degraded",
+      "base_url_present": true,
+      "credential_custody_reviewed": true,
+      "credential_value": "<managed-secret-reference>",
+      "endpoint_result": "stale-read",
+      "ticket_evidence": "stale",
+      "ticket_id_matches_aegisops_link": false,
+      "explicit_aegisops_linkage": true,
+      "ticket_state_authoritative": false,
+      "case_truth_source": "aegisops",
+      "action_truth_source": "aegisops",
+      "live_available_allowed": false,
+      "operator_visible_outcome": "preserve as degraded evidence",
+      "creates_orphan_authority_record": false
+    },
+    {
+      "id": "zammad-unavailable-placeholder-credential",
+      "posture": "unavailable",
+      "base_url_present": true,
+      "credential_custody_reviewed": false,
+      "credential_value": "<placeholder-token>",
+      "endpoint_result": "credential-blocked",
+      "ticket_evidence": "unavailable",
+      "ticket_id_matches_aegisops_link": false,
+      "explicit_aegisops_linkage": true,
+      "ticket_state_authoritative": false,
+      "case_truth_source": "aegisops",
+      "action_truth_source": "aegisops",
+      "live_available_allowed": false,
+      "operator_visible_outcome": "block live-available posture",
+      "creates_orphan_authority_record": false
+    }
+  ]
+}
