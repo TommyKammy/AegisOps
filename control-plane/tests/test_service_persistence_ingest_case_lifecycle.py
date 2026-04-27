@@ -3559,7 +3559,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             ("alert-known-last-seen", "alert-unknown-last-seen"),
         )
 
-    def test_service_marks_queue_lanes_for_mismatch_stale_and_degraded_context(
+    def test_service_marks_queue_lanes_for_structured_stale_receipt_and_degraded_context(
         self,
     ) -> None:
         store, _ = support.make_store()
@@ -3605,10 +3605,10 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
                 correlation_key="wazuh:queue-lanes",
                 first_seen_at=seen_at,
                 last_seen_at=seen_at,
-                ingest_disposition="created",
-                mismatch_summary="stale downstream execution observation requires refresh",
+                ingest_disposition="stale",
+                mismatch_summary="receipt observation is older than the reviewed freshness window",
                 compared_at=seen_at,
-                lifecycle_state="mismatched",
+                lifecycle_state="stale",
             )
         )
         service.persist_record(
@@ -3652,25 +3652,17 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             record["queue_lanes"],
             (
                 "action_required",
-                "reconciliation_mismatch",
                 "stale_receipt",
                 "optional_extension_degraded",
             ),
         )
         self.assertEqual(
-            record["queue_lane_details"]["reconciliation_mismatch"],
-            {
-                "state": "mismatched",
-                "summary": "stale downstream execution observation requires refresh",
-            },
-        )
-        self.assertEqual(
             record["queue_lane_details"]["stale_receipt"],
             {
-                "state": "stale_downstream_observed",
-                "lifecycle_state": "mismatched",
-                "ingest_disposition": "created",
-                "summary": "stale downstream execution observation requires refresh",
+                "state": "stale",
+                "lifecycle_state": "stale",
+                "ingest_disposition": "stale",
+                "summary": "receipt observation is older than the reviewed freshness window",
             },
         )
         self.assertEqual(
@@ -3686,7 +3678,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             queue_view.to_dict()["lane_counts"],
             {
                 "action_required": 1,
-                "reconciliation_mismatch": 1,
+                "reconciliation_mismatch": 0,
                 "stale_receipt": 1,
                 "optional_extension_degraded": 1,
                 "clean": 1,
@@ -3694,7 +3686,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
         )
         self.assertEqual(queue_view.records[1]["queue_lanes"], ("clean",))
 
-    def test_service_does_not_mark_pending_reconciliation_as_mismatch_lane(
+    def test_service_does_not_mark_pending_or_missing_reconciliation_as_review_lanes(
         self,
     ) -> None:
         store, _ = support.make_store()
@@ -3738,13 +3730,46 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
                 lifecycle_state="pending",
             )
         )
+        service.persist_record(
+            AlertRecord(
+                alert_id="alert-queue-missing-reconciliation",
+                finding_id="finding-queue-missing-reconciliation",
+                analytic_signal_id="signal-queue-missing-reconciliation",
+                case_id=None,
+                lifecycle_state="triaged",
+            )
+        )
+        service.persist_record(
+            support.ReconciliationRecord(
+                reconciliation_id="reconciliation-queue-missing",
+                subject_linkage={
+                    "alert_ids": ("alert-queue-missing-reconciliation",),
+                    "analytic_signal_ids": ("signal-queue-missing-reconciliation",),
+                    "substrate_detection_record_ids": ("wazuh:queue-missing",),
+                    "source_systems": ("wazuh",),
+                },
+                alert_id="alert-queue-missing-reconciliation",
+                finding_id="finding-queue-missing-reconciliation",
+                analytic_signal_id="signal-queue-missing-reconciliation",
+                execution_run_id=None,
+                linked_execution_run_ids=(),
+                correlation_key="wazuh:queue-missing",
+                first_seen_at=seen_at - timedelta(minutes=5),
+                last_seen_at=seen_at - timedelta(minutes=5),
+                ingest_disposition="missing",
+                mismatch_summary="missing downstream execution receipt for review",
+                compared_at=seen_at,
+                lifecycle_state="pending",
+            )
+        )
 
         queue_view = service.inspect_analyst_queue()
 
-        self.assertEqual(queue_view.total_records, 1)
-        record = queue_view.records[0]
-        self.assertEqual(record["queue_lanes"], ("clean",))
-        self.assertNotIn("reconciliation_mismatch", record["queue_lane_details"])
+        self.assertEqual(queue_view.total_records, 2)
+        for record in queue_view.records:
+            self.assertEqual(record["queue_lanes"], ("clean",))
+            self.assertNotIn("reconciliation_mismatch", record["queue_lane_details"])
+            self.assertNotIn("stale_receipt", record["queue_lane_details"])
         self.assertEqual(
             queue_view.to_dict()["lane_counts"],
             {
@@ -3752,7 +3777,82 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
                 "reconciliation_mismatch": 0,
                 "stale_receipt": 0,
                 "optional_extension_degraded": 0,
-                "clean": 1,
+                "clean": 2,
+            },
+        )
+
+    def test_service_does_not_mark_stale_receipt_from_mismatch_summary_text(
+        self,
+    ) -> None:
+        store, _ = support.make_store()
+        service = support.AegisOpsControlPlaneService(
+            support.RuntimeConfig(
+                postgres_dsn="postgresql://control-plane.local/aegisops"
+            ),
+            store=store,
+        )
+        seen_at = support.datetime(2026, 4, 5, 12, 25, tzinfo=support.timezone.utc)
+
+        service.persist_record(
+            AlertRecord(
+                alert_id="alert-queue-summary-text",
+                finding_id="finding-queue-summary-text",
+                analytic_signal_id="signal-queue-summary-text",
+                case_id=None,
+                lifecycle_state="triaged",
+            )
+        )
+        service.persist_record(
+            support.ReconciliationRecord(
+                reconciliation_id="reconciliation-queue-summary-text",
+                subject_linkage={
+                    "alert_ids": ("alert-queue-summary-text",),
+                    "analytic_signal_ids": ("signal-queue-summary-text",),
+                    "substrate_detection_record_ids": ("wazuh:queue-summary-text",),
+                    "source_systems": ("wazuh",),
+                },
+                alert_id="alert-queue-summary-text",
+                finding_id="finding-queue-summary-text",
+                analytic_signal_id="signal-queue-summary-text",
+                execution_run_id="execution-run-queue-summary-text",
+                linked_execution_run_ids=("execution-run-queue-summary-text",),
+                correlation_key="wazuh:queue-summary-text",
+                first_seen_at=seen_at,
+                last_seen_at=seen_at,
+                ingest_disposition="mismatch",
+                mismatch_summary=(
+                    "stale downstream execution observation wording appears in a "
+                    "non-stale mismatch summary"
+                ),
+                compared_at=seen_at,
+                lifecycle_state="mismatched",
+            )
+        )
+
+        queue_view = service.inspect_analyst_queue()
+
+        self.assertEqual(queue_view.total_records, 1)
+        record = queue_view.records[0]
+        self.assertEqual(record["queue_lanes"], ("reconciliation_mismatch",))
+        self.assertEqual(
+            record["queue_lane_details"]["reconciliation_mismatch"],
+            {
+                "state": "mismatched",
+                "summary": (
+                    "stale downstream execution observation wording appears in a "
+                    "non-stale mismatch summary"
+                ),
+            },
+        )
+        self.assertNotIn("stale_receipt", record["queue_lane_details"])
+        self.assertEqual(
+            queue_view.to_dict()["lane_counts"],
+            {
+                "action_required": 0,
+                "reconciliation_mismatch": 1,
+                "stale_receipt": 0,
+                "optional_extension_degraded": 0,
+                "clean": 0,
             },
         )
 
