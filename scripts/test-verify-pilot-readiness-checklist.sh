@@ -233,6 +233,12 @@ write_valid_docs "${missing_release_handoff_template_link_repo}"
 perl -0pi -e 's/^For pilot launch review, record the known-limitation.*\n//m' "${missing_release_handoff_template_link_repo}/docs/deployment/release-handoff-evidence-package.md"
 assert_fails_with "${missing_release_handoff_template_link_repo}" 'Missing release handoff known-limitation template link: For pilot launch review, record the known-limitation and retention decision with `docs/deployment/known-limitations-retention-decision-template.md`'
 
+missing_disposition_values_repo="${workdir}/missing-disposition-values"
+create_repo "${missing_disposition_values_repo}"
+write_valid_docs "${missing_disposition_values_repo}"
+perl -0pi -e 's/^Disposition values: blocking, accepted-with-owner, rollback, disable, follow-up, not-reviewed\.\n//m' "${missing_disposition_values_repo}/docs/deployment/known-limitations-retention-decision-template.md"
+assert_fails_with "${missing_disposition_values_repo}" "Missing known limitations retention template statement: Disposition values: blocking, accepted-with-owner, rollback, disable, follow-up, not-reviewed."
+
 missing_accepted_limitation_owner_repo="${workdir}/missing-accepted-limitation-owner"
 create_repo "${missing_accepted_limitation_owner_repo}"
 write_valid_docs "${missing_accepted_limitation_owner_repo}"
