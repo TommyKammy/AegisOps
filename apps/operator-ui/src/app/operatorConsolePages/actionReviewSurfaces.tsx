@@ -126,9 +126,19 @@ export function ReconciliationVisibilitySection({
 }: {
   actionReview: UnknownRecord | null;
 }) {
+  const reconciliationDetail = asRecord(actionReview?.reconciliation_detail);
+  const receivedReceipt = asRecord(reconciliationDetail?.received_receipt);
+  const closeoutEvidence = asRecord(reconciliationDetail?.closeout_evidence);
   const mismatchInspection = asRecord(actionReview?.mismatch_inspection);
   const reconciliationState = asString(actionReview?.reconciliation_state);
   const mismatchSummary = asString(mismatchInspection?.mismatch_summary);
+  const closeoutSummary = asString(closeoutEvidence?.mismatch_summary);
+  const actionRequired =
+    reconciliationDetail?.action_required === true
+      ? "yes"
+      : reconciliationDetail?.action_required === false
+        ? "no"
+        : null;
 
   return (
     <SectionCard
@@ -140,6 +150,8 @@ export function ReconciliationVisibilitySection({
           values={[
             ["Reconciliation", reconciliationState],
             ["Ingest", asString(mismatchInspection?.ingest_disposition)],
+            ["Action required", actionRequired],
+            ["Next step", asString(reconciliationDetail?.next_step)],
           ]}
         />
         {mismatchInspection ? (
@@ -150,12 +162,26 @@ export function ReconciliationVisibilitySection({
         ) : null}
         {!mismatchInspection && !asString(actionReview?.reconciliation_id) ? (
           <Alert severity="warning" variant="outlined">
-            No authoritative reconciliation record is visible for this reviewed request yet.
+            {closeoutSummary ??
+              "No authoritative reconciliation record is visible for this reviewed request yet."}
           </Alert>
         ) : null}
         <ValueList
           entries={[
             ["Reconciliation id", asString(actionReview?.reconciliation_id)],
+            [
+              "Expected AegisOps state",
+              asString(reconciliationDetail?.expected_aegisops_state),
+            ],
+            [
+              "Authoritative AegisOps state",
+              asString(reconciliationDetail?.authoritative_aegisops_state),
+            ],
+            ["Received receipt ingest", asString(receivedReceipt?.ingest_disposition)],
+            ["Received receipt run", asString(receivedReceipt?.execution_run_id)],
+            ["Closeout action required", actionRequired],
+            ["Closeout next step", asString(reconciliationDetail?.next_step)],
+            ["Closeout compared at", asString(closeoutEvidence?.compared_at)],
             ["Mismatch summary", mismatchSummary],
             ["Correlation key", asString(mismatchInspection?.correlation_key)],
             ["Observed execution run", asString(mismatchInspection?.execution_run_id)],

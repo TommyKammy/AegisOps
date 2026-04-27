@@ -396,6 +396,8 @@ Approval, execution, and reconciliation evidence must stay visibly separated: th
 
 Operator handoff must include the action request identifier, approval decision identifier, approver or fallback approver name, decision outcome, denial or timeout reason when applicable, approval window, linked evidence identifiers, and any break-glass closeout evidence needed to prove return to the normal reviewed path.
 
+Reconciliation closeout must name the expected AegisOps state separately from the received substrate receipt. A matched reconciliation may be closed only with the AegisOps reconciliation identifier, comparison time, execution receipt reference, and linked evidence retained as closeout evidence. A mismatched reconciliation remains open until an operator reviews the mismatch summary against the approved action scope and records the corrected AegisOps outcome. A stale or missing receipt remains action-required until a fresh authoritative receipt is obtained or the missing receipt is explicitly escalated; external ticket closure, downstream receipt text, or support comments must not be used as AegisOps closure.
+
 This section must remain consistent with the business-hours-oriented operating model and must not imply unrestricted autonomous response.
 
 ## 7. Validation
