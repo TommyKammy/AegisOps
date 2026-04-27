@@ -607,14 +607,9 @@ class OperatorInspectionReadSurface:
                 "summary": reconciliation.mismatch_summary,
             }
 
-        stale_downstream_observed = (
-            "stale downstream execution observation" in reconciliation.mismatch_summary
-        )
         stale_receipt_state = None
         if reconciliation.lifecycle_state == "stale":
             stale_receipt_state = reconciliation.lifecycle_state
-        elif stale_downstream_observed:
-            stale_receipt_state = "stale_downstream_observed"
         elif reconciliation.ingest_disposition == "stale":
             stale_receipt_state = reconciliation.ingest_disposition
 
