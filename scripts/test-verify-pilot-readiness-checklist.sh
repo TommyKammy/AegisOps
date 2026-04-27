@@ -96,6 +96,8 @@ EOF
 # Phase 38 Release Handoff Evidence Package
 
 The pilot readiness checklist in `docs/deployment/pilot-readiness-checklist.md` consumes this release handoff package as the reviewed release-readiness and known-limitations evidence source for the pilot entry decision.
+
+For pilot launch review, record the known-limitation and retention decision with `docs/deployment/known-limitations-retention-decision-template.md` so `accepted-with-owner`, blocking, rollback, disable, follow-up, and not-reviewed states, plus owners, operator-visible behavior, revisit dates, and bounded retention decisions, are reviewed in one place.
 EOF
 
   cat <<'EOF' > "${target}/docs/deployment/runtime-smoke-bundle.md"
@@ -224,6 +226,12 @@ create_repo "${missing_known_limitations_template_link_repo}"
 write_valid_docs "${missing_known_limitations_template_link_repo}"
 perl -0pi -e 's/^Pilot owners must record the known-limitation.*\n//m' "${missing_known_limitations_template_link_repo}/docs/deployment/pilot-readiness-checklist.md"
 assert_fails_with "${missing_known_limitations_template_link_repo}" 'Missing pilot readiness checklist statement: Pilot owners must record the known-limitation and retention decision in `docs/deployment/known-limitations-retention-decision-template.md`'
+
+missing_release_handoff_template_link_repo="${workdir}/missing-release-handoff-template-link"
+create_repo "${missing_release_handoff_template_link_repo}"
+write_valid_docs "${missing_release_handoff_template_link_repo}"
+perl -0pi -e 's/^For pilot launch review, record the known-limitation.*\n//m' "${missing_release_handoff_template_link_repo}/docs/deployment/release-handoff-evidence-package.md"
+assert_fails_with "${missing_release_handoff_template_link_repo}" 'Missing release handoff known-limitation template link: For pilot launch review, record the known-limitation and retention decision with `docs/deployment/known-limitations-retention-decision-template.md`'
 
 missing_accepted_limitation_owner_repo="${workdir}/missing-accepted-limitation-owner"
 create_repo "${missing_accepted_limitation_owner_repo}"

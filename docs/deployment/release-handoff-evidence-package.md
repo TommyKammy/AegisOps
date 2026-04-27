@@ -22,7 +22,7 @@ The release readiness summary must name the launch or upgrade decision, the revi
 
 The known limitations entry must be an explicit reviewed reference for the release window. Absence of a reviewed known-limitations entry blocks handoff because the next operator cannot distinguish "no known limitation" from an unreviewed package.
 
-For pilot launch review, record the known-limitation and retention decision with `docs/deployment/known-limitations-retention-decision-template.md` so accepted limitations, blocking limitations, rollback, disable, follow-up, not-reviewed states, owners, operator-visible behavior, revisit dates, and bounded retention decisions are reviewed in one place.
+For pilot launch review, record the known-limitation and retention decision with `docs/deployment/known-limitations-retention-decision-template.md` so `accepted-with-owner`, blocking, rollback, disable, follow-up, and not-reviewed states, plus owners, operator-visible behavior, revisit dates, and bounded retention decisions, are reviewed in one place.
 
 Release notes and known limitations must point to the operator handoff record and the rollback decision record so a launch reviewer can see whether limitations block launch, normal operation, or rollback acceptance.
 
