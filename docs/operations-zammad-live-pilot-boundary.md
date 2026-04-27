@@ -89,7 +89,19 @@ No failed Zammad write, stale read, timeout, proxy failure, auth failure, or deg
 
 Unavailable or degraded pilot behavior is testable by verifying that missing credential source, placeholder credential source, unreachable endpoint, stale ticket read, mismatched ticket identifier, and missing explicit AegisOps linkage all preserve AegisOps authority and expose the coordination gap.
 
-## 6. Verification Expectations
+## 6. Rehearsal Evidence
+
+The bounded rehearsal fixture is `control-plane/tests/fixtures/zammad/non-authority-coordination-rehearsal.json`.
+
+The rehearsal fixture covers available, degraded, and unavailable Zammad coordination states.
+
+A stale or mismatched ticket identifier must be retained as degraded or unavailable coordination evidence only.
+
+A missing, placeholder, fake, sample, TODO, empty, stale, or unsigned credential must block the live-available posture.
+
+Every rehearsal scenario must keep AegisOps records authoritative and must not create an orphan case, action, approval, execution, or reconciliation record from ticket state.
+
+## 7. Verification Expectations
 
 Before the pilot is treated as ready, run:
 

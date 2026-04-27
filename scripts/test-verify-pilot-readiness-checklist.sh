@@ -45,6 +45,8 @@ Detector activation scope must follow `docs/detector-activation-evidence-handoff
 
 Coordination scope must follow `docs/operations-zammad-live-pilot-boundary.md`; Zammad remains link-first, coordination-only, and non-authoritative for AegisOps case, action, approval, execution, and reconciliation records.
 
+Zammad coordination rehearsal evidence must include the checked available, degraded, and unavailable scenarios from `control-plane/tests/fixtures/zammad/non-authority-coordination-rehearsal.json` so stale reads, mismatched ticket identifiers, and missing or placeholder credentials remain visible without becoming AegisOps truth.
+
 Assistant output remains advisory-only and non-authoritative; it must stay grounded in reviewed control-plane records and linked evidence and must not approve, execute, reconcile, close, or widen pilot scope.
 
 ## 4. Required Entry Evidence
@@ -172,6 +174,12 @@ create_repo "${missing_coordination_link_repo}"
 write_valid_docs "${missing_coordination_link_repo}"
 printf '# Operations Zammad-First Live Pilot Boundary and Credential Custody\n' > "${missing_coordination_link_repo}/docs/operations-zammad-live-pilot-boundary.md"
 assert_fails_with "${missing_coordination_link_repo}" 'Missing coordination pilot readiness link: The pilot readiness checklist in `docs/deployment/pilot-readiness-checklist.md` consumes this Zammad-first boundary'
+
+missing_coordination_rehearsal_repo="${workdir}/missing-coordination-rehearsal"
+create_repo "${missing_coordination_rehearsal_repo}"
+write_valid_docs "${missing_coordination_rehearsal_repo}"
+perl -0pi -e 's/^Zammad coordination rehearsal evidence must.*\n//m' "${missing_coordination_rehearsal_repo}/docs/deployment/pilot-readiness-checklist.md"
+assert_fails_with "${missing_coordination_rehearsal_repo}" 'Missing pilot readiness checklist statement: Zammad coordination rehearsal evidence must include the checked available, degraded, and unavailable scenarios from `control-plane/tests/fixtures/zammad/non-authority-coordination-rehearsal.json`'
 
 forbidden_authority_repo="${workdir}/forbidden-authority"
 create_repo "${forbidden_authority_repo}"
