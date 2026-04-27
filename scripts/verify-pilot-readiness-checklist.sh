@@ -9,6 +9,7 @@ release_inventory_path="${repo_root}/docs/deployment/single-customer-release-bun
 release_handoff_path="${repo_root}/docs/deployment/release-handoff-evidence-package.md"
 smoke_path="${repo_root}/docs/deployment/runtime-smoke-bundle.md"
 detector_handoff_path="${repo_root}/docs/detector-activation-evidence-handoff.md"
+detector_exemplar_path="${repo_root}/docs/deployment/detector-activation-evidence.single-customer-pilot.example.md"
 coordination_path="${repo_root}/docs/operations-zammad-live-pilot-boundary.md"
 assistant_path="${repo_root}/docs/phase-15-identity-grounded-analyst-assistant-boundary.md"
 operational_handoff_path="${repo_root}/docs/deployment/operational-evidence-handoff-pack.md"
@@ -68,6 +69,7 @@ require_file "${release_inventory_path}" "single-customer release bundle invento
 require_file "${release_handoff_path}" "release handoff evidence package"
 require_file "${smoke_path}" "runtime smoke bundle"
 require_file "${detector_handoff_path}" "detector activation evidence handoff manifest"
+require_file "${detector_exemplar_path}" "filled redacted detector activation evidence exemplar"
 require_file "${coordination_path}" "Zammad live pilot boundary"
 require_file "${assistant_path}" "assistant boundary"
 require_file "${operational_handoff_path}" "operational evidence handoff pack"
@@ -96,6 +98,8 @@ required_checklist_phrases=(
   'Release readiness must be bound to `docs/deployment/single-customer-release-bundle-inventory.md` and `docs/deployment/release-handoff-evidence-package.md` for the same `aegisops-single-customer-<repository-revision>` release identifier.'
   'Runtime smoke must pass through `scripts/run-phase-37-runtime-smoke-gate.sh --env-file <runtime-env-file> --evidence-dir <evidence-dir>` and retain the smoke `manifest.md` as entry evidence.'
   'Detector activation scope must follow `docs/detector-activation-evidence-handoff.md` and name only the reviewed candidate rules, fixture evidence, activation owner, disable owner, rollback owner, expected alert volume, false-positive review, and next-review date accepted for the pilot.'
+  "For the filled single-customer packet shape, pilot owners must compare retained detector activation evidence against the provided single-customer example before accepting detector scope into the entry decision."
+  'The provided single-customer example is `docs/deployment/detector-activation-evidence.single-customer-pilot.example.md`.'
   'Coordination scope must follow `docs/operations-zammad-live-pilot-boundary.md`; Zammad remains link-first, coordination-only, and non-authoritative for AegisOps case, action, approval, execution, and reconciliation records.'
   'Zammad coordination rehearsal evidence must include the checked available, degraded, and unavailable scenarios from `control-plane/tests/fixtures/zammad/non-authority-coordination-rehearsal.json` so stale reads, mismatched ticket identifiers, and missing or placeholder credentials remain visible without becoming AegisOps truth.'
   'Assistant output remains advisory-only and non-authoritative; it must stay grounded in reviewed control-plane records and linked evidence and must not approve, execute, reconcile, close, or widen pilot scope.'
@@ -141,6 +145,7 @@ reject_workstation_paths "pilot readiness guidance" \
   "${release_handoff_path}" \
   "${smoke_path}" \
   "${detector_handoff_path}" \
+  "${detector_exemplar_path}" \
   "${coordination_path}" \
   "${assistant_path}" \
   "${operational_handoff_path}"

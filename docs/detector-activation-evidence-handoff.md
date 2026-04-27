@@ -23,6 +23,8 @@ The pilot readiness checklist in `docs/deployment/pilot-readiness-checklist.md` 
 | Alert or case admission sanity | AegisOps alert, case, evidence, or reconciliation identifiers, admission result, reviewed linkage to the source-family record, and clean-state outcome for failed or rejected paths. | Case admission remains control-plane-owned and must fail closed when provenance, scope, linkage, or snapshot consistency is missing. |
 | Known limitations | Deferred detector behavior, unsupported source fields, parser gaps, expected false-positive limits, retention limit, optional-extension non-requirements, and follow-up owner. | Limitations preserve review context without creating an unlimited history system or expanding detector authority. |
 
+The filled redacted single-customer exemplar in `docs/deployment/detector-activation-evidence.single-customer-pilot.example.md` shows how one GitHub audit detector activation handoff connects Wazuh substrate evidence to AegisOps analytic signal admission without making Wazuh rule state workflow truth.
+
 ## 3. Required Review Questions
 
 - Does the handoff name the exact candidate rule, source-family package, fixture set, validation command result, reviewer, activation owner, disable owner, rollback owner, and next-review date?
