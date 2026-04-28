@@ -97,14 +97,55 @@ For Phase 49.0 or Phase 49 scheduling, the preflight must:
 | Non-lint-clean issue | `issue-lint` reports `execution_ready=no` or `metadata_errors` is not `none` for a required Epic or child issue. | `blocked` | `fail=true`, `invalid_field="metadata_errors"`, `invalid_issue_number=<issue-number>`, `suggested_next_safe_action="repair the issue body and rerun issue-lint"` |
 | Evaluation still needed | Required issues are closed or merged, but `phase_evaluation_state` is missing or still open. | `merge_or_evaluation_needed` | `fail=true`, `invalid_field="phase_evaluation_state"`, `suggested_next_safe_action="record evaluation closure or explicit deferral before dependent scheduling"` |
 
-## 7. Validation
+## 7. Repo-Owned Preflight Invocation
 
-Focused validation for this contract:
+The repo-owned Phase 48.7.2 preflight command is:
+
+```sh
+bash scripts/roadmap-materialization-preflight.sh --graph docs/automation/roadmap-materialization-phase-graph.json --target-phase 49.0 --issue-source github
+```
+
+For live GitHub issue graph reads, the command uses `gh issue view` and runs `issue-lint` through the configured codex-supervisor checkout. Export the supervisor locations with placeholders rather than workstation-local paths in durable instructions:
+
+```sh
+CODEX_SUPERVISOR_ROOT=<codex-supervisor-root> \
+CODEX_SUPERVISOR_CONFIG=<supervisor-config-path> \
+bash scripts/roadmap-materialization-preflight.sh --graph docs/automation/roadmap-materialization-phase-graph.json --target-phase 49.0 --issue-source github
+```
+
+The preflight emits deterministic JSON. A blocked current Phase 48.7 predecessor is reported in this shape:
+
+```json
+{
+  "pass": false,
+  "fail": true,
+  "target_phase_id": "49.0",
+  "phase_classification": {
+    "48.7": "materialized_open"
+  },
+  "invalid_field": "phase_completion_state",
+  "invalid_issue_number": null,
+  "suggested_next_safe_action": "complete and evaluate the materialized predecessor phase before dependent scheduling"
+}
+```
+
+The positive fixture smoke path is:
+
+```sh
+bash scripts/test-verify-roadmap-materialization-preflight.sh
+```
+
+The repo-local phase graph binding is `docs/automation/roadmap-materialization-phase-graph.json`. That graph is the explicit input for the preflight and currently binds Phase 48.7 to Epic `#911` with child issues `#912`, `#913`, and `#914` before Phase 49.0/49 scheduling can proceed.
+
+## 8. Validation
+
+Focused validation for this contract and implementation:
 
 ```sh
 bash scripts/verify-roadmap-materialization-preflight-contract.sh
 bash scripts/test-verify-roadmap-materialization-preflight-contract.sh
-node <codex-supervisor-root>/dist/index.js issue-lint 912 --config <supervisor-config-path>
+bash scripts/test-verify-roadmap-materialization-preflight.sh
+node <codex-supervisor-root>/dist/index.js issue-lint 913 --config <supervisor-config-path>
 ```
 
 This validation is documentation and automation-contract focused. It does not authorize production writes, runtime behavior changes, issue creation for Phase 49.0/49, or any authority shift away from AegisOps control-plane records.
