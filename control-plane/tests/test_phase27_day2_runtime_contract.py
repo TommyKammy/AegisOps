@@ -643,8 +643,25 @@ class Phase27Day2RuntimeContractTests(ServicePersistenceTestBase):
     def test_phase27_upgrade_rollback_uncertainty_freezes_authority_sensitive_progression(
         self,
     ) -> None:
-        store, service, promoted_case, _evidence_id, reviewed_at = (
+        store, seed_service, promoted_case, _evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
+        )
+        recommendation = seed_service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome=(
+                "Keep rollback uncertainty from advancing workflow authority."
+            ),
+        )
+        action_request = seed_service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Hold approval-bound action during rollback verification.",
+            escalation_reason="Rollback-in-progress state must freeze authority.",
+            expires_at=reviewed_at + timedelta(hours=4),
+            action_request_id="action-request-phase27-rollback-freeze-001",
         )
         service = AegisOpsControlPlaneService(
             RuntimeConfig(
@@ -659,33 +676,36 @@ class Phase27Day2RuntimeContractTests(ServicePersistenceTestBase):
             ),
             store=store,
         )
-        recommendation = service.record_case_recommendation(
-            case_id=promoted_case.case_id,
-            review_owner="analyst-001",
-            intended_outcome=(
-                "Keep rollback uncertainty from advancing workflow authority."
-            ),
-        )
-        action_request = service.create_reviewed_action_request_from_advisory(
-            record_family="recommendation",
-            record_id=recommendation.recommendation_id,
-            requester_identity="analyst-001",
-            recipient_identity="repo-owner-001",
-            message_intent="Hold approval-bound action during rollback verification.",
-            escalation_reason="Rollback-in-progress state must freeze authority.",
-            expires_at=reviewed_at + timedelta(hours=4),
-            action_request_id="action-request-phase27-rollback-freeze-001",
-        )
 
         initial_action_request = service.get_record(
             ActionRequestRecord,
             action_request.action_request_id,
         )
+        initial_action_request_count = len(store.list(ActionRequestRecord))
         initial_case = service.get_record(CaseRecord, promoted_case.case_id)
         initial_transition_count = len(store.list(LifecycleTransitionRecord))
         initial_approval_count = len(store.list(ApprovalDecisionRecord))
         initial_execution_count = len(store.list(ActionExecutionRecord))
         initial_reconciliation_count = len(store.list(ReconciliationRecord))
+
+        with self.assertRaisesRegex(
+            PermissionError,
+            "control-plane upgrade or rollback verification is not complete",
+        ):
+            service.create_reviewed_action_request_from_advisory(
+                record_family="recommendation",
+                record_id=recommendation.recommendation_id,
+                requester_identity="analyst-001",
+                recipient_identity="repo-owner-002",
+                message_intent=(
+                    "Do not create a fresh request during rollback verification."
+                ),
+                escalation_reason=(
+                    "Rollback-in-progress state must freeze request creation."
+                ),
+                expires_at=reviewed_at + timedelta(hours=4),
+                action_request_id="action-request-phase27-rollback-freeze-002",
+            )
 
         with self.assertRaisesRegex(
             PermissionError,
@@ -750,6 +770,7 @@ class Phase27Day2RuntimeContractTests(ServicePersistenceTestBase):
             service.get_record(ActionRequestRecord, action_request.action_request_id),
             initial_action_request,
         )
+        self.assertEqual(len(store.list(ActionRequestRecord)), initial_action_request_count)
         self.assertEqual(service.get_record(CaseRecord, promoted_case.case_id), initial_case)
         self.assertEqual(len(store.list(LifecycleTransitionRecord)), initial_transition_count)
         self.assertEqual(len(store.list(ApprovalDecisionRecord)), initial_approval_count)
