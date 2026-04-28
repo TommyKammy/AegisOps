@@ -143,17 +143,17 @@ The accepted trade-off is that short-lived internal adapter code may remain duri
 
 Every extraction slice must keep the facade behavior-preserving and add focused regression coverage for its boundary.
 
-#920 owns intake and triage extraction. Its tests must prove that source admission, triage classification, and queue-facing state preserve existing authoritative record behavior.
+\#920 owns intake and triage extraction. Its tests must prove that source admission, triage classification, and queue-facing state preserve existing authoritative record behavior.
 
-#921 owns case mutation and evidence linkage extraction. Its tests must prove that case lifecycle mutation, evidence attachment, and linkage rules still bind to explicit authoritative records rather than inferred names, paths, comments, or neighboring metadata.
+\#921 owns case mutation and evidence linkage extraction. Its tests must prove that case lifecycle mutation, evidence attachment, and linkage rules still bind to explicit authoritative records rather than inferred names, paths, comments, or neighboring metadata.
 
-#922 owns advisory and AI trace lifecycle extraction. Its tests must prove that advisory output, AI traces, recommendations, and cited context stay subordinate to reviewed control-plane records and fail closed when citations, identity, scope, or authority signals are missing.
+\#922 owns advisory and AI trace lifecycle extraction. Its tests must prove that advisory output, AI traces, recommendations, and cited context stay subordinate to reviewed control-plane records and fail closed when citations, identity, scope, or authority signals are missing.
 
-#923 owns action and reconciliation orchestration extraction. Its tests must prove that action intent, approval state, execution delegation, receipts, and reconciliation remain explicitly bound and do not trust placeholder credentials, forwarded headers, ticket hints, assistant text, or substrate-local summaries as authority.
+\#923 owns action and reconciliation orchestration extraction. Its tests must prove that action intent, approval state, execution delegation, receipts, and reconciliation remain explicitly bound and do not trust placeholder credentials, forwarded headers, ticket hints, assistant text, or substrate-local summaries as authority.
 
-#924 owns runtime, restore, and readiness diagnostics extraction. Its tests must prove that readiness, backup, restore, export, and diagnostic surfaces use snapshot-consistent reads or explicit rejection when mixed state is detected, and that failed paths leave no orphan or partial durable state behind.
+\#924 owns runtime, restore, and readiness diagnostics extraction. Its tests must prove that readiness, backup, restore, export, and diagnostic surfaces use snapshot-consistent reads or explicit rejection when mixed state is detected, and that failed paths leave no orphan or partial durable state behind.
 
-#925 owns hotspot baseline refresh and validation closeout. It must run the maintainability hotspot verifier, refresh the baseline only after extraction is real, and preserve the public facade contract unless a later accepted decision changes it.
+\#925 owns hotspot baseline refresh and validation closeout. It must run the maintainability hotspot verifier, refresh the baseline only after extraction is real, and preserve the public facade contract unless a later accepted decision changes it.
 
 No deployment manifest, runtime configuration, database migration, credential source, endpoint exposure, browser behavior, operator UI capability, or commercial readiness workflow changes through this ADR.
 
