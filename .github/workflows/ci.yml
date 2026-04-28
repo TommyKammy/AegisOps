@@ -67,6 +67,8 @@ jobs:
           bash scripts/verify-postgres-compose-skeleton.sh
           bash scripts/verify-publishable-path-hygiene.sh
           bash scripts/verify-proxy-compose-skeleton.sh
+          bash scripts/verify-roadmap-materialization-preflight-contract.sh
+          bash scripts/test-verify-roadmap-materialization-preflight-contract.sh
           bash scripts/verify-support-playbook-break-glass-rehearsal.sh
           bash scripts/verify-response-action-safety-model-doc.sh
           bash scripts/verify-requirements-baseline-control-plane-thesis.sh
