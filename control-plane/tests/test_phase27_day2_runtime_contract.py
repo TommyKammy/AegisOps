@@ -257,6 +257,7 @@ class Phase27Day2RuntimeContractTests(ServicePersistenceTestBase):
             ActionRequestRecord,
             action_request.action_request_id,
         )
+        initial_action_request_count = len(store.list(ActionRequestRecord))
         initial_case = service.get_record(CaseRecord, promoted_case.case_id)
         initial_transition_count = len(store.list(LifecycleTransitionRecord))
         initial_approval_count = len(store.list(ApprovalDecisionRecord))
@@ -340,6 +341,7 @@ class Phase27Day2RuntimeContractTests(ServicePersistenceTestBase):
             service.get_record(ActionRequestRecord, action_request.action_request_id),
             initial_action_request,
         )
+        self.assertEqual(len(store.list(ActionRequestRecord)), initial_action_request_count)
         self.assertEqual(service.get_record(CaseRecord, promoted_case.case_id), initial_case)
         self.assertEqual(len(store.list(LifecycleTransitionRecord)), initial_transition_count)
         self.assertEqual(len(store.list(ApprovalDecisionRecord)), initial_approval_count)
