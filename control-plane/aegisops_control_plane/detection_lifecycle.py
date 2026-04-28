@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from .service import AegisOpsControlPlaneService, NativeDetectionRecordAdapter
 
 
-class DetectionLifecycleService:
+class DetectionIntakeService:
     def __init__(
         self,
         service: AegisOpsControlPlaneService,
@@ -33,10 +33,14 @@ class DetectionLifecycleService:
             [object],
             dict[str, str] | None,
         ],
+        case_lifecycle_state_by_triage_disposition: Mapping[str, str],
     ) -> None:
         self._service = service
         self._merge_reviewed_context = merge_reviewed_context
         self._normalize_admission_provenance = normalize_admission_provenance
+        self._case_lifecycle_state_by_triage_disposition = dict(
+            case_lifecycle_state_by_triage_disposition
+        )
 
     def ingest_finding_alert(
         self,
@@ -706,3 +710,60 @@ class DetectionLifecycleService:
                 reconciliation=reconciliation,
                 disposition=ingest_result.disposition,
             )
+
+    def reviewed_context_transitioned_at(
+        self,
+        record: AlertRecord | CaseRecord,
+    ) -> datetime | None:
+        reviewed_context = getattr(record, "reviewed_context", None)
+        if not isinstance(reviewed_context, Mapping):
+            return None
+        triage = reviewed_context.get("triage")
+        if not isinstance(triage, Mapping):
+            return None
+        if not self.triage_disposition_matches_current_state(
+            record,
+            triage.get("disposition"),
+        ):
+            return None
+        raw_recorded_at = triage.get("recorded_at")
+        if not isinstance(raw_recorded_at, str) or not raw_recorded_at.strip():
+            return None
+        try:
+            parsed = datetime.fromisoformat(raw_recorded_at)
+        except ValueError:
+            return None
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            return None
+        return parsed
+
+    def triage_disposition_matches_current_state(
+        self,
+        record: AlertRecord | CaseRecord,
+        disposition: object,
+    ) -> bool:
+        triage_lifecycle_state = self.case_lifecycle_state_for_triage_disposition(
+            disposition
+        )
+        if triage_lifecycle_state is None:
+            return False
+        if isinstance(record, AlertRecord):
+            return record.lifecycle_state == "closed" and triage_lifecycle_state == "closed"
+        return record.lifecycle_state == triage_lifecycle_state
+
+    def case_lifecycle_state_for_triage_disposition(
+        self,
+        disposition: object,
+    ) -> str | None:
+        if not isinstance(disposition, str) or not disposition.strip():
+            return None
+        return self._case_lifecycle_state_by_triage_disposition.get(disposition)
+
+    def case_lifecycle_for_disposition(self, disposition: str) -> str:
+        lifecycle_state = self.case_lifecycle_state_for_triage_disposition(disposition)
+        if lifecycle_state is not None:
+            return lifecycle_state
+        raise ValueError(f"Unsupported case disposition {disposition!r}")
+
+
+DetectionLifecycleService = DetectionIntakeService

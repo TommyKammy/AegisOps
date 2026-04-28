@@ -74,7 +74,7 @@ from .assistant_context import (
     AssistantContextAssembler,
     _advisory_text_claims_authority_or_scope_expansion,
 )
-from .detection_lifecycle import DetectionLifecycleService
+from .detection_lifecycle import DetectionIntakeService
 from .reviewed_slice_policy import (
     REVIEWED_LIVE_SLICE_LABEL,
     REVIEWED_LIVE_SOURCE_FAMILIES,
@@ -1384,10 +1384,13 @@ class AegisOpsControlPlaneService:
             self,
             merge_reviewed_context=_merge_reviewed_context,
         )
-        self._detection_lifecycle_service = DetectionLifecycleService(
+        self._detection_intake_service = DetectionIntakeService(
             self,
             merge_reviewed_context=_merge_reviewed_context,
             normalize_admission_provenance=_normalize_admission_provenance,
+            case_lifecycle_state_by_triage_disposition=(
+                _CASE_LIFECYCLE_STATE_BY_TRIAGE_DISPOSITION
+            ),
         )
         self._execution_coordinator = ExecutionCoordinator(self)
         self._action_lifecycle_write_coordinator = ActionLifecycleWriteCoordinator(self)
@@ -1741,55 +1744,29 @@ class AegisOpsControlPlaneService:
                     return candidate
         return fallback if fallback is not None else datetime.now(timezone.utc)
 
-    @staticmethod
     def _reviewed_context_transitioned_at(
+        self,
         record: AlertRecord | CaseRecord,
     ) -> datetime | None:
-        reviewed_context = getattr(record, "reviewed_context", None)
-        if not isinstance(reviewed_context, Mapping):
-            return None
-        triage = reviewed_context.get("triage")
-        if not isinstance(triage, Mapping):
-            return None
-        if not AegisOpsControlPlaneService._triage_disposition_matches_current_state(
-            record,
-            triage.get("disposition"),
-        ):
-            return None
-        raw_recorded_at = triage.get("recorded_at")
-        if not isinstance(raw_recorded_at, str) or not raw_recorded_at.strip():
-            return None
-        try:
-            parsed = datetime.fromisoformat(raw_recorded_at)
-        except ValueError:
-            return None
-        if parsed.tzinfo is None or parsed.utcoffset() is None:
-            return None
-        return parsed
+        return self._detection_intake_service.reviewed_context_transitioned_at(record)
 
-    @staticmethod
     def _triage_disposition_matches_current_state(
+        self,
         record: AlertRecord | CaseRecord,
         disposition: object,
     ) -> bool:
-        triage_lifecycle_state = (
-            AegisOpsControlPlaneService._case_lifecycle_state_for_triage_disposition(
-                disposition
-            )
+        return self._detection_intake_service.triage_disposition_matches_current_state(
+            record,
+            disposition,
         )
-        if triage_lifecycle_state is None:
-            return False
-        if isinstance(record, AlertRecord):
-            return record.lifecycle_state == "closed" and triage_lifecycle_state == "closed"
-        return record.lifecycle_state == triage_lifecycle_state
 
-    @staticmethod
     def _case_lifecycle_state_for_triage_disposition(
+        self,
         disposition: object,
     ) -> str | None:
-        if not isinstance(disposition, str) or not disposition.strip():
-            return None
-        return _CASE_LIFECYCLE_STATE_BY_TRIAGE_DISPOSITION.get(disposition)
+        return self._detection_intake_service.case_lifecycle_state_for_triage_disposition(
+            disposition
+        )
 
     def _latest_lifecycle_transition(
         self,
@@ -5381,7 +5358,7 @@ class AegisOpsControlPlaneService:
         materially_new_work: bool = False,
         reviewed_context: Mapping[str, object] | None = None,
     ) -> FindingAlertIngestResult:
-        return self._detection_lifecycle_service.ingest_finding_alert(
+        return self._detection_intake_service.ingest_finding_alert(
             finding_id=finding_id,
             analytic_signal_id=analytic_signal_id,
             substrate_detection_record_id=substrate_detection_record_id,
@@ -5399,7 +5376,7 @@ class AegisOpsControlPlaneService:
         case_id: str | None = None,
         case_lifecycle_state: str = "open",
     ) -> CaseRecord:
-        return self._detection_lifecycle_service.promote_alert_to_case(
+        return self._detection_intake_service.promote_alert_to_case(
             alert_id,
             case_id=case_id,
             case_lifecycle_state=case_lifecycle_state,
@@ -5410,7 +5387,7 @@ class AegisOpsControlPlaneService:
         adapter: NativeDetectionRecordAdapter,
         record: NativeDetectionRecord,
     ) -> FindingAlertIngestResult:
-        return self._detection_lifecycle_service.ingest_native_detection_record(
+        return self._detection_intake_service.ingest_native_detection_record(
             adapter,
             record,
         )
@@ -5419,7 +5396,7 @@ class AegisOpsControlPlaneService:
         self,
         admission: AnalyticSignalAdmission,
     ) -> FindingAlertIngestResult:
-        return self._detection_lifecycle_service.ingest_analytic_signal_admission(
+        return self._detection_intake_service.ingest_analytic_signal_admission(
             admission
         )
 
@@ -5430,7 +5407,7 @@ class AegisOpsControlPlaneService:
         ingest_result: FindingAlertIngestResult,
         substrate_detection_record_id: str,
     ) -> FindingAlertIngestResult:
-        return self._detection_lifecycle_service.attach_native_detection_context(
+        return self._detection_intake_service.attach_native_detection_context(
             record=record,
             ingest_result=ingest_result,
             substrate_detection_record_id=substrate_detection_record_id,
@@ -5997,16 +5974,10 @@ class AegisOpsControlPlaneService:
             )
         )
 
-    @staticmethod
-    def _case_lifecycle_for_disposition(disposition: str) -> str:
-        lifecycle_state = (
-            AegisOpsControlPlaneService._case_lifecycle_state_for_triage_disposition(
-                disposition
-            )
+    def _case_lifecycle_for_disposition(self, disposition: str) -> str:
+        return self._detection_intake_service.case_lifecycle_for_disposition(
+            disposition
         )
-        if lifecycle_state is not None:
-            return lifecycle_state
-        raise ValueError(f"Unsupported case disposition {disposition!r}")
 
     @staticmethod
     def _normalize_substrate_detection_record_id(
