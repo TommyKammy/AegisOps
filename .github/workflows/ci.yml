@@ -61,6 +61,7 @@ jobs:
           bash scripts/verify-parameter-category-docs.sh
           bash scripts/verify-parameter-config-files.sh
           bash scripts/verify-phase-44-47-boundary-docs.sh
+          bash scripts/verify-phase-49-service-decomposition-adr.sh
           bash scripts/run-ci-phase-contract.sh all-verifiers
           bash scripts/verify-pilot-pause-rollback-exit-criteria.sh
           bash scripts/verify-positive-smb-value-proposition.sh
@@ -326,6 +327,7 @@ jobs:
           bash scripts/test-verify-maintainability-hotspots.sh
           bash scripts/test-verify-positive-smb-value-proposition.sh
           bash scripts/test-verify-phase-44-47-boundary-docs.sh
+          bash scripts/test-verify-phase-49-service-decomposition-adr.sh
           bash scripts/run-ci-phase-contract.sh all-shell-tests
           bash scripts/test-verify-ci-phase-contract-runner.sh
           bash scripts/test-verify-requirements-baseline-control-plane-thesis.sh
