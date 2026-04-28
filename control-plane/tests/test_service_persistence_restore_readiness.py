@@ -60,8 +60,10 @@ class IsolationLevelFallbackProbeStore:
 
 class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
     def test_service_wires_restore_readiness_internal_collaborators(self) -> None:
+        store, _ = make_store()
         service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops")
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
         )
 
         restore_readiness_service = service._restore_readiness_service
@@ -74,6 +76,51 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             hasattr(restore_readiness_service, "_readiness_health_projection"),
             "RestoreReadinessService should delegate readiness projection to a dedicated collaborator",
         )
+
+    def test_service_routes_runtime_restore_and_readiness_through_diagnostics_boundary(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+
+        diagnostics_service = (
+            service._runtime_restore_readiness_diagnostics_service
+        )
+
+        self.assertIs(
+            service._runtime_boundary_service,
+            diagnostics_service._runtime_boundary_service,
+        )
+        self.assertIs(
+            service._restore_readiness_service,
+            diagnostics_service._restore_readiness_service,
+        )
+
+        with mock.patch.object(
+            diagnostics_service,
+            "describe_runtime",
+            wraps=diagnostics_service.describe_runtime,
+        ) as describe_runtime:
+            service.describe_runtime()
+        with mock.patch.object(
+            diagnostics_service,
+            "describe_startup_status",
+            wraps=diagnostics_service.describe_startup_status,
+        ) as describe_startup_status:
+            service.describe_startup_status()
+        with mock.patch.object(
+            diagnostics_service,
+            "export_authoritative_record_chain_backup",
+            wraps=diagnostics_service.export_authoritative_record_chain_backup,
+        ) as export_backup:
+            service.export_authoritative_record_chain_backup()
+
+        describe_runtime.assert_called_once_with()
+        describe_startup_status.assert_called_once_with()
+        export_backup.assert_called_once_with()
 
     def test_backup_restore_validation_does_not_import_postgres_adapter(self) -> None:
         module_path = (

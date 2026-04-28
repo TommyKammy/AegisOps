@@ -22,6 +22,9 @@ from .models import (
 )
 from .restore_readiness import RestoreReadinessService
 from .runtime_boundary import RuntimeBoundaryService
+from .runtime_restore_readiness_diagnostics import (
+    RuntimeRestoreReadinessDiagnosticsService,
+)
 from .service import (
     AegisOpsControlPlaneService,
     AnalystAssistantContextSnapshot,
@@ -61,6 +64,7 @@ __all__ = [
     "RuntimeConfig",
     "RuntimeSnapshot",
     "RuntimeBoundaryService",
+    "RuntimeRestoreReadinessDiagnosticsService",
     "WazuhAlertAdapter",
     "build_runtime_service",
     "build_runtime_snapshot",
