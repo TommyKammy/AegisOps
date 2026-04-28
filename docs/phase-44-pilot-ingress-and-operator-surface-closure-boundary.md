@@ -123,7 +123,7 @@ Phase 44 must fail closed when any prerequisite boundary signal is missing, malf
 
 Blocking conditions include:
 
-- the first-boot proxy route set is missing required reviewed routes or exposes write-capable or administrative routes outside the reviewed boundary;
+- the first-boot proxy route set is missing reviewed routes required by this boundary or exposes write-capable or administrative routes outside the reviewed boundary;
 - caller-supplied protected identity headers can pass through the first-boot proxy as trusted values;
 - the protected-surface runtime lacks reviewed proxy CIDRs, proxy secret, proxy service account, or reviewed identity-provider binding when non-loopback protected-surface access is configured;
 - protected-surface requests bypass the reviewed proxy peer boundary, omit HTTPS, use the wrong proxy credential, use the wrong proxy service account, omit reviewed identity provider, subject, identity, or role attribution, or present an unauthorized role;
