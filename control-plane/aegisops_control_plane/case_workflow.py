@@ -4,6 +4,7 @@ from dataclasses import replace
 from datetime import datetime
 from typing import TYPE_CHECKING, Callable, Mapping
 
+from .evidence_linkage import EvidenceLinkageService
 from .models import (
     AlertRecord,
     CaseRecord,
@@ -21,12 +22,14 @@ class CaseWorkflowService:
         self,
         service: AegisOpsControlPlaneService,
         *,
+        evidence_linkage_service: EvidenceLinkageService,
         merge_reviewed_context: Callable[
             [Mapping[str, object], Mapping[str, object]],
             dict[str, object],
         ],
     ) -> None:
         self._service = service
+        self._evidence_linkage_service = evidence_linkage_service
         self._merge_reviewed_context = merge_reviewed_context
 
     def record_case_observation(
@@ -55,13 +58,13 @@ class CaseWorkflowService:
             lifecycle_state,
             "lifecycle_state",
         )
-        normalized_evidence_ids = service._normalize_linked_record_ids(
+        normalized_evidence_ids = self._evidence_linkage_service.normalize_linked_record_ids(
             supporting_evidence_ids,
             "supporting_evidence_ids",
         )
         with service._store.transaction():
             case = service._require_reviewed_operator_case(case_id)
-            service._validate_case_evidence_linkage(
+            self._evidence_linkage_service.validate_case_evidence_linkage(
                 case=case,
                 evidence_ids=normalized_evidence_ids,
                 field_name="supporting_evidence_ids",
@@ -216,13 +219,13 @@ class CaseWorkflowService:
             "handoff_owner",
         )
         handoff_note = service._require_non_empty_string(handoff_note, "handoff_note")
-        normalized_evidence_ids = service._normalize_linked_record_ids(
+        normalized_evidence_ids = self._evidence_linkage_service.normalize_linked_record_ids(
             follow_up_evidence_ids,
             "follow_up_evidence_ids",
         )
         with service._store.transaction():
             case = service._require_reviewed_operator_case(case_id)
-            service._validate_case_evidence_linkage(
+            self._evidence_linkage_service.validate_case_evidence_linkage(
                 case=case,
                 evidence_ids=normalized_evidence_ids,
                 field_name="follow_up_evidence_ids",
