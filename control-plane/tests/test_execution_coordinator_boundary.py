@@ -417,6 +417,70 @@ class ExecutionCoordinatorBoundaryTests(unittest.TestCase):
             stale_after=stale_after,
         )
 
+    def test_action_boundary_blocks_reviewed_request_creation_when_authority_is_frozen(
+        self,
+    ) -> None:
+        service = mock.Mock()
+        service._require_control_plane_change_authority_unfrozen.side_effect = (
+            PermissionError(
+                "control-plane upgrade or rollback verification is not complete"
+            )
+        )
+        service._execution_coordinator = mock.Mock()
+        boundary = ActionOrchestrationBoundary(service)
+        expires_at = datetime(2026, 4, 15, 0, 0, tzinfo=timezone.utc)
+
+        with self.assertRaisesRegex(PermissionError, "verification is not complete"):
+            boundary.create_reviewed_action_request_from_advisory(
+                record_family="recommendation",
+                record_id="recommendation-001",
+                requester_identity="analyst-001",
+                recipient_identity="owner-001",
+                message_intent="notify",
+                escalation_reason="bounded reason",
+                expires_at=expires_at,
+                action_request_id="action-request-001",
+            )
+
+        create_reviewed_action_request = (
+            service._execution_coordinator.create_reviewed_action_request_from_advisory
+        )
+        create_reviewed_action_request.assert_not_called()
+        service._require_control_plane_change_authority_unfrozen.assert_called_once_with()
+
+    def test_action_boundary_blocks_reviewed_tracking_ticket_creation_when_authority_is_frozen(
+        self,
+    ) -> None:
+        service = mock.Mock()
+        service._require_control_plane_change_authority_unfrozen.side_effect = (
+            PermissionError(
+                "control-plane upgrade or rollback verification is not complete"
+            )
+        )
+        service._execution_coordinator = mock.Mock()
+        boundary = ActionOrchestrationBoundary(service)
+        expires_at = datetime(2026, 4, 15, 0, 0, tzinfo=timezone.utc)
+
+        with self.assertRaisesRegex(PermissionError, "verification is not complete"):
+            boundary.create_reviewed_tracking_ticket_request_from_advisory(
+                record_family="recommendation",
+                record_id="recommendation-002",
+                requester_identity="analyst-001",
+                coordination_reference_id="case-001",
+                coordination_target_type="zammad",
+                ticket_title="Review bounded case",
+                ticket_description="Open a link-first coordination ticket.",
+                expires_at=expires_at,
+                ticket_severity="medium",
+                action_request_id="action-request-002",
+            )
+
+        create_tracking_ticket_request = (
+            service._execution_coordinator.create_reviewed_tracking_ticket_request_from_advisory
+        )
+        create_tracking_ticket_request.assert_not_called()
+        service._require_control_plane_change_authority_unfrozen.assert_called_once_with()
+
     def test_service_delegates_reviewed_action_request_creation_to_execution_coordinator(
         self,
     ) -> None:

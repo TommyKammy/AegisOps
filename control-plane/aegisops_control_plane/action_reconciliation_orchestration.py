@@ -40,6 +40,7 @@ class ActionOrchestrationBoundary:
         expires_at: datetime,
         action_request_id: str | None = None,
     ) -> ActionRequestRecord:
+        self._service._require_control_plane_change_authority_unfrozen()
         return self._service._execution_coordinator.create_reviewed_action_request_from_advisory(
             record_family=record_family,
             record_id=record_id,
@@ -65,6 +66,7 @@ class ActionOrchestrationBoundary:
         ticket_severity: str = "medium",
         action_request_id: str | None = None,
     ) -> ActionRequestRecord:
+        self._service._require_control_plane_change_authority_unfrozen()
         return self._service._execution_coordinator.create_reviewed_tracking_ticket_request_from_advisory(
             record_family=record_family,
             record_id=record_id,
