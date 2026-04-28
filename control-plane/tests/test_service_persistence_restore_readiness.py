@@ -117,10 +117,31 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             wraps=diagnostics_service.export_authoritative_record_chain_backup,
         ) as export_backup:
             service.export_authoritative_record_chain_backup()
+        with mock.patch.object(
+            diagnostics_service,
+            "describe_shutdown_status",
+            wraps=diagnostics_service.describe_shutdown_status,
+        ) as describe_shutdown_status:
+            service.describe_shutdown_status()
+        with mock.patch.object(
+            diagnostics_service,
+            "inspect_readiness_diagnostics",
+            wraps=diagnostics_service.inspect_readiness_diagnostics,
+        ) as inspect_readiness_diagnostics:
+            service.inspect_readiness_diagnostics()
+        with mock.patch.object(
+            diagnostics_service,
+            "run_authoritative_restore_drill",
+            wraps=diagnostics_service.run_authoritative_restore_drill,
+        ) as run_authoritative_restore_drill:
+            service.run_authoritative_restore_drill()
 
         describe_runtime.assert_called_once_with()
         describe_startup_status.assert_called_once_with()
         export_backup.assert_called_once_with()
+        describe_shutdown_status.assert_called_once_with()
+        inspect_readiness_diagnostics.assert_called_once_with()
+        run_authoritative_restore_drill.assert_called_once_with()
 
     def test_backup_restore_validation_does_not_import_postgres_adapter(self) -> None:
         module_path = (
