@@ -33,6 +33,10 @@ from .assistant_provider import (
 )
 from .assistant_advisory import AssistantAdvisoryCoordinator
 from .action_lifecycle_write_coordinator import ActionLifecycleWriteCoordinator
+from .action_reconciliation_orchestration import (
+    ActionOrchestrationBoundary,
+    ReconciliationOrchestrationBoundary,
+)
 from .action_review_write_surface import ActionReviewWriteSurface
 from .case_workflow import CaseWorkflowService
 from .config import OpenBaoKVv2SecretTransport, RuntimeConfig
@@ -1404,7 +1408,15 @@ class AegisOpsControlPlaneService:
             ),
         )
         self._execution_coordinator = ExecutionCoordinator(self)
-        self._action_lifecycle_write_coordinator = ActionLifecycleWriteCoordinator(self)
+        self._action_orchestration_boundary = ActionOrchestrationBoundary(self)
+        self._reconciliation_orchestration_boundary = ReconciliationOrchestrationBoundary(
+            self
+        )
+        self._action_lifecycle_write_coordinator = ActionLifecycleWriteCoordinator(
+            self,
+            action_orchestration_boundary=self._action_orchestration_boundary,
+            reconciliation_orchestration_boundary=self._reconciliation_orchestration_boundary,
+        )
         self._endpoint_evidence_pack_adapter = EndpointEvidencePackAdapter()
         self._misp_context_adapter = MispContextAdapter(
             enabled=config.misp_enrichment_enabled

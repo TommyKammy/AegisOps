@@ -15,6 +15,10 @@ from aegisops_control_plane.config import RuntimeConfig
 from aegisops_control_plane.action_lifecycle_write_coordinator import (
     ActionLifecycleWriteCoordinator,
 )
+from aegisops_control_plane.action_reconciliation_orchestration import (
+    ActionOrchestrationBoundary,
+    ReconciliationOrchestrationBoundary,
+)
 from aegisops_control_plane.execution_coordinator import ExecutionCoordinator
 from aegisops_control_plane.service import AegisOpsControlPlaneService
 from postgres_test_support import make_store
@@ -48,6 +52,28 @@ class ExecutionCoordinatorBoundaryTests(unittest.TestCase):
         self.assertTrue(
             hasattr(service, "_action_lifecycle_write_coordinator"),
             "expected AegisOpsControlPlaneService to compose a dedicated action lifecycle write coordinator",
+        )
+
+    def test_service_initializes_focused_action_and_reconciliation_boundaries(
+        self,
+    ) -> None:
+        service = self._build_service()
+
+        self.assertIsInstance(
+            service._action_orchestration_boundary,
+            ActionOrchestrationBoundary,
+        )
+        self.assertIsInstance(
+            service._reconciliation_orchestration_boundary,
+            ReconciliationOrchestrationBoundary,
+        )
+        self.assertIs(
+            service._action_lifecycle_write_coordinator._action_orchestration_boundary,
+            service._action_orchestration_boundary,
+        )
+        self.assertIs(
+            service._action_lifecycle_write_coordinator._reconciliation_orchestration_boundary,
+            service._reconciliation_orchestration_boundary,
         )
 
     def test_service_routes_action_lifecycle_write_entrypoints_through_coordinator(
