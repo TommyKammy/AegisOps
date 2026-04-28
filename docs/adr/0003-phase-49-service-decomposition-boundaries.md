@@ -155,6 +155,8 @@ Every extraction slice must keep the facade behavior-preserving and add focused 
 
 \#925 owns hotspot baseline refresh and validation closeout. It must run the maintainability hotspot verifier, refresh the baseline only after extraction is real, and preserve the public facade contract unless a later accepted decision changes it.
 
+The #925 closeout keeps one ADR-approved exception because the accepted child issues decomposed internal ownership while preserving the public facade. At closeout, `control-plane/aegisops_control_plane/service.py` remains above the long-term 1,500-line target and `AegisOpsControlPlaneService` remains above the long-term 50-method target. The refreshed baseline must therefore record the current closeout ceilings and fail on any silent facade re-growth rather than claiming the hotspot has been eliminated.
+
 No deployment manifest, runtime configuration, database migration, credential source, endpoint exposure, browser behavior, operator UI capability, or commercial readiness workflow changes through this ADR.
 
 ## 8. Security Impact

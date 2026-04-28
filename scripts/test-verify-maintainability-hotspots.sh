@@ -51,7 +51,7 @@ append_repeated_lines() {
   local count="$4"
 
   for ((index = 1; index <= count; index++)); do
-    printf '    %s_%03d = %03d\n' "${prefix}" "${index}" "${index}" >>"${target}/${path}"
+    printf '    %s_%03d = %d\n' "${prefix}" "${index}" "${index}" >>"${target}/${path}"
   done
 }
 
@@ -97,7 +97,7 @@ assert_passes "${single_responsibility_repo}"
 baseline_repo="${workdir}/baseline"
 create_repo \
   "${baseline_repo}" \
-  "docs/maintainability-hotspot-baseline.txt" "control-plane/aegisops_control_plane/service.py" \
+  "docs/maintainability-hotspot-baseline.txt" "control-plane/aegisops_control_plane/service.py max_lines=960 max_effective_lines=960 max_facade_methods=1 adr_exception=ADR-0003" \
   "control-plane/aegisops_control_plane/service.py" "class AegisOpsControlPlaneService:
     def describe_runtime(self):
         auth_principal = 'trusted-runtime-boundary'
@@ -115,6 +115,35 @@ assert_passes "${baseline_repo}"
 if ! grep -F "Known maintainability hotspot baseline remains present" "${pass_stdout}" >/dev/null; then
   echo "Expected pass output to report the known baseline hotspot." >&2
   cat "${pass_stdout}" >&2
+  exit 1
+fi
+if ! grep -F "AegisOpsControlPlaneService methods=1" "${pass_stdout}" >/dev/null; then
+  echo "Expected pass output to report the facade method count." >&2
+  cat "${pass_stdout}" >&2
+  exit 1
+fi
+
+regrowth_repo="${workdir}/regrowth"
+create_repo \
+  "${regrowth_repo}" \
+  "docs/maintainability-hotspot-baseline.txt" "control-plane/aegisops_control_plane/service.py max_lines=959 max_effective_lines=959 max_facade_methods=0 adr_exception=ADR-0003" \
+  "control-plane/aegisops_control_plane/service.py" "class AegisOpsControlPlaneService:
+    def describe_runtime(self):
+        auth_principal = 'trusted-runtime-boundary'
+        queue_status = {'operator': auth_principal}
+        case_transition = queue_status
+        assistant_recommendation = case_transition
+        action_reconciliation = assistant_recommendation
+        restore_backup_export = action_reconciliation
+        evidence_admission = restore_backup_export
+        return evidence_admission"
+append_repeated_lines "${regrowth_repo}" "control-plane/aegisops_control_plane/service.py" "mixed_line" 950
+git -C "${regrowth_repo}" add .
+git -C "${regrowth_repo}" commit -q -m "hotspot growth past baseline"
+assert_fails_with "${regrowth_repo}" "Maintainability hotspot baseline limits were exceeded"
+if ! grep -F "max_facade_methods=0" "${fail_stderr}" >/dev/null; then
+  echo "Expected failure output to report the facade method limit." >&2
+  cat "${fail_stderr}" >&2
   exit 1
 fi
 

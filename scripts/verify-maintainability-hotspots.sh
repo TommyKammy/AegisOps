@@ -34,6 +34,8 @@ import pathlib
 import re
 import subprocess
 import sys
+import ast
+from typing import Mapping
 
 repo_root = pathlib.Path(os.environ["AEGISOPS_REPO_ROOT"])
 baseline_path = repo_root / os.environ["AEGISOPS_MAINTAINABILITY_BASELINE"]
@@ -76,17 +78,29 @@ def tracked_python_files() -> list[str]:
     return [line for line in result.stdout.splitlines() if line.endswith(".py")]
 
 
-def read_baseline() -> set[str]:
+def read_baseline() -> dict[str, dict[str, str]]:
     if not baseline_path.exists():
-        return set()
+        return {}
 
-    entries: set[str] = set()
+    entries: dict[str, dict[str, str]] = {}
     for line in baseline_path.read_text(encoding="utf-8").splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
-        entries.add(stripped.split()[0])
+        parts = stripped.split()
+        metadata: dict[str, str] = {}
+        for part in parts[1:]:
+            if "=" not in part:
+                continue
+            key, value = part.split("=", 1)
+            if key:
+                metadata[key] = value
+        entries[parts[0]] = metadata
     return entries
+
+
+def physical_line_count(text: str) -> int:
+    return len(text.splitlines())
 
 
 def effective_line_count(text: str) -> int:
@@ -99,7 +113,21 @@ def effective_line_count(text: str) -> int:
     return count
 
 
-def candidate_for(relative_path: str) -> tuple[str, int, tuple[str, ...]] | None:
+def class_method_count(text: str, class_name: str) -> int | None:
+    tree = ast.parse(text)
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef) and node.name == class_name:
+            return sum(
+                1
+                for child in node.body
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+            )
+    return None
+
+
+def candidate_for(
+    relative_path: str,
+) -> tuple[str, int, int, int | None, tuple[str, ...]] | None:
     path = repo_root / relative_path
     text = path.read_text(encoding="utf-8", errors="replace")
     facade_like = (
@@ -110,7 +138,9 @@ def candidate_for(relative_path: str) -> tuple[str, int, tuple[str, ...]] | None
     if not facade_like:
         return None
 
+    physical_lines = physical_line_count(text)
     effective_lines = effective_line_count(text)
+    facade_method_count = class_method_count(text, "AegisOpsControlPlaneService")
     present_signals = tuple(
         signal_name
         for signal_name, pattern in signal_patterns.items()
@@ -124,15 +154,65 @@ def candidate_for(relative_path: str) -> tuple[str, int, tuple[str, ...]] | None
     if not required_boundary_signals.intersection(present_signals):
         return None
 
-    return (relative_path, effective_lines, present_signals)
+    return (relative_path, physical_lines, effective_lines, facade_method_count, present_signals)
+
+
+def integer_metadata(
+    metadata: Mapping[str, str],
+    key: str,
+    relative_path: str,
+) -> int | None:
+    value = metadata.get(key)
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        print(
+            f"Maintainability baseline entry for {relative_path} has invalid {key}={value!r}.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
 
 baseline_entries = read_baseline()
 candidates = [candidate for relative_path in tracked_python_files() if (candidate := candidate_for(relative_path))]
-candidate_paths = {relative_path for relative_path, _, _ in candidates}
+candidate_paths = {relative_path for relative_path, _, _, _, _ in candidates}
 
 unknown_candidates = [candidate for candidate in candidates if candidate[0] not in baseline_entries]
-stale_baseline_entries = sorted(baseline_entries - candidate_paths)
+stale_baseline_entries = sorted(set(baseline_entries) - candidate_paths)
+baseline_regressions: list[str] = []
+
+for relative_path, physical_lines, effective_lines, facade_method_count, _signals in candidates:
+    metadata = baseline_entries.get(relative_path, {})
+    max_lines = integer_metadata(metadata, "max_lines", relative_path)
+    max_effective_lines = integer_metadata(
+        metadata,
+        "max_effective_lines",
+        relative_path,
+    )
+    max_facade_methods = integer_metadata(
+        metadata,
+        "max_facade_methods",
+        relative_path,
+    )
+
+    if max_lines is not None and physical_lines > max_lines:
+        baseline_regressions.append(
+            f"{relative_path}: lines={physical_lines} exceeds max_lines={max_lines}"
+        )
+    if max_effective_lines is not None and effective_lines > max_effective_lines:
+        baseline_regressions.append(
+            f"{relative_path}: effective_lines={effective_lines} exceeds max_effective_lines={max_effective_lines}"
+        )
+    if (
+        max_facade_methods is not None
+        and facade_method_count is not None
+        and facade_method_count > max_facade_methods
+    ):
+        baseline_regressions.append(
+            f"{relative_path}: AegisOpsControlPlaneService methods={facade_method_count} exceeds max_facade_methods={max_facade_methods}"
+        )
 
 if unknown_candidates:
     print(
@@ -143,9 +223,14 @@ if unknown_candidates:
         f"Review {threshold_doc} before extending these files or open a decomposition backlog.",
         file=sys.stderr,
     )
-    for relative_path, effective_lines, signals in unknown_candidates:
+    for relative_path, physical_lines, effective_lines, facade_method_count, signals in unknown_candidates:
+        method_summary = (
+            f", AegisOpsControlPlaneService methods={facade_method_count}"
+            if facade_method_count is not None
+            else ""
+        )
         print(
-            f"- {relative_path}: effective_lines={effective_lines}, signals={', '.join(signals)}",
+            f"- {relative_path}: lines={physical_lines}, effective_lines={effective_lines}{method_summary}, signals={', '.join(signals)}",
             file=sys.stderr,
         )
     sys.exit(1)
@@ -160,11 +245,29 @@ if stale_baseline_entries:
     print(f"Update {baseline_path.relative_to(repo_root)} after confirming the hotspot was decomposed.", file=sys.stderr)
     sys.exit(1)
 
+if baseline_regressions:
+    print(
+        "Maintainability hotspot baseline limits were exceeded.",
+        file=sys.stderr,
+    )
+    print(
+        "Open or update a decomposition decision before allowing facade hotspot growth.",
+        file=sys.stderr,
+    )
+    for regression in baseline_regressions:
+        print(f"- {regression}", file=sys.stderr)
+    sys.exit(1)
+
 if candidates:
     print("Known maintainability hotspot baseline remains present:")
-    for relative_path, effective_lines, signals in candidates:
+    for relative_path, physical_lines, effective_lines, facade_method_count, signals in candidates:
+        method_summary = (
+            f", AegisOpsControlPlaneService methods={facade_method_count}"
+            if facade_method_count is not None
+            else ""
+        )
         print(
-            f"- {relative_path}: effective_lines={effective_lines}, signals={len(signals)}; see {threshold_doc}"
+            f"- {relative_path}: lines={physical_lines}, effective_lines={effective_lines}{method_summary}, signals={len(signals)}; see {threshold_doc}"
         )
 else:
     print(f"No maintainability hotspot candidates found. See {threshold_doc}.")
