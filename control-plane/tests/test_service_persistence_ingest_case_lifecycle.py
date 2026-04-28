@@ -11,7 +11,9 @@ if str(TESTS_ROOT) not in sys.path:
 
 import _service_persistence_support as support
 from _service_persistence_support import ServicePersistenceTestBase
+from aegisops_control_plane.case_workflow import CaseWorkflowService
 from aegisops_control_plane.detection_lifecycle import DetectionIntakeService
+from aegisops_control_plane.evidence_linkage import EvidenceLinkageService
 from aegisops_control_plane.models import AlertRecord, AnalyticSignalRecord, CaseRecord
 
 for name, value in vars(support).items():
@@ -30,6 +32,97 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
         self.assertIsInstance(
             service._detection_intake_service,
             DetectionIntakeService,
+        )
+
+    def test_service_initializes_dedicated_case_workflow_and_evidence_linkage_boundaries(
+        self,
+    ) -> None:
+        store, _ = support.make_store()
+        service = support.AegisOpsControlPlaneService(
+            support.RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+
+        self.assertIsInstance(
+            service._case_workflow_service,
+            CaseWorkflowService,
+        )
+        self.assertIsInstance(
+            service._evidence_linkage_service,
+            EvidenceLinkageService,
+        )
+        self.assertIs(
+            service._case_workflow_service._evidence_linkage_service,
+            service._evidence_linkage_service,
+        )
+
+    def test_case_workflow_delegates_evidence_linkage_validation(self) -> None:
+        store, _ = support.make_store()
+        service = support.AegisOpsControlPlaneService(
+            support.RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        case = support.CaseRecord(
+            case_id="case-linkage-delegated-001",
+            finding_id="finding-linkage-delegated-001",
+            alert_id="alert-linkage-delegated-001",
+            evidence_ids=("evidence-linkage-delegated-001",),
+            lifecycle_state="investigating",
+            reviewed_context={"source": {"source_family": "github_audit"}},
+        )
+        service._require_case_record = support.mock.Mock(return_value=case)
+        service._require_reviewed_operator_case = support.mock.Mock(return_value=case)
+        linkage_delegate = support.mock.Mock()
+        linkage_delegate.normalize_linked_record_ids.side_effect = (
+            service._evidence_linkage_service.normalize_linked_record_ids
+        )
+        service._evidence_linkage_service = linkage_delegate
+        service._case_workflow_service._evidence_linkage_service = (
+            service._evidence_linkage_service
+        )
+        observed_at = support.datetime(2026, 4, 5, 12, 0, tzinfo=support.timezone.utc)
+
+        service.record_case_observation(
+            case_id=case.case_id,
+            author_identity="analyst-001",
+            observed_at=observed_at,
+            scope_statement="Delegated evidence linkage.",
+            supporting_evidence_ids=("evidence-linkage-delegated-001",),
+            observation_id="observation-linkage-delegated-001",
+        )
+        service.record_case_handoff(
+            case_id=case.case_id,
+            handoff_at=observed_at,
+            handoff_owner="analyst-001",
+            handoff_note="Delegated evidence linkage handoff.",
+            follow_up_evidence_ids=("evidence-linkage-delegated-002",),
+        )
+
+        service._evidence_linkage_service.normalize_linked_record_ids.assert_has_calls(
+            (
+                support.mock.call(
+                    ("evidence-linkage-delegated-001",),
+                    "supporting_evidence_ids",
+                ),
+                support.mock.call(
+                    ("evidence-linkage-delegated-002",),
+                    "follow_up_evidence_ids",
+                ),
+            )
+        )
+        service._evidence_linkage_service.validate_case_evidence_linkage.assert_has_calls(
+            (
+                support.mock.call(
+                    case=case,
+                    evidence_ids=("evidence-linkage-delegated-001",),
+                    field_name="supporting_evidence_ids",
+                ),
+                support.mock.call(
+                    case=case,
+                    evidence_ids=("evidence-linkage-delegated-002",),
+                    field_name="follow_up_evidence_ids",
+                ),
+            )
         )
 
     def test_service_delegates_case_workflow_mutations(self) -> None:

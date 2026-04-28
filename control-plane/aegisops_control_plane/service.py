@@ -39,6 +39,7 @@ from .execution_coordinator import (
     ExecutionCoordinator,
     _approved_payload_binding_hash,
 )
+from .evidence_linkage import EvidenceLinkageService
 from .external_evidence_boundary import ExternalEvidenceBoundary
 from .live_assistant_workflow import LiveAssistantWorkflowCoordinator
 from .models import (
@@ -1380,8 +1381,14 @@ class AegisOpsControlPlaneService:
             dedupe_strings=_dedupe_strings,
         )
         self._action_review_write_surface = ActionReviewWriteSurface(self)
+        self._evidence_linkage_service = EvidenceLinkageService(
+            store=self._store,
+            require_non_empty_string=self._require_non_empty_string,
+            merge_linked_ids=self._merge_linked_ids,
+        )
         self._case_workflow_service = CaseWorkflowService(
             self,
+            evidence_linkage_service=self._evidence_linkage_service,
             merge_reviewed_context=_merge_reviewed_context,
         )
         self._detection_intake_service = DetectionIntakeService(
@@ -5903,11 +5910,10 @@ class AegisOpsControlPlaneService:
         record_ids: tuple[str, ...],
         field_name: str,
     ) -> tuple[str, ...]:
-        normalized_ids: tuple[str, ...] = ()
-        for record_id in record_ids:
-            normalized_id = self._require_non_empty_string(record_id, field_name)
-            normalized_ids = self._merge_linked_ids(normalized_ids, normalized_id)
-        return normalized_ids
+        return self._evidence_linkage_service.normalize_linked_record_ids(
+            record_ids,
+            field_name,
+        )
 
     def _validate_case_evidence_linkage(
         self,
@@ -5916,20 +5922,11 @@ class AegisOpsControlPlaneService:
         evidence_ids: tuple[str, ...],
         field_name: str,
     ) -> None:
-        for evidence_id in evidence_ids:
-            evidence = self._store.get(EvidenceRecord, evidence_id)
-            if evidence is None:
-                raise LookupError(f"Missing evidence {evidence_id!r}")
-            if evidence.case_id not in {None, case.case_id}:
-                raise ValueError(
-                    f"{field_name} contains evidence {evidence_id!r} linked to "
-                    f"different case {evidence.case_id!r}"
-                )
-            if evidence.case_id is None and evidence.alert_id != case.alert_id:
-                raise ValueError(
-                    f"{field_name} contains evidence {evidence_id!r} that is not "
-                    f"linked to case {case.case_id!r} or its source alert"
-                )
+        self._evidence_linkage_service.validate_case_evidence_linkage(
+            case=case,
+            evidence_ids=evidence_ids,
+            field_name=field_name,
+        )
 
     def _validate_alert_evidence_linkage(
         self,
@@ -5938,17 +5935,11 @@ class AegisOpsControlPlaneService:
         evidence_ids: tuple[str, ...],
         field_name: str,
     ) -> None:
-        for evidence_id in evidence_ids:
-            evidence = self._store.get(EvidenceRecord, evidence_id)
-            if evidence is None:
-                raise LookupError(f"Missing evidence {evidence_id!r}")
-            shares_alert = evidence.alert_id == alert.alert_id
-            shares_case = alert.case_id is not None and evidence.case_id == alert.case_id
-            if not shares_alert and not shares_case:
-                raise ValueError(
-                    f"{field_name} contains evidence {evidence_id!r} that is not "
-                    f"linked to alert {alert.alert_id!r}"
-                )
+        self._evidence_linkage_service.validate_alert_evidence_linkage(
+            alert=alert,
+            evidence_ids=evidence_ids,
+            field_name=field_name,
+        )
 
     def _observations_for_case(self, case_id: str) -> tuple[ObservationRecord, ...]:
         return tuple(
