@@ -49,6 +49,7 @@ class Phase46OperationsPackDocsTests(unittest.TestCase):
             "Validation status: PASS",
             "docs/phase-46-approval-execution-reconciliation-operations-pack-boundary.md",
             "docs/runbook.md",
+            "docs/secops-domain-model.md",
             "docs/deployment/operator-training-handoff-packet.md",
             "docs/deployment/support-playbook-break-glass-rehearsal.md",
             "docs/operations-zammad-live-pilot-boundary.md",
