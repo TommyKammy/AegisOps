@@ -18,6 +18,21 @@ Canonical cross-phase boundary reference:
 
 - `docs/non-goals-and-expansion-guardrails.md`
 
+Phase 44-47 closure contracts:
+
+- Phase 44-47 boundary docs:
+  - `docs/phase-44-pilot-ingress-and-operator-surface-closure-boundary.md`
+  - `docs/phase-45-daily-soc-queue-and-operator-ux-hardening-boundary.md`
+  - `docs/phase-46-approval-execution-reconciliation-operations-pack-boundary.md`
+  - `docs/phase-47-control-plane-responsibility-decomposition-boundary.md`
+- Phase 44-47 validation docs:
+  - `docs/phase-44-pilot-ingress-and-operator-surface-closure-validation.md`
+  - `docs/phase-45-daily-soc-queue-and-operator-ux-hardening-validation.md`
+  - `docs/phase-46-approval-execution-reconciliation-operations-pack-validation.md`
+  - `docs/phase-47-control-plane-responsibility-decomposition-validation.md`
+
+AegisOps control-plane records remain authoritative. The operator UI, proxy, Zammad, assistant, optional evidence, downstream receipts, and maintainability projections remain subordinate context.
+
 The repository is no longer design-only: Phase 16 defines the approved first-boot runtime target for Phase 17 bring-up.
 That first-boot target is limited to the AegisOps control-plane service, PostgreSQL for control-plane state, the approved reverse proxy boundary, and reviewed Wazuh-facing analytic-signal intake expectations.
 OpenSearch, n8n, the full analyst-assistant surface, and the high-risk executor path remain optional, deferred, or non-blocking for first boot.

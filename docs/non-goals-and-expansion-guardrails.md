@@ -72,7 +72,22 @@ Missing or obviously fake secrets, placeholder credentials, unsigned tokens, inf
 
 When expansion depends on a later authorization, provenance, or scope-validation step, the reviewed proof must anchor at that real enforcement boundary instead of treating an earlier setup step as sufficient evidence.
 
-## 9. Review Use
+## 9. Phase 44-47 Closed Pilot-Readiness Guardrails
+
+The closed Phase 44-47 contracts cover pilot ingress, daily SOC queue, approval/execution/reconciliation operations, and control-plane responsibility decomposition.
+
+AegisOps control-plane records remain authoritative.
+
+No later roadmap item may use these closed phases to infer new runtime behavior, browser authority, ticket authority, assistant authority, optional-evidence authority, or commercial-readiness claims.
+
+Phase 44-47 boundary docs:
+
+- `docs/phase-44-pilot-ingress-and-operator-surface-closure-boundary.md`
+- `docs/phase-45-daily-soc-queue-and-operator-ux-hardening-boundary.md`
+- `docs/phase-46-approval-execution-reconciliation-operations-pack-boundary.md`
+- `docs/phase-47-control-plane-responsibility-decomposition-boundary.md`
+
+## 10. Review Use
 
 Use this registry as the default anti-expansion citation target when a proposal touches:
 
