@@ -128,6 +128,22 @@ class AssistantAdvisoryPersistenceTests(ServicePersistenceTestBase):
             )
         )
 
+    def test_service_initializes_dedicated_ai_trace_lifecycle_boundary(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+
+        self.assertIs(
+            service._assistant_context_assembler._ai_trace_lifecycle,
+            service._ai_trace_lifecycle_service,
+        )
+        self.assertIs(
+            service._live_assistant_workflow_coordinator._ai_trace_lifecycle,
+            service._ai_trace_lifecycle_service,
+        )
+
     def test_service_routes_reviewed_slice_checks_through_policy_module(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(

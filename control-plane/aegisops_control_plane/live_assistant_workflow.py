@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import json
 from typing import Any, Callable, Protocol
 
+from .ai_trace_lifecycle import AITraceLifecycleService
 from .assistant_provider import (
     AssistantProviderAdapter,
     AssistantProviderAttemptFailure,
@@ -55,27 +56,6 @@ class LiveAssistantWorkflowServiceDependencies(Protocol):
     ) -> str:
         ...
 
-    def _assistant_merge_ids(
-        self,
-        existing_values: tuple[str, ...],
-        *incoming_values: str | None,
-    ) -> tuple[str, ...]:
-        ...
-
-    def _assistant_ids_from_mapping(
-        self,
-        mapping: object,
-        key: str,
-    ) -> tuple[str, ...]:
-        ...
-
-    def _assistant_primary_linked_id(
-        self,
-        linked_ids: tuple[str, ...],
-    ) -> str | None:
-        ...
-
-
 class LiveAssistantWorkflowCoordinator:
     """Owns live assistant workflow orchestration behind the service API."""
 
@@ -92,6 +72,7 @@ class LiveAssistantWorkflowCoordinator:
         citations_from_context: Callable[[object], tuple[dict[str, object], ...]],
         unresolved_reasons_from_flags: Callable[[tuple[str, ...]], tuple[str, ...]],
         prompt_injection_flags: Callable[[object], tuple[str, ...]],
+        ai_trace_lifecycle: AITraceLifecycleService,
     ) -> None:
         self._service = service
         self._workflow_family = workflow_family
@@ -103,6 +84,7 @@ class LiveAssistantWorkflowCoordinator:
         self._citations_from_context = citations_from_context
         self._unresolved_reasons_from_flags = unresolved_reasons_from_flags
         self._prompt_injection_flags = prompt_injection_flags
+        self._ai_trace_lifecycle = ai_trace_lifecycle
 
     def run_live_assistant_workflow(
         self,
@@ -333,8 +315,8 @@ class LiveAssistantWorkflowCoordinator:
 
             updated_subject_linkage = dict(persisted_ai_trace.subject_linkage)
             updated_subject_linkage["recommendation_ids"] = (
-                self._service._assistant_merge_ids(
-                    self._service._assistant_ids_from_mapping(
+                self._ai_trace_lifecycle.merge_ids(
+                    self._ai_trace_lifecycle.ids_from_mapping(
                         persisted_ai_trace.subject_linkage,
                         "recommendation_ids",
                     ),
@@ -749,14 +731,14 @@ class LiveAssistantWorkflowCoordinator:
         source_alert_id = (
             getattr(context_snapshot, "record_id")
             if getattr(context_snapshot, "record_family") == "alert"
-            else self._service._assistant_primary_linked_id(
+            else self._ai_trace_lifecycle.primary_linked_id(
                 getattr(context_snapshot, "linked_alert_ids")
             )
         )
         source_case_id = (
             getattr(context_snapshot, "record_id")
             if getattr(context_snapshot, "record_family") == "case"
-            else self._service._assistant_primary_linked_id(
+            else self._ai_trace_lifecycle.primary_linked_id(
                 getattr(context_snapshot, "linked_case_ids")
             )
         )
