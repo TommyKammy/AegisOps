@@ -11,6 +11,7 @@ if str(TESTS_ROOT) not in sys.path:
 
 import _service_persistence_support as support
 from _service_persistence_support import ServicePersistenceTestBase
+from aegisops_control_plane.detection_lifecycle import DetectionIntakeService
 from aegisops_control_plane.models import AlertRecord, AnalyticSignalRecord, CaseRecord
 
 for name, value in vars(support).items():
@@ -19,6 +20,18 @@ for name, value in vars(support).items():
 
 
 class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
+    def test_service_initializes_dedicated_detection_intake_boundary(self) -> None:
+        store, _ = support.make_store()
+        service = support.AegisOpsControlPlaneService(
+            support.RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+
+        self.assertIsInstance(
+            service._detection_intake_service,
+            DetectionIntakeService,
+        )
+
     def test_service_delegates_case_workflow_mutations(self) -> None:
         store, _ = support.make_store()
         service = support.AegisOpsControlPlaneService(
@@ -134,7 +147,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             recorded_at=observed_at,
         )
 
-    def test_service_delegates_detection_lifecycle_operations(self) -> None:
+    def test_service_delegates_detection_intake_and_triage_operations(self) -> None:
         store, _ = support.make_store()
         service = support.AegisOpsControlPlaneService(
             support.RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
@@ -164,13 +177,24 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             last_seen_at=first_seen_at,
             reviewed_context={"source": {"source_family": "delegated"}},
         )
-        lifecycle_delegate = support.mock.Mock()
-        lifecycle_delegate.ingest_finding_alert.return_value = ingest_result
-        lifecycle_delegate.promote_alert_to_case.return_value = promoted_case
-        lifecycle_delegate.ingest_native_detection_record.return_value = native_result
-        lifecycle_delegate.ingest_analytic_signal_admission.return_value = ingest_result
-        lifecycle_delegate.attach_native_detection_context.return_value = attach_result
-        service._detection_lifecycle_service = lifecycle_delegate
+        reviewed_transitioned_at = first_seen_at
+        intake_delegate = support.mock.Mock()
+        intake_delegate.ingest_finding_alert.return_value = ingest_result
+        intake_delegate.promote_alert_to_case.return_value = promoted_case
+        intake_delegate.ingest_native_detection_record.return_value = native_result
+        intake_delegate.ingest_analytic_signal_admission.return_value = ingest_result
+        intake_delegate.attach_native_detection_context.return_value = attach_result
+        intake_delegate.reviewed_context_transitioned_at.return_value = (
+            reviewed_transitioned_at
+        )
+        intake_delegate.triage_disposition_matches_current_state.return_value = True
+        intake_delegate.case_lifecycle_state_for_triage_disposition.return_value = (
+            "triage_pending_action"
+        )
+        intake_delegate.case_lifecycle_for_disposition.return_value = (
+            "disposition_pending_action"
+        )
+        service._detection_intake_service = intake_delegate
 
         self.assertIs(
             service.ingest_finding_alert(
@@ -209,8 +233,28 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             ),
             attach_result,
         )
+        self.assertIs(
+            service._reviewed_context_transitioned_at(support.mock.sentinel.record),
+            reviewed_transitioned_at,
+        )
+        self.assertTrue(
+            service._triage_disposition_matches_current_state(
+                support.mock.sentinel.record,
+                "business_hours_handoff",
+            )
+        )
+        self.assertEqual(
+            service._case_lifecycle_state_for_triage_disposition(
+                "business_hours_handoff"
+            ),
+            "triage_pending_action",
+        )
+        self.assertEqual(
+            service._case_lifecycle_for_disposition("business_hours_handoff"),
+            "disposition_pending_action",
+        )
 
-        lifecycle_delegate.ingest_finding_alert.assert_called_once_with(
+        intake_delegate.ingest_finding_alert.assert_called_once_with(
             finding_id="finding-delegated-001",
             analytic_signal_id="signal-delegated-001",
             substrate_detection_record_id="substrate-delegated-001",
@@ -220,22 +264,35 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             materially_new_work=True,
             reviewed_context={"source": {"source_family": "delegated"}},
         )
-        lifecycle_delegate.promote_alert_to_case.assert_called_once_with(
+        intake_delegate.promote_alert_to_case.assert_called_once_with(
             "alert-delegated-001",
             case_id="case-delegated-001",
             case_lifecycle_state="investigating",
         )
-        lifecycle_delegate.ingest_native_detection_record.assert_called_once_with(
+        intake_delegate.ingest_native_detection_record.assert_called_once_with(
             adapter,
             native_record,
         )
-        lifecycle_delegate.ingest_analytic_signal_admission.assert_called_once_with(
+        intake_delegate.ingest_analytic_signal_admission.assert_called_once_with(
             admission
         )
-        lifecycle_delegate.attach_native_detection_context.assert_called_once_with(
+        intake_delegate.attach_native_detection_context.assert_called_once_with(
             record=native_record,
             ingest_result=ingest_result,
             substrate_detection_record_id="substrate-delegated-001",
+        )
+        intake_delegate.reviewed_context_transitioned_at.assert_called_once_with(
+            support.mock.sentinel.record
+        )
+        intake_delegate.triage_disposition_matches_current_state.assert_called_once_with(
+            support.mock.sentinel.record,
+            "business_hours_handoff",
+        )
+        intake_delegate.case_lifecycle_state_for_triage_disposition.assert_called_once_with(
+            "business_hours_handoff"
+        )
+        intake_delegate.case_lifecycle_for_disposition.assert_called_once_with(
+            "business_hours_handoff"
         )
 
     def test_service_rejects_promoting_alert_with_missing_linked_case(self) -> None:
