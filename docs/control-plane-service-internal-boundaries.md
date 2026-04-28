@@ -93,6 +93,12 @@ Current extraction status as of issue `#760`:
 
 - assistant context, advisory output, recommendation draft rendering, and advisory draft attachment now delegate from `AegisOpsControlPlaneService` into `AssistantContextAssembler`.
 
+Current extraction status as of issue `#922`:
+
+- AI trace linkage, material-input evidence selection, advisory citation read sets, and trace-adjacent recommendation/reconciliation discovery now live behind `AITraceLifecycleService`;
+- `AssistantContextAssembler` and the live assistant workflow receive that focused lifecycle boundary instead of owning trace linkage through facade helper callbacks; and
+- compatibility delegates remain on `AegisOpsControlPlaneService` for existing internal collaborators until later Phase 49 slices remove those call sites.
+
 Representative methods include:
 
 - `inspect_assistant_context`
@@ -179,6 +185,8 @@ The target collaborators are:
   Owns the bounded case mutation write path now extracted from `service.py`: observations, leads, recommendations, handoff, and disposition. This is the first extracted write-path slice inside the broader analyst workflow cluster and preserves the stable facade entrypoints on `AegisOpsControlPlaneService`.
 - `AssistantAdvisoryService`
   Owns assistant-context assembly, citation-grounded lineage gathering, advisory output shaping, recommendation draft rendering, and advisory draft attachment.
+- `AITraceLifecycleService`
+  Owns AI trace linkage, material input evidence selection, cited advisory read-set expansion, and trace-adjacent recommendation/reconciliation discovery used by advisory assembly and the live assistant workflow.
 - `ActionGovernanceService`
   Owns action-policy evaluation, action request creation, approval-bound delegation, observed-execution normalization, and action/delegation/reconciliation binding checks.
 - `RestoreReadinessService`

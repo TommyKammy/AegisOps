@@ -24,6 +24,7 @@ from .adapters.osquery import OsqueryHostContextAdapter
 from .adapters.postgres import PostgresControlPlaneStore
 from .adapters.shuffle import ShuffleActionAdapter
 from .adapters.wazuh import WazuhAlertAdapter
+from .ai_trace_lifecycle import AITraceLifecycleService
 from .assistant_provider import (
     AssistantProviderAdapter,
     AssistantProviderFailure,
@@ -1333,6 +1334,7 @@ class AegisOpsControlPlaneService:
             self,
             normalize_admission_provenance=_normalize_admission_provenance,
         )
+        self._ai_trace_lifecycle_service = AITraceLifecycleService(self._store)
         self._assistant_context_assembler = AssistantContextAssembler(
             self,
             record_types_by_family=RECORD_TYPES_BY_FAMILY,
@@ -1343,6 +1345,7 @@ class AegisOpsControlPlaneService:
             recommendation_draft_snapshot_from_context=(
                 _recommendation_draft_snapshot_from_context
             ),
+            ai_trace_lifecycle=self._ai_trace_lifecycle_service,
         )
         self._assistant_advisory_coordinator = AssistantAdvisoryCoordinator(
             self._assistant_context_assembler
@@ -1366,6 +1369,7 @@ class AegisOpsControlPlaneService:
             prompt_injection_flags=(
                 lambda text: _phase24_live_assistant_prompt_injection_flags(text)
             ),
+            ai_trace_lifecycle=self._ai_trace_lifecycle_service,
         )
         self._operator_inspection_read_surface = OperatorInspectionReadSurface(
             self,
@@ -4509,9 +4513,8 @@ class AegisOpsControlPlaneService:
             record_id=record_id,
         )
 
-    @staticmethod
-    def _assistant_primary_linked_id(linked_ids: tuple[str, ...]) -> str | None:
-        return linked_ids[0] if linked_ids else None
+    def _assistant_primary_linked_id(self, linked_ids: tuple[str, ...]) -> str | None:
+        return self._ai_trace_lifecycle_service.primary_linked_id(linked_ids)
 
     def create_reviewed_action_request_from_advisory(
         self,
@@ -4790,86 +4793,31 @@ class AegisOpsControlPlaneService:
             for detection_id in normalized_substrate_detection_record_ids
         )
 
-    @staticmethod
-    def _assistant_ids_from_value(value: object) -> tuple[str, ...]:
-        if isinstance(value, str):
-            return (value,)
-        if isinstance(value, (list, tuple)):
-            return tuple(item for item in value if isinstance(item, str))
-        return ()
+    def _assistant_ids_from_value(self, value: object) -> tuple[str, ...]:
+        return self._ai_trace_lifecycle_service.ids_from_value(value)
 
-    @staticmethod
     def _assistant_ids_from_mapping(
+        self,
         mapping: Mapping[str, object],
         key: str,
     ) -> tuple[str, ...]:
-        return AegisOpsControlPlaneService._assistant_ids_from_value(mapping.get(key))
+        return self._ai_trace_lifecycle_service.ids_from_mapping(mapping, key)
 
-    @staticmethod
     def _assistant_merge_ids(
+        self,
         existing_values: object,
         incoming_values: object,
     ) -> tuple[str, ...]:
-        merged = AegisOpsControlPlaneService._merge_linked_ids(existing_values, None)
-        if isinstance(incoming_values, (list, tuple)):
-            for value in incoming_values:
-                merged = AegisOpsControlPlaneService._merge_linked_ids(merged, value)
-        else:
-            merged = AegisOpsControlPlaneService._merge_linked_ids(
-                merged,
-                incoming_values if isinstance(incoming_values, str) else None,
-            )
-        return merged
+        return self._ai_trace_lifecycle_service.merge_ids(
+            existing_values,
+            incoming_values,
+        )
 
     def _assistant_action_lineage_ids(
         self,
         record: ControlPlaneRecord,
     ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
-        action_request_ids = self._assistant_ids_from_value(
-            getattr(record, "action_request_id", None)
-        )
-        approval_decision_ids = self._assistant_ids_from_value(
-            getattr(record, "approval_decision_id", None)
-        )
-        action_execution_ids = self._assistant_ids_from_value(
-            getattr(record, "action_execution_id", None)
-        )
-        delegation_ids = self._assistant_ids_from_value(getattr(record, "delegation_id", None))
-        if isinstance(record, ReconciliationRecord):
-            action_request_ids = self._assistant_merge_ids(
-                action_request_ids,
-                self._assistant_ids_from_mapping(
-                    record.subject_linkage,
-                    "action_request_ids",
-                ),
-            )
-            approval_decision_ids = self._assistant_merge_ids(
-                approval_decision_ids,
-                self._assistant_ids_from_mapping(
-                    record.subject_linkage,
-                    "approval_decision_ids",
-                ),
-            )
-            action_execution_ids = self._assistant_merge_ids(
-                action_execution_ids,
-                self._assistant_ids_from_mapping(
-                    record.subject_linkage,
-                    "action_execution_ids",
-                ),
-            )
-            delegation_ids = self._assistant_merge_ids(
-                delegation_ids,
-                self._assistant_ids_from_mapping(
-                    record.subject_linkage,
-                    "delegation_ids",
-                ),
-            )
-        return (
-            action_request_ids,
-            approval_decision_ids,
-            action_execution_ids,
-            delegation_ids,
-        )
+        return self._ai_trace_lifecycle_service.action_lineage_ids(record)
 
     def _assistant_merge_action_request_linkage(
         self,
@@ -4879,102 +4827,38 @@ class AegisOpsControlPlaneService:
         linked_finding_ids: tuple[str, ...],
         action_request: ActionRequestRecord,
     ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
-        return (
-            self._assistant_merge_ids(linked_alert_ids, action_request.alert_id),
-            self._assistant_merge_ids(linked_case_ids, action_request.case_id),
-            self._assistant_merge_ids(linked_finding_ids, action_request.finding_id),
+        return self._ai_trace_lifecycle_service.merge_action_request_linkage(
+            linked_alert_ids=linked_alert_ids,
+            linked_case_ids=linked_case_ids,
+            linked_finding_ids=linked_finding_ids,
+            action_request=action_request,
         )
 
     def _assistant_action_execution_for_delegation_id(
         self,
         delegation_id: str,
     ) -> ActionExecutionRecord | None:
-        for execution in self._store.list(ActionExecutionRecord):
-            if execution.delegation_id == delegation_id:
-                return execution
-        return None
+        return self._ai_trace_lifecycle_service.action_execution_for_delegation_id(
+            delegation_id
+        )
 
     def _assistant_ai_trace_records_for_context(
         self,
         record: ControlPlaneRecord,
     ) -> tuple[AITraceRecord, ...]:
-        records: list[AITraceRecord] = []
-        seen_trace_ids: set[str] = set()
-
-        def add_trace(trace: AITraceRecord | None) -> None:
-            if trace is None or trace.ai_trace_id in seen_trace_ids:
-                return
-            seen_trace_ids.add(trace.ai_trace_id)
-            records.append(trace)
-
-        ai_trace_id = getattr(record, "ai_trace_id", None)
-        if ai_trace_id is not None:
-            add_trace(self._store.get(AITraceRecord, ai_trace_id))
-        if isinstance(record, AITraceRecord):
-            add_trace(record)
-
-        record_recommendation_id = getattr(record, "recommendation_id", None)
-        if record_recommendation_id is not None:
-            for trace in self._store.list(AITraceRecord):
-                if trace.ai_trace_id in seen_trace_ids:
-                    continue
-                if record_recommendation_id in self._assistant_ids_from_mapping(
-                    trace.subject_linkage,
-                    "recommendation_ids",
-                ):
-                    add_trace(trace)
-
-        return tuple(records)
+        return self._ai_trace_lifecycle_service.ai_trace_records_for_context(record)
 
     def _assistant_ai_trace_evidence_ids(
         self,
         ai_trace_record: AITraceRecord,
     ) -> tuple[str, ...]:
-        linked_evidence_ids = self._assistant_ids_from_mapping(
-            ai_trace_record.subject_linkage,
-            "evidence_ids",
-        )
-        linked_evidence_ids = self._assistant_merge_ids(
-            linked_evidence_ids,
-            ai_trace_record.material_input_refs,
-        )
-        return tuple(
-            evidence_id
-            for evidence_id in linked_evidence_ids
-            if self._store.get(EvidenceRecord, evidence_id) is not None
-        )
+        return self._ai_trace_lifecycle_service.ai_trace_evidence_ids(ai_trace_record)
 
     def _assistant_linked_evidence_ids(self, record: ControlPlaneRecord) -> tuple[str, ...]:
-        linked_evidence_ids = self._assistant_ids_from_value(getattr(record, "evidence_ids", ()))
-        linked_evidence_ids = self._assistant_merge_ids(
-            linked_evidence_ids,
-            getattr(record, "supporting_evidence_ids", ()),
-        )
-        if isinstance(record, ActionExecutionRecord):
-            linked_evidence_ids = self._assistant_merge_ids(
-                linked_evidence_ids,
-                self._assistant_ids_from_mapping(record.provenance, "evidence_ids"),
-            )
-        if isinstance(record, ReconciliationRecord):
-            linked_evidence_ids = self._assistant_merge_ids(
-                linked_evidence_ids,
-                self._assistant_ids_from_mapping(record.subject_linkage, "evidence_ids"),
-            )
-        for ai_trace_record in self._assistant_ai_trace_records_for_context(record):
-            linked_evidence_ids = self._assistant_merge_ids(
-                linked_evidence_ids,
-                self._assistant_ai_trace_evidence_ids(ai_trace_record),
-            )
-        return linked_evidence_ids
+        return self._ai_trace_lifecycle_service.linked_evidence_ids(record)
 
     def _assistant_evidence_siblings(self, record: EvidenceRecord) -> tuple[str, ...]:
-        evidence_records = self._assistant_evidence_records_for_context(
-            alert_ids=self._assistant_ids_from_value(record.alert_id),
-            case_ids=self._assistant_ids_from_value(record.case_id),
-            evidence_ids=(),
-            exclude_evidence_id=record.evidence_id,
-        )
-        return tuple(evidence.evidence_id for evidence in evidence_records)
+        return self._ai_trace_lifecycle_service.evidence_siblings(record)
 
     def _assistant_evidence_records_for_context(
         self,
@@ -4984,30 +4868,12 @@ class AegisOpsControlPlaneService:
         evidence_ids: tuple[str, ...],
         exclude_evidence_id: str | None,
     ) -> tuple[EvidenceRecord, ...]:
-        records: list[EvidenceRecord] = []
-        seen_ids: set[str] = set()
-        for evidence_id in evidence_ids:
-            evidence = self._store.get(EvidenceRecord, evidence_id)
-            if evidence is None:
-                continue
-            if exclude_evidence_id is not None and evidence.evidence_id == exclude_evidence_id:
-                continue
-            if evidence.evidence_id in seen_ids:
-                continue
-            seen_ids.add(evidence.evidence_id)
-            records.append(evidence)
-        for evidence in self._store.list(EvidenceRecord):
-            if exclude_evidence_id is not None and evidence.evidence_id == exclude_evidence_id:
-                continue
-            if evidence.evidence_id in seen_ids:
-                continue
-            if evidence.alert_id in alert_ids or (
-                evidence.case_id is not None and evidence.case_id in case_ids
-            ):
-                seen_ids.add(evidence.evidence_id)
-                records.append(evidence)
-        records.sort(key=lambda evidence: evidence.evidence_id)
-        return tuple(records)
+        return self._ai_trace_lifecycle_service.evidence_records_for_context(
+            alert_ids=alert_ids,
+            case_ids=case_ids,
+            evidence_ids=evidence_ids,
+            exclude_evidence_id=exclude_evidence_id,
+        )
 
     def _assistant_recommendation_records_for_context(
         self,
@@ -5018,43 +4884,13 @@ class AegisOpsControlPlaneService:
         ai_trace_records: tuple[AITraceRecord, ...],
         exclude_recommendation_id: str | None,
     ) -> tuple[RecommendationRecord, ...]:
-        records: list[RecommendationRecord] = []
-        lead_id = getattr(record, "lead_id", None)
-        hunt_run_id = getattr(record, "hunt_run_id", None)
-        ai_trace_id = getattr(record, "ai_trace_id", None)
-        ai_trace_recommendation_ids: set[str] = set()
-        for ai_trace_record in ai_trace_records:
-            ai_trace_recommendation_ids.update(
-                self._assistant_ids_from_mapping(
-                    ai_trace_record.subject_linkage,
-                    "recommendation_ids",
-                )
-            )
-        for recommendation in self._store.list(RecommendationRecord):
-            if (
-                exclude_recommendation_id is not None
-                and recommendation.recommendation_id == exclude_recommendation_id
-            ):
-                continue
-            if recommendation.alert_id in alert_ids:
-                records.append(recommendation)
-                continue
-            if recommendation.case_id is not None and recommendation.case_id in case_ids:
-                records.append(recommendation)
-                continue
-            if lead_id is not None and recommendation.lead_id == lead_id:
-                records.append(recommendation)
-                continue
-            if hunt_run_id is not None and recommendation.hunt_run_id == hunt_run_id:
-                records.append(recommendation)
-                continue
-            if ai_trace_id is not None and recommendation.ai_trace_id == ai_trace_id:
-                records.append(recommendation)
-                continue
-            if recommendation.recommendation_id in ai_trace_recommendation_ids:
-                records.append(recommendation)
-        records.sort(key=lambda recommendation: recommendation.recommendation_id)
-        return tuple(records)
+        return self._ai_trace_lifecycle_service.recommendation_records_for_context(
+            record=record,
+            alert_ids=alert_ids,
+            case_ids=case_ids,
+            ai_trace_records=ai_trace_records,
+            exclude_recommendation_id=exclude_recommendation_id,
+        )
 
     def _assistant_reconciliation_records_for_context(
         self,
@@ -5066,119 +4902,14 @@ class AegisOpsControlPlaneService:
         evidence_ids: tuple[str, ...],
         exclude_reconciliation_id: str | None,
     ) -> tuple[ReconciliationRecord, ...]:
-        records: list[ReconciliationRecord] = []
-        analytic_signal_id = getattr(record, "analytic_signal_id", None)
-        finding_id = getattr(record, "finding_id", None)
-        (
-            action_request_ids,
-            approval_decision_ids,
-            action_execution_ids,
-            delegation_ids,
-        ) = self._assistant_action_lineage_ids(record)
-        linked_finding_ids = set(finding_ids)
-        for reconciliation in self._store.list(ReconciliationRecord):
-            if (
-                exclude_reconciliation_id is not None
-                and reconciliation.reconciliation_id == exclude_reconciliation_id
-            ):
-                continue
-            subject_action_request_ids = self._assistant_ids_from_mapping(
-                reconciliation.subject_linkage,
-                "action_request_ids",
-            )
-            if any(
-                action_request_id in subject_action_request_ids
-                for action_request_id in action_request_ids
-            ):
-                records.append(reconciliation)
-                continue
-            subject_approval_decision_ids = self._assistant_ids_from_mapping(
-                reconciliation.subject_linkage,
-                "approval_decision_ids",
-            )
-            if any(
-                approval_decision_id in subject_approval_decision_ids
-                for approval_decision_id in approval_decision_ids
-            ):
-                records.append(reconciliation)
-                continue
-            subject_action_execution_ids = self._assistant_ids_from_mapping(
-                reconciliation.subject_linkage,
-                "action_execution_ids",
-            )
-            if any(
-                action_execution_id in subject_action_execution_ids
-                for action_execution_id in action_execution_ids
-            ):
-                records.append(reconciliation)
-                continue
-            subject_delegation_ids = self._assistant_ids_from_mapping(
-                reconciliation.subject_linkage,
-                "delegation_ids",
-            )
-            if any(
-                delegation_id in subject_delegation_ids
-                for delegation_id in delegation_ids
-            ):
-                records.append(reconciliation)
-                continue
-            if reconciliation.alert_id is not None and reconciliation.alert_id in alert_ids:
-                records.append(reconciliation)
-                continue
-            if (
-                analytic_signal_id is not None
-                and reconciliation.analytic_signal_id == analytic_signal_id
-            ):
-                records.append(reconciliation)
-                continue
-            subject_alert_ids = self._assistant_ids_from_mapping(
-                reconciliation.subject_linkage,
-                "alert_ids",
-            )
-            if any(alert_id in subject_alert_ids for alert_id in alert_ids):
-                records.append(reconciliation)
-                continue
-            subject_analytic_signal_ids = self._assistant_ids_from_mapping(
-                reconciliation.subject_linkage,
-                "analytic_signal_ids",
-            )
-            if (
-                analytic_signal_id is not None
-                and analytic_signal_id in subject_analytic_signal_ids
-            ):
-                records.append(reconciliation)
-                continue
-            if finding_id is not None and reconciliation.finding_id == finding_id:
-                records.append(reconciliation)
-                continue
-            if (
-                reconciliation.finding_id is not None
-                and reconciliation.finding_id in linked_finding_ids
-            ):
-                records.append(reconciliation)
-                continue
-            subject_finding_ids = self._assistant_ids_from_mapping(
-                reconciliation.subject_linkage,
-                "finding_ids",
-            )
-            if any(finding_id in subject_finding_ids for finding_id in linked_finding_ids):
-                records.append(reconciliation)
-                continue
-            subject_case_ids = self._assistant_ids_from_mapping(
-                reconciliation.subject_linkage,
-                "case_ids",
-            )
-            if any(case_id in subject_case_ids for case_id in case_ids):
-                records.append(reconciliation)
-                continue
-            subject_evidence_ids = self._assistant_ids_from_mapping(
-                reconciliation.subject_linkage,
-                "evidence_ids",
-            )
-            if any(evidence_id in subject_evidence_ids for evidence_id in evidence_ids):
-                records.append(reconciliation)
-        records.sort(key=lambda reconciliation: reconciliation.reconciliation_id)
-        return tuple(records)
+        return self._ai_trace_lifecycle_service.reconciliation_records_for_context(
+            record=record,
+            alert_ids=alert_ids,
+            case_ids=case_ids,
+            finding_ids=finding_ids,
+            evidence_ids=evidence_ids,
+            exclude_reconciliation_id=exclude_reconciliation_id,
+        )
 
     @staticmethod
     def _require_aware_datetime(value: object, field_name: str) -> datetime:

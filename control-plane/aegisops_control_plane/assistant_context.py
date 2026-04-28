@@ -4,6 +4,7 @@ from dataclasses import replace
 import re
 from typing import Any, Callable, Mapping
 
+from .ai_trace_lifecycle import AITraceLifecycleService
 from .models import (
     AITraceRecord,
     ActionExecutionRecord,
@@ -565,6 +566,7 @@ class AssistantContextAssembler:
         assistant_context_snapshot_factory: Callable[..., Any],
         advisory_snapshot_from_context: Callable[[Any], Any],
         recommendation_draft_snapshot_from_context: Callable[[Any], Any],
+        ai_trace_lifecycle: AITraceLifecycleService,
     ) -> None:
         self._service = service
         self._record_types_by_family = record_types_by_family
@@ -575,6 +577,7 @@ class AssistantContextAssembler:
         self._recommendation_draft_snapshot_from_context = (
             recommendation_draft_snapshot_from_context
         )
+        self._ai_trace_lifecycle = ai_trace_lifecycle
 
     def inspect_assistant_context(self, record_family: str, record_id: str) -> Any:
         record_family = self._service._require_non_empty_string(record_family, "record_family")
@@ -594,16 +597,16 @@ class AssistantContextAssembler:
         if record_family == "case":
             self._service._require_reviewed_operator_case_record(record)
 
-        linked_alert_ids = self._service._assistant_ids_from_value(
+        linked_alert_ids = self._ai_trace_lifecycle.ids_from_value(
             getattr(record, "alert_id", None)
         )
-        linked_case_ids = self._service._assistant_ids_from_value(
+        linked_case_ids = self._ai_trace_lifecycle.ids_from_value(
             getattr(record, "case_id", None)
         )
-        linked_finding_ids = self._service._assistant_ids_from_value(
+        linked_finding_ids = self._ai_trace_lifecycle.ids_from_value(
             getattr(record, "finding_id", None)
         )
-        linked_evidence_ids = self._service._assistant_linked_evidence_ids(record)
+        linked_evidence_ids = self._ai_trace_lifecycle.linked_evidence_ids(record)
 
         if isinstance(record, (ApprovalDecisionRecord, ActionExecutionRecord)):
             action_request_id = self._service._require_non_empty_string(
@@ -615,40 +618,40 @@ class AssistantContextAssembler:
                 raise LookupError(
                     f"Missing action request {action_request_id!r} for assistant context"
                 )
-            linked_alert_ids = self._service._assistant_merge_ids(
+            linked_alert_ids = self._ai_trace_lifecycle.merge_ids(
                 linked_alert_ids,
                 action_request.alert_id,
             )
-            linked_case_ids = self._service._assistant_merge_ids(
+            linked_case_ids = self._ai_trace_lifecycle.merge_ids(
                 linked_case_ids,
                 action_request.case_id,
             )
-            linked_finding_ids = self._service._assistant_merge_ids(
+            linked_finding_ids = self._ai_trace_lifecycle.merge_ids(
                 linked_finding_ids,
                 action_request.finding_id,
             )
 
         if isinstance(record, AnalyticSignalRecord):
-            linked_alert_ids = self._service._assistant_merge_ids(
+            linked_alert_ids = self._ai_trace_lifecycle.merge_ids(
                 linked_alert_ids,
                 record.alert_ids,
             )
-            linked_case_ids = self._service._assistant_merge_ids(
+            linked_case_ids = self._ai_trace_lifecycle.merge_ids(
                 linked_case_ids,
                 record.case_ids,
             )
         elif isinstance(record, CaseRecord):
-            linked_evidence_ids = self._service._assistant_merge_ids(
+            linked_evidence_ids = self._ai_trace_lifecycle.merge_ids(
                 linked_evidence_ids,
                 record.evidence_ids,
             )
         elif isinstance(record, EvidenceRecord):
-            linked_evidence_ids = self._service._assistant_merge_ids(
+            linked_evidence_ids = self._ai_trace_lifecycle.merge_ids(
                 linked_evidence_ids,
-                self._service._assistant_evidence_siblings(record),
+                self._ai_trace_lifecycle.evidence_siblings(record),
             )
         elif isinstance(record, ObservationRecord):
-            linked_evidence_ids = self._service._assistant_merge_ids(
+            linked_evidence_ids = self._ai_trace_lifecycle.merge_ids(
                 linked_evidence_ids,
                 record.supporting_evidence_ids,
             )
@@ -657,16 +660,16 @@ class AssistantContextAssembler:
                 linked_alert_ids,
                 record.alert_id,
             )
-            linked_alert_ids = self._service._assistant_merge_ids(
+            linked_alert_ids = self._ai_trace_lifecycle.merge_ids(
                 linked_alert_ids,
-                self._service._assistant_ids_from_mapping(record.subject_linkage, "alert_ids"),
+                self._ai_trace_lifecycle.ids_from_mapping(record.subject_linkage, "alert_ids"),
             )
             (
                 action_request_ids,
                 approval_decision_ids,
                 action_execution_ids,
                 delegation_ids,
-            ) = self._service._assistant_action_lineage_ids(record)
+            ) = self._ai_trace_lifecycle.action_lineage_ids(record)
             for action_request_id in action_request_ids:
                 action_request = self._service._store.get(ActionRequestRecord, action_request_id)
                 if action_request is None:
@@ -675,7 +678,7 @@ class AssistantContextAssembler:
                     linked_alert_ids,
                     linked_case_ids,
                     linked_finding_ids,
-                ) = self._service._assistant_merge_action_request_linkage(
+                ) = self._ai_trace_lifecycle.merge_action_request_linkage(
                     linked_alert_ids=linked_alert_ids,
                     linked_case_ids=linked_case_ids,
                     linked_finding_ids=linked_finding_ids,
@@ -698,7 +701,7 @@ class AssistantContextAssembler:
                     linked_alert_ids,
                     linked_case_ids,
                     linked_finding_ids,
-                ) = self._service._assistant_merge_action_request_linkage(
+                ) = self._ai_trace_lifecycle.merge_action_request_linkage(
                     linked_alert_ids=linked_alert_ids,
                     linked_case_ids=linked_case_ids,
                     linked_finding_ids=linked_finding_ids,
@@ -720,18 +723,18 @@ class AssistantContextAssembler:
                         linked_alert_ids,
                         linked_case_ids,
                         linked_finding_ids,
-                    ) = self._service._assistant_merge_action_request_linkage(
+                    ) = self._ai_trace_lifecycle.merge_action_request_linkage(
                         linked_alert_ids=linked_alert_ids,
                         linked_case_ids=linked_case_ids,
                         linked_finding_ids=linked_finding_ids,
                         action_request=action_request,
                     )
-                linked_evidence_ids = self._service._assistant_merge_ids(
+                linked_evidence_ids = self._ai_trace_lifecycle.merge_ids(
                     linked_evidence_ids,
-                    self._service._assistant_linked_evidence_ids(action_execution),
+                    self._ai_trace_lifecycle.linked_evidence_ids(action_execution),
                 )
             for delegation_id in delegation_ids:
-                action_execution = self._service._assistant_action_execution_for_delegation_id(
+                action_execution = self._ai_trace_lifecycle.action_execution_for_delegation_id(
                     delegation_id
                 )
                 if action_execution is None:
@@ -745,17 +748,17 @@ class AssistantContextAssembler:
                         linked_alert_ids,
                         linked_case_ids,
                         linked_finding_ids,
-                    ) = self._service._assistant_merge_action_request_linkage(
+                    ) = self._ai_trace_lifecycle.merge_action_request_linkage(
                         linked_alert_ids=linked_alert_ids,
                         linked_case_ids=linked_case_ids,
                         linked_finding_ids=linked_finding_ids,
                         action_request=action_request,
                     )
-                linked_evidence_ids = self._service._assistant_merge_ids(
+                linked_evidence_ids = self._ai_trace_lifecycle.merge_ids(
                     linked_evidence_ids,
-                    self._service._assistant_linked_evidence_ids(action_execution),
+                    self._ai_trace_lifecycle.linked_evidence_ids(action_execution),
                 )
-            subject_analytic_signal_ids = self._service._assistant_ids_from_mapping(
+            subject_analytic_signal_ids = self._ai_trace_lifecycle.ids_from_mapping(
                 record.subject_linkage,
                 "analytic_signal_ids",
             )
@@ -763,15 +766,15 @@ class AssistantContextAssembler:
                 signal = self._service._store.get(AnalyticSignalRecord, analytic_signal_id)
                 if signal is None:
                     continue
-                linked_alert_ids = self._service._assistant_merge_ids(
+                linked_alert_ids = self._ai_trace_lifecycle.merge_ids(
                     linked_alert_ids,
                     signal.alert_ids,
                 )
-                linked_case_ids = self._service._assistant_merge_ids(
+                linked_case_ids = self._ai_trace_lifecycle.merge_ids(
                     linked_case_ids,
                     signal.case_ids,
                 )
-                linked_finding_ids = self._service._assistant_merge_ids(
+                linked_finding_ids = self._ai_trace_lifecycle.merge_ids(
                     linked_finding_ids,
                     signal.finding_id,
                 )
@@ -779,54 +782,54 @@ class AssistantContextAssembler:
                 alert = self._service._store.get(AlertRecord, alert_id)
                 if alert is None:
                     continue
-                linked_case_ids = self._service._assistant_merge_ids(
+                linked_case_ids = self._ai_trace_lifecycle.merge_ids(
                     linked_case_ids,
                     alert.case_id,
                 )
-                linked_finding_ids = self._service._assistant_merge_ids(
+                linked_finding_ids = self._ai_trace_lifecycle.merge_ids(
                     linked_finding_ids,
                     alert.finding_id,
                 )
-            linked_case_ids = self._service._assistant_merge_ids(
+            linked_case_ids = self._ai_trace_lifecycle.merge_ids(
                 linked_case_ids,
-                self._service._assistant_ids_from_mapping(record.subject_linkage, "case_ids"),
+                self._ai_trace_lifecycle.ids_from_mapping(record.subject_linkage, "case_ids"),
             )
-            linked_finding_ids = self._service._assistant_merge_ids(
+            linked_finding_ids = self._ai_trace_lifecycle.merge_ids(
                 linked_finding_ids,
-                self._service._assistant_ids_from_mapping(record.subject_linkage, "finding_ids"),
+                self._ai_trace_lifecycle.ids_from_mapping(record.subject_linkage, "finding_ids"),
             )
-            linked_evidence_ids = self._service._assistant_merge_ids(
+            linked_evidence_ids = self._ai_trace_lifecycle.merge_ids(
                 linked_evidence_ids,
-                self._service._assistant_ids_from_mapping(record.subject_linkage, "evidence_ids"),
+                self._ai_trace_lifecycle.ids_from_mapping(record.subject_linkage, "evidence_ids"),
             )
         elif isinstance(record, HuntRunRecord):
-            linked_evidence_ids = self._service._assistant_merge_ids(
+            linked_evidence_ids = self._ai_trace_lifecycle.merge_ids(
                 linked_evidence_ids,
-                self._service._assistant_ids_from_mapping(record.output_linkage, "evidence_ids"),
+                self._ai_trace_lifecycle.ids_from_mapping(record.output_linkage, "evidence_ids"),
             )
 
-        linked_ai_trace_records = self._service._assistant_ai_trace_records_for_context(record)
+        linked_ai_trace_records = self._ai_trace_lifecycle.ai_trace_records_for_context(record)
         for ai_trace_record in linked_ai_trace_records:
-            linked_alert_ids = self._service._assistant_merge_ids(
+            linked_alert_ids = self._ai_trace_lifecycle.merge_ids(
                 linked_alert_ids,
-                self._service._assistant_ids_from_mapping(
+                self._ai_trace_lifecycle.ids_from_mapping(
                     ai_trace_record.subject_linkage,
                     "alert_ids",
                 ),
             )
-            linked_case_ids = self._service._assistant_merge_ids(
+            linked_case_ids = self._ai_trace_lifecycle.merge_ids(
                 linked_case_ids,
-                self._service._assistant_ids_from_mapping(
+                self._ai_trace_lifecycle.ids_from_mapping(
                     ai_trace_record.subject_linkage,
                     "case_ids",
                 ),
             )
-            linked_evidence_ids = self._service._assistant_merge_ids(
+            linked_evidence_ids = self._ai_trace_lifecycle.merge_ids(
                 linked_evidence_ids,
-                self._service._assistant_ai_trace_evidence_ids(ai_trace_record),
+                self._ai_trace_lifecycle.ai_trace_evidence_ids(ai_trace_record),
             )
 
-        linked_evidence_records = self._service._assistant_evidence_records_for_context(
+        linked_evidence_records = self._ai_trace_lifecycle.evidence_records_for_context(
             alert_ids=linked_alert_ids,
             case_ids=linked_case_ids,
             evidence_ids=linked_evidence_ids,
@@ -834,21 +837,21 @@ class AssistantContextAssembler:
                 record.evidence_id if isinstance(record, EvidenceRecord) else None
             ),
         )
-        linked_evidence_ids = self._service._assistant_merge_ids(
+        linked_evidence_ids = self._ai_trace_lifecycle.merge_ids(
             linked_evidence_ids,
             tuple(evidence.evidence_id for evidence in linked_evidence_records),
         )
         for evidence in linked_evidence_records:
-            linked_alert_ids = self._service._assistant_merge_ids(
+            linked_alert_ids = self._ai_trace_lifecycle.merge_ids(
                 linked_alert_ids,
                 evidence.alert_id,
             )
-            linked_case_ids = self._service._assistant_merge_ids(
+            linked_case_ids = self._ai_trace_lifecycle.merge_ids(
                 linked_case_ids,
                 evidence.case_id,
             )
 
-        linked_recommendation_records = self._service._assistant_recommendation_records_for_context(
+        linked_recommendation_records = self._ai_trace_lifecycle.recommendation_records_for_context(
             record=record,
             alert_ids=linked_alert_ids,
             case_ids=linked_case_ids,
@@ -866,11 +869,11 @@ class AssistantContextAssembler:
         )
         if not has_direct_recommendation_lineage:
             for recommendation in linked_recommendation_records:
-                linked_alert_ids = self._service._assistant_merge_ids(
+                linked_alert_ids = self._ai_trace_lifecycle.merge_ids(
                     linked_alert_ids,
                     recommendation.alert_id,
                 )
-                linked_case_ids = self._service._assistant_merge_ids(
+                linked_case_ids = self._ai_trace_lifecycle.merge_ids(
                     linked_case_ids,
                     recommendation.case_id,
                 )
@@ -889,7 +892,7 @@ class AssistantContextAssembler:
                 linked_case_records_list.append(self._record_to_dict(case))
         linked_case_records = tuple(linked_case_records_list)
 
-        linked_reconciliation_records = self._service._assistant_reconciliation_records_for_context(
+        linked_reconciliation_records = self._ai_trace_lifecycle.reconciliation_records_for_context(
             record=record,
             alert_ids=linked_alert_ids,
             case_ids=linked_case_ids,
