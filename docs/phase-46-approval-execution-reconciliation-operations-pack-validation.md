@@ -65,7 +65,7 @@ No approval behavior, execution behavior, reconciliation behavior, Zammad behavi
 
 ## Validation Commands
 
-- `python3 -m unittest control-plane.tests.test_phase46_operations_pack_docs`
+- `python3 -m unittest control-plane/tests/test_phase46_operations_pack_docs.py`
 - `bash scripts/verify-zammad-live-pilot-boundary.sh`
 - `bash scripts/test-verify-zammad-live-pilot-boundary.sh`
 - `bash scripts/verify-phase-37-reviewed-record-chain-rehearsal.sh`

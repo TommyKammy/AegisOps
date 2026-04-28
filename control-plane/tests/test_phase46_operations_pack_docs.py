@@ -57,7 +57,7 @@ class Phase46OperationsPackDocsTests(unittest.TestCase):
             "scripts/verify-phase-37-reviewed-record-chain-rehearsal.sh",
             "bash scripts/verify-zammad-live-pilot-boundary.sh",
             "bash scripts/test-verify-zammad-live-pilot-boundary.sh",
-            "python3 -m unittest control-plane.tests.test_phase46_operations_pack_docs",
+            "python3 -m unittest control-plane/tests/test_phase46_operations_pack_docs.py",
             "node <codex-supervisor-root>/dist/index.js issue-lint 890 --config <supervisor-config-path>",
             "No approval behavior, execution behavior, reconciliation behavior, Zammad behavior, or runtime behavior changes are introduced by this validation document.",
         ):
