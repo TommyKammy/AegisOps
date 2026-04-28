@@ -59,6 +59,7 @@ The preflight output must be deterministic and machine-readable.
 | `pass` | boolean | `true` only when every predecessor gate required by the requested phase is `done` or explicitly deferred. |
 | `fail` | boolean | `true` when the requested phase cannot safely start. `pass` and `fail` must not both be true. |
 | `phase_classification` | classification map | Map from `phase_id` to one of the phase-state classifications. |
+| `invalid_phase_id` | string or null | Exact phase id that failed, for example `48.7`. |
 | `invalid_field` | string or null | Exact missing or invalid field, for example `child_issue_numbers`, `Depends on:`, `metadata_errors`, or `phase_evaluation_state`. |
 | `invalid_issue_number` | number or null | Exact issue number when the failure belongs to one issue. |
 | `suggested_next_safe_action` | string | Specific next action, for example create a child issue, replace a placeholder dependency, rerun issue-lint, or record evaluation closure. |
@@ -92,8 +93,9 @@ For Phase 49.0 or Phase 49 scheduling, the preflight must:
 | Example | Input facts | Classification | Output |
 | --- | --- | --- | --- |
 | Complete phase | Phase 48 has an Epic, all child issues are listed, metadata is valid, `issue-lint` reports `execution_ready=yes`, `missing_required=none`, `metadata_errors=none`, and evaluation is closed. | `done` | `pass=true`, `invalid_field=null`, `suggested_next_safe_action="evaluate next phase gate"` |
+| Missing Epic issue | Phase 48.7 has no `epic_issue_number` binding, or the bound Epic issue record cannot be read from the same issue graph snapshot. | `missing` | `fail=true`, `invalid_phase_id="48.7"`, `invalid_field="epic_issue_number"`, `suggested_next_safe_action="create or bind the missing Epic issue before scheduling dependent phases"` |
 | Missing child issue | Phase 48.7 has an Epic, but `child_issue_numbers` omits a required child from the phase graph. | `missing` | `fail=true`, `invalid_field="child_issue_numbers"`, `suggested_next_safe_action="create or bind the missing child issue before scheduling dependent phases"` |
-| Placeholder dependency | A child issue has `Depends on: TBD` or a sample issue number instead of an explicit authoritative dependency or `none`. | `blocked` | `fail=true`, `invalid_field="Depends on:"`, `suggested_next_safe_action="replace the placeholder dependency and rerun issue-lint"` |
+| Placeholder or non-real dependency | A child issue has `Depends on: TBD`, a sample issue number, or an issue number outside the authoritative phase graph instead of an explicit authoritative dependency or `none`. | `blocked` | `fail=true`, `invalid_phase_id="48.7"`, `invalid_field="Depends on:"`, `suggested_next_safe_action="replace the placeholder dependency and rerun issue-lint"` |
 | Non-lint-clean issue | `issue-lint` reports `execution_ready=no` or `metadata_errors` is not `none` for a required Epic or child issue. | `blocked` | `fail=true`, `invalid_field="metadata_errors"`, `invalid_issue_number=<issue-number>`, `suggested_next_safe_action="repair the issue body and rerun issue-lint"` |
 | Evaluation still needed | Required issues are closed or merged, but `phase_evaluation_state` is missing or still open. | `merge_or_evaluation_needed` | `fail=true`, `invalid_field="phase_evaluation_state"`, `suggested_next_safe_action="record evaluation closure or explicit deferral before dependent scheduling"` |
 
@@ -123,6 +125,7 @@ The preflight emits deterministic JSON. A blocked current Phase 48.7 predecessor
   "phase_classification": {
     "48.7": "materialized_open"
   },
+  "invalid_phase_id": "48.7",
   "invalid_field": "phase_completion_state",
   "invalid_issue_number": null,
   "suggested_next_safe_action": "complete and evaluate the materialized predecessor phase before dependent scheduling"
