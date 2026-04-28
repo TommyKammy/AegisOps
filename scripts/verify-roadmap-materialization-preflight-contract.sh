@@ -29,6 +29,9 @@ require_file
 
 required_phrases=(
   "Roadmap Materialization Preflight Contract"
+  "bash scripts/roadmap-materialization-preflight.sh --graph docs/automation/roadmap-materialization-phase-graph.json --target-phase 49.0 --issue-source github"
+  "bash scripts/test-verify-roadmap-materialization-preflight.sh"
+  "docs/automation/roadmap-materialization-phase-graph.json"
   "phase_id"
   "epic_issue_number"
   "child_issue_numbers"

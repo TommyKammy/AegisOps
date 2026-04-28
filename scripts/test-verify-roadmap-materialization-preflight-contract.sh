@@ -26,6 +26,10 @@ Required classifications: missing, materialized_open, blocked, execution_ready, 
 
 Required outputs: pass, fail, phase_classification, invalid_field, suggested_next_safe_action.
 
+Invocation: bash scripts/roadmap-materialization-preflight.sh --graph docs/automation/roadmap-materialization-phase-graph.json --target-phase 49.0 --issue-source github
+Smoke test: bash scripts/test-verify-roadmap-materialization-preflight.sh
+Graph input: docs/automation/roadmap-materialization-phase-graph.json
+
 Phase 49.0/49 must not start before Phase 48, Phase 48.5, Phase 48.6, and Phase 48.7 gates are materialized, lint-clean, and evaluated or explicitly deferred.
 
 AegisOps control-plane records remain authoritative workflow truth.
