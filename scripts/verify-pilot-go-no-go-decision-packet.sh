@@ -178,6 +178,7 @@ require_label_contains_release "Known limitations review:" "known limitations re
 require_label_contains_release "Retention decision:" "retention decision"
 require_label_contains_release "Zammad/non-authority posture:" "Zammad non-authority posture"
 require_label_contains_release "Assistant limitation posture:" "assistant limitation posture"
+require_label_contains_release "Evidence handoff owner:" "evidence handoff owner"
 require_label_contains_release "Next health review:" "next health review"
 
 required_reference_phrases=(

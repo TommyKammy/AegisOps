@@ -22,7 +22,7 @@ Zammad/non-authority posture: Zammad remains coordination-only for aegisops-sing
 
 Assistant limitation posture: assistant output remains advisory-only for aegisops-single-customer-pilot-2026-04-27-c4527e5.
 
-Evidence handoff owner: pilot-owner-redacted.
+Evidence handoff owner: pilot-owner-redacted owns the retained packet for aegisops-single-customer-pilot-2026-04-27-c4527e5.
 
 Next health review: 2026-04-28 for aegisops-single-customer-pilot-2026-04-27-c4527e5.
 

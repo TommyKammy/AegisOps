@@ -44,6 +44,7 @@ assert_fails_with() {
 assert_passes "${positive_packet}"
 assert_fails_with "${fixture_dir}/missing-release-handoff.md" "Missing pilot go/no-go decision packet entry: Release handoff evidence:"
 assert_fails_with "${fixture_dir}/mixed-release-identifier.md" "Mixed pilot go/no-go release identifiers:"
+assert_fails_with "${fixture_dir}/owner-not-release-bound.md" "Missing evidence handoff owner: Evidence handoff owner: must reference aegisops-single-customer-pilot-2026-04-27-c4527e5"
 
 workstation_path_packet="${workdir}/workstation-local-path.md"
 cp "${fixture_dir}/workstation-local-path.md" "${workstation_path_packet}"

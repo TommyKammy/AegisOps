@@ -10,7 +10,7 @@ Detector activation evidence: docs/deployment/detector-activation-evidence.singl
 Known limitations review: docs/deployment/known-limitations-retention-decision-template.md for aegisops-single-customer-pilot-2026-04-27-c4527e5.
 Retention decision: docs/deployment/known-limitations-retention-decision-template.md for aegisops-single-customer-pilot-2026-04-27-c4527e5.
 Assistant limitation posture: assistant output remains advisory-only for aegisops-single-customer-pilot-2026-04-27-c4527e5.
-Evidence handoff owner: pilot-owner-redacted.
+Evidence handoff owner: pilot-owner-redacted owns the retained packet for aegisops-single-customer-pilot-2026-04-27-c4527e5.
 Next health review: 2026-04-28 for aegisops-single-customer-pilot-2026-04-27-c4527e5.
 Refused evidence: private payloads are refused.
 Verification: Run `scripts/verify-pilot-readiness-checklist.sh`.
