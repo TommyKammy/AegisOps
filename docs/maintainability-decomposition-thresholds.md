@@ -204,6 +204,11 @@ It reports a candidate only when a tracked control-plane Python module is both l
 Known current candidates are recorded in `docs/maintainability-hotspot-baseline.txt`.
 If the verifier reports only known baseline entries, maintainers should treat the output as a reminder that those files remain reviewed hotspots and should not absorb unrelated responsibility growth without a decomposition decision.
 
+Baseline entries may also record Phase closeout ceilings such as `max_lines`, `max_effective_lines`, and `max_facade_methods`.
+Those ceilings are not success targets; they are ADR-documented exception limits for known hotspots that remain above the long-term threshold after an accepted extraction sequence.
+If a known hotspot exceeds a recorded ceiling, the verifier fails because the facade or successor hotspot has grown beyond the reviewed closeout state.
+The expected response is to lower the hotspot through another decomposition issue or update the governing ADR before accepting the growth.
+
 If the verifier fails with a new candidate, reviewers should use the threshold rule above before extending the file further.
 The expected response is either a narrow justification that the current change stays inside one cohesive responsibility or a follow-up maintainability backlog that preserves public behavior while extracting the next coherent cluster.
 
