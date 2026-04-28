@@ -76,6 +76,9 @@ from .readiness_contracts import (
 )
 from .restore_readiness import RestoreReadinessService
 from .runtime_boundary import RuntimeBoundaryService, _is_missing_runtime_binding
+from .runtime_restore_readiness_diagnostics import (
+    RuntimeRestoreReadinessDiagnosticsService,
+)
 from .assistant_context import (
     AssistantContextAssembler,
     _advisory_text_claims_authority_or_scope_expansion,
@@ -1483,9 +1486,15 @@ class AegisOpsControlPlaneService:
             ),
             inspect_reconciliation_status=lambda: self.inspect_reconciliation_status(),
         )
+        self._runtime_restore_readiness_diagnostics_service = (
+            RuntimeRestoreReadinessDiagnosticsService(
+                runtime_boundary_service=self._runtime_boundary_service,
+                restore_readiness_service=self._restore_readiness_service,
+            )
+        )
 
     def describe_runtime(self) -> RuntimeSnapshot:
-        return self._runtime_boundary_service.describe_runtime()
+        return self._runtime_restore_readiness_diagnostics_service.describe_runtime()
 
     def persist_record(
         self,
@@ -1884,10 +1893,10 @@ class AegisOpsControlPlaneService:
         return self._store.get(record_type, record_id)
 
     def validate_wazuh_ingest_runtime(self) -> None:
-        self._runtime_boundary_service.validate_wazuh_ingest_runtime()
+        self._runtime_restore_readiness_diagnostics_service.validate_wazuh_ingest_runtime()
 
     def validate_protected_surface_runtime(self) -> None:
-        self._runtime_boundary_service.validate_protected_surface_runtime()
+        self._runtime_restore_readiness_diagnostics_service.validate_protected_surface_runtime()
 
     def authenticate_protected_surface_request(
         self,
@@ -1902,7 +1911,8 @@ class AegisOpsControlPlaneService:
         authenticated_role_header: str | None,
         allowed_roles: tuple[str, ...],
     ) -> AuthenticatedRuntimePrincipal:
-        return self._runtime_boundary_service.authenticate_protected_surface_request(
+        diagnostics_service = self._runtime_restore_readiness_diagnostics_service
+        return diagnostics_service.authenticate_protected_surface_request(
             peer_addr=peer_addr,
             forwarded_proto=forwarded_proto,
             reverse_proxy_secret_header=reverse_proxy_secret_header,
@@ -1915,10 +1925,14 @@ class AegisOpsControlPlaneService:
         )
 
     def require_admin_bootstrap_token(self, supplied_token: str | None) -> None:
-        self._runtime_boundary_service.require_admin_bootstrap_token(supplied_token)
+        self._runtime_restore_readiness_diagnostics_service.require_admin_bootstrap_token(
+            supplied_token
+        )
 
     def require_break_glass_token(self, supplied_token: str | None) -> None:
-        self._runtime_boundary_service.require_break_glass_token(supplied_token)
+        self._runtime_restore_readiness_diagnostics_service.require_break_glass_token(
+            supplied_token
+        )
 
     def ingest_wazuh_alert(
         self,
@@ -2169,13 +2183,19 @@ class AegisOpsControlPlaneService:
         )
 
     def describe_startup_status(self) -> StartupStatusSnapshot:
-        return self._restore_readiness_service.describe_startup_status()
+        return (
+            self._runtime_restore_readiness_diagnostics_service.describe_startup_status()
+        )
 
     def describe_shutdown_status(self) -> ShutdownStatusSnapshot:
-        return self._restore_readiness_service.describe_shutdown_status()
+        return (
+            self._runtime_restore_readiness_diagnostics_service.describe_shutdown_status()
+        )
 
     def inspect_readiness_diagnostics(self) -> ReadinessDiagnosticsSnapshot:
-        return self._restore_readiness_service.inspect_readiness_diagnostics()
+        return (
+            self._runtime_restore_readiness_diagnostics_service.inspect_readiness_diagnostics()
+        )
 
     def control_plane_change_authority_freeze_status(self) -> dict[str, object]:
         change_state = self._config.control_plane_change_state.strip()
@@ -2203,29 +2223,37 @@ class AegisOpsControlPlaneService:
         )
 
     def _inspect_readiness_aggregates(self) -> ReadinessDiagnosticsAggregates:
-        return self._restore_readiness_service.inspect_readiness_aggregates()
+        return (
+            self._runtime_restore_readiness_diagnostics_service.inspect_readiness_aggregates()
+        )
 
     def export_authoritative_record_chain_backup(self) -> dict[str, object]:
-        return self._restore_readiness_service.export_authoritative_record_chain_backup()
+        diagnostics_service = self._runtime_restore_readiness_diagnostics_service
+        return diagnostics_service.export_authoritative_record_chain_backup()
 
     def restore_authoritative_record_chain_backup(
         self,
         backup_payload: Mapping[str, object],
     ) -> RestoreSummarySnapshot:
-        return self._restore_readiness_service.restore_authoritative_record_chain_backup(
+        diagnostics_service = self._runtime_restore_readiness_diagnostics_service
+        return diagnostics_service.restore_authoritative_record_chain_backup(
             backup_payload
         )
 
     @contextmanager
     def _restore_drill_snapshot_transaction(self) -> Iterator[None]:
-        with self._restore_readiness_service.restore_drill_snapshot_transaction():
+        diagnostics_service = self._runtime_restore_readiness_diagnostics_service
+        with diagnostics_service.restore_drill_snapshot_transaction():
             yield
 
     def run_authoritative_restore_drill(self) -> RestoreDrillSnapshot:
-        return self._restore_readiness_service.run_authoritative_restore_drill()
+        return (
+            self._runtime_restore_readiness_diagnostics_service.run_authoritative_restore_drill()
+        )
 
     def _run_authoritative_restore_drill_snapshot(self) -> RestoreDrillSnapshot:
-        return self._restore_readiness_service.run_authoritative_restore_drill_snapshot()
+        diagnostics_service = self._runtime_restore_readiness_diagnostics_service
+        return diagnostics_service.run_authoritative_restore_drill_snapshot()
 
     def _build_action_review_record_index(self) -> _ActionReviewRecordIndex:
         return _action_review_projection.build_action_review_record_index(self)
@@ -5491,7 +5519,8 @@ class AegisOpsControlPlaneService:
         return f"analytic-signal-{uuid.uuid5(uuid.NAMESPACE_URL, mint_material)}"
 
     def _require_empty_authoritative_restore_target(self) -> None:
-        self._restore_readiness_service.require_empty_authoritative_restore_target()
+        diagnostics_service = self._runtime_restore_readiness_diagnostics_service
+        diagnostics_service.require_empty_authoritative_restore_target()
 
     def _validate_authoritative_record_chain_restore(
         self,
@@ -5499,7 +5528,8 @@ class AegisOpsControlPlaneService:
         *,
         restored_record_counts: Mapping[str, int] | None = None,
     ) -> None:
-        self._restore_readiness_service.validate_authoritative_record_chain_restore(
+        diagnostics_service = self._runtime_restore_readiness_diagnostics_service
+        diagnostics_service.validate_authoritative_record_chain_restore(
             records_by_family,
             restored_record_counts=restored_record_counts,
         )
