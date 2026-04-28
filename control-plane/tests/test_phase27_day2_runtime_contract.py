@@ -4,7 +4,9 @@ from dataclasses import replace
 from datetime import timedelta
 import pathlib
 import sys
+from typing import Callable
 import unittest
+from unittest import mock
 
 
 TESTS_ROOT = pathlib.Path(__file__).resolve().parent
@@ -13,10 +15,15 @@ if str(TESTS_ROOT) not in sys.path:
 
 from support.service_persistence import ServicePersistenceTestBase
 from aegisops_control_plane.config import RuntimeConfig
+from aegisops_control_plane.http_protected_surface import authenticate_protected_write
 from aegisops_control_plane.service import (
     AegisOpsControlPlaneService,
     ActionExecutionRecord,
+    ActionRequestRecord,
     ApprovalDecisionRecord,
+    CaseRecord,
+    LifecycleTransitionRecord,
+    ReconciliationRecord,
 )
 from postgres_test_support import make_store
 
@@ -199,6 +206,150 @@ class Phase27Day2RuntimeContractTests(ServicePersistenceTestBase):
                 authenticated_role_header="analyst",
                 allowed_roles=("analyst",),
             )
+
+    def test_phase27_idp_outage_blocks_operator_authority_and_workflow_progression(
+        self,
+    ) -> None:
+        store, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host=runtime_auth_tests.TEST_NON_LOOPBACK_HOST,
+                port=8080,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret=runtime_auth_tests.REVIEWED_SHARED_SECRET,
+                wazuh_ingest_reverse_proxy_secret=(
+                    runtime_auth_tests.REVIEWED_WAZUH_PROXY_SECRET
+                ),
+                wazuh_ingest_trusted_proxy_cidrs=("10.10.0.5/32",),
+                protected_surface_reverse_proxy_secret=(
+                    runtime_auth_tests.REVIEWED_SURFACE_PROXY_SECRET
+                ),
+                protected_surface_trusted_proxy_cidrs=("10.10.0.5/32",),
+                protected_surface_proxy_service_account=(
+                    runtime_auth_tests.REVIEWED_PROXY_SERVICE_ACCOUNT
+                ),
+                protected_surface_reviewed_identity_provider="authentik",
+                admin_bootstrap_token=runtime_auth_tests.REVIEWED_ADMIN_BOOTSTRAP_TOKEN,
+            ),
+            store=store,
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome=(
+                "Do not let unavailable identity-provider context advance authority."
+            ),
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Keep approval-bound action blocked during IdP outage.",
+            escalation_reason="Missing IdP trust must not grant workflow authority.",
+            expires_at=reviewed_at + timedelta(hours=4),
+            action_request_id="action-request-phase27-idp-outage-001",
+        )
+
+        initial_action_request = service.get_record(
+            ActionRequestRecord,
+            action_request.action_request_id,
+        )
+        initial_action_request_count = len(store.list(ActionRequestRecord))
+        initial_case = service.get_record(CaseRecord, promoted_case.case_id)
+        initial_transition_count = len(store.list(LifecycleTransitionRecord))
+        initial_approval_count = len(store.list(ApprovalDecisionRecord))
+        initial_execution_count = len(store.list(ActionExecutionRecord))
+        initial_reconciliation_count = len(store.list(ReconciliationRecord))
+
+        def assert_idp_outage_blocks(
+            path: str,
+            role: str,
+            write: Callable[[], object],
+        ) -> None:
+            handler = mock.Mock()
+            handler.client_address = ("10.10.0.5", 44321)
+            headers = {
+                "X-Forwarded-Proto": "https",
+                "X-AegisOps-Proxy-Secret": (
+                    runtime_auth_tests.REVIEWED_SURFACE_PROXY_SECRET
+                ),
+                "X-AegisOps-Proxy-Service-Account": (
+                    runtime_auth_tests.REVIEWED_PROXY_SERVICE_ACCOUNT
+                ),
+                "X-AegisOps-Authenticated-Subject": "authentik-user-001",
+                "X-AegisOps-Authenticated-Identity": (
+                    "approver-001" if role == "approver" else "analyst-001"
+                ),
+                "X-AegisOps-Authenticated-Role": role,
+            }
+            handler.headers.get.side_effect = headers.get
+
+            with self.assertRaisesRegex(
+                PermissionError,
+                "protected control-plane surfaces require an attributed reviewed identity provider header",
+            ):
+                authenticate_protected_write(
+                    service=service,
+                    handler=handler,
+                    request_path=path,
+                    require_loopback_operator_request_fn=lambda _handler: None,
+                )
+                write()
+
+        assert_idp_outage_blocks(
+            "/operator/create-reviewed-action-request",
+            "analyst",
+            lambda: service.create_reviewed_action_request_from_advisory(
+                record_family="recommendation",
+                record_id=recommendation.recommendation_id,
+                requester_identity="analyst-001",
+                recipient_identity="repo-owner-002",
+                message_intent="This write must remain unreachable during IdP outage.",
+                escalation_reason="Missing IdP trust cannot create authority.",
+                expires_at=reviewed_at + timedelta(hours=4),
+                action_request_id="action-request-phase27-idp-outage-unreachable-001",
+            ),
+        )
+        assert_idp_outage_blocks(
+            "/operator/record-action-approval-decision",
+            "approver",
+            lambda: service.record_action_approval_decision(
+                action_request_id=action_request.action_request_id,
+                approver_identity="approver-001",
+                authenticated_approver_identity="approver-001",
+                decision="grant",
+                decision_rationale="This approval must remain unreachable.",
+                decided_at=reviewed_at + timedelta(minutes=5),
+                approval_decision_id="approval-phase27-idp-outage-unreachable-001",
+            ),
+        )
+        assert_idp_outage_blocks(
+            "/operator/record-case-disposition",
+            "analyst",
+            lambda: service.record_case_disposition(
+                case_id=promoted_case.case_id,
+                disposition="closed",
+                rationale="This case lifecycle update must remain unreachable.",
+                recorded_at=reviewed_at + timedelta(minutes=10),
+            ),
+        )
+
+        self.assertEqual(
+            service.get_record(ActionRequestRecord, action_request.action_request_id),
+            initial_action_request,
+        )
+        self.assertEqual(len(store.list(ActionRequestRecord)), initial_action_request_count)
+        self.assertEqual(service.get_record(CaseRecord, promoted_case.case_id), initial_case)
+        self.assertEqual(len(store.list(LifecycleTransitionRecord)), initial_transition_count)
+        self.assertEqual(len(store.list(ApprovalDecisionRecord)), initial_approval_count)
+        self.assertEqual(len(store.list(ActionExecutionRecord)), initial_execution_count)
+        self.assertEqual(
+            len(store.list(ReconciliationRecord)),
+            initial_reconciliation_count,
+        )
 
     def test_phase27_secret_contract_requires_fresh_read_and_blocks_backend_outage(
         self,
