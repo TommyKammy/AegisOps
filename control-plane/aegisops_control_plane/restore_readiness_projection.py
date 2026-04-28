@@ -171,6 +171,9 @@ class _ReadinessHealthProjection:
                 readiness_aggregates,
                 readiness_review_snapshots,
             )
+            control_plane_change_authority_freeze = (
+                self._control_plane_change_authority_freeze_status()
+            )
 
         shutdown = self._build_shutdown_status_snapshot(
             open_case_ids=readiness_aggregates.open_case_ids,
@@ -183,6 +186,9 @@ class _ReadinessHealthProjection:
             startup_ready=startup.startup_ready,
             reconciliation_lifecycle_counts=readiness_aggregates.reconciliation_lifecycle_counts,
             review_path_health_overall_state=review_path_health["overall_state"],
+            control_plane_authority_frozen=(
+                control_plane_change_authority_freeze["state"] == "frozen"
+            ),
         )
 
         metrics = {
@@ -257,6 +263,9 @@ class _ReadinessHealthProjection:
             "source_health": source_health,
             "automation_substrate_health": automation_substrate_health,
             "optional_extensions": optional_extensions,
+            "control_plane_change_authority_freeze": (
+                control_plane_change_authority_freeze
+            ),
         }
 
         return self._readiness_diagnostics_snapshot_factory(
@@ -274,6 +283,23 @@ class _ReadinessHealthProjection:
                 else None
             ),
         )
+
+    def _control_plane_change_authority_freeze_status(self) -> dict[str, object]:
+        change_state = self._config.control_plane_change_state.strip()
+        evidence_id = self._config.control_plane_change_evidence_id.strip()
+        normalized_state = change_state or "unknown"
+        is_verified = normalized_state in {"verified_current", "verified_safe"}
+        return {
+            "state": "verified" if is_verified else "frozen",
+            "change_state": normalized_state,
+            "evidence_id": evidence_id or None,
+            "authority_sensitive_progression_allowed": is_verified,
+            "reason": (
+                "control_plane_state_verified"
+                if is_verified
+                else "control_plane_upgrade_or_rollback_verification_incomplete"
+            ),
+        }
 
     def inspect_readiness_aggregates(self) -> ReadinessDiagnosticsAggregates:
         aggregate_reader = getattr(self._store, "inspect_readiness_aggregates", None)

@@ -254,6 +254,7 @@ class CaseWorkflowService:
         recorded_at: datetime,
     ) -> CaseRecord:
         service = self._service
+        service._require_control_plane_change_authority_unfrozen()
         disposition = service._require_non_empty_string(disposition, "disposition")
         rationale = service._require_non_empty_string(rationale, "rationale")
         recorded_at = service._require_aware_datetime(recorded_at, "recorded_at")

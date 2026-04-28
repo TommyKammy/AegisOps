@@ -663,11 +663,13 @@ def _derive_readiness_status(
     startup_ready: bool,
     reconciliation_lifecycle_counts: Mapping[str, int],
     review_path_health_overall_state: str | None = None,
+    control_plane_authority_frozen: bool = False,
 ) -> str:
     return resolve_current_readiness_runtime_status(
         startup_ready=startup_ready,
         reconciliation_lifecycle_counts=reconciliation_lifecycle_counts,
         review_path_health_overall_state=review_path_health_overall_state,
+        control_plane_authority_frozen=control_plane_authority_frozen,
     ).status
 
 
@@ -2174,6 +2176,31 @@ class AegisOpsControlPlaneService:
 
     def inspect_readiness_diagnostics(self) -> ReadinessDiagnosticsSnapshot:
         return self._restore_readiness_service.inspect_readiness_diagnostics()
+
+    def control_plane_change_authority_freeze_status(self) -> dict[str, object]:
+        change_state = self._config.control_plane_change_state.strip()
+        evidence_id = self._config.control_plane_change_evidence_id.strip()
+        normalized_state = change_state or "unknown"
+        is_verified = normalized_state in {"verified_current", "verified_safe"}
+        return {
+            "state": "verified" if is_verified else "frozen",
+            "change_state": normalized_state,
+            "evidence_id": evidence_id or None,
+            "authority_sensitive_progression_allowed": is_verified,
+            "reason": (
+                "control_plane_state_verified"
+                if is_verified
+                else "control_plane_upgrade_or_rollback_verification_incomplete"
+            ),
+        }
+
+    def _require_control_plane_change_authority_unfrozen(self) -> None:
+        freeze_status = self.control_plane_change_authority_freeze_status()
+        if freeze_status["authority_sensitive_progression_allowed"] is True:
+            return
+        raise PermissionError(
+            "control-plane upgrade or rollback verification is not complete"
+        )
 
     def _inspect_readiness_aggregates(self) -> ReadinessDiagnosticsAggregates:
         return self._restore_readiness_service.inspect_readiness_aggregates()
