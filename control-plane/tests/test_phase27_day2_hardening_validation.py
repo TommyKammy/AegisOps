@@ -37,6 +37,8 @@ class Phase27Day2HardeningValidationTests(unittest.TestCase):
             "test_phase27_restore_runtime_contract_fails_closed_without_post_restore_bindings",
             "test_phase27_readiness_contract_surfaces_degraded_source_and_automation_state",
             "test_phase27_identity_contract_fails_closed_for_missing_or_unreviewed_provider_boundary",
+            "test_phase27_idp_outage_blocks_operator_authority_and_workflow_progression",
+            "IdP outage fail-closed workflow authority",
             "test_phase27_secret_contract_requires_fresh_read_and_blocks_backend_outage",
             "Rollback remains a reviewed operational contract and capacity guardrail, not a dedicated runtime-enforced Phase 27 contract in the current path.",
             "None at the runtime-enforcement layer. Phase 27 currently relies on the reviewed runbook backup, restore, and rollback contract as the operator-facing rollback proof while dedicated runtime rollback enforcement remains out of scope.",
