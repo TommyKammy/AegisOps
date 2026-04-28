@@ -206,6 +206,8 @@ class RuntimeConfig:
     admin_bootstrap_token: str = field(default="", repr=False)
     break_glass_token: str = field(default="", repr=False)
     misp_enrichment_enabled: bool = False
+    control_plane_change_state: str = "verified_current"
+    control_plane_change_evidence_id: str = ""
 
     @classmethod
     def from_env(
@@ -311,4 +313,13 @@ class RuntimeConfig:
                 "AEGISOPS_CONTROL_PLANE_MISP_ENRICHMENT_ENABLED",
                 cls.misp_enrichment_enabled,
             ),
+            control_plane_change_state=source.get(
+                "AEGISOPS_CONTROL_PLANE_CHANGE_STATE",
+                cls.control_plane_change_state,
+            ).strip()
+            or cls.control_plane_change_state,
+            control_plane_change_evidence_id=source.get(
+                "AEGISOPS_CONTROL_PLANE_CHANGE_EVIDENCE_ID",
+                cls.control_plane_change_evidence_id,
+            ).strip(),
         )

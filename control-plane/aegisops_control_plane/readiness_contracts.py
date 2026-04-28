@@ -71,8 +71,11 @@ def resolve_current_readiness_runtime_status(
     startup_ready: bool,
     reconciliation_lifecycle_counts: Mapping[str, int],
     review_path_health_overall_state: str | None = None,
+    control_plane_authority_frozen: bool = False,
 ) -> ReadinessRuntimeStatus:
-    if not startup_ready:
+    if control_plane_authority_frozen:
+        status = "failing_closed"
+    elif not startup_ready:
         status = "failing_closed"
     elif reconciliation_lifecycle_counts.get("stale", 0):
         status = "stale"

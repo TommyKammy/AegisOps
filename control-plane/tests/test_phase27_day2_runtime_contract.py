@@ -501,6 +501,123 @@ class Phase27Day2RuntimeContractTests(ServicePersistenceTestBase):
             initial_reconciliation_count,
         )
 
+    def test_phase27_upgrade_rollback_uncertainty_freezes_authority_sensitive_progression(
+        self,
+    ) -> None:
+        store, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",
+                control_plane_change_state="rollback_in_progress",
+                control_plane_change_evidence_id="rollback-window-phase27-001",
+            ),
+            store=store,
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome=(
+                "Keep rollback uncertainty from advancing workflow authority."
+            ),
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Hold approval-bound action during rollback verification.",
+            escalation_reason="Rollback-in-progress state must freeze authority.",
+            expires_at=reviewed_at + timedelta(hours=4),
+            action_request_id="action-request-phase27-rollback-freeze-001",
+        )
+
+        initial_action_request = service.get_record(
+            ActionRequestRecord,
+            action_request.action_request_id,
+        )
+        initial_case = service.get_record(CaseRecord, promoted_case.case_id)
+        initial_transition_count = len(store.list(LifecycleTransitionRecord))
+        initial_approval_count = len(store.list(ApprovalDecisionRecord))
+        initial_execution_count = len(store.list(ActionExecutionRecord))
+        initial_reconciliation_count = len(store.list(ReconciliationRecord))
+
+        with self.assertRaisesRegex(
+            PermissionError,
+            "control-plane upgrade or rollback verification is not complete",
+        ):
+            service.record_action_approval_decision(
+                action_request_id=action_request.action_request_id,
+                approver_identity="approver-001",
+                authenticated_approver_identity="approver-001",
+                decision="grant",
+                decision_rationale="Rollback uncertainty must block approval.",
+                decided_at=reviewed_at + timedelta(minutes=5),
+                approval_decision_id="approval-phase27-rollback-freeze-001",
+            )
+
+        with self.assertRaisesRegex(
+            PermissionError,
+            "control-plane upgrade or rollback verification is not complete",
+        ):
+            service.delegate_approved_action_to_shuffle(
+                action_request_id=action_request.action_request_id,
+                approved_payload=dict(action_request.requested_payload),
+                delegated_at=reviewed_at + timedelta(minutes=10),
+                delegation_issuer="control-plane-service",
+            )
+
+        with self.assertRaisesRegex(
+            PermissionError,
+            "control-plane upgrade or rollback verification is not complete",
+        ):
+            service.reconcile_action_execution(
+                action_request_id=action_request.action_request_id,
+                execution_surface_type="automation_substrate",
+                execution_surface_id="shuffle",
+                observed_executions=(),
+                compared_at=reviewed_at + timedelta(minutes=15),
+                stale_after=reviewed_at + timedelta(hours=1),
+            )
+
+        with self.assertRaisesRegex(
+            PermissionError,
+            "control-plane upgrade or rollback verification is not complete",
+        ):
+            service.record_case_disposition(
+                case_id=promoted_case.case_id,
+                disposition="closed",
+                rationale="Rollback uncertainty must not close the case.",
+                recorded_at=reviewed_at + timedelta(minutes=20),
+            )
+
+        readiness = service.inspect_readiness_diagnostics()
+        freeze_status = readiness.metrics["control_plane_change_authority_freeze"]
+
+        self.assertEqual(readiness.status, "failing_closed")
+        self.assertEqual(freeze_status["state"], "frozen")
+        self.assertEqual(freeze_status["change_state"], "rollback_in_progress")
+        self.assertEqual(
+            freeze_status["evidence_id"],
+            "rollback-window-phase27-001",
+        )
+        self.assertEqual(
+            service.get_record(ActionRequestRecord, action_request.action_request_id),
+            initial_action_request,
+        )
+        self.assertEqual(service.get_record(CaseRecord, promoted_case.case_id), initial_case)
+        self.assertEqual(len(store.list(LifecycleTransitionRecord)), initial_transition_count)
+        self.assertEqual(len(store.list(ApprovalDecisionRecord)), initial_approval_count)
+        self.assertEqual(len(store.list(ActionExecutionRecord)), initial_execution_count)
+        self.assertEqual(
+            len(store.list(ReconciliationRecord)),
+            initial_reconciliation_count,
+        )
+
     def test_phase27_secret_contract_requires_fresh_read_and_blocks_backend_outage(
         self,
     ) -> None:

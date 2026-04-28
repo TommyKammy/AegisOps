@@ -15,6 +15,9 @@ class ActionLifecycleWriteCoordinatorServiceDependencies(Protocol):
     _action_review_write_surface: object
     _execution_coordinator: object
 
+    def _require_control_plane_change_authority_unfrozen(self) -> None:
+        ...
+
 
 class ActionLifecycleWriteCoordinator:
     """Coordinates action lifecycle writes behind the public service facade."""
@@ -86,6 +89,7 @@ class ActionLifecycleWriteCoordinator:
         decided_at: datetime,
         approval_decision_id: str | None = None,
     ) -> ApprovalDecisionRecord:
+        self._service._require_control_plane_change_authority_unfrozen()
         return self._service._action_review_write_surface.record_action_approval_decision(
             action_request_id=action_request_id,
             approver_identity=approver_identity,
@@ -105,6 +109,7 @@ class ActionLifecycleWriteCoordinator:
         delegation_issuer: str,
         evidence_ids: tuple[str, ...] = (),
     ) -> ActionExecutionRecord:
+        self._service._require_control_plane_change_authority_unfrozen()
         return self._service._execution_coordinator.delegate_approved_action_to_shuffle(
             action_request_id=action_request_id,
             approved_payload=approved_payload,
@@ -122,6 +127,7 @@ class ActionLifecycleWriteCoordinator:
         delegation_issuer: str,
         evidence_ids: tuple[str, ...] = (),
     ) -> ActionExecutionRecord:
+        self._service._require_control_plane_change_authority_unfrozen()
         return self._service._execution_coordinator.delegate_approved_action_to_isolated_executor(
             action_request_id=action_request_id,
             approved_payload=approved_payload,
@@ -140,6 +146,7 @@ class ActionLifecycleWriteCoordinator:
         compared_at: datetime,
         stale_after: datetime,
     ) -> ReconciliationRecord:
+        self._service._require_control_plane_change_authority_unfrozen()
         return self._service._execution_coordinator.reconcile_action_execution(
             action_request_id=action_request_id,
             execution_surface_type=execution_surface_type,
