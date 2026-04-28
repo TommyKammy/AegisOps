@@ -120,17 +120,20 @@ def _load_bound_string(
     *,
     secret_backend_transport: OpenBaoSecretTransport | None = None,
 ) -> str:
-    value = _load_env_or_file_string(source, env_name)
+    raw_value = source.get(env_name, "").strip()
+    raw_file_path = source.get(f"{env_name}_FILE", "").strip()
     openbao_path = source.get(f"{env_name}_OPENBAO_PATH", "").strip()
 
-    if value and openbao_path:
+    if raw_value and openbao_path:
         raise ValueError(
             f"{env_name} and {env_name}_OPENBAO_PATH are mutually exclusive; provide exactly one binding"
         )
-    if source.get(f"{env_name}_FILE", "").strip() and openbao_path:
+    if raw_file_path and openbao_path:
         raise ValueError(
             f"{env_name}_FILE and {env_name}_OPENBAO_PATH are mutually exclusive; provide exactly one binding"
         )
+
+    value = _load_env_or_file_string(source, env_name)
 
     if openbao_path:
         if secret_backend_transport is None:

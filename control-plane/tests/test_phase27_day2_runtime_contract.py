@@ -4,6 +4,7 @@ from dataclasses import replace
 from datetime import timedelta
 import pathlib
 import sys
+import tempfile
 from typing import Callable
 import unittest
 from unittest import mock
@@ -409,6 +410,109 @@ class Phase27Day2RuntimeContractTests(ServicePersistenceTestBase):
 
         self.assertEqual(initial.wazuh_ingest_shared_secret, "reviewed-shared-secret-v1")
         self.assertEqual(rotated.wazuh_ingest_shared_secret, "reviewed-shared-secret-v2")
+
+    def test_phase27_secret_backend_outage_rejects_plaintext_fallback_and_blocks_workflow_progression(
+        self,
+    ) -> None:
+        store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        initial_case = service.get_record(CaseRecord, promoted_case.case_id)
+        initial_action_request_count = len(store.list(ActionRequestRecord))
+        initial_transition_count = len(store.list(LifecycleTransitionRecord))
+        initial_approval_count = len(store.list(ApprovalDecisionRecord))
+        initial_execution_count = len(store.list(ActionExecutionRecord))
+        initial_reconciliation_count = len(store.list(ReconciliationRecord))
+        failing_transport = secret_boundary_tests._MutableOpenBaoTransport(
+            error=RuntimeError("backend unavailable")
+        )
+        base_env = {
+            "AEGISOPS_OPENBAO_ADDRESS": "https://openbao.example.test",
+            "AEGISOPS_OPENBAO_TOKEN": "reviewed-openbao-token",
+            "AEGISOPS_CONTROL_PLANE_HOST": runtime_auth_tests.TEST_NON_LOOPBACK_HOST,
+            "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_TRUSTED_PROXY_CIDRS": (
+                "10.10.0.5/32"
+            ),
+            "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_PROXY_SERVICE_ACCOUNT": (
+                runtime_auth_tests.REVIEWED_PROXY_SERVICE_ACCOUNT
+            ),
+            "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVIEWED_IDENTITY_PROVIDER": (
+                "authentik"
+            ),
+        }
+        openbao_env = {
+            **base_env,
+            "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVERSE_PROXY_SECRET_OPENBAO_PATH": (
+                "kv/aegisops/control-plane/protected-surface-reverse-proxy-secret"
+            ),
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVERSE_PROXY_SECRET_OPENBAO_PATH "
+                "could not be read from OpenBao"
+            ),
+        ):
+            RuntimeConfig.from_env(
+                openbao_env,
+                secret_backend_transport=failing_transport,
+            )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVERSE_PROXY_SECRET and "
+                "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVERSE_PROXY_SECRET_OPENBAO_PATH "
+                "are mutually exclusive"
+            ),
+        ):
+            RuntimeConfig.from_env(
+                {
+                    **openbao_env,
+                    "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVERSE_PROXY_SECRET": (
+                        "unsafe-plaintext-fallback"
+                    ),
+                },
+                secret_backend_transport=failing_transport,
+            )
+
+        with tempfile.NamedTemporaryFile("w+", encoding="utf-8") as handle:
+            handle.write("unsafe-file-fallback\n")
+            handle.flush()
+
+            with self.assertRaisesRegex(
+                ValueError,
+                (
+                    "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVERSE_PROXY_SECRET_FILE "
+                    "and "
+                    "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVERSE_PROXY_SECRET_OPENBAO_PATH "
+                    "are mutually exclusive"
+                ),
+            ):
+                RuntimeConfig.from_env(
+                    {
+                        **openbao_env,
+                        "AEGISOPS_CONTROL_PLANE_PROTECTED_SURFACE_REVERSE_PROXY_SECRET_FILE": (
+                            handle.name
+                        ),
+                    },
+                    secret_backend_transport=failing_transport,
+                )
+
+        self.assertEqual(failing_transport.calls, 1)
+        self.assertEqual(
+            service.get_record(CaseRecord, promoted_case.case_id),
+            initial_case,
+        )
+        self.assertEqual(len(store.list(ActionRequestRecord)), initial_action_request_count)
+        self.assertEqual(len(store.list(LifecycleTransitionRecord)), initial_transition_count)
+        self.assertEqual(len(store.list(ApprovalDecisionRecord)), initial_approval_count)
+        self.assertEqual(len(store.list(ActionExecutionRecord)), initial_execution_count)
+        self.assertEqual(
+            len(store.list(ReconciliationRecord)),
+            initial_reconciliation_count,
+        )
 
 
 if __name__ == "__main__":
