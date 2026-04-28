@@ -24,7 +24,7 @@ Required inputs: phase_id, epic_issue_number, child_issue_numbers, Part of:, Dep
 
 Required classifications: missing, materialized_open, blocked, execution_ready, merge_or_evaluation_needed, done.
 
-Required outputs: pass, fail, phase_classification, invalid_field, suggested_next_safe_action.
+Required outputs: pass, fail, phase_classification, invalid_phase_id, invalid_field, suggested_next_safe_action.
 
 Invocation: bash scripts/roadmap-materialization-preflight.sh --graph docs/automation/roadmap-materialization-phase-graph.json --target-phase 49.0 --issue-source github
 Smoke test: bash scripts/test-verify-roadmap-materialization-preflight.sh
@@ -35,7 +35,7 @@ Phase 49.0/49 must not start before Phase 48, Phase 48.5, Phase 48.6, and Phase 
 AegisOps control-plane records remain authoritative workflow truth.
 tickets, assistant output, ML output, endpoint evidence, network evidence, browser state, receipts, and optional extension status remain subordinate context.
 
-Examples: Complete phase, Missing child issue, Placeholder dependency, Non-lint-clean issue.
+Examples: Complete phase, Missing Epic issue, Missing child issue, Placeholder or non-real dependency, Non-lint-clean issue.
 
 Validation command: node <codex-supervisor-root>/dist/index.js issue-lint <issue-number> --config <supervisor-config-path>
 EOF

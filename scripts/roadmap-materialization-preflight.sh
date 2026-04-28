@@ -57,6 +57,7 @@ def base_payload(graph: dict, target_phase: str, classifications: Optional[dict]
         "fail": True,
         "target_phase_id": target_phase,
         "phase_classification": classifications or {},
+        "invalid_phase_id": None,
         "invalid_field": None,
         "invalid_issue_number": None,
         "suggested_next_safe_action": "repair the roadmap phase graph and rerun the preflight",
@@ -84,6 +85,7 @@ def fail(
     if phase_id:
         updated[phase_id] = classification
     payload = base_payload(graph, target_phase, updated)
+    payload["invalid_phase_id"] = phase_id or None
     payload["invalid_field"] = invalid_field
     payload["invalid_issue_number"] = issue_number
     payload["suggested_next_safe_action"] = suggested

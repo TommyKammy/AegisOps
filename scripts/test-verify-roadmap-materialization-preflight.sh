@@ -119,35 +119,49 @@ write_graph
 jq 'del(.phases[] | select(.phase_id == "48.7") | .epic_issue_number)' "${graph_path}" >"${graph_path}.tmp"
 mv "${graph_path}.tmp" "${graph_path}"
 assert_fails_with_json \
-  '.pass == false and .fail == true and .phase_classification["48.7"] == "missing" and .invalid_field == "epic_issue_number"' \
-  "missing Epic issue"
+  '.pass == false and .fail == true and .phase_classification["48.7"] == "missing" and .invalid_phase_id == "48.7" and .invalid_field == "epic_issue_number"' \
+  "missing Epic issue binding"
+
+write_graph
+jq 'del(.issues[] | select(.number == 911))' "${graph_path}" >"${graph_path}.tmp"
+mv "${graph_path}.tmp" "${graph_path}"
+assert_fails_with_json \
+  '.pass == false and .fail == true and .phase_classification["48.7"] == "missing" and .invalid_phase_id == "48.7" and .invalid_field == "epic_issue_number" and .invalid_issue_number == 911' \
+  "missing bound Epic issue 911"
 
 write_graph
 jq '(.issues[] | select(.number == 913) | .body) = "Part of: #911\nDepends on: TBD\nParallelizable: No\n\n## Execution order\n2 of 2\n"' "${graph_path}" >"${graph_path}.tmp"
 mv "${graph_path}.tmp" "${graph_path}"
 assert_fails_with_json \
-  '.pass == false and .fail == true and .phase_classification["48.7"] == "blocked" and .invalid_field == "Depends on:" and .invalid_issue_number == 913' \
+  '.pass == false and .fail == true and .phase_classification["48.7"] == "blocked" and .invalid_phase_id == "48.7" and .invalid_field == "Depends on:" and .invalid_issue_number == 913' \
   "placeholder Depends on metadata"
+
+write_graph
+jq '(.issues[] | select(.number == 913) | .body) = "Part of: #911\nDepends on: #915\nParallelizable: No\n\n## Execution order\n2 of 2\n"' "${graph_path}" >"${graph_path}.tmp"
+mv "${graph_path}.tmp" "${graph_path}"
+assert_fails_with_json \
+  '.pass == false and .fail == true and .phase_classification["48.7"] == "blocked" and .invalid_phase_id == "48.7" and .invalid_field == "Depends on:" and .invalid_issue_number == 913' \
+  "non-real Depends on issue metadata"
 
 write_graph
 jq '(.phases[] | select(.phase_id == "48.7") | .child_issue_numbers) = [912, 913, 914]' "${graph_path}" >"${graph_path}.tmp"
 mv "${graph_path}.tmp" "${graph_path}"
 assert_fails_with_json \
-  '.pass == false and .fail == true and .phase_classification["48.7"] == "missing" and .invalid_field == "child_issue_numbers" and .invalid_issue_number == 914' \
+  '.pass == false and .fail == true and .phase_classification["48.7"] == "missing" and .invalid_phase_id == "48.7" and .invalid_field == "child_issue_numbers" and .invalid_issue_number == 914' \
   "missing child issue 914"
 
 write_graph
 jq '(.issues[] | select(.number == 913) | .body) = "Part of: TBD\nDepends on: #912\nParallelizable: No\n\n## Execution order\n2 of 2\n"' "${graph_path}" >"${graph_path}.tmp"
 mv "${graph_path}.tmp" "${graph_path}"
 assert_fails_with_json \
-  '.pass == false and .fail == true and .phase_classification["48.7"] == "blocked" and .invalid_field == "Part of:" and .invalid_issue_number == 913' \
+  '.pass == false and .fail == true and .phase_classification["48.7"] == "blocked" and .invalid_phase_id == "48.7" and .invalid_field == "Part of:" and .invalid_issue_number == 913' \
   "placeholder Part of metadata"
 
 write_graph
 jq '(.issues[] | select(.number == 913) | .lint.metadata_errors) = "missing-part-of"' "${graph_path}" >"${graph_path}.tmp"
 mv "${graph_path}.tmp" "${graph_path}"
 assert_fails_with_json \
-  '.pass == false and .fail == true and .phase_classification["48.7"] == "blocked" and .invalid_field == "metadata_errors" and .invalid_issue_number == 913' \
+  '.pass == false and .fail == true and .phase_classification["48.7"] == "blocked" and .invalid_phase_id == "48.7" and .invalid_field == "metadata_errors" and .invalid_issue_number == 913' \
   "non-lint-clean issue"
 
 echo "Roadmap materialization preflight tests passed."
