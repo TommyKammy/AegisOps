@@ -27,19 +27,26 @@ class Phase49ServiceDecompositionCloseoutTests(unittest.TestCase):
             )
         return defined_names
 
-    def _facade_method_count(self) -> int:
+    def _facade_method_count(self, class_name: str) -> int:
         tree = ast.parse(
             self._read("control-plane/aegisops_control_plane/service.py"),
             filename="control-plane/aegisops_control_plane/service.py",
         )
         for node in tree.body:
-            if isinstance(node, ast.ClassDef) and node.name == "AegisOpsControlPlaneService":
+            if isinstance(node, ast.ClassDef) and node.name == class_name:
                 return sum(
                     1
                     for child in node.body
                     if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
                 )
-        raise AssertionError("AegisOpsControlPlaneService class not found")
+        raise AssertionError(f"{class_name} class not found")
+
+    def _effective_line_count(self, text: str) -> int:
+        return sum(
+            1
+            for line in text.splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        )
 
     def _baseline_metadata(self) -> dict[str, str]:
         for line in self._read("docs/maintainability-hotspot-baseline.txt").splitlines():
@@ -60,10 +67,15 @@ class Phase49ServiceDecompositionCloseoutTests(unittest.TestCase):
 
         self.assertEqual(metadata["adr_exception"], "ADR-0003")
         self.assertEqual(metadata["phase"], "49.0.7")
+        self.assertEqual(metadata["facade_class"], "AegisOpsControlPlaneService")
         self.assertEqual(int(metadata["max_lines"]), len(service_text.splitlines()))
         self.assertEqual(
+            int(metadata["max_effective_lines"]),
+            self._effective_line_count(service_text),
+        )
+        self.assertEqual(
             int(metadata["max_facade_methods"]),
-            self._facade_method_count(),
+            self._facade_method_count(metadata["facade_class"]),
         )
         self.assertGreater(int(metadata["max_lines"]), 1500)
         self.assertGreater(int(metadata["max_facade_methods"]), 50)

@@ -113,6 +113,10 @@ def effective_line_count(text: str) -> int:
     return count
 
 
+def read_python_file(relative_path: str) -> str:
+    return (repo_root / relative_path).read_text(encoding="utf-8", errors="replace")
+
+
 def class_method_count(text: str, class_name: str) -> int | None:
     tree = ast.parse(text)
     for node in tree.body:
@@ -125,22 +129,32 @@ def class_method_count(text: str, class_name: str) -> int | None:
     return None
 
 
+def detected_facade_class(text: str) -> str | None:
+    tree = ast.parse(text)
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef) and re.search(r"(Service|Facade)$", node.name):
+            return node.name
+    return None
+
+
 def candidate_for(
     relative_path: str,
-) -> tuple[str, int, int, int | None, tuple[str, ...]] | None:
-    path = repo_root / relative_path
-    text = path.read_text(encoding="utf-8", errors="replace")
+) -> tuple[str, int, int, str | None, int | None, tuple[str, ...]] | None:
+    text = read_python_file(relative_path)
+    facade_class = detected_facade_class(text)
     facade_like = (
         pathlib.Path(relative_path).name == "service.py"
         or "facade" in relative_path.lower()
-        or re.search(r"^class\s+\w*(Service|Facade)\b", text, re.M) is not None
+        or facade_class is not None
     )
     if not facade_like:
         return None
 
     physical_lines = physical_line_count(text)
     effective_lines = effective_line_count(text)
-    facade_method_count = class_method_count(text, "AegisOpsControlPlaneService")
+    facade_method_count = (
+        class_method_count(text, facade_class) if facade_class is not None else None
+    )
     present_signals = tuple(
         signal_name
         for signal_name, pattern in signal_patterns.items()
@@ -154,7 +168,14 @@ def candidate_for(
     if not required_boundary_signals.intersection(present_signals):
         return None
 
-    return (relative_path, physical_lines, effective_lines, facade_method_count, present_signals)
+    return (
+        relative_path,
+        physical_lines,
+        effective_lines,
+        facade_class,
+        facade_method_count,
+        present_signals,
+    )
 
 
 def integer_metadata(
@@ -177,13 +198,13 @@ def integer_metadata(
 
 baseline_entries = read_baseline()
 candidates = [candidate for relative_path in tracked_python_files() if (candidate := candidate_for(relative_path))]
-candidate_paths = {relative_path for relative_path, _, _, _, _ in candidates}
+candidate_paths = {relative_path for relative_path, _, _, _, _, _ in candidates}
 
 unknown_candidates = [candidate for candidate in candidates if candidate[0] not in baseline_entries]
 stale_baseline_entries = sorted(set(baseline_entries) - candidate_paths)
 baseline_regressions: list[str] = []
 
-for relative_path, physical_lines, effective_lines, facade_method_count, _signals in candidates:
+for relative_path, physical_lines, effective_lines, facade_class, facade_method_count, _signals in candidates:
     metadata = baseline_entries.get(relative_path, {})
     max_lines = integer_metadata(metadata, "max_lines", relative_path)
     max_effective_lines = integer_metadata(
@@ -196,6 +217,12 @@ for relative_path, physical_lines, effective_lines, facade_method_count, _signal
         "max_facade_methods",
         relative_path,
     )
+    configured_facade_class = metadata.get("facade_class") or facade_class
+    configured_facade_method_count = (
+        class_method_count(read_python_file(relative_path), configured_facade_class)
+        if configured_facade_class is not None
+        else None
+    )
 
     if max_lines is not None and physical_lines > max_lines:
         baseline_regressions.append(
@@ -207,11 +234,26 @@ for relative_path, physical_lines, effective_lines, facade_method_count, _signal
         )
     if (
         max_facade_methods is not None
-        and facade_method_count is not None
-        and facade_method_count > max_facade_methods
+        and configured_facade_class is None
     ):
         baseline_regressions.append(
-            f"{relative_path}: AegisOpsControlPlaneService methods={facade_method_count} exceeds max_facade_methods={max_facade_methods}"
+            f"{relative_path}: facade_class is required for max_facade_methods={max_facade_methods}"
+        )
+    if (
+        max_facade_methods is not None
+        and configured_facade_class is not None
+        and configured_facade_method_count is None
+    ):
+        baseline_regressions.append(
+            f"{relative_path}: facade_class={configured_facade_class} not found for max_facade_methods={max_facade_methods}"
+        )
+    if (
+        max_facade_methods is not None
+        and configured_facade_method_count is not None
+        and configured_facade_method_count > max_facade_methods
+    ):
+        baseline_regressions.append(
+            f"{relative_path}: {configured_facade_class} methods={configured_facade_method_count} exceeds max_facade_methods={max_facade_methods}"
         )
 
 if unknown_candidates:
@@ -223,10 +265,10 @@ if unknown_candidates:
         f"Review {threshold_doc} before extending these files or open a decomposition backlog.",
         file=sys.stderr,
     )
-    for relative_path, physical_lines, effective_lines, facade_method_count, signals in unknown_candidates:
+    for relative_path, physical_lines, effective_lines, facade_class, facade_method_count, signals in unknown_candidates:
         method_summary = (
-            f", AegisOpsControlPlaneService methods={facade_method_count}"
-            if facade_method_count is not None
+            f", {facade_class} methods={facade_method_count}"
+            if facade_class is not None and facade_method_count is not None
             else ""
         )
         print(
@@ -260,10 +302,10 @@ if baseline_regressions:
 
 if candidates:
     print("Known maintainability hotspot baseline remains present:")
-    for relative_path, physical_lines, effective_lines, facade_method_count, signals in candidates:
+    for relative_path, physical_lines, effective_lines, facade_class, facade_method_count, signals in candidates:
         method_summary = (
-            f", AegisOpsControlPlaneService methods={facade_method_count}"
-            if facade_method_count is not None
+            f", {facade_class} methods={facade_method_count}"
+            if facade_class is not None and facade_method_count is not None
             else ""
         )
         print(

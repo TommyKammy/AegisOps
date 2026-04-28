@@ -97,7 +97,7 @@ assert_passes "${single_responsibility_repo}"
 baseline_repo="${workdir}/baseline"
 create_repo \
   "${baseline_repo}" \
-  "docs/maintainability-hotspot-baseline.txt" "control-plane/aegisops_control_plane/service.py max_lines=960 max_effective_lines=960 max_facade_methods=1 adr_exception=ADR-0003" \
+  "docs/maintainability-hotspot-baseline.txt" "control-plane/aegisops_control_plane/service.py max_lines=960 max_effective_lines=960 max_facade_methods=1 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003" \
   "control-plane/aegisops_control_plane/service.py" "class AegisOpsControlPlaneService:
     def describe_runtime(self):
         auth_principal = 'trusted-runtime-boundary'
@@ -126,8 +126,8 @@ fi
 regrowth_repo="${workdir}/regrowth"
 create_repo \
   "${regrowth_repo}" \
-  "docs/maintainability-hotspot-baseline.txt" "control-plane/aegisops_control_plane/service.py max_lines=959 max_effective_lines=959 max_facade_methods=0 adr_exception=ADR-0003" \
-  "control-plane/aegisops_control_plane/service.py" "class AegisOpsControlPlaneService:
+  "docs/maintainability-hotspot-baseline.txt" "control-plane/aegisops_control_plane/service.py max_lines=959 max_effective_lines=959 max_facade_methods=0 facade_class=RenamedControlPlaneService adr_exception=ADR-0003" \
+  "control-plane/aegisops_control_plane/service.py" "class RenamedControlPlaneService:
     def describe_runtime(self):
         auth_principal = 'trusted-runtime-boundary'
         queue_status = {'operator': auth_principal}
@@ -141,8 +141,23 @@ append_repeated_lines "${regrowth_repo}" "control-plane/aegisops_control_plane/s
 git -C "${regrowth_repo}" add .
 git -C "${regrowth_repo}" commit -q -m "hotspot growth past baseline"
 assert_fails_with "${regrowth_repo}" "Maintainability hotspot baseline limits were exceeded"
+if ! grep -F "lines=960 exceeds max_lines=959" "${fail_stderr}" >/dev/null; then
+  echo "Expected failure output to report the line-count limit." >&2
+  cat "${fail_stderr}" >&2
+  exit 1
+fi
+if ! grep -F "effective_lines=960 exceeds max_effective_lines=959" "${fail_stderr}" >/dev/null; then
+  echo "Expected failure output to report the effective-line limit." >&2
+  cat "${fail_stderr}" >&2
+  exit 1
+fi
 if ! grep -F "max_facade_methods=0" "${fail_stderr}" >/dev/null; then
   echo "Expected failure output to report the facade method limit." >&2
+  cat "${fail_stderr}" >&2
+  exit 1
+fi
+if ! grep -F "RenamedControlPlaneService methods=1" "${fail_stderr}" >/dev/null; then
+  echo "Expected failure output to report the configured successor facade class." >&2
   cat "${fail_stderr}" >&2
   exit 1
 fi
