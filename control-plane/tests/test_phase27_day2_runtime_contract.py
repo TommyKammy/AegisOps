@@ -32,6 +32,27 @@ import test_phase21_runtime_auth_validation as runtime_auth_tests
 import test_runtime_secret_boundary as secret_boundary_tests
 
 
+class _InterruptedOpenBaoRotationTransport:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def read_secret(
+        self,
+        *,
+        address: str,
+        token: str,
+        mount: str,
+        secret_path: str,
+    ) -> str:
+        del address
+        del token
+        del mount
+        self.calls.append(secret_path)
+        if secret_path == "kv/aegisops/control-plane/wazuh-ingest-shared-secret":
+            return "reviewed-shared-secret-v2"
+        raise RuntimeError("rotation interrupted before companion secret was current")
+
+
 class Phase27Day2RuntimeContractTests(ServicePersistenceTestBase):
     def test_phase27_restore_runtime_contract_fails_closed_without_post_restore_bindings(
         self,
@@ -769,6 +790,113 @@ class Phase27Day2RuntimeContractTests(ServicePersistenceTestBase):
                 )
 
         self.assertEqual(failing_transport.calls, 1)
+        self.assertEqual(
+            service.get_record(CaseRecord, promoted_case.case_id),
+            initial_case,
+        )
+        self.assertEqual(len(store.list(ActionRequestRecord)), initial_action_request_count)
+        self.assertEqual(len(store.list(LifecycleTransitionRecord)), initial_transition_count)
+        self.assertEqual(len(store.list(ApprovalDecisionRecord)), initial_approval_count)
+        self.assertEqual(len(store.list(ActionExecutionRecord)), initial_execution_count)
+        self.assertEqual(
+            len(store.list(ReconciliationRecord)),
+            initial_reconciliation_count,
+        )
+
+    def test_phase27_secret_rotation_interruption_rejects_mixed_or_partial_credential_state(
+        self,
+    ) -> None:
+        store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host=runtime_auth_tests.TEST_NON_LOOPBACK_HOST,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret-v1",
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret-v1",
+                wazuh_ingest_trusted_proxy_cidrs=("10.10.0.5/32",),
+            ),
+            store=store,
+        )
+        initial_case = service.get_record(CaseRecord, promoted_case.case_id)
+        initial_action_request_count = len(store.list(ActionRequestRecord))
+        initial_transition_count = len(store.list(LifecycleTransitionRecord))
+        initial_approval_count = len(store.list(ApprovalDecisionRecord))
+        initial_execution_count = len(store.list(ActionExecutionRecord))
+        initial_reconciliation_count = len(store.list(ReconciliationRecord))
+        mixed_source_transport = secret_boundary_tests._MutableOpenBaoTransport(
+            {
+                "kv/aegisops/control-plane/wazuh-ingest-reverse-proxy-secret": (
+                    "reviewed-proxy-secret-v2"
+                ),
+            }
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "Wazuh ingest secret rotation bindings must not mix",
+        ):
+            RuntimeConfig.from_env(
+                {
+                    "AEGISOPS_OPENBAO_ADDRESS": "https://openbao.example.test",
+                    "AEGISOPS_OPENBAO_TOKEN": "reviewed-openbao-token",
+                    "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET": (
+                        "reviewed-shared-secret-v1"
+                    ),
+                    "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_REVERSE_PROXY_SECRET_OPENBAO_PATH": (
+                        "kv/aegisops/control-plane/wazuh-ingest-reverse-proxy-secret"
+                    ),
+                },
+                secret_backend_transport=mixed_source_transport,
+            )
+
+        interrupted_transport = _InterruptedOpenBaoRotationTransport()
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_REVERSE_PROXY_SECRET_OPENBAO_PATH "
+                "could not be read from OpenBao"
+            ),
+        ):
+            RuntimeConfig.from_env(
+                {
+                    "AEGISOPS_OPENBAO_ADDRESS": "https://openbao.example.test",
+                    "AEGISOPS_OPENBAO_TOKEN": "reviewed-openbao-token",
+                    "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET_OPENBAO_PATH": (
+                        "kv/aegisops/control-plane/wazuh-ingest-shared-secret"
+                    ),
+                    "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_REVERSE_PROXY_SECRET_OPENBAO_PATH": (
+                        "kv/aegisops/control-plane/wazuh-ingest-reverse-proxy-secret"
+                    ),
+                },
+                secret_backend_transport=interrupted_transport,
+            )
+
+        with self.assertRaisesRegex(
+            PermissionError,
+            "live Wazuh ingest bearer credential did not match the reviewed shared secret",
+        ):
+            service.ingest_wazuh_alert(
+                raw_alert={},
+                authorization_header="Bearer reviewed-shared-secret-v2",
+                forwarded_proto="https",
+                reverse_proxy_secret_header="reviewed-proxy-secret-v1",
+                peer_addr="10.10.0.5",
+            )
+
+        self.assertEqual(mixed_source_transport.calls, 0)
+        self.assertEqual(
+            interrupted_transport.calls,
+            [
+                "kv/aegisops/control-plane/wazuh-ingest-shared-secret",
+                "kv/aegisops/control-plane/wazuh-ingest-reverse-proxy-secret",
+            ],
+        )
+        self.assertEqual(
+            service.inspect_readiness_diagnostics().status,
+            "failing_closed",
+        )
         self.assertEqual(
             service.get_record(CaseRecord, promoted_case.case_id),
             initial_case,

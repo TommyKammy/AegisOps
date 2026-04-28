@@ -174,6 +174,36 @@ def _load_bound_string(
     return default
 
 
+def _secret_binding_source(source: Mapping[str, str], env_name: str) -> str:
+    if source.get(f"{env_name}_OPENBAO_PATH", "").strip():
+        return "openbao"
+    if source.get(f"{env_name}_FILE", "").strip():
+        return "file"
+    if source.get(env_name, "").strip():
+        return "direct"
+    return "default"
+
+
+def _reject_mixed_wazuh_rotation_bindings(source: Mapping[str, str]) -> None:
+    wazuh_secret_sources = {
+        _secret_binding_source(
+            source,
+            "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET",
+        ),
+        _secret_binding_source(
+            source,
+            "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_REVERSE_PROXY_SECRET",
+        ),
+    }
+    active_sources = wazuh_secret_sources - {"default"}
+    if "openbao" in active_sources and active_sources - {"openbao"}:
+        raise ValueError(
+            "Wazuh ingest secret rotation bindings must not mix OpenBao-managed "
+            "and direct or file-backed credential sources; complete or retry "
+            "rotation from one trusted source"
+        )
+
+
 def _load_bool(source: Mapping[str, str], env_name: str, default: bool) -> bool:
     raw_value = source.get(env_name, "").strip().lower()
     if raw_value == "":
@@ -217,6 +247,7 @@ class RuntimeConfig:
         secret_backend_transport: OpenBaoSecretTransport | None = None,
     ) -> "RuntimeConfig":
         source = environ if environ is not None else os.environ
+        _reject_mixed_wazuh_rotation_bindings(source)
         raw_port = source.get("AEGISOPS_CONTROL_PLANE_PORT", "")
         if raw_port == "":
             port = cls.port
