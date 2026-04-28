@@ -40,6 +40,8 @@ class Phase27Day2HardeningValidationTests(unittest.TestCase):
             "test_phase27_idp_outage_blocks_operator_authority_and_workflow_progression",
             "IdP outage fail-closed workflow authority",
             "test_phase27_secret_contract_requires_fresh_read_and_blocks_backend_outage",
+            "test_phase27_secret_backend_outage_rejects_plaintext_fallback_and_blocks_workflow_progression",
+            "plaintext fallback, local file fallback, and protected workflow progression",
             "Rollback remains a reviewed operational contract and capacity guardrail, not a dedicated runtime-enforced Phase 27 contract in the current path.",
             "None at the runtime-enforcement layer. Phase 27 currently relies on the reviewed runbook backup, restore, and rollback contract as the operator-facing rollback proof while dedicated runtime rollback enforcement remains out of scope.",
             "bash scripts/verify-phase-27-day-2-hardening-validation.sh",
