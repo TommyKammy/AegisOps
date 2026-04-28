@@ -511,8 +511,10 @@ class Phase27Day2RuntimeContractTests(ServicePersistenceTestBase):
             RuntimeConfig(
                 host="127.0.0.1",
                 postgres_dsn="postgresql://control-plane.local/aegisops",
-                wazuh_ingest_shared_secret="reviewed-shared-secret",
-                admin_bootstrap_token="reviewed-admin-bootstrap-token",
+                wazuh_ingest_shared_secret=runtime_auth_tests.REVIEWED_SHARED_SECRET,
+                admin_bootstrap_token=(
+                    runtime_auth_tests.REVIEWED_ADMIN_BOOTSTRAP_TOKEN
+                ),
                 control_plane_change_state="rollback_in_progress",
                 control_plane_change_evidence_id="rollback-window-phase27-001",
             ),
