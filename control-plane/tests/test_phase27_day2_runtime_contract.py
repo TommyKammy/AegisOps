@@ -21,6 +21,7 @@ from aegisops_control_plane.service import (
     AegisOpsControlPlaneService,
     ActionExecutionRecord,
     ActionRequestRecord,
+    AlertRecord,
     ApprovalDecisionRecord,
     CaseRecord,
     LifecycleTransitionRecord,
@@ -317,6 +318,123 @@ class Phase27Day2RuntimeContractTests(ServicePersistenceTestBase):
         self.assertEqual(
             automation_health["surfaces"]["automation_substrate:shuffle"]["state"],
             "degraded",
+        )
+
+    def test_phase27_degraded_source_health_visibility_does_not_advance_workflow_authority(
+        self,
+    ) -> None:
+        store, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome=(
+                "Keep degraded source-health visible without advancing workflow truth."
+            ),
+        )
+        requested_at = reviewed_at - timedelta(hours=2)
+        delegated_at = reviewed_at - timedelta(hours=1, minutes=50)
+        expired_at = reviewed_at - timedelta(hours=1)
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Show degraded source-health as reviewed context only.",
+            escalation_reason=(
+                "Operators need degraded source visibility without lifecycle promotion."
+            ),
+            expires_at=reviewed_at + timedelta(hours=4),
+            action_request_id="action-request-phase27-source-health-visibility-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase27-source-health-visibility-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=requested_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=expired_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                requested_at=requested_at,
+                expires_at=expired_at,
+                lifecycle_state="executing",
+            )
+        )
+        service.persist_record(
+            ActionExecutionRecord(
+                action_execution_id=(
+                    "action-execution-phase27-source-health-visibility-001"
+                ),
+                action_request_id=action_request.action_request_id,
+                approval_decision_id=approval.approval_decision_id,
+                delegation_id="delegation-phase27-source-health-visibility-001",
+                execution_surface_type="automation_substrate",
+                execution_surface_id="shuffle",
+                execution_run_id="execution-run-phase27-source-health-visibility-001",
+                idempotency_key=action_request.idempotency_key,
+                target_scope=dict(action_request.target_scope),
+                approved_payload=dict(action_request.requested_payload),
+                payload_hash=action_request.payload_hash,
+                delegated_at=delegated_at,
+                expires_at=expired_at,
+                provenance={"initiated_by": "operator-review"},
+                lifecycle_state="dispatching",
+            )
+        )
+
+        initial_alerts = tuple(store.list(AlertRecord))
+        initial_cases = tuple(store.list(CaseRecord))
+        initial_action_requests = tuple(store.list(ActionRequestRecord))
+        initial_approvals = tuple(store.list(ApprovalDecisionRecord))
+        initial_executions = tuple(store.list(ActionExecutionRecord))
+        initial_reconciliations = tuple(store.list(ReconciliationRecord))
+        initial_transition_count = len(store.list(LifecycleTransitionRecord))
+
+        readiness = service.inspect_readiness_diagnostics()
+        source_health = readiness.metrics["source_health"]
+        review_path_health = readiness.metrics["review_path_health"]
+
+        self.assertEqual(readiness.status, "failing_closed")
+        self.assertEqual(review_path_health["overall_state"], "degraded")
+        self.assertEqual(source_health["overall_state"], "degraded")
+        self.assertEqual(source_health["tracked_sources"], 1)
+        self.assertEqual(
+            source_health["summary"],
+            "degraded source health: github_audit ingest signal timeout",
+        )
+        github_audit = source_health["sources"]["github_audit"]
+        self.assertEqual(github_audit["state"], "degraded")
+        self.assertEqual(github_audit["reason"], "ingest_signal_timeout")
+        self.assertEqual(github_audit["tracked_reviews"], 1)
+        self.assertEqual(github_audit["affected_reviews"], 1)
+        self.assertEqual(
+            github_audit["by_state"],
+            {
+                "healthy": 0,
+                "delayed": 0,
+                "degraded": 1,
+                "failed": 0,
+            },
+        )
+
+        self.assertEqual(tuple(store.list(AlertRecord)), initial_alerts)
+        self.assertEqual(tuple(store.list(CaseRecord)), initial_cases)
+        self.assertEqual(tuple(store.list(ActionRequestRecord)), initial_action_requests)
+        self.assertEqual(tuple(store.list(ApprovalDecisionRecord)), initial_approvals)
+        self.assertEqual(tuple(store.list(ActionExecutionRecord)), initial_executions)
+        self.assertEqual(tuple(store.list(ReconciliationRecord)), initial_reconciliations)
+        self.assertEqual(
+            len(store.list(LifecycleTransitionRecord)),
+            initial_transition_count,
         )
 
     def test_phase27_identity_contract_fails_closed_for_missing_or_unreviewed_provider_boundary(
