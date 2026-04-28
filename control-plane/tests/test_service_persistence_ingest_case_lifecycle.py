@@ -189,9 +189,11 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
         )
         intake_delegate.triage_disposition_matches_current_state.return_value = True
         intake_delegate.case_lifecycle_state_for_triage_disposition.return_value = (
-            "pending_action"
+            "triage_pending_action"
         )
-        intake_delegate.case_lifecycle_for_disposition.return_value = "pending_action"
+        intake_delegate.case_lifecycle_for_disposition.return_value = (
+            "disposition_pending_action"
+        )
         service._detection_intake_service = intake_delegate
 
         self.assertIs(
@@ -245,11 +247,11 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             service._case_lifecycle_state_for_triage_disposition(
                 "business_hours_handoff"
             ),
-            "pending_action",
+            "triage_pending_action",
         )
         self.assertEqual(
             service._case_lifecycle_for_disposition("business_hours_handoff"),
-            "pending_action",
+            "disposition_pending_action",
         )
 
         intake_delegate.ingest_finding_alert.assert_called_once_with(
