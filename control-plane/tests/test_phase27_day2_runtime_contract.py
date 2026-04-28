@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 import pathlib
 import sys
 import tempfile
@@ -63,6 +63,155 @@ class Phase27Day2RuntimeContractTests(ServicePersistenceTestBase):
         self.assertIn(
             "AEGISOPS_CONTROL_PLANE_ADMIN_BOOTSTRAP_TOKEN",
             readiness.startup["missing_bindings"],
+        )
+
+    def test_phase27_restore_reconciliation_truth_integrity_keeps_mismatch_reviewable(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Observed repository permission change requires tracked review.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            triage_owner="analyst-001",
+            triage_rationale="Privilege-impacting change needs a bounded tracking ticket.",
+            observation_id=observation.observation_id,
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Open one reviewed tracking ticket for daily operator follow-up.",
+            lead_id=lead.lead_id,
+        )
+        action_request = service.create_reviewed_tracking_ticket_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            coordination_reference_id="coord-ref-phase27-restore-truth-001",
+            coordination_target_type="zammad",
+            ticket_title="Review restored reconciliation mismatch",
+            ticket_description=(
+                "Preserve the mismatched restore-drill receipt as subordinate evidence."
+            ),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-phase27-restore-truth-001",
+        )
+        approval = service.record_action_approval_decision(
+            action_request_id=action_request.action_request_id,
+            approver_identity="approver-001",
+            authenticated_approver_identity="approver-001",
+            decision="grant",
+            decision_rationale=(
+                "Reviewed tracking ticket remains subordinate to AegisOps workflow truth."
+            ),
+            decided_at=reviewed_at + timedelta(minutes=5),
+            approval_decision_id="approval-phase27-restore-truth-001",
+        )
+        approved_request = service.get_record(
+            ActionRequestRecord,
+            action_request.action_request_id,
+        )
+        assert approved_request is not None
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id=approved_request.action_request_id,
+            approved_payload=dict(approved_request.requested_payload),
+            delegated_at=reviewed_at + timedelta(minutes=10),
+            delegation_issuer="control-plane-service",
+            evidence_ids=(evidence_id,),
+        )
+        downstream_binding = execution.provenance["downstream_binding"]
+        reconciliation = service.reconcile_action_execution(
+            action_request_id=approved_request.action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(
+                {
+                    "execution_run_id": execution.execution_run_id,
+                    "execution_surface_id": "shuffle",
+                    "idempotency_key": approved_request.idempotency_key,
+                    "approval_decision_id": approval.approval_decision_id,
+                    "delegation_id": execution.delegation_id,
+                    "payload_hash": execution.payload_hash,
+                    "coordination_reference_id": downstream_binding[
+                        "coordination_reference_id"
+                    ],
+                    "coordination_target_type": downstream_binding[
+                        "coordination_target_type"
+                    ],
+                    "external_receipt_id": "restored-downstream-receipt-drifted-001",
+                    "coordination_target_id": downstream_binding[
+                        "coordination_target_id"
+                    ],
+                    "ticket_reference_url": downstream_binding["ticket_reference_url"],
+                    "observed_at": reviewed_at + timedelta(minutes=15),
+                    "status": "success",
+                },
+            ),
+            compared_at=reviewed_at + timedelta(minutes=20),
+            stale_after=reviewed_at + timedelta(hours=1),
+        )
+        backup = service.export_authoritative_record_chain_backup()
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",
+            ),
+            store=restored_store,
+        )
+
+        restore_summary = restored_service.restore_authoritative_record_chain_backup(
+            backup
+        )
+        readiness = restored_service.inspect_readiness_diagnostics()
+        restored_case = restored_service.get_record(CaseRecord, promoted_case.case_id)
+        restored_request = restored_service.get_record(
+            ActionRequestRecord,
+            approved_request.action_request_id,
+        )
+        restored_execution = restored_service.get_record(
+            ActionExecutionRecord,
+            execution.action_execution_id,
+        )
+        restored_reconciliation = restored_service.get_record(
+            ReconciliationRecord,
+            reconciliation.reconciliation_id,
+        )
+
+        self.assertFalse(restore_summary.restore_drill.drill_passed)
+        self.assertEqual(readiness.status, "failing_closed")
+        self.assertEqual(readiness.metrics["reconciliations"]["mismatched"], 1)
+        self.assertEqual(
+            readiness.latest_reconciliation["reconciliation_id"],
+            reconciliation.reconciliation_id,
+        )
+        assert restored_case is not None
+        assert restored_request is not None
+        assert restored_execution is not None
+        assert restored_reconciliation is not None
+        self.assertEqual(restored_case.lifecycle_state, promoted_case.lifecycle_state)
+        self.assertEqual(restored_request.lifecycle_state, "approved")
+        self.assertEqual(restored_execution.lifecycle_state, "queued")
+        self.assertEqual(restored_reconciliation.lifecycle_state, "mismatched")
+        self.assertEqual(restored_reconciliation.ingest_disposition, "mismatch")
+        self.assertEqual(
+            restored_reconciliation.mismatch_summary,
+            "coordination receipt mismatch between authoritative action execution "
+            "and observed downstream execution",
+        )
+        self.assertEqual(
+            restored_reconciliation.subject_linkage["external_receipt_ids"],
+            (downstream_binding["external_receipt_id"],),
         )
 
     def test_phase27_readiness_contract_surfaces_degraded_source_and_automation_state(
