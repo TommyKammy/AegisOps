@@ -127,7 +127,7 @@ Run `node <codex-supervisor-root>/dist/index.js issue-lint 988 --config <supervi
 - No external-evidence module split is approved by this ADR.
 - No approval, execution, reconciliation, assistant, ticket, ML, endpoint, network, browser, optional-evidence, restore, readiness, detection, external-evidence, or operator authority behavior is changed.
 - No deployment, database, migration, credential source, external substrate, HTTP surface, CLI surface, or operator UI behavior is changed.
-- No public service entrypoint, runtime behavior, configuration shape, authority semantic, external-evidence response semantic, or durable-state side effect is changed.
+- No public service entrypoint, runtime behavior, configuration shape, authority semantics, external-evidence response semantics, or durable-state side effects are changed.
 - No baseline refresh is approved before Phase 50.10 implementation evidence exists.
 - No subordinate source, operator-facing projection, summary, badge, counter, recommendation, evidence snippet, reconciliation note, or external-evidence adapter output becomes authoritative workflow truth.
 - No exception may raise the Phase 50.9.6 ceiling.
