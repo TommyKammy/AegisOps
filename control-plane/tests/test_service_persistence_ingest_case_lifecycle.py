@@ -812,11 +812,22 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             ),
         )
 
+        native_evidence_records = tuple(
+            evidence
+            for evidence in store.list(EvidenceRecord)
+            if evidence.alert_id == created.alert.alert_id
+            and evidence.derivation_relationship == "native_detection_record"
+        )
         persisted_evidence = service.get_record(
             EvidenceRecord,
             enriched_evidence.evidence_id,
         )
         self.assertEqual(replayed.disposition, "deduplicated")
+        self.assertEqual(len(native_evidence_records), 1)
+        self.assertEqual(
+            native_evidence_records[0].evidence_id,
+            enriched_evidence.evidence_id,
+        )
         self.assertIsNotNone(persisted_evidence)
         self.assertEqual(persisted_evidence.provenance, enriched_evidence.provenance)
         self.assertEqual(persisted_evidence.content, enriched_evidence.content)
