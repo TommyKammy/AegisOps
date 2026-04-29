@@ -59,23 +59,13 @@ class NativeDetectionContextAttacher:
                         f"Alert {ingest_result.alert.alert_id!r} "
                         f"references missing case {case_id!r}"
                     )
-            evidence = service.persist_record(
-                EvidenceRecord(
-                    evidence_id=evidence_id,
-                    source_record_id=substrate_detection_record_id,
-                    alert_id=ingest_result.alert.alert_id,
-                    case_id=case_id,
-                    source_system=source_system,
-                    collector_identity=f"{record.substrate_key}-native-detection-adapter",
-                    acquired_at=service._require_aware_datetime(
-                        record.first_seen_at,
-                        "record.first_seen_at",
-                    ),
-                    derivation_relationship="native_detection_record",
-                    lifecycle_state="linked" if case_id is not None else "collected",
-                    provenance={},
-                    content={},
-                )
+            evidence = self._persist_native_context_evidence(
+                evidence_id=evidence_id,
+                substrate_detection_record_id=substrate_detection_record_id,
+                record=record,
+                ingest_result=ingest_result,
+                case_id=case_id,
+                source_system=source_system,
             )
             if existing_case is not None:
                 self._merge_case_context(
@@ -122,6 +112,47 @@ class NativeDetectionContextAttacher:
                 reconciliation=reconciliation,
                 disposition=ingest_result.disposition,
             )
+
+    def _persist_native_context_evidence(
+        self,
+        *,
+        evidence_id: str,
+        substrate_detection_record_id: str,
+        record: NativeDetectionRecord,
+        ingest_result: FindingAlertIngestResult,
+        case_id: str | None,
+        source_system: str,
+    ) -> EvidenceRecord:
+        service = self._service
+        existing_evidence = service._store.get(EvidenceRecord, evidence_id)
+        evidence_fields = {
+            "source_record_id": substrate_detection_record_id,
+            "alert_id": ingest_result.alert.alert_id,
+            "case_id": case_id,
+            "source_system": source_system,
+            "collector_identity": f"{record.substrate_key}-native-detection-adapter",
+            "acquired_at": service._require_aware_datetime(
+                record.first_seen_at,
+                "record.first_seen_at",
+            ),
+            "derivation_relationship": "native_detection_record",
+            "lifecycle_state": "linked" if case_id is not None else "collected",
+        }
+        if existing_evidence is not None:
+            return service.persist_record(
+                replace(
+                    existing_evidence,
+                    **evidence_fields,
+                )
+            )
+        return service.persist_record(
+            EvidenceRecord(
+                evidence_id=evidence_id,
+                provenance={},
+                content={},
+                **evidence_fields,
+            )
+        )
 
     def _merge_case_context(
         self,
