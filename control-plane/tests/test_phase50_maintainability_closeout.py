@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import pathlib
+import shutil
 import subprocess
 import unittest
 
@@ -89,12 +90,17 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
             self.assertIn(required, closeout)
 
     def test_verifier_reports_only_phase50_accepted_hotspot(self) -> None:
+        bash_executable = shutil.which("bash")
+        if bash_executable is None:
+            self.fail("bash executable not found")
+
         result = subprocess.run(
-            ["bash", "scripts/verify-maintainability-hotspots.sh"],
+            [bash_executable, "scripts/verify-maintainability-hotspots.sh"],
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,
             check=True,
+            timeout=30,
         )
 
         self.assertIn("Known maintainability hotspot baseline remains present", result.stdout)
