@@ -323,10 +323,13 @@ def _action_review_overdue_path_health(
     *,
     review_state: str,
     action_execution: ActionExecutionRecord | None,
+    reconciliation: ReconciliationRecord | None,
     paths: Mapping[str, Mapping[str, str]],
 ) -> dict[str, dict[str, str]]:
     if action_execution is None:
         if review_state in {"approved", "executing"}:
+            if reconciliation is not None:
+                return _action_review_path_health_entries(paths)
             return _action_review_unresolved_without_execution_path_health()
         return _action_review_path_health_entries(paths)
 
@@ -439,7 +442,10 @@ def _action_review_delegation_path_health(
                 "reason": "awaiting_reviewed_delegation",
             }
         )
-    if review_state == "approved" or action_request.lifecycle_state == "approved":
+    if (
+        review_state in {"approved", "executing"}
+        or action_request.lifecycle_state == "approved"
+    ):
         return _action_review_path_health_entry(
             {
                 "state": "delayed",
@@ -1494,6 +1500,7 @@ def action_review_path_health(
         paths = _action_review_overdue_path_health(
             review_state=review_state,
             action_execution=action_execution,
+            reconciliation=reconciliation,
             paths=paths,
         )
     overall_state = _action_review_overall_path_state(paths.values())
