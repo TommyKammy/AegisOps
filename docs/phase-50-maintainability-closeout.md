@@ -1,6 +1,6 @@
 # Phase 50 Maintainability Closeout
 
-Phase 50.8.2 closes the ordered maintainability hotspot reduction sequence governed by ADR-0004.
+Phase 50.8.3 continues the ordered maintainability hotspot reduction sequence governed by ADR-0004.
 
 This closeout is validation and documentation only. It does not change runtime behavior, public APIs, approval, execution, reconciliation, assistant, ticket, ML, endpoint, network, browser, optional-evidence, restore, readiness, or operator authority.
 
@@ -12,14 +12,14 @@ The maintainability verifier still reports one remaining accepted hotspot:
 
 - `control-plane/aegisops_control_plane/service.py`
 
-That result is expected because `AegisOpsControlPlaneService` remains the public facade after the Phase 50 extraction and fencing work. Phase 50.8.2 lowered the accepted residual ceiling for #963 to:
+That result is expected because `AegisOpsControlPlaneService` remains the public facade after the Phase 50 extraction and fencing work. Phase 50.8.3 lowered the accepted residual ceiling for #964 to:
 
-- `max_lines=4708`
-- `max_effective_lines=4343`
+- `max_lines=4087`
+- `max_effective_lines=3733`
 - `max_facade_methods=188`
 - `facade_class=AegisOpsControlPlaneService`
 - `adr_exception=ADR-0003`
-- `phase=50.8.2`
+- `phase=50.8.3`
 
 No additional baseline entry is recorded for restore validation, HTTP surface, assistant, detection, operator inspection, or operator UI route tests because the verifier does not report those areas as current responsibility-growth candidates.
 

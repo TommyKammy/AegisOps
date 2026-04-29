@@ -30,6 +30,140 @@ from _service_persistence_support import (
 )
 
 class ActionReviewSurfacePersistenceTests(ServicePersistenceTestBase):
+    def test_action_review_path_health_preserves_overdue_reconciliation_without_execution(
+        self,
+    ) -> None:
+        requested_at = datetime(2026, 4, 27, 9, 0, tzinfo=timezone.utc)
+        expires_at = requested_at + timedelta(minutes=30)
+        action_request = ActionRequestRecord(
+            action_request_id="action-request-path-health-reconciliation-no-execution-001",
+            approval_decision_id="approval-path-health-reconciliation-no-execution-001",
+            case_id="case-path-health-reconciliation-no-execution-001",
+            alert_id="alert-path-health-reconciliation-no-execution-001",
+            finding_id="finding-path-health-reconciliation-no-execution-001",
+            idempotency_key="idempotency-path-health-reconciliation-no-execution-001",
+            target_scope={
+                "record_family": "recommendation",
+                "record_id": "recommendation-path-health-reconciliation-no-execution-001",
+                "case_id": "case-path-health-reconciliation-no-execution-001",
+                "alert_id": "alert-path-health-reconciliation-no-execution-001",
+                "finding_id": "finding-path-health-reconciliation-no-execution-001",
+                "recipient_identity": "repo-owner-001",
+            },
+            payload_hash="payload-hash-path-health-reconciliation-no-execution-001",
+            requested_at=requested_at,
+            expires_at=expires_at,
+            lifecycle_state="approved",
+            requester_identity="analyst-001",
+            requested_payload={
+                "action_type": "notify_identity_owner",
+                "recipient_identity": "repo-owner-001",
+            },
+        )
+        approval = ApprovalDecisionRecord(
+            approval_decision_id="approval-path-health-reconciliation-no-execution-001",
+            action_request_id=action_request.action_request_id,
+            approver_identities=("approver-001",),
+            target_snapshot=dict(action_request.target_scope),
+            payload_hash=action_request.payload_hash,
+            decided_at=requested_at + timedelta(minutes=5),
+            lifecycle_state="approved",
+            approved_expires_at=expires_at,
+        )
+        reconciliation = support.ReconciliationRecord(
+            reconciliation_id="reconciliation-path-health-no-execution-001",
+            subject_linkage={
+                "action_request_ids": (action_request.action_request_id,),
+                "approval_decision_ids": (approval.approval_decision_id,),
+            },
+            alert_id=action_request.alert_id,
+            finding_id=action_request.finding_id,
+            analytic_signal_id=None,
+            execution_run_id=None,
+            linked_execution_run_ids=(),
+            correlation_key=f"reconciliation-no-execution:{action_request.action_request_id}",
+            first_seen_at=requested_at + timedelta(minutes=10),
+            last_seen_at=requested_at + timedelta(minutes=10),
+            ingest_disposition="matched",
+            mismatch_summary="reconciliation observed without persisted execution",
+            compared_at=requested_at + timedelta(minutes=11),
+            lifecycle_state="matched",
+        )
+
+        path_health = action_review_projection.action_review_path_health(
+            service=None,
+            action_request=action_request,
+            approval_decision=approval,
+            action_execution=None,
+            reconciliation=reconciliation,
+            review_state="approved",
+            as_of=expires_at + timedelta(minutes=5),
+        )
+
+        self.assertEqual(path_health["overall_state"], "degraded")
+        self.assertEqual(
+            path_health["paths"]["ingest"]["reason"],
+            "observations_current",
+        )
+        self.assertEqual(
+            path_health["paths"]["delegation"]["reason"],
+            "reviewed_delegation_record_missing",
+        )
+        self.assertEqual(
+            path_health["paths"]["provider"]["reason"],
+            "provider_execution_record_missing",
+        )
+        self.assertEqual(
+            path_health["paths"]["persistence"]["reason"],
+            "reconciliation_execution_lineage_missing",
+        )
+
+    def test_action_review_path_health_treats_executing_without_execution_as_reviewed(
+        self,
+    ) -> None:
+        requested_at = datetime(2026, 4, 27, 9, 0, tzinfo=timezone.utc)
+        action_request = ActionRequestRecord(
+            action_request_id="action-request-path-health-executing-no-execution-001",
+            approval_decision_id=None,
+            case_id="case-path-health-executing-no-execution-001",
+            alert_id="alert-path-health-executing-no-execution-001",
+            finding_id="finding-path-health-executing-no-execution-001",
+            idempotency_key="idempotency-path-health-executing-no-execution-001",
+            target_scope={
+                "record_family": "recommendation",
+                "record_id": "recommendation-path-health-executing-no-execution-001",
+                "case_id": "case-path-health-executing-no-execution-001",
+                "alert_id": "alert-path-health-executing-no-execution-001",
+                "finding_id": "finding-path-health-executing-no-execution-001",
+                "recipient_identity": "repo-owner-001",
+            },
+            payload_hash="payload-hash-path-health-executing-no-execution-001",
+            requested_at=requested_at,
+            expires_at=requested_at + timedelta(hours=1),
+            lifecycle_state="executing",
+            requester_identity="analyst-001",
+            requested_payload={
+                "action_type": "notify_identity_owner",
+                "recipient_identity": "repo-owner-001",
+            },
+        )
+
+        path_health = action_review_projection.action_review_path_health(
+            service=None,
+            action_request=action_request,
+            approval_decision=None,
+            action_execution=None,
+            reconciliation=None,
+            review_state="executing",
+            as_of=requested_at + timedelta(minutes=10),
+        )
+
+        self.assertEqual(path_health["overall_state"], "delayed")
+        self.assertEqual(
+            path_health["paths"]["delegation"]["reason"],
+            "awaiting_reviewed_delegation",
+        )
+
     def test_action_review_reconciliation_detail_names_expected_received_and_closeout_guidance(
         self,
     ) -> None:
