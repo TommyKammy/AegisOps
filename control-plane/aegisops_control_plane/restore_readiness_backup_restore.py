@@ -155,13 +155,21 @@ def _record_from_backup_payload(
                     f"{family}.{field_info.name} must contain only non-empty strings"
                 )
         elif field_info.name in mapping_fields:
-            if not isinstance(value, Mapping):
-                raise ValueError(
-                    f"{family}.{field_info.name} must be a JSON object in restore payload"
-                )
-            value = {str(key): item for key, item in value.items()}
+            value = _parse_backup_mapping(value, family, field_info.name)
         kwargs[field_info.name] = value
     return record_type(**kwargs)
+
+
+def _parse_backup_mapping(
+    value: object,
+    family: str,
+    field_name: str,
+) -> Mapping[str, object]:
+    if not isinstance(value, Mapping):
+        raise ValueError(
+            f"{family}.{field_name} must be a JSON object in restore payload"
+        )
+    return {str(key): item for key, item in value.items()}
 
 
 def _is_nested_transaction_isolation_level_error(exc: ValueError) -> bool:
