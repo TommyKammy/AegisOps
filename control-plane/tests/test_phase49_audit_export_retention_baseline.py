@@ -116,6 +116,33 @@ class Phase49AuditExportRetentionBaselineTests(unittest.TestCase):
             "audit export must read authoritative records from one repeatable-read snapshot",
         )
 
+    def test_audit_export_rejects_empty_export_id_at_service_boundary(self) -> None:
+        store, backend = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        exported_at = datetime(2026, 4, 29, 1, 45, tzinfo=timezone.utc)
+
+        for export_id in ("", "   "):
+            with self.subTest(export_id=export_id):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "export_id must be a non-empty string",
+                ):
+                    service.export_audit_retention_baseline(
+                        export_id=export_id,
+                        exported_at=exported_at,
+                    )
+
+        self.assertFalse(
+            any(
+                statement.startswith("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+                for statement, _params in backend.statements
+            ),
+            "invalid export IDs must be rejected before the export snapshot opens",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

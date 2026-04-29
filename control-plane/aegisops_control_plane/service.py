@@ -2189,6 +2189,7 @@ class AegisOpsControlPlaneService:
         export_id: str,
         exported_at: datetime,
     ) -> dict[str, object]:
+        export_id = self._require_non_empty_string(export_id, "export_id")
         exported_at = self._require_aware_datetime(
             exported_at,
             "exported_at",
