@@ -104,7 +104,7 @@ reject_unredacted_sensitive_values() {
     exit 1
   fi
 
-  if grep -Eq 'Bearer[[:space:]]+[A-Za-z0-9._~+/=-]{12,}' "${path}"; then
+  if grep -Eiq 'Bearer[[:space:]]+[A-Za-z0-9._~+/=-]{12,}' "${path}"; then
     echo "Unredacted bearer ${description} value detected: ${path}" >&2
     exit 1
   fi
@@ -232,17 +232,17 @@ if [[ -n "${manifest_path}" ]]; then
 
   reject_manifest_pattern \
     "${manifest_path}" \
-    '^Same-day rollback decision:.*rollback-in-progress.*(advanced|advance|accepted|handoff|complete|closed)' \
+    '^Same-day rollback decision:.*rollback-in-progress.*[^[:alnum:]_](advanced|advance|accepted|closed|unblocked)([^[:alnum:]_]|$)' \
     "Incomplete Phase 37 rollback verification cannot advance protected workflows:"
 
   reject_manifest_pattern \
     "${manifest_path}" \
-    '^Upgrade evidence:.*incomplete.*(advanced|advance|accepted|handoff|complete|closed)' \
+    '^Upgrade evidence:.*incomplete.*[^[:alnum:]_](advanced|advance|accepted|closed|unblocked)([^[:alnum:]_]|$)' \
     "Incomplete Phase 37 upgrade verification cannot advance protected workflows:"
 
   reject_manifest_pattern \
     "${manifest_path}" \
-    '^Protected workflow advancement:.*(advanced|advance|accepted|handoff|closed)' \
+    '^Protected workflow advancement:.*[^[:alnum:]_](advanced|advance|accepted|closed|unblocked)([^[:alnum:]_]|$)' \
     "Protected workflow advancement must remain blocked until verification is complete:"
 fi
 
