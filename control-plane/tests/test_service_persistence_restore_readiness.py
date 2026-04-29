@@ -5805,7 +5805,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         backup = service.export_authoritative_record_chain_backup()
         backup["record_families"]["reconciliation"][0]["subject_linkage"] = None
 
-        restored_store, _ = make_store()
+        restored_store, _ = support.make_store()
         restored_service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
             store=restored_store,
