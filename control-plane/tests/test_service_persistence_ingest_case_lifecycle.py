@@ -771,6 +771,69 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             (promoted_case.case_id, promoted_case.case_id),
         )
 
+    def test_service_preserves_native_detection_evidence_metadata_on_idempotent_reingest(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        adapter = WazuhAlertAdapter()
+        payload = _load_wazuh_fixture("agent-origin-alert.json")
+        created = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(payload),
+        )
+        native_evidence = next(
+            evidence
+            for evidence in store.list(EvidenceRecord)
+            if evidence.alert_id == created.alert.alert_id
+            and evidence.derivation_relationship == "native_detection_record"
+        )
+        enriched_evidence = service.persist_record(
+            replace(
+                native_evidence,
+                provenance={
+                    "classification": "reviewed-native-context",
+                    "reviewed_by": "analyst-001",
+                },
+                content={
+                    "triage_note": "Retained enrichment on replay.",
+                    "reviewed_fields": ("agent.id", "rule.id"),
+                },
+            )
+        )
+
+        replayed = service.ingest_native_detection_record(
+            adapter,
+            adapter.build_native_detection_record(
+                _load_wazuh_fixture("agent-origin-alert.json")
+            ),
+        )
+
+        native_evidence_records = tuple(
+            evidence
+            for evidence in store.list(EvidenceRecord)
+            if evidence.alert_id == created.alert.alert_id
+            and evidence.derivation_relationship == "native_detection_record"
+        )
+        persisted_evidence = service.get_record(
+            EvidenceRecord,
+            enriched_evidence.evidence_id,
+        )
+        self.assertEqual(replayed.disposition, "deduplicated")
+        self.assertEqual(len(native_evidence_records), 1)
+        self.assertEqual(
+            native_evidence_records[0].evidence_id,
+            enriched_evidence.evidence_id,
+        )
+        self.assertIsNotNone(persisted_evidence)
+        self.assertEqual(persisted_evidence.provenance, enriched_evidence.provenance)
+        self.assertEqual(persisted_evidence.content, enriched_evidence.content)
+        self.assertEqual(persisted_evidence.alert_id, created.alert.alert_id)
+        self.assertEqual(persisted_evidence.lifecycle_state, "collected")
+
     def test_service_keeps_distinct_wazuh_incidents_separate_when_native_context_differs(
         self,
     ) -> None:

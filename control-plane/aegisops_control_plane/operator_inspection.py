@@ -461,123 +461,137 @@ class OperatorInspectionReadSurface:
 
             if not self._service._reconciliation_is_wazuh_origin(reconciliation):
                 continue
-            source_systems = self._service._merge_linked_ids(
-                reconciliation.subject_linkage.get("source_systems"),
-                None,
-            )
-            substrate_detection_record_ids = self._service._merge_linked_ids(
-                reconciliation.subject_linkage.get("substrate_detection_record_ids"),
-                None,
-            )
-            case_record = (
-                self._service._store.get(CaseRecord, alert.case_id)
-                if alert.case_id is not None
-                else None
-            )
-            action_reviews = self._service._action_review_chains_for_scope(
-                case_id=alert.case_id,
-                alert_id=alert.alert_id,
-                record_index=action_review_index,
-            )
-            review_state = self._service._alert_review_state(alert)
-            ai_trace_review_groups = self._ai_trace_review_groups_for_queue_record(
-                alert_id=alert.alert_id,
-                case_id=alert.case_id,
-                ai_trace_records=ai_trace_records,
-            )
-            queue_lanes, queue_lane_details = self._queue_lanes_for_record(
-                alert=alert,
-                reconciliation=reconciliation,
-                review_state=review_state,
-                action_reviews=action_reviews,
-            )
-            now = datetime.now(timezone.utc)
-            first_seen_at = reconciliation.first_seen_at
-            age_seconds = (
-                max(0, int((now - first_seen_at).total_seconds()))
-                if first_seen_at is not None
-                else 0
-            )
-            last_activity_at = reconciliation.last_seen_at or first_seen_at
-            owner_reviewed_context = (
-                case_record.reviewed_context if case_record is not None else alert.reviewed_context
-            )
             queue_records.append(
-                {
-                    "alert_id": alert.alert_id,
-                    "finding_id": alert.finding_id,
-                    "analytic_signal_id": alert.analytic_signal_id,
-                    "case_id": alert.case_id,
-                    "case_lifecycle_state": (
-                        case_record.lifecycle_state if case_record is not None else None
-                    ),
-                    "queue_selection": "business_hours_triage",
-                    "review_state": review_state,
-                    "escalation_boundary": self._service._alert_escalation_boundary(alert),
-                    "source_system": (
-                        "wazuh"
-                        if self._service._reconciliation_is_wazuh_origin(reconciliation)
-                        else (source_systems[0] if source_systems else "wazuh")
-                    ),
-                    "substrate_detection_record_ids": substrate_detection_record_ids,
-                    "accountable_source_identities": self._service._merge_linked_ids(
-                        reconciliation.subject_linkage.get(
-                            "accountable_source_identities"
-                        ),
-                        None,
-                    ),
-                    "reviewed_context": dict(alert.reviewed_context),
-                    "native_rule": reconciliation.subject_linkage.get(
-                        "latest_native_rule"
-                    ),
-                    "evidence_ids": self._service._merge_linked_ids(
-                        reconciliation.subject_linkage.get("evidence_ids"),
-                        None,
-                    ),
-                    "correlation_key": reconciliation.correlation_key,
-                    "first_seen_at": reconciliation.first_seen_at,
-                    "last_seen_at": reconciliation.last_seen_at,
-                    "owner": self._queue_owner(
-                        alert_id=alert.alert_id,
-                        case_id=alert.case_id,
-                        reviewed_context=owner_reviewed_context,
-                        action_reviews=action_reviews,
-                    ),
-                    "age_seconds": age_seconds,
-                    "age_bucket": self._queue_age_bucket(age_seconds),
-                    "severity": self._queue_severity_from_reviewed_context(
-                        alert.reviewed_context,
-                    ),
-                    "last_activity_at": last_activity_at,
-                    "next_action": self._queue_next_action(
-                        alert_id=alert.alert_id,
-                        case_id=alert.case_id,
-                        review_state=review_state,
-                        action_reviews=action_reviews,
-                    ),
-                    "queue_lanes": queue_lanes,
-                    "queue_lane_details": queue_lane_details,
-                    "current_action_review": (
-                        dict(action_reviews[0]) if action_reviews else None
-                    ),
-                    "ai_trace_review_groups": ai_trace_review_groups,
-                }
+                self._queue_record_for_alert(
+                    alert=alert,
+                    reconciliation=reconciliation,
+                    action_review_index=action_review_index,
+                    ai_trace_records=ai_trace_records,
+                )
             )
 
-        queue_records.sort(
-            key=lambda record: (
-                record["last_seen_at"]
-                or datetime.min.replace(tzinfo=timezone.utc),
-                record["alert_id"],
-            ),
-            reverse=True,
-        )
+        queue_records = self._sorted_queue_records(queue_records)
         return self._analyst_queue_snapshot_factory(
             read_only=True,
             queue_name="analyst_review",
             total_records=len(queue_records),
             lane_counts=self._queue_lane_counts(queue_records),
             records=tuple(queue_records),
+        )
+
+    def _queue_record_for_alert(
+        self,
+        *,
+        alert: AlertRecord,
+        reconciliation: ReconciliationRecord,
+        action_review_index: object,
+        ai_trace_records: tuple[AITraceRecord, ...],
+    ) -> dict[str, object]:
+        source_systems = self._service._merge_linked_ids(
+            reconciliation.subject_linkage.get("source_systems"),
+            None,
+        )
+        substrate_detection_record_ids = self._service._merge_linked_ids(
+            reconciliation.subject_linkage.get("substrate_detection_record_ids"),
+            None,
+        )
+        case_record = (
+            self._service._store.get(CaseRecord, alert.case_id)
+            if alert.case_id is not None
+            else None
+        )
+        action_reviews = self._service._action_review_chains_for_scope(
+            case_id=alert.case_id,
+            alert_id=alert.alert_id,
+            record_index=action_review_index,
+        )
+        review_state = self._service._alert_review_state(alert)
+        ai_trace_review_groups = self._ai_trace_review_groups_for_queue_record(
+            alert_id=alert.alert_id,
+            case_id=alert.case_id,
+            ai_trace_records=ai_trace_records,
+        )
+        queue_lanes, queue_lane_details = self._queue_lanes_for_record(
+            alert=alert,
+            reconciliation=reconciliation,
+            review_state=review_state,
+            action_reviews=action_reviews,
+        )
+        now = datetime.now(timezone.utc)
+        first_seen_at = reconciliation.first_seen_at
+        age_seconds = (
+            max(0, int((now - first_seen_at).total_seconds()))
+            if first_seen_at is not None
+            else 0
+        )
+        last_activity_at = reconciliation.last_seen_at or first_seen_at
+        owner_reviewed_context = (
+            case_record.reviewed_context if case_record is not None else alert.reviewed_context
+        )
+        return {
+            "alert_id": alert.alert_id,
+            "finding_id": alert.finding_id,
+            "analytic_signal_id": alert.analytic_signal_id,
+            "case_id": alert.case_id,
+            "case_lifecycle_state": (
+                case_record.lifecycle_state if case_record is not None else None
+            ),
+            "queue_selection": "business_hours_triage",
+            "review_state": review_state,
+            "escalation_boundary": self._service._alert_escalation_boundary(alert),
+            "source_system": (
+                "wazuh"
+                if self._service._reconciliation_is_wazuh_origin(reconciliation)
+                else (source_systems[0] if source_systems else "wazuh")
+            ),
+            "substrate_detection_record_ids": substrate_detection_record_ids,
+            "accountable_source_identities": self._service._merge_linked_ids(
+                reconciliation.subject_linkage.get("accountable_source_identities"),
+                None,
+            ),
+            "reviewed_context": dict(alert.reviewed_context),
+            "native_rule": reconciliation.subject_linkage.get("latest_native_rule"),
+            "evidence_ids": self._service._merge_linked_ids(
+                reconciliation.subject_linkage.get("evidence_ids"),
+                None,
+            ),
+            "correlation_key": reconciliation.correlation_key,
+            "first_seen_at": reconciliation.first_seen_at,
+            "last_seen_at": reconciliation.last_seen_at,
+            "owner": self._queue_owner(
+                alert_id=alert.alert_id,
+                case_id=alert.case_id,
+                reviewed_context=owner_reviewed_context,
+                action_reviews=action_reviews,
+            ),
+            "age_seconds": age_seconds,
+            "age_bucket": self._queue_age_bucket(age_seconds),
+            "severity": self._queue_severity_from_reviewed_context(alert.reviewed_context),
+            "last_activity_at": last_activity_at,
+            "next_action": self._queue_next_action(
+                alert_id=alert.alert_id,
+                case_id=alert.case_id,
+                review_state=review_state,
+                action_reviews=action_reviews,
+            ),
+            "queue_lanes": queue_lanes,
+            "queue_lane_details": queue_lane_details,
+            "current_action_review": dict(action_reviews[0]) if action_reviews else None,
+            "ai_trace_review_groups": ai_trace_review_groups,
+        }
+
+    @staticmethod
+    def _sorted_queue_records(
+        queue_records: list[dict[str, object]],
+    ) -> list[dict[str, object]]:
+        return sorted(
+            queue_records,
+            key=lambda record: (
+                record["last_seen_at"]
+                or datetime.min.replace(tzinfo=timezone.utc),
+                record["alert_id"],
+            ),
+            reverse=True,
         )
 
     def _queue_lanes_for_record(
