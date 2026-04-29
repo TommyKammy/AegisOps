@@ -46,14 +46,14 @@ if [[ ! -f "${doc_path}" ]]; then
 fi
 
 for heading in "${required_headings[@]}"; do
-  if ! grep -Fq -- "${heading}" "${doc_path}"; then
+  if ! grep -Fxq -- "${heading}" "${doc_path}"; then
     echo "Missing Phase 49.1 production RBAC/auth contract heading: ${heading}" >&2
     exit 1
   fi
 done
 
 for phrase in "${required_phrases[@]}"; do
-  if ! grep -Fq -- "${phrase}" "${doc_path}"; then
+  if ! grep -Fxq -- "${phrase}" "${doc_path}"; then
     echo "Missing Phase 49.1 production RBAC/auth contract statement: ${phrase}" >&2
     exit 1
   fi

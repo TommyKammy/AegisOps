@@ -111,6 +111,22 @@ valid_repo="${workdir}/valid"
 create_valid_repo "${valid_repo}"
 assert_passes "${valid_repo}"
 
+partial_heading_repo="${workdir}/partial-heading"
+create_valid_repo "${partial_heading_repo}"
+perl -0pi -e 's/## 1\. Purpose/## 1. Purpose \(draft\)/g' \
+  "${partial_heading_repo}/docs/phase-49-production-rbac-auth-hardening-contract.md"
+assert_fails_with \
+  "${partial_heading_repo}" \
+  "Missing Phase 49.1 production RBAC/auth contract heading: ## 1. Purpose"
+
+partial_statement_repo="${workdir}/partial-statement"
+create_valid_repo "${partial_statement_repo}"
+perl -0pi -e 's/This contract fixes the production RBAC and authentication hardening posture for later Phase 49 implementation work without changing runtime behavior in this issue\./This contract fixes the production RBAC and authentication hardening posture for later Phase 49 implementation work without changing runtime behavior in this issue. Draft./g' \
+  "${partial_statement_repo}/docs/phase-49-production-rbac-auth-hardening-contract.md"
+assert_fails_with \
+  "${partial_statement_repo}" \
+  "Missing Phase 49.1 production RBAC/auth contract statement: This contract fixes the production RBAC and authentication hardening posture for later Phase 49 implementation work without changing runtime behavior in this issue."
+
 missing_doc_repo="${workdir}/missing-doc"
 mkdir -p "${missing_doc_repo}/docs"
 assert_fails_with \
