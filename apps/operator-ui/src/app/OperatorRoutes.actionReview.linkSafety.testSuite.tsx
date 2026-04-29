@@ -1,8 +1,7 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
-import { createDefaultDependencies, OperatorRoutes } from "./OperatorRoutes";
+import { createDefaultDependencies } from "./OperatorRoutes";
 import {
   createAuthorizedFetch,
   renderOperatorRoute,
@@ -64,13 +63,27 @@ export function registerOperatorRoutesActionReviewLinkSafetyTests() {
       );
 
       expect(
-        screen.getByText(
+        screen.queryByText(/query-secret|super-secret-token/),
+      ).not.toBeInTheDocument();
+
+      const eventLogHeading = screen.getByRole("heading", {
+        name: "Reviewed UI event log",
+      });
+      const eventLogCard = eventLogHeading.closest(".MuiCard-root");
+      expect(eventLogCard).not.toBeNull();
+      const eventLog = within(eventLogCard as HTMLElement);
+      expect(eventLog.getByText("External open")).toBeInTheDocument();
+      expect(
+        eventLog.getByText("Open downstream coordination reference"),
+      ).toBeInTheDocument();
+      expect(
+        eventLog.getByText(
           "Target: https://tickets.example.invalid/incidents/246/<redacted-path-suffix>",
         ),
       ).toBeInTheDocument();
       expect(
-        screen.queryByText(/query-secret|super-secret-token/),
-      ).not.toBeInTheDocument();
+        eventLogCard,
+      ).not.toHaveTextContent(/query-secret|super-secret-token/);
     });
 
     it("keeps unsafe coordination reference schemes non-clickable", async () => {

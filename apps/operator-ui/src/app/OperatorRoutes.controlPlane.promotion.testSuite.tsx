@@ -1,8 +1,7 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
-import { createDefaultDependencies, OperatorRoutes } from "./OperatorRoutes";
+import { createDefaultDependencies } from "./OperatorRoutes";
 import {
   jsonResponse,
   renderOperatorRoute,
@@ -90,6 +89,7 @@ export function registerOperatorRoutesControlPlanePromotionTests() {
               ...alertDetailPayload,
               case_record: {
                 case_id: "case-456",
+                lifecycle_state: "open",
               },
             };
             return Promise.resolve(

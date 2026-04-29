@@ -1,13 +1,11 @@
 import {
   fireEvent,
-  render,
   screen,
   waitFor,
   within,
 } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
-import { createDefaultDependencies, OperatorRoutes } from "./OperatorRoutes";
+import { createDefaultDependencies } from "./OperatorRoutes";
 import {
   jsonResponse,
   renderOperatorRoute,
@@ -265,8 +263,8 @@ export function registerOperatorRoutesControlPlaneCaseRecordTests() {
       );
       await waitFor(() => {
         expect(
-          screen.getAllByText("recommendation-123").length,
-        ).toBeGreaterThan(0);
+          screen.getByText("Known recommendation ids: recommendation-123"),
+        ).toBeInTheDocument();
       });
     }, 20000);
   });
