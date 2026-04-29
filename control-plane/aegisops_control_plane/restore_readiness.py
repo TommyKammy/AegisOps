@@ -30,12 +30,8 @@ class RestoreReadinessService:
         json_ready: Callable[[object], object],
         redacted_reconciliation_payload: Callable[[ReconciliationRecord], dict[str, object]],
         readiness_operability_helper: Any,
-        build_shutdown_status_snapshot: Callable[..., Any],
+        shutdown_status_snapshot_factory: Callable[..., Any],
         derive_readiness_status: Callable[..., str],
-        record_from_backup_payload: Callable[
-            [Type[ControlPlaneRecord], Mapping[str, object]],
-            ControlPlaneRecord,
-        ],
         authoritative_record_chain_record_types: tuple[Type[ControlPlaneRecord], ...],
         authoritative_record_chain_backup_schema_version: str,
         authoritative_primary_id_field_by_family: Mapping[str, str],
@@ -105,7 +101,7 @@ class RestoreReadinessService:
                     snapshots,
                 )
             ),
-            build_shutdown_status_snapshot=build_shutdown_status_snapshot,
+            shutdown_status_snapshot_factory=shutdown_status_snapshot_factory,
             derive_readiness_status=derive_readiness_status,
         )
         self._backup_restore_flow = _BackupRestoreFlow(
@@ -126,7 +122,6 @@ class RestoreReadinessService:
                 )
             ),
             derive_readiness_status=derive_readiness_status,
-            record_from_backup_payload=record_from_backup_payload,
             authoritative_record_chain_record_types=(
                 authoritative_record_chain_record_types
             ),

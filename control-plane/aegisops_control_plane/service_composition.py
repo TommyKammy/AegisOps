@@ -85,12 +85,8 @@ class ControlPlaneServiceCompositionDependencies:
     readiness_diagnostics_snapshot_factory: Callable[..., Any]
     restore_drill_snapshot_factory: Callable[..., Any]
     restore_summary_snapshot_factory: Callable[..., Any]
-    build_shutdown_status_snapshot: Callable[..., Any]
+    shutdown_status_snapshot_factory: Callable[..., Any]
     derive_readiness_status: Callable[..., str]
-    record_from_backup_payload: Callable[
-        [Type[ControlPlaneRecord], Mapping[str, object]],
-        ControlPlaneRecord,
-    ]
     find_duplicate_strings: Callable[[tuple[str, ...]], tuple[str, ...]]
 
 
@@ -279,11 +275,10 @@ def build_control_plane_service_composition(
             dependencies.redacted_reconciliation_payload
         ),
         readiness_operability_helper=readiness_operability_helper,
-        build_shutdown_status_snapshot=(
-            dependencies.build_shutdown_status_snapshot
+        shutdown_status_snapshot_factory=(
+            dependencies.shutdown_status_snapshot_factory
         ),
         derive_readiness_status=dependencies.derive_readiness_status,
-        record_from_backup_payload=dependencies.record_from_backup_payload,
         authoritative_record_chain_record_types=(
             dependencies.authoritative_record_chain_record_types
         ),

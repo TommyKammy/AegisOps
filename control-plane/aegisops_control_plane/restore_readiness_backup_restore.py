@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Iterator, Mapping, Type
+from typing import Any, Callable, Iterator, Mapping, Type, TypeVar
 
 from .models import (
     AITraceRecord,
@@ -48,6 +48,48 @@ _NESTED_TRANSACTION_ISOLATION_LEVEL_ERROR_SNIPPETS = (
     "isolation_level",
     "active transaction",
 )
+_BACKUP_DATETIME_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
+    "analytic_signal": ("first_seen_at", "last_seen_at"),
+    "evidence": ("acquired_at",),
+    "observation": ("observed_at",),
+    "lifecycle_transition": ("transitioned_at",),
+    "approval_decision": ("decided_at", "approved_expires_at"),
+    "action_request": ("requested_at", "expires_at"),
+    "action_execution": ("delegated_at", "expires_at"),
+    "hunt": ("opened_at",),
+    "hunt_run": ("started_at", "completed_at"),
+    "ai_trace": ("generated_at",),
+    "reconciliation": ("first_seen_at", "last_seen_at", "compared_at"),
+}
+_BACKUP_TUPLE_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
+    "analytic_signal": ("alert_ids", "case_ids"),
+    "case": ("evidence_ids",),
+    "observation": ("supporting_evidence_ids",),
+    "approval_decision": ("approver_identities",),
+    "ai_trace": ("material_input_refs",),
+    "reconciliation": ("linked_execution_run_ids",),
+}
+_BACKUP_MAPPING_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
+    "analytic_signal": ("reviewed_context",),
+    "alert": ("reviewed_context",),
+    "case": ("reviewed_context",),
+    "recommendation": ("reviewed_context", "assistant_advisory_draft"),
+    "lifecycle_transition": ("attribution",),
+    "approval_decision": ("target_snapshot",),
+    "action_request": (
+        "target_scope",
+        "requested_payload",
+        "policy_basis",
+        "policy_evaluation",
+    ),
+    "action_execution": ("target_scope", "approved_payload", "provenance"),
+    "hunt_run": ("scope_snapshot", "output_linkage"),
+    "ai_trace": ("subject_linkage", "assistant_advisory_draft"),
+    "reconciliation": ("subject_linkage",),
+}
+
+
+RecordT = TypeVar("RecordT", bound=ControlPlaneRecord)
 
 
 def _parse_optional_backup_created_at(value: object) -> datetime | None:
@@ -62,6 +104,64 @@ def _parse_optional_backup_created_at(value: object) -> datetime | None:
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         return None
     return parsed
+
+
+def _parse_backup_datetime(value: object, field_name: str) -> datetime | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field_name} must be a non-empty ISO 8601 datetime")
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be a valid ISO 8601 datetime") from exc
+    if parsed.tzinfo is None:
+        raise ValueError(f"{field_name} must include a timezone offset")
+    return parsed
+
+
+def _record_from_backup_payload(
+    record_type: Type[RecordT],
+    payload: Mapping[str, object],
+) -> RecordT:
+    if not isinstance(payload, Mapping):
+        raise ValueError(
+            f"{record_type.record_family} backup entries must be JSON objects"
+        )
+    family = record_type.record_family
+    datetime_fields = set(_BACKUP_DATETIME_FIELDS_BY_FAMILY.get(family, ()))
+    tuple_fields = set(_BACKUP_TUPLE_FIELDS_BY_FAMILY.get(family, ()))
+    mapping_fields = set(_BACKUP_MAPPING_FIELDS_BY_FAMILY.get(family, ()))
+    kwargs: dict[str, object] = {}
+    for field_info in fields(record_type):
+        if field_info.name not in payload:
+            raise ValueError(
+                f"{family} backup entry is missing required field {field_info.name!r}"
+            )
+        value = payload[field_info.name]
+        if field_info.name in datetime_fields:
+            value = _parse_backup_datetime(value, field_info.name)
+        elif field_info.name in tuple_fields:
+            if value is None:
+                value = ()
+            elif isinstance(value, list):
+                value = tuple(value)
+            elif not isinstance(value, tuple):
+                raise ValueError(
+                    f"{family}.{field_info.name} must be a JSON array in restore payload"
+                )
+            if any(not isinstance(item, str) or not item.strip() for item in value):
+                raise ValueError(
+                    f"{family}.{field_info.name} must contain only non-empty strings"
+                )
+        elif field_info.name in mapping_fields:
+            if not isinstance(value, Mapping):
+                raise ValueError(
+                    f"{family}.{field_info.name} must be a JSON object in restore payload"
+                )
+            value = {str(key): item for key, item in value.items()}
+        kwargs[field_info.name] = value
+    return record_type(**kwargs)
 
 
 def _is_nested_transaction_isolation_level_error(exc: ValueError) -> bool:
@@ -211,10 +311,6 @@ class _BackupRestoreFlow:
             [Any, list[dict[str, object]]], dict[str, object]
         ],
         derive_readiness_status: Callable[..., str],
-        record_from_backup_payload: Callable[
-            [Type[ControlPlaneRecord], Mapping[str, object]],
-            ControlPlaneRecord,
-        ],
         authoritative_record_chain_record_types: tuple[Type[ControlPlaneRecord], ...],
         authoritative_record_chain_backup_schema_version: str,
         authoritative_primary_id_field_by_family: Mapping[str, str],
@@ -242,7 +338,7 @@ class _BackupRestoreFlow:
             build_readiness_review_path_health
         )
         self._derive_readiness_status = derive_readiness_status
-        self._record_from_backup_payload = record_from_backup_payload
+        self._record_from_backup_payload = _record_from_backup_payload
         self._authoritative_record_chain_record_types = (
             authoritative_record_chain_record_types
         )

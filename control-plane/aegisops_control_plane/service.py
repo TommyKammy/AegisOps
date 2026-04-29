@@ -44,6 +44,7 @@ from .models import (
     ReconciliationRecord,
     RecommendationRecord,
 )
+from .persistence_lifecycle import PersistenceLifecycleService
 from .readiness_contracts import (
     ReadinessDiagnosticsAggregates,
     resolve_current_readiness_runtime_status,
@@ -694,45 +695,6 @@ _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY: dict[str, str] = {
     "ai_trace": "ai_trace_id",
     "reconciliation": "reconciliation_id",
 }
-_BACKUP_DATETIME_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
-    "analytic_signal": ("first_seen_at", "last_seen_at"),
-    "evidence": ("acquired_at",),
-    "observation": ("observed_at",),
-    "lifecycle_transition": ("transitioned_at",),
-    "approval_decision": ("decided_at", "approved_expires_at"),
-    "action_request": ("requested_at", "expires_at"),
-    "action_execution": ("delegated_at", "expires_at"),
-    "hunt": ("opened_at",),
-    "hunt_run": ("started_at", "completed_at"),
-    "ai_trace": ("generated_at",),
-    "reconciliation": ("first_seen_at", "last_seen_at", "compared_at"),
-}
-_BACKUP_TUPLE_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
-    "analytic_signal": ("alert_ids", "case_ids"),
-    "case": ("evidence_ids",),
-    "observation": ("supporting_evidence_ids",),
-    "approval_decision": ("approver_identities",),
-    "ai_trace": ("material_input_refs",),
-    "reconciliation": ("linked_execution_run_ids",),
-}
-_BACKUP_MAPPING_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
-    "analytic_signal": ("reviewed_context",),
-    "alert": ("reviewed_context",),
-    "case": ("reviewed_context",),
-    "recommendation": ("reviewed_context", "assistant_advisory_draft"),
-    "lifecycle_transition": ("attribution",),
-    "approval_decision": ("target_snapshot",),
-    "action_request": (
-        "target_scope",
-        "requested_payload",
-        "policy_basis",
-        "policy_evaluation",
-    ),
-    "action_execution": ("target_scope", "approved_payload", "provenance"),
-    "hunt_run": ("scope_snapshot", "output_linkage"),
-    "ai_trace": ("subject_linkage", "assistant_advisory_draft"),
-    "reconciliation": ("subject_linkage",),
-}
 
 def _json_ready(value: object) -> object:
     if isinstance(value, _DATETIME_TYPE):
@@ -857,98 +819,6 @@ def _redacted_reconciliation_payload(
         payload["subject_linkage"] = redacted_subject_linkage
     return payload
 
-
-def _build_shutdown_status_snapshot(
-    *,
-    open_case_ids: tuple[str, ...],
-    active_action_request_ids: tuple[str, ...],
-    active_action_execution_ids: tuple[str, ...],
-    unresolved_reconciliation_ids: tuple[str, ...],
-) -> ShutdownStatusSnapshot:
-    blocking_reasons: list[str] = []
-    if open_case_ids:
-        blocking_reasons.append(
-            "controlled shutdown requires resolving or explicitly handing off open casework"
-        )
-    if active_action_request_ids:
-        blocking_reasons.append(
-            "controlled shutdown requires approval-bound action requests to leave an inactive state"
-        )
-    if active_action_execution_ids:
-        blocking_reasons.append(
-            "controlled shutdown requires dispatching, queued, or running executions to reach a terminal state"
-        )
-    if unresolved_reconciliation_ids:
-        blocking_reasons.append(
-            "controlled shutdown requires pending reconciliation mismatches to be reviewed first"
-        )
-    return ShutdownStatusSnapshot(
-        read_only=True,
-        shutdown_ready=not blocking_reasons,
-        blocking_reasons=tuple(blocking_reasons),
-        open_case_ids=open_case_ids,
-        active_action_request_ids=active_action_request_ids,
-        active_action_execution_ids=active_action_execution_ids,
-        unresolved_reconciliation_ids=unresolved_reconciliation_ids,
-    )
-
-
-def _parse_backup_datetime(value: object, field_name: str) -> datetime | None:
-    if value is None:
-        return None
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{field_name} must be a non-empty ISO 8601 datetime")
-    try:
-        parsed = datetime.fromisoformat(value)
-    except ValueError as exc:
-        raise ValueError(f"{field_name} must be a valid ISO 8601 datetime") from exc
-    if parsed.tzinfo is None:
-        raise ValueError(f"{field_name} must include a timezone offset")
-    return parsed
-
-
-def _record_from_backup_payload(
-    record_type: Type[RecordT],
-    payload: Mapping[str, object],
-) -> RecordT:
-    if not isinstance(payload, Mapping):
-        raise ValueError(
-            f"{record_type.record_family} backup entries must be JSON objects"
-        )
-    family = record_type.record_family
-    datetime_fields = set(_BACKUP_DATETIME_FIELDS_BY_FAMILY.get(family, ()))
-    tuple_fields = set(_BACKUP_TUPLE_FIELDS_BY_FAMILY.get(family, ()))
-    mapping_fields = set(_BACKUP_MAPPING_FIELDS_BY_FAMILY.get(family, ()))
-    kwargs: dict[str, object] = {}
-    for field_info in fields(record_type):
-        if field_info.name not in payload:
-            raise ValueError(
-                f"{family} backup entry is missing required field {field_info.name!r}"
-            )
-        value = payload[field_info.name]
-        if field_info.name in datetime_fields:
-            value = _parse_backup_datetime(value, field_info.name)
-        elif field_info.name in tuple_fields:
-            if value is None:
-                value = ()
-            elif isinstance(value, list):
-                value = tuple(value)
-            elif not isinstance(value, tuple):
-                raise ValueError(
-                    f"{family}.{field_info.name} must be a JSON array in restore payload"
-                )
-            if any(not isinstance(item, str) or not item.strip() for item in value):
-                raise ValueError(
-                    f"{family}.{field_info.name} must contain only non-empty strings"
-                )
-        elif field_info.name in mapping_fields:
-            if not isinstance(value, Mapping):
-                raise ValueError(
-                    f"{family}.{field_info.name} must be a JSON object in restore payload"
-                )
-            value = {str(key): item for key, item in value.items()}
-        kwargs[field_info.name] = value
-    return record_type(**kwargs)
 
 def _merge_reviewed_context(
     existing_context: Mapping[str, object] | None,
@@ -1294,9 +1164,8 @@ class AegisOpsControlPlaneService:
                 readiness_diagnostics_snapshot_factory=ReadinessDiagnosticsSnapshot,
                 restore_drill_snapshot_factory=RestoreDrillSnapshot,
                 restore_summary_snapshot_factory=RestoreSummarySnapshot,
-                build_shutdown_status_snapshot=_build_shutdown_status_snapshot,
+                shutdown_status_snapshot_factory=ShutdownStatusSnapshot,
                 derive_readiness_status=_derive_readiness_status,
-                record_from_backup_payload=_record_from_backup_payload,
                 find_duplicate_strings=_find_duplicate_strings,
             ),
         )
@@ -1345,6 +1214,13 @@ class AegisOpsControlPlaneService:
         self._runtime_restore_readiness_diagnostics_service = (
             composition.runtime_restore_readiness_diagnostics_service
         )
+        self._persistence_lifecycle_service = PersistenceLifecycleService(
+            store=self._store,
+            lifecycle_transition_helper=(
+                self._detection_intake_service.lifecycle_transition_helper
+            ),
+            require_aware_datetime=self._require_aware_datetime,
+        )
 
     def describe_runtime(self) -> RuntimeSnapshot:
         return self._runtime_restore_readiness_diagnostics_service.describe_runtime()
@@ -1355,33 +1231,10 @@ class AegisOpsControlPlaneService:
         *,
         transitioned_at: datetime | None = None,
     ) -> RecordT:
-        if isinstance(record, LifecycleTransitionRecord):
-            raise ValueError(
-                "persist_record does not accept direct lifecycle transition records"
-            )
-        if transitioned_at is not None:
-            transitioned_at = self._require_aware_datetime(
-                transitioned_at,
-                "transitioned_at",
-            )
-        with self._store.transaction():
-            lineage_lock_subject = self._linked_alert_case_lifecycle_lock_subject(record)
-            if lineage_lock_subject is not None:
-                self._lock_lifecycle_transition_subject(*lineage_lock_subject)
-            self._lock_lifecycle_transition_subject(
-                record.record_family,
-                record.record_id,
-            )
-            existing_record = self._store.get(type(record), record.record_id)
-            persisted_record = self._store.save(record)
-            transition_records = self._build_lifecycle_transition_records(
-                persisted_record,
-                existing_record=existing_record,
-                transitioned_at=transitioned_at,
-            )
-            for transition_record in transition_records:
-                self._store.save(transition_record)
-            return persisted_record
+        return self._persistence_lifecycle_service.persist_record(
+            record,
+            transitioned_at=transitioned_at,
+        )
 
     def _lock_lifecycle_transition_subject(
         self,
