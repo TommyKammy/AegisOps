@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import logging
 from typing import TYPE_CHECKING, Protocol
 
+from .action_policy import evaluate_action_policy_record
 from .models import (
     ActionRequestRecord,
     AlertRecord,
@@ -109,26 +110,6 @@ class ActionReviewWriteSurfaceDependencies(Protocol):
         action_request_id: str,
         context_key: str,
         context_value: dict[str, object],
-    ) -> dict[str, object]:
-        ...
-
-    def _apply_action_policy_evaluation_overrides(
-        self,
-        *,
-        computed_policy_evaluation: dict[str, object],
-        persisted_policy_evaluation: dict[str, object],
-    ) -> dict[str, object]:
-        ...
-
-    def _determine_action_policy(
-        self,
-        action_policy_basis: dict[str, object],
-    ) -> dict[str, object]:
-        ...
-
-    def _normalize_action_policy_basis(
-        self,
-        policy_basis: object,
     ) -> dict[str, object]:
         ...
 
@@ -375,12 +356,9 @@ class ActionReviewWriteSurface:
             if decided_at < action_request.requested_at:
                 raise ValueError("decided_at must be on or after requested_at")
 
-            policy_evaluation = service._apply_action_policy_evaluation_overrides(
-                computed_policy_evaluation=service._determine_action_policy(
-                    service._normalize_action_policy_basis(action_request.policy_basis)
-                ),
-                persisted_policy_evaluation=action_request.policy_evaluation,
-            )
+            policy_evaluation = evaluate_action_policy_record(
+                action_request
+            ).policy_evaluation
             if policy_evaluation.get("approval_requirement") == "policy_authorized":
                 raise PermissionError(
                     "reviewed approval decisions are not authorized when the re-evaluated action policy is policy_authorized"

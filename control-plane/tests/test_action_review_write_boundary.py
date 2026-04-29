@@ -36,6 +36,19 @@ class ActionReviewWriteBoundaryTests(unittest.TestCase):
             "expected AegisOpsControlPlaneService to compose a dedicated action-review write surface",
         )
 
+    def test_action_policy_helpers_are_not_owned_by_service_facade(self) -> None:
+        service_private_helpers = {
+            "_normalize_action_policy_basis",
+            "_determine_action_policy",
+            "_apply_action_policy_evaluation_overrides",
+        }
+
+        for helper_name in service_private_helpers:
+            self.assertFalse(
+                hasattr(AegisOpsControlPlaneService, helper_name),
+                f"{helper_name} should be owned by the action-policy boundary, not the service facade",
+            )
+
     def test_service_delegates_action_review_write_entrypoints_to_write_surface(
         self,
     ) -> None:
