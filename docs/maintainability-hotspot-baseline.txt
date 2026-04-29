@@ -1,12 +1,12 @@
 # Reviewed maintainability hotspot baseline for scripts/verify-maintainability-hotspots.sh.
 # One repo-relative Python path per line. Entries are not exemptions for new responsibility growth.
 #
-# Phase 50.8.4 lowered residual exception:
+# Phase 50.8.5 lowered residual exception:
 # ADR-0004 accepted ordered hotspot reduction after the ADR-0003
 # facade-preservation exception behind AegisOpsControlPlaneService.
 # The facade remains above the long-term 1,500-line and 50-method targets after
-# the lifecycle/intake helper extraction, so this baseline records the lowered
-# Phase 50.8.4 ceiling and fails on silent re-growth. A future ADR or
+# the action-policy helper extraction, so this baseline records the lowered
+# Phase 50.8.5 ceiling and fails on silent re-growth. A future ADR or
 # maintainability backlog must lower or replace these limits before unrelated
 # feature expansion lands in the facade.
-control-plane/aegisops_control_plane/service.py max_lines=3697 max_effective_lines=3362 max_facade_methods=188 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.8.4 issue=#965
+control-plane/aegisops_control_plane/service.py max_lines=3505 max_effective_lines=3182 max_facade_methods=185 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.8.5 issue=#966
