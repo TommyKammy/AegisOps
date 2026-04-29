@@ -31,6 +31,7 @@ from .assistant_provider import (
     AssistantProviderResult,
     AssistantProviderTransport,
 )
+from .audit_export import export_audit_retention_baseline
 from .assistant_advisory import AssistantAdvisoryCoordinator
 from .action_lifecycle_write_coordinator import ActionLifecycleWriteCoordinator
 from .action_reconciliation_orchestration import (
@@ -2180,6 +2181,24 @@ class AegisOpsControlPlaneService:
             records=tuple(
                 _redacted_reconciliation_payload(record) for record in records
             ),
+        )
+
+    def export_audit_retention_baseline(
+        self,
+        *,
+        export_id: str,
+        exported_at: datetime,
+    ) -> dict[str, object]:
+        export_id = self._require_non_empty_string(export_id, "export_id")
+        exported_at = self._require_aware_datetime(
+            exported_at,
+            "exported_at",
+        )
+        return export_audit_retention_baseline(
+            store=self._store,
+            record_types=AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES,
+            export_id=export_id,
+            exported_at=exported_at,
         )
 
     def describe_startup_status(self) -> StartupStatusSnapshot:

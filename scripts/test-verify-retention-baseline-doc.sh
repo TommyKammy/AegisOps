@@ -90,7 +90,21 @@ This baseline defines policy-level hot, warm, cold, or rollover expectations onl
 
 ## 6. Baseline Alignment Notes
 
-The document remains a baseline artifact only.'
+The document remains a baseline artifact only.
+
+## 7. Audit Export Baseline
+
+Audit exports must derive from AegisOps authoritative control-plane records rather than tickets, assistant output, ML output, endpoint evidence, network evidence, browser state, optional extension state, downstream receipts, or component-local logs.
+
+Audit export reads must be snapshot-consistent. If the exporter cannot read the authoritative record chain from one committed snapshot, it must reject or escalate instead of stitching together mixed-state records.
+
+Exported evidence payloads must be labeled as subordinate evidence. The export may include bounded, redacted subordinate evidence context only to explain the authoritative AegisOps record; it must not promote subordinate evidence into approval, execution, reconciliation, case-lifecycle, or commercial-readiness authority.
+
+Export artifacts must not contain live secrets, placeholder credentials treated as valid credentials, raw authorization headers, private keys, workstation-local absolute paths, or unredacted source payloads that are not needed for the bounded audit baseline.
+
+The retention baseline is bounded. It does not promise unlimited raw log retention, enterprise SIEM archive behavior, customer portal packaging, compliance certification, or production storage lifecycle automation.
+
+The Phase 49.2 export schema records the bounded retention posture explicitly with `unlimited_log_retention` set to `false` and `compliance_certification_claim` set to `false`.'
 assert_passes "${valid_repo}"
 
 missing_doc_repo="${workdir}/missing-doc"
@@ -133,7 +147,74 @@ This baseline defines policy-level hot, warm, cold, or rollover expectations onl
 
 ## 6. Baseline Alignment Notes
 
-The document remains a baseline artifact only.'
+The document remains a baseline artifact only.
+
+## 7. Audit Export Baseline
+
+Audit exports must derive from AegisOps authoritative control-plane records rather than tickets, assistant output, ML output, endpoint evidence, network evidence, browser state, optional extension state, downstream receipts, or component-local logs.
+
+Audit export reads must be snapshot-consistent. If the exporter cannot read the authoritative record chain from one committed snapshot, it must reject or escalate instead of stitching together mixed-state records.
+
+Exported evidence payloads must be labeled as subordinate evidence. The export may include bounded, redacted subordinate evidence context only to explain the authoritative AegisOps record; it must not promote subordinate evidence into approval, execution, reconciliation, case-lifecycle, or commercial-readiness authority.
+
+Export artifacts must not contain live secrets, placeholder credentials treated as valid credentials, raw authorization headers, private keys, workstation-local absolute paths, or unredacted source payloads that are not needed for the bounded audit baseline.
+
+The retention baseline is bounded. It does not promise unlimited raw log retention, enterprise SIEM archive behavior, customer portal packaging, compliance certification, or production storage lifecycle automation.
+
+The Phase 49.2 export schema records the bounded retention posture explicitly with `unlimited_log_retention` set to `false` and `compliance_certification_claim` set to `false`.'
 assert_fails_with "${missing_phrase_repo}" "Replay-capable datasets must be retained long enough to support parser validation, rule validation, and targeted historical reprocessing for approved investigations and recovery exercises."
+
+missing_subordinate_export_repo="${workdir}/missing-subordinate-export"
+create_repo "${missing_subordinate_export_repo}"
+write_doc "${missing_subordinate_export_repo}" '# AegisOps Retention, Evidence Lifecycle, and Replay Readiness Baseline
+
+## 1. Purpose
+
+This document defines the baseline retention classes, evidence lifecycle assumptions, and replay readiness expectations for AegisOps-owned records.
+
+## 2. Retention Classes
+
+| Record family | Baseline |
+| ---- | ---- |
+| `Raw Event` | Baseline placeholder |
+| `Normalized Event` | Baseline placeholder |
+| `Finding` | Baseline placeholder |
+| `Alert` | Baseline placeholder |
+| `Evidence` | Baseline placeholder |
+| `Approval Decision` | Baseline placeholder |
+| `Action Execution` | Baseline placeholder |
+
+## 3. Replay Dataset and Restore Readiness Expectations
+
+Replay-capable datasets must be retained long enough to support parser validation, rule validation, and targeted historical reprocessing for approved investigations and recovery exercises.
+
+Restore readiness must assume application-aware restore procedures for OpenSearch, PostgreSQL, and future platform-owned control records rather than treating hypervisor snapshots as the primary recovery model.
+
+## 4. Evidence Lifecycle and Legal-Hold Baseline
+
+Evidence retention must preserve chain-of-custody context, source provenance, review references, and legal-hold status long enough to support audit, investigation, and post-incident review.
+
+Legal hold must suspend ordinary expiration for specifically scoped evidence and related approval or execution records until the hold is explicitly released through approved process.
+
+## 5. Lifecycle Policy Constraints
+
+This baseline defines policy-level hot, warm, cold, or rollover expectations only. It does not introduce live ILM policies, shard counts, index templates, storage tier automation, or production retention settings in this phase.
+
+## 6. Baseline Alignment Notes
+
+The document remains a baseline artifact only.
+
+## 7. Audit Export Baseline
+
+Audit exports must derive from AegisOps authoritative control-plane records rather than tickets, assistant output, ML output, endpoint evidence, network evidence, browser state, optional extension state, downstream receipts, or component-local logs.
+
+Audit export reads must be snapshot-consistent. If the exporter cannot read the authoritative record chain from one committed snapshot, it must reject or escalate instead of stitching together mixed-state records.
+
+Export artifacts must not contain live secrets, placeholder credentials treated as valid credentials, raw authorization headers, private keys, workstation-local absolute paths, or unredacted source payloads that are not needed for the bounded audit baseline.
+
+The retention baseline is bounded. It does not promise unlimited raw log retention, enterprise SIEM archive behavior, customer portal packaging, compliance certification, or production storage lifecycle automation.
+
+The Phase 49.2 export schema records the bounded retention posture explicitly with `unlimited_log_retention` set to `false` and `compliance_certification_claim` set to `false`.'
+assert_fails_with "${missing_subordinate_export_repo}" "Exported evidence payloads must be labeled as subordinate evidence."
 
 echo "verify-retention-baseline-doc tests passed"
