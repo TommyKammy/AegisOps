@@ -237,6 +237,126 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
         ):
             self.assertIn(term, boundary_tests)
 
+    def test_phase50_constructor_delegates_collaborator_composition(self) -> None:
+        service_source = self._read("control-plane/aegisops_control_plane/service.py")
+        tree = ast.parse(service_source)
+        service_class = next(
+            node
+            for node in tree.body
+            if isinstance(node, ast.ClassDef)
+            and node.name == "AegisOpsControlPlaneService"
+        )
+        constructor = next(
+            node
+            for node in service_class.body
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "__init__"
+        )
+
+        direct_constructor_calls = {
+            node.func.id
+            for node in ast.walk(constructor)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id
+            in {
+                "ActionLifecycleWriteCoordinator",
+                "ActionOrchestrationBoundary",
+                "ActionReviewWriteSurface",
+                "AssistantAdvisoryCoordinator",
+                "AssistantContextAssembler",
+                "AssistantProviderAdapter",
+                "CaseWorkflowService",
+                "DetectionIntakeService",
+                "EndpointEvidencePackAdapter",
+                "EvidenceLinkageService",
+                "ExecutionCoordinator",
+                "ExternalEvidenceBoundary",
+                "IsolatedExecutorAdapter",
+                "LiveAssistantWorkflowCoordinator",
+                "MispContextAdapter",
+                "N8NReconciliationAdapter",
+                "OperatorInspectionReadSurface",
+                "OsqueryHostContextAdapter",
+                "PostgresControlPlaneStore",
+                "ReconciliationOrchestrationBoundary",
+                "RestoreReadinessService",
+                "ReviewedSlicePolicy",
+                "RuntimeBoundaryService",
+                "RuntimeRestoreReadinessDiagnosticsService",
+                "ShuffleActionAdapter",
+            }
+        }
+        composition_call_names = {
+            node.func.id
+            for node in ast.walk(constructor)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+        }
+
+        self.assertFalse(
+            direct_constructor_calls,
+            "facade constructor should delegate collaborator wiring, found "
+            f"{sorted(direct_constructor_calls)}",
+        )
+        self.assertIn(
+            "build_control_plane_service_composition",
+            composition_call_names,
+        )
+
+    def test_phase50_detection_linkage_helpers_live_with_detection_intake(
+        self,
+    ) -> None:
+        service_source = self._read("control-plane/aegisops_control_plane/service.py")
+        detection_source = self._read(
+            "control-plane/aegisops_control_plane/detection_lifecycle.py"
+        )
+        service_tree = ast.parse(service_source)
+        detection_tree = ast.parse(detection_source)
+        service_class = next(
+            node
+            for node in service_tree.body
+            if isinstance(node, ast.ClassDef)
+            and node.name == "AegisOpsControlPlaneService"
+        )
+        detection_class = next(
+            node
+            for node in detection_tree.body
+            if isinstance(node, ast.ClassDef)
+            and node.name == "DetectionIntakeService"
+        )
+
+        moved_helper_names = {
+            "_link_case_to_analytic_signals",
+            "_list_alert_evidence_records",
+            "_link_case_to_alert_reconciliations",
+        }
+        detection_method_names = {
+            node.name
+            for node in detection_class.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        self.assertTrue(moved_helper_names.issubset(detection_method_names))
+
+        service_methods = {
+            node.name: node
+            for node in service_class.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        for helper_name in moved_helper_names:
+            service_method = service_methods[helper_name]
+            calls = [
+                node
+                for node in ast.walk(service_method)
+                if isinstance(node, ast.Attribute)
+                and node.attr == helper_name
+            ]
+            self.assertEqual(
+                len(calls),
+                1,
+                f"{helper_name} should remain only as a facade compatibility delegate",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

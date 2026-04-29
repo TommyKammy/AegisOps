@@ -16,38 +16,14 @@ from typing import Iterable, Iterator, Mapping, Protocol, Type, TypeVar
 _DATETIME_TYPE = datetime
 
 from . import action_review_projection as _action_review_projection
-from .adapters.executor import IsolatedExecutorAdapter
-from .adapters.endpoint_evidence import EndpointEvidencePackAdapter
-from .adapters.misp import MispContextAdapter
-from .adapters.n8n import N8NReconciliationAdapter
-from .adapters.osquery import OsqueryHostContextAdapter
-from .adapters.postgres import PostgresControlPlaneStore
-from .adapters.shuffle import ShuffleActionAdapter
 from .adapters.wazuh import WazuhAlertAdapter
-from .ai_trace_lifecycle import AITraceLifecycleService
 from .assistant_provider import (
-    AssistantProviderAdapter,
     AssistantProviderFailure,
     AssistantProviderResult,
     AssistantProviderTransport,
 )
 from .audit_export import export_audit_retention_baseline
-from .assistant_advisory import AssistantAdvisoryCoordinator
-from .action_lifecycle_write_coordinator import ActionLifecycleWriteCoordinator
-from .action_reconciliation_orchestration import (
-    ActionOrchestrationBoundary,
-    ReconciliationOrchestrationBoundary,
-)
-from .action_review_write_surface import ActionReviewWriteSurface
-from .case_workflow import CaseWorkflowService
 from .config import OpenBaoKVv2SecretTransport, RuntimeConfig
-from .execution_coordinator import (
-    ExecutionCoordinator,
-    _approved_payload_binding_hash,
-)
-from .evidence_linkage import EvidenceLinkageService
-from .external_evidence_boundary import ExternalEvidenceBoundary
-from .live_assistant_workflow import LiveAssistantWorkflowCoordinator
 from .models import (
     AITraceRecord,
     ActionExecutionRecord,
@@ -69,28 +45,22 @@ from .models import (
     ReconciliationRecord,
     RecommendationRecord,
 )
-from .operator_inspection import OperatorInspectionReadSurface
 from .readiness_contracts import (
     ReadinessDiagnosticsAggregates,
     ReadinessReviewPathRecords,
     resolve_current_readiness_runtime_status,
 )
-from .restore_readiness import RestoreReadinessService
 from .runtime_boundary import RuntimeBoundaryService, _is_missing_runtime_binding
-from .runtime_restore_readiness_diagnostics import (
-    RuntimeRestoreReadinessDiagnosticsService,
-)
-from .assistant_context import (
-    AssistantContextAssembler,
-    _advisory_text_claims_authority_or_scope_expansion,
-)
-from .detection_lifecycle import DetectionIntakeService
 from .reviewed_slice_policy import (
     REVIEWED_LIVE_SLICE_LABEL,
     REVIEWED_LIVE_SOURCE_FAMILIES,
     ReviewedSlicePolicy,
 )
 from .action_review_projection import _ActionReviewRecordIndex
+from .service_composition import (
+    ControlPlaneServiceCompositionDependencies,
+    build_control_plane_service_composition,
+)
 
 
 RecordT = TypeVar("RecordT", bound=ControlPlaneRecord)
@@ -1323,175 +1293,110 @@ class AegisOpsControlPlaneService:
         store: ControlPlaneStore | None = None,
     ) -> None:
         self._config = config
-        self._store = store or PostgresControlPlaneStore(config.postgres_dsn)
-        self._reconciliation = N8NReconciliationAdapter(config.n8n_base_url)
-        self._shuffle = ShuffleActionAdapter(config.shuffle_base_url)
-        self._isolated_executor = IsolatedExecutorAdapter(
-            config.isolated_executor_base_url
-        )
         self._logger = logging.getLogger("aegisops.control_plane")
-        self._assistant_provider_adapter = AssistantProviderAdapter(
-            provider_identity="reviewed_local",
-            model_identity="bounded_reviewed_summary",
-            prompt_version=_PHASE24_WORKFLOW_PROMPT_VERSIONS["case_summary"],
-            request_timeout_seconds=5.0,
-            max_attempts=1,
-            transport=_ReviewedSummaryTransport(),
-        )
-        self._reviewed_slice_policy = ReviewedSlicePolicy(
-            self,
-            normalize_admission_provenance=_normalize_admission_provenance,
-        )
-        self._ai_trace_lifecycle_service = AITraceLifecycleService(self._store)
-        self._assistant_context_assembler = AssistantContextAssembler(
-            self,
-            record_types_by_family=RECORD_TYPES_BY_FAMILY,
-            record_to_dict=_record_to_dict,
-            merge_reviewed_context=_merge_reviewed_context,
-            assistant_context_snapshot_factory=AnalystAssistantContextSnapshot,
-            advisory_snapshot_from_context=_advisory_inspection_snapshot_from_context,
-            recommendation_draft_snapshot_from_context=(
-                _recommendation_draft_snapshot_from_context
-            ),
-            ai_trace_lifecycle=self._ai_trace_lifecycle_service,
-        )
-        self._assistant_advisory_coordinator = AssistantAdvisoryCoordinator(
-            self._assistant_context_assembler
-        )
-        self._live_assistant_workflow_coordinator = LiveAssistantWorkflowCoordinator(
-            self,
-            workflow_family=_PHASE24_WORKFLOW_FAMILY,
-            workflow_prompt_versions=_PHASE24_WORKFLOW_PROMPT_VERSIONS,
-            json_ready=lambda value: _json_ready(value),
-            dedupe_strings=lambda values: _dedupe_strings(values),
-            advisory_scope_expansion_flags=(
-                lambda text: _advisory_text_claims_authority_or_scope_expansion(text)
-            ),
-            snapshot_factory=lambda **kwargs: _phase24_live_assistant_snapshot(**kwargs),
-            citations_from_context=(
-                lambda snapshot: _phase24_live_assistant_citations_from_context(snapshot)
-            ),
-            unresolved_reasons_from_flags=(
-                lambda flags: _phase24_live_assistant_unresolved_reasons(flags)
-            ),
-            prompt_injection_flags=(
-                lambda text: _phase24_live_assistant_prompt_injection_flags(text)
-            ),
-            ai_trace_lifecycle=self._ai_trace_lifecycle_service,
-        )
-        self._operator_inspection_read_surface = OperatorInspectionReadSurface(
-            self,
-            analyst_queue_snapshot_factory=AnalystQueueSnapshot,
-            alert_detail_snapshot_factory=AlertDetailSnapshot,
-            case_detail_snapshot_factory=CaseDetailSnapshot,
-            action_review_detail_snapshot_factory=ActionReviewDetailSnapshot,
-            record_to_dict=_record_to_dict,
-            redacted_reconciliation_payload=_redacted_reconciliation_payload,
-            normalize_admission_provenance=_normalize_admission_provenance,
-            coordination_reference_payload=_coordination_reference_payload,
-            coordination_reference_signature=_coordination_reference_signature,
-            dedupe_strings=_dedupe_strings,
-        )
-        self._action_review_write_surface = ActionReviewWriteSurface(self)
-        self._evidence_linkage_service = EvidenceLinkageService(
-            store=self._store,
-            require_non_empty_string=self._require_non_empty_string,
-            merge_linked_ids=self._merge_linked_ids,
-        )
-        self._case_workflow_service = CaseWorkflowService(
-            self,
-            evidence_linkage_service=self._evidence_linkage_service,
-            merge_reviewed_context=_merge_reviewed_context,
-        )
-        self._detection_intake_service = DetectionIntakeService(
-            self,
-            merge_reviewed_context=_merge_reviewed_context,
-            normalize_admission_provenance=_normalize_admission_provenance,
-            case_lifecycle_state_by_triage_disposition=(
-                _CASE_LIFECYCLE_STATE_BY_TRIAGE_DISPOSITION
+        composition = build_control_plane_service_composition(
+            service=self,
+            config=config,
+            store=store,
+            dependencies=ControlPlaneServiceCompositionDependencies(
+                runtime_snapshot_factory=RuntimeSnapshot,
+                authenticated_principal_factory=AuthenticatedRuntimePrincipal,
+                reviewed_summary_transport_factory=_ReviewedSummaryTransport,
+                workflow_family=_PHASE24_WORKFLOW_FAMILY,
+                workflow_prompt_versions=_PHASE24_WORKFLOW_PROMPT_VERSIONS,
+                record_types_by_family=RECORD_TYPES_BY_FAMILY,
+                authoritative_record_chain_record_types=(
+                    AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES
+                ),
+                authoritative_record_chain_backup_schema_version=(
+                    AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION
+                ),
+                authoritative_primary_id_field_by_family=(
+                    _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY
+                ),
+                normalize_admission_provenance=_normalize_admission_provenance,
+                merge_reviewed_context=_merge_reviewed_context,
+                case_lifecycle_state_by_triage_disposition=(
+                    _CASE_LIFECYCLE_STATE_BY_TRIAGE_DISPOSITION
+                ),
+                record_to_dict=_record_to_dict,
+                json_ready=_json_ready,
+                redacted_reconciliation_payload=_redacted_reconciliation_payload,
+                coordination_reference_payload=_coordination_reference_payload,
+                coordination_reference_signature=_coordination_reference_signature,
+                dedupe_strings=_dedupe_strings,
+                analyst_queue_snapshot_factory=AnalystQueueSnapshot,
+                alert_detail_snapshot_factory=AlertDetailSnapshot,
+                case_detail_snapshot_factory=CaseDetailSnapshot,
+                action_review_detail_snapshot_factory=ActionReviewDetailSnapshot,
+                assistant_context_snapshot_factory=AnalystAssistantContextSnapshot,
+                advisory_snapshot_from_context=(
+                    _advisory_inspection_snapshot_from_context
+                ),
+                recommendation_draft_snapshot_from_context=(
+                    _recommendation_draft_snapshot_from_context
+                ),
+                live_assistant_snapshot_factory=_phase24_live_assistant_snapshot,
+                live_assistant_citations_from_context=(
+                    _phase24_live_assistant_citations_from_context
+                ),
+                live_assistant_unresolved_reasons=(
+                    _phase24_live_assistant_unresolved_reasons
+                ),
+                live_assistant_prompt_injection_flags=(
+                    _phase24_live_assistant_prompt_injection_flags
+                ),
+                startup_status_snapshot_factory=StartupStatusSnapshot,
+                readiness_diagnostics_snapshot_factory=ReadinessDiagnosticsSnapshot,
+                restore_drill_snapshot_factory=RestoreDrillSnapshot,
+                restore_summary_snapshot_factory=RestoreSummarySnapshot,
+                build_shutdown_status_snapshot=_build_shutdown_status_snapshot,
+                derive_readiness_status=_derive_readiness_status,
+                record_from_backup_payload=_record_from_backup_payload,
+                find_duplicate_strings=_find_duplicate_strings,
             ),
         )
-        self._execution_coordinator = ExecutionCoordinator(self)
-        self._action_orchestration_boundary = ActionOrchestrationBoundary(self)
-        self._reconciliation_orchestration_boundary = ReconciliationOrchestrationBoundary(
-            self
+        self._store = composition.store
+        self._reconciliation = composition.reconciliation
+        self._shuffle = composition.shuffle
+        self._isolated_executor = composition.isolated_executor
+        self._assistant_provider_adapter = composition.assistant_provider_adapter
+        self._reviewed_slice_policy = composition.reviewed_slice_policy
+        self._ai_trace_lifecycle_service = composition.ai_trace_lifecycle_service
+        self._assistant_context_assembler = composition.assistant_context_assembler
+        self._assistant_advisory_coordinator = (
+            composition.assistant_advisory_coordinator
         )
-        self._action_lifecycle_write_coordinator = ActionLifecycleWriteCoordinator(
-            self,
-            action_orchestration_boundary=self._action_orchestration_boundary,
-            reconciliation_orchestration_boundary=self._reconciliation_orchestration_boundary,
+        self._live_assistant_workflow_coordinator = (
+            composition.live_assistant_workflow_coordinator
         )
-        self._endpoint_evidence_pack_adapter = EndpointEvidencePackAdapter()
-        self._misp_context_adapter = MispContextAdapter(
-            enabled=config.misp_enrichment_enabled
+        self._operator_inspection_read_surface = (
+            composition.operator_inspection_read_surface
         )
-        self._external_evidence_boundary = ExternalEvidenceBoundary(self)
-        self._osquery_host_context_adapter = OsqueryHostContextAdapter()
-        self._runtime_boundary_service = RuntimeBoundaryService(
-            config=self._config,
-            store=self._store,
-            reconciliation_adapter=self._reconciliation,
-            shuffle_adapter=self._shuffle,
-            isolated_executor_adapter=self._isolated_executor,
-            runtime_snapshot_factory=RuntimeSnapshot,
-            authenticated_principal_factory=AuthenticatedRuntimePrincipal,
+        self._action_review_write_surface = composition.action_review_write_surface
+        self._evidence_linkage_service = composition.evidence_linkage_service
+        self._case_workflow_service = composition.case_workflow_service
+        self._detection_intake_service = composition.detection_intake_service
+        self._execution_coordinator = composition.execution_coordinator
+        self._action_orchestration_boundary = (
+            composition.action_orchestration_boundary
         )
-        self._restore_readiness_service = RestoreReadinessService(
-            config=self._config,
-            store=self._store,
-            runtime_boundary_service=self._runtime_boundary_service,
-            startup_status_snapshot_factory=StartupStatusSnapshot,
-            readiness_diagnostics_snapshot_factory=ReadinessDiagnosticsSnapshot,
-            restore_drill_snapshot_factory=RestoreDrillSnapshot,
-            restore_summary_snapshot_factory=RestoreSummarySnapshot,
-            record_to_dict=_record_to_dict,
-            json_ready=_json_ready,
-            redacted_reconciliation_payload=_redacted_reconciliation_payload,
-            collect_readiness_review_snapshots=self._collect_readiness_review_snapshots,
-            build_readiness_review_path_health=self._build_readiness_review_path_health,
-            build_readiness_source_health=self._build_readiness_source_health,
-            build_readiness_automation_substrate_health=(
-                self._build_readiness_automation_substrate_health
-            ),
-            build_optional_extension_operability=(
-                self._build_optional_extension_operability
-            ),
-            build_shutdown_status_snapshot=_build_shutdown_status_snapshot,
-            derive_readiness_status=_derive_readiness_status,
-            record_from_backup_payload=_record_from_backup_payload,
-            authoritative_record_chain_record_types=(
-                AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES
-            ),
-            authoritative_record_chain_backup_schema_version=(
-                AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION
-            ),
-            authoritative_primary_id_field_by_family=(
-                _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY
-            ),
-            record_types_by_family=RECORD_TYPES_BY_FAMILY,
-            find_duplicate_strings=_find_duplicate_strings,
-            synthesize_lifecycle_transition_record=(
-                lambda record, initial_transitioned_at_fallback=None: self._build_lifecycle_transition_record(
-                    record,
-                    existing_record=None,
-                    initial_transitioned_at_fallback=initial_transitioned_at_fallback,
-                )
-            ),
-            assistant_ids_from_mapping=self._assistant_ids_from_mapping,
-            inspect_case_detail=lambda case_id: self.inspect_case_detail(case_id),
-            inspect_assistant_context=(
-                lambda record_family, record_id: self.inspect_assistant_context(
-                    record_family,
-                    record_id,
-                )
-            ),
-            inspect_reconciliation_status=lambda: self.inspect_reconciliation_status(),
+        self._reconciliation_orchestration_boundary = (
+            composition.reconciliation_orchestration_boundary
         )
+        self._action_lifecycle_write_coordinator = (
+            composition.action_lifecycle_write_coordinator
+        )
+        self._endpoint_evidence_pack_adapter = (
+            composition.endpoint_evidence_pack_adapter
+        )
+        self._misp_context_adapter = composition.misp_context_adapter
+        self._external_evidence_boundary = composition.external_evidence_boundary
+        self._osquery_host_context_adapter = composition.osquery_host_context_adapter
+        self._runtime_boundary_service = composition.runtime_boundary_service
+        self._restore_readiness_service = composition.restore_readiness_service
         self._runtime_restore_readiness_diagnostics_service = (
-            RuntimeRestoreReadinessDiagnosticsService(
-                runtime_boundary_service=self._runtime_boundary_service,
-                restore_readiness_service=self._restore_readiness_service,
-            )
+            composition.runtime_restore_readiness_diagnostics_service
         )
 
     def describe_runtime(self) -> RuntimeSnapshot:
@@ -5398,32 +5303,10 @@ class AegisOpsControlPlaneService:
         analytic_signal_ids: tuple[str, ...],
         case_id: str | None,
     ) -> None:
-        if case_id is None:
-            return
-
-        for analytic_signal_id in analytic_signal_ids:
-            existing_signal = self._store.get(AnalyticSignalRecord, analytic_signal_id)
-            if existing_signal is None:
-                continue
-            linked_case_ids = self._merge_linked_ids(existing_signal.case_ids, case_id)
-            if linked_case_ids == existing_signal.case_ids:
-                continue
-            self.persist_record(
-                AnalyticSignalRecord(
-                    analytic_signal_id=existing_signal.analytic_signal_id,
-                    substrate_detection_record_id=(
-                        existing_signal.substrate_detection_record_id
-                    ),
-                    finding_id=existing_signal.finding_id,
-                    alert_ids=existing_signal.alert_ids,
-                    case_ids=linked_case_ids,
-                    correlation_key=existing_signal.correlation_key,
-                    first_seen_at=existing_signal.first_seen_at,
-                    last_seen_at=existing_signal.last_seen_at,
-                    lifecycle_state=existing_signal.lifecycle_state,
-                    reviewed_context=existing_signal.reviewed_context,
-                )
-            )
+        self._detection_intake_service._link_case_to_analytic_signals(
+            analytic_signal_ids,
+            case_id,
+        )
 
     def _list_alert_evidence_records(
         self,
@@ -5431,13 +5314,10 @@ class AegisOpsControlPlaneService:
         alert_id: str,
         case_id: str | None,
     ) -> tuple[EvidenceRecord, ...]:
-        evidence_records: list[EvidenceRecord] = []
-        for evidence in self._store.list(EvidenceRecord):
-            if evidence.alert_id == alert_id or (
-                case_id is not None and evidence.case_id == case_id
-            ):
-                evidence_records.append(evidence)
-        return tuple(evidence_records)
+        return self._detection_intake_service._list_alert_evidence_records(
+            alert_id=alert_id,
+            case_id=case_id,
+        )
 
     def _link_case_to_alert_reconciliations(
         self,
@@ -5446,51 +5326,11 @@ class AegisOpsControlPlaneService:
         case_id: str,
         evidence_ids: tuple[str, ...],
     ) -> None:
-        for reconciliation in self._store.list(ReconciliationRecord):
-            if reconciliation.alert_id != alert_id:
-                continue
-            subject_linkage = dict(reconciliation.subject_linkage)
-            updated_case_ids = self._merge_linked_ids(
-                subject_linkage.get("case_ids"),
-                case_id,
-            )
-            updated_evidence_ids = self._merge_linked_ids(
-                subject_linkage.get("evidence_ids"),
-                None,
-            )
-            for evidence_id in evidence_ids:
-                updated_evidence_ids = self._merge_linked_ids(
-                    updated_evidence_ids,
-                    evidence_id,
-                )
-            if (
-                tuple(subject_linkage.get("case_ids", ())) == updated_case_ids
-                and tuple(subject_linkage.get("evidence_ids", ()))
-                == updated_evidence_ids
-            ):
-                continue
-            subject_linkage["case_ids"] = updated_case_ids
-            subject_linkage["evidence_ids"] = updated_evidence_ids
-            self.persist_record(
-                ReconciliationRecord(
-                    reconciliation_id=reconciliation.reconciliation_id,
-                    subject_linkage=subject_linkage,
-                    alert_id=reconciliation.alert_id,
-                    finding_id=reconciliation.finding_id,
-                    analytic_signal_id=reconciliation.analytic_signal_id,
-                    execution_run_id=reconciliation.execution_run_id,
-                    linked_execution_run_ids=(
-                        reconciliation.linked_execution_run_ids
-                    ),
-                    correlation_key=reconciliation.correlation_key,
-                    first_seen_at=reconciliation.first_seen_at,
-                    last_seen_at=reconciliation.last_seen_at,
-                    ingest_disposition=reconciliation.ingest_disposition,
-                    mismatch_summary=reconciliation.mismatch_summary,
-                    compared_at=reconciliation.compared_at,
-                    lifecycle_state=reconciliation.lifecycle_state,
-                )
-            )
+        self._detection_intake_service._link_case_to_alert_reconciliations(
+            alert_id=alert_id,
+            case_id=case_id,
+            evidence_ids=evidence_ids,
+        )
 
     def _resolve_analytic_signal_id(
         self,
