@@ -1,11 +1,12 @@
 # Reviewed maintainability hotspot baseline for scripts/verify-maintainability-hotspots.sh.
 # One repo-relative Python path per line. Entries are not exemptions for new responsibility growth.
 #
-# Phase 49.0 closeout exception:
-# ADR-0003 accepted facade-preserving extraction behind AegisOpsControlPlaneService.
+# Phase 50.7 closeout exception:
+# ADR-0004 accepted ordered hotspot reduction after the ADR-0003
+# facade-preservation exception behind AegisOpsControlPlaneService.
 # The facade remains above the long-term 1,500-line and 50-method targets after
-# the Phase 49.0 child issues, so this baseline records the current closeout
-# ceiling and fails on silent re-growth. A future ADR or maintainability backlog
-# must lower or replace these limits before unrelated Phase 49 feature expansion
-# lands in the facade.
-control-plane/aegisops_control_plane/service.py max_lines=5660 max_effective_lines=5250 max_facade_methods=203 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=49.0.7
+# the Phase 50 child issues, so this baseline records the accepted Phase 50.7
+# closeout ceiling and fails on silent re-growth. A future ADR or
+# maintainability backlog must lower or replace these limits before unrelated
+# feature expansion lands in the facade.
+control-plane/aegisops_control_plane/service.py max_lines=5660 max_effective_lines=5250 max_facade_methods=203 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.7 issue=#953
