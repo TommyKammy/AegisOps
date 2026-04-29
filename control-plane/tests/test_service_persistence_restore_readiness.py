@@ -5798,6 +5798,26 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             restored_service.restore_authoritative_record_chain_backup(backup)
         self._assert_authoritative_store_empty(restored_store)
 
+    def test_service_phase21_restore_rejects_null_mapping_payload_fields(self) -> None:
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        backup["record_families"]["reconciliation"][0]["subject_linkage"] = None
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "reconciliation.subject_linkage must be a JSON object in restore payload",
+        ):
+            restored_service.restore_authoritative_record_chain_backup(backup)
+        self._assert_authoritative_store_empty(restored_store)
+
     def test_service_phase21_restore_rejects_approval_target_binding_mismatch(self) -> None:
         _store, service, promoted_case, _evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()

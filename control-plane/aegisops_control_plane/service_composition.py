@@ -32,6 +32,7 @@ from .external_evidence_boundary import ExternalEvidenceBoundary
 from .live_assistant_workflow import LiveAssistantWorkflowCoordinator
 from .models import ControlPlaneRecord, ReconciliationRecord
 from .operator_inspection import OperatorInspectionReadSurface
+from .persistence_lifecycle import PersistenceLifecycleService
 from .readiness_operability import ReadinessOperabilityHelper
 from .restore_readiness import RestoreReadinessService
 from .reviewed_slice_policy import ReviewedSlicePolicy
@@ -121,6 +122,7 @@ class ControlPlaneServiceComposition:
     runtime_restore_readiness_diagnostics_service: (
         RuntimeRestoreReadinessDiagnosticsService
     )
+    persistence_lifecycle_service: PersistenceLifecycleService
 
 
 def build_control_plane_service_composition(
@@ -313,6 +315,13 @@ def build_control_plane_service_composition(
             restore_readiness_service=restore_readiness_service,
         )
     )
+    persistence_lifecycle_service = PersistenceLifecycleService(
+        store=resolved_store,
+        lifecycle_transition_helper=(
+            detection_intake_service.lifecycle_transition_helper
+        ),
+        require_aware_datetime=service._require_aware_datetime,
+    )
 
     return ControlPlaneServiceComposition(
         store=resolved_store,
@@ -344,6 +353,7 @@ def build_control_plane_service_composition(
         runtime_restore_readiness_diagnostics_service=(
             runtime_restore_readiness_diagnostics_service
         ),
+        persistence_lifecycle_service=persistence_lifecycle_service,
     )
 
 

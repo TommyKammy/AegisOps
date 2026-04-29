@@ -41,7 +41,7 @@ class RestoreReadinessService:
             [ControlPlaneRecord, datetime | None],
             LifecycleTransitionRecord | None,
         ],
-        assistant_ids_from_mapping: Callable[[Mapping[str, object] | None, str], tuple[str, ...]],
+        assistant_ids_from_mapping: Callable[[Mapping[str, object], str], tuple[str, ...]],
         inspect_case_detail: Callable[[str], Any],
         inspect_assistant_context: Callable[[str, str], Any],
         inspect_reconciliation_status: Callable[[], Any],

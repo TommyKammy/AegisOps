@@ -44,7 +44,6 @@ from .models import (
     ReconciliationRecord,
     RecommendationRecord,
 )
-from .persistence_lifecycle import PersistenceLifecycleService
 from .readiness_contracts import (
     ReadinessDiagnosticsAggregates,
     resolve_current_readiness_runtime_status,
@@ -1214,12 +1213,8 @@ class AegisOpsControlPlaneService:
         self._runtime_restore_readiness_diagnostics_service = (
             composition.runtime_restore_readiness_diagnostics_service
         )
-        self._persistence_lifecycle_service = PersistenceLifecycleService(
-            store=self._store,
-            lifecycle_transition_helper=(
-                self._detection_intake_service.lifecycle_transition_helper
-            ),
-            require_aware_datetime=self._require_aware_datetime,
+        self._persistence_lifecycle_service = (
+            composition.persistence_lifecycle_service
         )
 
     def describe_runtime(self) -> RuntimeSnapshot:

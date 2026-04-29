@@ -442,20 +442,23 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
         self.assertIn("persist_record", persistence_methods)
 
         persist_record = service_methods["persist_record"]
-        persisted_delegate_calls = [
-            node
-            for node in ast.walk(persist_record)
-            if isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "persist_record"
-            and isinstance(node.func.value, ast.Attribute)
-            and node.func.value.attr == "_persistence_lifecycle_service"
-        ]
         self.assertEqual(
-            len(persisted_delegate_calls),
+            len(persist_record.body),
             1,
-            "service.persist_record should remain a facade delegate",
+            "service.persist_record should stay as a single return delegate",
         )
+        self.assertIsInstance(persist_record.body[0], ast.Return)
+        delegate_call = persist_record.body[0].value
+        self.assertIsInstance(delegate_call, ast.Call)
+        self.assertIsInstance(delegate_call.func, ast.Attribute)
+        self.assertEqual(delegate_call.func.attr, "persist_record")
+        self.assertIsInstance(delegate_call.func.value, ast.Attribute)
+        self.assertEqual(
+            delegate_call.func.value.attr,
+            "_persistence_lifecycle_service",
+        )
+        self.assertIsInstance(delegate_call.func.value.value, ast.Name)
+        self.assertEqual(delegate_call.func.value.value.id, "self")
 
     def test_phase50_detection_linkage_helpers_live_with_detection_intake(
         self,
