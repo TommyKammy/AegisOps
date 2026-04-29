@@ -268,6 +268,7 @@ class Phase28ExternalEvidenceBoundaryRefactorTests(unittest.TestCase):
             "_container_explicitly_cites_misp_indicator",
             "_require_explicit_misp_anchor_binding",
             "_require_case_host_identifier",
+            "require_case_host_identifier",
         )
 
         for helper_name in extracted_helper_names:

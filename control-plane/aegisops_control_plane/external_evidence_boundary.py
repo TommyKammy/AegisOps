@@ -6,11 +6,9 @@ import hashlib
 import json
 from typing import Iterable, Mapping, Protocol
 
+from . import external_evidence_osquery as _external_evidence_osquery
 from .external_evidence_misp import MispExternalEvidenceHelper
-from .external_evidence_osquery import (
-    OsqueryExternalEvidenceHelper,
-    require_case_host_identifier,
-)
+from .external_evidence_osquery import OsqueryExternalEvidenceHelper
 from .execution_coordinator import _approved_payload_binding_hash, _json_ready
 from .models import (
     ActionRequestRecord,
@@ -221,7 +219,9 @@ class ExternalEvidenceBoundary:
 
         with self._service._store.transaction(isolation_level="SERIALIZABLE"):
             case = self._service._require_reviewed_operator_case(case_id)
-            authoritative_host_identifier = require_case_host_identifier(case)
+            authoritative_host_identifier = (
+                _external_evidence_osquery.require_case_host_identifier(case)
+            )
             if host_identifier != authoritative_host_identifier:
                 raise ValueError(
                     "host_identifier must match the authoritative reviewed case host binding"
@@ -432,7 +432,9 @@ class ExternalEvidenceBoundary:
                 "case_id",
             )
             case = self._service._require_reviewed_operator_case(case_id)
-            authoritative_host_identifier = require_case_host_identifier(case)
+            authoritative_host_identifier = (
+                _external_evidence_osquery.require_case_host_identifier(case)
+            )
             approved_host_identifier = self._service._require_non_empty_string(
                 action_request.target_scope.get("host_identifier"),
                 "action_request.target_scope.host_identifier",
