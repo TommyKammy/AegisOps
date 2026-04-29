@@ -321,6 +321,8 @@ def _action_review_visibility_deadline(
 
 def _action_review_overdue_path_health(
     *,
+    action_request: ActionRequestRecord,
+    approval_decision: ApprovalDecisionRecord | None,
     review_state: str,
     action_execution: ActionExecutionRecord | None,
     reconciliation: ReconciliationRecord | None,
@@ -329,7 +331,12 @@ def _action_review_overdue_path_health(
     if action_execution is None:
         if review_state in {"approved", "executing"}:
             if reconciliation is not None:
-                return _action_review_path_health_entries(paths)
+                return _action_review_reconciliation_without_execution_path_health(
+                    action_request=action_request,
+                    approval_decision=approval_decision,
+                    reconciliation=reconciliation,
+                    review_state=review_state,
+                )
             return _action_review_unresolved_without_execution_path_health()
         return _action_review_path_health_entries(paths)
 
@@ -1498,6 +1505,8 @@ def action_review_path_health(
     )
     if deadline is not None and deadline <= as_of:
         paths = _action_review_overdue_path_health(
+            action_request=action_request,
+            approval_decision=approval_decision,
             review_state=review_state,
             action_execution=action_execution,
             reconciliation=reconciliation,
