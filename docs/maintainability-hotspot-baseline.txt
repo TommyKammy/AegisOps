@@ -8,4 +8,4 @@
 # ceiling and fails on silent re-growth. A future ADR or maintainability backlog
 # must lower or replace these limits before unrelated Phase 49 feature expansion
 # lands in the facade.
-control-plane/aegisops_control_plane/service.py max_lines=5818 max_effective_lines=5407 max_facade_methods=203 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=49.0.7
+control-plane/aegisops_control_plane/service.py max_lines=5660 max_effective_lines=5250 max_facade_methods=203 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=49.0.7
