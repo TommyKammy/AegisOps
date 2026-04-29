@@ -162,6 +162,35 @@ if ! grep -F "RenamedControlPlaneService methods=1" "${fail_stderr}" >/dev/null;
   exit 1
 fi
 
+phase50_10_regrowth_repo="${workdir}/phase50-10-regrowth"
+create_repo \
+  "${phase50_10_regrowth_repo}" \
+  "docs/maintainability-hotspot-baseline.txt" "control-plane/aegisops_control_plane/service.py max_lines=3003 max_effective_lines=2704 max_facade_methods=167 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.10.6 issue=#993" \
+  "control-plane/aegisops_control_plane/service.py" "class AegisOpsControlPlaneService:
+    def describe_runtime(self):
+        auth_principal = 'trusted-runtime-boundary'
+        queue_status = {'operator': auth_principal}
+        case_transition = queue_status
+        assistant_recommendation = case_transition
+        action_reconciliation = assistant_recommendation
+        restore_backup_export = action_reconciliation
+        evidence_admission = restore_backup_export
+        return evidence_admission"
+append_repeated_lines "${phase50_10_regrowth_repo}" "control-plane/aegisops_control_plane/service.py" "phase50_10_growth_line" 2994
+git -C "${phase50_10_regrowth_repo}" add .
+git -C "${phase50_10_regrowth_repo}" commit -q -m "phase 50.10 regrowth past accepted closeout"
+assert_fails_with "${phase50_10_regrowth_repo}" "Maintainability hotspot baseline limits were exceeded"
+if ! grep -F "lines=3004 exceeds max_lines=3003" "${fail_stderr}" >/dev/null; then
+  echo "Expected failure output to report the Phase 50.10 line-count limit." >&2
+  cat "${fail_stderr}" >&2
+  exit 1
+fi
+if ! grep -F "effective_lines=3004 exceeds max_effective_lines=2704" "${fail_stderr}" >/dev/null; then
+  echo "Expected failure output to report the Phase 50.10 effective-line limit." >&2
+  cat "${fail_stderr}" >&2
+  exit 1
+fi
+
 new_hotspot_repo="${workdir}/new-hotspot"
 create_repo \
   "${new_hotspot_repo}" \

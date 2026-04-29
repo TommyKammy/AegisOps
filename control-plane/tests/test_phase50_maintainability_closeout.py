@@ -50,13 +50,13 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
                 return metadata
         raise AssertionError("service.py hotspot baseline entry not found")
 
-    def test_baseline_records_phase50_9_closeout_ceiling(self) -> None:
+    def test_baseline_records_phase50_10_closeout_ceiling(self) -> None:
         service_text = self._read("control-plane/aegisops_control_plane/service.py")
         metadata = self._baseline_metadata()
 
         self.assertEqual(metadata["adr_exception"], "ADR-0003")
-        self.assertEqual(metadata["phase"], "50.10.5")
-        self.assertEqual(metadata["issue"], "#992")
+        self.assertEqual(metadata["phase"], "50.10.6")
+        self.assertEqual(metadata["issue"], "#993")
         self.assertEqual(metadata["facade_class"], "AegisOpsControlPlaneService")
         self.assertLessEqual(len(service_text.splitlines()), int(metadata["max_lines"]))
         self.assertLessEqual(
@@ -71,25 +71,30 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
         self.assertLess(int(metadata["max_effective_lines"]), 3182)
         self.assertLess(int(metadata["max_facade_methods"]), 185)
 
-    def test_closeout_notes_preserve_phase50_9_hotspot_and_trigger(self) -> None:
+    def test_closeout_notes_preserve_phase50_10_hotspot_and_trigger(self) -> None:
         closeout = self._read("docs/phase-50-maintainability-closeout.md")
 
         for required in (
-            "Phase 50.9.6",
+            "Phase 50.10.6",
             "control-plane/aegisops_control_plane/service.py",
             "control-plane/aegisops_control_plane/action_review_projection.py",
+            "control-plane/aegisops_control_plane/external_evidence_boundary.py",
             "AegisOpsControlPlaneService",
-            "max_lines=3158",
-            "max_effective_lines=2853",
-            "max_facade_methods=173",
+            "max_lines=3003",
+            "max_effective_lines=2704",
+            "max_facade_methods=167",
             "projection lines=105",
             "projection effective_lines=103",
+            "external_evidence_boundary.py lines=216",
+            "external_evidence_boundary.py effective_lines=195",
+            "ADR-0007",
             "ADR-0004",
             "ADR-0003",
-            "#980",
+            "#993",
             "remaining accepted hotspot",
-            "facade dispatch and authority-boundary guard helpers",
+            "facade dispatch, compatibility entrypoints, and authority-boundary guard helpers",
             "projection split does not require a baseline entry",
+            "external-evidence split does not require a baseline entry",
             "silent re-growth",
             "another decomposition decision",
             "bash scripts/verify-maintainability-hotspots.sh",
@@ -120,9 +125,12 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
 
         for required in (
             "regrowth_repo",
+            "phase50_10_regrowth_repo",
             "Maintainability hotspot baseline limits were exceeded",
             "lines=960 exceeds max_lines=959",
             "effective_lines=960 exceeds max_effective_lines=959",
+            "lines=3004 exceeds max_lines=3003",
+            "effective_lines=3004 exceeds max_effective_lines=2704",
             "max_facade_methods=0",
         ):
             self.assertIn(required, verifier_test)

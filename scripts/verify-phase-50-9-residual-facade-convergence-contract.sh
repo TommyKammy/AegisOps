@@ -114,6 +114,7 @@ for phrase in "${required_phrases[@]}"; do
 done
 
 service_baseline_entry="control-plane/aegisops_control_plane/service.py max_lines=3158 max_effective_lines=2853 max_facade_methods=173 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.9.6 issue=#980"
+phase50_10_service_baseline_entry="control-plane/aegisops_control_plane/service.py max_lines=3003 max_effective_lines=2704 max_facade_methods=167 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.10.6 issue=#993"
 service_entry="$(grep -E '^control-plane/aegisops_control_plane/service.py[[:space:]]' "${baseline_path}" || true)"
 service_entry_count="$(printf '%s\n' "${service_entry}" | sed '/^$/d' | wc -l | tr -d ' ')"
 if [[ "${service_entry_count}" -eq 0 ]]; then
@@ -124,7 +125,31 @@ if [[ "${service_entry_count}" -ne 1 ]]; then
   echo "Phase 50.9 closeout requires exactly one service.py hotspot baseline entry." >&2
   exit 1
 fi
-if [[ "${service_entry}" != "${service_baseline_entry}" ]]; then
+if [[ "${service_entry}" == "${service_baseline_entry}" ]]; then
+  :
+elif [[ "${service_entry}" == "${phase50_10_service_baseline_entry}" ]]; then
+  closeout_path="${repo_root}/docs/phase-50-maintainability-closeout.md"
+  if [[ ! -f "${closeout_path}" ]]; then
+    echo "Phase 50.9 superseding Phase 50.10 baseline requires closeout evidence: ${closeout_path}" >&2
+    exit 1
+  fi
+  closeout_required_phrases=(
+    "Phase 50.10.6"
+    "#993"
+    "\`max_lines=3003\`"
+    "\`max_effective_lines=2704\`"
+    "\`max_facade_methods=167\`"
+    "external-evidence split does not require a baseline entry"
+    "silent re-growth"
+    "another decomposition decision"
+  )
+  for phrase in "${closeout_required_phrases[@]}"; do
+    if ! grep -Fq -- "${phrase}" "${closeout_path}"; then
+      echo "Phase 50.9 superseding Phase 50.10 closeout evidence is missing: ${phrase}" >&2
+      exit 1
+    fi
+  done
+else
   echo "Phase 50.9 closeout requires the accepted Phase 50.9.6 service.py ceiling after implementation evidence exists." >&2
   exit 1
 fi

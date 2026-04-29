@@ -30,6 +30,34 @@ write_baseline() {
     >"${target}/docs/maintainability-hotspot-baseline.txt"
 }
 
+write_phase50_10_baseline() {
+  local target="$1"
+
+  mkdir -p "${target}/docs"
+  printf '%s\n' \
+    "control-plane/aegisops_control_plane/service.py max_lines=3003 max_effective_lines=2704 max_facade_methods=167 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.10.6 issue=#993" \
+    >"${target}/docs/maintainability-hotspot-baseline.txt"
+}
+
+write_phase50_10_closeout() {
+  local target="$1"
+
+  mkdir -p "${target}/docs"
+  cat >"${target}/docs/phase-50-maintainability-closeout.md" <<'EOF'
+# Phase 50 Maintainability Closeout
+
+Phase 50.10.6 records the final #993 closeout baseline.
+
+- `max_lines=3003`
+- `max_effective_lines=2704`
+- `max_facade_methods=167`
+
+The external-evidence split does not require a baseline entry.
+
+Any silent re-growth requires another decomposition decision.
+EOF
+}
+
 create_valid_repo() {
   local target="$1"
 
@@ -199,6 +227,19 @@ assert_fails_with() {
 valid_repo="${workdir}/valid"
 create_valid_repo "${valid_repo}"
 assert_passes "${valid_repo}"
+
+phase50_10_superseding_repo="${workdir}/phase50-10-superseding"
+create_valid_repo "${phase50_10_superseding_repo}"
+write_phase50_10_baseline "${phase50_10_superseding_repo}"
+write_phase50_10_closeout "${phase50_10_superseding_repo}"
+assert_passes "${phase50_10_superseding_repo}"
+
+missing_phase50_10_closeout_repo="${workdir}/missing-phase50-10-closeout"
+create_valid_repo "${missing_phase50_10_closeout_repo}"
+write_phase50_10_baseline "${missing_phase50_10_closeout_repo}"
+assert_fails_with \
+  "${missing_phase50_10_closeout_repo}" \
+  "Phase 50.9 superseding Phase 50.10 baseline requires closeout evidence"
 
 missing_contract_repo="${workdir}/missing-contract"
 create_valid_repo "${missing_contract_repo}"

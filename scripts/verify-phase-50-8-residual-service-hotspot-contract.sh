@@ -182,8 +182,28 @@ elif [[ "${phase}" == "50.9.6" && "${issue}" == "#980" ]]; then
     "silent re-growth"
     "another decomposition decision"
   )
+elif [[ "${phase}" == "50.10.6" && "${issue}" == "#993" ]]; then
+  if [[
+    "${max_lines}" -gt 3003 ||
+    "${max_effective_lines}" -gt 2704 ||
+    "${max_facade_methods}" -gt 167
+  ]]; then
+    echo "Phase 50.10 superseding closeout baseline must remain at or below the accepted #993 ceiling." >&2
+    exit 1
+  fi
+  closeout_required_phrases=(
+    "Phase 50.10.6"
+    "#993"
+    "\`max_lines=${max_lines}\`"
+    "\`max_effective_lines=${max_effective_lines}\`"
+    "\`max_facade_methods=${max_facade_methods}\`"
+    "facade dispatch, compatibility entrypoints, and authority-boundary guard helpers"
+    "external-evidence split does not require a baseline entry"
+    "silent re-growth"
+    "another decomposition decision"
+  )
 else
-  echo "Phase 50.8 contract requires a final Phase 50.8.6 closeout baseline for #967 or a lower superseding Phase 50.9.6 closeout baseline for #980." >&2
+  echo "Phase 50.8 contract requires a final Phase 50.8.6 closeout baseline for #967, a lower superseding Phase 50.9.6 closeout baseline for #980, or a lower superseding Phase 50.10.6 closeout baseline for #993." >&2
   exit 1
 fi
 
