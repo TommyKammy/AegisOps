@@ -14,6 +14,7 @@ import {
 export function registerOperatorRoutesControlPlaneCaseRecordTests() {
   describe("control-plane case record routes", () => {
     it("records bounded case observations, leads, and recommendations from case detail", async () => {
+      const observedAt = "2026-04-22T00:00:00+00:00";
       let caseDetailPayload: Record<string, unknown> = {
         case_id: "case-456",
         case_record: {
@@ -61,16 +62,16 @@ export function registerOperatorRoutesControlPlaneCaseRecordTests() {
 
           if (url.startsWith("/operator/record-case-observation")) {
             expect(init?.method).toBe("POST");
-            expect(init?.body).toBe(
-              JSON.stringify({
-                author_identity: "analyst@example.com",
-                case_id: "case-456",
-                observed_at: "2026-04-22T00:00",
-                scope_statement:
-                  "Observed repository permission change requires tracked review.",
-                supporting_evidence_ids: ["evidence-123", "evidence-456"],
-              }),
-            );
+            const payload = JSON.parse(String(init?.body ?? "{}"));
+            expect(payload).toMatchObject({
+              author_identity: "analyst@example.com",
+              case_id: "case-456",
+              observed_at: observedAt,
+              scope_statement:
+                "Observed repository permission change requires tracked review.",
+              supporting_evidence_ids: ["evidence-123", "evidence-456"],
+            });
+            expect(payload.observed_at).toMatch(/(Z|[+-]\d{2}:\d{2})$/);
             caseDetailPayload = {
               ...caseDetailPayload,
               linked_observation_ids: ["observation-123"],
@@ -152,7 +153,7 @@ export function registerOperatorRoutesControlPlaneCaseRecordTests() {
         within(observationCard as HTMLElement).getByRole("textbox", {
           name: "Observed at",
         }),
-        { target: { value: "2026-04-22T00:00" } },
+        { target: { value: observedAt } },
       );
       fireEvent.change(
         within(observationCard as HTMLElement).getByRole("textbox", {
