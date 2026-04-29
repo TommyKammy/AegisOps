@@ -69,6 +69,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         )
 
         restore_readiness_service = service._restore_readiness_service
+        readiness_operability_helper = service._readiness_operability_helper
 
         self.assertTrue(
             hasattr(restore_readiness_service, "_backup_restore_flow"),
@@ -78,6 +79,24 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             hasattr(restore_readiness_service, "_readiness_health_projection"),
             "RestoreReadinessService should delegate readiness projection to a dedicated collaborator",
         )
+        self.assertIs(
+            restore_readiness_service._readiness_operability_helper,
+            readiness_operability_helper,
+        )
+        self.assertEqual(
+            type(readiness_operability_helper).__module__,
+            "aegisops_control_plane.readiness_operability",
+        )
+        for helper_name in (
+            "_collect_readiness_review_snapshots",
+            "_build_readiness_review_path_health",
+            "_build_readiness_source_health",
+            "_build_readiness_automation_substrate_health",
+            "_build_optional_extension_operability",
+        ):
+            with self.subTest(helper_name=helper_name):
+                self.assertFalse(hasattr(service, helper_name))
+                self.assertTrue(hasattr(readiness_operability_helper, helper_name))
 
     def test_service_decomposes_restore_validation_into_internal_helpers(
         self,
@@ -3776,7 +3795,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         with mock.patch.object(
             service._restore_readiness_service,
             "_collect_readiness_review_snapshots",
-            wraps=service._collect_readiness_review_snapshots,
+            wraps=service._readiness_operability_helper._collect_readiness_review_snapshots,
         ) as collect_readiness_review_snapshots:
             readiness = service.inspect_readiness_diagnostics()
         source_health = readiness.metrics["source_health"]

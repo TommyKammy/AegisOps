@@ -29,21 +29,7 @@ class RestoreReadinessService:
         record_to_dict: Callable[[ControlPlaneRecord], dict[str, object]],
         json_ready: Callable[[object], object],
         redacted_reconciliation_payload: Callable[[ReconciliationRecord], dict[str, object]],
-        collect_readiness_review_snapshots: Callable[
-            [ReadinessDiagnosticsAggregates], list[dict[str, object]]
-        ],
-        build_readiness_review_path_health: Callable[
-            [ReadinessDiagnosticsAggregates, list[dict[str, object]]], dict[str, object]
-        ],
-        build_readiness_source_health: Callable[
-            [ReadinessDiagnosticsAggregates, list[dict[str, object]]], dict[str, object]
-        ],
-        build_readiness_automation_substrate_health: Callable[
-            [ReadinessDiagnosticsAggregates, list[dict[str, object]]], dict[str, object]
-        ],
-        build_optional_extension_operability: Callable[
-            [ReadinessDiagnosticsAggregates, list[dict[str, object]]], dict[str, object]
-        ],
+        readiness_operability_helper: Any,
         build_shutdown_status_snapshot: Callable[..., Any],
         derive_readiness_status: Callable[..., str],
         record_from_backup_payload: Callable[
@@ -65,16 +51,21 @@ class RestoreReadinessService:
         inspect_reconciliation_status: Callable[[], Any],
     ) -> None:
         del record_types_by_family
-        self._collect_readiness_review_snapshots = collect_readiness_review_snapshots
-        self._build_readiness_review_path_health = (
-            build_readiness_review_path_health
+        self._readiness_operability_helper = readiness_operability_helper
+        self._collect_readiness_review_snapshots = (
+            readiness_operability_helper._collect_readiness_review_snapshots
         )
-        self._build_readiness_source_health = build_readiness_source_health
+        self._build_readiness_review_path_health = (
+            readiness_operability_helper._build_readiness_review_path_health
+        )
+        self._build_readiness_source_health = (
+            readiness_operability_helper._build_readiness_source_health
+        )
         self._build_readiness_automation_substrate_health = (
-            build_readiness_automation_substrate_health
+            readiness_operability_helper._build_readiness_automation_substrate_health
         )
         self._build_optional_extension_operability = (
-            build_optional_extension_operability
+            readiness_operability_helper._build_optional_extension_operability
         )
         self._readiness_health_projection = _ReadinessHealthProjection(
             config=config,
