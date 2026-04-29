@@ -363,6 +363,83 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
                 f"{helper_name} should remain only as a facade compatibility delegate",
             )
 
+    def test_phase50_5_second_hotspot_boundary_methods_are_split(self) -> None:
+        targets = {
+            (
+                "control-plane/aegisops_control_plane/assistant_context.py",
+                "AssistantContextAssembler",
+                "inspect_assistant_context",
+            ): {
+                "max_lines": 180,
+                "required_helpers": {
+                    "_require_context_record",
+                    "_context_lineage",
+                    "_linked_records_for_context",
+                    "_context_reviewed_context",
+                    "_build_context_snapshot",
+                },
+            },
+            (
+                "control-plane/aegisops_control_plane/detection_lifecycle.py",
+                "DetectionIntakeService",
+                "ingest_analytic_signal_admission",
+            ): {
+                "max_lines": 170,
+                "required_helpers": {
+                    "_resolve_admission_inputs",
+                    "_admit_new_alert",
+                    "_merge_existing_alert_admission",
+                    "_persist_analytic_signal_admission",
+                    "_persist_admission_reconciliation",
+                },
+            },
+            (
+                "control-plane/aegisops_control_plane/operator_inspection.py",
+                "OperatorInspectionReadSurface",
+                "inspect_analyst_queue",
+            ): {
+                "max_lines": 90,
+                "required_helpers": {
+                    "_queue_record_for_alert",
+                    "_sorted_queue_records",
+                },
+            },
+        }
+
+        for (relative_path, class_name, method_name), expectation in targets.items():
+            source = self._read(relative_path)
+            tree = ast.parse(source, filename=relative_path)
+            target_class = next(
+                node
+                for node in tree.body
+                if isinstance(node, ast.ClassDef) and node.name == class_name
+            )
+            methods = {
+                node.name: node
+                for node in target_class.body
+                if isinstance(node, ast.FunctionDef)
+            }
+            self.assertTrue(
+                expectation["required_helpers"].issubset(methods),
+                f"{class_name} should split {method_name} through focused helpers",
+            )
+            target_method = methods[method_name]
+            self.assertLessEqual(
+                target_method.end_lineno - target_method.lineno + 1,
+                expectation["max_lines"],
+                f"{class_name}.{method_name} remains a second-hotspot candidate",
+            )
+            oversized_helpers = {
+                helper_name: helper.end_lineno - helper.lineno + 1
+                for helper_name, helper in methods.items()
+                if helper.end_lineno - helper.lineno + 1 > 180
+            }
+            self.assertEqual(
+                oversized_helpers,
+                {},
+                f"{class_name} should not replace one hotspot with a broad helper",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
