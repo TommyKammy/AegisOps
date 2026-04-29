@@ -54,10 +54,17 @@ The retained manifest is the handoff index for the release gate. It must include
 - restore target and restore validation result;
 - same-day rollback decision and rollback evidence;
 - upgrade revision and post-upgrade evidence;
+- failed-attempt retention showing refused, rejected, failed, rollback-in-progress, and incomplete-verification attempts instead of only the final retry;
+- redaction review confirming secret values, DSNs, bootstrap tokens, break-glass tokens, bearer tokens, private keys, customer-private payloads, and workstation-local paths were omitted or replaced with reviewed placeholders;
+- protected-workflow advancement status showing that rollback-in-progress or incomplete upgrade verification keeps release, handoff, and protected workflow closure blocked until verification completes;
 - runtime smoke manifest reference;
 - reviewed record-chain evidence reference;
 - clean-state validation confirming no orphan record, partial durable write, half-restored state, or misleading handoff evidence survived a failed path; and
 - handoff owner and next review.
+
+Failed, refused, rejected, rollback-in-progress, or incomplete-verification attempts must stay visible in the retained manifest instead of being replaced by the final successful retry.
+
+The retained manifest must include failed-attempt retention, redaction review, and protected-workflow advancement entries so rollback-in-progress or incomplete upgrade verification cannot be mistaken for authority to close a protected workflow.
 
 The manifest must use repo-relative commands, documented env vars, and placeholders such as `<runtime-env-file>`, `<evidence-dir>`, and `<release-gate-manifest.md>`. It must not include workstation-local absolute paths, live secrets, DSNs, bootstrap tokens, break-glass tokens, unsigned identity hints, raw forwarded-header values, or customer-private credentials.
 
@@ -69,7 +76,7 @@ The focused release-gate verifier is:
 scripts/verify-phase-37-restore-rollback-upgrade-evidence.sh --manifest <release-gate-manifest.md>
 ```
 
-The verifier fails closed when the rehearsal document is missing, required cross-links are missing, a retained manifest omits backup, restore, rollback, upgrade, smoke, reviewed-record, or clean-state evidence, placeholder values remain, or publishable guidance uses workstation-local absolute paths.
+The verifier fails closed when the rehearsal document is missing, required cross-links are missing, a retained manifest omits backup, restore, rollback, upgrade, smoke, reviewed-record, failed-attempt, redaction, protected-workflow, or clean-state evidence, placeholder values remain, unredacted sensitive values remain, rollback-in-progress is treated as complete, incomplete verification advances a protected workflow, or publishable guidance uses workstation-local absolute paths.
 
 Rejected, forbidden, failed, or restore-failure paths must preserve the refusal reason and prove durable state remained clean. It is not enough to prove only that an error occurred.
 
