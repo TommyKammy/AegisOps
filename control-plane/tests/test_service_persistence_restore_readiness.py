@@ -13,6 +13,7 @@ if str(TESTS_ROOT) not in sys.path:
 import _service_persistence_support as support
 from _service_persistence_support import (
     AegisOpsControlPlaneService,
+    ActionRequestRecord,
     AITraceRecord,
     RuntimeConfig,
     ServicePersistenceTestBase,
@@ -3958,31 +3959,34 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
     def test_service_readiness_handles_malformed_review_payload_fields(self) -> None:
         inner_store, _ = support.make_store()
         store = MalformedReadinessFieldStore(inner_store)
-        service = AegisOpsControlPlaneService(
-            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
-            store=store,
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case(store=store)
         )
-        requested_at = datetime(2026, 4, 29, 9, 0, tzinfo=timezone.utc)
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome=(
+                "Review repository owner change evidence before any approval-bound "
+                "response."
+            ),
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent=(
+                "Notify the accountable repository owner about the reviewed "
+                "permission change."
+            ),
+            escalation_reason=(
+                "Reviewed GitHub audit evidence requires bounded owner notification."
+            ),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-malformed-readiness-fields-001",
+        )
         action_request = service.persist_record(
-            ActionRequestRecord(
-                action_request_id="action-request-malformed-readiness-fields-001",
-                approval_decision_id=None,
-                case_id=None,
-                alert_id=None,
-                finding_id="finding-malformed-readiness-fields-001",
-                idempotency_key="idempotency-malformed-readiness-fields-001",
-                target_scope={"asset_id": "asset-malformed-readiness-fields-001"},
-                requested_payload={"action_type": "notify_identity_owner"},
-                policy_evaluation={
-                    "approval_requirement": "human_required",
-                    "execution_surface_type": "automation_substrate",
-                    "execution_surface_id": "shuffle",
-                },
-                payload_hash="payload-hash-malformed-readiness-fields-001",
-                requested_at=requested_at,
-                expires_at=None,
-                lifecycle_state="approved",
-            )
+            replace(action_request, lifecycle_state="approved")
         )
         store.malformed_action_request_fields[action_request.action_request_id] = {
             "requested_payload": "malformed requested payload",
@@ -3996,6 +4000,56 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         self.assertEqual(review_path_health["review_count"], 1)
         self.assertEqual(review_path_health["overall_state"], "delayed")
         self.assertEqual(automation_health["tracked_surfaces"], 0)
+
+    def test_service_readiness_reason_helpers_fail_closed_on_mismatched_states(
+        self,
+    ) -> None:
+        store, _ = support.make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        helper = service._readiness_operability_helper
+
+        self.assertEqual(
+            helper._readiness_dominant_reason(
+                (
+                    {
+                        "state": "healthy",
+                        "reason": "healthy_reason",
+                        "affected_reviews": 1,
+                    },
+                ),
+                overall_state="degraded",
+            ),
+            "degraded_reason_unknown",
+        )
+        self.assertEqual(
+            helper._aggregate_readiness_path_health(
+                path_name="approval",
+                review_path_health=(
+                    {
+                        "paths": {
+                            "approval": {
+                                "state": "unexpected",
+                                "reason": "unexpected_reason",
+                            },
+                        },
+                    },
+                ),
+            ),
+            {
+                "state": "degraded",
+                "reason": "degraded_reason_unknown",
+                "affected_reviews": 1,
+                "by_state": {
+                    "healthy": 0,
+                    "delayed": 0,
+                    "degraded": 0,
+                    "failed": 0,
+                },
+            },
+        )
 
     def test_service_readiness_degrades_malformed_assistant_subject_linkage(
         self,

@@ -789,6 +789,8 @@ class ReadinessOperabilityHelper:
                 else int(path.get("affected_reviews", 0))
             )
             reason_counts[str(path["reason"])] += max(weight, 1)
+        if not reason_counts:
+            return f"{overall_state}_reason_unknown"
         return sorted(
             reason_counts.items(),
             key=lambda item: (-item[1], item[0]),
@@ -972,10 +974,13 @@ class ReadinessOperabilityHelper:
             for path_snapshot in path_snapshots
             if path_snapshot["state"] == overall_state
         )
-        reason = sorted(
-            reason_counts.items(),
-            key=lambda item: (-item[1], item[0]),
-        )[0][0]
+        if reason_counts:
+            reason = sorted(
+                reason_counts.items(),
+                key=lambda item: (-item[1], item[0]),
+            )[0][0]
+        else:
+            reason = f"{overall_state}_reason_unknown"
         return {
             "state": overall_state,
             "reason": reason,
