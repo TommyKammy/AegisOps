@@ -5,6 +5,7 @@ from collections.abc import Iterable, Mapping
 from datetime import datetime, timezone
 from typing import Any
 
+from . import action_review_projection as _action_review_projection
 from .action_review_projection import _ActionReviewRecordIndex
 from .models import (
     AITraceRecord,
@@ -339,11 +340,11 @@ class ReadinessOperabilityHelper:
             approval_decision = approval_decisions_by_action_request_id.get(action_request_id)
             action_execution = executions_by_action_request_id.get(action_request_id)
             reconciliation = reconciliations_by_action_request_id.get(action_request_id)
-            approval_state = self._action_review_approval_state(
+            approval_state = _action_review_projection._action_review_approval_state(
                 action_request=action_request,
                 approval_decision=approval_decision,
             )
-            review_state = self._action_review_state(
+            review_state = _action_review_projection._action_review_state(
                 action_request=action_request,
                 approval_state=approval_state,
                 action_execution=action_execution,
