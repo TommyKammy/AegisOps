@@ -189,6 +189,52 @@ Any silent re-growth requires another decomposition decision.
 EOF
 assert_passes "${final_closeout_repo}"
 
+superseding_closeout_repo="${workdir}/superseding-closeout"
+create_valid_repo "${superseding_closeout_repo}"
+printf '%s\n' \
+  "control-plane/aegisops_control_plane/service.py max_lines=3158 max_effective_lines=2853 max_facade_methods=173 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.9.6 issue=#980" \
+  >"${superseding_closeout_repo}/docs/maintainability-hotspot-baseline.txt"
+cat >"${superseding_closeout_repo}/docs/phase-50-maintainability-closeout.md" <<'EOF'
+# Phase 50 Maintainability Closeout
+
+Phase 50.9.6 records the final #980 closeout baseline.
+
+- `max_lines=3158`
+- `max_effective_lines=2853`
+- `max_facade_methods=173`
+
+The remaining accepted hotspot is the facade dispatch and authority-boundary guard helpers.
+
+The projection split does not require a baseline entry.
+
+Any silent re-growth requires another decomposition decision.
+EOF
+assert_passes "${superseding_closeout_repo}"
+
+superseding_regrowth_repo="${workdir}/superseding-regrowth"
+create_valid_repo "${superseding_regrowth_repo}"
+printf '%s\n' \
+  "control-plane/aegisops_control_plane/service.py max_lines=3159 max_effective_lines=2854 max_facade_methods=174 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.9.6 issue=#980" \
+  >"${superseding_regrowth_repo}/docs/maintainability-hotspot-baseline.txt"
+cat >"${superseding_regrowth_repo}/docs/phase-50-maintainability-closeout.md" <<'EOF'
+# Phase 50 Maintainability Closeout
+
+Phase 50.9.6 records a regrown #980 closeout baseline.
+
+- `max_lines=3159`
+- `max_effective_lines=2854`
+- `max_facade_methods=174`
+
+The remaining accepted hotspot is the facade dispatch and authority-boundary guard helpers.
+
+The projection split does not require a baseline entry.
+
+Any silent re-growth requires another decomposition decision.
+EOF
+assert_fails_with \
+  "${superseding_regrowth_repo}" \
+  "Phase 50.9 superseding closeout baseline must remain at or below the accepted #980 ceiling."
+
 missing_contract_repo="${workdir}/missing-contract"
 create_valid_repo "${missing_contract_repo}"
 rm "${missing_contract_repo}/docs/adr/0005-phase-50-8-residual-service-hotspot-migration-contract.md"

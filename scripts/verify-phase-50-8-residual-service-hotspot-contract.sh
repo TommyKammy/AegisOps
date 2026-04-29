@@ -164,11 +164,11 @@ if [[ "${phase}" == "50.8.6" && "${issue}" == "#967" ]]; then
   )
 elif [[ "${phase}" == "50.9.6" && "${issue}" == "#980" ]]; then
   if [[
-    "${max_lines}" -ge 3505 ||
-    "${max_effective_lines}" -ge 3182 ||
-    "${max_facade_methods}" -ge 185
+    "${max_lines}" -gt 3158 ||
+    "${max_effective_lines}" -gt 2853 ||
+    "${max_facade_methods}" -gt 173
   ]]; then
-    echo "Phase 50.9 superseding closeout baseline must remain lower than the Phase 50.8.6 ceiling." >&2
+    echo "Phase 50.9 superseding closeout baseline must remain at or below the accepted #980 ceiling." >&2
     exit 1
   fi
   closeout_required_phrases=(
