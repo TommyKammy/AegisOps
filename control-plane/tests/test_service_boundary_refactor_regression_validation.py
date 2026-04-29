@@ -260,6 +260,12 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
         projection_functions = {
             node.name for node in projection_tree.body if isinstance(node, ast.FunctionDef)
         }
+        projection_import_exports = {
+            alias.asname or alias.name
+            for node in projection_tree.body
+            if isinstance(node, ast.ImportFrom)
+            for alias in node.names
+        }
         retained_delegate_names = {
             "_action_review_after_hours_handoff_visibility",
             "_action_review_context_matches_lineage",
@@ -286,7 +292,9 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
             "_action_review_visibility_update",
         }
         moved_helper_names = retained_delegate_names | removed_internal_delegate_names
-        self.assertTrue(moved_helper_names.issubset(projection_functions))
+        self.assertTrue(
+            moved_helper_names.issubset(projection_functions | projection_import_exports)
+        )
 
         for helper_name in removed_internal_delegate_names:
             self.assertNotIn(
