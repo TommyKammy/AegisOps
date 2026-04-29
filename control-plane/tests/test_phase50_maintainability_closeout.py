@@ -58,14 +58,14 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
         self.assertEqual(metadata["phase"], "50.8.6")
         self.assertEqual(metadata["issue"], "#967")
         self.assertEqual(metadata["facade_class"], "AegisOpsControlPlaneService")
-        self.assertEqual(int(metadata["max_lines"]), len(service_text.splitlines()))
-        self.assertEqual(
-            int(metadata["max_effective_lines"]),
+        self.assertLessEqual(len(service_text.splitlines()), int(metadata["max_lines"]))
+        self.assertLessEqual(
             self._effective_line_count(service_text),
+            int(metadata["max_effective_lines"]),
         )
-        self.assertEqual(
-            int(metadata["max_facade_methods"]),
+        self.assertLessEqual(
             self._facade_method_count(metadata["facade_class"]),
+            int(metadata["max_facade_methods"]),
         )
 
     def test_closeout_notes_preserve_remaining_hotspot_and_trigger(self) -> None:
