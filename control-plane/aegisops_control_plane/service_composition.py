@@ -32,6 +32,7 @@ from .external_evidence_boundary import ExternalEvidenceBoundary
 from .live_assistant_workflow import LiveAssistantWorkflowCoordinator
 from .models import ControlPlaneRecord, ReconciliationRecord
 from .operator_inspection import OperatorInspectionReadSurface
+from .readiness_operability import ReadinessOperabilityHelper
 from .restore_readiness import RestoreReadinessService
 from .reviewed_slice_policy import ReviewedSlicePolicy
 from .runtime_boundary import RuntimeBoundaryService
@@ -119,6 +120,7 @@ class ControlPlaneServiceComposition:
     external_evidence_boundary: ExternalEvidenceBoundary
     osquery_host_context_adapter: OsqueryHostContextAdapter
     runtime_boundary_service: RuntimeBoundaryService
+    readiness_operability_helper: ReadinessOperabilityHelper
     restore_readiness_service: RestoreReadinessService
     runtime_restore_readiness_diagnostics_service: (
         RuntimeRestoreReadinessDiagnosticsService
@@ -256,6 +258,11 @@ def build_control_plane_service_composition(
             dependencies.authenticated_principal_factory
         ),
     )
+    readiness_operability_helper = ReadinessOperabilityHelper(
+        service=service,
+        config=config,
+        store=resolved_store,
+    )
     restore_readiness_service = RestoreReadinessService(
         config=config,
         store=resolved_store,
@@ -271,19 +278,7 @@ def build_control_plane_service_composition(
         redacted_reconciliation_payload=(
             dependencies.redacted_reconciliation_payload
         ),
-        collect_readiness_review_snapshots=(
-            service._collect_readiness_review_snapshots
-        ),
-        build_readiness_review_path_health=(
-            service._build_readiness_review_path_health
-        ),
-        build_readiness_source_health=service._build_readiness_source_health,
-        build_readiness_automation_substrate_health=(
-            service._build_readiness_automation_substrate_health
-        ),
-        build_optional_extension_operability=(
-            service._build_optional_extension_operability
-        ),
+        readiness_operability_helper=readiness_operability_helper,
         build_shutdown_status_snapshot=(
             dependencies.build_shutdown_status_snapshot
         ),
@@ -349,6 +344,7 @@ def build_control_plane_service_composition(
         external_evidence_boundary=external_evidence_boundary,
         osquery_host_context_adapter=osquery_host_context_adapter,
         runtime_boundary_service=runtime_boundary_service,
+        readiness_operability_helper=readiness_operability_helper,
         restore_readiness_service=restore_readiness_service,
         runtime_restore_readiness_diagnostics_service=(
             runtime_restore_readiness_diagnostics_service
