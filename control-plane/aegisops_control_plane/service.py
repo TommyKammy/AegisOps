@@ -32,6 +32,7 @@ from .assistant_provider import (
     AssistantProviderTransport,
 )
 from .audit_export import export_audit_retention_baseline
+from .pilot_reporting_export import export_pilot_executive_summary
 from .assistant_advisory import AssistantAdvisoryCoordinator
 from .action_lifecycle_write_coordinator import ActionLifecycleWriteCoordinator
 from .action_reconciliation_orchestration import (
@@ -2199,6 +2200,31 @@ class AegisOpsControlPlaneService:
             record_types=AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES,
             export_id=export_id,
             exported_at=exported_at,
+        )
+
+    def export_pilot_executive_summary(
+        self,
+        *,
+        export_id: str,
+        release_identifier: str,
+        exported_at: datetime,
+        executive_note: str | None = None,
+    ) -> dict[str, object]:
+        export_id = self._require_non_empty_string(export_id, "export_id")
+        release_identifier = self._require_non_empty_string(
+            release_identifier,
+            "release_identifier",
+        )
+        exported_at = self._require_aware_datetime(
+            exported_at,
+            "exported_at",
+        )
+        return export_pilot_executive_summary(
+            store=self._store,
+            export_id=export_id,
+            release_identifier=release_identifier,
+            exported_at=exported_at,
+            executive_note=executive_note,
         )
 
     def describe_startup_status(self) -> StartupStatusSnapshot:
