@@ -115,10 +115,7 @@ class DetectionLifecycleTransitionHelper:
                     f"{record.record_family} record {record.record_id!r} has orphaned "
                     "lifecycle transition history without a current-state record"
                 )
-            if (
-                existing_record is not None
-                and existing_lifecycle_state != latest_transition.lifecycle_state
-            ):
+            if existing_lifecycle_state != latest_transition.lifecycle_state:
                 raise ValueError(
                     f"{record.record_family} record {record.record_id!r} lifecycle_state "
                     f"{existing_lifecycle_state!r} does not match latest lifecycle "

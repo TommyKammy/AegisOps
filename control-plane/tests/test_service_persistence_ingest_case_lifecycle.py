@@ -16,6 +16,8 @@ from aegisops_control_plane.detection_lifecycle import DetectionIntakeService
 from aegisops_control_plane.evidence_linkage import EvidenceLinkageService
 from aegisops_control_plane.models import AlertRecord, AnalyticSignalRecord, CaseRecord
 
+REVIEWED_PROXY_SECRET = "reviewed-proxy-secret"  # noqa: S105 - test fixture secret
+
 for name, value in vars(support).items():
     if not (name.startswith("__") and name.endswith("__")):
         globals()[name] = value
@@ -395,7 +397,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
                 raw_alert={"alert": {"data": {"source_family": "github_audit"}}},
                 authorization_header="Bearer reviewed-shared-secret",
                 forwarded_proto="https",
-                reverse_proxy_secret_header="reviewed-proxy-secret",
+                reverse_proxy_secret_header=REVIEWED_PROXY_SECRET,
                 peer_addr="10.10.0.5",
             ),
             wazuh_result,
@@ -530,7 +532,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             raw_alert={"alert": {"data": {"source_family": "github_audit"}}},
             authorization_header="Bearer reviewed-shared-secret",
             forwarded_proto="https",
-            reverse_proxy_secret_header="reviewed-proxy-secret",
+            reverse_proxy_secret_header=REVIEWED_PROXY_SECRET,
             peer_addr="10.10.0.5",
         )
         lifecycle_delegate.build_lifecycle_transition_record.assert_called_once_with(
