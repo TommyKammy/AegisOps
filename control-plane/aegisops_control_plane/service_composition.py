@@ -32,6 +32,7 @@ from .external_evidence_boundary import ExternalEvidenceBoundary
 from .live_assistant_workflow import LiveAssistantWorkflowCoordinator
 from .models import ControlPlaneRecord, ReconciliationRecord
 from .operator_inspection import OperatorInspectionReadSurface
+from .persistence_lifecycle import PersistenceLifecycleService
 from .readiness_operability import ReadinessOperabilityHelper
 from .restore_readiness import RestoreReadinessService
 from .reviewed_slice_policy import ReviewedSlicePolicy
@@ -85,12 +86,8 @@ class ControlPlaneServiceCompositionDependencies:
     readiness_diagnostics_snapshot_factory: Callable[..., Any]
     restore_drill_snapshot_factory: Callable[..., Any]
     restore_summary_snapshot_factory: Callable[..., Any]
-    build_shutdown_status_snapshot: Callable[..., Any]
+    shutdown_status_snapshot_factory: Callable[..., Any]
     derive_readiness_status: Callable[..., str]
-    record_from_backup_payload: Callable[
-        [Type[ControlPlaneRecord], Mapping[str, object]],
-        ControlPlaneRecord,
-    ]
     find_duplicate_strings: Callable[[tuple[str, ...]], tuple[str, ...]]
 
 
@@ -125,6 +122,7 @@ class ControlPlaneServiceComposition:
     runtime_restore_readiness_diagnostics_service: (
         RuntimeRestoreReadinessDiagnosticsService
     )
+    persistence_lifecycle_service: PersistenceLifecycleService
 
 
 def build_control_plane_service_composition(
@@ -279,11 +277,10 @@ def build_control_plane_service_composition(
             dependencies.redacted_reconciliation_payload
         ),
         readiness_operability_helper=readiness_operability_helper,
-        build_shutdown_status_snapshot=(
-            dependencies.build_shutdown_status_snapshot
+        shutdown_status_snapshot_factory=(
+            dependencies.shutdown_status_snapshot_factory
         ),
         derive_readiness_status=dependencies.derive_readiness_status,
-        record_from_backup_payload=dependencies.record_from_backup_payload,
         authoritative_record_chain_record_types=(
             dependencies.authoritative_record_chain_record_types
         ),
@@ -318,6 +315,13 @@ def build_control_plane_service_composition(
             restore_readiness_service=restore_readiness_service,
         )
     )
+    persistence_lifecycle_service = PersistenceLifecycleService(
+        store=resolved_store,
+        lifecycle_transition_helper=(
+            detection_intake_service.lifecycle_transition_helper
+        ),
+        require_aware_datetime=service._require_aware_datetime,
+    )
 
     return ControlPlaneServiceComposition(
         store=resolved_store,
@@ -349,6 +353,7 @@ def build_control_plane_service_composition(
         runtime_restore_readiness_diagnostics_service=(
             runtime_restore_readiness_diagnostics_service
         ),
+        persistence_lifecycle_service=persistence_lifecycle_service,
     )
 
 

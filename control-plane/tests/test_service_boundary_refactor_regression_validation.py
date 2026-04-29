@@ -370,6 +370,96 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
             composition_call_names,
         )
 
+    def test_phase50_9_3_persistence_restore_and_status_helpers_leave_service_facade(
+        self,
+    ) -> None:
+        service_source = self._read("control-plane/aegisops_control_plane/service.py")
+        backup_restore_source = self._read(
+            "control-plane/aegisops_control_plane/restore_readiness_backup_restore.py"
+        )
+        projection_source = self._read(
+            "control-plane/aegisops_control_plane/restore_readiness_projection.py"
+        )
+        persistence_source = self._read(
+            "control-plane/aegisops_control_plane/persistence_lifecycle.py"
+        )
+        service_tree = ast.parse(service_source)
+        backup_restore_functions = {
+            node.name
+            for node in ast.parse(backup_restore_source).body
+            if isinstance(node, ast.FunctionDef)
+        }
+        projection_class = next(
+            node
+            for node in ast.parse(projection_source).body
+            if isinstance(node, ast.ClassDef)
+            and node.name == "_ReadinessHealthProjection"
+        )
+        projection_methods = {
+            node.name for node in projection_class.body if isinstance(node, ast.FunctionDef)
+        }
+        persistence_class = next(
+            node
+            for node in ast.parse(persistence_source).body
+            if isinstance(node, ast.ClassDef)
+            and node.name == "PersistenceLifecycleService"
+        )
+        persistence_methods = {
+            node.name
+            for node in persistence_class.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        service_class = next(
+            node
+            for node in service_tree.body
+            if isinstance(node, ast.ClassDef)
+            and node.name == "AegisOpsControlPlaneService"
+        )
+        service_methods = {
+            node.name: node
+            for node in service_class.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        service_module_functions = {
+            node.name for node in service_tree.body if isinstance(node, ast.FunctionDef)
+        }
+
+        self.assertNotIn("_build_shutdown_status_snapshot", service_module_functions)
+        self.assertIn("_build_shutdown_status_snapshot", projection_methods)
+        self.assertFalse(
+            {
+                "_parse_backup_datetime",
+                "_record_from_backup_payload",
+            }
+            & service_module_functions
+        )
+        self.assertTrue(
+            {
+                "_parse_backup_datetime",
+                "_record_from_backup_payload",
+            }.issubset(backup_restore_functions)
+        )
+        self.assertIn("persist_record", persistence_methods)
+
+        persist_record = service_methods["persist_record"]
+        self.assertEqual(
+            len(persist_record.body),
+            1,
+            "service.persist_record should stay as a single return delegate",
+        )
+        self.assertIsInstance(persist_record.body[0], ast.Return)
+        delegate_call = persist_record.body[0].value
+        self.assertIsInstance(delegate_call, ast.Call)
+        self.assertIsInstance(delegate_call.func, ast.Attribute)
+        self.assertEqual(delegate_call.func.attr, "persist_record")
+        self.assertIsInstance(delegate_call.func.value, ast.Attribute)
+        self.assertEqual(
+            delegate_call.func.value.attr,
+            "_persistence_lifecycle_service",
+        )
+        self.assertIsInstance(delegate_call.func.value.value, ast.Name)
+        self.assertEqual(delegate_call.func.value.value.id, "self")
+
     def test_phase50_detection_linkage_helpers_live_with_detection_intake(
         self,
     ) -> None:

@@ -40,7 +40,7 @@ class _ReadinessHealthProjection:
         build_optional_extension_operability: Callable[
             [ReadinessDiagnosticsAggregates, list[dict[str, object]]], dict[str, object]
         ],
-        build_shutdown_status_snapshot: Callable[..., Any],
+        shutdown_status_snapshot_factory: Callable[..., Any],
         derive_readiness_status: Callable[..., str],
     ) -> None:
         self._config = config
@@ -64,7 +64,7 @@ class _ReadinessHealthProjection:
         self._build_optional_extension_operability = (
             build_optional_extension_operability
         )
-        self._build_shutdown_status_snapshot = build_shutdown_status_snapshot
+        self._shutdown_status_snapshot_factory = shutdown_status_snapshot_factory
         self._derive_readiness_status = derive_readiness_status
 
     def describe_startup_status(self) -> Any:
@@ -144,6 +144,41 @@ class _ReadinessHealthProjection:
             active_action_request_ids=readiness_aggregates.active_action_request_ids,
             active_action_execution_ids=readiness_aggregates.active_action_execution_ids,
             unresolved_reconciliation_ids=readiness_aggregates.unresolved_reconciliation_ids,
+        )
+
+    def _build_shutdown_status_snapshot(
+        self,
+        *,
+        open_case_ids: tuple[str, ...],
+        active_action_request_ids: tuple[str, ...],
+        active_action_execution_ids: tuple[str, ...],
+        unresolved_reconciliation_ids: tuple[str, ...],
+    ) -> Any:
+        blocking_reasons: list[str] = []
+        if open_case_ids:
+            blocking_reasons.append(
+                "controlled shutdown requires resolving or explicitly handing off open casework"
+            )
+        if active_action_request_ids:
+            blocking_reasons.append(
+                "controlled shutdown requires approval-bound action requests to leave an inactive state"
+            )
+        if active_action_execution_ids:
+            blocking_reasons.append(
+                "controlled shutdown requires dispatching, queued, or running executions to reach a terminal state"
+            )
+        if unresolved_reconciliation_ids:
+            blocking_reasons.append(
+                "controlled shutdown requires pending reconciliation mismatches to be reviewed first"
+            )
+        return self._shutdown_status_snapshot_factory(
+            read_only=True,
+            shutdown_ready=not blocking_reasons,
+            blocking_reasons=tuple(blocking_reasons),
+            open_case_ids=open_case_ids,
+            active_action_request_ids=active_action_request_ids,
+            active_action_execution_ids=active_action_execution_ids,
+            unresolved_reconciliation_ids=unresolved_reconciliation_ids,
         )
 
     def inspect_readiness_diagnostics(self) -> Any:

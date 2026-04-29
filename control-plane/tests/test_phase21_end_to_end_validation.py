@@ -417,7 +417,10 @@ class Phase21EndToEndValidationTests(unittest.TestCase):
 
         post_rejection_queue = service.inspect_analyst_queue()
         self.assertEqual(post_rejection_queue.total_records, queue_view.total_records)
-        self.assertEqual(post_rejection_queue.records, queue_view.records)
+        self.assertEqual(
+            self._without_volatile_queue_age(post_rejection_queue.records),
+            self._without_volatile_queue_age(queue_view.records),
+        )
         post_rejection_readiness = service.inspect_readiness_diagnostics()
         self.assertEqual(
             post_rejection_readiness.metrics["alerts"],
@@ -426,6 +429,19 @@ class Phase21EndToEndValidationTests(unittest.TestCase):
         self.assertEqual(
             post_rejection_readiness.metrics["cases"],
             baseline_readiness.metrics["cases"],
+        )
+
+    @staticmethod
+    def _without_volatile_queue_age(
+        records: tuple[dict[str, object], ...],
+    ) -> tuple[dict[str, object], ...]:
+        return tuple(
+            {
+                key: value
+                for key, value in record.items()
+                if key not in {"age_seconds", "age_bucket"}
+            }
+            for record in records
         )
 
 
