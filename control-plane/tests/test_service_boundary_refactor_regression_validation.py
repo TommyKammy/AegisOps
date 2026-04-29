@@ -261,6 +261,7 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
             node.name for node in projection_tree.body if isinstance(node, ast.FunctionDef)
         }
         moved_helper_names = {
+            "_action_request_is_review_bound",
             "_action_review_after_hours_handoff_visibility",
             "_action_review_approval_decision",
             "_action_review_approval_state",
@@ -274,8 +275,12 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
             "_action_review_persistence_path_health",
             "_action_review_provider_path_health",
             "_action_review_state",
+            "_action_review_stage_snapshot",
+            "_action_review_visibility_entry",
             "_action_review_visibility_context",
+            "_action_review_visibility_update",
             "_latest_action_review_reconciliation",
+            "_next_expected_action_for_review_state",
             "_replacement_action_request",
         }
         self.assertTrue(moved_helper_names.issubset(projection_functions))

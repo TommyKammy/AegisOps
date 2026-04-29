@@ -12,6 +12,15 @@ from _cli_inspection_support import *  # noqa: F403
 from _cli_inspection_support import _approved_payload_binding_hash, _load_wazuh_fixture
 
 
+def _expected_action_review_path_health_paths(
+    paths: dict[str, dict[str, str]],
+) -> dict[str, dict[str, str]]:
+    return {
+        path_name: {**path, "health": path["state"]}
+        for path_name, path in paths.items()
+    }
+
+
 class CliInspectionActionReviewTests(ControlPlaneCliInspectionTestBase):
     def test_cli_renders_recommendation_draft_view_for_a_case(self) -> None:
         _, service, promoted_case, evidence_id, _ = self._build_phase19_in_scope_case()
@@ -214,24 +223,26 @@ class CliInspectionActionReviewTests(ControlPlaneCliInspectionTestBase):
         action_reviews_by_id = {
             record["action_request_id"]: record for record in payload["action_reviews"]
         }
-        expected_paths = {
-            "ingest": {
-                "state": "healthy",
-                "reason": "review_closed_before_ingest",
-            },
-            "delegation": {
-                "state": "healthy",
-                "reason": "review_closed_without_delegation",
-            },
-            "provider": {
-                "state": "healthy",
-                "reason": "review_closed_before_provider",
-            },
-            "persistence": {
-                "state": "healthy",
-                "reason": "review_closed_before_reconciliation",
-            },
-        }
+        expected_paths = _expected_action_review_path_health_paths(
+            {
+                "ingest": {
+                    "state": "healthy",
+                    "reason": "review_closed_before_ingest",
+                },
+                "delegation": {
+                    "state": "healthy",
+                    "reason": "review_closed_without_delegation",
+                },
+                "provider": {
+                    "state": "healthy",
+                    "reason": "review_closed_before_provider",
+                },
+                "persistence": {
+                    "state": "healthy",
+                    "reason": "review_closed_before_reconciliation",
+                },
+            }
+        )
 
         for action_request in (
             seeded["rejected_request"],
@@ -782,24 +793,26 @@ class CliInspectionActionReviewTests(ControlPlaneCliInspectionTestBase):
         self.assertEqual(review["path_health"]["overall_state"], "delayed")
         self.assertEqual(
             review["path_health"]["paths"],
-            {
-                "ingest": {
-                    "state": "delayed",
-                    "reason": "awaiting_ingest_signal",
-                },
-                "delegation": {
-                    "state": "delayed",
-                    "reason": "awaiting_approval",
-                },
-                "provider": {
-                    "state": "delayed",
-                    "reason": "awaiting_delegation",
-                },
-                "persistence": {
-                    "state": "delayed",
-                    "reason": "awaiting_reconciliation",
-                },
-            },
+            _expected_action_review_path_health_paths(
+                {
+                    "ingest": {
+                        "state": "delayed",
+                        "reason": "awaiting_ingest_signal",
+                    },
+                    "delegation": {
+                        "state": "delayed",
+                        "reason": "awaiting_approval",
+                    },
+                    "provider": {
+                        "state": "delayed",
+                        "reason": "awaiting_delegation",
+                    },
+                    "persistence": {
+                        "state": "delayed",
+                        "reason": "awaiting_reconciliation",
+                    },
+                }
+            ),
         )
 
     def test_cli_inspect_case_detail_classifies_stale_delegation_receipt_timeout(
@@ -884,24 +897,26 @@ class CliInspectionActionReviewTests(ControlPlaneCliInspectionTestBase):
         self.assertEqual(review["path_health"]["overall_state"], "degraded")
         self.assertEqual(
             review["path_health"]["paths"],
-            {
-                "ingest": {
-                    "state": "degraded",
-                    "reason": "ingest_signal_timeout",
-                },
-                "delegation": {
-                    "state": "degraded",
-                    "reason": "delegation_receipt_timeout",
-                },
-                "provider": {
-                    "state": "degraded",
-                    "reason": "provider_receipt_timeout",
-                },
-                "persistence": {
-                    "state": "degraded",
-                    "reason": "reconciliation_timeout",
-                },
-            },
+            _expected_action_review_path_health_paths(
+                {
+                    "ingest": {
+                        "state": "degraded",
+                        "reason": "ingest_signal_timeout",
+                    },
+                    "delegation": {
+                        "state": "degraded",
+                        "reason": "delegation_receipt_timeout",
+                    },
+                    "provider": {
+                        "state": "degraded",
+                        "reason": "provider_receipt_timeout",
+                    },
+                    "persistence": {
+                        "state": "degraded",
+                        "reason": "reconciliation_timeout",
+                    },
+                }
+            ),
         )
 
     def test_cli_inspect_case_detail_surfaces_create_tracking_ticket_outcome(
@@ -1737,24 +1752,26 @@ class CliInspectionActionReviewTests(ControlPlaneCliInspectionTestBase):
         self.assertEqual(review["path_health"]["overall_state"], "degraded")
         self.assertEqual(
             review["path_health"]["paths"],
-            {
-                "ingest": {
-                    "state": "degraded",
-                    "reason": "ingest_signal_missing_after_approval",
-                },
-                "delegation": {
-                    "state": "degraded",
-                    "reason": "reviewed_delegation_missing_after_approval",
-                },
-                "provider": {
-                    "state": "degraded",
-                    "reason": "provider_signal_missing_after_approval",
-                },
-                "persistence": {
-                    "state": "degraded",
-                    "reason": "reconciliation_missing_after_approval",
-                },
-            },
+            _expected_action_review_path_health_paths(
+                {
+                    "ingest": {
+                        "state": "degraded",
+                        "reason": "ingest_signal_missing_after_approval",
+                    },
+                    "delegation": {
+                        "state": "degraded",
+                        "reason": "reviewed_delegation_missing_after_approval",
+                    },
+                    "provider": {
+                        "state": "degraded",
+                        "reason": "provider_signal_missing_after_approval",
+                    },
+                    "persistence": {
+                        "state": "degraded",
+                        "reason": "reconciliation_missing_after_approval",
+                    },
+                }
+            ),
         )
 
     def test_cli_inspect_case_detail_keeps_reconciliation_bound_to_selected_execution(
@@ -1896,24 +1913,26 @@ class CliInspectionActionReviewTests(ControlPlaneCliInspectionTestBase):
         self.assertTrue(review["path_health"]["summary"])
         self.assertEqual(
             review["path_health"]["paths"],
-            {
-                "ingest": {
-                    "state": "degraded",
-                    "reason": "mismatch_detected",
-                },
-                "delegation": {
-                    "state": "healthy",
-                    "reason": "delegated",
-                },
-                "provider": {
-                    "state": "delayed",
-                    "reason": "awaiting_authoritative_outcome",
-                },
-                "persistence": {
-                    "state": "degraded",
-                    "reason": "reconciliation_mismatched",
-                },
-            },
+            _expected_action_review_path_health_paths(
+                {
+                    "ingest": {
+                        "state": "degraded",
+                        "reason": "mismatch_detected",
+                    },
+                    "delegation": {
+                        "state": "healthy",
+                        "reason": "delegated",
+                    },
+                    "provider": {
+                        "state": "delayed",
+                        "reason": "awaiting_authoritative_outcome",
+                    },
+                    "persistence": {
+                        "state": "degraded",
+                        "reason": "reconciliation_mismatched",
+                    },
+                }
+            ),
         )
 
     def test_cli_inspect_analyst_queue_renders_review_timeline_and_mismatch_details(
