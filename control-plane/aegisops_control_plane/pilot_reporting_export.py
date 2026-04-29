@@ -132,6 +132,14 @@ def export_pilot_executive_summary(
     exported_at: datetime,
     executive_note: str | None = None,
 ) -> dict[str, object]:
+    if not isinstance(export_id, str) or export_id.strip() == "":
+        raise ValueError("export_id must be a non-empty string")
+    if not isinstance(release_identifier, str) or release_identifier.strip() == "":
+        raise ValueError("release_identifier must be a non-empty string")
+    if not isinstance(exported_at, datetime) or exported_at.tzinfo is None:
+        raise ValueError("exported_at must be a timezone-aware datetime")
+    export_id = export_id.strip()
+    release_identifier = release_identifier.strip()
     _validate_no_unsupported_pilot_claims(executive_note)
 
     with store.transaction(isolation_level="REPEATABLE READ"):

@@ -2,7 +2,7 @@
 
 Validation status: PASS
 
-This document records the bounded Phase 49.5 pilot reporting export baseline. The implemented artifact is the `export_pilot_executive_summary` service boundary in `control-plane/aegisops_control_plane/pilot_reporting_export.py`.
+This document records the bounded Phase 49.5 pilot reporting export baseline. The implemented artifact is the `export_pilot_executive_summary` report/export boundary in `control-plane/aegisops_control_plane/pilot_reporting_export.py`.
 
 The export derives its customer-facing summary from AegisOps authoritative case records selected by an explicit reviewed pilot release identifier. It reads the selected case records and linked evidence in one repeatable-read snapshot, so the summary does not stitch together mixed lifecycle views from different points in time.
 

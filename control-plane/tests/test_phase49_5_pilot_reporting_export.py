@@ -14,6 +14,9 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 from aegisops_control_plane.config import RuntimeConfig
 from aegisops_control_plane.models import CaseRecord, EvidenceRecord
+from aegisops_control_plane.pilot_reporting_export import (
+    export_pilot_executive_summary,
+)
 from aegisops_control_plane.service import AegisOpsControlPlaneService
 from postgres_test_support import make_store
 
@@ -74,7 +77,8 @@ class Phase495PilotReportingExportTests(unittest.TestCase):
             transitioned_at=exported_at,
         )
 
-        export = service.export_pilot_executive_summary(
+        export = export_pilot_executive_summary(
+            store=store,
             export_id="pilot-exec-summary-phase49-5",
             release_identifier="aegisops-single-customer-pilot-2026-04-27-c4527e5",
             exported_at=exported_at,
@@ -164,7 +168,8 @@ class Phase495PilotReportingExportTests(unittest.TestCase):
                     ValueError,
                     expected,
                 ):
-                    service.export_pilot_executive_summary(
+                    export_pilot_executive_summary(
+                        store=store,
                         export_id="pilot-exec-summary-phase49-5",
                         release_identifier=(
                             "aegisops-single-customer-pilot-2026-04-27-c4527e5"
