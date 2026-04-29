@@ -264,6 +264,207 @@ class CrossBoundaryNegativeE2EValidationTests(unittest.TestCase):
             downstream_binding["external_receipt_id"],
         )
 
+    def test_external_ticket_stale_or_closed_observation_does_not_auto_close_case(
+        self,
+    ) -> None:
+        for observed_status in ("success", "closed"):
+            with self.subTest(observed_status=observed_status):
+                cli_helper = cli_support.ControlPlaneCliInspectionTestBase()
+                store, service, promoted_case, _evidence_id, reviewed_at = (
+                    cli_helper._build_phase19_in_scope_case()
+                )
+                seeded = cli_helper._seed_create_tracking_ticket_request(
+                    service=service,
+                    promoted_case=promoted_case,
+                    reviewed_at=reviewed_at,
+                    suffix=f"cross-boundary-ticket-{observed_status}-001",
+                    coordination_reference_id=(
+                        f"coord-ref-cross-boundary-ticket-{observed_status}-001"
+                    ),
+                )
+                baseline_case = store.get(CaseRecord, promoted_case.case_id)
+                baseline_alert = store.get(AlertRecord, promoted_case.alert_id)
+                self.assertIsNotNone(baseline_case)
+                self.assertIsNotNone(baseline_alert)
+
+                execution = service.delegate_approved_action_to_shuffle(
+                    action_request_id=seeded["action_request"].action_request_id,
+                    approved_payload=seeded["approved_payload"],
+                    delegated_at=reviewed_at + timedelta(minutes=15),
+                    delegation_issuer="control-plane-service",
+                )
+                downstream_binding = execution.provenance["downstream_binding"]
+                reconciliation = service.reconcile_action_execution(
+                    action_request_id=seeded["action_request"].action_request_id,
+                    execution_surface_type="automation_substrate",
+                    execution_surface_id="shuffle",
+                    observed_executions=(
+                        {
+                            "execution_run_id": execution.execution_run_id,
+                            "execution_surface_id": "shuffle",
+                            "idempotency_key": seeded["action_request"].idempotency_key,
+                            "approval_decision_id": seeded[
+                                "approval"
+                            ].approval_decision_id,
+                            "delegation_id": execution.delegation_id,
+                            "payload_hash": seeded["payload_hash"],
+                            "coordination_reference_id": downstream_binding[
+                                "coordination_reference_id"
+                            ],
+                            "coordination_target_type": downstream_binding[
+                                "coordination_target_type"
+                            ],
+                            "external_receipt_id": downstream_binding[
+                                "external_receipt_id"
+                            ],
+                            "coordination_target_id": downstream_binding[
+                                "coordination_target_id"
+                            ],
+                            "ticket_reference_url": downstream_binding[
+                                "ticket_reference_url"
+                            ],
+                            "observed_at": reviewed_at + timedelta(minutes=20),
+                            "status": observed_status,
+                        },
+                    ),
+                    compared_at=reviewed_at + timedelta(hours=2),
+                    stale_after=reviewed_at + timedelta(hours=1),
+                )
+
+                current_case = store.get(CaseRecord, promoted_case.case_id)
+                current_alert = store.get(AlertRecord, promoted_case.alert_id)
+                current_execution = store.get(
+                    ActionExecutionRecord,
+                    execution.action_execution_id,
+                )
+                case_detail = service.inspect_case_detail(promoted_case.case_id).to_dict()
+
+                self.assertEqual(reconciliation.lifecycle_state, "stale")
+                self.assertEqual(reconciliation.ingest_disposition, "stale")
+                self.assertIsNotNone(current_case)
+                self.assertIsNotNone(current_alert)
+                self.assertIsNotNone(current_execution)
+                self.assertEqual(
+                    current_case.lifecycle_state,
+                    baseline_case.lifecycle_state,
+                )
+                self.assertEqual(
+                    current_alert.lifecycle_state,
+                    baseline_alert.lifecycle_state,
+                )
+                self.assertIsNone(current_case.coordination_reference_id)
+                self.assertIsNone(current_alert.coordination_reference_id)
+                self.assertEqual(current_execution.lifecycle_state, "queued")
+                self.assertEqual(
+                    case_detail["current_action_review"][
+                        "coordination_ticket_outcome"
+                    ]["status"],
+                    "pending",
+                )
+                self.assertNotEqual(current_case.lifecycle_state, "closed")
+
+    def test_endpoint_evidence_missing_provenance_is_not_promoted(self) -> None:
+        phase28_helper = phase28_tests.Phase28EndpointEvidencePackValidationTests()
+        store, service, promoted_case, anchor_evidence_id, reviewed_at = (
+            phase28_helper._build_host_bound_case()
+        )
+        action_request = service.create_endpoint_evidence_collection_request(
+            case_id=promoted_case.case_id,
+            admitting_evidence_id=anchor_evidence_id,
+            requester_identity="analyst-001",
+            host_identifier="host-001",
+            evidence_gap="Need endpoint evidence to resolve the reviewed host-state gap.",
+            artifact_classes=("collection_manifest",),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+        )
+        phase28_helper._approve_action_request(
+            service,
+            action_request.action_request_id,
+            decided_at=action_request.requested_at + timedelta(minutes=5),
+        )
+        baseline_case = store.get(CaseRecord, promoted_case.case_id)
+        baseline_evidence_ids = {record.evidence_id for record in store.list(EvidenceRecord)}
+        self.assertIsNotNone(baseline_case)
+
+        with self.assertRaisesRegex(ValueError, "artifact.source_boundary"):
+            service.ingest_endpoint_evidence_artifacts(
+                action_request_id=action_request.action_request_id,
+                artifacts=(
+                    {
+                        "artifact_class": "collection_manifest",
+                        "artifact_id": "manifest-missing-provenance-001",
+                        "source_artifact_id": "collector-manifest-missing-provenance-001",
+                        "collected_at": reviewed_at,
+                        "collector_identity": "velociraptor",
+                        "tool_name": "Velociraptor",
+                        "citation_kind": "raw_collected_output",
+                        "description": "Missing boundary provenance must stay blocked.",
+                        "content": {"query_names": ("Artifact.Windows.System.Pslist",)},
+                    },
+                ),
+                admitted_by="analyst-001",
+            )
+
+        current_case = store.get(CaseRecord, promoted_case.case_id)
+        self.assertIsNotNone(current_case)
+        self.assertEqual(current_case.lifecycle_state, baseline_case.lifecycle_state)
+        self.assertEqual(current_case.evidence_ids, baseline_case.evidence_ids)
+        self.assertEqual(
+            {record.evidence_id for record in store.list(EvidenceRecord)},
+            baseline_evidence_ids,
+        )
+
+    def test_expired_delegation_fails_closed_before_action_execution_dispatch(self) -> None:
+        phase28_helper = phase28_tests.Phase28EndpointEvidencePackValidationTests()
+        store, service, promoted_case, anchor_evidence_id, reviewed_at = (
+            phase28_helper._build_host_bound_case()
+        )
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+        action_request = service.create_endpoint_evidence_collection_request(
+            case_id=promoted_case.case_id,
+            admitting_evidence_id=anchor_evidence_id,
+            requester_identity="analyst-001",
+            host_identifier="host-001",
+            evidence_gap="Need endpoint evidence to resolve the reviewed host-state gap.",
+            artifact_classes=("collection_manifest",),
+            expires_at=expires_at,
+        )
+        phase28_helper._approve_action_request(
+            service,
+            action_request.action_request_id,
+            decided_at=action_request.requested_at + timedelta(minutes=5),
+        )
+        approved_request = store.get(ActionRequestRecord, action_request.action_request_id)
+        baseline_case = store.get(CaseRecord, promoted_case.case_id)
+        baseline_execution_ids = {
+            record.action_execution_id for record in store.list(ActionExecutionRecord)
+        }
+        self.assertIsNotNone(approved_request)
+        self.assertIsNotNone(baseline_case)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "expired before isolated executor delegation",
+        ):
+            service.delegate_approved_action_to_isolated_executor(
+                action_request_id=approved_request.action_request_id,
+                approved_payload=approved_request.requested_payload,
+                delegated_at=expires_at + timedelta(seconds=1),
+                delegation_issuer="control-plane-service",
+            )
+
+        current_case = store.get(CaseRecord, promoted_case.case_id)
+        self.assertIsNotNone(current_case)
+        self.assertEqual(current_case.lifecycle_state, baseline_case.lifecycle_state)
+        self.assertEqual(current_case.evidence_ids, baseline_case.evidence_ids)
+        self.assertEqual(
+            {
+                record.action_execution_id
+                for record in store.list(ActionExecutionRecord)
+            },
+            baseline_execution_ids,
+        )
+
     def test_ml_shadow_and_optional_network_failure_signals_leave_authoritative_state_clean(
         self,
     ) -> None:
