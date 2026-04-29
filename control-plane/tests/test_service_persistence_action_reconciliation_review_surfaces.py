@@ -11,6 +11,12 @@ if str(TESTS_ROOT) not in sys.path:
 
 import _service_persistence_support as support
 from aegisops_control_plane import action_review_projection
+from aegisops_control_plane import action_review_chain
+from aegisops_control_plane import action_review_coordination
+from aegisops_control_plane import action_review_index
+from aegisops_control_plane import action_review_path_health
+from aegisops_control_plane import action_review_timeline
+from aegisops_control_plane import action_review_visibility
 from _service_persistence_support import (
     ActionExecutionRecord,
     ActionRequestRecord,
@@ -30,6 +36,46 @@ from _service_persistence_support import (
 )
 
 class ActionReviewSurfacePersistenceTests(ServicePersistenceTestBase):
+    def test_action_review_projection_shim_preserves_focused_public_imports(
+        self,
+    ) -> None:
+        self.assertIs(
+            action_review_projection.build_action_review_record_index,
+            action_review_index.build_action_review_record_index,
+        )
+        self.assertIs(
+            action_review_projection.action_review_chains_for_scope,
+            action_review_chain.action_review_chains_for_scope,
+        )
+        self.assertIs(
+            action_review_projection.build_action_review_chain_snapshot,
+            action_review_chain.build_action_review_chain_snapshot,
+        )
+        self.assertIs(
+            action_review_projection.action_review_path_health,
+            action_review_path_health.action_review_path_health,
+        )
+        self.assertIs(
+            action_review_projection.action_review_runtime_visibility,
+            action_review_visibility.action_review_runtime_visibility,
+        )
+        self.assertIs(
+            action_review_projection.action_review_timeline,
+            action_review_timeline.action_review_timeline,
+        )
+        self.assertIs(
+            action_review_projection.action_review_reconciliation_detail,
+            action_review_timeline.action_review_reconciliation_detail,
+        )
+        self.assertIs(
+            action_review_projection.action_review_coordination_ticket_outcome,
+            action_review_coordination.action_review_coordination_ticket_outcome,
+        )
+        self.assertIs(
+            action_review_projection.action_review_downstream_binding,
+            action_review_coordination.action_review_downstream_binding,
+        )
+
     def test_action_review_path_health_preserves_overdue_reconciliation_without_execution(
         self,
     ) -> None:
