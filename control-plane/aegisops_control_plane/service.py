@@ -1338,7 +1338,9 @@ class AegisOpsControlPlaneService:
                 ),
                 live_assistant_snapshot_factory=_phase24_live_assistant_snapshot,
                 live_assistant_citations_from_context=(
-                    _phase24_live_assistant_citations_from_context
+                    lambda snapshot: _phase24_live_assistant_citations_from_context(
+                        snapshot
+                    )
                 ),
                 live_assistant_unresolved_reasons=(
                     _phase24_live_assistant_unresolved_reasons
