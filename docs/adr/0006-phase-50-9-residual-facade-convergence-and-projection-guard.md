@@ -5,7 +5,7 @@
 - **Owners**: AegisOps maintainers
 - **Related Baseline**: `docs/requirements-baseline.md`
 - **Product**: AegisOps
-- **Related Issues**: #974, #975
+- **Related Issues**: #974, #975, #980
 - **Depends On**: #967
 - **Supersedes**: N/A
 - **Superseded By**: N/A
@@ -26,7 +26,7 @@ ADR-0005 remains authoritative for the Phase 50.8 residual helper migration cont
 
 Phase 50.9 needs a repo-owned contract before the next implementation sequence starts so later slices do not choose local extraction order, treat the final Phase 50.8 ceiling as permission for facade growth, or move action-review projection pressure into another unchecked hotspot.
 
-This ADR does not refresh the baseline because Phase 50.9 implementation evidence does not exist yet.
+This ADR did not refresh the baseline before implementation evidence existed. Phase 50.9.6 closeout issue #980 later refreshed the baseline after the extraction sequence landed.
 
 ## 2. Decision
 
@@ -48,7 +48,7 @@ Tickets, assistant output, ML, endpoint evidence, network evidence, browser stat
 
 ## 3. Residual Facade Targets
 
-The current Phase 50.8.6 ceiling remains:
+The Phase 50.8.6 starting ceiling was:
 
 - `max_lines=3505`
 - `max_effective_lines=3182`
@@ -63,6 +63,14 @@ The Phase 50.9 implementation target for `control-plane/aegisops_control_plane/s
 A Phase 50.9 closeout may record a lower exception only if it names the unresolved cluster, records the measured line, effective-line, and facade-method counts, and keeps the exception lower than the Phase 50.8.6 ceiling.
 
 Any `service.py` baseline refresh before Phase 50.9 implementation evidence exists is forbidden.
+
+Phase 50.9.6 closeout issue #980 records the accepted residual `service.py` ceiling as:
+
+- `max_lines=3158`
+- `max_effective_lines=2853`
+- `max_facade_methods=173`
+- `phase=50.9.6`
+- `issue=#980`
 
 ## 4. Projection Hotspot Guard
 
@@ -84,6 +92,8 @@ An `action_review_projection.py` baseline may be recorded only at Phase 50.9 clo
 - the closeout explicitly states why another split would be riskier than accepting the temporary projection hotspot.
 
 If those criteria are not all true, the correct result is a follow-up decomposition issue, not a silent projection hotspot exception.
+
+Phase 50.9.6 measured `control-plane/aegisops_control_plane/action_review_projection.py` at `projection lines=105` and `projection effective_lines=103`, which is below the verifier threshold and below the pre-Phase 50.9 projection measurement. No projection baseline entry is recorded.
 
 ## 5. Migration Order
 
@@ -114,6 +124,8 @@ Run `bash scripts/test-verify-phase-50-9-residual-facade-convergence-contract.sh
 Run `bash scripts/verify-maintainability-hotspots.sh`.
 
 Run `node <codex-supervisor-root>/dist/index.js issue-lint 975 --config <supervisor-config-path>`.
+
+Run `node <codex-supervisor-root>/dist/index.js issue-lint 980 --config <supervisor-config-path>`.
 
 ## 7. Non-Goals
 
