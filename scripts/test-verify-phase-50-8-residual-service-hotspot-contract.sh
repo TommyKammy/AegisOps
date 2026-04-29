@@ -219,7 +219,7 @@ printf '%s\n' \
   >"${premature_baseline_repo}/docs/maintainability-hotspot-baseline.txt"
 assert_fails_with \
   "${premature_baseline_repo}" \
-  "Phase 50.8 contract requires the Phase 50.7 service.py ceiling to remain unchanged until implementation evidence exists."
+  "After implementation evidence exists, it requires either the final Phase 50.8.6 closeout baseline for #967 or the lower superseding Phase 50.9.6 closeout baseline for #980."
 
 missing_authority_repo="${workdir}/missing-authority"
 create_valid_repo "${missing_authority_repo}"

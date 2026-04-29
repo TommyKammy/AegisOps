@@ -129,7 +129,7 @@ if [[
   "${facade_class}" != "AegisOpsControlPlaneService" ||
   "${adr_exception}" != "ADR-0003"
 ]]; then
-  echo "Phase 50.8 contract requires the Phase 50.7 service.py ceiling to remain unchanged until implementation evidence exists. After implementation evidence exists, it requires a final Phase 50.8.6 closeout baseline for #967." >&2
+  echo "Phase 50.8 contract requires the Phase 50.7 service.py ceiling to remain unchanged until implementation evidence exists. After implementation evidence exists, it requires either the final Phase 50.8.6 closeout baseline for #967 or the lower superseding Phase 50.9.6 closeout baseline for #980." >&2
   exit 1
 fi
 
