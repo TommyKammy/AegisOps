@@ -82,7 +82,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
     def test_service_decomposes_restore_validation_into_internal_helpers(
         self,
     ) -> None:
-        store, _ = make_store()
+        store, _ = support.make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
             store=store,
