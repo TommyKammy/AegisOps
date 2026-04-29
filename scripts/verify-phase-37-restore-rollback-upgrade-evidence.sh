@@ -95,6 +95,21 @@ reject_placeholders() {
   fi
 }
 
+reject_unredacted_sensitive_values() {
+  local path="$1"
+  local description="$2"
+
+  if grep -Eiq '(password|passwd|token|secret|dsn|private[._-]?key)[[:space:]]*=[[:space:]]*[^[:space:]]+' "${path}"; then
+    echo "Unredacted sensitive ${description} value detected: ${path}" >&2
+    exit 1
+  fi
+
+  if grep -Eq 'Bearer[[:space:]]+[A-Za-z0-9._~+/=-]{12,}' "${path}"; then
+    echo "Unredacted bearer ${description} value detected: ${path}" >&2
+    exit 1
+  fi
+}
+
 reject_workstation_paths() {
   local description="$1"
   shift
@@ -107,6 +122,17 @@ reject_workstation_paths() {
 
   if grep -Eq "${workstation_local_path_pattern}" "$@"; then
     echo "Forbidden ${description}: workstation-local absolute path detected" >&2
+    exit 1
+  fi
+}
+
+reject_manifest_pattern() {
+  local path="$1"
+  local pattern="$2"
+  local message="$3"
+
+  if grep -Eiq "${pattern}" "${path}"; then
+    echo "${message} ${path}" >&2
     exit 1
   fi
 }
@@ -147,9 +173,11 @@ required_doc_phrases=(
   'Run the Phase 37 runtime smoke gate after restore, rollback, or upgrade where feasible and retain its `manifest.md`.'
   'Assemble the release-gate manifest and verify it with `scripts/verify-phase-37-restore-rollback-upgrade-evidence.sh --manifest <release-gate-manifest.md>`.'
   "The retained manifest is the handoff index for the release gate."
+  "Failed, refused, rejected, rollback-in-progress, or incomplete-verification attempts must stay visible in the retained manifest instead of being replaced by the final successful retry."
   "clean-state validation confirming no orphan record, partial durable write, half-restored state, or misleading handoff evidence survived a failed path"
+  "The retained manifest must include failed-attempt retention, redaction review, and protected-workflow advancement entries so rollback-in-progress or incomplete upgrade verification cannot be mistaken for authority to close a protected workflow."
   'The manifest must use repo-relative commands, documented env vars, and placeholders such as `<runtime-env-file>`, `<evidence-dir>`, and `<release-gate-manifest.md>`.'
-  "The verifier fails closed when the rehearsal document is missing, required cross-links are missing, a retained manifest omits backup, restore, rollback, upgrade, smoke, reviewed-record, or clean-state evidence, placeholder values remain, or publishable guidance uses workstation-local absolute paths."
+  "The verifier fails closed when the rehearsal document is missing, required cross-links are missing, a retained manifest omits backup, restore, rollback, upgrade, smoke, reviewed-record, failed-attempt, redaction, protected-workflow, or clean-state evidence, placeholder values remain, unredacted sensitive values remain, rollback-in-progress is treated as complete, incomplete verification advances a protected workflow, or publishable guidance uses workstation-local absolute paths."
   "Zero-downtime deployment, HA, database clustering, vendor-specific backup product integration, direct backend exposure, optional-extension startup or upgrade gates, multi-customer evidence warehouses, and customer-private production access are out of scope."
 )
 
@@ -174,6 +202,7 @@ reject_workstation_paths "Phase 37 release-gate rehearsal guidance" "${doc_path}
 if [[ -n "${manifest_path}" ]]; then
   require_file "${manifest_path}" "Phase 37 release-gate evidence manifest"
   reject_placeholders "${manifest_path}" "manifest"
+  reject_unredacted_sensitive_values "${manifest_path}" "manifest"
   reject_workstation_paths "Phase 37 release-gate evidence manifest" "${manifest_path}"
 
   required_manifest_phrases=(
@@ -187,6 +216,9 @@ if [[ -n "${manifest_path}" ]]; then
     "Same-day rollback decision:"
     "Rollback evidence:"
     "Upgrade evidence:"
+    "Failed attempts retained:"
+    "Redaction review:"
+    "Protected workflow advancement:"
     "Post-upgrade smoke:"
     "Reviewed record-chain evidence:"
     "Clean-state validation:"
@@ -197,6 +229,21 @@ if [[ -n "${manifest_path}" ]]; then
   for phrase in "${required_manifest_phrases[@]}"; do
     require_phrase "${manifest_path}" "${phrase}" "Phase 37 release-gate evidence manifest statement"
   done
+
+  reject_manifest_pattern \
+    "${manifest_path}" \
+    '^Same-day rollback decision:.*rollback-in-progress.*(advanced|advance|accepted|handoff|complete|closed)' \
+    "Incomplete Phase 37 rollback verification cannot advance protected workflows:"
+
+  reject_manifest_pattern \
+    "${manifest_path}" \
+    '^Upgrade evidence:.*incomplete.*(advanced|advance|accepted|handoff|complete|closed)' \
+    "Incomplete Phase 37 upgrade verification cannot advance protected workflows:"
+
+  reject_manifest_pattern \
+    "${manifest_path}" \
+    '^Protected workflow advancement:.*(advanced|advance|accepted|handoff|closed)' \
+    "Protected workflow advancement must remain blocked until verification is complete:"
 fi
 
 echo "Phase 37 restore, rollback, upgrade, smoke, and handoff evidence rehearsal is documented and fail-closed."

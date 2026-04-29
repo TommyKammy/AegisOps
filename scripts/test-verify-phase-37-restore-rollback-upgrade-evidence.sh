@@ -99,13 +99,17 @@ Assemble the release-gate manifest and verify it with `scripts/verify-phase-37-r
 
 The retained manifest is the handoff index for the release gate.
 
+Failed, refused, rejected, rollback-in-progress, or incomplete-verification attempts must stay visible in the retained manifest instead of being replaced by the final successful retry.
+
 clean-state validation confirming no orphan record, partial durable write, half-restored state, or misleading handoff evidence survived a failed path
+
+The retained manifest must include failed-attempt retention, redaction review, and protected-workflow advancement entries so rollback-in-progress or incomplete upgrade verification cannot be mistaken for authority to close a protected workflow.
 
 The manifest must use repo-relative commands, documented env vars, and placeholders such as `<runtime-env-file>`, `<evidence-dir>`, and `<release-gate-manifest.md>`.
 
 ## 5. Fail-Closed Validation
 
-The verifier fails closed when the rehearsal document is missing, required cross-links are missing, a retained manifest omits backup, restore, rollback, upgrade, smoke, reviewed-record, or clean-state evidence, placeholder values remain, or publishable guidance uses workstation-local absolute paths.
+The verifier fails closed when the rehearsal document is missing, required cross-links are missing, a retained manifest omits backup, restore, rollback, upgrade, smoke, reviewed-record, failed-attempt, redaction, protected-workflow, or clean-state evidence, placeholder values remain, unredacted sensitive values remain, rollback-in-progress is treated as complete, incomplete verification advances a protected workflow, or publishable guidance uses workstation-local absolute paths.
 
 ## 6. Out of Scope
 
@@ -128,6 +132,9 @@ Restore validation: evidence/restore-validation.md
 Same-day rollback decision: rollback-not-needed-after-validation
 Rollback evidence: evidence/rollback-decision.md
 Upgrade evidence: evidence/upgrade-window.md
+Failed attempts retained: evidence/failed-attempts.md records refused and failed attempts with final outcomes preserved.
+Redaction review: secret-values-omitted and private payloads refused from retained upgrade and rollback evidence.
+Protected workflow advancement: blocked-until-verification-complete
 Post-upgrade smoke: evidence/smoke/manifest.md
 Reviewed record-chain evidence: evidence/reviewed-record-chain.txt
 Clean-state validation: evidence/clean-state.md
@@ -221,5 +228,50 @@ write_valid_manifest "${absolute_path_manifest_repo}/manifest.md"
 printf '\nLocal output: /%s/%s/evidence/manifest.md\n' "Users" "example" >> "${absolute_path_manifest_repo}/manifest.md"
 commit_fixture "${absolute_path_manifest_repo}"
 assert_fails_with "${absolute_path_manifest_repo}" "${absolute_path_manifest_repo}/manifest.md" "Forbidden Phase 37 release-gate evidence manifest: workstation-local absolute path detected"
+
+rollback_in_progress_repo="${workdir}/rollback-in-progress-manifest"
+create_repo "${rollback_in_progress_repo}"
+write_shared_docs "${rollback_in_progress_repo}"
+write_valid_doc "${rollback_in_progress_repo}"
+write_valid_manifest "${rollback_in_progress_repo}/manifest.md"
+perl -0pi -e 's/^Same-day rollback decision:.*$/Same-day rollback decision: rollback-in-progress but protected workflow advanced/m' "${rollback_in_progress_repo}/manifest.md"
+commit_fixture "${rollback_in_progress_repo}"
+assert_fails_with "${rollback_in_progress_repo}" "${rollback_in_progress_repo}/manifest.md" "Incomplete Phase 37 rollback verification cannot advance protected workflows:"
+
+incomplete_upgrade_repo="${workdir}/incomplete-upgrade-manifest"
+create_repo "${incomplete_upgrade_repo}"
+write_shared_docs "${incomplete_upgrade_repo}"
+write_valid_doc "${incomplete_upgrade_repo}"
+write_valid_manifest "${incomplete_upgrade_repo}/manifest.md"
+perl -0pi -e 's/^Upgrade evidence:.*$/Upgrade evidence: incomplete verification accepted for handoff/m' "${incomplete_upgrade_repo}/manifest.md"
+commit_fixture "${incomplete_upgrade_repo}"
+assert_fails_with "${incomplete_upgrade_repo}" "${incomplete_upgrade_repo}/manifest.md" "Incomplete Phase 37 upgrade verification cannot advance protected workflows:"
+
+missing_failed_attempts_repo="${workdir}/missing-failed-attempts-manifest"
+create_repo "${missing_failed_attempts_repo}"
+write_shared_docs "${missing_failed_attempts_repo}"
+write_valid_doc "${missing_failed_attempts_repo}"
+write_valid_manifest "${missing_failed_attempts_repo}/manifest.md"
+perl -0pi -e 's/^Failed attempts retained:.*\n//m' "${missing_failed_attempts_repo}/manifest.md"
+commit_fixture "${missing_failed_attempts_repo}"
+assert_fails_with "${missing_failed_attempts_repo}" "${missing_failed_attempts_repo}/manifest.md" "Missing Phase 37 release-gate evidence manifest statement: Failed attempts retained:"
+
+missing_redaction_repo="${workdir}/missing-redaction-manifest"
+create_repo "${missing_redaction_repo}"
+write_shared_docs "${missing_redaction_repo}"
+write_valid_doc "${missing_redaction_repo}"
+write_valid_manifest "${missing_redaction_repo}/manifest.md"
+perl -0pi -e 's/^Redaction review:.*\n//m' "${missing_redaction_repo}/manifest.md"
+commit_fixture "${missing_redaction_repo}"
+assert_fails_with "${missing_redaction_repo}" "${missing_redaction_repo}/manifest.md" "Missing Phase 37 release-gate evidence manifest statement: Redaction review:"
+
+unredacted_secret_repo="${workdir}/unredacted-secret-manifest"
+create_repo "${unredacted_secret_repo}"
+write_shared_docs "${unredacted_secret_repo}"
+write_valid_doc "${unredacted_secret_repo}"
+write_valid_manifest "${unredacted_secret_repo}/manifest.md"
+printf '\nOperator capture: token=live-upgrade-token-value\n' >> "${unredacted_secret_repo}/manifest.md"
+commit_fixture "${unredacted_secret_repo}"
+assert_fails_with "${unredacted_secret_repo}" "${unredacted_secret_repo}/manifest.md" "Unredacted sensitive manifest value detected:"
 
 echo "verify-phase-37-restore-rollback-upgrade-evidence tests passed"
