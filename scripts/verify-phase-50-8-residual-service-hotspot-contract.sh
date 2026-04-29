@@ -86,15 +86,20 @@ for phrase in "${required_phrases[@]}"; do
 done
 
 phase50_7_baseline_entry="control-plane/aegisops_control_plane/service.py max_lines=5660 max_effective_lines=5250 max_facade_methods=203 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.7 issue=#953"
-if grep -Fq -- "${phase50_7_baseline_entry}" "${baseline_path}"; then
-  echo "Phase 50.8 residual service hotspot contract fixes clusters, migration order, measurement guard, non-goals, and validation commands."
-  exit 0
-fi
-
 baseline_entry="$(grep -E '^control-plane/aegisops_control_plane/service.py[[:space:]]' "${baseline_path}" || true)"
-if [[ -z "${baseline_entry}" ]]; then
+baseline_entry_count="$(printf '%s\n' "${baseline_entry}" | sed '/^$/d' | wc -l | tr -d ' ')"
+if [[ "${baseline_entry_count}" -eq 0 ]]; then
   echo "Phase 50.8 contract requires a service.py hotspot baseline entry." >&2
   exit 1
+fi
+if [[ "${baseline_entry_count}" -ne 1 ]]; then
+  echo "Phase 50.8 contract requires exactly one service.py hotspot baseline entry." >&2
+  exit 1
+fi
+
+if [[ "${baseline_entry}" == "${phase50_7_baseline_entry}" ]]; then
+  echo "Phase 50.8 residual service hotspot contract fixes clusters, migration order, measurement guard, non-goals, and validation commands."
+  exit 0
 fi
 
 metadata_value() {

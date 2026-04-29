@@ -160,6 +160,15 @@ valid_repo="${workdir}/valid"
 create_valid_repo "${valid_repo}"
 assert_passes "${valid_repo}"
 
+duplicate_baseline_repo="${workdir}/duplicate-baseline"
+create_valid_repo "${duplicate_baseline_repo}"
+printf '%s\n' \
+  "control-plane/aegisops_control_plane/service.py max_lines=3505 max_effective_lines=3182 max_facade_methods=185 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.8.6 issue=#967" \
+  >>"${duplicate_baseline_repo}/docs/maintainability-hotspot-baseline.txt"
+assert_fails_with \
+  "${duplicate_baseline_repo}" \
+  "Phase 50.8 contract requires exactly one service.py hotspot baseline entry."
+
 final_closeout_repo="${workdir}/final-closeout"
 create_valid_repo "${final_closeout_repo}"
 printf '%s\n' \
