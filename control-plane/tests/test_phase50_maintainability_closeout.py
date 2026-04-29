@@ -55,8 +55,8 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
         metadata = self._baseline_metadata()
 
         self.assertEqual(metadata["adr_exception"], "ADR-0003")
-        self.assertEqual(metadata["phase"], "50.8.2")
-        self.assertEqual(metadata["issue"], "#963")
+        self.assertEqual(metadata["phase"], "50.8.3")
+        self.assertEqual(metadata["issue"], "#964")
         self.assertEqual(metadata["facade_class"], "AegisOpsControlPlaneService")
         self.assertEqual(int(metadata["max_lines"]), len(service_text.splitlines()))
         self.assertEqual(
@@ -72,15 +72,15 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
         closeout = self._read("docs/phase-50-maintainability-closeout.md")
 
         for required in (
-            "Phase 50.8.2",
+            "Phase 50.8.3",
             "control-plane/aegisops_control_plane/service.py",
             "AegisOpsControlPlaneService",
-            "max_lines=4708",
-            "max_effective_lines=4343",
+            "max_lines=4087",
+            "max_effective_lines=3733",
             "max_facade_methods=188",
             "ADR-0004",
             "ADR-0003",
-            "#963",
+            "#964",
             "remaining accepted hotspot",
             "silent re-growth",
             "another decomposition decision",
