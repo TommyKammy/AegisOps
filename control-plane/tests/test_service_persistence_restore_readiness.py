@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import copy
+from datetime import datetime, timedelta, timezone
 import pathlib
 import sys
 
@@ -12,6 +13,7 @@ if str(TESTS_ROOT) not in sys.path:
 import _service_persistence_support as support
 from _service_persistence_support import (
     AegisOpsControlPlaneService,
+    AITraceRecord,
     RuntimeConfig,
     ServicePersistenceTestBase,
 )
