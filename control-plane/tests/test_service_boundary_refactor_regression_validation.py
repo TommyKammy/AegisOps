@@ -318,6 +318,9 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
         write_surface_source = self._read(
             "control-plane/aegisops_control_plane/action_review_write_surface.py"
         )
+        readiness_operability_source = self._read(
+            "control-plane/aegisops_control_plane/readiness_operability.py"
+        )
         service_source = self._read("control-plane/aegisops_control_plane/service.py")
         http_sources = "\n".join(
             self._read(relative_path)
@@ -329,6 +332,7 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
             )
         )
         write_surface_tree = ast.parse(write_surface_source)
+        readiness_operability_tree = ast.parse(readiness_operability_source)
         service_tree = ast.parse(service_source)
         service_class = next(
             node
@@ -354,9 +358,10 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
         for helper_name in removed_internal_delegate_names:
             self.assertNotIn(helper_name, http_sources)
 
-        projection_calls = {
+        direct_projection_call_names = {
             node.func.attr
-            for node in ast.walk(write_surface_tree)
+            for tree in (write_surface_tree, readiness_operability_tree)
+            for node in ast.walk(tree)
             if isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
             and isinstance(node.func.value, ast.Name)
@@ -369,8 +374,26 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
                 "_action_review_execution",
                 "_action_review_state",
                 "_action_review_visibility_update",
-            }.issubset(projection_calls)
+            }.issubset(direct_projection_call_names)
         )
+        service_facade_delegate_names = removed_internal_delegate_names - {
+            "_action_request_is_review_bound",
+        }
+        for helper_name in service_facade_delegate_names:
+            for tree in (write_surface_tree, readiness_operability_tree):
+                service_facade_calls = [
+                    node
+                    for node in ast.walk(tree)
+                    if isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == helper_name
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id in {"self", "service"}
+                ]
+                self.assertFalse(
+                    service_facade_calls,
+                    f"{helper_name} must not be reached through the service facade",
+                )
 
     def test_phase50_constructor_delegates_collaborator_composition(self) -> None:
         service_source = self._read("control-plane/aegisops_control_plane/service.py")
