@@ -15,6 +15,7 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 from aegisops_control_plane.config import RuntimeConfig
 from aegisops_control_plane import external_evidence_boundary
 from aegisops_control_plane import external_evidence_endpoint
+from aegisops_control_plane import external_evidence_facade
 from aegisops_control_plane.service import AegisOpsControlPlaneService
 from postgres_test_support import make_store
 
@@ -260,6 +261,33 @@ class Phase28ExternalEvidenceBoundaryRefactorTests(unittest.TestCase):
                     hasattr(AegisOpsControlPlaneService, helper_name),
                     f"{helper_name} should be owned by the external evidence boundary",
                 )
+
+    def test_external_evidence_public_routes_are_not_defined_in_service_module(
+        self,
+    ) -> None:
+        service_source = (
+            CONTROL_PLANE_ROOT / "aegisops_control_plane" / "service.py"
+        ).read_text(encoding="utf-8")
+        facade_source = (
+            CONTROL_PLANE_ROOT / "aegisops_control_plane" / "external_evidence_facade.py"
+        ).read_text(encoding="utf-8")
+        public_route_names = (
+            "attach_misp_context",
+            "attach_osquery_host_context",
+            "create_endpoint_evidence_collection_request",
+            "ingest_endpoint_evidence_artifacts",
+        )
+
+        self.assertTrue(
+            issubclass(
+                AegisOpsControlPlaneService,
+                external_evidence_facade.ExternalEvidenceFacade,
+            )
+        )
+        for route_name in public_route_names:
+            with self.subTest(route_name=route_name):
+                self.assertNotIn(f"    def {route_name}(", service_source)
+                self.assertIn(f"    def {route_name}(", facade_source)
 
     def test_misp_and_osquery_helpers_are_extracted_from_boundary_module(self) -> None:
         extracted_helper_names = (
