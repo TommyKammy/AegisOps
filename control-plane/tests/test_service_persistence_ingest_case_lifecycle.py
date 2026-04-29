@@ -274,6 +274,13 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
         native_result = support.SimpleNamespace(name="native-result")
         attach_result = support.SimpleNamespace(name="attach-result")
         promoted_case = support.SimpleNamespace(case_id="case-delegated-001")
+        wazuh_result = support.SimpleNamespace(name="wazuh-result")
+        transition_record = support.SimpleNamespace(name="transition-record")
+        transition_records = (transition_record,)
+        latest_transition = support.SimpleNamespace(name="latest-transition")
+        attribution = {"source": "delegated-lifecycle", "actor_identities": ()}
+        reconciliation = support.SimpleNamespace(name="reconciliation")
+        reconciliation_map = {"alert-delegated-001": reconciliation}
         adapter = support.SimpleNamespace(substrate_key="wazuh")
         native_record = support.NativeDetectionRecord(
             substrate_key="wazuh",
@@ -300,6 +307,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
         intake_delegate.ingest_native_detection_record.return_value = native_result
         intake_delegate.ingest_analytic_signal_admission.return_value = ingest_result
         intake_delegate.attach_native_detection_context.return_value = attach_result
+        intake_delegate.ingest_wazuh_alert.return_value = wazuh_result
         intake_delegate.reviewed_context_transitioned_at.return_value = (
             reviewed_transitioned_at
         )
@@ -310,6 +318,39 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
         intake_delegate.case_lifecycle_for_disposition.return_value = (
             "disposition_pending_action"
         )
+        intake_delegate.resolve_analytic_signal_id.return_value = (
+            "signal-delegated-001"
+        )
+        lifecycle_delegate = support.mock.Mock()
+        lifecycle_delegate.build_lifecycle_transition_record.return_value = (
+            transition_record
+        )
+        lifecycle_delegate.build_lifecycle_transition_records.return_value = (
+            transition_records
+        )
+        lifecycle_delegate.initial_lifecycle_transitioned_at.return_value = (
+            reviewed_transitioned_at
+        )
+        lifecycle_delegate.latest_lifecycle_transition.return_value = latest_transition
+        lifecycle_delegate.lifecycle_transition_attribution.return_value = attribution
+        lifecycle_delegate.lifecycle_transition_id.return_value = (
+            "delegated-transition-id"
+        )
+        lifecycle_delegate.linked_alert_case_lifecycle_lock_subject.return_value = (
+            "linked_alert_case_lifecycle",
+            "alert:alert-delegated-001|case:case-delegated-001",
+        )
+        intake_delegate.lifecycle_transition_helper = lifecycle_delegate
+        reconciliation_delegate = support.mock.Mock()
+        reconciliation_delegate.reconciliation_has_detection_lineage.return_value = True
+        reconciliation_delegate.latest_detection_reconciliation_for_alert.return_value = (
+            reconciliation
+        )
+        reconciliation_delegate.latest_detection_reconciliations_by_alert_id.return_value = (
+            reconciliation_map
+        )
+        reconciliation_delegate.reconciliation_is_wazuh_origin.return_value = True
+        intake_delegate.reconciliation_resolver = reconciliation_delegate
         service._detection_intake_service = intake_delegate
 
         self.assertIs(
@@ -348,6 +389,94 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
                 substrate_detection_record_id="substrate-delegated-001",
             ),
             attach_result,
+        )
+        self.assertIs(
+            service.ingest_wazuh_alert(
+                raw_alert={"alert": {"data": {"source_family": "github_audit"}}},
+                authorization_header="Bearer reviewed-shared-secret",
+                forwarded_proto="https",
+                reverse_proxy_secret_header="reviewed-proxy-secret",
+                peer_addr="10.10.0.5",
+            ),
+            wazuh_result,
+        )
+        self.assertIs(
+            service._build_lifecycle_transition_record(
+                support.mock.sentinel.record,
+                existing_record=support.mock.sentinel.existing_record,
+                transitioned_at=first_seen_at,
+                latest_transition=support.mock.sentinel.latest_transition,
+            ),
+            transition_record,
+        )
+        self.assertIs(
+            service._build_lifecycle_transition_records(
+                support.mock.sentinel.record,
+                existing_record=support.mock.sentinel.existing_record,
+                transitioned_at=first_seen_at,
+            ),
+            transition_records,
+        )
+        self.assertEqual(
+            service._lifecycle_transition_id(
+                transition_timestamp="20260405T120000.000000Z",
+                transitioned_at=first_seen_at,
+                latest_transition=support.mock.sentinel.latest_transition,
+            ),
+            "delegated-transition-id",
+        )
+        self.assertEqual(
+            service._linked_alert_case_lifecycle_lock_subject(
+                support.mock.sentinel.record
+            ),
+            (
+                "linked_alert_case_lifecycle",
+                "alert:alert-delegated-001|case:case-delegated-001",
+            ),
+        )
+        service._lock_lifecycle_transition_subject("alert", "alert-delegated-001")
+        self.assertIs(
+            service._initial_lifecycle_transitioned_at(
+                support.mock.sentinel.record,
+                fallback=first_seen_at,
+            ),
+            reviewed_transitioned_at,
+        )
+        self.assertIs(
+            service._latest_lifecycle_transition("alert", "alert-delegated-001"),
+            latest_transition,
+        )
+        self.assertEqual(
+            service._lifecycle_transition_attribution(support.mock.sentinel.record),
+            attribution,
+        )
+        self.assertEqual(
+            service._resolve_analytic_signal_id(
+                analytic_signal_id=None,
+                finding_id="finding-delegated-001",
+                correlation_key="claim:delegated",
+                substrate_detection_record_id="substrate-delegated-001",
+                latest_reconciliation=None,
+            ),
+            "signal-delegated-001",
+        )
+        self.assertTrue(
+            service._reconciliation_has_detection_lineage(
+                support.mock.sentinel.reconciliation
+            )
+        )
+        self.assertIs(
+            service._latest_detection_reconciliation_for_alert("alert-delegated-001"),
+            reconciliation,
+        )
+        self.assertIs(
+            service._latest_detection_reconciliations_by_alert_id(),
+            reconciliation_map,
+        )
+        self.assertTrue(
+            service._reconciliation_is_wazuh_origin(
+                support.mock.sentinel.reconciliation
+            )
         )
         self.assertIs(
             service._reviewed_context_transitioned_at(support.mock.sentinel.record),
@@ -396,6 +525,66 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             record=native_record,
             ingest_result=ingest_result,
             substrate_detection_record_id="substrate-delegated-001",
+        )
+        intake_delegate.ingest_wazuh_alert.assert_called_once_with(
+            raw_alert={"alert": {"data": {"source_family": "github_audit"}}},
+            authorization_header="Bearer reviewed-shared-secret",
+            forwarded_proto="https",
+            reverse_proxy_secret_header="reviewed-proxy-secret",
+            peer_addr="10.10.0.5",
+        )
+        lifecycle_delegate.build_lifecycle_transition_record.assert_called_once_with(
+            support.mock.sentinel.record,
+            existing_record=support.mock.sentinel.existing_record,
+            transitioned_at=first_seen_at,
+            initial_transitioned_at_fallback=None,
+            must_precede_transitioned_at=None,
+            latest_transition=support.mock.sentinel.latest_transition,
+        )
+        lifecycle_delegate.build_lifecycle_transition_records.assert_called_once_with(
+            support.mock.sentinel.record,
+            existing_record=support.mock.sentinel.existing_record,
+            transitioned_at=first_seen_at,
+        )
+        lifecycle_delegate.lifecycle_transition_id.assert_called_once_with(
+            transition_timestamp="20260405T120000.000000Z",
+            transitioned_at=first_seen_at,
+            latest_transition=support.mock.sentinel.latest_transition,
+        )
+        lifecycle_delegate.linked_alert_case_lifecycle_lock_subject.assert_called_once_with(
+            support.mock.sentinel.record
+        )
+        lifecycle_delegate.lock_lifecycle_transition_subject.assert_called_once_with(
+            "alert",
+            "alert-delegated-001",
+        )
+        lifecycle_delegate.initial_lifecycle_transitioned_at.assert_called_once_with(
+            support.mock.sentinel.record,
+            fallback=first_seen_at,
+        )
+        lifecycle_delegate.latest_lifecycle_transition.assert_called_once_with(
+            "alert",
+            "alert-delegated-001",
+        )
+        lifecycle_delegate.lifecycle_transition_attribution.assert_called_once_with(
+            support.mock.sentinel.record
+        )
+        intake_delegate.resolve_analytic_signal_id.assert_called_once_with(
+            analytic_signal_id=None,
+            finding_id="finding-delegated-001",
+            correlation_key="claim:delegated",
+            substrate_detection_record_id="substrate-delegated-001",
+            latest_reconciliation=None,
+        )
+        reconciliation_delegate.reconciliation_has_detection_lineage.assert_called_once_with(
+            support.mock.sentinel.reconciliation
+        )
+        reconciliation_delegate.latest_detection_reconciliation_for_alert.assert_called_once_with(
+            "alert-delegated-001"
+        )
+        reconciliation_delegate.latest_detection_reconciliations_by_alert_id.assert_called_once_with()
+        reconciliation_delegate.reconciliation_is_wazuh_origin.assert_called_once_with(
+            support.mock.sentinel.reconciliation
         )
         intake_delegate.reviewed_context_transitioned_at.assert_called_once_with(
             support.mock.sentinel.record
