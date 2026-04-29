@@ -81,3 +81,17 @@ Parameterization of concrete durations, tier thresholds, rollover triggers, back
 This baseline keeps retention and replay expectations explicit without pretending that current repository scaffolding already provides a production retention implementation.
 
 It remains aligned with the storage policy rule that application-aware backup and restore take precedence over hypervisor snapshots, the runbook rule that restore evidence must be reviewable, and the control-plane state model rule that approvals and execution are first-class records rather than incidental workflow logs.
+
+## 7. Audit Export Baseline
+
+Audit exports must derive from AegisOps authoritative control-plane records rather than tickets, assistant output, ML output, endpoint evidence, network evidence, browser state, optional extension state, downstream receipts, or component-local logs.
+
+Audit export reads must be snapshot-consistent. If the exporter cannot read the authoritative record chain from one committed snapshot, it must reject or escalate instead of stitching together mixed-state records.
+
+Exported evidence payloads must be labeled as subordinate evidence. The export may include bounded, redacted subordinate evidence context only to explain the authoritative AegisOps record; it must not promote subordinate evidence into approval, execution, reconciliation, case-lifecycle, or commercial-readiness authority.
+
+Export artifacts must not contain live secrets, placeholder credentials treated as valid credentials, raw authorization headers, private keys, workstation-local absolute paths, or unredacted source payloads that are not needed for the bounded audit baseline.
+
+The retention baseline is bounded. It does not promise unlimited raw log retention, enterprise SIEM archive behavior, customer portal packaging, compliance certification, or production storage lifecycle automation.
+
+The Phase 49.2 export schema records the bounded retention posture explicitly with `unlimited_log_retention` set to `false` and `compliance_certification_claim` set to `false`.
