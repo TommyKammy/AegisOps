@@ -85,18 +85,139 @@ class ExternalEvidenceBoundaryServiceDependencies(Protocol):
     ) -> tuple[str, ...]:
         ...
 
-    def _require_case_host_identifier(self, case: CaseRecord) -> str:
-        ...
 
-    def _require_explicit_misp_anchor_binding(
-        self,
-        *,
-        case: CaseRecord,
-        admitting_evidence: EvidenceRecord,
-        queried_object_type: str,
-        queried_object_value: str,
-    ) -> None:
-        ...
+def _normalize_misp_indicator_type(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    if normalized == "":
+        return None
+    return normalized.lower()
+
+
+def _normalize_misp_indicator_value(
+    object_type: str,
+    value: object,
+) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    if normalized == "":
+        return None
+    if object_type in {"domain", "ip", "sha1", "sha256", "md5"}:
+        return normalized.lower()
+    return normalized
+
+
+def _mapping_matches_misp_indicator(
+    mapping: Mapping[str, object],
+    *,
+    queried_object_type: str,
+    queried_object_value: str,
+) -> bool:
+    direct_type = _normalize_misp_indicator_type(mapping.get("type"))
+    direct_value = _normalize_misp_indicator_value(
+        queried_object_type,
+        mapping.get("value"),
+    )
+    if direct_type == queried_object_type and direct_value == queried_object_value:
+        return True
+
+    indicator_type = _normalize_misp_indicator_type(mapping.get("indicator_type"))
+    indicator_value = _normalize_misp_indicator_value(
+        queried_object_type,
+        mapping.get("indicator_value"),
+    )
+    return (
+        indicator_type == queried_object_type
+        and indicator_value == queried_object_value
+    )
+
+
+def _container_explicitly_cites_misp_indicator(
+    value: object,
+    *,
+    queried_object_type: str,
+    queried_object_value: str,
+) -> bool:
+    if isinstance(value, Mapping):
+        if _mapping_matches_misp_indicator(
+            value,
+            queried_object_type=queried_object_type,
+            queried_object_value=queried_object_value,
+        ):
+            return True
+        return any(
+            _container_explicitly_cites_misp_indicator(
+                child,
+                queried_object_type=queried_object_type,
+                queried_object_value=queried_object_value,
+            )
+            for child in value.values()
+        )
+    if isinstance(value, (list, tuple)):
+        return any(
+            _container_explicitly_cites_misp_indicator(
+                item,
+                queried_object_type=queried_object_type,
+                queried_object_value=queried_object_value,
+            )
+            for item in value
+        )
+    return False
+
+
+def _require_explicit_misp_anchor_binding(
+    *,
+    case: CaseRecord,
+    admitting_evidence: EvidenceRecord,
+    queried_object_type: object,
+    queried_object_value: object,
+) -> None:
+    if not isinstance(queried_object_type, str) or not queried_object_type.strip():
+        raise ValueError("queried_object_type must be a non-empty string")
+    normalized_type = queried_object_type.strip().lower()
+    normalized_value = _normalize_misp_indicator_value(
+        normalized_type,
+        queried_object_value,
+    )
+    if normalized_value is None:
+        raise ValueError("queried_object_value must be a non-empty string")
+    if _container_explicitly_cites_misp_indicator(
+        admitting_evidence.content,
+        queried_object_type=normalized_type,
+        queried_object_value=normalized_value,
+    ):
+        return
+    if _container_explicitly_cites_misp_indicator(
+        admitting_evidence.provenance,
+        queried_object_type=normalized_type,
+        queried_object_value=normalized_value,
+    ):
+        return
+    if _container_explicitly_cites_misp_indicator(
+        case.reviewed_context,
+        queried_object_type=normalized_type,
+        queried_object_value=normalized_value,
+    ):
+        return
+    raise ValueError(
+        "queried_object must be explicitly cited by the reviewed case or admitting evidence anchor"
+    )
+
+
+def _require_case_host_identifier(case: CaseRecord) -> str:
+    asset = case.reviewed_context.get("asset")
+    if not isinstance(asset, Mapping):
+        raise ValueError(
+            "reviewed case asset.host_identifier must explicitly bind osquery host context"
+        )
+    host_identifier = asset.get("host_identifier")
+    if not isinstance(host_identifier, str) or not host_identifier.strip():
+        raise ValueError(
+            "reviewed case asset.host_identifier must explicitly bind osquery host context"
+        )
+    return host_identifier
 
 
 class ExternalEvidenceBoundary:
@@ -134,9 +255,7 @@ class ExternalEvidenceBoundary:
             )
         with self._service._store.transaction(isolation_level="SERIALIZABLE"):
             case = self._service._require_reviewed_operator_case(case_id)
-            authoritative_host_identifier = self._service._require_case_host_identifier(
-                case
-            )
+            authoritative_host_identifier = _require_case_host_identifier(case)
             attachment = self._service._osquery_host_context_adapter.build_attachment(
                 case_id=case.case_id,
                 alert_id=case.alert_id,
@@ -278,7 +397,7 @@ class ExternalEvidenceBoundary:
                 raise ValueError(
                     "admitting_evidence_id must reference reviewed evidence, not previously attached MISP context"
                 )
-            self._service._require_explicit_misp_anchor_binding(
+            _require_explicit_misp_anchor_binding(
                 case=case,
                 admitting_evidence=admitting_evidence,
                 queried_object_type=queried_object_type,
@@ -410,9 +529,7 @@ class ExternalEvidenceBoundary:
 
         with self._service._store.transaction(isolation_level="SERIALIZABLE"):
             case = self._service._require_reviewed_operator_case(case_id)
-            authoritative_host_identifier = self._service._require_case_host_identifier(
-                case
-            )
+            authoritative_host_identifier = _require_case_host_identifier(case)
             if host_identifier != authoritative_host_identifier:
                 raise ValueError(
                     "host_identifier must match the authoritative reviewed case host binding"
@@ -623,9 +740,7 @@ class ExternalEvidenceBoundary:
                 "case_id",
             )
             case = self._service._require_reviewed_operator_case(case_id)
-            authoritative_host_identifier = self._service._require_case_host_identifier(
-                case
-            )
+            authoritative_host_identifier = _require_case_host_identifier(case)
             approved_host_identifier = self._service._require_non_empty_string(
                 action_request.target_scope.get("host_identifier"),
                 "action_request.target_scope.host_identifier",

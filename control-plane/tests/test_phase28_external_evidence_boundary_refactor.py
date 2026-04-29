@@ -242,6 +242,23 @@ class Phase28ExternalEvidenceBoundaryRefactorTests(unittest.TestCase):
             },
         )
 
+    def test_external_evidence_residual_helpers_are_not_owned_by_service(self) -> None:
+        residual_helper_names = (
+            "_normalize_misp_indicator_type",
+            "_normalize_misp_indicator_value",
+            "_mapping_matches_misp_indicator",
+            "_container_explicitly_cites_misp_indicator",
+            "_require_explicit_misp_anchor_binding",
+            "_require_case_host_identifier",
+        )
+
+        for helper_name in residual_helper_names:
+            with self.subTest(helper_name=helper_name):
+                self.assertFalse(
+                    hasattr(AegisOpsControlPlaneService, helper_name),
+                    f"{helper_name} should be owned by the external evidence boundary",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
