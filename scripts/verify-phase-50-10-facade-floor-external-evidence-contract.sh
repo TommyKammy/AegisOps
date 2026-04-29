@@ -20,7 +20,7 @@ required_headings=(
 
 required_phrases=(
   "- **Status**: Accepted"
-  "- **Date**: 2026-04-30"
+  "- **Date**: 2026-04-29"
   "- **Related Issues**: #987, #988"
   "- **Depends On**: #980"
   "ADR-0003 remains authoritative for the public facade-preservation exception."

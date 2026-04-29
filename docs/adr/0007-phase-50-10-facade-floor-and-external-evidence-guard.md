@@ -1,7 +1,7 @@
 # ADR-0007: Phase 50.10 Facade Floor and External Evidence Guard Contract
 
 - **Status**: Accepted
-- **Date**: 2026-04-30
+- **Date**: 2026-04-29
 - **Owners**: AegisOps maintainers
 - **Related Baseline**: `docs/requirements-baseline.md`
 - **Product**: AegisOps
@@ -137,4 +137,4 @@ Run `node <codex-supervisor-root>/dist/index.js issue-lint 988 --config <supervi
 - **Proposed By**: Codex for Issue #988
 - **Reviewed By**: AegisOps maintainers
 - **Approved By**: AegisOps maintainers
-- **Approval Date**: 2026-04-30
+- **Approval Date**: 2026-04-29
