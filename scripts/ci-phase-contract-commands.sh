@@ -11,6 +11,7 @@ bash scripts/verify-phase-6-initial-telemetry-slice-doc.sh
 bash scripts/verify-phase-6-opensearch-detector-artifacts.sh
 bash scripts/verify-phase-6-replay-to-notify-validation.sh
 bash scripts/verify-phase-25-multi-source-case-review-runbook.sh
+bash scripts/verify-phase-49-production-rbac-auth-contract.sh
 EOF
 }
 
@@ -61,5 +62,6 @@ bash scripts/test-verify-ci-phase-27-workflow-coverage.sh
 bash scripts/test-verify-phase-6-initial-telemetry-slice-doc.sh
 bash scripts/test-verify-phase-6-opensearch-detector-artifacts.sh
 bash scripts/test-verify-phase-6-replay-to-notify-validation.sh
+bash scripts/test-verify-phase-49-production-rbac-auth-contract.sh
 EOF
 }
