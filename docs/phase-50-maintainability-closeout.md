@@ -1,10 +1,10 @@
 # Phase 50 Maintainability Closeout
 
-Phase 50.9.6 closes the ordered maintainability hotspot reduction sequence governed by ADR-0004, ADR-0005, and ADR-0006.
+Phase 50.10.6 closes the ordered maintainability hotspot reduction sequence governed by ADR-0004, ADR-0005, ADR-0006, and ADR-0007.
 
 This closeout is validation and documentation only. It does not change runtime behavior, public APIs, approval, execution, reconciliation, assistant, ticket, ML, endpoint, network, browser, optional-evidence, restore, readiness, or operator authority.
 
-ADR-0004 governs the Phase 50 migration order and closeout validation. ADR-0005 governs the Phase 50.8 residual service migration contract. ADR-0006 governs the Phase 50.9 residual facade convergence and projection guard. ADR-0003 remains the facade-preservation exception authority for the remaining `service.py` baseline entry.
+ADR-0004 governs the Phase 50 migration order and closeout validation. ADR-0005 governs the Phase 50.8 residual service migration contract. ADR-0006 governs the Phase 50.9 residual facade convergence and projection guard. ADR-0007 governs the Phase 50.10 facade floor and external-evidence guard. ADR-0003 remains the facade-preservation exception authority for the remaining `service.py` baseline entry.
 
 ## Accepted Verifier State
 
@@ -12,18 +12,18 @@ The maintainability verifier still reports one remaining accepted hotspot:
 
 - `control-plane/aegisops_control_plane/service.py`
 
-That result is expected because `AegisOpsControlPlaneService` remains the public facade after the Phase 50.9 extraction and fencing work. The final Phase 50.9.6 closeout for #980 records the accepted residual ceiling as:
+That result is expected because `AegisOpsControlPlaneService` remains the public facade after the Phase 50.10 extraction, service-facade rewiring, and internal-caller rewiring work. The final Phase 50.10.6 closeout for #993 records the accepted residual ceiling as:
 
-- `max_lines=3158`
-- `max_effective_lines=2853`
-- `max_facade_methods=173`
+- `max_lines=3003`
+- `max_effective_lines=2704`
+- `max_facade_methods=167`
 - `facade_class=AegisOpsControlPlaneService`
 - `adr_exception=ADR-0003`
-- `phase=50.9.6`
+- `phase=50.10.6`
 
-No additional baseline entry is recorded for restore validation, HTTP surface, assistant, detection, operator inspection, operator UI route tests, or `control-plane/aegisops_control_plane/action_review_projection.py` because the verifier does not report those areas as current responsibility-growth candidates. The Phase 50.9.6 projection measurement is `projection lines=105` and `projection effective_lines=103`, so the projection split does not require a baseline entry.
+No additional baseline entry is recorded for restore validation, HTTP surface, assistant, detection, operator inspection, operator UI route tests, `control-plane/aegisops_control_plane/action_review_projection.py`, or `control-plane/aegisops_control_plane/external_evidence_boundary.py` because the verifier does not report those areas as current responsibility-growth candidates. The Phase 50.9.6 projection measurement is `projection lines=105` and `projection effective_lines=103`, so the projection split does not require a baseline entry. The Phase 50.10.6 external-evidence measurement is `external_evidence_boundary.py lines=216` and `external_evidence_boundary.py effective_lines=195`, so the external-evidence split does not require a baseline entry.
 
-The remaining accepted hotspot is not a general extension target. The residual helper pressure is concentrated in facade dispatch and authority-boundary guard helpers that still sit behind the public facade. Those helpers remain review-visible because they protect action review state, detection intake linkage, and fail-closed authoritative-state reads at the service boundary.
+The remaining accepted hotspot is not a general extension target. The residual helper pressure is concentrated in facade dispatch, compatibility entrypoints, and authority-boundary guard helpers that still sit behind the public facade. Those helpers remain review-visible because they protect action review state, detection intake linkage, external-evidence linkage, and fail-closed authoritative-state reads at the service boundary.
 
 ## Follow-Up Trigger
 
@@ -33,7 +33,7 @@ Any silent re-growth beyond the recorded ceiling must fail the verifier. The exp
 
 If a later extraction lowers the facade below the verifier threshold, maintainers should remove or lower the baseline only after confirming that the file no longer crosses the responsibility-growth threshold.
 
-If future work needs to add another action-review surface, intake pathway, authoritative restore/read guard, or cross-record projection helper to `service.py`, that is the follow-up trigger for another maintainability issue. The follow-up should extract or fence the directly linked helper cluster instead of using this exception as approval for new facade responsibility. If `action_review_projection.py` grows back toward the Phase 50.9 pre-split measurement of `max_lines=2034` or `max_effective_lines=1911`, the follow-up should split that directly linked projection cluster instead of silently recording a new projection hotspot exception.
+If future work needs to add another action-review surface, intake pathway, authoritative restore/read guard, external-evidence linkage path, or cross-record projection helper to `service.py`, that is the follow-up trigger for another maintainability issue. The follow-up should extract or fence the directly linked helper cluster instead of using this exception as approval for new facade responsibility. If `action_review_projection.py` grows back toward the Phase 50.9 pre-split measurement of `max_lines=2034` or `max_effective_lines=1911`, the follow-up should split that directly linked projection cluster instead of silently recording a new projection hotspot exception. If `external_evidence_boundary.py` grows back toward the pre-Phase 50.10 measurement of `max_lines=1083` or `max_effective_lines=1033`, the follow-up should split the directly linked MISP, osquery, or endpoint-evidence helper cluster instead of recording a silent external-evidence hotspot exception.
 
 ## Verification Evidence
 

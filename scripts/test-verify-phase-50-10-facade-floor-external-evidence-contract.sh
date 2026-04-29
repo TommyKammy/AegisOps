@@ -30,6 +30,36 @@ write_baseline() {
     >"${target}/docs/maintainability-hotspot-baseline.txt"
 }
 
+write_closeout_baseline() {
+  local target="$1"
+
+  mkdir -p "${target}/docs"
+  printf '%s\n' \
+    "control-plane/aegisops_control_plane/service.py max_lines=3003 max_effective_lines=2704 max_facade_methods=167 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.10.6 issue=#993" \
+    >"${target}/docs/maintainability-hotspot-baseline.txt"
+}
+
+write_closeout_evidence() {
+  local target="$1"
+
+  mkdir -p "${target}/docs"
+  cat >"${target}/docs/phase-50-maintainability-closeout.md" <<'EOF'
+# Phase 50 Maintainability Closeout
+
+Phase 50.10.6 closes the ordered maintainability hotspot reduction sequence.
+
+The final Phase 50.10.6 closeout for #993 records the accepted residual ceiling as:
+
+- `max_lines=3003`
+- `max_effective_lines=2704`
+- `max_facade_methods=167`
+
+The Phase 50.10.6 external-evidence measurement is `external_evidence_boundary.py lines=216` and `external_evidence_boundary.py effective_lines=195`, so the external-evidence split does not require a baseline entry.
+
+Any silent re-growth beyond the recorded ceiling must fail the verifier. The expected response is another decomposition decision or maintainability backlog.
+EOF
+}
+
 create_valid_repo() {
   local target="$1"
 
@@ -193,6 +223,12 @@ valid_repo="${workdir}/valid"
 create_valid_repo "${valid_repo}"
 assert_passes "${valid_repo}"
 
+final_closeout_repo="${workdir}/final-closeout"
+create_valid_repo "${final_closeout_repo}"
+write_closeout_baseline "${final_closeout_repo}"
+write_closeout_evidence "${final_closeout_repo}"
+assert_passes "${final_closeout_repo}"
+
 missing_contract_repo="${workdir}/missing-contract"
 create_valid_repo "${missing_contract_repo}"
 rm "${missing_contract_repo}/docs/adr/0007-phase-50-10-facade-floor-and-external-evidence-guard.md"
@@ -224,6 +260,23 @@ printf '%s\n' \
 assert_fails_with \
   "${premature_service_baseline_repo}" \
   "Phase 50.10 contract forbids refreshing the service.py baseline before implementation evidence exists."
+
+missing_closeout_evidence_repo="${workdir}/missing-closeout-evidence"
+create_valid_repo "${missing_closeout_evidence_repo}"
+write_closeout_baseline "${missing_closeout_evidence_repo}"
+assert_fails_with \
+  "${missing_closeout_evidence_repo}" \
+  "Phase 50.10 final baseline refresh requires closeout evidence"
+
+incomplete_closeout_evidence_repo="${workdir}/incomplete-closeout-evidence"
+create_valid_repo "${incomplete_closeout_evidence_repo}"
+write_closeout_baseline "${incomplete_closeout_evidence_repo}"
+write_closeout_evidence "${incomplete_closeout_evidence_repo}"
+perl -0pi -e 's/external-evidence split does not require a baseline entry//g' \
+  "${incomplete_closeout_evidence_repo}/docs/phase-50-maintainability-closeout.md"
+assert_fails_with \
+  "${incomplete_closeout_evidence_repo}" \
+  "Phase 50.10 final closeout evidence is missing: external-evidence split does not require a baseline entry"
 
 premature_external_baseline_repo="${workdir}/premature-external-baseline"
 create_valid_repo "${premature_external_baseline_repo}"

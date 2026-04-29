@@ -211,6 +211,28 @@ Any silent re-growth requires another decomposition decision.
 EOF
 assert_passes "${superseding_closeout_repo}"
 
+phase50_10_superseding_closeout_repo="${workdir}/phase50-10-superseding-closeout"
+create_valid_repo "${phase50_10_superseding_closeout_repo}"
+printf '%s\n' \
+  "control-plane/aegisops_control_plane/service.py max_lines=3003 max_effective_lines=2704 max_facade_methods=167 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.10.6 issue=#993" \
+  >"${phase50_10_superseding_closeout_repo}/docs/maintainability-hotspot-baseline.txt"
+cat >"${phase50_10_superseding_closeout_repo}/docs/phase-50-maintainability-closeout.md" <<'EOF'
+# Phase 50 Maintainability Closeout
+
+Phase 50.10.6 records the final #993 closeout baseline.
+
+- `max_lines=3003`
+- `max_effective_lines=2704`
+- `max_facade_methods=167`
+
+The remaining accepted hotspot is the facade dispatch, compatibility entrypoints, and authority-boundary guard helpers.
+
+The external-evidence split does not require a baseline entry.
+
+Any silent re-growth requires another decomposition decision.
+EOF
+assert_passes "${phase50_10_superseding_closeout_repo}"
+
 superseding_regrowth_repo="${workdir}/superseding-regrowth"
 create_valid_repo "${superseding_regrowth_repo}"
 printf '%s\n' \
@@ -234,6 +256,30 @@ EOF
 assert_fails_with \
   "${superseding_regrowth_repo}" \
   "Phase 50.9 superseding closeout baseline must remain at or below the accepted #980 ceiling."
+
+phase50_10_superseding_regrowth_repo="${workdir}/phase50-10-superseding-regrowth"
+create_valid_repo "${phase50_10_superseding_regrowth_repo}"
+printf '%s\n' \
+  "control-plane/aegisops_control_plane/service.py max_lines=3004 max_effective_lines=2705 max_facade_methods=168 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.10.6 issue=#993" \
+  >"${phase50_10_superseding_regrowth_repo}/docs/maintainability-hotspot-baseline.txt"
+cat >"${phase50_10_superseding_regrowth_repo}/docs/phase-50-maintainability-closeout.md" <<'EOF'
+# Phase 50 Maintainability Closeout
+
+Phase 50.10.6 records a regrown #993 closeout baseline.
+
+- `max_lines=3004`
+- `max_effective_lines=2705`
+- `max_facade_methods=168`
+
+The remaining accepted hotspot is the facade dispatch, compatibility entrypoints, and authority-boundary guard helpers.
+
+The external-evidence split does not require a baseline entry.
+
+Any silent re-growth requires another decomposition decision.
+EOF
+assert_fails_with \
+  "${phase50_10_superseding_regrowth_repo}" \
+  "Phase 50.10 superseding closeout baseline must remain at or below the accepted #993 ceiling."
 
 missing_contract_repo="${workdir}/missing-contract"
 create_valid_repo "${missing_contract_repo}"
