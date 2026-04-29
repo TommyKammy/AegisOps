@@ -260,6 +260,7 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
             and isinstance(node.func, ast.Name)
             and node.func.id
             in {
+                "AITraceLifecycleService",
                 "ActionLifecycleWriteCoordinator",
                 "ActionOrchestrationBoundary",
                 "ActionReviewWriteSurface",
@@ -348,8 +349,13 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
             calls = [
                 node
                 for node in ast.walk(service_method)
-                if isinstance(node, ast.Attribute)
-                and node.attr == helper_name
+                if isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == helper_name
+                and isinstance(node.func.value, ast.Attribute)
+                and node.func.value.attr == "_detection_intake_service"
+                and isinstance(node.func.value.value, ast.Name)
+                and node.func.value.value.id == "self"
             ]
             self.assertEqual(
                 len(calls),

@@ -132,7 +132,9 @@ def build_control_plane_service_composition(
     store: Any | None,
     dependencies: ControlPlaneServiceCompositionDependencies,
 ) -> ControlPlaneServiceComposition:
-    resolved_store = store or PostgresControlPlaneStore(config.postgres_dsn)
+    resolved_store = (
+        store if store is not None else PostgresControlPlaneStore(config.postgres_dsn)
+    )
     reconciliation = N8NReconciliationAdapter(config.n8n_base_url)
     shuffle = ShuffleActionAdapter(config.shuffle_base_url)
     isolated_executor = IsolatedExecutorAdapter(config.isolated_executor_base_url)

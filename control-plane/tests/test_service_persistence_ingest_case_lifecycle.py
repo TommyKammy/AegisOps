@@ -21,7 +21,30 @@ for name, value in vars(support).items():
         globals()[name] = value
 
 
+class _FalseyStoreAdapter:
+    def __init__(self, inner: object) -> None:
+        self._inner = inner
+
+    def __bool__(self) -> bool:
+        return False
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._inner, name)
+
+
 class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
+    def test_service_preserves_explicit_falsey_store_adapter(self) -> None:
+        store, _ = support.make_store()
+        falsey_store = _FalseyStoreAdapter(store)
+        service = support.AegisOpsControlPlaneService(
+            support.RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=falsey_store,
+        )
+
+        self.assertIs(service._store, falsey_store)
+        self.assertIs(service._ai_trace_lifecycle_service._store, falsey_store)
+        self.assertIs(service._evidence_linkage_service._store, falsey_store)
+
     def test_service_initializes_dedicated_detection_intake_boundary(self) -> None:
         store, _ = support.make_store()
         service = support.AegisOpsControlPlaneService(
