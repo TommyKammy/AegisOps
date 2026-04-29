@@ -619,6 +619,48 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
                 f"{helper_name} should remain only as a facade compatibility delegate",
             )
 
+    def test_phase50_10_5_lifecycle_transition_callers_bypass_facade_delegates(
+        self,
+    ) -> None:
+        service_source = self._read("control-plane/aegisops_control_plane/service.py")
+        composition_source = self._read(
+            "control-plane/aegisops_control_plane/service_composition.py"
+        )
+        endpoint_source = self._read(
+            "control-plane/aegisops_control_plane/external_evidence_endpoint.py"
+        )
+        service_tree = ast.parse(service_source)
+        service_class = next(
+            node
+            for node in service_tree.body
+            if isinstance(node, ast.ClassDef)
+            and node.name == "AegisOpsControlPlaneService"
+        )
+        service_method_names = {
+            node.name
+            for node in service_class.body
+            if isinstance(node, ast.FunctionDef)
+        }
+
+        self.assertNotIn("_build_lifecycle_transition_record", service_method_names)
+        self.assertNotIn("_build_lifecycle_transition_records", service_method_names)
+        self.assertIn(
+            "lifecycle_transition_helper.build_lifecycle_transition_record",
+            composition_source,
+        )
+        self.assertIn(
+            "transition_helper.build_lifecycle_transition_records",
+            endpoint_source,
+        )
+        self.assertNotIn(
+            "service._build_lifecycle_transition_record",
+            composition_source,
+        )
+        self.assertNotIn(
+            "self._service._build_lifecycle_transition_records",
+            endpoint_source,
+        )
+
     def test_phase50_5_second_hotspot_boundary_methods_are_split(self) -> None:
         targets = {
             (

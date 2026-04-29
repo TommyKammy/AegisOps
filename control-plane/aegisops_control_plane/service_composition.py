@@ -261,6 +261,20 @@ def build_control_plane_service_composition(
         config=config,
         store=resolved_store,
     )
+    lifecycle_transition_helper = (
+        detection_intake_service.lifecycle_transition_helper
+    )
+
+    def synthesize_lifecycle_transition_record(
+        record: ControlPlaneRecord,
+        initial_transitioned_at_fallback: Any | None = None,
+    ) -> Any:
+        return lifecycle_transition_helper.build_lifecycle_transition_record(
+            record,
+            existing_record=None,
+            initial_transitioned_at_fallback=initial_transitioned_at_fallback,
+        )
+
     restore_readiness_service = RestoreReadinessService(
         config=config,
         store=resolved_store,
@@ -292,13 +306,7 @@ def build_control_plane_service_composition(
         ),
         record_types_by_family=dependencies.record_types_by_family,
         find_duplicate_strings=dependencies.find_duplicate_strings,
-        synthesize_lifecycle_transition_record=(
-            lambda record, initial_transitioned_at_fallback=None: service._build_lifecycle_transition_record(
-                record,
-                existing_record=None,
-                initial_transitioned_at_fallback=initial_transitioned_at_fallback,
-            )
-        ),
+        synthesize_lifecycle_transition_record=synthesize_lifecycle_transition_record,
         assistant_ids_from_mapping=service._assistant_ids_from_mapping,
         inspect_case_detail=lambda case_id: service.inspect_case_detail(case_id),
         inspect_assistant_context=(
