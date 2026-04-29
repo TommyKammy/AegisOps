@@ -79,6 +79,29 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             "RestoreReadinessService should delegate readiness projection to a dedicated collaborator",
         )
 
+    def test_service_decomposes_restore_validation_into_internal_helpers(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        backup_restore_flow = (
+            service._restore_readiness_service._backup_restore_flow
+        )
+
+        for helper_name in (
+            "_collect_restore_record_families",
+            "_reject_duplicate_restore_identifiers",
+            "_validate_restore_record_links",
+            "_validate_restore_lifecycle_transitions",
+            "_collect_restore_drill_verified_ids",
+            "_derive_restore_drill_readiness_status",
+        ):
+            with self.subTest(helper_name=helper_name):
+                self.assertTrue(hasattr(backup_restore_flow, helper_name))
+
     def test_service_routes_runtime_restore_and_readiness_through_diagnostics_boundary(
         self,
     ) -> None:
