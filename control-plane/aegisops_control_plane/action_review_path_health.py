@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Iterable, Mapping
+from typing import TYPE_CHECKING, Iterable, Mapping
 
 from .models import (
     ActionExecutionRecord,
@@ -9,6 +9,9 @@ from .models import (
     ApprovalDecisionRecord,
     ReconciliationRecord,
 )
+
+if TYPE_CHECKING:
+    from .service import AegisOpsControlPlaneService
 
 
 def _action_review_path_health_entry(path: Mapping[str, str]) -> dict[str, str]:

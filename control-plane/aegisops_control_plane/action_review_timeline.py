@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Mapping
+from typing import TYPE_CHECKING, Mapping
 
 from .models import (
     ActionExecutionRecord,
@@ -9,6 +9,9 @@ from .models import (
     ApprovalDecisionRecord,
     ReconciliationRecord,
 )
+
+if TYPE_CHECKING:
+    from .service import AegisOpsControlPlaneService
 
 
 def _action_review_stage_snapshot(
