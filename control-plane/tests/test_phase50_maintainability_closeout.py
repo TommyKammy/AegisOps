@@ -50,13 +50,13 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
                 return metadata
         raise AssertionError("service.py hotspot baseline entry not found")
 
-    def test_baseline_records_phase50_closeout_ceiling(self) -> None:
+    def test_baseline_records_phase50_9_closeout_ceiling(self) -> None:
         service_text = self._read("control-plane/aegisops_control_plane/service.py")
         metadata = self._baseline_metadata()
 
         self.assertEqual(metadata["adr_exception"], "ADR-0003")
-        self.assertEqual(metadata["phase"], "50.8.6")
-        self.assertEqual(metadata["issue"], "#967")
+        self.assertEqual(metadata["phase"], "50.9.6")
+        self.assertEqual(metadata["issue"], "#980")
         self.assertEqual(metadata["facade_class"], "AegisOpsControlPlaneService")
         self.assertLessEqual(len(service_text.splitlines()), int(metadata["max_lines"]))
         self.assertLessEqual(
@@ -67,23 +67,29 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
             self._facade_method_count(metadata["facade_class"]),
             int(metadata["max_facade_methods"]),
         )
+        self.assertLess(int(metadata["max_lines"]), 3505)
+        self.assertLess(int(metadata["max_effective_lines"]), 3182)
+        self.assertLess(int(metadata["max_facade_methods"]), 185)
 
-    def test_closeout_notes_preserve_remaining_hotspot_and_trigger(self) -> None:
+    def test_closeout_notes_preserve_phase50_9_hotspot_and_trigger(self) -> None:
         closeout = self._read("docs/phase-50-maintainability-closeout.md")
 
         for required in (
-            "Phase 50.8.6",
+            "Phase 50.9.6",
             "control-plane/aegisops_control_plane/service.py",
+            "control-plane/aegisops_control_plane/action_review_projection.py",
             "AegisOpsControlPlaneService",
-            "max_lines=3505",
-            "max_effective_lines=3182",
-            "max_facade_methods=185",
+            "max_lines=3158",
+            "max_effective_lines=2853",
+            "max_facade_methods=173",
+            "projection lines=105",
+            "projection effective_lines=103",
             "ADR-0004",
             "ADR-0003",
-            "#967",
+            "#980",
             "remaining accepted hotspot",
-            "action review projection and visibility helper cluster",
-            "intake and authoritative-state guard helpers",
+            "facade dispatch and authority-boundary guard helpers",
+            "projection split does not require a baseline entry",
             "silent re-growth",
             "another decomposition decision",
             "bash scripts/verify-maintainability-hotspots.sh",

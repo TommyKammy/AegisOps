@@ -127,9 +127,7 @@ issue="$(metadata_value issue)"
 
 if [[
   "${facade_class}" != "AegisOpsControlPlaneService" ||
-  "${adr_exception}" != "ADR-0003" ||
-  "${phase}" != "50.8.6" ||
-  "${issue}" != "#967"
+  "${adr_exception}" != "ADR-0003"
 ]]; then
   echo "Phase 50.8 contract requires the Phase 50.7 service.py ceiling to remain unchanged until implementation evidence exists. After implementation evidence exists, it requires a final Phase 50.8.6 closeout baseline for #967." >&2
   exit 1
@@ -152,17 +150,42 @@ if [[ ! -f "${closeout_path}" ]]; then
   exit 1
 fi
 
-closeout_required_phrases=(
-  "Phase 50.8.6"
-  "#967"
-  "\`max_lines=${max_lines}\`"
-  "\`max_effective_lines=${max_effective_lines}\`"
-  "\`max_facade_methods=${max_facade_methods}\`"
-  "action review projection and visibility helper cluster"
-  "intake and authoritative-state guard helpers"
-  "silent re-growth"
-  "another decomposition decision"
-)
+if [[ "${phase}" == "50.8.6" && "${issue}" == "#967" ]]; then
+  closeout_required_phrases=(
+    "Phase 50.8.6"
+    "#967"
+    "\`max_lines=${max_lines}\`"
+    "\`max_effective_lines=${max_effective_lines}\`"
+    "\`max_facade_methods=${max_facade_methods}\`"
+    "action review projection and visibility helper cluster"
+    "intake and authoritative-state guard helpers"
+    "silent re-growth"
+    "another decomposition decision"
+  )
+elif [[ "${phase}" == "50.9.6" && "${issue}" == "#980" ]]; then
+  if [[
+    "${max_lines}" -ge 3505 ||
+    "${max_effective_lines}" -ge 3182 ||
+    "${max_facade_methods}" -ge 185
+  ]]; then
+    echo "Phase 50.9 superseding closeout baseline must remain lower than the Phase 50.8.6 ceiling." >&2
+    exit 1
+  fi
+  closeout_required_phrases=(
+    "Phase 50.9.6"
+    "#980"
+    "\`max_lines=${max_lines}\`"
+    "\`max_effective_lines=${max_effective_lines}\`"
+    "\`max_facade_methods=${max_facade_methods}\`"
+    "facade dispatch and authority-boundary guard helpers"
+    "projection split does not require a baseline entry"
+    "silent re-growth"
+    "another decomposition decision"
+  )
+else
+  echo "Phase 50.8 contract requires a final Phase 50.8.6 closeout baseline for #967 or a lower superseding Phase 50.9.6 closeout baseline for #980." >&2
+  exit 1
+fi
 
 for phrase in "${closeout_required_phrases[@]}"; do
   if ! grep -Fq -- "${phrase}" "${closeout_path}"; then

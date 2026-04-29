@@ -21,14 +21,14 @@ required_headings=(
 required_phrases=(
   "- **Status**: Accepted"
   "- **Date**: 2026-04-29"
-  "- **Related Issues**: #974, #975"
+  "- **Related Issues**: #974, #975, #980"
   "- **Depends On**: #967"
   "Phase 50.8.6 closed #967 and recorded the current residual \`service.py\` ceiling in \`docs/maintainability-hotspot-baseline.txt\`."
   "ADR-0003 remains authoritative for the public facade-preservation exception."
   "ADR-0004 remains authoritative for the Phase 50 ordered hotspot-reduction rule."
   "ADR-0005 remains authoritative for the Phase 50.8 residual helper migration contract and the rule that baseline refreshes require implementation evidence."
   "\`docs/maintainability-decomposition-thresholds.md\` remains the governing hotspot trigger policy."
-  "This ADR does not refresh the baseline because Phase 50.9 implementation evidence does not exist yet."
+  "This ADR did not refresh the baseline before implementation evidence existed. Phase 50.9.6 closeout issue #980 later refreshed the baseline after the extraction sequence landed."
   "The residual Phase 50.9 target clusters are:"
   "- external evidence helper cluster"
   "- persistence and record-shaping helper cluster"
@@ -38,7 +38,7 @@ required_phrases=(
   "Public service entrypoints, runtime behavior, configuration shape, authority semantics, projection response semantics, and durable-state side effects remain unchanged."
   "AegisOps control-plane records remain authoritative workflow truth."
   "Tickets, assistant output, ML, endpoint evidence, network evidence, browser state, receipts, optional extension status, Wazuh, Shuffle, Zammad, operator-facing summaries, badges, counters, and projections remain subordinate context."
-  "The current Phase 50.8.6 ceiling remains:"
+  "The Phase 50.8.6 starting ceiling was:"
   "- \`max_lines=3505\`"
   "- \`max_effective_lines=3182\`"
   "- \`max_facade_methods=185\`"
@@ -48,6 +48,12 @@ required_phrases=(
   "- \`max_facade_methods <= 160\`"
   "A Phase 50.9 closeout may record a lower exception only if it names the unresolved cluster, records the measured line, effective-line, and facade-method counts, and keeps the exception lower than the Phase 50.8.6 ceiling."
   "Any \`service.py\` baseline refresh before Phase 50.9 implementation evidence exists is forbidden."
+  "Phase 50.9.6 closeout issue #980 records the accepted residual \`service.py\` ceiling as:"
+  "- \`max_lines=3158\`"
+  "- \`max_effective_lines=2853\`"
+  "- \`max_facade_methods=173\`"
+  "- \`phase=50.9.6\`"
+  "- \`issue=#980\`"
   "The action-review projection split target is \`control-plane/aegisops_control_plane/action_review_projection.py\`."
   "The projection split must preserve directly linked authoritative action-review records as the anchor for approval, execution, reconciliation, mismatch inspection, path health, coordination outcome, and runtime visibility surfaces."
   "The projection split must not widen advisory context, recommendation lineage, evidence anchors, reconciliation subject linkage, or operator-facing detail surfaces beyond directly linked authoritative records."
@@ -59,6 +65,7 @@ required_phrases=(
   "- the recorded projection ceiling is lower than the pre-Phase 50.9 projection measurement of \`max_lines=2034\` and \`max_effective_lines=1911\`;"
   "- the baseline entry names a Phase 50.9 closeout phase and issue;"
   "- the closeout explicitly states why another split would be riskier than accepting the temporary projection hotspot."
+  "Phase 50.9.6 measured \`control-plane/aegisops_control_plane/action_review_projection.py\` at \`projection lines=105\` and \`projection effective_lines=103\`, which is below the verifier threshold and below the pre-Phase 50.9 projection measurement. No projection baseline entry is recorded."
   "The Phase 50.9 migration order is:"
   "1. external evidence helper cluster"
   "2. persistence and record-shaping helper cluster"
@@ -73,6 +80,7 @@ required_phrases=(
   "Run \`bash scripts/test-verify-phase-50-9-residual-facade-convergence-contract.sh\`."
   "Run \`bash scripts/verify-maintainability-hotspots.sh\`."
   "Run \`node <codex-supervisor-root>/dist/index.js issue-lint 975 --config <supervisor-config-path>\`."
+  "Run \`node <codex-supervisor-root>/dist/index.js issue-lint 980 --config <supervisor-config-path>\`."
   "No production code extraction is approved by this ADR."
   "No projection module split is approved by this ADR."
   "No approval, execution, reconciliation, assistant, ticket, ML, endpoint, network, browser, optional-evidence, restore, readiness, detection, external-evidence, or operator authority behavior is changed."
@@ -105,19 +113,19 @@ for phrase in "${required_phrases[@]}"; do
   fi
 done
 
-service_baseline_entry="control-plane/aegisops_control_plane/service.py max_lines=3505 max_effective_lines=3182 max_facade_methods=185 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.8.6 issue=#967"
+service_baseline_entry="control-plane/aegisops_control_plane/service.py max_lines=3158 max_effective_lines=2853 max_facade_methods=173 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.9.6 issue=#980"
 service_entry="$(grep -E '^control-plane/aegisops_control_plane/service.py[[:space:]]' "${baseline_path}" || true)"
 service_entry_count="$(printf '%s\n' "${service_entry}" | sed '/^$/d' | wc -l | tr -d ' ')"
 if [[ "${service_entry_count}" -eq 0 ]]; then
-  echo "Phase 50.9 contract requires the Phase 50.8.6 service.py hotspot baseline entry." >&2
+  echo "Phase 50.9 closeout requires the accepted Phase 50.9.6 service.py hotspot baseline entry." >&2
   exit 1
 fi
 if [[ "${service_entry_count}" -ne 1 ]]; then
-  echo "Phase 50.9 contract requires exactly one service.py hotspot baseline entry." >&2
+  echo "Phase 50.9 closeout requires exactly one service.py hotspot baseline entry." >&2
   exit 1
 fi
 if [[ "${service_entry}" != "${service_baseline_entry}" ]]; then
-  echo "Phase 50.9 contract requires the Phase 50.8.6 service.py ceiling to remain unchanged until implementation evidence exists." >&2
+  echo "Phase 50.9 closeout requires the accepted Phase 50.9.6 service.py ceiling after implementation evidence exists." >&2
   exit 1
 fi
 
