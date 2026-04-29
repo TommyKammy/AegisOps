@@ -160,6 +160,26 @@ valid_repo="${workdir}/valid"
 create_valid_repo "${valid_repo}"
 assert_passes "${valid_repo}"
 
+final_closeout_repo="${workdir}/final-closeout"
+create_valid_repo "${final_closeout_repo}"
+printf '%s\n' \
+  "control-plane/aegisops_control_plane/service.py max_lines=3505 max_effective_lines=3182 max_facade_methods=185 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.8.6 issue=#967" \
+  >"${final_closeout_repo}/docs/maintainability-hotspot-baseline.txt"
+cat >"${final_closeout_repo}/docs/phase-50-maintainability-closeout.md" <<'EOF'
+# Phase 50 Maintainability Closeout
+
+Phase 50.8.6 records the final #967 closeout baseline.
+
+- `max_lines=3505`
+- `max_effective_lines=3182`
+- `max_facade_methods=185`
+
+The remaining accepted hotspot is the action review projection and visibility helper cluster plus intake and authoritative-state guard helpers.
+
+Any silent re-growth requires another decomposition decision.
+EOF
+assert_passes "${final_closeout_repo}"
+
 missing_contract_repo="${workdir}/missing-contract"
 create_valid_repo "${missing_contract_repo}"
 rm "${missing_contract_repo}/docs/adr/0005-phase-50-8-residual-service-hotspot-migration-contract.md"

@@ -66,7 +66,7 @@ class Phase49ServiceDecompositionCloseoutTests(unittest.TestCase):
         metadata = self._baseline_metadata()
 
         self.assertEqual(metadata["adr_exception"], "ADR-0003")
-        self.assertEqual(metadata["phase"], "50.8.5")
+        self.assertEqual(metadata["phase"], "50.8.6")
         self.assertEqual(metadata["facade_class"], "AegisOpsControlPlaneService")
         self.assertEqual(int(metadata["max_lines"]), len(service_text.splitlines()))
         self.assertEqual(
