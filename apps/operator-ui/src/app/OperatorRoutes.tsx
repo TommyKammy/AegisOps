@@ -22,6 +22,7 @@ import {
   createSessionStore,
 } from "../auth/session";
 import type { DataProvider } from "react-admin";
+import type { OperatorUiEventLogObserver } from "./operatorUiEvents";
 import {
   createOperatorTaskActionClient,
   type OperatorTaskActionClient,
@@ -31,6 +32,7 @@ export interface OperatorAppDependencies {
   authProvider: AuthProvider;
   config: OperatorUiConfig;
   dataProvider: DataProvider;
+  onEventLogEntriesChange?: OperatorUiEventLogObserver;
   sessionStore: SessionStore;
   taskActionClient: OperatorTaskActionClient;
 }
@@ -38,6 +40,7 @@ export interface OperatorAppDependencies {
 interface OperatorDependencyOverrides {
   config?: Partial<OperatorUiConfig>;
   fetchFn?: typeof fetch;
+  onEventLogEntriesChange?: OperatorUiEventLogObserver;
   redirector?: Redirector;
 }
 
@@ -67,6 +70,7 @@ export function createDefaultDependencies(
     authProvider,
     config,
     dataProvider,
+    onEventLogEntriesChange: overrides.onEventLogEntriesChange,
     sessionStore,
     taskActionClient,
   };
@@ -190,6 +194,7 @@ function ProtectedOperatorRoute({
   authProvider,
   config,
   dataProvider,
+  onEventLogEntriesChange,
   sessionStore,
   taskActionClient,
 }: OperatorAppDependencies) {
@@ -277,6 +282,7 @@ function ProtectedOperatorRoute({
       authProvider={authProvider}
       basePath={config.basePath}
       dataProvider={dataProvider}
+      onEventLogEntriesChange={onEventLogEntriesChange}
       operatorIdentity={session?.identity ?? ""}
       operatorRoles={session?.roles ?? []}
       taskActionClient={taskActionClient}
@@ -289,7 +295,14 @@ export function OperatorRoutes({
 }: {
   dependencies: OperatorAppDependencies;
 }) {
-  const { authProvider, config, dataProvider, sessionStore, taskActionClient } = dependencies;
+  const {
+    authProvider,
+    config,
+    dataProvider,
+    onEventLogEntriesChange,
+    sessionStore,
+    taskActionClient,
+  } = dependencies;
 
   return (
     <Routes>
@@ -311,6 +324,7 @@ export function OperatorRoutes({
             authProvider={authProvider}
             config={config}
             dataProvider={dataProvider}
+            onEventLogEntriesChange={onEventLogEntriesChange}
             sessionStore={sessionStore}
             taskActionClient={taskActionClient}
           />

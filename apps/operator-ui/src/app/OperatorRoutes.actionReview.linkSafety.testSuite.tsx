@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { createDefaultDependencies } from "./OperatorRoutes";
+import type { OperatorUiEventRecord } from "./operatorUiEvents";
 import {
   createAuthorizedFetch,
   renderOperatorRoute,
@@ -11,6 +12,7 @@ export function registerOperatorRoutesActionReviewLinkSafetyTests() {
   describe("action review link safety routes", () => {
     it("sanitizes bounded external-link logging so secret-like URL suffixes stay out of the UI event log", async () => {
       const user = userEvent.setup();
+      let eventLogEntries: OperatorUiEventRecord[] = [];
       const dependencies = createDefaultDependencies({
         fetchFn: createAuthorizedFetch(
           {
@@ -43,6 +45,9 @@ export function registerOperatorRoutesActionReviewLinkSafetyTests() {
             subject: "operator-8",
           },
         ),
+        onEventLogEntriesChange: (entries) => {
+          eventLogEntries = entries;
+        },
       });
 
       renderOperatorRoute(
@@ -84,6 +89,19 @@ export function registerOperatorRoutesActionReviewLinkSafetyTests() {
       expect(
         eventLogCard,
       ).not.toHaveTextContent(/query-secret|super-secret-token/);
+      const externalOpenEntry = eventLogEntries.find(
+        (entry) => entry.kind === "bounded_external_open",
+      );
+      expect(externalOpenEntry).toMatchObject({
+        kind: "bounded_external_open",
+        label: "Open downstream coordination reference",
+        route: "browser",
+        target:
+          "https://tickets.example.invalid/incidents/246/<redacted-path-suffix>",
+      });
+      expect(JSON.stringify(externalOpenEntry)).not.toMatch(
+        /query-secret|super-secret-token/,
+      );
     });
 
     it("keeps unsafe coordination reference schemes non-clickable", async () => {

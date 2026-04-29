@@ -230,10 +230,21 @@ export function registerOperatorRoutesControlPlaneReadOnlyTests() {
       expect(screen.getByText("Optional network evidence")).toBeInTheDocument();
       expect(screen.getAllByText("Disabled By Default")).toHaveLength(2);
       expect(screen.queryByText("ML shadow")).not.toBeInTheDocument();
-      expect(fetchFn).toHaveBeenCalledWith(
-        "/diagnostics/readiness?order=ASC&page=1&per_page=1&sort=status",
-        expect.any(Object),
+      const readinessCall = fetchFn.mock.calls.find(([url]) =>
+        String(url).startsWith("/diagnostics/readiness"),
       );
+      expect(readinessCall).toBeDefined();
+      const [readinessUrl, readinessOptions] = readinessCall!;
+      const parsedReadinessUrl = new URL(
+        String(readinessUrl),
+        "http://operator-ui.local",
+      );
+      expect(parsedReadinessUrl.pathname).toBe("/diagnostics/readiness");
+      expect(parsedReadinessUrl.searchParams.get("order")).toBe("ASC");
+      expect(parsedReadinessUrl.searchParams.get("page")).toBe("1");
+      expect(parsedReadinessUrl.searchParams.get("per_page")).toBe("1");
+      expect(parsedReadinessUrl.searchParams.get("sort")).toBe("status");
+      expect(readinessOptions).toEqual(expect.any(Object));
     });
 
     it("renders reconciliation mismatch visibility from reviewed records", async () => {
