@@ -1,10 +1,10 @@
 # Phase 50 Maintainability Closeout
 
-Phase 50.8.5 continues the ordered maintainability hotspot reduction sequence governed by ADR-0004.
+Phase 50.8.6 closes the ordered maintainability hotspot reduction sequence governed by ADR-0004 and ADR-0005.
 
 This closeout is validation and documentation only. It does not change runtime behavior, public APIs, approval, execution, reconciliation, assistant, ticket, ML, endpoint, network, browser, optional-evidence, restore, readiness, or operator authority.
 
-ADR-0004 governs the Phase 50 migration order and closeout validation. ADR-0003 remains the facade-preservation exception authority for the remaining `service.py` baseline entry.
+ADR-0004 governs the Phase 50 migration order and closeout validation. ADR-0005 governs the Phase 50.8 residual service migration contract. ADR-0003 remains the facade-preservation exception authority for the remaining `service.py` baseline entry.
 
 ## Accepted Verifier State
 
@@ -12,16 +12,18 @@ The maintainability verifier still reports one remaining accepted hotspot:
 
 - `control-plane/aegisops_control_plane/service.py`
 
-That result is expected because `AegisOpsControlPlaneService` remains the public facade after the Phase 50 extraction and fencing work. Phase 50.8.5 lowered the accepted residual ceiling for #966 to:
+That result is expected because `AegisOpsControlPlaneService` remains the public facade after the Phase 50.8 extraction and fencing work. The final Phase 50.8.6 closeout for #967 records the accepted residual ceiling as:
 
 - `max_lines=3505`
 - `max_effective_lines=3182`
 - `max_facade_methods=185`
 - `facade_class=AegisOpsControlPlaneService`
 - `adr_exception=ADR-0003`
-- `phase=50.8.5`
+- `phase=50.8.6`
 
 No additional baseline entry is recorded for restore validation, HTTP surface, assistant, detection, operator inspection, or operator UI route tests because the verifier does not report those areas as current responsibility-growth candidates.
+
+The remaining accepted hotspot is not a general extension target. The residual helper pressure is concentrated in the action review projection and visibility helper cluster plus intake and authoritative-state guard helpers that still sit behind the public facade. Those helpers remain review-visible because they protect action review state, detection intake linkage, and fail-closed authoritative-state reads at the service boundary.
 
 ## Follow-Up Trigger
 
@@ -30,6 +32,8 @@ The service facade remains above the long-term 1,500-line and 50-method targets.
 Any silent re-growth beyond the recorded ceiling must fail the verifier. The expected response is another decomposition decision or maintainability backlog before unrelated feature expansion lands in the facade.
 
 If a later extraction lowers the facade below the verifier threshold, maintainers should remove or lower the baseline only after confirming that the file no longer crosses the responsibility-growth threshold.
+
+If future work needs to add another action-review surface, intake pathway, authoritative restore/read guard, or cross-record projection helper to `service.py`, that is the follow-up trigger for another maintainability issue. The follow-up should extract or fence the directly linked helper cluster instead of using this exception as approval for new facade responsibility.
 
 ## Verification Evidence
 

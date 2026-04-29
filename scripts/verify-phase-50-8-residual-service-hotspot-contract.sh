@@ -5,6 +5,7 @@ set -euo pipefail
 repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 doc_path="${repo_root}/docs/adr/0005-phase-50-8-residual-service-hotspot-migration-contract.md"
 baseline_path="${repo_root}/docs/maintainability-hotspot-baseline.txt"
+closeout_path="${repo_root}/docs/phase-50-maintainability-closeout.md"
 
 required_headings=(
   "# ADR-0005: Phase 50.8 Residual Service Hotspot Migration Contract"
@@ -84,10 +85,90 @@ for phrase in "${required_phrases[@]}"; do
   fi
 done
 
-required_baseline_entry="control-plane/aegisops_control_plane/service.py max_lines=5660 max_effective_lines=5250 max_facade_methods=203 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.7 issue=#953"
-if ! grep -Fq -- "${required_baseline_entry}" "${baseline_path}"; then
-  echo "Phase 50.8 contract requires the Phase 50.7 service.py ceiling to remain unchanged until implementation evidence exists." >&2
+phase50_7_baseline_entry="control-plane/aegisops_control_plane/service.py max_lines=5660 max_effective_lines=5250 max_facade_methods=203 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.7 issue=#953"
+baseline_entry="$(grep -E '^control-plane/aegisops_control_plane/service.py[[:space:]]' "${baseline_path}" || true)"
+baseline_entry_count="$(printf '%s\n' "${baseline_entry}" | sed '/^$/d' | wc -l | tr -d ' ')"
+if [[ "${baseline_entry_count}" -eq 0 ]]; then
+  echo "Phase 50.8 contract requires a service.py hotspot baseline entry." >&2
   exit 1
 fi
+if [[ "${baseline_entry_count}" -ne 1 ]]; then
+  echo "Phase 50.8 contract requires exactly one service.py hotspot baseline entry." >&2
+  exit 1
+fi
+
+if [[ "${baseline_entry}" == "${phase50_7_baseline_entry}" ]]; then
+  echo "Phase 50.8 residual service hotspot contract fixes clusters, migration order, measurement guard, non-goals, and validation commands."
+  exit 0
+fi
+
+metadata_value() {
+  local key="$1"
+  awk -v key="${key}" '
+    {
+      for (field_index = 2; field_index <= NF; field_index++) {
+        split($field_index, item, "=")
+        if (item[1] == key) {
+          print item[2]
+          exit
+        }
+      }
+    }
+  ' <<<"${baseline_entry}"
+}
+
+max_lines="$(metadata_value max_lines)"
+max_effective_lines="$(metadata_value max_effective_lines)"
+max_facade_methods="$(metadata_value max_facade_methods)"
+facade_class="$(metadata_value facade_class)"
+adr_exception="$(metadata_value adr_exception)"
+phase="$(metadata_value phase)"
+issue="$(metadata_value issue)"
+
+if [[
+  "${facade_class}" != "AegisOpsControlPlaneService" ||
+  "${adr_exception}" != "ADR-0003" ||
+  "${phase}" != "50.8.6" ||
+  "${issue}" != "#967"
+]]; then
+  echo "Phase 50.8 contract requires the Phase 50.7 service.py ceiling to remain unchanged until implementation evidence exists. After implementation evidence exists, it requires a final Phase 50.8.6 closeout baseline for #967." >&2
+  exit 1
+fi
+
+if [[
+  -z "${max_lines}" ||
+  -z "${max_effective_lines}" ||
+  -z "${max_facade_methods}" ||
+  "${max_lines}" -ge 5660 ||
+  "${max_effective_lines}" -ge 5250 ||
+  "${max_facade_methods}" -ge 203
+]]; then
+  echo "Phase 50.8 final closeout baseline must remain lower than the Phase 50.7 ceiling." >&2
+  exit 1
+fi
+
+if [[ ! -f "${closeout_path}" ]]; then
+  echo "Phase 50.8 final baseline refresh requires closeout evidence: ${closeout_path}" >&2
+  exit 1
+fi
+
+closeout_required_phrases=(
+  "Phase 50.8.6"
+  "#967"
+  "\`max_lines=${max_lines}\`"
+  "\`max_effective_lines=${max_effective_lines}\`"
+  "\`max_facade_methods=${max_facade_methods}\`"
+  "action review projection and visibility helper cluster"
+  "intake and authoritative-state guard helpers"
+  "silent re-growth"
+  "another decomposition decision"
+)
+
+for phrase in "${closeout_required_phrases[@]}"; do
+  if ! grep -Fq -- "${phrase}" "${closeout_path}"; then
+    echo "Phase 50.8 final closeout evidence is missing: ${phrase}" >&2
+    exit 1
+  fi
+done
 
 echo "Phase 50.8 residual service hotspot contract fixes clusters, migration order, measurement guard, non-goals, and validation commands."
