@@ -6,6 +6,7 @@ import sys
 import tempfile
 import threading
 import unittest
+import inspect
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 from unittest import mock
@@ -203,6 +204,33 @@ class RuntimeSkeletonTests(unittest.TestCase):
         )
 
         self.assertTrue(issubclass(handler_class, BaseHTTPRequestHandler))
+
+    def test_http_surface_dispatch_uses_declared_route_tables(self) -> None:
+        from aegisops_control_plane import http_surface
+
+        self.assertIn("/inspect-records", http_surface.HTTP_GET_ROUTES)
+        self.assertIn(
+            "/operator/promote-alert-to-case",
+            http_surface.HTTP_POST_ROUTES,
+        )
+        self.assertIn("/intake/wazuh", http_surface.HTTP_POST_ROUTES)
+
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops")
+        )
+        handler_class = http_surface.build_handler_class(
+            service=service,
+            runtime_snapshot=service.describe_runtime().to_dict(),
+            stderr=sys.stderr,
+        )
+
+        get_dispatch_source = inspect.getsource(handler_class.do_GET)
+        post_dispatch_source = inspect.getsource(handler_class.do_POST)
+
+        self.assertIn("dispatch_get_request", get_dispatch_source)
+        self.assertIn("dispatch_post_request", post_dispatch_source)
+        self.assertNotIn("/inspect-records", get_dispatch_source)
+        self.assertNotIn("/operator/promote-alert-to-case", post_dispatch_source)
 
     def test_readyz_uses_current_readiness_diagnostics_status(self) -> None:
         from http.server import ThreadingHTTPServer
