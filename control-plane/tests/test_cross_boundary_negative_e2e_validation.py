@@ -419,7 +419,7 @@ class CrossBoundaryNegativeE2EValidationTests(unittest.TestCase):
         store, service, promoted_case, anchor_evidence_id, reviewed_at = (
             phase28_helper._build_host_bound_case()
         )
-        expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+        expires_at = reviewed_at + timedelta(days=3650)
         action_request = service.create_endpoint_evidence_collection_request(
             case_id=promoted_case.case_id,
             admitting_evidence_id=anchor_evidence_id,
