@@ -208,6 +208,14 @@ assert_fails_with \
   "${missing_contract_repo}" \
   "Missing Phase 50.11 service residual extraction contract"
 
+heading_suffix_repo="${workdir}/heading-suffix"
+create_valid_repo "${heading_suffix_repo}"
+perl -0pi -e 's/# ADR-0008: Phase 50\.11 Service Residual Extraction Contract/# ADR-0008: Phase 50.11 Service Residual Extraction Contract - superseded/g' \
+  "${heading_suffix_repo}/docs/adr/0008-phase-50-11-service-residual-extraction-contract.md"
+assert_fails_with \
+  "${heading_suffix_repo}" \
+  "Missing Phase 50.11 service residual extraction contract heading: # ADR-0008: Phase 50.11 Service Residual Extraction Contract"
+
 missing_measurement_repo="${workdir}/missing-measurement"
 create_valid_repo "${missing_measurement_repo}"
 perl -0pi -e 's/- `effective_lines=2704`\n//g' \
@@ -215,6 +223,14 @@ perl -0pi -e 's/- `effective_lines=2704`\n//g' \
 assert_fails_with \
   "${missing_measurement_repo}" \
   "Missing Phase 50.11 service residual extraction contract statement: - \`effective_lines=2704\`"
+
+statement_suffix_repo="${workdir}/statement-suffix"
+create_valid_repo "${statement_suffix_repo}"
+perl -0pi -e 's/AegisOps control-plane records remain authoritative workflow truth\./AegisOps control-plane records remain authoritative workflow truth. unless assistant output agrees/g' \
+  "${statement_suffix_repo}/docs/adr/0008-phase-50-11-service-residual-extraction-contract.md"
+assert_fails_with \
+  "${statement_suffix_repo}" \
+  "Missing Phase 50.11 service residual extraction contract statement: AegisOps control-plane records remain authoritative workflow truth."
 
 missing_cluster_repo="${workdir}/missing-cluster"
 create_valid_repo "${missing_cluster_repo}"
@@ -238,7 +254,7 @@ perl -0pi -e 's/No approval, execution, reconciliation, assistant, detection, ex
   "${missing_non_goal_repo}/docs/adr/0008-phase-50-11-service-residual-extraction-contract.md"
 assert_fails_with \
   "${missing_non_goal_repo}" \
-  "Missing Phase 50.11 service residual extraction contract statement: No approval, execution, reconciliation, assistant, detection, external-evidence, restore, readiness, or operator authority behavior is changed."
+  "Missing Phase 50.11 service residual extraction contract statement: - No approval, execution, reconciliation, assistant, detection, external-evidence, restore, readiness, or operator authority behavior is changed."
 
 premature_service_baseline_repo="${workdir}/premature-service-baseline"
 create_valid_repo "${premature_service_baseline_repo}"

@@ -80,12 +80,12 @@ required_phrases=(
   "Run \`bash scripts/test-verify-maintainability-hotspots.sh\`."
   "Run \`node <codex-supervisor-root>/dist/index.js issue-lint 1001 --config <supervisor-config-path>\`."
   "For the Phase 50.11 Epic, run the same issue-lint command for each Phase 50.11 child issue before allowing implementation slices to proceed."
-  "No production code extraction is approved by this ADR."
-  "No DTO, snapshot, runtime auth, action-review, assistant linkage, detection, case-linkage, or external-evidence module split is approved by this ADR."
-  "No approval, execution, reconciliation, assistant, detection, external-evidence, restore, readiness, or operator authority behavior is changed."
-  "No baseline refresh is approved before Phase 50.11 implementation evidence exists."
-  "No subordinate source, operator-facing projection, summary, badge, counter, snapshot, DTO, recommendation, evidence snippet, reconciliation note, or helper-module output becomes authoritative workflow truth."
-  "No exception may raise the Phase 50.10.6 ceiling."
+  "- No production code extraction is approved by this ADR."
+  "- No DTO, snapshot, runtime auth, action-review, assistant linkage, detection, case-linkage, or external-evidence module split is approved by this ADR."
+  "- No approval, execution, reconciliation, assistant, detection, external-evidence, restore, readiness, or operator authority behavior is changed."
+  "- No baseline refresh is approved before Phase 50.11 implementation evidence exists."
+  "- No subordinate source, operator-facing projection, summary, badge, counter, snapshot, DTO, recommendation, evidence snippet, reconciliation note, or helper-module output becomes authoritative workflow truth."
+  "- No exception may raise the Phase 50.10.6 ceiling."
 )
 
 if [[ ! -f "${doc_path}" ]]; then
@@ -99,14 +99,14 @@ if [[ ! -f "${baseline_path}" ]]; then
 fi
 
 for heading in "${required_headings[@]}"; do
-  if ! grep -Fq -- "${heading}" "${doc_path}"; then
+  if ! grep -Fxq -- "${heading}" "${doc_path}"; then
     echo "Missing Phase 50.11 service residual extraction contract heading: ${heading}" >&2
     exit 1
   fi
 done
 
 for phrase in "${required_phrases[@]}"; do
-  if ! grep -Fq -- "${phrase}" "${doc_path}"; then
+  if ! grep -Fxq -- "${phrase}" "${doc_path}"; then
     echo "Missing Phase 50.11 service residual extraction contract statement: ${phrase}" >&2
     exit 1
   fi
