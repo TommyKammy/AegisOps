@@ -60,6 +60,56 @@ class IsolationLevelFallbackProbeStore:
         return getattr(self.inner, name)
 
 
+class MalformedReadinessFieldStore:
+    def __init__(self, inner: object) -> None:
+        self.inner = inner
+        self.malformed_action_request_fields: dict[str, dict[str, object]] = {}
+        self.malformed_latest_ai_trace_fields: dict[str, object] = {}
+
+    @property
+    def dsn(self) -> str:
+        return self.inner.dsn
+
+    @property
+    def persistence_mode(self) -> str:
+        return self.inner.persistence_mode
+
+    def transaction(self, *, isolation_level: str | None = None):
+        return self.inner.transaction(isolation_level=isolation_level)
+
+    def get(self, record_type: object, record_id: str) -> object | None:
+        record = self.inner.get(record_type, record_id)
+        if (
+            record_type is ActionRequestRecord
+            and record is not None
+            and record_id in self.malformed_action_request_fields
+        ):
+            record = copy.copy(record)
+            for field_name, value in self.malformed_action_request_fields[
+                record_id
+            ].items():
+                object.__setattr__(record, field_name, value)
+        return record
+
+    def list(self, record_type: object) -> tuple[object, ...]:
+        records = self.inner.list(record_type)
+        if record_type is not ActionRequestRecord:
+            return records
+        return tuple(self.get(record_type, record.record_id) for record in records)
+
+    def latest_ai_trace_record(self) -> object | None:
+        record = self.inner.latest_ai_trace_record()
+        if record is None or not self.malformed_latest_ai_trace_fields:
+            return record
+        record = copy.copy(record)
+        for field_name, value in self.malformed_latest_ai_trace_fields.items():
+            object.__setattr__(record, field_name, value)
+        return record
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self.inner, name)
+
+
 class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
     def test_service_wires_restore_readiness_internal_collaborators(self) -> None:
         store, _ = make_store()
@@ -3903,6 +3953,91 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
                 "mainline_dependency": "non_blocking",
                 "reason": "reviewed_ml_shadow_extension_not_activated",
             },
+        )
+
+    def test_service_readiness_handles_malformed_review_payload_fields(self) -> None:
+        inner_store, _ = support.make_store()
+        store = MalformedReadinessFieldStore(inner_store)
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 29, 9, 0, tzinfo=timezone.utc)
+        action_request = service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-malformed-readiness-fields-001",
+                approval_decision_id=None,
+                case_id=None,
+                alert_id=None,
+                finding_id="finding-malformed-readiness-fields-001",
+                idempotency_key="idempotency-malformed-readiness-fields-001",
+                target_scope={"asset_id": "asset-malformed-readiness-fields-001"},
+                requested_payload={"action_type": "notify_identity_owner"},
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+                payload_hash="payload-hash-malformed-readiness-fields-001",
+                requested_at=requested_at,
+                expires_at=None,
+                lifecycle_state="approved",
+            )
+        )
+        store.malformed_action_request_fields[action_request.action_request_id] = {
+            "requested_payload": "malformed requested payload",
+            "policy_evaluation": ("malformed policy evaluation",),
+        }
+
+        readiness = service.inspect_readiness_diagnostics()
+        review_path_health = readiness.metrics["review_path_health"]
+        automation_health = readiness.metrics["automation_substrate_health"]
+
+        self.assertEqual(review_path_health["review_count"], 1)
+        self.assertEqual(review_path_health["overall_state"], "delayed")
+        self.assertEqual(automation_health["tracked_surfaces"], 0)
+
+    def test_service_readiness_degrades_malformed_assistant_subject_linkage(
+        self,
+    ) -> None:
+        inner_store, _ = support.make_store()
+        store = MalformedReadinessFieldStore(inner_store)
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-malformed-subject-linkage-001",
+                subject_linkage={
+                    "provider_identity": "openai",
+                    "provider_status": "ready",
+                    "provider_operational_quality": {
+                        "availability": "available",
+                        "posture": "ready",
+                        "retry_policy": "not_recorded",
+                    },
+                },
+                model_identity="openai/gpt-5.4",
+                prompt_version="phase24-case-summary-v1",
+                generated_at=datetime(2026, 4, 29, 9, 0, tzinfo=timezone.utc),
+                material_input_refs=("case-001",),
+                reviewer_identity="system://bounded-live-assistant",
+                lifecycle_state="under_review",
+            )
+        )
+        store.malformed_latest_ai_trace_fields["subject_linkage"] = (
+            "malformed subject linkage"
+        )
+
+        readiness = service.inspect_readiness_diagnostics()
+        assistant = readiness.metrics["optional_extensions"]["extensions"]["assistant"]
+
+        self.assertEqual(assistant["readiness"], "degraded")
+        self.assertEqual(assistant["reason"], "assistant_provider_degraded")
+        self.assertEqual(
+            assistant["latest_ai_trace_id"],
+            "ai-trace-malformed-subject-linkage-001",
         )
 
     def test_service_phase493_operator_health_labels_optional_degradation_subordinate(

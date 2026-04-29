@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from collections.abc import Iterable, Mapping
 from datetime import datetime, timezone
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 from .action_review_projection import _ActionReviewRecordIndex
 from .models import (
@@ -36,6 +37,20 @@ class ReadinessOperabilityHelper:
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._service, name)
+
+    @staticmethod
+    def _mapping_or_empty(value: object) -> Mapping[str, object]:
+        return value if isinstance(value, Mapping) else {}
+
+    @staticmethod
+    def _action_request_is_review_bound(action_request: ActionRequestRecord) -> bool:
+        policy_evaluation = ReadinessOperabilityHelper._mapping_or_empty(
+            action_request.policy_evaluation
+        )
+        return not (
+            policy_evaluation.get("approval_requirement") == "policy_authorized"
+            and action_request.approval_decision_id is None
+        )
 
     def _build_readiness_review_path_health(
         self,
@@ -315,6 +330,12 @@ class ReadinessOperabilityHelper:
         readiness_review_snapshots: list[dict[str, object]] = []
         path_health_as_of = datetime.now(timezone.utc)
         for action_request_id, action_request in sorted(candidate_action_requests.items()):
+            policy_evaluation = self._mapping_or_empty(
+                action_request.policy_evaluation
+            )
+            requested_payload = self._mapping_or_empty(
+                action_request.requested_payload
+            )
             approval_decision = approval_decisions_by_action_request_id.get(action_request_id)
             action_execution = executions_by_action_request_id.get(action_request_id)
             reconciliation = reconciliations_by_action_request_id.get(action_request_id)
@@ -351,16 +372,14 @@ class ReadinessOperabilityHelper:
                     "execution_surface_type": (
                         action_execution.execution_surface_type
                         if action_execution is not None
-                        else action_request.policy_evaluation.get("execution_surface_type")
+                        else policy_evaluation.get("execution_surface_type")
                     ),
                     "execution_surface_id": (
                         action_execution.execution_surface_id
                         if action_execution is not None
-                        else action_request.policy_evaluation.get("execution_surface_id")
+                        else policy_evaluation.get("execution_surface_id")
                     ),
-                    "requested_action_type": action_request.requested_payload.get(
-                        "action_type"
-                    ),
+                    "requested_action_type": requested_payload.get("action_type"),
                     "path_health": path_health,
                 }
             )
@@ -561,7 +580,8 @@ class ReadinessOperabilityHelper:
         if latest_trace is None:
             return base
 
-        subject_linkage = latest_trace.subject_linkage
+        subject_linkage_raw = latest_trace.subject_linkage
+        subject_linkage = self._mapping_or_empty(subject_linkage_raw)
         quality = subject_linkage.get("provider_operational_quality")
         advisory_draft = latest_trace.assistant_advisory_draft
         unresolved_reasons = ()
@@ -578,6 +598,13 @@ class ReadinessOperabilityHelper:
                     latest_trace=latest_trace,
                     unresolved_reasons=unresolved_reasons,
                 )
+            if not isinstance(subject_linkage_raw, Mapping):
+                return {
+                    **base,
+                    "readiness": "degraded",
+                    "reason": "assistant_provider_degraded",
+                    "latest_ai_trace_id": latest_trace.ai_trace_id,
+                }
             return base
 
         availability = str(quality.get("availability") or "available")
