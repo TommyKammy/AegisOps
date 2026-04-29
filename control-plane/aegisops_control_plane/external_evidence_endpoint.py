@@ -18,11 +18,8 @@ from .models import (
 )
 
 
-class EndpointExternalEvidenceDependencies(Protocol):
-    _store: object
-    _endpoint_evidence_pack_adapter: object
-
-    def _build_lifecycle_transition_records(
+class _LifecycleTransitionHelper(Protocol):
+    def build_lifecycle_transition_records(
         self,
         record: ControlPlaneRecord,
         *,
@@ -30,6 +27,16 @@ class EndpointExternalEvidenceDependencies(Protocol):
         transitioned_at: datetime | None = None,
     ) -> tuple[LifecycleTransitionRecord, ...]:
         ...
+
+
+class _DetectionIntakeBoundary(Protocol):
+    lifecycle_transition_helper: _LifecycleTransitionHelper
+
+
+class EndpointExternalEvidenceDependencies(Protocol):
+    _store: object
+    _endpoint_evidence_pack_adapter: object
+    _detection_intake_service: _DetectionIntakeBoundary
 
     def persist_record(
         self,
@@ -273,7 +280,10 @@ class EndpointExternalEvidenceHelper:
                 )
             )
             if created:
-                for transition_record in self._service._build_lifecycle_transition_records(
+                transition_helper = (
+                    self._service._detection_intake_service.lifecycle_transition_helper
+                )
+                for transition_record in transition_helper.build_lifecycle_transition_records(
                     action_request,
                     existing_record=None,
                     transitioned_at=requested_at,

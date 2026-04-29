@@ -277,8 +277,6 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
         attach_result = support.SimpleNamespace(name="attach-result")
         promoted_case = support.SimpleNamespace(case_id="case-delegated-001")
         wazuh_result = support.SimpleNamespace(name="wazuh-result")
-        transition_record = support.SimpleNamespace(name="transition-record")
-        transition_records = (transition_record,)
         latest_transition = support.SimpleNamespace(name="latest-transition")
         attribution = {"source": "delegated-lifecycle", "actor_identities": ()}
         reconciliation = support.SimpleNamespace(name="reconciliation")
@@ -324,12 +322,6 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             "signal-delegated-001"
         )
         lifecycle_delegate = support.mock.Mock()
-        lifecycle_delegate.build_lifecycle_transition_record.return_value = (
-            transition_record
-        )
-        lifecycle_delegate.build_lifecycle_transition_records.return_value = (
-            transition_records
-        )
         lifecycle_delegate.initial_lifecycle_transitioned_at.return_value = (
             reviewed_transitioned_at
         )
@@ -401,23 +393,6 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
                 peer_addr="10.10.0.5",
             ),
             wazuh_result,
-        )
-        self.assertIs(
-            service._build_lifecycle_transition_record(
-                support.mock.sentinel.record,
-                existing_record=support.mock.sentinel.existing_record,
-                transitioned_at=first_seen_at,
-                latest_transition=support.mock.sentinel.latest_transition,
-            ),
-            transition_record,
-        )
-        self.assertIs(
-            service._build_lifecycle_transition_records(
-                support.mock.sentinel.record,
-                existing_record=support.mock.sentinel.existing_record,
-                transitioned_at=first_seen_at,
-            ),
-            transition_records,
         )
         self.assertEqual(
             service._lifecycle_transition_id(
@@ -534,19 +509,6 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             forwarded_proto="https",
             reverse_proxy_secret_header=REVIEWED_PROXY_SECRET,
             peer_addr="10.10.0.5",
-        )
-        lifecycle_delegate.build_lifecycle_transition_record.assert_called_once_with(
-            support.mock.sentinel.record,
-            existing_record=support.mock.sentinel.existing_record,
-            transitioned_at=first_seen_at,
-            initial_transitioned_at_fallback=None,
-            must_precede_transitioned_at=None,
-            latest_transition=support.mock.sentinel.latest_transition,
-        )
-        lifecycle_delegate.build_lifecycle_transition_records.assert_called_once_with(
-            support.mock.sentinel.record,
-            existing_record=support.mock.sentinel.existing_record,
-            transitioned_at=first_seen_at,
         )
         lifecycle_delegate.lifecycle_transition_id.assert_called_once_with(
             transition_timestamp="20260405T120000.000000Z",

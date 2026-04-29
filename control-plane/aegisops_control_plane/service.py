@@ -1250,27 +1250,6 @@ class AegisOpsControlPlaneService(ExternalEvidenceFacade):
             record
         )
 
-    def _build_lifecycle_transition_record(
-        self,
-        record: ControlPlaneRecord,
-        *,
-        existing_record: ControlPlaneRecord | None,
-        transitioned_at: datetime | None = None,
-        initial_transitioned_at_fallback: datetime | None = None,
-        must_precede_transitioned_at: datetime | None = None,
-        latest_transition: LifecycleTransitionRecord | None | object = (
-            _LATEST_LIFECYCLE_TRANSITION_UNSET
-        ),
-    ) -> LifecycleTransitionRecord | None:
-        return self._detection_intake_service.lifecycle_transition_helper.build_lifecycle_transition_record(
-            record,
-            existing_record=existing_record,
-            transitioned_at=transitioned_at,
-            initial_transitioned_at_fallback=initial_transitioned_at_fallback,
-            must_precede_transitioned_at=must_precede_transitioned_at,
-            latest_transition=latest_transition,
-        )
-
     def _lifecycle_transition_id(
         self,
         *,
@@ -1282,19 +1261,6 @@ class AegisOpsControlPlaneService(ExternalEvidenceFacade):
             transition_timestamp=transition_timestamp,
             transitioned_at=transitioned_at,
             latest_transition=latest_transition,
-        )
-
-    def _build_lifecycle_transition_records(
-        self,
-        record: ControlPlaneRecord,
-        *,
-        existing_record: ControlPlaneRecord | None,
-        transitioned_at: datetime | None = None,
-    ) -> tuple[LifecycleTransitionRecord, ...]:
-        return self._detection_intake_service.lifecycle_transition_helper.build_lifecycle_transition_records(
-            record,
-            existing_record=existing_record,
-            transitioned_at=transitioned_at,
         )
 
     def _initial_lifecycle_transitioned_at(
