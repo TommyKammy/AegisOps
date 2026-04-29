@@ -237,6 +237,66 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
         ):
             self.assertIn(term, boundary_tests)
 
+    def test_phase50_8_action_review_helpers_live_with_projection_boundary(
+        self,
+    ) -> None:
+        service_source = self._read("control-plane/aegisops_control_plane/service.py")
+        projection_source = self._read(
+            "control-plane/aegisops_control_plane/action_review_projection.py"
+        )
+        service_tree = ast.parse(service_source)
+        projection_tree = ast.parse(projection_source)
+        service_class = next(
+            node
+            for node in service_tree.body
+            if isinstance(node, ast.ClassDef)
+            and node.name == "AegisOpsControlPlaneService"
+        )
+        service_methods = {
+            node.name: node
+            for node in service_class.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        projection_functions = {
+            node.name for node in projection_tree.body if isinstance(node, ast.FunctionDef)
+        }
+        moved_helper_names = {
+            "_action_review_after_hours_handoff_visibility",
+            "_action_review_approval_decision",
+            "_action_review_approval_state",
+            "_action_review_context_matches_lineage",
+            "_action_review_execution",
+            "_action_review_escalation_visibility",
+            "_action_review_ingest_path_health",
+            "_action_review_manual_fallback_visibility",
+            "_action_review_overall_path_state",
+            "_action_review_path_health_summary",
+            "_action_review_persistence_path_health",
+            "_action_review_provider_path_health",
+            "_action_review_state",
+            "_action_review_visibility_context",
+            "_latest_action_review_reconciliation",
+            "_replacement_action_request",
+        }
+        self.assertTrue(moved_helper_names.issubset(projection_functions))
+
+        for helper_name in moved_helper_names:
+            service_method = service_methods[helper_name]
+            calls = [
+                node
+                for node in ast.walk(service_method)
+                if isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == helper_name
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "_action_review_projection"
+            ]
+            self.assertEqual(
+                len(calls),
+                1,
+                f"{helper_name} should remain only as a facade compatibility delegate",
+            )
+
     def test_phase50_constructor_delegates_collaborator_composition(self) -> None:
         service_source = self._read("control-plane/aegisops_control_plane/service.py")
         tree = ast.parse(service_source)
