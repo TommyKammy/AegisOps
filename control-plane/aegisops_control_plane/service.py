@@ -1917,19 +1917,6 @@ class AegisOpsControlPlaneService:
             context_key=context_key,
         )
 
-    @staticmethod
-    def _action_review_visibility_update(
-        *,
-        action_request_id: str,
-        context_key: str,
-        context_value: Mapping[str, object],
-    ) -> dict[str, object]:
-        return _action_review_projection._action_review_visibility_update(
-            action_request_id=action_request_id,
-            context_key=context_key,
-            context_value=context_value,
-        )
-
     def _case_has_single_review_bound_action_request(
         self,
         case_id: str | None,
@@ -1939,30 +1926,6 @@ class AegisOpsControlPlaneService:
         return _action_review_projection._case_has_single_review_bound_action_request(
             self,
             case_id,
-            record_index=record_index,
-        )
-
-    def _action_review_approval_decision(
-        self,
-        action_request: ActionRequestRecord,
-        *,
-        record_index: _ActionReviewRecordIndex | None = None,
-    ) -> ApprovalDecisionRecord | None:
-        return _action_review_projection._action_review_approval_decision(
-            self,
-            action_request,
-            record_index=record_index,
-        )
-
-    def _action_review_execution(
-        self,
-        action_request: ActionRequestRecord,
-        *,
-        record_index: _ActionReviewRecordIndex | None = None,
-    ) -> ActionExecutionRecord | None:
-        return _action_review_projection._action_review_execution(
-            self,
-            action_request,
             record_index=record_index,
         )
 
@@ -1982,30 +1945,6 @@ class AegisOpsControlPlaneService:
             record_index=record_index,
         )
 
-    @staticmethod
-    def _action_review_approval_state(
-        *,
-        action_request: ActionRequestRecord,
-        approval_decision: ApprovalDecisionRecord | None,
-    ) -> str | None:
-        return _action_review_projection._action_review_approval_state(
-            action_request=action_request,
-            approval_decision=approval_decision,
-        )
-
-    @staticmethod
-    def _action_review_state(
-        *,
-        action_request: ActionRequestRecord,
-        approval_state: str | None,
-        action_execution: ActionExecutionRecord | None,
-    ) -> str:
-        return _action_review_projection._action_review_state(
-            action_request=action_request,
-            approval_state=approval_state,
-            action_execution=action_execution,
-        )
-
     def _replacement_action_request(
         self,
         action_request: ActionRequestRecord,
@@ -2017,10 +1956,6 @@ class AegisOpsControlPlaneService:
             action_request,
             record_index=record_index,
         )
-
-    @staticmethod
-    def _action_request_is_review_bound(action_request: ActionRequestRecord) -> bool:
-        return _action_review_projection._action_request_is_review_bound(action_request)
 
     @staticmethod
     def _next_expected_action_for_review_state(review_state: str) -> str | None:
@@ -2978,7 +2913,9 @@ class AegisOpsControlPlaneService:
         action_request_id: str,
     ) -> ActionRequestRecord:
         action_request = self._require_action_request_record(action_request_id)
-        if not self._action_request_is_review_bound(action_request):
+        if not _action_review_projection._action_request_is_review_bound(
+            action_request
+        ):
             raise ValueError(
                 "action_request_id must reference a reviewed action request"
             )

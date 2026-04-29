@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import logging
 from typing import TYPE_CHECKING, Protocol
 
+from . import action_review_projection as _action_review_projection
 from .action_policy import evaluate_action_policy_record
 from .models import (
     ActionRequestRecord,
@@ -46,32 +47,6 @@ class ActionReviewWriteSurfaceDependencies(Protocol):
     ) -> ActionRequestRecord:
         ...
 
-    def _action_review_approval_decision(
-        self,
-        action_request: ActionRequestRecord,
-    ) -> ApprovalDecisionRecord | None:
-        ...
-
-    def _action_review_approval_state(
-        self,
-        *,
-        action_request: ActionRequestRecord,
-        approval_decision: ApprovalDecisionRecord | None,
-    ) -> str:
-        ...
-
-    def _action_review_execution(self, action_request: ActionRequestRecord) -> object:
-        ...
-
-    def _action_review_state(
-        self,
-        *,
-        action_request: ActionRequestRecord,
-        approval_state: str,
-        action_execution: object,
-    ) -> str:
-        ...
-
     def _require_action_review_visibility_context_record(
         self,
         action_request: ActionRequestRecord,
@@ -102,15 +77,6 @@ class ActionReviewWriteSurfaceDependencies(Protocol):
         context_record: CaseRecord | AlertRecord,
         reviewed_context_update: dict[str, object],
     ) -> CaseRecord | AlertRecord:
-        ...
-
-    def _action_review_visibility_update(
-        self,
-        *,
-        action_request_id: str,
-        context_key: str,
-        context_value: dict[str, object],
-    ) -> dict[str, object]:
         ...
 
     def _require_reviewed_action_approver_policy(
@@ -184,16 +150,29 @@ class ActionReviewWriteSurface:
             "residual_uncertainty",
         )
         with service._store.transaction():
-            action_request = service._require_review_bound_action_request(action_request_id)
-            approval_decision = service._action_review_approval_decision(action_request)
-            approval_state = service._action_review_approval_state(
-                action_request=action_request,
-                approval_decision=approval_decision,
+            action_request = service._require_review_bound_action_request(
+                action_request_id
             )
-            review_state = service._action_review_state(
+            approval_decision = (
+                _action_review_projection._action_review_approval_decision(
+                    service,
+                    action_request,
+                )
+            )
+            approval_state = (
+                _action_review_projection._action_review_approval_state(
+                    action_request=action_request,
+                    approval_decision=approval_decision,
+                )
+            )
+            action_execution = _action_review_projection._action_review_execution(
+                service,
+                action_request,
+            )
+            review_state = _action_review_projection._action_review_state(
                 action_request=action_request,
                 approval_state=approval_state,
-                action_execution=service._action_review_execution(action_request),
+                action_execution=action_execution,
             )
             if (
                 approval_decision is None
@@ -201,7 +180,8 @@ class ActionReviewWriteSurface:
                 or review_state in {"pending", "rejected", "expired", "superseded"}
             ):
                 raise ValueError(
-                    "manual fallback requires an approved action review in a live post-approval state"
+                    "manual fallback requires an approved action review in a live "
+                    "post-approval state"
                 )
             context_record = service._require_action_review_visibility_context_record(
                 action_request
@@ -234,10 +214,12 @@ class ActionReviewWriteSurface:
                 )
             return service._persist_action_review_visibility_context_record(
                 context_record=context_record,
-                reviewed_context_update=service._action_review_visibility_update(
-                    action_request_id=action_request.action_request_id,
-                    context_key="manual_fallback",
-                    context_value=manual_fallback_context,
+                reviewed_context_update=(
+                    _action_review_projection._action_review_visibility_update(
+                        action_request_id=action_request.action_request_id,
+                        context_key="manual_fallback",
+                        context_value=manual_fallback_context,
+                    )
                 ),
             )
 
@@ -262,16 +244,29 @@ class ActionReviewWriteSurface:
         )
         note = service._require_non_empty_string(note, "note")
         with service._store.transaction():
-            action_request = service._require_review_bound_action_request(action_request_id)
-            approval_decision = service._action_review_approval_decision(action_request)
-            approval_state = service._action_review_approval_state(
-                action_request=action_request,
-                approval_decision=approval_decision,
+            action_request = service._require_review_bound_action_request(
+                action_request_id
             )
-            review_state = service._action_review_state(
+            approval_decision = (
+                _action_review_projection._action_review_approval_decision(
+                    service,
+                    action_request,
+                )
+            )
+            approval_state = (
+                _action_review_projection._action_review_approval_state(
+                    action_request=action_request,
+                    approval_decision=approval_decision,
+                )
+            )
+            action_execution = _action_review_projection._action_review_execution(
+                service,
+                action_request,
+            )
+            review_state = _action_review_projection._action_review_state(
                 action_request=action_request,
                 approval_state=approval_state,
-                action_execution=service._action_review_execution(action_request),
+                action_execution=action_execution,
             )
             context_record = service._require_action_review_visibility_context_record(
                 action_request
@@ -290,10 +285,12 @@ class ActionReviewWriteSurface:
                 )
             return service._persist_action_review_visibility_context_record(
                 context_record=context_record,
-                reviewed_context_update=service._action_review_visibility_update(
-                    action_request_id=action_request.action_request_id,
-                    context_key="escalation",
-                    context_value=escalation_context,
+                reviewed_context_update=(
+                    _action_review_projection._action_review_visibility_update(
+                        action_request_id=action_request.action_request_id,
+                        context_key="escalation",
+                        context_value=escalation_context,
+                    )
                 ),
             )
 

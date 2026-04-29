@@ -260,13 +260,9 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
         projection_functions = {
             node.name for node in projection_tree.body if isinstance(node, ast.FunctionDef)
         }
-        moved_helper_names = {
-            "_action_request_is_review_bound",
+        retained_delegate_names = {
             "_action_review_after_hours_handoff_visibility",
-            "_action_review_approval_decision",
-            "_action_review_approval_state",
             "_action_review_context_matches_lineage",
-            "_action_review_execution",
             "_action_review_escalation_visibility",
             "_action_review_ingest_path_health",
             "_action_review_manual_fallback_visibility",
@@ -274,18 +270,32 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
             "_action_review_path_health_summary",
             "_action_review_persistence_path_health",
             "_action_review_provider_path_health",
-            "_action_review_state",
             "_action_review_stage_snapshot",
             "_action_review_visibility_entry",
             "_action_review_visibility_context",
-            "_action_review_visibility_update",
             "_latest_action_review_reconciliation",
             "_next_expected_action_for_review_state",
             "_replacement_action_request",
         }
+        removed_internal_delegate_names = {
+            "_action_request_is_review_bound",
+            "_action_review_approval_decision",
+            "_action_review_approval_state",
+            "_action_review_execution",
+            "_action_review_state",
+            "_action_review_visibility_update",
+        }
+        moved_helper_names = retained_delegate_names | removed_internal_delegate_names
         self.assertTrue(moved_helper_names.issubset(projection_functions))
 
-        for helper_name in moved_helper_names:
+        for helper_name in removed_internal_delegate_names:
+            self.assertNotIn(
+                helper_name,
+                service_methods,
+                f"{helper_name} should be bypassed by internal collaborators instead of retained on the facade",
+            )
+
+        for helper_name in retained_delegate_names:
             service_method = service_methods[helper_name]
             calls = [
                 node
@@ -301,6 +311,66 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
                 1,
                 f"{helper_name} should remain only as a facade compatibility delegate",
             )
+
+    def test_phase50_9_4_internal_action_review_write_delegates_bypass_service_facade(
+        self,
+    ) -> None:
+        write_surface_source = self._read(
+            "control-plane/aegisops_control_plane/action_review_write_surface.py"
+        )
+        service_source = self._read("control-plane/aegisops_control_plane/service.py")
+        http_sources = "\n".join(
+            self._read(relative_path)
+            for relative_path in (
+                "control-plane/aegisops_control_plane/http_surface.py",
+                "control-plane/aegisops_control_plane/http_runtime_surface.py",
+                "control-plane/aegisops_control_plane/http_protected_surface.py",
+                "control-plane/aegisops_control_plane/cli.py",
+            )
+        )
+        write_surface_tree = ast.parse(write_surface_source)
+        service_tree = ast.parse(service_source)
+        service_class = next(
+            node
+            for node in service_tree.body
+            if isinstance(node, ast.ClassDef)
+            and node.name == "AegisOpsControlPlaneService"
+        )
+        service_method_names = {
+            node.name
+            for node in service_class.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        removed_internal_delegate_names = {
+            "_action_request_is_review_bound",
+            "_action_review_approval_decision",
+            "_action_review_approval_state",
+            "_action_review_execution",
+            "_action_review_state",
+            "_action_review_visibility_update",
+        }
+
+        self.assertFalse(removed_internal_delegate_names & service_method_names)
+        for helper_name in removed_internal_delegate_names:
+            self.assertNotIn(helper_name, http_sources)
+
+        projection_calls = {
+            node.func.attr
+            for node in ast.walk(write_surface_tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "_action_review_projection"
+        }
+        self.assertTrue(
+            {
+                "_action_review_approval_decision",
+                "_action_review_approval_state",
+                "_action_review_execution",
+                "_action_review_state",
+                "_action_review_visibility_update",
+            }.issubset(projection_calls)
+        )
 
     def test_phase50_constructor_delegates_collaborator_composition(self) -> None:
         service_source = self._read("control-plane/aegisops_control_plane/service.py")
