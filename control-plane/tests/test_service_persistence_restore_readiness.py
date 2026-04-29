@@ -3861,6 +3861,90 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             },
         )
 
+    def test_service_phase493_operator_health_labels_optional_degradation_subordinate(
+        self,
+    ) -> None:
+        store, _ = support.make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+            ),
+            store=store,
+        )
+        service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-phase493-timeout-001",
+                subject_linkage={
+                    "provider_identity": "openai",
+                    "provider_status": "timeout",
+                    "provider_failure_summary": "attempt 1: timeout: provider timed out",
+                    "provider_operational_quality": {
+                        "availability": "unavailable",
+                        "posture": "timeout",
+                        "retry_policy": "retry_exhausted",
+                    },
+                },
+                model_identity="openai/gpt-5.4",
+                prompt_version="phase24-case-summary-v1",
+                generated_at=datetime(2026, 4, 29, 9, 0, tzinfo=timezone.utc),
+                material_input_refs=("case-001",),
+                reviewer_identity="system://bounded-live-assistant",
+                lifecycle_state="under_review",
+            )
+        )
+
+        readiness = service.inspect_readiness_diagnostics()
+        operator_health = readiness.metrics["operator_health"]
+
+        self.assertEqual(readiness.status, "ready")
+        self.assertEqual(operator_health["overall_state"], "degraded")
+        self.assertEqual(
+            operator_health["authority_source"],
+            "aegisops_control_plane_records",
+        )
+        self.assertEqual(
+            operator_health["subordinate_signal_policy"],
+            "visibility_only",
+        )
+        self.assertFalse(operator_health["subordinate_signals_authoritative"])
+        self.assertEqual(
+            operator_health["mainline"]["readiness_status"],
+            "ready",
+        )
+        self.assertEqual(operator_health["mainline"]["open_case_count"], 0)
+        self.assertEqual(
+            operator_health["mainline"]["active_action_request_count"],
+            0,
+        )
+        self.assertEqual(
+            operator_health["mainline"]["active_action_execution_count"],
+            0,
+        )
+        self.assertEqual(
+            operator_health["mainline"]["unresolved_reconciliation_count"],
+            0,
+        )
+        self.assertEqual(
+            operator_health["subordinate_context"]["optional_extensions"]["state"],
+            "degraded",
+        )
+        self.assertEqual(
+            operator_health["subordinate_context"]["optional_extensions"][
+                "authority_mode"
+            ],
+            "non_authoritative",
+        )
+        self.assertEqual(
+            operator_health["subordinate_context"]["optional_extensions"][
+                "degraded_extensions"
+            ],
+            ("assistant",),
+        )
+        self.assertEqual(operator_health["commercial_claims"], ())
+
     def test_service_phase21_readiness_source_health_ignores_predelegation_backlog(
         self,
     ) -> None:

@@ -410,6 +410,8 @@ The operator health review contract is the reviewed business-hours cadence for d
 
 Each business day, operators must review `curl -fsS http://127.0.0.1:<proxy-port>/readyz`, `curl -fsS http://127.0.0.1:<proxy-port>/runtime`, the reviewed queue and alert surfaces, and any explicit degraded-state markers before treating the platform as ready for normal work.
 
+The readiness diagnostics `metrics.operator_health` block is the bounded commercial operator-health rollup for this review. It is derived from AegisOps control-plane records and labels source, automation substrate, and optional-extension signals as visibility-only subordinate context; it does not create an SLA claim or make subordinate health authoritative for case, action, approval, execution, or reconciliation lifecycle state.
+
 The reviewed queue lanes for action-required, reconciliation mismatch, stale receipt, optional-extension degraded, and clean states are visibility aids for this review. They do not make optional extension health, downstream receipts, or browser-rendered state authoritative for workflow closure.
 
 The daily review must classify each degraded condition as safe for continued business-hours inspection, requiring same-day follow-up, or requiring escalation before normal operation continues.

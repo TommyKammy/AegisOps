@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 from .config import RuntimeConfig
 from .models import (
@@ -190,6 +190,17 @@ class _ReadinessHealthProjection:
                 control_plane_change_authority_freeze["state"] == "frozen"
             ),
         )
+        operator_health = self._build_operator_health_signal(
+            readiness_status=status,
+            startup_ready=startup.startup_ready,
+            shutdown_ready=shutdown.shutdown_ready,
+            readiness_aggregates=readiness_aggregates,
+            review_path_health=review_path_health,
+            source_health=source_health,
+            automation_substrate_health=automation_substrate_health,
+            optional_extensions=optional_extensions,
+            control_plane_change_authority_freeze=control_plane_change_authority_freeze,
+        )
 
         metrics = {
             "alerts": {
@@ -266,6 +277,7 @@ class _ReadinessHealthProjection:
             "control_plane_change_authority_freeze": (
                 control_plane_change_authority_freeze
             ),
+            "operator_health": operator_health,
         }
 
         return self._readiness_diagnostics_snapshot_factory(
@@ -282,6 +294,131 @@ class _ReadinessHealthProjection:
                 if readiness_aggregates.latest_reconciliation is not None
                 else None
             ),
+        )
+
+    def _build_operator_health_signal(
+        self,
+        *,
+        readiness_status: str,
+        startup_ready: bool,
+        shutdown_ready: bool,
+        readiness_aggregates: ReadinessDiagnosticsAggregates,
+        review_path_health: dict[str, object],
+        source_health: dict[str, object],
+        automation_substrate_health: dict[str, object],
+        optional_extensions: dict[str, object],
+        control_plane_change_authority_freeze: dict[str, object],
+    ) -> dict[str, object]:
+        subordinate_context = {
+            "source_health": self._operator_subordinate_context_entry(
+                state=str(source_health.get("overall_state", "unknown")),
+                tracked_count=int(source_health.get("tracked_sources", 0)),
+            ),
+            "automation_substrate_health": self._operator_subordinate_context_entry(
+                state=str(automation_substrate_health.get("overall_state", "unknown")),
+                tracked_count=int(
+                    automation_substrate_health.get("tracked_surfaces", 0)
+                ),
+            ),
+            "optional_extensions": {
+                **self._operator_subordinate_context_entry(
+                    state=str(optional_extensions.get("overall_state", "unknown")),
+                    tracked_count=int(optional_extensions.get("tracked_extensions", 0)),
+                ),
+                "degraded_extensions": tuple(
+                    extension_name
+                    for extension_name, extension in sorted(
+                        self._operator_extension_entries(optional_extensions).items()
+                    )
+                    if extension.get("readiness") == "degraded"
+                ),
+            },
+        }
+        subordinate_state = self._operator_worst_state(
+            entry["state"] for entry in subordinate_context.values()
+        )
+        mainline_state = readiness_status
+        overall_state = self._operator_worst_state((mainline_state, subordinate_state))
+
+        return {
+            "contract": "phase49_commercial_operator_health",
+            "overall_state": overall_state,
+            "authority_source": "aegisops_control_plane_records",
+            "subordinate_signal_policy": "visibility_only",
+            "subordinate_signals_authoritative": False,
+            "mainline": {
+                "readiness_status": readiness_status,
+                "startup_ready": startup_ready,
+                "shutdown_ready": shutdown_ready,
+                "review_path_state": review_path_health.get("overall_state"),
+                "authority_freeze_state": control_plane_change_authority_freeze.get(
+                    "state"
+                ),
+                "open_case_count": len(readiness_aggregates.open_case_ids),
+                "active_action_request_count": len(
+                    readiness_aggregates.active_action_request_ids
+                ),
+                "active_action_execution_count": len(
+                    readiness_aggregates.active_action_execution_ids
+                ),
+                "unresolved_reconciliation_count": len(
+                    readiness_aggregates.unresolved_reconciliation_ids
+                ),
+            },
+            "subordinate_context": subordinate_context,
+            "commercial_claims": (),
+        }
+
+    @staticmethod
+    def _operator_subordinate_context_entry(
+        *,
+        state: str,
+        tracked_count: int,
+    ) -> dict[str, object]:
+        return {
+            "state": state,
+            "tracked_count": tracked_count,
+            "authority_mode": "non_authoritative",
+            "mainline_dependency": "non_blocking",
+        }
+
+    @staticmethod
+    def _operator_extension_entries(
+        optional_extensions: dict[str, object],
+    ) -> dict[str, dict[str, object]]:
+        extensions = optional_extensions.get("extensions")
+        if not isinstance(extensions, dict):
+            return {}
+        return {
+            str(extension_name): dict(extension)
+            for extension_name, extension in extensions.items()
+            if isinstance(extension, dict)
+        }
+
+    @staticmethod
+    def _operator_worst_state(states: Iterable[object]) -> str:
+        severity = {
+            "ready": 0,
+            "healthy": 0,
+            "not_applicable": 0,
+            "delayed": 1,
+            "degraded": 2,
+            "stale": 2,
+            "failed": 3,
+            "failing_closed": 3,
+            "frozen": 3,
+            "unknown": 3,
+        }
+        normalized_states = [
+            str(state)
+            for state in states
+            if isinstance(state, str) and state.strip()
+        ]
+        if not normalized_states:
+            return "unknown"
+        return max(
+            normalized_states,
+            key=lambda state: severity.get(state, severity["unknown"]),
         )
 
     def _control_plane_change_authority_freeze_status(self) -> dict[str, object]:
