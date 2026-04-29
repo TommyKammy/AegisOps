@@ -14,6 +14,7 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 from aegisops_control_plane.config import RuntimeConfig
 from aegisops_control_plane import external_evidence_boundary
+from aegisops_control_plane import external_evidence_endpoint
 from aegisops_control_plane.service import AegisOpsControlPlaneService
 from postgres_test_support import make_store
 
@@ -276,6 +277,27 @@ class Phase28ExternalEvidenceBoundaryRefactorTests(unittest.TestCase):
                 self.assertFalse(
                     hasattr(external_evidence_boundary, helper_name),
                     f"{helper_name} should be owned by focused external evidence modules",
+                )
+
+    def test_endpoint_evidence_helpers_are_extracted_from_boundary_module(self) -> None:
+        self.assertTrue(
+            hasattr(external_evidence_endpoint, "EndpointExternalEvidenceHelper")
+        )
+
+        residual_helper_names = (
+            "_resolve_reviewed_endpoint_gap_anchor",
+            "_resolve_reviewed_endpoint_follow_up_decision_anchor",
+            "_index_endpoint_request_artifacts",
+            "_resolve_binary_analysis_attachment",
+        )
+        for helper_name in residual_helper_names:
+            with self.subTest(helper_name=helper_name):
+                self.assertFalse(
+                    hasattr(
+                        external_evidence_boundary.ExternalEvidenceBoundary,
+                        helper_name,
+                    ),
+                    f"{helper_name} should be owned by the endpoint evidence helper",
                 )
 
 
