@@ -4,6 +4,11 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Callable, Mapping
 
+from .detection_lifecycle_helpers import (
+    DetectionLifecycleTransitionHelper,
+    DetectionReconciliationResolver,
+    LiveWazuhIntakeHandler,
+)
 from .detection_native_context import NativeDetectionContextAttacher
 from .models import (
     AnalyticSignalAdmission,
@@ -70,6 +75,26 @@ class DetectionIntakeService:
             service,
             merge_reviewed_context=merge_reviewed_context,
             normalize_admission_provenance=normalize_admission_provenance,
+        )
+        self.lifecycle_transition_helper = DetectionLifecycleTransitionHelper(service)
+        self.reconciliation_resolver = DetectionReconciliationResolver(service)
+        self.wazuh_intake_handler = LiveWazuhIntakeHandler(service, self)
+
+    def ingest_wazuh_alert(
+        self,
+        *,
+        raw_alert: Mapping[str, object],
+        authorization_header: str | None,
+        forwarded_proto: str | None,
+        reverse_proxy_secret_header: str | None,
+        peer_addr: str | None,
+    ) -> FindingAlertIngestResult:
+        return self.wazuh_intake_handler.ingest_wazuh_alert(
+            raw_alert=raw_alert,
+            authorization_header=authorization_header,
+            forwarded_proto=forwarded_proto,
+            reverse_proxy_secret_header=reverse_proxy_secret_header,
+            peer_addr=peer_addr,
         )
 
     def ingest_finding_alert(
@@ -321,7 +346,7 @@ class DetectionIntakeService:
             )
             inputs = _AnalyticSignalAdmissionInputs(
                 finding_id=inputs.finding_id,
-                analytic_signal_id=service._resolve_analytic_signal_id(
+                analytic_signal_id=self.resolve_analytic_signal_id(
                     analytic_signal_id=inputs.analytic_signal_id,
                     finding_id=inputs.finding_id,
                     correlation_key=inputs.correlation_key,
@@ -690,6 +715,23 @@ class DetectionIntakeService:
             record=record,
             ingest_result=ingest_result,
             substrate_detection_record_id=substrate_detection_record_id,
+        )
+
+    def resolve_analytic_signal_id(
+        self,
+        *,
+        analytic_signal_id: str | None,
+        finding_id: str,
+        correlation_key: str,
+        substrate_detection_record_id: str | None,
+        latest_reconciliation: ReconciliationRecord | None,
+    ) -> str:
+        return self.reconciliation_resolver.resolve_analytic_signal_id(
+            analytic_signal_id=analytic_signal_id,
+            finding_id=finding_id,
+            correlation_key=correlation_key,
+            substrate_detection_record_id=substrate_detection_record_id,
+            latest_reconciliation=latest_reconciliation,
         )
 
     def reviewed_context_transitioned_at(
