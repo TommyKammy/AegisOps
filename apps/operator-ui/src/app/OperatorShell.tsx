@@ -42,6 +42,7 @@ import {
 import {
   OperatorUiEventLogPanel,
   OperatorUiEventLogProvider,
+  type OperatorUiEventLogObserver,
   useOperatorUiEventLog,
 } from "./operatorUiEvents";
 import { TaskActionClientProvider } from "../taskActions/taskActionPrimitives";
@@ -453,11 +454,13 @@ export function OperatorShell({
   dataProvider,
   operatorIdentity,
   operatorRoles,
+  onEventLogEntriesChange,
   taskActionClient,
 }: {
   authProvider: AuthProvider;
   basePath: string;
   dataProvider: DataProvider;
+  onEventLogEntriesChange?: OperatorUiEventLogObserver;
   operatorIdentity: string;
   operatorRoles: string[];
   taskActionClient: OperatorTaskActionClient;
@@ -471,7 +474,7 @@ export function OperatorShell({
       dataProvider={dataProvider}
       theme={operatorTheme}
     >
-      <OperatorUiEventLogProvider>
+      <OperatorUiEventLogProvider onEntriesChange={onEventLogEntriesChange}>
         <TaskActionClientProvider client={taskActionClient}>
           <Layout
             appBar={OperatorAppBar}

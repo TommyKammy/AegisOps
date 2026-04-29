@@ -1,5 +1,6 @@
 import {
   createContext,
+  useEffect,
   useContext,
   useMemo,
   useRef,
@@ -21,6 +22,10 @@ export interface OperatorUiEventRecord {
   route: string;
   target?: string;
 }
+
+export type OperatorUiEventLogObserver = (
+  entries: OperatorUiEventRecord[],
+) => void;
 
 interface OperatorUiEventLogContextValue {
   entries: OperatorUiEventRecord[];
@@ -91,12 +96,18 @@ function appendEntry(
 export function OperatorUiEventLogProvider({
   children,
   now = () => new Date(),
+  onEntriesChange,
 }: {
   children: ReactNode;
   now?: () => Date;
+  onEntriesChange?: OperatorUiEventLogObserver;
 }) {
   const [entries, setEntries] = useState<OperatorUiEventRecord[]>([]);
   const nextId = useRef(1);
+
+  useEffect(() => {
+    onEntriesChange?.(entries);
+  }, [entries, onEntriesChange]);
 
   const value = useMemo<OperatorUiEventLogContextValue>(
     () => ({

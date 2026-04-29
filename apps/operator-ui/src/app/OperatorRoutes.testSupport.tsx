@@ -1,5 +1,8 @@
-import { useNavigate } from "react-router-dom";
+import { render } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { MemoryRouter, useNavigate } from "react-router-dom";
 import { vi } from "vitest";
+import { OperatorRoutes, type OperatorAppDependencies } from "./OperatorRoutes";
 
 export function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -11,7 +14,12 @@ export function jsonResponse(body: unknown, status = 200) {
 }
 
 export function createOptionalExtensionPayload(
-  overrides: Partial<Record<"assistant" | "endpoint_evidence" | "network_evidence" | "ml_shadow", unknown>> = {},
+  overrides: Partial<
+    Record<
+      "assistant" | "endpoint_evidence" | "network_evidence" | "ml_shadow",
+      unknown
+    >
+  > = {},
 ) {
   return {
     overall_state: "ready",
@@ -55,11 +63,18 @@ export function createOptionalExtensionPayload(
 }
 
 export function createReadinessResponse(
-  optionalExtensionsOverrides?: Partial<Record<"assistant" | "endpoint_evidence" | "network_evidence" | "ml_shadow", unknown>>,
+  optionalExtensionsOverrides?: Partial<
+    Record<
+      "assistant" | "endpoint_evidence" | "network_evidence" | "ml_shadow",
+      unknown
+    >
+  >,
 ) {
   return {
     metrics: {
-      optional_extensions: createOptionalExtensionPayload(optionalExtensionsOverrides),
+      optional_extensions: createOptionalExtensionPayload(
+        optionalExtensionsOverrides,
+      ),
     },
     status: "ready",
   };
@@ -90,7 +105,9 @@ export function createAuthorizedFetch(
       );
     }
 
-    const match = Object.entries(handlers).find(([prefix]) => url.startsWith(prefix));
+    const match = Object.entries(handlers).find(([prefix]) =>
+      url.startsWith(prefix),
+    );
     if (match) {
       return Promise.resolve(jsonResponse(match[1]));
     }
@@ -122,6 +139,19 @@ export function createDeferredResponse() {
   };
 }
 
+export function renderOperatorRoute(
+  initialEntry: string,
+  dependencies: OperatorAppDependencies,
+  children?: ReactNode,
+) {
+  return render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      {children}
+      <OperatorRoutes dependencies={dependencies} />
+    </MemoryRouter>,
+  );
+}
+
 export function TestRouteNavigator() {
   const navigate = useNavigate();
 
@@ -130,7 +160,10 @@ export function TestRouteNavigator() {
       <button onClick={() => navigate("/operator/readiness")} type="button">
         Go to readiness
       </button>
-      <button onClick={() => navigate("/operator/alerts/alert-123")} type="button">
+      <button
+        onClick={() => navigate("/operator/alerts/alert-123")}
+        type="button"
+      >
         Go to alert detail
       </button>
     </>
