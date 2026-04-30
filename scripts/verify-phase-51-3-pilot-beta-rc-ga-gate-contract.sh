@@ -122,7 +122,7 @@ mac_user_home="$(printf '/%s/' 'Users')"
 unix_user_home="$(printf '/%s/' 'home')"
 windows_user_profile="$(printf '[A-Za-z]:\\\\%s\\\\' 'Users')"
 
-if grep -Eq "(^|[[:space:]])(${mac_user_home}|${unix_user_home}[^[:space:]]+|${windows_user_profile})" "${doc_path}"; then
+if grep -Eq "(${mac_user_home}[^[:space:]]*|${unix_user_home}[^[:space:]]*|${windows_user_profile}[^[:space:]]*)" "${doc_path}"; then
   echo "Forbidden Phase 51.3 gate contract: workstation-local absolute path detected" >&2
   exit 1
 fi
@@ -132,7 +132,7 @@ if [[ ! -f "${readme_path}" ]]; then
   exit 1
 fi
 
-if ! grep -Fq -- "docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md" "${readme_path}"; then
+if ! grep -Eq '\[[^]]+\]\(docs/phase-51-3-pilot-beta-rc-ga-gate-contract\.md\)' "${readme_path}"; then
   echo "README must link the Phase 51.3 pilot beta RC GA gate contract." >&2
   exit 1
 fi

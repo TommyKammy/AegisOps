@@ -17,7 +17,7 @@ create_valid_repo() {
   local target="$1"
 
   mkdir -p "${target}/docs"
-  printf '%s\n' "# AegisOps" "See docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md." >"${target}/README.md"
+  printf '%s\n' "# AegisOps" "See [Phase 51.3 gate contract](docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md)." >"${target}/README.md"
   cp "${repo_root}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md" \
     "${target}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
 }
@@ -125,10 +125,17 @@ assert_fails_with \
 workstation_path_repo="${workdir}/workstation-local-path"
 create_valid_repo "${workstation_path_repo}"
 workstation_path="$(printf '/%s/%s/evidence.md' "Users" "example")"
-printf '%s\n' "Evidence path: ${workstation_path}" \
+printf '%s\n' "Evidence path:file://${workstation_path}" \
   >>"${workstation_path_repo}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
 assert_fails_with \
   "${workstation_path_repo}" \
   "Forbidden Phase 51.3 gate contract: workstation-local absolute path detected"
+
+raw_readme_path_repo="${workdir}/raw-readme-path"
+create_valid_repo "${raw_readme_path_repo}"
+printf '%s\n' "# AegisOps" "See docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md." >"${raw_readme_path_repo}/README.md"
+assert_fails_with \
+  "${raw_readme_path_repo}" \
+  "README must link the Phase 51.3 pilot beta RC GA gate contract."
 
 echo "Phase 51.3 pilot beta RC GA gate contract verifier tests passed."

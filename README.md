@@ -18,7 +18,7 @@ Canonical cross-phase boundary reference:
 
 - `docs/non-goals-and-expansion-guardrails.md`
 - `docs/adr/0011-phase-51-1-replacement-boundary.md` defines the Phase 51.1 SMB SecOps replacement boundary: AegisOps replaces the operating experience above Wazuh and Shuffle, not their internals or every SIEM/SOAR capability.
-- `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md` defines the Pilot, Beta, RC, and GA evidence gates for replacement-readiness materialization.
+- [Phase 51.3 pilot beta RC GA gate contract](docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md) defines the Pilot, Beta, RC, and GA evidence gates for replacement-readiness materialization.
 
 ## Product positioning
 
@@ -30,7 +30,7 @@ Replacement means the operating experience and authoritative record chain for da
 
 The Phase 51 replacement boundary is defined by `docs/adr/0011-phase-51-1-replacement-boundary.md`.
 
-The Phase 51.3 Pilot, Beta, RC, and GA gate contract is defined by `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md`; Phase 66 is RC and Phase 67 is GA.
+The Phase 51.3 Pilot, Beta, RC, and GA gate contract is defined by the [Phase 51.3 pilot beta RC GA gate contract](docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md); Phase 66 is RC and Phase 67 is GA.
 
 Wazuh detects, AegisOps decides, records, and reconciles, and Shuffle executes reviewed delegated routine work.
 
