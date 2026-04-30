@@ -132,6 +132,99 @@ class CaseDetectionLinkageHelper:
             )
 
 
+class CaseWorkflowFacade:
+    def record_case_observation(
+        self,
+        *,
+        case_id: str,
+        author_identity: str,
+        observed_at: datetime,
+        scope_statement: str,
+        supporting_evidence_ids: tuple[str, ...] = (),
+        observation_id: str | None = None,
+        lifecycle_state: str = "confirmed",
+    ) -> ObservationRecord:
+        return self._case_workflow_service.record_case_observation(
+            case_id=case_id,
+            author_identity=author_identity,
+            observed_at=observed_at,
+            scope_statement=scope_statement,
+            supporting_evidence_ids=supporting_evidence_ids,
+            observation_id=observation_id,
+            lifecycle_state=lifecycle_state,
+        )
+
+    def record_case_lead(
+        self,
+        *,
+        case_id: str,
+        triage_owner: str,
+        triage_rationale: str,
+        observation_id: str | None = None,
+        lead_id: str | None = None,
+        lifecycle_state: str = "triaged",
+    ) -> LeadRecord:
+        return self._case_workflow_service.record_case_lead(
+            case_id=case_id,
+            triage_owner=triage_owner,
+            triage_rationale=triage_rationale,
+            observation_id=observation_id,
+            lead_id=lead_id,
+            lifecycle_state=lifecycle_state,
+        )
+
+    def record_case_recommendation(
+        self,
+        *,
+        case_id: str,
+        review_owner: str,
+        intended_outcome: str,
+        lead_id: str | None = None,
+        recommendation_id: str | None = None,
+        lifecycle_state: str = "under_review",
+    ) -> RecommendationRecord:
+        return self._case_workflow_service.record_case_recommendation(
+            case_id=case_id,
+            review_owner=review_owner,
+            intended_outcome=intended_outcome,
+            lead_id=lead_id,
+            recommendation_id=recommendation_id,
+            lifecycle_state=lifecycle_state,
+        )
+
+    def record_case_handoff(
+        self,
+        *,
+        case_id: str,
+        handoff_at: datetime,
+        handoff_owner: str,
+        handoff_note: str,
+        follow_up_evidence_ids: tuple[str, ...] = (),
+    ) -> CaseRecord:
+        return self._case_workflow_service.record_case_handoff(
+            case_id=case_id,
+            handoff_at=handoff_at,
+            handoff_owner=handoff_owner,
+            handoff_note=handoff_note,
+            follow_up_evidence_ids=follow_up_evidence_ids,
+        )
+
+    def record_case_disposition(
+        self,
+        *,
+        case_id: str,
+        disposition: str,
+        rationale: str,
+        recorded_at: datetime,
+    ) -> CaseRecord:
+        return self._case_workflow_service.record_case_disposition(
+            case_id=case_id,
+            disposition=disposition,
+            rationale=rationale,
+            recorded_at=recorded_at,
+        )
+
+
 class CaseWorkflowService:
     def __init__(
         self,

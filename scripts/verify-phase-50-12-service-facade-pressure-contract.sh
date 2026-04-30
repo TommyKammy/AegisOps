@@ -5,6 +5,7 @@ set -euo pipefail
 repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 doc_path="${repo_root}/docs/adr/0009-phase-50-12-service-facade-pressure-contract.md"
 baseline_path="${repo_root}/docs/maintainability-hotspot-baseline.txt"
+closeout_path="${repo_root}/docs/phase-50-maintainability-closeout.md"
 
 required_headings=(
   "# ADR-0009: Phase 50.12 Service Facade Pressure Contract"
@@ -119,23 +120,53 @@ for phrase in "${required_phrases[@]}"; do
 done
 
 starting_service_baseline_entry="control-plane/aegisops_control_plane/service.py max_lines=1812 max_effective_lines=1632 max_facade_methods=125 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.11.7 issue=#1007"
+phase50_12_4_service_baseline_entry="control-plane/aegisops_control_plane/service.py max_lines=1619 max_effective_lines=1445 max_facade_methods=117 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.12.4 issue=#1019"
 service_entry="$(grep -Fx -- "${starting_service_baseline_entry}" "${baseline_path}" || true)"
+phase50_12_4_service_entry="$(grep -Fx -- "${phase50_12_4_service_baseline_entry}" "${baseline_path}" || true)"
 service_entry_count="$(printf '%s\n' "${service_entry}" | sed '/^$/d' | wc -l | tr -d ' ')"
+phase50_12_4_service_entry_count="$(printf '%s\n' "${phase50_12_4_service_entry}" | sed '/^$/d' | wc -l | tr -d ' ')"
 service_path_entry_count="$(
   awk -v prefix="control-plane/aegisops_control_plane/service.py " \
     'index($0, prefix) == 1 { count += 1 } END { print count + 0 }' \
     "${baseline_path}"
 )"
+if [[ "${service_path_entry_count}" -ne 1 ]]; then
+  echo "Phase 50.12 contract requires exactly one service.py hotspot baseline entry." >&2
+  exit 1
+fi
+if [[ "${service_entry_count}" -eq 1 ]]; then
+  echo "Phase 50.12 service facade pressure contract fixes residual clusters, starting measurements, sub-1500 target ceilings, fallback rules, authority non-goals, migration order, and validation commands."
+  exit 0
+fi
+if [[ "${phase50_12_4_service_entry_count}" -eq 1 ]]; then
+  if [[ ! -f "${closeout_path}" ]]; then
+    echo "Phase 50.12.4 baseline requires docs/phase-50-maintainability-closeout.md evidence." >&2
+    exit 1
+  fi
+  phase50_12_4_closeout_phrases=(
+    "Phase 50.12.4 for #1019 fenced casework write compatibility delegates behind the case workflow facade."
+    "- \`max_lines=1619\`"
+    "- \`max_effective_lines=1445\`"
+    "- \`max_facade_methods=117\`"
+    "- \`phase=50.12.4\`"
+    "- \`issue=#1019\`"
+    "Phase 50.12.4 then moved the casework write compatibility delegates out of \`AegisOpsControlPlaneService\` and into \`control-plane/aegisops_control_plane/case_workflow.py\`, preserving the public facade entrypoints for observation, lead, recommendation, handoff, and disposition writes."
+  )
+  for phrase in "${phase50_12_4_closeout_phrases[@]}"; do
+    if ! grep -Fq -- "${phrase}" "${closeout_path}"; then
+      echo "Phase 50.12.4 baseline requires closeout evidence: ${phrase}" >&2
+      exit 1
+    fi
+  done
+  echo "Phase 50.12 service facade pressure contract fixes residual clusters, starting measurements, sub-1500 target ceilings, fallback rules, authority non-goals, migration order, and validation commands."
+  exit 0
+fi
 if [[ "${service_entry_count}" -eq 0 ]]; then
   if [[ "${service_path_entry_count}" -ne 0 ]]; then
     echo "Phase 50.12 contract forbids refreshing the service.py hotspot baseline before implementation evidence exists." >&2
     exit 1
   fi
   echo "Phase 50.12 contract requires the accepted Phase 50.11.7 service.py hotspot baseline entry." >&2
-  exit 1
-fi
-if [[ "${service_path_entry_count}" -ne 1 || "${service_entry_count}" -ne 1 ]]; then
-  echo "Phase 50.12 contract requires exactly one service.py hotspot baseline entry." >&2
   exit 1
 fi
 if [[ "${service_entry}" != "${starting_service_baseline_entry}" ]]; then

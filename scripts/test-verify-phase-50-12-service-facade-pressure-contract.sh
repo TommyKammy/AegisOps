@@ -212,6 +212,26 @@ valid_repo="${workdir}/valid"
 create_valid_repo "${valid_repo}"
 assert_passes "${valid_repo}"
 
+phase50_12_4_closeout_repo="${workdir}/phase50-12-4-closeout"
+create_valid_repo "${phase50_12_4_closeout_repo}"
+printf '%s\n' \
+  "control-plane/aegisops_control_plane/service.py max_lines=1619 max_effective_lines=1445 max_facade_methods=117 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.12.4 issue=#1019" \
+  >"${phase50_12_4_closeout_repo}/docs/maintainability-hotspot-baseline.txt"
+cat >"${phase50_12_4_closeout_repo}/docs/phase-50-maintainability-closeout.md" <<'EOF'
+# Phase 50 Maintainability Closeout
+
+Phase 50.12.4 for #1019 fenced casework write compatibility delegates behind the case workflow facade.
+
+- `max_lines=1619`
+- `max_effective_lines=1445`
+- `max_facade_methods=117`
+- `phase=50.12.4`
+- `issue=#1019`
+
+Phase 50.12.4 then moved the casework write compatibility delegates out of `AegisOpsControlPlaneService` and into `control-plane/aegisops_control_plane/case_workflow.py`, preserving the public facade entrypoints for observation, lead, recommendation, handoff, and disposition writes.
+EOF
+assert_passes "${phase50_12_4_closeout_repo}"
+
 missing_contract_repo="${workdir}/missing-contract"
 create_valid_repo "${missing_contract_repo}"
 rm "${missing_contract_repo}/docs/adr/0009-phase-50-12-service-facade-pressure-contract.md"
