@@ -160,6 +160,15 @@ assert_fails_with \
   "${workstation_path_repo}" \
   "Forbidden Phase 51.3 gate contract: workstation-local absolute path detected"
 
+windows_slash_path_repo="${workdir}/windows-slash-path"
+create_valid_repo "${windows_slash_path_repo}"
+windows_slash_path="$(printf 'C:/%s/%s/evidence.md' "Users" "example")"
+printf '%s\n' "Evidence path:file://${windows_slash_path}" \
+  >>"${windows_slash_path_repo}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
+assert_fails_with \
+  "${windows_slash_path_repo}" \
+  "Forbidden Phase 51.3 gate contract: workstation-local absolute path detected"
+
 raw_readme_path_repo="${workdir}/raw-readme-path"
 create_valid_repo "${raw_readme_path_repo}"
 printf '%s\n' "# AegisOps" "See docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md." >"${raw_readme_path_repo}/README.md"
@@ -187,6 +196,18 @@ printf '%s\n' \
   >"${fenced_code_readme_link_repo}/README.md"
 assert_fails_with \
   "${fenced_code_readme_link_repo}" \
+  "README must link the Phase 51.3 pilot beta RC GA gate contract."
+
+tilde_fenced_code_readme_link_repo="${workdir}/tilde-fenced-code-readme-link"
+create_valid_repo "${tilde_fenced_code_readme_link_repo}"
+printf '%s\n' \
+  "# AegisOps" \
+  '~~~markdown' \
+  '[Phase 51.3 gate contract](docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md)' \
+  '~~~' \
+  >"${tilde_fenced_code_readme_link_repo}/README.md"
+assert_fails_with \
+  "${tilde_fenced_code_readme_link_repo}" \
   "README must link the Phase 51.3 pilot beta RC GA gate contract."
 
 echo "Phase 51.3 pilot beta RC GA gate contract verifier tests passed."

@@ -120,9 +120,10 @@ done
 
 mac_user_home="$(printf '/%s/' 'Users')"
 unix_user_home="$(printf '/%s/' 'home')"
-windows_user_profile="$(printf '[A-Za-z]:\\\\%s\\\\' 'Users')"
+windows_user_profile_backslash="$(printf '[A-Za-z]:\\\\%s\\\\' 'Users')"
+windows_user_profile_slash="$(printf '[A-Za-z]:/%s/' 'Users')"
 
-if grep -Eq "(${mac_user_home}[^[:space:]]*|${unix_user_home}[^[:space:]]*|${windows_user_profile}[^[:space:]]*)" "${doc_path}"; then
+if grep -Eq "(${mac_user_home}[^[:space:]]*|${unix_user_home}[^[:space:]]*|${windows_user_profile_backslash}[^[:space:]]*|${windows_user_profile_slash}[^[:space:]]*)" "${doc_path}"; then
   echo "Forbidden Phase 51.3 gate contract: workstation-local absolute path detected" >&2
   exit 1
 fi
@@ -134,7 +135,7 @@ fi
 
 readme_rendered_markdown="$(
   awk '
-    /^[[:space:]]*```/ {
+    /^[[:space:]]*(```|~~~)/ {
       in_fenced_block = !in_fenced_block
       next
     }
