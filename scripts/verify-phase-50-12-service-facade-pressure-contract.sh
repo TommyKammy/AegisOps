@@ -248,6 +248,9 @@ if [[ "${phase50_13_5_service_entry_count}" -eq 1 ]]; then
   phase50_13_5_closeout_phrases=(
     "Phase 50.13.5 records the accepted final \`service.py\` residual closeout after the Phase 50.11.7 ordered DTO/helper extraction sequence, the Phase 50.12.2/50.12.3/50.12.4/50.12.5/50.12.6 facade-pressure reductions, and the Phase 50.13 facade inventory, internal rewiring, private guard relocation, and compatibility delegate consolidation work governed by ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, and ADR-0010."
     "The measured Phase 50.13.5 closeout state is:"
+    "- \`physical_lines=1393\`"
+    "- \`effective_lines=1241\`"
+    "- \`AegisOpsControlPlaneService methods=95\`"
     "The Phase 50.13 target of \`AegisOpsControlPlaneService <= 85\` methods was not reached safely; the retained \`95\` facade methods are accepted only as an ADR-0003 facade-preservation exception because the remaining public compatibility entrypoints continue to protect existing callers while delegating into extracted boundaries."
     "- \`max_lines=1393\`"
     "- \`max_effective_lines=1241\`"

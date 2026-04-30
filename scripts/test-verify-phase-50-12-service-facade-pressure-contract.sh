@@ -312,9 +312,21 @@ Phase 50.13.5 records the accepted final `service.py` residual closeout after th
 
 The measured Phase 50.13.5 closeout state is:
 
+- `physical_lines=1393`
+- `effective_lines=1241`
+- `AegisOpsControlPlaneService methods=95`
+
 The Phase 50.13 target of `AegisOpsControlPlaneService <= 85` methods was not reached safely; the retained `95` facade methods are accepted only as an ADR-0003 facade-preservation exception because the remaining public compatibility entrypoints continue to protect existing callers while delegating into extracted boundaries.
 EOF
 assert_passes "${phase50_13_5_closeout_repo}"
+
+phase50_13_5_missing_measured_evidence_repo="${workdir}/phase50-13-5-missing-measured-evidence"
+cp -R "${phase50_13_5_closeout_repo}" "${phase50_13_5_missing_measured_evidence_repo}"
+perl -0pi -e 's/- `AegisOpsControlPlaneService methods=95`\n//g' \
+  "${phase50_13_5_missing_measured_evidence_repo}/docs/phase-50-maintainability-closeout.md"
+assert_fails_with \
+  "${phase50_13_5_missing_measured_evidence_repo}" \
+  "Phase 50.13.5 baseline requires closeout evidence: - \`AegisOpsControlPlaneService methods=95\`"
 
 missing_contract_repo="${workdir}/missing-contract"
 create_valid_repo "${missing_contract_repo}"
