@@ -119,13 +119,22 @@ for phrase in "${required_phrases[@]}"; do
 done
 
 starting_service_baseline_entry="control-plane/aegisops_control_plane/service.py max_lines=1812 max_effective_lines=1632 max_facade_methods=125 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.11.7 issue=#1007"
-service_entry="$(grep -E '^control-plane/aegisops_control_plane/service.py[[:space:]]' "${baseline_path}" || true)"
+service_entry="$(grep -Fx -- "${starting_service_baseline_entry}" "${baseline_path}" || true)"
 service_entry_count="$(printf '%s\n' "${service_entry}" | sed '/^$/d' | wc -l | tr -d ' ')"
+service_path_entry_count="$(
+  awk -v prefix="control-plane/aegisops_control_plane/service.py " \
+    'index($0, prefix) == 1 { count += 1 } END { print count + 0 }' \
+    "${baseline_path}"
+)"
 if [[ "${service_entry_count}" -eq 0 ]]; then
+  if [[ "${service_path_entry_count}" -ne 0 ]]; then
+    echo "Phase 50.12 contract forbids refreshing the service.py hotspot baseline before implementation evidence exists." >&2
+    exit 1
+  fi
   echo "Phase 50.12 contract requires the accepted Phase 50.11.7 service.py hotspot baseline entry." >&2
   exit 1
 fi
-if [[ "${service_entry_count}" -ne 1 ]]; then
+if [[ "${service_path_entry_count}" -ne 1 || "${service_entry_count}" -ne 1 ]]; then
   echo "Phase 50.12 contract requires exactly one service.py hotspot baseline entry." >&2
   exit 1
 fi
