@@ -39,6 +39,28 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
                 )
         raise AssertionError(f"{class_name} class not found")
 
+    def _facade_method(self, method_name: str) -> ast.FunctionDef:
+        service_text = self._read("control-plane/aegisops_control_plane/service.py")
+        tree = ast.parse(
+            service_text,
+            filename="control-plane/aegisops_control_plane/service.py",
+        )
+        service_class = next(
+            (
+                node
+                for node in tree.body
+                if isinstance(node, ast.ClassDef)
+                and node.name == "AegisOpsControlPlaneService"
+            ),
+            None,
+        )
+        if service_class is None:
+            raise AssertionError("AegisOpsControlPlaneService class not found")
+        for child in service_class.body:
+            if isinstance(child, ast.FunctionDef) and child.name == method_name:
+                return child
+        raise AssertionError(f"{method_name} method not found")
+
     def _baseline_metadata(self) -> dict[str, str]:
         for line in self._read("docs/maintainability-hotspot-baseline.txt").splitlines():
             stripped = line.strip()
@@ -131,6 +153,52 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
             "bash scripts/test-verify-phase-50-12-service-facade-pressure-contract.sh",
         ):
             self.assertIn(required, closeout)
+
+    def test_closeout_lists_retained_public_compatibility_delegates(self) -> None:
+        closeout = self._read("docs/phase-50-maintainability-closeout.md")
+
+        for required in (
+            "## Retained Compatibility Delegates",
+            "| `ingest_finding_alert` | `DetectionIntakeService.ingest_finding_alert` |",
+            "| `reconcile_action_execution` | `ActionLifecycleWriteCoordinator.reconcile_action_execution` |",
+            "Both retained delegates must remain narrow single-hop facade methods.",
+            "Remove or reclassify only after every documented caller is rewired to `DetectionIntakeService`",
+            "Remove or reclassify only after every documented caller is rewired to the action lifecycle write boundary",
+            "rejected reconciliation paths still prove durable state stays clean",
+            "must not grow local authorization, provenance, scope, reconciliation, detection, projection, persistence, or durable-state side effects in `service.py`",
+        ):
+            self.assertIn(required, closeout)
+
+    def test_retained_compatibility_delegates_are_single_hop_facade_methods(
+        self,
+    ) -> None:
+        expected_delegates = {
+            "ingest_finding_alert": (
+                "_detection_intake_service",
+                "ingest_finding_alert",
+            ),
+            "reconcile_action_execution": (
+                "_action_lifecycle_write_coordinator",
+                "reconcile_action_execution",
+            ),
+        }
+
+        for method_name, (attribute_name, target_method_name) in expected_delegates.items():
+            with self.subTest(method_name=method_name):
+                method = self._facade_method(method_name)
+                self.assertEqual(len(method.body), 1)
+                statement = method.body[0]
+                self.assertIsInstance(statement, ast.Return)
+                return_value = statement.value
+                self.assertIsInstance(return_value, ast.Call)
+                callee = return_value.func
+                self.assertIsInstance(callee, ast.Attribute)
+                self.assertEqual(callee.attr, target_method_name)
+                target = callee.value
+                self.assertIsInstance(target, ast.Attribute)
+                self.assertEqual(target.attr, attribute_name)
+                self.assertIsInstance(target.value, ast.Name)
+                self.assertEqual(target.value.id, "self")
 
     def test_verifier_reports_only_phase50_accepted_hotspot(self) -> None:
         bash_executable = shutil.which("bash")
