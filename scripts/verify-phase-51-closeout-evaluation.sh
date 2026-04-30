@@ -25,11 +25,12 @@ fi
 
 required_phrases=(
   "# Phase 51 Closeout Evaluation"
-  "**Status**: Accepted with lifecycle closed; Phase 52 preflight reconciliation pending"
+  "**Status**: Accepted with lifecycle closed; Phase 52 preflight unblocked by Phase 51 graph state"
   "**Related Issues**: #1041, #1042, #1043, #1044, #1045, #1046, #1047, #1048, #1049"
   "Phase 51 is accepted as a repo-owned replacement-readiness contract."
-  "Phase 52 is the next materialization target after repo-owned graph and preflight state are reconciled with the now-closed Phase 51 issue lifecycle."
-  'phase_classification["51"] = "materialized_open"'
+  "Phase 52 is the next materialization target after repo-owned graph and preflight state were reconciled with the now-closed Phase 51 issue lifecycle."
+  'phase_classification["51"] = "done"'
+  "Phase 52 issue materialization still requires explicit owner direction."
   "| #1042 | Phase 51.1 replacement boundary ADR | Closed."
   "| #1043 | Phase 51.2 README product positioning | Closed."
   "| #1044 | Phase 51.3 Pilot, Beta, RC, and GA gate contract | Closed."
@@ -61,16 +62,20 @@ required_phrases=(
   "CODEX_SUPERVISOR_ROOT=<codex-supervisor-root>"
   "CODEX_SUPERVISOR_CONFIG=<supervisor-config-path>"
   "bash scripts/roadmap-materialization-preflight.sh --graph docs/automation/roadmap-materialization-phase-graph.json --target-phase 52 --issue-source github"
-  'invalid_phase_id="51"'
-  'invalid_field="phase_completion_state"'
+  "That check now passes after the repo-owned graph recorded Phase 51 as complete and evaluated."
+  "It verifies the Phase 51 predecessor gate only; it does not create or authorize Phase 52 issues."
+  "pass=true"
+  "fail=false"
+  "invalid_phase_id=null"
+  "invalid_field=null"
   'invalid_issue_number=null'
-  'phase_classification["51"]="materialized_open"'
-  "The remaining Phase 52 preflight blocker is repo-owned graph reconciliation, not GitHub issue lifecycle."
+  'phase_classification["51"]="done"'
+  'suggested_next_safe_action="evaluate next phase gate"'
   "Replacement boundary ADR exists and is cited from README."
   "Authority-boundary policy requires later breadth issues to cite fail-closed negative-test expectations"
   "Phase 51 does not implement Phase 52 setup"
   "Phase 51 does not prove GA replacement readiness."
-  'Do not materialize Phase 52 while repo-owned graph or preflight state still reports Phase 51 as `materialized_open`, stale, missing, or otherwise unreconciled.'
+  "Do not materialize Phase 52 solely because the graph and preflight now classify Phase 51 as done; Phase 52 issue materialization still requires explicit owner direction."
 )
 
 for phrase in "${required_phrases[@]}"; do
@@ -91,6 +96,7 @@ for forbidden in \
   "Phase 51 proves GA replacement readiness" \
   "Phase 52 may be materialized while Phase 51 is open" \
   "Phase 52 is blocked because #1041 or #1049 are open" \
+  "The remaining Phase 52 preflight blocker is repo-owned graph reconciliation" \
   "while #1041 and #1049 remain open" \
   "#1049 | Phase 51.8 closeout evaluation | Open" \
   "Accepted with lifecycle closeout pending" \

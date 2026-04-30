@@ -32,9 +32,9 @@
     {
       "phase_id": "51",
       "phase_title": "Replacement Thesis, Gates, Boundary ADR",
-      "phase_status": "materialized",
-      "phase_completion_state": "open",
-      "phase_evaluation_state": "open",
+      "phase_status": "done",
+      "phase_completion_state": "done",
+      "phase_evaluation_state": "evaluated",
       "predecessor_phase_ids": [],
       "epic_issue_number": 1041,
       "child_issue_numbers": [1042, 1043, 1044, 1045, 1046, 1047, 1048, 1049]

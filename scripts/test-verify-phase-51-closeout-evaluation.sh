@@ -56,13 +56,13 @@ assert_fails_with \
   "${missing_doc_repo}" \
   "Missing Phase 51 closeout evaluation: docs/phase-51-closeout-evaluation.md"
 
-missing_phase52_guard_repo="${workdir}/missing-phase52-guard"
-copy_valid_repo "${missing_phase52_guard_repo}"
-perl -0pi -e 's/Do not materialize Phase 52 while repo-owned graph or preflight state still reports Phase 51 as `materialized_open`, stale, missing, or otherwise unreconciled\.//' \
-  "${missing_phase52_guard_repo}/docs/phase-51-closeout-evaluation.md"
+missing_owner_direction_repo="${workdir}/missing-owner-direction"
+copy_valid_repo "${missing_owner_direction_repo}"
+perl -0pi -e 's/Do not materialize Phase 52 solely because the graph and preflight now classify Phase 51 as done; Phase 52 issue materialization still requires explicit owner direction\.//' \
+  "${missing_owner_direction_repo}/docs/phase-51-closeout-evaluation.md"
 assert_fails_with \
-  "${missing_phase52_guard_repo}" \
-  'Missing required closeout term in docs/phase-51-closeout-evaluation.md: Do not materialize Phase 52 while repo-owned graph or preflight state still reports Phase 51 as `materialized_open`, stale, missing, or otherwise unreconciled.'
+  "${missing_owner_direction_repo}" \
+  "Missing required closeout term in docs/phase-51-closeout-evaluation.md: Do not materialize Phase 52 solely because the graph and preflight now classify Phase 51 as done; Phase 52 issue materialization still requires explicit owner direction."
 
 ga_overclaim_repo="${workdir}/ga-overclaim"
 copy_valid_repo "${ga_overclaim_repo}"
