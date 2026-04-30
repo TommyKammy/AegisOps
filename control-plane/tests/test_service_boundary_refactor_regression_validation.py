@@ -637,6 +637,54 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
             constructor_call_names,
         )
 
+    def test_phase50_12_3_action_approval_policy_helpers_leave_service_facade(
+        self,
+    ) -> None:
+        service_source = self._read("control-plane/aegisops_control_plane/service.py")
+        write_surface_source = self._read(
+            "control-plane/aegisops_control_plane/action_review_write_surface.py"
+        )
+        service_tree = ast.parse(service_source)
+        service_class = next(
+            node
+            for node in service_tree.body
+            if isinstance(node, ast.ClassDef)
+            and node.name == "AegisOpsControlPlaneService"
+        )
+        service_method_names = {
+            node.name
+            for node in service_class.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        service_module_function_names = {
+            node.name
+            for node in service_tree.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        write_surface_functions = {
+            node.name
+            for node in ast.parse(write_surface_source).body
+            if isinstance(node, ast.FunctionDef)
+        }
+
+        approval_policy_helpers = {
+            "_require_reviewed_action_approver_policy",
+            "_reviewed_action_class_for_request",
+            "_authorized_approver_identities_for_request",
+        }
+        self.assertFalse(
+            approval_policy_helpers & service_method_names,
+            "reviewed action approval policy helpers should not remain service facade methods",
+        )
+        self.assertFalse(
+            approval_policy_helpers & service_module_function_names,
+            "reviewed action approval policy helpers should not remain service module functions",
+        )
+        self.assertTrue(
+            approval_policy_helpers.issubset(write_surface_functions),
+            "reviewed action approval policy helpers should live with the approval write surface",
+        )
+
     def test_phase50_9_3_persistence_restore_and_status_helpers_leave_service_facade(
         self,
     ) -> None:
