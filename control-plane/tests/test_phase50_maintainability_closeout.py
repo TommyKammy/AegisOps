@@ -58,8 +58,8 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
         facade_methods = self._facade_method_count(metadata["facade_class"])
 
         self.assertEqual(metadata["adr_exception"], "ADR-0003")
-        self.assertEqual(metadata["phase"], "50.12.6")
-        self.assertEqual(metadata["issue"], "#1021")
+        self.assertEqual(metadata["phase"], "50.12.7")
+        self.assertEqual(metadata["issue"], "#1022")
         self.assertEqual(metadata["facade_class"], "AegisOpsControlPlaneService")
         self.assertEqual(int(metadata["max_lines"]), physical_lines)
         self.assertEqual(int(metadata["max_effective_lines"]), effective_lines)
@@ -67,9 +67,12 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
         self.assertEqual(physical_lines, 1451)
         self.assertEqual(effective_lines, 1294)
         self.assertEqual(facade_methods, 100)
-        self.assertLess(int(metadata["max_lines"]), 3003)
-        self.assertLess(int(metadata["max_effective_lines"]), 2704)
-        self.assertLess(int(metadata["max_facade_methods"]), 167)
+        self.assertLess(int(metadata["max_lines"]), 1812)
+        self.assertLess(int(metadata["max_effective_lines"]), 1632)
+        self.assertLess(int(metadata["max_facade_methods"]), 125)
+        self.assertLessEqual(int(metadata["max_lines"]), 1500)
+        self.assertLessEqual(int(metadata["max_effective_lines"]), 1350)
+        self.assertGreater(int(metadata["max_facade_methods"]), 95)
 
     def test_closeout_notes_preserve_phase50_10_hotspot_and_trigger(self) -> None:
         closeout = self._read("docs/phase-50-maintainability-closeout.md")
@@ -81,6 +84,7 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
             "Phase 50.12.4",
             "Phase 50.12.5",
             "Phase 50.12.6",
+            "Phase 50.12.7",
             "control-plane/aegisops_control_plane/service.py",
             "control-plane/aegisops_control_plane/case_workflow.py",
             "control-plane/aegisops_control_plane/action_review_write_surface.py",
@@ -93,13 +97,18 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
             "max_facade_methods=100",
             "physical_lines=1451",
             "effective_lines=1294",
+            "max_lines <= 1500",
+            "max_effective_lines <= 1350",
+            "max_facade_methods <= 95",
             "ADR-0007",
             "ADR-0008",
+            "ADR-0009",
             "ADR-0004",
             "ADR-0003",
             "#1007",
             "#1017",
             "#1021",
+            "#1022",
             "#1018",
             "#1019",
             "#1020",
@@ -113,6 +122,8 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
             "another decomposition decision",
             "bash scripts/verify-maintainability-hotspots.sh",
             "bash scripts/test-verify-maintainability-hotspots.sh",
+            "bash scripts/verify-phase-50-12-service-facade-pressure-contract.sh",
+            "bash scripts/test-verify-phase-50-12-service-facade-pressure-contract.sh",
         ):
             self.assertIn(required, closeout)
 
@@ -140,11 +151,14 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
         for required in (
             "regrowth_repo",
             "phase50_11_regrowth_repo",
+            "phase50_12_final_regrowth_repo",
             "Maintainability hotspot baseline limits were exceeded",
             "lines=960 exceeds max_lines=959",
             "effective_lines=960 exceeds max_effective_lines=959",
             "lines=1774 exceeds max_lines=1773",
             "effective_lines=1774 exceeds max_effective_lines=1589",
+            "lines=1452 exceeds max_lines=1451",
+            "effective_lines=1452 exceeds max_effective_lines=1294",
             "max_facade_methods=0",
         ):
             self.assertIn(required, verifier_test)

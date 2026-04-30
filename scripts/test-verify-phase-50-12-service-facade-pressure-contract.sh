@@ -272,6 +272,28 @@ Phase 50.12.6 then moved the remaining reviewed action visibility persistence he
 EOF
 assert_passes "${phase50_12_6_closeout_repo}"
 
+phase50_12_7_closeout_repo="${workdir}/phase50-12-7-closeout"
+create_valid_repo "${phase50_12_7_closeout_repo}"
+printf '%s\n' \
+  "control-plane/aegisops_control_plane/service.py max_lines=1451 max_effective_lines=1294 max_facade_methods=100 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.12.7 issue=#1022" \
+  >"${phase50_12_7_closeout_repo}/docs/maintainability-hotspot-baseline.txt"
+cat >"${phase50_12_7_closeout_repo}/docs/phase-50-maintainability-closeout.md" <<'EOF'
+# Phase 50 Maintainability Closeout
+
+Phase 50.12.7 records the accepted final `service.py` residual closeout after the Phase 50.11.7 ordered DTO/helper extraction sequence and the Phase 50.12.2/50.12.3/50.12.4/50.12.5/50.12.6 facade-pressure reductions governed by ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, and ADR-0009.
+
+- `max_lines=1451`
+- `max_effective_lines=1294`
+- `max_facade_methods=100`
+- `phase=50.12.7`
+- `issue=#1022`
+
+The measured Phase 50.12.7 closeout state is:
+
+The baseline is lower than the Phase 50.11.7 ceiling of `max_lines=1812`, `max_effective_lines=1632`, and `max_facade_methods=125`. It also reached the ADR-0009 Phase 50.12 physical-line and effective-line targets of `max_lines <= 1500` and `max_effective_lines <= 1350`, but it did not reach the `max_facade_methods <= 95` target. The retained `100` facade methods are accepted only as an ADR-0003 facade-preservation exception because the remaining public compatibility entrypoints continue to protect existing callers while delegating into extracted boundaries.
+EOF
+assert_passes "${phase50_12_7_closeout_repo}"
+
 missing_contract_repo="${workdir}/missing-contract"
 create_valid_repo "${missing_contract_repo}"
 rm "${missing_contract_repo}/docs/adr/0009-phase-50-12-service-facade-pressure-contract.md"

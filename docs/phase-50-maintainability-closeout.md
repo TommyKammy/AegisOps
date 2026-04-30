@@ -1,6 +1,6 @@
 # Phase 50 Maintainability Closeout
 
-Phase 50.12.6 updates the accepted `service.py` residual closeout after the Phase 50.11.7 ordered DTO/helper extraction sequence and the Phase 50.12.2/50.12.3/50.12.4/50.12.5/50.12.6 facade-pressure reductions governed by ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, and ADR-0009.
+Phase 50.12.7 records the accepted final `service.py` residual closeout after the Phase 50.11.7 ordered DTO/helper extraction sequence and the Phase 50.12.2/50.12.3/50.12.4/50.12.5/50.12.6 facade-pressure reductions governed by ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, and ADR-0009.
 
 This closeout is validation and documentation only. It does not change runtime behavior, public APIs, approval, execution, reconciliation, assistant, ticket, ML, endpoint, network, browser, optional-evidence, restore, readiness, or operator authority.
 
@@ -19,16 +19,16 @@ That result is expected because `AegisOpsControlPlaneService` remains the public
 - `max_facade_methods=100`
 - `facade_class=AegisOpsControlPlaneService`
 - `adr_exception=ADR-0003`
-- `phase=50.12.6`
-- `issue=#1021`
+- `phase=50.12.7`
+- `issue=#1022`
 
-The measured closeout state is:
+The measured Phase 50.12.7 closeout state is:
 
 - `physical_lines=1451`
 - `effective_lines=1294`
 - `AegisOpsControlPlaneService methods=100`
 
-The baseline is lower than the Phase 50.10.6 ceiling of `max_lines=3003`, `max_effective_lines=2704`, and `max_facade_methods=167`. It is also below the ADR-0008 Phase 50.11 target ceiling of `max_lines <= 2700`, `max_effective_lines <= 2450`, and `max_facade_methods <= 150`.
+The baseline is lower than the Phase 50.11.7 ceiling of `max_lines=1812`, `max_effective_lines=1632`, and `max_facade_methods=125`. It also reached the ADR-0009 Phase 50.12 physical-line and effective-line targets of `max_lines <= 1500` and `max_effective_lines <= 1350`, but it did not reach the `max_facade_methods <= 95` target. The retained `100` facade methods are accepted only as an ADR-0003 facade-preservation exception because the remaining public compatibility entrypoints continue to protect existing callers while delegating into extracted boundaries.
 
 No additional baseline entry is recorded for restore validation, HTTP surface, assistant, detection, operator inspection, operator UI route tests, `control-plane/aegisops_control_plane/action_review_projection.py`, or `control-plane/aegisops_control_plane/external_evidence_boundary.py` because the verifier does not report those areas as current responsibility-growth candidates. The earlier Phase 50.9 projection measurement was `projection lines=105` and `projection effective_lines=103`, so the projection split does not require a baseline entry. The earlier Phase 50.10 external-evidence measurement was `external_evidence_boundary.py lines=216` and `external_evidence_boundary.py effective_lines=195`, so the external-evidence split does not require a baseline entry.
 
@@ -56,7 +56,7 @@ Those extractions preserve the public service facade. AegisOps control-plane rec
 
 ## Follow-Up Trigger
 
-The service facade remains above the long-term 1,500-line and 50-method targets. It is therefore an accepted exception, not a success target.
+The service facade is below the long-term 1,500-line target, but it remains above the long-term 50-method target. The retained method-count ceiling is therefore an accepted exception, not a success target.
 
 Any silent re-growth beyond the recorded ceiling must fail the verifier. The expected response is another decomposition decision or maintainability backlog before unrelated feature expansion lands in the facade.
 
@@ -70,8 +70,8 @@ Run:
 
 - `bash scripts/verify-maintainability-hotspots.sh`
 - `bash scripts/test-verify-maintainability-hotspots.sh`
-- `bash scripts/verify-phase-50-11-service-residual-extraction-contract.sh`
-- `bash scripts/test-verify-phase-50-11-service-residual-extraction-contract.sh`
+- `bash scripts/verify-phase-50-12-service-facade-pressure-contract.sh`
+- `bash scripts/test-verify-phase-50-12-service-facade-pressure-contract.sh`
 - `python3 -m unittest control-plane/tests/test_phase50_maintainability_closeout.py`
 
-The focused negative verifier coverage remains in `scripts/test-verify-maintainability-hotspots.sh` through the `regrowth_repo` fixture and the `phase50_11_regrowth_repo` fixture, which verify that line-count, effective-line, and facade-method growth beyond the recorded ceiling still fails closed.
+The focused negative verifier coverage remains in `scripts/test-verify-maintainability-hotspots.sh` through the `regrowth_repo`, `phase50_11_regrowth_repo`, and `phase50_12_final_regrowth_repo` fixtures, which verify that line-count, effective-line, and facade-method growth beyond the recorded ceiling still fails closed.
