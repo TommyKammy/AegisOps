@@ -19,7 +19,9 @@ from aegisops_control_plane.assistant_provider import (
     AssistantProviderAdapter,
     AssistantProviderResult,
 )
-from aegisops_control_plane.service import _phase24_live_assistant_citations_from_context
+from aegisops_control_plane.live_assistant_workflow import (
+    phase24_live_assistant_citations_from_context,
+)
 
 
 class Phase24LiveAssistantFeedbackLoopValidationTests(ServicePersistenceTestBase):
@@ -418,7 +420,7 @@ class Phase24LiveAssistantFeedbackLoopValidationTests(ServicePersistenceTestBase
                 "reviewed_context_conflicts": ("triage.disposition",),
             },
         )
-        expected_citations = _phase24_live_assistant_citations_from_context(
+        expected_citations = phase24_live_assistant_citations_from_context(
             unresolved_context
         )
         service._assistant_provider_adapter = mock.Mock()

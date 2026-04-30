@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import pathlib
 import sys
 
@@ -62,6 +63,32 @@ class AssistantAdvisoryPersistenceTests(ServicePersistenceTestBase):
                 for authority_term in authority_terms
             )
         )
+
+    def test_assistant_snapshot_and_live_helpers_are_not_owned_by_service_facade(
+        self,
+    ) -> None:
+        service_source = (
+            pathlib.Path(__file__).resolve().parents[1]
+            / "aegisops_control_plane"
+            / "service.py"
+        ).read_text()
+        service_functions = {
+            node.name
+            for node in ast.walk(ast.parse(service_source))
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+
+        extracted_helpers = {
+            "_advisory_inspection_snapshot_from_context",
+            "_recommendation_draft_snapshot_from_context",
+            "_phase24_live_assistant_unresolved_reasons",
+            "_phase24_live_assistant_prompt_injection_flags",
+            "_phase24_live_assistant_citations_from_context",
+            "_phase24_live_assistant_follow_up",
+            "_phase24_live_assistant_snapshot",
+        }
+
+        self.assertTrue(extracted_helpers.isdisjoint(service_functions))
 
     def test_service_delegates_assistant_context_to_assembler_and_advisory_to_coordinator(
         self,
