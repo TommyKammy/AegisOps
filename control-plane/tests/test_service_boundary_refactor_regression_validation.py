@@ -141,6 +141,80 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
         ):
             self.assertIn(term, auth_end_to_end_and_cli_tests)
 
+    def test_phase50_11_3_runtime_auth_and_structured_event_helpers_leave_service_facade(
+        self,
+    ) -> None:
+        service_source = self._read("control-plane/aegisops_control_plane/service.py")
+        runtime_boundary_source = self._read(
+            "control-plane/aegisops_control_plane/runtime_boundary.py"
+        )
+        structured_events_source = self._read(
+            "control-plane/aegisops_control_plane/structured_events.py"
+        )
+        service_tree = ast.parse(service_source)
+        runtime_boundary_tree = ast.parse(runtime_boundary_source)
+        structured_events_tree = ast.parse(structured_events_source)
+        service_class = next(
+            node
+            for node in service_tree.body
+            if isinstance(node, ast.ClassDef)
+            and node.name == "AegisOpsControlPlaneService"
+        )
+        service_method_names = {
+            node.name
+            for node in service_class.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        service_module_function_names = {
+            node.name for node in service_tree.body if isinstance(node, ast.FunctionDef)
+        }
+        runtime_boundary_methods = {
+            node.name
+            for node in next(
+                node
+                for node in runtime_boundary_tree.body
+                if isinstance(node, ast.ClassDef)
+                and node.name == "RuntimeBoundaryService"
+            ).body
+            if isinstance(node, ast.FunctionDef)
+        }
+        structured_event_functions = {
+            node.name
+            for node in structured_events_tree.body
+            if isinstance(node, ast.FunctionDef)
+        }
+
+        self.assertTrue(
+            {
+                "validate_wazuh_ingest_runtime",
+                "validate_protected_surface_runtime",
+                "authenticate_protected_surface_request",
+                "require_admin_bootstrap_token",
+                "require_break_glass_token",
+                "is_trusted_wazuh_ingest_peer",
+                "is_trusted_protected_surface_peer",
+                "is_trusted_peer_for_proxy_cidrs",
+            }.issubset(runtime_boundary_methods)
+        )
+        self.assertTrue(
+            {
+                "_classify_network_identifier",
+                "_count_identity_values",
+                "sanitize_structured_event_fields",
+            }.issubset(structured_event_functions)
+        )
+        self.assertFalse(
+            {
+                "_classify_network_identifier",
+                "_count_identity_values",
+                "_sanitize_structured_event_fields",
+            }
+            & service_module_function_names
+        )
+
+        emit_structured_event = service_method_names & {"_emit_structured_event"}
+        self.assertEqual(emit_structured_event, {"_emit_structured_event"})
+
     def test_phase22_regression_validation_keeps_operator_trust_runtime_coverage(
         self,
     ) -> None:
