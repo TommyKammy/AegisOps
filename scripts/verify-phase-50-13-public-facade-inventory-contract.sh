@@ -49,7 +49,7 @@ required_phrases=(
   '- No production code extraction is approved by this ADR.'
   '- No public API, runtime endpoint, CLI command, operator UI behavior, or durable-state side effect is changed.'
   '- No approval, execution, reconciliation, assistant, detection, external-evidence, restore, readiness, or operator authority behavior is changed.'
-  '- No baseline refresh is approved while Phase 50.13 implementation slices remain.'
+  '- No baseline refresh is approved before implementation evidence exists.'
   '- No subordinate source, projection, DTO, summary, helper-module output, or nearby metadata becomes authoritative workflow truth.'
 )
 
@@ -175,20 +175,20 @@ if invalid_categories:
     )
     sys.exit(1)
 
-if len(service_methods) != 100:
+if len(service_methods) != 95:
     print(
-        f"Phase 50.13 inventory expected 100 facade methods before implementation, found {len(service_methods)}.",
+        f"Phase 50.13 inventory expected 95 facade methods after the Phase 50.13.3 guard relocation slice, found {len(service_methods)}.",
         file=sys.stderr,
     )
     sys.exit(1)
-if len(rows) != 100:
+if len(rows) != 95:
     print(
-        f"Phase 50.13 inventory must classify exactly 100 facade methods, found {len(rows)}.",
+        f"Phase 50.13 inventory must classify exactly 95 facade methods after the Phase 50.13.3 guard relocation slice, found {len(rows)}.",
         file=sys.stderr,
     )
     sys.exit(1)
 
 print(
-    "Phase 50.13 public facade inventory classifies all 100 current service facade methods and records compatibility policy, authority non-goals, target ceiling, and validation commands."
+    "Phase 50.13 public facade inventory classifies all 95 current service facade methods and records compatibility policy, authority non-goals, target ceiling, and validation commands."
 )
 PY

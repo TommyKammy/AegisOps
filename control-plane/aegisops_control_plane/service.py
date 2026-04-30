@@ -1260,30 +1260,6 @@ class AegisOpsControlPlaneService(CaseWorkflowFacade, ExternalEvidenceFacade):
     def _require_reviewed_operator_case(self, case_id: str) -> CaseRecord:
         return self._reviewed_slice_policy.require_operator_case(case_id)
 
-    @staticmethod
-    def _require_single_linked_case_id(linked_case_ids: tuple[str, ...]) -> str:
-        if len(linked_case_ids) != 1:
-            raise ValueError(
-                "reviewed advisory context must bind exactly one case before creating an action request"
-            )
-        return linked_case_ids[0]
-
-    @staticmethod
-    def _require_single_recommendation_binding(
-        *,
-        record_family: str,
-        record_id: str,
-        linked_recommendation_ids: tuple[str, ...],
-    ) -> str:
-        recommendation_ids = linked_recommendation_ids
-        if record_family == "recommendation":
-            recommendation_ids = (record_id,)
-        if len(recommendation_ids) != 1:
-            raise ValueError(
-                "reviewed advisory context must bind exactly one recommendation before creating an action request"
-            )
-        return recommendation_ids[0]
-
     def _require_reviewed_case_scoped_advisory_read(
         self,
         context_snapshot: AnalystAssistantContextSnapshot,
@@ -1376,30 +1352,6 @@ class AegisOpsControlPlaneService(CaseWorkflowFacade, ExternalEvidenceFacade):
             field_name=field_name,
         )
 
-    def _observations_for_case(self, case_id: str) -> tuple[ObservationRecord, ...]:
-        return tuple(
-            sorted(
-                (
-                    record
-                    for record in self._store.list(ObservationRecord)
-                    if record.case_id == case_id
-                ),
-                key=lambda record: (record.observed_at, record.observation_id),
-            )
-        )
-
-    def _leads_for_case(self, case_id: str) -> tuple[LeadRecord, ...]:
-        return tuple(
-            sorted(
-                (
-                    record
-                    for record in self._store.list(LeadRecord)
-                    if record.case_id == case_id
-                ),
-                key=lambda record: record.lead_id,
-            )
-        )
-
     def _case_lifecycle_for_disposition(self, disposition: str) -> str:
         return self._detection_intake_service.case_lifecycle_for_disposition(
             disposition
@@ -1408,16 +1360,6 @@ class AegisOpsControlPlaneService(CaseWorkflowFacade, ExternalEvidenceFacade):
     @staticmethod
     def _next_identifier(prefix: str) -> str:
         return f"{prefix}-{uuid.uuid4()}"
-
-    @staticmethod
-    def _alert_review_state(alert: AlertRecord) -> str:
-        if alert.lifecycle_state in {"new", "reopened"}:
-            return "pending_review"
-        if alert.lifecycle_state == "escalated_to_case":
-            return "case_required"
-        if alert.lifecycle_state == "investigating":
-            return "investigating"
-        return "triaged"
 
     @staticmethod
     def _alert_escalation_boundary(alert: AlertRecord) -> str:

@@ -50,7 +50,7 @@ The Phase 50.13 target ceiling is `AegisOpsControlPlaneService <= 85` methods if
 
 The long-term 50-method target remains out of scope for this ADR and requires later child issues with implementation evidence.
 
-No baseline refresh is approved in this ADR because implementation slices remain.
+No baseline refresh is approved by this ADR before implementation evidence exists.
 
 ## 4. Public Facade Inventory
 
@@ -135,8 +135,6 @@ Categories are intentionally conservative. A method with multiple callers is ass
 | `_require_case_record` | private guard | Case lookup guard. | Move only with authoritative case read ownership. |
 | `_require_action_request_record` | private guard | Action request lookup guard. | Move only with authoritative action-request read ownership. |
 | `_require_reviewed_operator_case` | private guard | Reviewed slice policy guard. | Move only with reviewed operator case scope ownership. |
-| `_require_single_linked_case_id` | private guard | Advisory/action binding guard. | Move only with explicit case binding ownership. |
-| `_require_single_recommendation_binding` | private guard | Advisory/action binding guard. | Move only with explicit recommendation binding ownership. |
 | `_require_reviewed_case_scoped_advisory_read` | private guard | Reviewed slice advisory guard. | Move only with reviewed advisory read ownership. |
 | `_require_reviewed_alert_scoped_queue_summary_read` | private guard | Reviewed slice queue summary guard. | Move only with reviewed queue summary ownership. |
 | `_reviewed_case_scoped_read_error` | private guard | Reviewed slice error helper. | Move only with reviewed case-scope policy ownership. |
@@ -151,11 +149,8 @@ Categories are intentionally conservative. A method with multiple callers is ass
 | `_normalize_linked_record_ids` | private guard | Evidence linkage guard. | Move only with linked record normalization ownership. |
 | `_validate_case_evidence_linkage` | private guard | Evidence linkage guard. | Move only with case evidence linkage ownership. |
 | `_validate_alert_evidence_linkage` | private guard | Evidence linkage guard. | Move only with alert evidence linkage ownership. |
-| `_observations_for_case` | private guard | Case detail read helper. | Move only with snapshot-consistent case detail ownership. |
-| `_leads_for_case` | private guard | Case detail read helper. | Move only with snapshot-consistent case detail ownership. |
 | `_case_lifecycle_for_disposition` | private guard | Case lifecycle helper. | Move only with case lifecycle disposition ownership. |
 | `_next_identifier` | private guard | Identifier allocation helper. | Move only with receiving boundary identifier ownership. |
-| `_alert_review_state` | private guard | Alert detail projection helper. | Move only with alert review projection ownership. |
 | `_alert_escalation_boundary` | private guard | Alert detail projection helper. | Move only with alert escalation projection ownership. |
 | `_require_mapping` | private guard | Internal facade and extracted helpers. | Keep until receiving collaborator owns input-shape enforcement. |
 
@@ -197,7 +192,7 @@ For the Phase 50.13 Epic, run the same issue-lint command for each Phase 50.13 c
 - No public API, runtime endpoint, CLI command, operator UI behavior, or durable-state side effect is changed.
 - No approval, execution, reconciliation, assistant, detection, external-evidence, restore, readiness, or operator authority behavior is changed.
 - No ticket, ML, endpoint, network, browser, optional-evidence, Wazuh, Shuffle, Zammad, deployment, database, migration, credential source, HTTP surface, CLI surface, or operator UI behavior is changed.
-- No baseline refresh is approved while Phase 50.13 implementation slices remain.
+- No baseline refresh is approved before implementation evidence exists.
 - No subordinate source, projection, DTO, summary, helper-module output, or nearby metadata becomes authoritative workflow truth.
 - No long-term 50-method completion claim is approved unless later child issues prove it safely.
 

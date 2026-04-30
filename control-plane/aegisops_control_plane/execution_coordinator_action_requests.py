@@ -20,6 +20,30 @@ class ReviewedActionRequestCoordinator:
     def __init__(self, service: ExecutionCoordinatorServiceDependencies) -> None:
         self._service = service
 
+    @staticmethod
+    def _require_single_linked_case_id(linked_case_ids: tuple[str, ...]) -> str:
+        if len(linked_case_ids) != 1:
+            raise ValueError(
+                "reviewed advisory context must bind exactly one case before creating an action request"
+            )
+        return linked_case_ids[0]
+
+    @staticmethod
+    def _require_single_recommendation_binding(
+        *,
+        record_family: str,
+        record_id: str,
+        linked_recommendation_ids: tuple[str, ...],
+    ) -> str:
+        recommendation_ids = linked_recommendation_ids
+        if record_family == "recommendation":
+            recommendation_ids = (record_id,)
+        if len(recommendation_ids) != 1:
+            raise ValueError(
+                "reviewed advisory context must bind exactly one recommendation before creating an action request"
+            )
+        return recommendation_ids[0]
+
     def create_reviewed_action_request_from_advisory(
         self,
         *,
@@ -69,12 +93,12 @@ class ReviewedActionRequestCoordinator:
                     "reviewed advisory context is not ready for approval-bound action requests"
                 )
 
-            recommendation_id = self._service._require_single_recommendation_binding(
+            recommendation_id = self._require_single_recommendation_binding(
                 record_family=record_family,
                 record_id=record_id,
                 linked_recommendation_ids=recommendation_draft.linked_recommendation_ids,
             )
-            case_id = self._service._require_single_linked_case_id(
+            case_id = self._require_single_linked_case_id(
                 recommendation_draft.linked_case_ids
             )
             case = self._service._require_reviewed_operator_case(case_id)
@@ -263,12 +287,12 @@ class ReviewedActionRequestCoordinator:
                     "reviewed advisory context is not ready for approval-bound action requests"
                 )
 
-            recommendation_id = self._service._require_single_recommendation_binding(
+            recommendation_id = self._require_single_recommendation_binding(
                 record_family=record_family,
                 record_id=record_id,
                 linked_recommendation_ids=recommendation_draft.linked_recommendation_ids,
             )
-            case_id = self._service._require_single_linked_case_id(
+            case_id = self._require_single_linked_case_id(
                 recommendation_draft.linked_case_ids
             )
             case = self._service._require_reviewed_operator_case(case_id)
