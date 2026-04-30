@@ -198,6 +198,21 @@ assert_fails_with \
   "${workstation_path_repo}" \
   "Forbidden Phase 51.5 competitive gap matrix: workstation-local absolute path detected"
 
+web_url_home_repo="${workdir}/web-url-home-path"
+create_valid_repo "${web_url_home_repo}"
+printf '%s\n' "Reference URL: https://docs.example.invalid/home/aegisops/gap-matrix" \
+  >>"${web_url_home_repo}/docs/phase-51-5-competitive-gap-matrix.md"
+assert_passes "${web_url_home_repo}"
+
+standalone_unix_home_repo="${workdir}/standalone-unix-home-path"
+create_valid_repo "${standalone_unix_home_repo}"
+standalone_unix_home_path="$(printf '/%s/%s/gap-matrix.md' "home" "example")"
+printf '%s\n' "Matrix path: ${standalone_unix_home_path}" \
+  >>"${standalone_unix_home_repo}/docs/phase-51-5-competitive-gap-matrix.md"
+assert_fails_with \
+  "${standalone_unix_home_repo}" \
+  "Forbidden Phase 51.5 competitive gap matrix: workstation-local absolute path detected"
+
 raw_readme_path_repo="${workdir}/raw-readme-path"
 create_valid_repo "${raw_readme_path_repo}"
 printf '%s\n' "# AegisOps" "See docs/phase-51-5-competitive-gap-matrix.md." >"${raw_readme_path_repo}/README.md"

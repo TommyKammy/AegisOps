@@ -117,8 +117,10 @@ mac_user_home="$(printf '/%s/' 'Users')"
 unix_user_home="$(printf '/%s/' 'home')"
 windows_user_profile_backslash="$(printf '[A-Za-z]:\\\\%s\\\\' 'Users')"
 windows_user_profile_slash="$(printf '[A-Za-z]:/%s/' 'Users')"
+path_token_boundary="(^|[[:space:]'\"(<{=])"
+local_path_token="(${mac_user_home}|${unix_user_home}|${windows_user_profile_backslash}|${windows_user_profile_slash})[^[:space:]'\" )>}]*"
 
-if grep -Eq "(${mac_user_home}[^[:space:]]*|${unix_user_home}[^[:space:]]*|${windows_user_profile_backslash}[^[:space:]]*|${windows_user_profile_slash}[^[:space:]]*)" "${doc_path}"; then
+if grep -Eq "(${path_token_boundary}${local_path_token}|file:///?${local_path_token})" "${doc_path}"; then
   echo "Forbidden Phase 51.5 competitive gap matrix: workstation-local absolute path detected" >&2
   exit 1
 fi
