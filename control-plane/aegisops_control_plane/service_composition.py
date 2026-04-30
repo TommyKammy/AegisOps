@@ -265,6 +265,7 @@ def build_control_plane_service_composition(
         config=config,
         store=resolved_store,
         action_review_inspection_boundary=action_review_inspection_boundary,
+        ai_trace_lifecycle=ai_trace_lifecycle_service,
     )
     lifecycle_transition_helper = (
         detection_intake_service.lifecycle_transition_helper
@@ -312,7 +313,7 @@ def build_control_plane_service_composition(
         record_types_by_family=dependencies.record_types_by_family,
         find_duplicate_strings=dependencies.find_duplicate_strings,
         synthesize_lifecycle_transition_record=synthesize_lifecycle_transition_record,
-        assistant_ids_from_mapping=service._assistant_ids_from_mapping,
+        assistant_ids_from_mapping=ai_trace_lifecycle_service.ids_from_mapping,
         inspect_case_detail=lambda case_id: service.inspect_case_detail(case_id),
         inspect_assistant_context=(
             lambda record_family, record_id: service.inspect_assistant_context(

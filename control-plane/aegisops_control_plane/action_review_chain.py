@@ -120,13 +120,13 @@ def _latest_action_review_reconciliation(
     ) -> bool:
         if action_execution is None:
             return False
-        subject_action_execution_ids = service._assistant_ids_from_mapping(
+        subject_action_execution_ids = service._ai_trace_lifecycle_service.ids_from_mapping(
             reconciliation.subject_linkage,
             "action_execution_ids",
         )
         if action_execution.action_execution_id in subject_action_execution_ids:
             return True
-        subject_delegation_ids = service._assistant_ids_from_mapping(
+        subject_delegation_ids = service._ai_trace_lifecycle_service.ids_from_mapping(
             reconciliation.subject_linkage,
             "delegation_ids",
         )
@@ -136,13 +136,13 @@ def _latest_action_review_reconciliation(
         if _matches_current_execution_lineage(reconciliation):
             return True
         if approval_decision is not None:
-            subject_approval_decision_ids = service._assistant_ids_from_mapping(
+            subject_approval_decision_ids = service._ai_trace_lifecycle_service.ids_from_mapping(
                 reconciliation.subject_linkage,
                 "approval_decision_ids",
             )
             if approval_decision.approval_decision_id in subject_approval_decision_ids:
                 return True
-        subject_action_request_ids = service._assistant_ids_from_mapping(
+        subject_action_request_ids = service._ai_trace_lifecycle_service.ids_from_mapping(
             reconciliation.subject_linkage,
             "action_request_ids",
         )

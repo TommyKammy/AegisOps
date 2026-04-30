@@ -90,6 +90,46 @@ class AssistantAdvisoryPersistenceTests(ServicePersistenceTestBase):
 
         self.assertTrue(extracted_helpers.isdisjoint(service_functions))
 
+    def test_assistant_lifecycle_helpers_are_not_service_facade_methods(
+        self,
+    ) -> None:
+        service_source = (
+            pathlib.Path(__file__).resolve().parents[1]
+            / "aegisops_control_plane"
+            / "service.py"
+        ).read_text()
+        service_tree = ast.parse(service_source)
+        service_class = next(
+            node
+            for node in service_tree.body
+            if isinstance(node, ast.ClassDef)
+            and node.name == "AegisOpsControlPlaneService"
+        )
+        service_method_names = {
+            node.name
+            for node in service_class.body
+            if isinstance(node, ast.FunctionDef)
+        }
+
+        residual_assistant_helpers = {
+            "_assistant_primary_linked_id",
+            "_assistant_ids_from_value",
+            "_assistant_ids_from_mapping",
+            "_assistant_merge_ids",
+            "_assistant_action_lineage_ids",
+            "_assistant_merge_action_request_linkage",
+            "_assistant_action_execution_for_delegation_id",
+            "_assistant_ai_trace_records_for_context",
+            "_assistant_ai_trace_evidence_ids",
+            "_assistant_linked_evidence_ids",
+            "_assistant_evidence_siblings",
+            "_assistant_evidence_records_for_context",
+            "_assistant_recommendation_records_for_context",
+            "_assistant_reconciliation_records_for_context",
+        }
+
+        self.assertTrue(residual_assistant_helpers.isdisjoint(service_method_names))
+
     def test_service_delegates_assistant_context_to_assembler_and_advisory_to_coordinator(
         self,
     ) -> None:
