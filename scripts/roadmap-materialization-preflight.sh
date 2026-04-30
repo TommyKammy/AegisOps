@@ -180,6 +180,11 @@ def phase_done(phase: dict) -> bool:
     }
 
 
+def issue_closed_or_accepted(issue: dict) -> bool:
+    state = str(issue.get("state", "")).lower()
+    return state == "closed" or issue.get("explicitly_accepted") is True
+
+
 def load_graph(path: str) -> dict:
     graph_path = Path(path)
     if not graph_path.is_file():
@@ -456,6 +461,19 @@ def validate_phase(
                 "blocked",
                 lint_key,
                 "repair the issue body and rerun issue-lint",
+                issue_number=number,
+                issue_numbers_read=issue_numbers_read,
+            )
+
+        if not issue_closed_or_accepted(issue):
+            fail(
+                graph,
+                target_phase,
+                classifications,
+                phase_id,
+                "materialized_open",
+                "issue_state",
+                "close or explicitly accept every predecessor Epic and child issue before dependent scheduling",
                 issue_number=number,
                 issue_numbers_read=issue_numbers_read,
             )

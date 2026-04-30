@@ -1,7 +1,7 @@
 {
-  "snapshot_id": "aegisops-phase-48-7-roadmap-materialization-graph",
-  "phase_graph_source": "repo-local Phase 48.7 issue graph binding",
-  "target_phase_ids": ["49.0", "49"],
+  "snapshot_id": "aegisops-post-phase50-roadmap-materialization-graph",
+  "phase_graph_source": "repo-local post-Phase50 issue graph binding",
+  "target_phase_ids": ["49.0", "49", "52"],
   "phases": [
     {
       "phase_id": "48.7",
@@ -28,6 +28,24 @@
       "phase_completion_state": "not_started",
       "phase_evaluation_state": "not_started",
       "predecessor_phase_ids": ["48.7", "49.0"]
+    },
+    {
+      "phase_id": "51",
+      "phase_title": "Replacement Thesis, Gates, Boundary ADR",
+      "phase_status": "materialized",
+      "phase_completion_state": "open",
+      "phase_evaluation_state": "open",
+      "predecessor_phase_ids": [],
+      "epic_issue_number": 1041,
+      "child_issue_numbers": [1042, 1043, 1044, 1045, 1046, 1047, 1048, 1049]
+    },
+    {
+      "phase_id": "52",
+      "phase_title": "Setup and Guided Onboarding",
+      "phase_status": "planned",
+      "phase_completion_state": "not_started",
+      "phase_evaluation_state": "not_started",
+      "predecessor_phase_ids": ["51"]
     }
   ]
 }
