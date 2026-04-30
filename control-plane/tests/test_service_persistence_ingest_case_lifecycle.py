@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 from dataclasses import replace
 from datetime import timedelta
 import pathlib
@@ -270,19 +269,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
     def test_case_workflow_compatibility_delegates_are_fenced_from_service_class(
         self,
     ) -> None:
-        service_source = pathlib.Path(service_module.__file__).read_text(
-            encoding="utf-8",
-        )
-        service_tree = ast.parse(service_source)
-        service_class = next(
-            node
-            for node in service_tree.body
-            if isinstance(node, ast.ClassDef)
-            and node.name == "AegisOpsControlPlaneService"
-        )
-        direct_service_methods = {
-            node.name for node in service_class.body if isinstance(node, ast.FunctionDef)
-        }
+        direct_service_attrs = set(vars(service_module.AegisOpsControlPlaneService))
         case_workflow_write_methods = {
             "record_case_observation",
             "record_case_lead",
@@ -296,7 +283,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
                 set(dir(support.AegisOpsControlPlaneService))
             )
         )
-        self.assertFalse(case_workflow_write_methods & direct_service_methods)
+        self.assertFalse(case_workflow_write_methods & direct_service_attrs)
 
     def test_service_delegates_detection_intake_and_triage_operations(self) -> None:
         store, _ = support.make_store()

@@ -144,13 +144,12 @@ if [[ "${phase50_12_4_service_entry_count}" -eq 1 ]]; then
     exit 1
   fi
   phase50_12_4_closeout_phrases=(
-    "Phase 50.12.4 for #1019 fenced casework write compatibility delegates behind the case workflow facade."
+    "Phase 50.12.4 then moved the casework write compatibility delegates out of \`AegisOpsControlPlaneService\` and into \`control-plane/aegisops_control_plane/case_workflow.py\`, preserving the public facade entrypoints for observation, lead, recommendation, handoff, and disposition writes."
     "- \`max_lines=1619\`"
     "- \`max_effective_lines=1445\`"
     "- \`max_facade_methods=117\`"
     "- \`phase=50.12.4\`"
     "- \`issue=#1019\`"
-    "Phase 50.12.4 then moved the casework write compatibility delegates out of \`AegisOpsControlPlaneService\` and into \`control-plane/aegisops_control_plane/case_workflow.py\`, preserving the public facade entrypoints for observation, lead, recommendation, handoff, and disposition writes."
   )
   for phrase in "${phase50_12_4_closeout_phrases[@]}"; do
     if ! grep -Fq -- "${phrase}" "${closeout_path}"; then
