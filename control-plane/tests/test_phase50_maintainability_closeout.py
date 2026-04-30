@@ -58,21 +58,21 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
         facade_methods = self._facade_method_count(metadata["facade_class"])
 
         self.assertEqual(metadata["adr_exception"], "ADR-0003")
-        self.assertEqual(metadata["phase"], "50.12.7")
-        self.assertEqual(metadata["issue"], "#1022")
+        self.assertEqual(metadata["phase"], "50.13.3")
+        self.assertEqual(metadata["issue"], "#1033")
         self.assertEqual(metadata["facade_class"], "AegisOpsControlPlaneService")
         self.assertEqual(int(metadata["max_lines"]), physical_lines)
         self.assertEqual(int(metadata["max_effective_lines"]), effective_lines)
         self.assertEqual(int(metadata["max_facade_methods"]), facade_methods)
-        self.assertEqual(physical_lines, 1451)
-        self.assertEqual(effective_lines, 1294)
-        self.assertEqual(facade_methods, 100)
+        self.assertEqual(physical_lines, 1393)
+        self.assertEqual(effective_lines, 1241)
+        self.assertEqual(facade_methods, 95)
         self.assertLess(int(metadata["max_lines"]), 1812)
         self.assertLess(int(metadata["max_effective_lines"]), 1632)
         self.assertLess(int(metadata["max_facade_methods"]), 125)
         self.assertLessEqual(int(metadata["max_lines"]), 1500)
         self.assertLessEqual(int(metadata["max_effective_lines"]), 1350)
-        self.assertGreater(int(metadata["max_facade_methods"]), 95)
+        self.assertLessEqual(int(metadata["max_facade_methods"]), 95)
 
     def test_closeout_notes_preserve_phase50_10_hotspot_and_trigger(self) -> None:
         closeout = self._read("docs/phase-50-maintainability-closeout.md")
@@ -85,18 +85,21 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
             "Phase 50.12.5",
             "Phase 50.12.6",
             "Phase 50.12.7",
+            "Phase 50.13.3",
             "control-plane/aegisops_control_plane/service.py",
             "control-plane/aegisops_control_plane/case_workflow.py",
             "control-plane/aegisops_control_plane/action_review_write_surface.py",
+            "control-plane/aegisops_control_plane/operator_inspection.py",
+            "control-plane/aegisops_control_plane/execution_coordinator_action_requests.py",
             "control-plane/aegisops_control_plane/action_review_projection.py",
             "control-plane/aegisops_control_plane/external_evidence_boundary.py",
             "control-plane/aegisops_control_plane/ai_trace_lifecycle.py",
             "AegisOpsControlPlaneService",
-            "max_lines=1451",
-            "max_effective_lines=1294",
-            "max_facade_methods=100",
-            "physical_lines=1451",
-            "effective_lines=1294",
+            "max_lines=1393",
+            "max_effective_lines=1241",
+            "max_facade_methods=95",
+            "physical_lines=1393",
+            "effective_lines=1241",
             "max_lines <= 1500",
             "max_effective_lines <= 1350",
             "max_facade_methods <= 95",
@@ -109,6 +112,7 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
             "#1017",
             "#1021",
             "#1022",
+            "#1033",
             "#1018",
             "#1019",
             "#1020",
@@ -116,6 +120,7 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
             "facade dispatch, compatibility entrypoints, runtime-boundary guards, and lifecycle/write-path delegates",
             "reviewed action approval policy helpers",
             "casework write compatibility delegates",
+            "reviewed action-request binding guards",
             "projection split does not require a baseline entry",
             "external-evidence split does not require a baseline entry",
             "silent re-growth",

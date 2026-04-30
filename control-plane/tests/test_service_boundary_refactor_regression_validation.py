@@ -733,6 +733,74 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
             "write surface that records the reviewed context",
         )
 
+    def test_phase50_13_3_private_guard_helpers_move_to_owned_boundaries(
+        self,
+    ) -> None:
+        service_source = self._read("control-plane/aegisops_control_plane/service.py")
+        operator_source = self._read(
+            "control-plane/aegisops_control_plane/operator_inspection.py"
+        )
+        action_request_source = self._read(
+            "control-plane/aegisops_control_plane/execution_coordinator_action_requests.py"
+        )
+        service_tree = ast.parse(service_source)
+        operator_tree = ast.parse(operator_source)
+        action_request_tree = ast.parse(action_request_source)
+        service_class = next(
+            node
+            for node in service_tree.body
+            if isinstance(node, ast.ClassDef)
+            and node.name == "AegisOpsControlPlaneService"
+        )
+        operator_class = next(
+            node
+            for node in operator_tree.body
+            if isinstance(node, ast.ClassDef)
+            and node.name == "OperatorInspectionReadSurface"
+        )
+        action_request_class = next(
+            node
+            for node in action_request_tree.body
+            if isinstance(node, ast.ClassDef)
+            and node.name == "ReviewedActionRequestCoordinator"
+        )
+        service_method_names = {
+            node.name
+            for node in service_class.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        operator_method_names = {
+            node.name
+            for node in operator_class.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        action_request_method_names = {
+            node.name
+            for node in action_request_class.body
+            if isinstance(node, ast.FunctionDef)
+        }
+
+        operator_guard_helpers = {
+            "_alert_review_state",
+            "_observations_for_case",
+            "_leads_for_case",
+        }
+        action_request_guard_helpers = {
+            "_require_single_linked_case_id",
+            "_require_single_recommendation_binding",
+        }
+        moved_guard_helpers = operator_guard_helpers | action_request_guard_helpers
+
+        self.assertFalse(
+            moved_guard_helpers & service_method_names,
+            "private guards with owned read/write boundaries should not remain "
+            "service facade methods",
+        )
+        self.assertTrue(operator_guard_helpers.issubset(operator_method_names))
+        self.assertTrue(
+            action_request_guard_helpers.issubset(action_request_method_names)
+        )
+
     def test_phase50_9_3_persistence_restore_and_status_helpers_leave_service_facade(
         self,
     ) -> None:

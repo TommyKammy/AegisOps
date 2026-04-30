@@ -49,18 +49,6 @@ class ExecutionCoordinatorServiceDependencies(Protocol):
     ) -> None:
         ...
 
-    def _require_single_recommendation_binding(
-        self,
-        *,
-        record_family: str,
-        record_id: str,
-        linked_recommendation_ids: tuple[str, ...],
-    ) -> str:
-        ...
-
-    def _require_single_linked_case_id(self, linked_case_ids: tuple[str, ...]) -> str:
-        ...
-
     def _require_reviewed_operator_case(self, case_id: str) -> object:
         ...
 

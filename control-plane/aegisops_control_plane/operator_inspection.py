@@ -74,9 +74,6 @@ class OperatorInspectionServiceDependencies(Protocol):
     ) -> tuple[str, ...]:
         ...
 
-    def _alert_review_state(self, alert: AlertRecord) -> str:
-        ...
-
     def _alert_escalation_boundary(self, alert: AlertRecord) -> str:
         ...
 
@@ -86,12 +83,6 @@ class OperatorInspectionServiceDependencies(Protocol):
         ...
 
     def _require_reviewed_operator_case(self, case_id: str) -> CaseRecord:
-        ...
-
-    def _observations_for_case(self, case_id: str) -> tuple[ObservationRecord, ...]:
-        ...
-
-    def _leads_for_case(self, case_id: str) -> tuple[LeadRecord, ...]:
         ...
 
     def _reviewed_operator_source_family(
@@ -157,6 +148,40 @@ class OperatorInspectionReadSurface:
                 if isinstance(entry, str) and entry.strip()
             )
         return ()
+
+    def _observations_for_case(self, case_id: str) -> tuple[ObservationRecord, ...]:
+        return tuple(
+            sorted(
+                (
+                    record
+                    for record in self._service._store.list(ObservationRecord)
+                    if record.case_id == case_id
+                ),
+                key=lambda record: (record.observed_at, record.observation_id),
+            )
+        )
+
+    def _leads_for_case(self, case_id: str) -> tuple[LeadRecord, ...]:
+        return tuple(
+            sorted(
+                (
+                    record
+                    for record in self._service._store.list(LeadRecord)
+                    if record.case_id == case_id
+                ),
+                key=lambda record: record.lead_id,
+            )
+        )
+
+    @staticmethod
+    def _alert_review_state(alert: AlertRecord) -> str:
+        if alert.lifecycle_state in {"new", "reopened"}:
+            return "pending_review"
+        if alert.lifecycle_state == "escalated_to_case":
+            return "case_required"
+        if alert.lifecycle_state == "investigating":
+            return "investigating"
+        return "triaged"
 
     def _ai_trace_review_states(
         self,
@@ -474,7 +499,7 @@ class OperatorInspectionReadSurface:
             alert_id=alert.alert_id,
             record_index=action_review_index,
         )
-        review_state = self._service._alert_review_state(alert)
+        review_state = self._alert_review_state(alert)
         ai_trace_review_groups = self._ai_trace_review_groups_for_queue_record(
             alert_id=alert.alert_id,
             case_id=alert.case_id,
@@ -741,7 +766,7 @@ class OperatorInspectionReadSurface:
                 self._record_to_dict(evidence) for evidence in evidence_records
             ),
             reviewed_context=dict(alert.reviewed_context),
-            review_state=self._service._alert_review_state(alert),
+            review_state=self._alert_review_state(alert),
             escalation_boundary=self._service._alert_escalation_boundary(alert),
             source_system=source_system,
             native_rule=(
@@ -781,10 +806,10 @@ class OperatorInspectionReadSurface:
         )
         observation_records = tuple(
             self._record_to_dict(record)
-            for record in self._service._observations_for_case(case_id)
+            for record in self._observations_for_case(case_id)
         )
         lead_records = tuple(
-            self._record_to_dict(record) for record in self._service._leads_for_case(case_id)
+            self._record_to_dict(record) for record in self._leads_for_case(case_id)
         )
         action_reviews = self._action_review_inspection_boundary.chains_for_scope(
             case_id=case_id,
