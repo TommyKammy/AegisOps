@@ -58,14 +58,14 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
         facade_methods = self._facade_method_count(metadata["facade_class"])
 
         self.assertEqual(metadata["adr_exception"], "ADR-0003")
-        self.assertEqual(metadata["phase"], "50.11.7")
-        self.assertEqual(metadata["issue"], "#1007")
+        self.assertEqual(metadata["phase"], "50.12.2")
+        self.assertEqual(metadata["issue"], "#1017")
         self.assertEqual(metadata["facade_class"], "AegisOpsControlPlaneService")
         self.assertEqual(int(metadata["max_lines"]), physical_lines)
         self.assertEqual(int(metadata["max_effective_lines"]), effective_lines)
         self.assertEqual(int(metadata["max_facade_methods"]), facade_methods)
-        self.assertEqual(physical_lines, 1812)
-        self.assertEqual(effective_lines, 1632)
+        self.assertEqual(physical_lines, 1773)
+        self.assertEqual(effective_lines, 1589)
         self.assertEqual(facade_methods, 125)
         self.assertLess(int(metadata["max_lines"]), 3003)
         self.assertLess(int(metadata["max_effective_lines"]), 2704)
@@ -76,20 +76,22 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
 
         for required in (
             "Phase 50.11.7",
+            "Phase 50.12.2",
             "control-plane/aegisops_control_plane/service.py",
             "control-plane/aegisops_control_plane/action_review_projection.py",
             "control-plane/aegisops_control_plane/external_evidence_boundary.py",
             "AegisOpsControlPlaneService",
-            "max_lines=1812",
-            "max_effective_lines=1632",
+            "max_lines=1773",
+            "max_effective_lines=1589",
             "max_facade_methods=125",
-            "physical_lines=1812",
-            "effective_lines=1632",
+            "physical_lines=1773",
+            "effective_lines=1589",
             "ADR-0007",
             "ADR-0008",
             "ADR-0004",
             "ADR-0003",
             "#1007",
+            "#1017",
             "remaining accepted hotspot",
             "facade dispatch, compatibility entrypoints, runtime-boundary guards, and lifecycle/write-path delegates",
             "projection split does not require a baseline entry",
@@ -128,8 +130,8 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
             "Maintainability hotspot baseline limits were exceeded",
             "lines=960 exceeds max_lines=959",
             "effective_lines=960 exceeds max_effective_lines=959",
-            "lines=1813 exceeds max_lines=1812",
-            "effective_lines=1813 exceeds max_effective_lines=1632",
+            "lines=1774 exceeds max_lines=1773",
+            "effective_lines=1774 exceeds max_effective_lines=1589",
             "max_facade_methods=0",
         ):
             self.assertIn(required, verifier_test)

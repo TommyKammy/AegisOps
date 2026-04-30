@@ -58,6 +58,7 @@ from .external_evidence_facade import ExternalEvidenceFacade
 from .service_composition import (
     ControlPlaneServiceCompositionDependencies,
     build_control_plane_service_composition,
+    install_control_plane_service_composition,
 )
 from .service_snapshots import (
     ActionReviewDetailSnapshot,
@@ -118,6 +119,72 @@ _PHASE24_WORKFLOW_PROMPT_VERSIONS = {
     "case_summary": "phase24-case-summary-v1",
     "queue_triage_summary": "phase24-queue-summary-v1",
 }
+
+
+def _build_control_plane_service_composition_dependencies(
+) -> ControlPlaneServiceCompositionDependencies:
+    return ControlPlaneServiceCompositionDependencies(
+        runtime_snapshot_factory=RuntimeSnapshot,
+        authenticated_principal_factory=AuthenticatedRuntimePrincipal,
+        reviewed_summary_transport_factory=_ReviewedSummaryTransport,
+        workflow_family=_PHASE24_WORKFLOW_FAMILY,
+        workflow_prompt_versions=_PHASE24_WORKFLOW_PROMPT_VERSIONS,
+        record_types_by_family=RECORD_TYPES_BY_FAMILY,
+        authoritative_record_chain_record_types=(
+            AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES
+        ),
+        authoritative_record_chain_backup_schema_version=(
+            AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION
+        ),
+        authoritative_primary_id_field_by_family=(
+            _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY
+        ),
+        normalize_admission_provenance=_normalize_admission_provenance,
+        merge_reviewed_context=_merge_reviewed_context,
+        case_lifecycle_state_by_triage_disposition=(
+            _CASE_LIFECYCLE_STATE_BY_TRIAGE_DISPOSITION
+        ),
+        record_to_dict=_record_to_dict,
+        json_ready=_json_ready,
+        redacted_reconciliation_payload=_redacted_reconciliation_payload,
+        coordination_reference_payload=_coordination_reference_payload,
+        coordination_reference_signature=_coordination_reference_signature,
+        dedupe_strings=_dedupe_strings,
+        analyst_queue_snapshot_factory=AnalystQueueSnapshot,
+        alert_detail_snapshot_factory=AlertDetailSnapshot,
+        case_detail_snapshot_factory=CaseDetailSnapshot,
+        action_review_detail_snapshot_factory=ActionReviewDetailSnapshot,
+        assistant_context_snapshot_factory=AnalystAssistantContextSnapshot,
+        advisory_snapshot_from_context=(
+            _assistant_advisory.advisory_inspection_snapshot_from_context
+        ),
+        recommendation_draft_snapshot_from_context=(
+            _assistant_advisory.recommendation_draft_snapshot_from_context
+        ),
+        live_assistant_snapshot_factory=(
+            _live_assistant_workflow.phase24_live_assistant_snapshot
+        ),
+        live_assistant_citations_from_context=(
+            lambda snapshot: _live_assistant_workflow.phase24_live_assistant_citations_from_context(
+                snapshot
+            )
+        ),
+        live_assistant_unresolved_reasons=(
+            _live_assistant_workflow.phase24_live_assistant_unresolved_reasons
+        ),
+        live_assistant_prompt_injection_flags=(
+            _live_assistant_workflow.phase24_live_assistant_prompt_injection_flags
+        ),
+        startup_status_snapshot_factory=StartupStatusSnapshot,
+        readiness_diagnostics_snapshot_factory=ReadinessDiagnosticsSnapshot,
+        restore_drill_snapshot_factory=RestoreDrillSnapshot,
+        restore_summary_snapshot_factory=RestoreSummarySnapshot,
+        shutdown_status_snapshot_factory=ShutdownStatusSnapshot,
+        derive_readiness_status=_derive_readiness_status,
+        find_duplicate_strings=_find_duplicate_strings,
+    )
+
+
 class _ReviewedSummaryTransport(AssistantProviderTransport):
     """Deterministic reviewed-only transport for the first live workflow family."""
 
@@ -413,117 +480,11 @@ class AegisOpsControlPlaneService(ExternalEvidenceFacade):
             service=self,
             config=config,
             store=store,
-            dependencies=ControlPlaneServiceCompositionDependencies(
-                runtime_snapshot_factory=RuntimeSnapshot,
-                authenticated_principal_factory=AuthenticatedRuntimePrincipal,
-                reviewed_summary_transport_factory=_ReviewedSummaryTransport,
-                workflow_family=_PHASE24_WORKFLOW_FAMILY,
-                workflow_prompt_versions=_PHASE24_WORKFLOW_PROMPT_VERSIONS,
-                record_types_by_family=RECORD_TYPES_BY_FAMILY,
-                authoritative_record_chain_record_types=(
-                    AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES
-                ),
-                authoritative_record_chain_backup_schema_version=(
-                    AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION
-                ),
-                authoritative_primary_id_field_by_family=(
-                    _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY
-                ),
-                normalize_admission_provenance=_normalize_admission_provenance,
-                merge_reviewed_context=_merge_reviewed_context,
-                case_lifecycle_state_by_triage_disposition=(
-                    _CASE_LIFECYCLE_STATE_BY_TRIAGE_DISPOSITION
-                ),
-                record_to_dict=_record_to_dict,
-                json_ready=_json_ready,
-                redacted_reconciliation_payload=_redacted_reconciliation_payload,
-                coordination_reference_payload=_coordination_reference_payload,
-                coordination_reference_signature=_coordination_reference_signature,
-                dedupe_strings=_dedupe_strings,
-                analyst_queue_snapshot_factory=AnalystQueueSnapshot,
-                alert_detail_snapshot_factory=AlertDetailSnapshot,
-                case_detail_snapshot_factory=CaseDetailSnapshot,
-                action_review_detail_snapshot_factory=ActionReviewDetailSnapshot,
-                assistant_context_snapshot_factory=AnalystAssistantContextSnapshot,
-                advisory_snapshot_from_context=(
-                    _assistant_advisory.advisory_inspection_snapshot_from_context
-                ),
-                recommendation_draft_snapshot_from_context=(
-                    _assistant_advisory.recommendation_draft_snapshot_from_context
-                ),
-                live_assistant_snapshot_factory=(
-                    _live_assistant_workflow.phase24_live_assistant_snapshot
-                ),
-                live_assistant_citations_from_context=(
-                    lambda snapshot: _live_assistant_workflow.phase24_live_assistant_citations_from_context(
-                        snapshot
-                    )
-                ),
-                live_assistant_unresolved_reasons=(
-                    _live_assistant_workflow.phase24_live_assistant_unresolved_reasons
-                ),
-                live_assistant_prompt_injection_flags=(
-                    _live_assistant_workflow.phase24_live_assistant_prompt_injection_flags
-                ),
-                startup_status_snapshot_factory=StartupStatusSnapshot,
-                readiness_diagnostics_snapshot_factory=ReadinessDiagnosticsSnapshot,
-                restore_drill_snapshot_factory=RestoreDrillSnapshot,
-                restore_summary_snapshot_factory=RestoreSummarySnapshot,
-                shutdown_status_snapshot_factory=ShutdownStatusSnapshot,
-                derive_readiness_status=_derive_readiness_status,
-                find_duplicate_strings=_find_duplicate_strings,
-            ),
+            dependencies=_build_control_plane_service_composition_dependencies(),
         )
-        self._store = composition.store
-        self._reconciliation = composition.reconciliation
-        self._shuffle = composition.shuffle
-        self._isolated_executor = composition.isolated_executor
-        self._assistant_provider_adapter = composition.assistant_provider_adapter
-        self._reviewed_slice_policy = composition.reviewed_slice_policy
-        self._ai_trace_lifecycle_service = composition.ai_trace_lifecycle_service
-        self._assistant_context_assembler = composition.assistant_context_assembler
-        self._assistant_advisory_coordinator = (
-            composition.assistant_advisory_coordinator
-        )
-        self._live_assistant_workflow_coordinator = (
-            composition.live_assistant_workflow_coordinator
-        )
-        self._action_review_inspection_boundary = (
-            composition.action_review_inspection_boundary
-        )
-        self._operator_inspection_read_surface = (
-            composition.operator_inspection_read_surface
-        )
-        self._action_review_write_surface = composition.action_review_write_surface
-        self._evidence_linkage_service = composition.evidence_linkage_service
-        self._case_workflow_service = composition.case_workflow_service
-        self._detection_intake_service = composition.detection_intake_service
-        self._execution_coordinator = composition.execution_coordinator
-        self._action_orchestration_boundary = (
-            composition.action_orchestration_boundary
-        )
-        self._reconciliation_orchestration_boundary = (
-            composition.reconciliation_orchestration_boundary
-        )
-        self._action_lifecycle_write_coordinator = (
-            composition.action_lifecycle_write_coordinator
-        )
-        self._endpoint_evidence_pack_adapter = (
-            composition.endpoint_evidence_pack_adapter
-        )
-        self._misp_context_adapter = composition.misp_context_adapter
-        self._external_evidence_boundary = composition.external_evidence_boundary
-        self._osquery_host_context_adapter = composition.osquery_host_context_adapter
-        self._runtime_boundary_service = composition.runtime_boundary_service
-        self._readiness_operability_helper = (
-            composition.readiness_operability_helper
-        )
-        self._restore_readiness_service = composition.restore_readiness_service
-        self._runtime_restore_readiness_diagnostics_service = (
-            composition.runtime_restore_readiness_diagnostics_service
-        )
-        self._persistence_lifecycle_service = (
-            composition.persistence_lifecycle_service
+        install_control_plane_service_composition(
+            service=self,
+            composition=composition,
         )
 
     def describe_runtime(self) -> RuntimeSnapshot:

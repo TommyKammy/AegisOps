@@ -568,6 +568,53 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
             composition_call_names,
         )
 
+    def test_phase50_12_2_constructor_keeps_composition_assignment_out_of_facade(
+        self,
+    ) -> None:
+        service_source = self._read("control-plane/aegisops_control_plane/service.py")
+        tree = ast.parse(service_source)
+        service_class = next(
+            node
+            for node in tree.body
+            if isinstance(node, ast.ClassDef)
+            and node.name == "AegisOpsControlPlaneService"
+        )
+        constructor = next(
+            node
+            for node in service_class.body
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "__init__"
+        )
+        self_assignments = [
+            node
+            for node in ast.walk(constructor)
+            if isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "self"
+            and isinstance(getattr(node, "ctx", None), ast.Store)
+        ]
+        constructor_call_names = {
+            node.func.id
+            for node in ast.walk(constructor)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+        }
+
+        self.assertLessEqual(
+            len(self_assignments),
+            2,
+            "facade constructor should not directly assign composition collaborators",
+        )
+        self.assertNotIn(
+            "ControlPlaneServiceCompositionDependencies",
+            constructor_call_names,
+            "dependency container wiring should live outside the facade constructor",
+        )
+        self.assertIn(
+            "install_control_plane_service_composition",
+            constructor_call_names,
+        )
+
     def test_phase50_9_3_persistence_restore_and_status_helpers_leave_service_facade(
         self,
     ) -> None:
