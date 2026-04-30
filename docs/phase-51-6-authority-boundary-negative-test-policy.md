@@ -1,7 +1,7 @@
 # Phase 51.6 Authority-Boundary Negative-Test Policy
 
 - **Status**: Accepted
-- **Date**: 2026-05-01
+- **Date**: 2026-04-30
 - **Owners**: AegisOps maintainers
 - **Related Baseline**: `docs/adr/0011-phase-51-1-replacement-boundary.md`, `docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md`, `docs/phase-51-5-competitive-gap-matrix.md`
 - **Related Issues**: #1041, #1042, #1047

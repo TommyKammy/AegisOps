@@ -73,15 +73,15 @@ alternate_date_repo="${workdir}/alternate-date"
 create_valid_repo "${alternate_date_repo}"
 replace_text_in_policy \
   "${alternate_date_repo}" \
-  "- **Date**: 2026-05-01" \
-  "- **Date**: 2026-04-30"
+  "- **Date**: 2026-04-30" \
+  "- **Date**: 2026-04-29"
 assert_passes "${alternate_date_repo}"
 
 invalid_date_repo="${workdir}/invalid-date"
 create_valid_repo "${invalid_date_repo}"
 replace_text_in_policy \
   "${invalid_date_repo}" \
-  "- **Date**: 2026-05-01" \
+  "- **Date**: 2026-04-30" \
   "- **Date**: May 1, 2026"
 assert_fails_with \
   "${invalid_date_repo}" \
@@ -196,7 +196,15 @@ printf '%s\n' "AI may approve actions." \
   >>"${ai_approval_repo}/docs/phase-51-6-authority-boundary-negative-test-policy.md"
 assert_fails_with \
   "${ai_approval_repo}" \
-  "Forbidden Phase 51.6 authority-boundary negative-test policy claim: AI may approve actions."
+  "Forbidden Phase 51.6 authority-boundary negative-test policy claim: AI may approve actions"
+
+ai_approval_variant_repo="${workdir}/ai-approval-variant"
+create_valid_repo "${ai_approval_variant_repo}"
+printf '%s\n' "  ai   MAY approve actions  " \
+  >>"${ai_approval_variant_repo}/docs/phase-51-6-authority-boundary-negative-test-policy.md"
+assert_fails_with \
+  "${ai_approval_variant_repo}" \
+  "Forbidden Phase 51.6 authority-boundary negative-test policy claim: AI may approve actions"
 
 ai_reconciliation_repo="${workdir}/ai-reconciliation"
 create_valid_repo "${ai_reconciliation_repo}"
@@ -204,7 +212,7 @@ printf '%s\n' "AI may reconcile execution." \
   >>"${ai_reconciliation_repo}/docs/phase-51-6-authority-boundary-negative-test-policy.md"
 assert_fails_with \
   "${ai_reconciliation_repo}" \
-  "Forbidden Phase 51.6 authority-boundary negative-test policy claim: AI may reconcile execution."
+  "Forbidden Phase 51.6 authority-boundary negative-test policy claim: AI may reconcile execution"
 
 wazuh_close_repo="${workdir}/wazuh-close"
 create_valid_repo "${wazuh_close_repo}"
@@ -212,7 +220,7 @@ printf '%s\n' "Wazuh alert status may close AegisOps records." \
   >>"${wazuh_close_repo}/docs/phase-51-6-authority-boundary-negative-test-policy.md"
 assert_fails_with \
   "${wazuh_close_repo}" \
-  "Forbidden Phase 51.6 authority-boundary negative-test policy claim: Wazuh alert status may close AegisOps records."
+  "Forbidden Phase 51.6 authority-boundary negative-test policy claim: Wazuh alert status may close AegisOps records"
 
 shuffle_reconcile_repo="${workdir}/shuffle-reconcile"
 create_valid_repo "${shuffle_reconcile_repo}"
@@ -220,7 +228,7 @@ printf '%s\n' "Shuffle workflow success may reconcile AegisOps records." \
   >>"${shuffle_reconcile_repo}/docs/phase-51-6-authority-boundary-negative-test-policy.md"
 assert_fails_with \
   "${shuffle_reconcile_repo}" \
-  "Forbidden Phase 51.6 authority-boundary negative-test policy claim: Shuffle workflow success may reconcile AegisOps records."
+  "Forbidden Phase 51.6 authority-boundary negative-test policy claim: Shuffle workflow success may reconcile AegisOps records"
 
 workstation_path_repo="${workdir}/workstation-local-path"
 create_valid_repo "${workstation_path_repo}"

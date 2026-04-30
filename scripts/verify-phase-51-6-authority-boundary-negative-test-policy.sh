@@ -58,22 +58,40 @@ required_phrases=(
 )
 
 forbidden_lines=(
-  "AI may approve actions."
-  "AI may execute actions."
-  "AI may reconcile execution."
-  "AI may close cases."
-  "AI may activate detectors."
-  "AI may become source truth."
-  "Wazuh alert status may close AegisOps records."
-  "Wazuh alert status may reconcile AegisOps records."
-  "Shuffle workflow success may close AegisOps records."
-  "Shuffle workflow success may reconcile AegisOps records."
-  "Ticket status may close AegisOps records."
-  "Browser state is workflow truth."
-  "UI cache is workflow truth."
-  "Downstream receipts are reconciliation truth."
-  "Demo data is production truth."
+  "AI may approve actions"
+  "AI may execute actions"
+  "AI may reconcile execution"
+  "AI may close cases"
+  "AI may activate detectors"
+  "AI may become source truth"
+  "Wazuh alert status may close AegisOps records"
+  "Wazuh alert status may reconcile AegisOps records"
+  "Shuffle workflow success may close AegisOps records"
+  "Shuffle workflow success may reconcile AegisOps records"
+  "Ticket status may close AegisOps records"
+  "Browser state is workflow truth"
+  "UI cache is workflow truth"
+  "Downstream receipts are reconciliation truth"
+  "Demo data is production truth"
 )
+
+canonicalize_policy_text() {
+  perl -0pe '
+    s/\r\n?/\n/g;
+    s/[[:space:]]+/ /g;
+    s/[[:punct:]]+(?= |$)//g;
+    $_ = lc $_;
+  ' "$1"
+}
+
+canonicalize_claim() {
+  printf '%s' "$1" | perl -0pe '
+    s/^\s+|\s+$//g;
+    s/[[:space:]]+/ /g;
+    s/[[:punct:]]+$//g;
+    $_ = lc $_;
+  '
+}
 
 if [[ ! -f "${doc_path}" ]]; then
   echo "Missing Phase 51.6 authority-boundary negative-test policy: ${doc_path}" >&2
@@ -99,8 +117,11 @@ if ! grep -Eq '^- \*\*Date\*\*: [0-9]{4}-[0-9]{2}-[0-9]{2}$' "${doc_path}"; then
   exit 1
 fi
 
+canonical_policy_text="$(canonicalize_policy_text "${doc_path}")"
+
 for line in "${forbidden_lines[@]}"; do
-  if grep -Fiq -- "${line}" "${doc_path}"; then
+  canonical_line="$(canonicalize_claim "${line}")"
+  if grep -Fq -- "${canonical_line}" <<<"${canonical_policy_text}"; then
     echo "Forbidden Phase 51.6 authority-boundary negative-test policy claim: ${line}" >&2
     exit 1
   fi
