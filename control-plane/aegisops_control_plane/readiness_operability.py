@@ -31,10 +31,18 @@ _LIVE_OPTIONAL_EXTENSION_REVIEW_STATES = frozenset(
 
 
 class ReadinessOperabilityHelper:
-    def __init__(self, *, service: Any, config: Any, store: Any) -> None:
+    def __init__(
+        self,
+        *,
+        service: Any,
+        config: Any,
+        store: Any,
+        action_review_inspection_boundary: Any,
+    ) -> None:
         self._service = service
         self._config = config
         self._store = store
+        self._action_review_inspection_boundary = action_review_inspection_boundary
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._service, name)
@@ -94,11 +102,13 @@ class ReadinessOperabilityHelper:
             )
             for path_name in ("ingest", "delegation", "provider", "persistence")
         }
-        overall_state = self._action_review_overall_path_state(paths.values())
+        overall_state = self._action_review_inspection_boundary.overall_path_state(
+            paths.values()
+        )
         return {
             "review_count": len(review_path_health),
             "overall_state": overall_state,
-            "summary": self._action_review_path_health_summary(
+            "summary": self._action_review_inspection_boundary.path_health_summary(
                 overall_state=overall_state,
                 paths=paths,
             ),
@@ -237,11 +247,13 @@ class ReadinessOperabilityHelper:
                     action_request_id
                 )
                 action_execution = executions_by_action_request_id.get(action_request_id)
-                reconciliation = self._latest_action_review_reconciliation(
-                    action_request=action_request,
-                    approval_decision=approval_decision,
-                    action_execution=action_execution,
-                    record_index=targeted_record_index,
+                reconciliation = (
+                    self._action_review_inspection_boundary.latest_reconciliation(
+                        action_request=action_request,
+                        approval_decision=approval_decision,
+                        action_execution=action_execution,
+                        record_index=targeted_record_index,
+                    )
                 )
                 if reconciliation is not None:
                     reconciliations_by_action_request_id[action_request_id] = reconciliation
@@ -349,8 +361,12 @@ class ReadinessOperabilityHelper:
                 approval_state=approval_state,
                 action_execution=action_execution,
             )
-            reviewed_context = self._action_review_visibility_context(action_request)
-            path_health = self._action_review_path_health(
+            reviewed_context = (
+                self._action_review_inspection_boundary.visibility_context(
+                    action_request
+                )
+            )
+            path_health = self._action_review_inspection_boundary.path_health(
                 action_request=action_request,
                 approval_decision=approval_decision,
                 action_execution=action_execution,
@@ -429,7 +445,9 @@ class ReadinessOperabilityHelper:
                 "by_state": ingest_path["by_state"],
             }
 
-        overall_state = self._action_review_overall_path_state(sources.values())
+        overall_state = self._action_review_inspection_boundary.overall_path_state(
+            sources.values()
+        )
         return {
             "tracked_sources": len(sources),
             "overall_state": overall_state,
@@ -486,7 +504,7 @@ class ReadinessOperabilityHelper:
                 )
                 for path_name in ("delegation", "provider", "persistence")
             }
-            overall_state = self._action_review_overall_path_state(
+            overall_state = self._action_review_inspection_boundary.overall_path_state(
                 aggregated_paths.values()
             )
             execution_surface_type, execution_surface_id = surface_metadata[surface_key]
@@ -506,7 +524,9 @@ class ReadinessOperabilityHelper:
                 "paths": aggregated_paths,
             }
 
-        overall_state = self._action_review_overall_path_state(surfaces.values())
+        overall_state = self._action_review_inspection_boundary.overall_path_state(
+            surfaces.values()
+        )
         return {
             "tracked_surfaces": len(surfaces),
             "overall_state": overall_state,
@@ -709,7 +729,9 @@ class ReadinessOperabilityHelper:
             )
             for path_name in ("delegation", "provider", "persistence")
         }
-        overall_state = self._action_review_overall_path_state(aggregated_paths.values())
+        overall_state = self._action_review_inspection_boundary.overall_path_state(
+            aggregated_paths.values()
+        )
         if overall_state == "healthy":
             readiness = "ready"
             reason = "reviewed_endpoint_evidence_path_healthy"
@@ -969,7 +991,9 @@ class ReadinessOperabilityHelper:
         state_counts = Counter(
             str(path_snapshot["state"]) for path_snapshot in path_snapshots
         )
-        overall_state = self._action_review_overall_path_state(path_snapshots)
+        overall_state = self._action_review_inspection_boundary.overall_path_state(
+            path_snapshots
+        )
         reason_counts = Counter(
             str(path_snapshot["reason"])
             for path_snapshot in path_snapshots

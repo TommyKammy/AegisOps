@@ -416,7 +416,7 @@ class ActionReviewSurfacePersistenceTests(ServicePersistenceTestBase):
         self.assertEqual(detail["case_record"]["case_id"], promoted_case.case_id)
         self.assertIsNone(detail["alert_record"])
 
-    def test_service_delegates_action_review_chain_snapshot_to_projection_module(
+    def test_action_review_inspection_boundary_delegates_chain_snapshot_to_projection_module(
         self,
     ) -> None:
         _store, service, promoted_case, evidence_id, reviewed_at = (
@@ -451,7 +451,8 @@ class ActionReviewSurfacePersistenceTests(ServicePersistenceTestBase):
             expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
             action_request_id="action-request-projection-delegation-001",
         )
-        record_index = service._build_action_review_record_index()
+        boundary = service._action_review_inspection_boundary
+        record_index = boundary.build_record_index()
         sentinel = {"review_state": "delegated-to-module"}
 
         with support.mock.patch.object(
@@ -460,7 +461,7 @@ class ActionReviewSurfacePersistenceTests(ServicePersistenceTestBase):
             autospec=True,
             return_value=sentinel,
         ) as build_snapshot:
-            result = service._build_action_review_chain_snapshot(
+            result = boundary.build_chain_snapshot(
                 action_request,
                 record_index=record_index,
             )

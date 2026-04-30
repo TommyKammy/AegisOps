@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Callable, Mapping, Protocol, Type, TypeVar
+from typing import Any, Callable, Mapping, Protocol, Type, TypeVar
 
 from .models import (
     ActionRequestRecord,
@@ -53,9 +53,6 @@ class OperatorInspectionServiceDependencies(Protocol):
     ) -> dict[str, ReconciliationRecord]:
         ...
 
-    def _build_action_review_record_index(self) -> object:
-        ...
-
     def _reconciliation_is_wazuh_origin(
         self,
         reconciliation: ReconciliationRecord,
@@ -67,15 +64,6 @@ class OperatorInspectionServiceDependencies(Protocol):
         linked_ids: object,
         additional_id: str | None,
     ) -> tuple[str, ...]:
-        ...
-
-    def _action_review_chains_for_scope(
-        self,
-        *,
-        case_id: str | None,
-        alert_id: str | None,
-        record_index: object,
-    ) -> tuple[dict[str, object], ...]:
         ...
 
     def _alert_review_state(self, alert: AlertRecord) -> str:
@@ -146,6 +134,7 @@ class OperatorInspectionReadSurface:
         self,
         service: OperatorInspectionServiceDependencies,
         *,
+        action_review_inspection_boundary: Any,
         analyst_queue_snapshot_factory: Callable[..., object],
         alert_detail_snapshot_factory: Callable[..., object],
         case_detail_snapshot_factory: Callable[..., object],
@@ -158,6 +147,7 @@ class OperatorInspectionReadSurface:
         dedupe_strings: Callable[[tuple[str, ...]], tuple[str, ...]],
     ) -> None:
         self._service = service
+        self._action_review_inspection_boundary = action_review_inspection_boundary
         self._analyst_queue_snapshot_factory = analyst_queue_snapshot_factory
         self._alert_detail_snapshot_factory = alert_detail_snapshot_factory
         self._case_detail_snapshot_factory = case_detail_snapshot_factory
@@ -449,7 +439,7 @@ class OperatorInspectionReadSurface:
         latest_reconciliation_by_alert_id = (
             self._service._latest_detection_reconciliations_by_alert_id()
         )
-        action_review_index = self._service._build_action_review_record_index()
+        action_review_index = self._action_review_inspection_boundary.build_record_index()
         ai_trace_records = self._service._store.list(AITraceRecord)
         queue_records: list[dict[str, object]] = []
         for alert in self._service._store.list(AlertRecord):
@@ -500,7 +490,7 @@ class OperatorInspectionReadSurface:
             if alert.case_id is not None
             else None
         )
-        action_reviews = self._service._action_review_chains_for_scope(
+        action_reviews = self._action_review_inspection_boundary.chains_for_scope(
             case_id=alert.case_id,
             alert_id=alert.alert_id,
             record_index=action_review_index,
@@ -747,10 +737,10 @@ class OperatorInspectionReadSurface:
             "first_seen_at": reconciliation.first_seen_at,
             "last_seen_at": reconciliation.last_seen_at,
         }
-        action_reviews = self._service._action_review_chains_for_scope(
+        action_reviews = self._action_review_inspection_boundary.chains_for_scope(
             case_id=alert.case_id,
             alert_id=alert.alert_id,
-            record_index=self._service._build_action_review_record_index(),
+            record_index=self._action_review_inspection_boundary.build_record_index(),
         )
 
         return self._alert_detail_snapshot_factory(
@@ -810,10 +800,10 @@ class OperatorInspectionReadSurface:
         lead_records = tuple(
             self._record_to_dict(record) for record in self._service._leads_for_case(case_id)
         )
-        action_reviews = self._service._action_review_chains_for_scope(
+        action_reviews = self._action_review_inspection_boundary.chains_for_scope(
             case_id=case_id,
             alert_id=case.alert_id,
-            record_index=self._service._build_action_review_record_index(),
+            record_index=self._action_review_inspection_boundary.build_record_index(),
         )
         cross_source_timeline, provenance_summary = self._build_case_cross_source_surfaces(
             case=case,
@@ -884,10 +874,10 @@ class OperatorInspectionReadSurface:
                 "Action review inspection requires an authoritative reviewed case or alert scope"
             )
 
-        action_reviews = self._service._action_review_chains_for_scope(
+        action_reviews = self._action_review_inspection_boundary.chains_for_scope(
             case_id=action_request.case_id,
             alert_id=action_request.alert_id,
-            record_index=self._service._build_action_review_record_index(),
+            record_index=self._action_review_inspection_boundary.build_record_index(),
         )
         selected_review = next(
             (
