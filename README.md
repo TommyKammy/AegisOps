@@ -2,7 +2,7 @@
 
 **AegisOps** is a governed SecOps control plane above external detection and automation substrates.
 
-It is **not** a SIEM/SOAR replacement.
+It is **not** a broad standalone replacement for every SIEM/SOAR capability.
 It is the layer that owns the authoritative record chain for analyst work, approval, delegation, execution, and reconciliation.
 AegisOps is built to support **human-controlled security operations** with an explicit authority boundary for approvals, evidence, action intent, and reconciliation.
 
@@ -18,6 +18,24 @@ Canonical cross-phase boundary reference:
 
 - `docs/non-goals-and-expansion-guardrails.md`
 - `docs/adr/0011-phase-51-1-replacement-boundary.md` defines the Phase 51.1 SMB SecOps replacement boundary: AegisOps replaces the operating experience above Wazuh and Shuffle, not their internals or every SIEM/SOAR capability.
+
+## Product positioning
+
+Current status: AegisOps has a strong pilot foundation, but it is still pre-GA and is not yet a self-service commercial replacement.
+
+Target status: AegisOps aims to provide an AI-agent-native SMB SOC/SIEM/SOAR operating experience above Wazuh and Shuffle.
+
+Replacement means the operating experience and authoritative record chain for daily SMB security operations, not Wazuh internals, Shuffle internals, or every SIEM/SOAR capability.
+
+The Phase 51 replacement boundary is defined by `docs/adr/0011-phase-51-1-replacement-boundary.md`.
+
+Wazuh detects, AegisOps decides, records, and reconciles, and Shuffle executes reviewed delegated routine work.
+
+AegisOps control-plane records remain authoritative for alert, case, evidence, approval, action request, execution receipt, reconciliation, audit, and release truth.
+
+AI remains advisory-only and non-authoritative; it must not approve, execute, reconcile, close cases, activate detectors, or become source truth.
+
+Forbidden overclaim: AegisOps must not be described as already GA, already self-service commercial, a replacement for every SIEM/SOAR capability, a reimplementation of Wazuh or Shuffle internals, or a broad autonomous SOC.
 
 Phase 44-47 closure contracts:
 
