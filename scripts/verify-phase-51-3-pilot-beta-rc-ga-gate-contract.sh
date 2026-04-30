@@ -100,8 +100,19 @@ for phrase in "${required_phrases[@]}"; do
   fi
 done
 
+contains_forbidden_outside_forbidden_section() {
+  local claim="$1"
+
+  awk -v claim="${claim}" '
+    /^## 8\. Forbidden Claims$/ { in_forbidden_claims = 1; next }
+    /^## / && in_forbidden_claims { in_forbidden_claims = 0 }
+    !in_forbidden_claims && index($0, claim) { found = 1 }
+    END { exit(found ? 0 : 1) }
+  ' "${doc_path}"
+}
+
 for line in "${forbidden_lines[@]}"; do
-  if grep -Fxq -- "${line}" "${doc_path}"; then
+  if contains_forbidden_outside_forbidden_section "${line}"; then
     echo "Forbidden Phase 51.3 gate contract claim: ${line}" >&2
     exit 1
   fi

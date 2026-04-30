@@ -56,6 +56,23 @@ remove_text_from_contract() {
     "${target}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
 }
 
+insert_after_heading() {
+  local target="$1"
+  local heading="$2"
+  local text="$3"
+  local source="${target}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
+  local updated="${target}/contract.updated"
+
+  awk -v heading="${heading}" -v text="${text}" '{
+    print
+    if ($0 == heading) {
+      print ""
+      print text
+    }
+  }' "${source}" >"${updated}"
+  mv "${updated}" "${source}"
+}
+
 valid_repo="${workdir}/valid"
 create_valid_repo "${valid_repo}"
 assert_passes "${valid_repo}"
@@ -100,8 +117,7 @@ assert_fails_with \
 
 ga_overclaim_repo="${workdir}/ga-overclaim"
 create_valid_repo "${ga_overclaim_repo}"
-printf '%s\n' "Phase 66 is GA." \
-  >>"${ga_overclaim_repo}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
+insert_after_heading "${ga_overclaim_repo}" "## 6. RC Gate" "- Phase 66 is GA."
 assert_fails_with \
   "${ga_overclaim_repo}" \
   "Forbidden Phase 51.3 gate contract claim: Phase 66 is GA"
