@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import AbstractContextManager, contextmanager
 from collections import Counter
-from dataclasses import fields, replace
+from dataclasses import fields
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -12,7 +12,6 @@ from typing import Iterable, Iterator, Mapping, Protocol, Type, TypeVar
 
 _DATETIME_TYPE = datetime
 
-from . import action_review_projection as _action_review_projection
 from .action_policy import evaluate_action_policy_record
 from . import assistant_advisory as _assistant_advisory
 from . import live_assistant_workflow as _live_assistant_workflow
@@ -1257,52 +1256,6 @@ class AegisOpsControlPlaneService(CaseWorkflowFacade, ExternalEvidenceFacade):
         if action_request is None:
             raise LookupError(f"Missing action request {action_request_id!r}")
         return action_request
-
-    def _require_review_bound_action_request(
-        self,
-        action_request_id: str,
-    ) -> ActionRequestRecord:
-        action_request = self._require_action_request_record(action_request_id)
-        if not _action_review_projection._action_request_is_review_bound(
-            action_request
-        ):
-            raise ValueError(
-                "action_request_id must reference a reviewed action request"
-            )
-        return action_request
-
-    def _require_action_review_visibility_context_record(
-        self,
-        action_request: ActionRequestRecord,
-    ) -> CaseRecord | AlertRecord:
-        if action_request.case_id is not None:
-            return self._require_reviewed_operator_case(action_request.case_id)
-        if action_request.alert_id is None:
-            raise ValueError(
-                "reviewed action request must be linked to a case or alert before "
-                "recording runtime visibility"
-            )
-        alert = self._store.get(AlertRecord, action_request.alert_id)
-        if alert is None:
-            raise LookupError(f"Missing alert {action_request.alert_id!r}")
-        return alert
-
-    def _persist_action_review_visibility_context_record(
-        self,
-        *,
-        context_record: CaseRecord | AlertRecord,
-        reviewed_context_update: Mapping[str, object],
-    ) -> CaseRecord | AlertRecord:
-        updated_reviewed_context = _merge_reviewed_context(
-            context_record.reviewed_context,
-            reviewed_context_update,
-        )
-        return self.persist_record(
-            replace(
-                context_record,
-                reviewed_context=updated_reviewed_context,
-            )
-        )
 
     def _require_reviewed_operator_case(self, case_id: str) -> CaseRecord:
         return self._reviewed_slice_policy.require_operator_case(case_id)

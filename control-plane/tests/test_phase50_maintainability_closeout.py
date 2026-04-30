@@ -58,15 +58,15 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
         facade_methods = self._facade_method_count(metadata["facade_class"])
 
         self.assertEqual(metadata["adr_exception"], "ADR-0003")
-        self.assertEqual(metadata["phase"], "50.12.5")
-        self.assertEqual(metadata["issue"], "#1020")
+        self.assertEqual(metadata["phase"], "50.12.6")
+        self.assertEqual(metadata["issue"], "#1021")
         self.assertEqual(metadata["facade_class"], "AegisOpsControlPlaneService")
         self.assertEqual(int(metadata["max_lines"]), physical_lines)
         self.assertEqual(int(metadata["max_effective_lines"]), effective_lines)
         self.assertEqual(int(metadata["max_facade_methods"]), facade_methods)
-        self.assertEqual(physical_lines, 1498)
-        self.assertEqual(effective_lines, 1338)
-        self.assertEqual(facade_methods, 103)
+        self.assertEqual(physical_lines, 1451)
+        self.assertEqual(effective_lines, 1294)
+        self.assertEqual(facade_methods, 100)
         self.assertLess(int(metadata["max_lines"]), 3003)
         self.assertLess(int(metadata["max_effective_lines"]), 2704)
         self.assertLess(int(metadata["max_facade_methods"]), 167)
@@ -80,6 +80,7 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
             "Phase 50.12.3",
             "Phase 50.12.4",
             "Phase 50.12.5",
+            "Phase 50.12.6",
             "control-plane/aegisops_control_plane/service.py",
             "control-plane/aegisops_control_plane/case_workflow.py",
             "control-plane/aegisops_control_plane/action_review_write_surface.py",
@@ -87,17 +88,18 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
             "control-plane/aegisops_control_plane/external_evidence_boundary.py",
             "control-plane/aegisops_control_plane/ai_trace_lifecycle.py",
             "AegisOpsControlPlaneService",
-            "max_lines=1498",
-            "max_effective_lines=1338",
-            "max_facade_methods=103",
-            "physical_lines=1498",
-            "effective_lines=1338",
+            "max_lines=1451",
+            "max_effective_lines=1294",
+            "max_facade_methods=100",
+            "physical_lines=1451",
+            "effective_lines=1294",
             "ADR-0007",
             "ADR-0008",
             "ADR-0004",
             "ADR-0003",
             "#1007",
             "#1017",
+            "#1021",
             "#1018",
             "#1019",
             "#1020",
