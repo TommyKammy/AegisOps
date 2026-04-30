@@ -22,6 +22,7 @@ from .action_reconciliation_orchestration import (
     ActionOrchestrationBoundary,
     ReconciliationOrchestrationBoundary,
 )
+from .action_review_inspection import ActionReviewInspectionBoundary
 from .action_review_write_surface import ActionReviewWriteSurface
 from .case_workflow import CaseWorkflowService
 from .config import RuntimeConfig
@@ -103,6 +104,7 @@ class ControlPlaneServiceComposition:
     assistant_context_assembler: AssistantContextAssembler
     assistant_advisory_coordinator: AssistantAdvisoryCoordinator
     live_assistant_workflow_coordinator: LiveAssistantWorkflowCoordinator
+    action_review_inspection_boundary: ActionReviewInspectionBoundary
     operator_inspection_read_surface: OperatorInspectionReadSurface
     action_review_write_surface: ActionReviewWriteSurface
     evidence_linkage_service: EvidenceLinkageService
@@ -193,8 +195,10 @@ def build_control_plane_service_composition(
         ),
         ai_trace_lifecycle=ai_trace_lifecycle_service,
     )
+    action_review_inspection_boundary = ActionReviewInspectionBoundary(service)
     operator_inspection_read_surface = OperatorInspectionReadSurface(
         service,
+        action_review_inspection_boundary=action_review_inspection_boundary,
         analyst_queue_snapshot_factory=dependencies.analyst_queue_snapshot_factory,
         alert_detail_snapshot_factory=dependencies.alert_detail_snapshot_factory,
         case_detail_snapshot_factory=dependencies.case_detail_snapshot_factory,
@@ -260,6 +264,7 @@ def build_control_plane_service_composition(
         service=service,
         config=config,
         store=resolved_store,
+        action_review_inspection_boundary=action_review_inspection_boundary,
     )
     lifecycle_transition_helper = (
         detection_intake_service.lifecycle_transition_helper
@@ -342,6 +347,7 @@ def build_control_plane_service_composition(
         assistant_context_assembler=assistant_context_assembler,
         assistant_advisory_coordinator=assistant_advisory_coordinator,
         live_assistant_workflow_coordinator=live_assistant_workflow_coordinator,
+        action_review_inspection_boundary=action_review_inspection_boundary,
         operator_inspection_read_surface=operator_inspection_read_surface,
         action_review_write_surface=action_review_write_surface,
         evidence_linkage_service=evidence_linkage_service,

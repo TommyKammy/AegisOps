@@ -4763,9 +4763,9 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         ) as mocked_datetime:
             mocked_datetime.now.side_effect = advancing_now
             with mock.patch.object(
-                service,
-                "_action_review_path_health",
-                wraps=service._action_review_path_health,
+                service._action_review_inspection_boundary,
+                "path_health",
+                wraps=service._action_review_inspection_boundary.path_health,
             ) as action_review_path_health:
                 readiness = service.inspect_readiness_diagnostics()
 
