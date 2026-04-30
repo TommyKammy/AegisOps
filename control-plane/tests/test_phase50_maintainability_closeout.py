@@ -58,15 +58,15 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
         facade_methods = self._facade_method_count(metadata["facade_class"])
 
         self.assertEqual(metadata["adr_exception"], "ADR-0003")
-        self.assertEqual(metadata["phase"], "50.12.3")
-        self.assertEqual(metadata["issue"], "#1018")
+        self.assertEqual(metadata["phase"], "50.12.4")
+        self.assertEqual(metadata["issue"], "#1019")
         self.assertEqual(metadata["facade_class"], "AegisOpsControlPlaneService")
         self.assertEqual(int(metadata["max_lines"]), physical_lines)
         self.assertEqual(int(metadata["max_effective_lines"]), effective_lines)
         self.assertEqual(int(metadata["max_facade_methods"]), facade_methods)
-        self.assertEqual(physical_lines, 1709)
-        self.assertEqual(effective_lines, 1530)
-        self.assertEqual(facade_methods, 122)
+        self.assertEqual(physical_lines, 1619)
+        self.assertEqual(effective_lines, 1445)
+        self.assertEqual(facade_methods, 117)
         self.assertLess(int(metadata["max_lines"]), 3003)
         self.assertLess(int(metadata["max_effective_lines"]), 2704)
         self.assertLess(int(metadata["max_facade_methods"]), 167)
@@ -78,16 +78,18 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
             "Phase 50.11.7",
             "Phase 50.12.2",
             "Phase 50.12.3",
+            "Phase 50.12.4",
             "control-plane/aegisops_control_plane/service.py",
+            "control-plane/aegisops_control_plane/case_workflow.py",
             "control-plane/aegisops_control_plane/action_review_write_surface.py",
             "control-plane/aegisops_control_plane/action_review_projection.py",
             "control-plane/aegisops_control_plane/external_evidence_boundary.py",
             "AegisOpsControlPlaneService",
-            "max_lines=1709",
-            "max_effective_lines=1530",
-            "max_facade_methods=122",
-            "physical_lines=1709",
-            "effective_lines=1530",
+            "max_lines=1619",
+            "max_effective_lines=1445",
+            "max_facade_methods=117",
+            "physical_lines=1619",
+            "effective_lines=1445",
             "ADR-0007",
             "ADR-0008",
             "ADR-0004",
@@ -95,9 +97,11 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
             "#1007",
             "#1017",
             "#1018",
+            "#1019",
             "remaining accepted hotspot",
             "facade dispatch, compatibility entrypoints, runtime-boundary guards, and lifecycle/write-path delegates",
             "reviewed action approval policy helpers",
+            "casework write compatibility delegates",
             "projection split does not require a baseline entry",
             "external-evidence split does not require a baseline entry",
             "silent re-growth",

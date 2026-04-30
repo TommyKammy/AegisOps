@@ -1,6 +1,6 @@
 # Phase 50 Maintainability Closeout
 
-Phase 50.12.3 updates the accepted `service.py` residual closeout after the Phase 50.11.7 ordered DTO/helper extraction sequence and the Phase 50.12.2/50.12.3 facade-pressure reductions governed by ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, and ADR-0009.
+Phase 50.12.4 updates the accepted `service.py` residual closeout after the Phase 50.11.7 ordered DTO/helper extraction sequence and the Phase 50.12.2/50.12.3/50.12.4 facade-pressure reductions governed by ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, and ADR-0009.
 
 This closeout is validation and documentation only. It does not change runtime behavior, public APIs, approval, execution, reconciliation, assistant, ticket, ML, endpoint, network, browser, optional-evidence, restore, readiness, or operator authority.
 
@@ -12,21 +12,21 @@ The maintainability verifier still reports one remaining accepted hotspot:
 
 - `control-plane/aegisops_control_plane/service.py`
 
-That result is expected because `AegisOpsControlPlaneService` remains the public facade after the Phase 50.11 DTO/snapshot, runtime-event, action-review inspection, assistant-advisory, and detection/case-linkage helper extraction work accepted in #1007. Phase 50.12.2 for #1017 further extracted constructor composition assignment pressure, and Phase 50.12.3 for #1018 moved reviewed action approval policy helper pressure into the action-review write surface. The accepted residual ceiling is:
+That result is expected because `AegisOpsControlPlaneService` remains the public facade after the Phase 50.11 DTO/snapshot, runtime-event, action-review inspection, assistant-advisory, and detection/case-linkage helper extraction work accepted in #1007. Phase 50.12.2 for #1017 further extracted constructor composition assignment pressure, Phase 50.12.3 for #1018 moved reviewed action approval policy helper pressure into the action-review write surface, and Phase 50.12.4 for #1019 fenced casework write compatibility delegates behind the case workflow facade. The accepted residual ceiling is:
 
-- `max_lines=1709`
-- `max_effective_lines=1530`
-- `max_facade_methods=122`
+- `max_lines=1619`
+- `max_effective_lines=1445`
+- `max_facade_methods=117`
 - `facade_class=AegisOpsControlPlaneService`
 - `adr_exception=ADR-0003`
-- `phase=50.12.3`
-- `issue=#1018`
+- `phase=50.12.4`
+- `issue=#1019`
 
 The measured closeout state is:
 
-- `physical_lines=1709`
-- `effective_lines=1530`
-- `AegisOpsControlPlaneService methods=122`
+- `physical_lines=1619`
+- `effective_lines=1445`
+- `AegisOpsControlPlaneService methods=117`
 
 The baseline is lower than the Phase 50.10.6 ceiling of `max_lines=3003`, `max_effective_lines=2704`, and `max_facade_methods=167`. It is also below the ADR-0008 Phase 50.11 target ceiling of `max_lines <= 2700`, `max_effective_lines <= 2450`, and `max_facade_methods <= 150`.
 
@@ -45,6 +45,8 @@ The final Phase 50.11 extraction sequence moved the following directly linked he
 - detection/case-linkage helpers into `control-plane/aegisops_control_plane/case_workflow.py`, `control-plane/aegisops_control_plane/detection_lifecycle.py`, and `control-plane/aegisops_control_plane/detection_lifecycle_helpers.py`.
 
 Phase 50.12.3 then moved the reviewed action approval policy helpers out of `service.py` and into `control-plane/aegisops_control_plane/action_review_write_surface.py`, preserving the public facade entrypoints for action request creation and approval decision recording.
+
+Phase 50.12.4 then moved the casework write compatibility delegates out of `AegisOpsControlPlaneService` and into `control-plane/aegisops_control_plane/case_workflow.py`, preserving the public facade entrypoints for observation, lead, recommendation, handoff, and disposition writes.
 
 Those extractions preserve the public service facade. AegisOps control-plane records remain authoritative workflow truth. Tickets, assistant output, ML, endpoint evidence, network evidence, browser state, receipts, optional extension status, Wazuh, Shuffle, Zammad, operator-facing summaries, badges, counters, projections, snapshots, DTOs, and helper-module output remain subordinate context.
 

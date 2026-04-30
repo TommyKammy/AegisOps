@@ -11,6 +11,7 @@ if str(TESTS_ROOT) not in sys.path:
 
 import _service_persistence_support as support
 from _service_persistence_support import ServicePersistenceTestBase
+import aegisops_control_plane.service as service_module
 from aegisops_control_plane.case_workflow import CaseWorkflowService
 from aegisops_control_plane.detection_lifecycle import DetectionIntakeService
 from aegisops_control_plane.evidence_linkage import EvidenceLinkageService
@@ -264,6 +265,25 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             rationale="Delegated disposition.",
             recorded_at=observed_at,
         )
+
+    def test_case_workflow_compatibility_delegates_are_fenced_from_service_class(
+        self,
+    ) -> None:
+        direct_service_attrs = set(vars(service_module.AegisOpsControlPlaneService))
+        case_workflow_write_methods = {
+            "record_case_observation",
+            "record_case_lead",
+            "record_case_recommendation",
+            "record_case_handoff",
+            "record_case_disposition",
+        }
+
+        self.assertTrue(
+            case_workflow_write_methods.issubset(
+                set(dir(support.AegisOpsControlPlaneService))
+            )
+        )
+        self.assertFalse(case_workflow_write_methods & direct_service_attrs)
 
     def test_service_delegates_detection_intake_and_triage_operations(self) -> None:
         store, _ = support.make_store()
