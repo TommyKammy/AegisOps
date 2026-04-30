@@ -79,14 +79,6 @@ class ActionReviewWriteSurfaceDependencies(Protocol):
     ) -> CaseRecord | AlertRecord:
         ...
 
-    def _require_reviewed_action_approver_policy(
-        self,
-        *,
-        action_request: ActionRequestRecord,
-        approver_identity: str,
-    ) -> None:
-        ...
-
     def _resolve_new_record_identifier(
         self,
         record_type: type,
@@ -364,7 +356,8 @@ class ActionReviewWriteSurface:
                 raise PermissionError(
                     "reviewed approval decisions require a human-required action policy"
                 )
-            service._require_reviewed_action_approver_policy(
+            _require_reviewed_action_approver_policy(
+                service,
                 action_request=action_request,
                 approver_identity=approver_identity,
             )
@@ -433,3 +426,70 @@ class ActionReviewWriteSurface:
             lifecycle_state=approval_decision.lifecycle_state,
         )
         return approval_decision
+
+
+def _require_reviewed_action_approver_policy(
+    service: ActionReviewWriteSurfaceDependencies,
+    *,
+    action_request: ActionRequestRecord,
+    approver_identity: str,
+) -> None:
+    action_class = _reviewed_action_class_for_request(action_request)
+    if action_class not in {"notify", "soft_write", "read_only"}:
+        raise PermissionError(
+            "approval decisions are not authorized for the reviewed action class"
+        )
+
+    authorized_approver_identities = _authorized_approver_identities_for_request(
+        service,
+        action_request,
+    )
+    if (
+        authorized_approver_identities is not None
+        and approver_identity not in authorized_approver_identities
+    ):
+        raise PermissionError(
+            "approver identity is not authorized by the reviewed action approver policy"
+        )
+
+
+def _reviewed_action_class_for_request(action_request: ActionRequestRecord) -> str:
+    action_type = action_request.requested_payload.get("action_type")
+    if action_type == "notify_identity_owner":
+        return "notify"
+    if action_type == "create_tracking_ticket":
+        return "soft_write"
+    if action_type == "collect_endpoint_evidence_pack":
+        return "read_only"
+    raise PermissionError(
+        "approval decisions are not authorized for the reviewed action class"
+    )
+
+
+def _authorized_approver_identities_for_request(
+    service: ActionReviewWriteSurfaceDependencies,
+    action_request: ActionRequestRecord,
+) -> tuple[str, ...] | None:
+    configured_identities = action_request.policy_evaluation.get(
+        "authorized_approver_identities"
+    )
+    if configured_identities is None:
+        return None
+    if not isinstance(configured_identities, (list, tuple)):
+        raise ValueError(
+            "policy_evaluation.authorized_approver_identities must be a sequence of identities"
+        )
+
+    normalized_identities: list[str] = []
+    for index, identity in enumerate(configured_identities):
+        normalized_identity = service._require_non_empty_string(
+            identity,
+            f"policy_evaluation.authorized_approver_identities[{index}]",
+        )
+        if normalized_identity not in normalized_identities:
+            normalized_identities.append(normalized_identity)
+    if not normalized_identities:
+        raise ValueError(
+            "policy_evaluation.authorized_approver_identities must contain at least one identity"
+        )
+    return tuple(normalized_identities)

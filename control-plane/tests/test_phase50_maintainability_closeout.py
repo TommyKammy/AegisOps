@@ -50,7 +50,7 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
                 return metadata
         raise AssertionError("service.py hotspot baseline entry not found")
 
-    def test_baseline_records_phase50_11_closeout_measurements(self) -> None:
+    def test_baseline_records_current_phase50_closeout_measurements(self) -> None:
         service_text = self._read("control-plane/aegisops_control_plane/service.py")
         metadata = self._baseline_metadata()
         physical_lines = len(service_text.splitlines())
@@ -58,15 +58,15 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
         facade_methods = self._facade_method_count(metadata["facade_class"])
 
         self.assertEqual(metadata["adr_exception"], "ADR-0003")
-        self.assertEqual(metadata["phase"], "50.12.2")
-        self.assertEqual(metadata["issue"], "#1017")
+        self.assertEqual(metadata["phase"], "50.12.3")
+        self.assertEqual(metadata["issue"], "#1018")
         self.assertEqual(metadata["facade_class"], "AegisOpsControlPlaneService")
         self.assertEqual(int(metadata["max_lines"]), physical_lines)
         self.assertEqual(int(metadata["max_effective_lines"]), effective_lines)
         self.assertEqual(int(metadata["max_facade_methods"]), facade_methods)
-        self.assertEqual(physical_lines, 1773)
-        self.assertEqual(effective_lines, 1589)
-        self.assertEqual(facade_methods, 125)
+        self.assertEqual(physical_lines, 1709)
+        self.assertEqual(effective_lines, 1530)
+        self.assertEqual(facade_methods, 122)
         self.assertLess(int(metadata["max_lines"]), 3003)
         self.assertLess(int(metadata["max_effective_lines"]), 2704)
         self.assertLess(int(metadata["max_facade_methods"]), 167)
@@ -77,23 +77,27 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
         for required in (
             "Phase 50.11.7",
             "Phase 50.12.2",
+            "Phase 50.12.3",
             "control-plane/aegisops_control_plane/service.py",
+            "control-plane/aegisops_control_plane/action_review_write_surface.py",
             "control-plane/aegisops_control_plane/action_review_projection.py",
             "control-plane/aegisops_control_plane/external_evidence_boundary.py",
             "AegisOpsControlPlaneService",
-            "max_lines=1773",
-            "max_effective_lines=1589",
-            "max_facade_methods=125",
-            "physical_lines=1773",
-            "effective_lines=1589",
+            "max_lines=1709",
+            "max_effective_lines=1530",
+            "max_facade_methods=122",
+            "physical_lines=1709",
+            "effective_lines=1530",
             "ADR-0007",
             "ADR-0008",
             "ADR-0004",
             "ADR-0003",
             "#1007",
             "#1017",
+            "#1018",
             "remaining accepted hotspot",
             "facade dispatch, compatibility entrypoints, runtime-boundary guards, and lifecycle/write-path delegates",
+            "reviewed action approval policy helpers",
             "projection split does not require a baseline entry",
             "external-evidence split does not require a baseline entry",
             "silent re-growth",
