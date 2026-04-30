@@ -66,8 +66,9 @@ AegisOps control-plane records remain authoritative. The operator UI, proxy, Zam
 
 Current automation gate:
 
-- Before Phase 49.0 or Phase 49 work is created, scheduled, or executed, run the roadmap materialization preflight from `docs/roadmap-materialization-preflight-contract.md`.
-- The required repo-owned command is `bash scripts/roadmap-materialization-preflight.sh --graph docs/automation/roadmap-materialization-phase-graph.json --target-phase 49.0 --issue-source github`.
+- Before Phase 49.0, Phase 49, or Phase 52+ work is created, scheduled, or executed, run the roadmap materialization preflight from `docs/roadmap-materialization-preflight-contract.md`.
+- The required repo-owned Phase 49 command is `bash scripts/roadmap-materialization-preflight.sh --graph docs/automation/roadmap-materialization-phase-graph.json --target-phase 49.0 --issue-source github`.
+- The required repo-owned post-Phase50 command is `bash scripts/roadmap-materialization-preflight.sh --graph docs/automation/roadmap-materialization-phase-graph.json --target-phase 52 --issue-source github`.
 - The focused fixture path is `bash scripts/test-verify-roadmap-materialization-preflight.sh`.
 
 The repository is no longer design-only: Phase 16 defines the approved first-boot runtime target for Phase 17 bring-up.

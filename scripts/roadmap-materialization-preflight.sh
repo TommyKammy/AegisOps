@@ -26,6 +26,7 @@ LINT_KEYS = (
     "metadata_errors",
     "high_risk_blocking_ambiguity",
 )
+OWNER_ACCEPTANCE_RE = re.compile(r"(?m)^Explicit owner acceptance: yes$")
 
 
 def parse_args() -> argparse.Namespace:
@@ -178,6 +179,13 @@ def phase_done(phase: dict) -> bool:
         "evaluated",
         "explicitly_deferred",
     }
+
+
+def issue_closed_or_accepted(issue: dict) -> bool:
+    state = str(issue.get("state", "")).lower()
+    if state == "closed" or issue.get("explicitly_accepted") is True:
+        return True
+    return bool(OWNER_ACCEPTANCE_RE.search(issue.get("body") or ""))
 
 
 def load_graph(path: str) -> dict:
@@ -456,6 +464,19 @@ def validate_phase(
                 "blocked",
                 lint_key,
                 "repair the issue body and rerun issue-lint",
+                issue_number=number,
+                issue_numbers_read=issue_numbers_read,
+            )
+
+        if not issue_closed_or_accepted(issue):
+            fail(
+                graph,
+                target_phase,
+                classifications,
+                phase_id,
+                "materialized_open",
+                "issue_state",
+                "close or explicitly accept every predecessor Epic and child issue before dependent scheduling",
                 issue_number=number,
                 issue_numbers_read=issue_numbers_read,
             )
