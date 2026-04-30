@@ -21,6 +21,7 @@ Canonical cross-phase boundary reference:
 - [Phase 51.3 pilot beta RC GA gate contract](docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md) defines the Pilot, Beta, RC, and GA evidence gates for replacement-readiness materialization.
 - [Phase 51.4 SMB personas and jobs-to-be-done matrix](docs/phase-51-4-smb-personas-jobs-to-be-done.md) defines the internal IT manager, part-time security operator, approver/escalation owner, platform admin, and bounded external support collaborator personas for later replacement-roadmap work.
 - [Phase 51.5 competitive gap matrix](docs/phase-51-5-competitive-gap-matrix.md) compares the replacement operating-experience target against standalone Wazuh, standalone Shuffle, manual SOC/ticket workflow, and common SMB SIEM/SOAR expectations.
+- [Phase 51.6 authority-boundary negative-test policy](docs/phase-51-6-authority-boundary-negative-test-policy.md) defines the fail-closed negative-test classes later AI, Wazuh, Shuffle, ticket, evidence, browser, UI cache, downstream receipt, and demo-data work must cite.
 
 ## Product positioning
 
@@ -37,6 +38,8 @@ The Phase 51.3 Pilot, Beta, RC, and GA gate contract is defined by the [Phase 51
 The Phase 51.4 SMB personas and jobs-to-be-done matrix is defined by the [Phase 51.4 SMB personas and jobs-to-be-done matrix](docs/phase-51-4-smb-personas-jobs-to-be-done.md).
 
 The Phase 51.5 competitive gap matrix is defined by the [Phase 51.5 competitive gap matrix](docs/phase-51-5-competitive-gap-matrix.md).
+
+The Phase 51.6 authority-boundary negative-test policy is defined by the [Phase 51.6 authority-boundary negative-test policy](docs/phase-51-6-authority-boundary-negative-test-policy.md).
 
 Wazuh detects, AegisOps decides, records, and reconciles, and Shuffle executes reviewed delegated routine work.
 
