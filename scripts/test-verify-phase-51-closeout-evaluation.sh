@@ -79,4 +79,12 @@ assert_fails_with \
   "${absolute_path_repo}" \
   "Forbidden Phase 51 closeout evaluation: workstation-local absolute path detected"
 
+windows_backslash_path_repo="${workdir}/windows-backslash-path"
+copy_valid_repo "${windows_backslash_path_repo}"
+windows_backslash_path="$(printf 'C:%bUsers%bexample%brepo%bfile.md' '\\' '\\' '\\' '\\')"
+printf 'Run %s.\n' "${windows_backslash_path}" >>"${windows_backslash_path_repo}/docs/phase-51-closeout-evaluation.md"
+assert_fails_with \
+  "${windows_backslash_path_repo}" \
+  "Forbidden Phase 51 closeout evaluation: workstation-local absolute path detected"
+
 echo "Phase 51 closeout evaluation verifier tests passed."

@@ -76,11 +76,12 @@ for phrase in "${required_phrases[@]}"; do
   require_phrase "${phrase}" "required closeout term"
 done
 
-unix_home_prefix="/""home/"
-mac_home_prefix="/""Users/"
-windows_backslash_prefix="C:""\\Users\\"
-windows_slash_prefix="C:""/""Users/"
-if grep -Eq "(${mac_home_prefix}|${unix_home_prefix}[^ <\`]+|${windows_backslash_prefix}|${windows_slash_prefix})" "${absolute_doc_path}"; then
+mac_home_prefix="$(printf '/%s/' 'Users')"
+unix_home_prefix="$(printf '/%s/' 'home')"
+windows_backslash_prefix="$(printf '[A-Za-z]:\\\\%s\\\\' 'Users')"
+windows_slash_prefix="$(printf '[A-Za-z]:/%s/' 'Users')"
+absolute_path_pattern="(${mac_home_prefix}|${unix_home_prefix}|${windows_backslash_prefix}|${windows_slash_prefix})[^ <\`]+"
+if grep -Eq -- "${absolute_path_pattern}" "${absolute_doc_path}"; then
   echo "Forbidden Phase 51 closeout evaluation: workstation-local absolute path detected" >&2
   exit 1
 fi
