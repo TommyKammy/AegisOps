@@ -132,7 +132,17 @@ if [[ ! -f "${readme_path}" ]]; then
   exit 1
 fi
 
-if ! grep -Eq '\[[^]]+\]\(docs/phase-51-3-pilot-beta-rc-ga-gate-contract\.md\)' "${readme_path}"; then
+readme_rendered_markdown="$(
+  awk '
+    /^[[:space:]]*```/ {
+      in_fenced_block = !in_fenced_block
+      next
+    }
+    !in_fenced_block { print }
+  ' "${readme_path}" | perl -pe 's/`[^`]*`//g'
+)"
+
+if ! grep -Eq '\[[^]]+\]\(docs/phase-51-3-pilot-beta-rc-ga-gate-contract\.md\)' <<<"${readme_rendered_markdown}"; then
   echo "README must link the Phase 51.3 pilot beta RC GA gate contract." >&2
   exit 1
 fi

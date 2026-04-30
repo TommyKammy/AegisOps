@@ -167,4 +167,26 @@ assert_fails_with \
   "${raw_readme_path_repo}" \
   "README must link the Phase 51.3 pilot beta RC GA gate contract."
 
+inline_code_readme_link_repo="${workdir}/inline-code-readme-link"
+create_valid_repo "${inline_code_readme_link_repo}"
+printf '%s\n' \
+  "# AegisOps" \
+  'Mentioned only as code: `[Phase 51.3 gate contract](docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md)`.' \
+  >"${inline_code_readme_link_repo}/README.md"
+assert_fails_with \
+  "${inline_code_readme_link_repo}" \
+  "README must link the Phase 51.3 pilot beta RC GA gate contract."
+
+fenced_code_readme_link_repo="${workdir}/fenced-code-readme-link"
+create_valid_repo "${fenced_code_readme_link_repo}"
+printf '%s\n' \
+  "# AegisOps" \
+  '```markdown' \
+  '[Phase 51.3 gate contract](docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md)' \
+  '```' \
+  >"${fenced_code_readme_link_repo}/README.md"
+assert_fails_with \
+  "${fenced_code_readme_link_repo}" \
+  "README must link the Phase 51.3 pilot beta RC GA gate contract."
+
 echo "Phase 51.3 pilot beta RC GA gate contract verifier tests passed."
