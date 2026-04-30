@@ -429,7 +429,7 @@ class Phase24LiveAssistantFeedbackLoopValidationTests(ServicePersistenceTestBase
         service._assistant_provider_adapter._prompt_version = "phase24-case-summary-v1"
 
         with mock.patch.object(
-            service,
+            service._assistant_context_assembler,
             "inspect_assistant_context",
             return_value=unresolved_context,
         ):

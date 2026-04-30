@@ -51,14 +51,18 @@ class ReviewedActionRequestCoordinator:
         expires_at = self._service._require_aware_datetime(expires_at, "expires_at")
 
         with self._service._store.transaction():
-            context_snapshot = self._service.inspect_assistant_context(
-                record_family,
-                record_id,
+            context_snapshot = (
+                self._service._assistant_context_assembler.inspect_assistant_context(
+                    record_family,
+                    record_id,
+                )
             )
             self._service._require_reviewed_case_scoped_advisory_read(context_snapshot)
-            recommendation_draft = self._service.render_recommendation_draft(
-                record_family,
-                record_id,
+            recommendation_draft = (
+                self._service._assistant_advisory_coordinator.render_recommendation_draft(
+                    record_family,
+                    record_id,
+                )
             )
             if recommendation_draft.recommendation_draft.get("status") != "ready":
                 raise ValueError(
@@ -241,14 +245,18 @@ class ReviewedActionRequestCoordinator:
         expires_at = self._service._require_aware_datetime(expires_at, "expires_at")
 
         with self._service._store.transaction():
-            context_snapshot = self._service.inspect_assistant_context(
-                record_family,
-                record_id,
+            context_snapshot = (
+                self._service._assistant_context_assembler.inspect_assistant_context(
+                    record_family,
+                    record_id,
+                )
             )
             self._service._require_reviewed_case_scoped_advisory_read(context_snapshot)
-            recommendation_draft = self._service.render_recommendation_draft(
-                record_family,
-                record_id,
+            recommendation_draft = (
+                self._service._assistant_advisory_coordinator.render_recommendation_draft(
+                    record_family,
+                    record_id,
+                )
             )
             if recommendation_draft.recommendation_draft.get("status") != "ready":
                 raise ValueError(
