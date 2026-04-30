@@ -182,6 +182,26 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
                 "reconcile_action_execution",
             ),
         }
+        expected_forwarded_keywords = {
+            "ingest_finding_alert": (
+                "finding_id",
+                "analytic_signal_id",
+                "substrate_detection_record_id",
+                "correlation_key",
+                "first_seen_at",
+                "last_seen_at",
+                "materially_new_work",
+                "reviewed_context",
+            ),
+            "reconcile_action_execution": (
+                "action_request_id",
+                "execution_surface_type",
+                "execution_surface_id",
+                "observed_executions",
+                "compared_at",
+                "stale_after",
+            ),
+        }
 
         for method_name, (attribute_name, target_method_name) in expected_delegates.items():
             with self.subTest(method_name=method_name):
@@ -199,6 +219,17 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
                 self.assertEqual(target.attr, attribute_name)
                 self.assertIsInstance(target.value, ast.Name)
                 self.assertEqual(target.value.id, "self")
+                self.assertEqual(return_value.args, [])
+                forwarded_keywords: list[tuple[str | None, str]] = []
+                for keyword in return_value.keywords:
+                    self.assertIsNotNone(keyword.arg)
+                    self.assertIsInstance(keyword.value, ast.Name)
+                    forwarded_keywords.append((keyword.arg, keyword.value.id))
+                expected_keywords = expected_forwarded_keywords[method_name]
+                self.assertEqual(
+                    forwarded_keywords,
+                    [(keyword, keyword) for keyword in expected_keywords],
+                )
 
     def test_verifier_reports_only_phase50_accepted_hotspot(self) -> None:
         bash_executable = shutil.which("bash")
