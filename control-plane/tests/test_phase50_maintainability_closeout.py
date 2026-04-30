@@ -50,49 +50,48 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
                 return metadata
         raise AssertionError("service.py hotspot baseline entry not found")
 
-    def test_baseline_records_phase50_10_closeout_ceiling(self) -> None:
+    def test_baseline_records_phase50_11_closeout_measurements(self) -> None:
         service_text = self._read("control-plane/aegisops_control_plane/service.py")
         metadata = self._baseline_metadata()
+        physical_lines = len(service_text.splitlines())
+        effective_lines = self._effective_line_count(service_text)
+        facade_methods = self._facade_method_count(metadata["facade_class"])
 
         self.assertEqual(metadata["adr_exception"], "ADR-0003")
-        self.assertEqual(metadata["phase"], "50.10.6")
-        self.assertEqual(metadata["issue"], "#993")
+        self.assertEqual(metadata["phase"], "50.11.7")
+        self.assertEqual(metadata["issue"], "#1007")
         self.assertEqual(metadata["facade_class"], "AegisOpsControlPlaneService")
-        self.assertLessEqual(len(service_text.splitlines()), int(metadata["max_lines"]))
-        self.assertLessEqual(
-            self._effective_line_count(service_text),
-            int(metadata["max_effective_lines"]),
-        )
-        self.assertLessEqual(
-            self._facade_method_count(metadata["facade_class"]),
-            int(metadata["max_facade_methods"]),
-        )
-        self.assertLess(int(metadata["max_lines"]), 3505)
-        self.assertLess(int(metadata["max_effective_lines"]), 3182)
-        self.assertLess(int(metadata["max_facade_methods"]), 185)
+        self.assertEqual(int(metadata["max_lines"]), physical_lines)
+        self.assertEqual(int(metadata["max_effective_lines"]), effective_lines)
+        self.assertEqual(int(metadata["max_facade_methods"]), facade_methods)
+        self.assertEqual(physical_lines, 1812)
+        self.assertEqual(effective_lines, 1632)
+        self.assertEqual(facade_methods, 125)
+        self.assertLess(int(metadata["max_lines"]), 3003)
+        self.assertLess(int(metadata["max_effective_lines"]), 2704)
+        self.assertLess(int(metadata["max_facade_methods"]), 167)
 
     def test_closeout_notes_preserve_phase50_10_hotspot_and_trigger(self) -> None:
         closeout = self._read("docs/phase-50-maintainability-closeout.md")
 
         for required in (
-            "Phase 50.10.6",
+            "Phase 50.11.7",
             "control-plane/aegisops_control_plane/service.py",
             "control-plane/aegisops_control_plane/action_review_projection.py",
             "control-plane/aegisops_control_plane/external_evidence_boundary.py",
             "AegisOpsControlPlaneService",
-            "max_lines=3003",
-            "max_effective_lines=2704",
-            "max_facade_methods=167",
-            "projection lines=105",
-            "projection effective_lines=103",
-            "external_evidence_boundary.py lines=216",
-            "external_evidence_boundary.py effective_lines=195",
+            "max_lines=1812",
+            "max_effective_lines=1632",
+            "max_facade_methods=125",
+            "physical_lines=1812",
+            "effective_lines=1632",
             "ADR-0007",
+            "ADR-0008",
             "ADR-0004",
             "ADR-0003",
-            "#993",
+            "#1007",
             "remaining accepted hotspot",
-            "facade dispatch, compatibility entrypoints, and authority-boundary guard helpers",
+            "facade dispatch, compatibility entrypoints, runtime-boundary guards, and lifecycle/write-path delegates",
             "projection split does not require a baseline entry",
             "external-evidence split does not require a baseline entry",
             "silent re-growth",
@@ -125,12 +124,12 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
 
         for required in (
             "regrowth_repo",
-            "phase50_10_regrowth_repo",
+            "phase50_11_regrowth_repo",
             "Maintainability hotspot baseline limits were exceeded",
             "lines=960 exceeds max_lines=959",
             "effective_lines=960 exceeds max_effective_lines=959",
-            "lines=3004 exceeds max_lines=3003",
-            "effective_lines=3004 exceeds max_effective_lines=2704",
+            "lines=1813 exceeds max_lines=1812",
+            "effective_lines=1813 exceeds max_effective_lines=1632",
             "max_facade_methods=0",
         ):
             self.assertIn(required, verifier_test)

@@ -5,6 +5,7 @@ set -euo pipefail
 repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 doc_path="${repo_root}/docs/adr/0008-phase-50-11-service-residual-extraction-contract.md"
 baseline_path="${repo_root}/docs/maintainability-hotspot-baseline.txt"
+closeout_path="${repo_root}/docs/phase-50-maintainability-closeout.md"
 
 required_headings=(
   "# ADR-0008: Phase 50.11 Service Residual Extraction Contract"
@@ -113,6 +114,7 @@ for phrase in "${required_phrases[@]}"; do
 done
 
 starting_service_baseline_entry="control-plane/aegisops_control_plane/service.py max_lines=3003 max_effective_lines=2704 max_facade_methods=167 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.10.6 issue=#993"
+closeout_service_baseline_entry="control-plane/aegisops_control_plane/service.py max_lines=1812 max_effective_lines=1632 max_facade_methods=125 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.11.7 issue=#1007"
 service_entry="$(grep -E '^control-plane/aegisops_control_plane/service.py[[:space:]]' "${baseline_path}" || true)"
 service_entry_count="$(printf '%s\n' "${service_entry}" | sed '/^$/d' | wc -l | tr -d ' ')"
 if [[ "${service_entry_count}" -eq 0 ]]; then
@@ -123,9 +125,28 @@ if [[ "${service_entry_count}" -ne 1 ]]; then
   echo "Phase 50.11 contract requires exactly one service.py hotspot baseline entry." >&2
   exit 1
 fi
-if [[ "${service_entry}" != "${starting_service_baseline_entry}" ]]; then
-  echo "Phase 50.11 contract forbids refreshing the service.py baseline before implementation evidence exists." >&2
+if [[ "${service_entry}" != "${starting_service_baseline_entry}" && "${service_entry}" != "${closeout_service_baseline_entry}" ]]; then
+  echo "Phase 50.11 contract requires either the accepted starting baseline or the verified Phase 50.11.7 closeout baseline." >&2
   exit 1
+fi
+if [[ "${service_entry}" == "${closeout_service_baseline_entry}" ]]; then
+  if [[ ! -f "${closeout_path}" ]]; then
+    echo "Phase 50.11 closeout baseline requires docs/phase-50-maintainability-closeout.md evidence." >&2
+    exit 1
+  fi
+  for phrase in \
+    "Phase 50.11.7" \
+    "max_lines=1812" \
+    "max_effective_lines=1632" \
+    "max_facade_methods=125" \
+    "physical_lines=1812" \
+    "effective_lines=1632" \
+    "#1007"; do
+    if ! grep -Fq -- "${phrase}" "${closeout_path}"; then
+      echo "Phase 50.11 closeout baseline missing closeout evidence: ${phrase}" >&2
+      exit 1
+    fi
+  done
 fi
 
 echo "Phase 50.11 service residual extraction contract fixes residual clusters, starting measurements, target ceilings, authority non-goals, migration order, and validation commands."

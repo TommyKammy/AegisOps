@@ -201,6 +201,24 @@ valid_repo="${workdir}/valid"
 create_valid_repo "${valid_repo}"
 assert_passes "${valid_repo}"
 
+closeout_baseline_repo="${workdir}/closeout-baseline"
+create_valid_repo "${closeout_baseline_repo}"
+printf '%s\n' \
+  "control-plane/aegisops_control_plane/service.py max_lines=1812 max_effective_lines=1632 max_facade_methods=125 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.11.7 issue=#1007" \
+  >"${closeout_baseline_repo}/docs/maintainability-hotspot-baseline.txt"
+cat >"${closeout_baseline_repo}/docs/phase-50-maintainability-closeout.md" <<'EOF'
+# Phase 50 Maintainability Closeout
+
+Phase 50.11.7 records the final #1007 closeout baseline.
+
+- `max_lines=1812`
+- `max_effective_lines=1632`
+- `max_facade_methods=125`
+- `physical_lines=1812`
+- `effective_lines=1632`
+EOF
+assert_passes "${closeout_baseline_repo}"
+
 missing_contract_repo="${workdir}/missing-contract"
 create_valid_repo "${missing_contract_repo}"
 rm "${missing_contract_repo}/docs/adr/0008-phase-50-11-service-residual-extraction-contract.md"
@@ -259,11 +277,20 @@ assert_fails_with \
 premature_service_baseline_repo="${workdir}/premature-service-baseline"
 create_valid_repo "${premature_service_baseline_repo}"
 printf '%s\n' \
-  "control-plane/aegisops_control_plane/service.py max_lines=2700 max_effective_lines=2450 max_facade_methods=150 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0008 phase=50.11 issue=#1001" \
+  "control-plane/aegisops_control_plane/service.py max_lines=1812 max_effective_lines=1632 max_facade_methods=125 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.11.7 issue=#1007" \
   >"${premature_service_baseline_repo}/docs/maintainability-hotspot-baseline.txt"
 assert_fails_with \
   "${premature_service_baseline_repo}" \
-  "Phase 50.11 contract forbids refreshing the service.py baseline before implementation evidence exists."
+  "Phase 50.11 closeout baseline requires docs/phase-50-maintainability-closeout.md evidence."
+
+unsupported_service_baseline_repo="${workdir}/unsupported-service-baseline"
+create_valid_repo "${unsupported_service_baseline_repo}"
+printf '%s\n' \
+  "control-plane/aegisops_control_plane/service.py max_lines=2700 max_effective_lines=2450 max_facade_methods=150 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0008 phase=50.11 issue=#1001" \
+  >"${unsupported_service_baseline_repo}/docs/maintainability-hotspot-baseline.txt"
+assert_fails_with \
+  "${unsupported_service_baseline_repo}" \
+  "Phase 50.11 contract requires either the accepted starting baseline or the verified Phase 50.11.7 closeout baseline."
 
 duplicate_service_baseline_repo="${workdir}/duplicate-service-baseline"
 create_valid_repo "${duplicate_service_baseline_repo}"
