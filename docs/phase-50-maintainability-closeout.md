@@ -56,6 +56,17 @@ Phase 50.13.3 then moved owned private guard helpers out of `AegisOpsControlPlan
 
 Those extractions preserve the public service facade. AegisOps control-plane records remain authoritative workflow truth. Tickets, assistant output, ML, endpoint evidence, network evidence, browser state, receipts, optional extension status, Wazuh, Shuffle, Zammad, operator-facing summaries, badges, counters, projections, snapshots, DTOs, and helper-module output remain subordinate context.
 
+## Retained Compatibility Delegates
+
+Phase 50.13.4 consolidates the retained public compatibility delegates that intentionally remain defined directly on `AegisOpsControlPlaneService` after the Phase 50.12 and Phase 50.13 internal rewiring:
+
+| Delegate | Extracted boundary | Retention rationale | Follow-up trigger |
+| --- | --- | --- | --- |
+| `ingest_finding_alert` | `DetectionIntakeService.ingest_finding_alert` | Preserves the public detection-intake facade for existing tests, workflows, and callers while detection intake ownership lives behind `control-plane/aegisops_control_plane/detection_lifecycle.py`. | Remove or reclassify only after every documented caller is rewired to `DetectionIntakeService` or another explicit public detection-intake boundary. |
+| `reconcile_action_execution` | `ActionLifecycleWriteCoordinator.reconcile_action_execution` | Preserves the public action-reconciliation facade for existing reviewed action workflows while reconciliation write authority lives behind the action lifecycle write boundary. | Remove or reclassify only after every documented caller is rewired to the action lifecycle write boundary and rejected reconciliation paths still prove durable state stays clean. |
+
+Both retained delegates must remain narrow single-hop facade methods. They must not grow local authorization, provenance, scope, reconciliation, detection, projection, persistence, or durable-state side effects in `service.py`; those responsibilities belong to the extracted authoritative boundaries. If either delegate needs local logic beyond argument forwarding, the follow-up is a maintainability issue that names the owning boundary instead of silently expanding the facade exception.
+
 ## Follow-Up Trigger
 
 The service facade is below the long-term 1,500-line target, but it remains above the long-term 50-method target. The retained method-count ceiling is therefore an accepted exception, not a success target.
