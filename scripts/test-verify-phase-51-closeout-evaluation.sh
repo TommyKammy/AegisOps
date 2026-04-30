@@ -79,6 +79,22 @@ assert_fails_with \
   "${absolute_path_repo}" \
   "Forbidden Phase 51 closeout evaluation: workstation-local absolute path detected"
 
+linux_home_path_repo="${workdir}/linux-home-path"
+copy_valid_repo "${linux_home_path_repo}"
+linux_home_prefix="/""home/example"
+printf 'Run %s/Dev/codex-supervisor/dist/index.js.\n' "${linux_home_prefix}" >>"${linux_home_path_repo}/docs/phase-51-closeout-evaluation.md"
+assert_fails_with \
+  "${linux_home_path_repo}" \
+  "Forbidden Phase 51 closeout evaluation: workstation-local absolute path detected"
+
+windows_slash_path_repo="${workdir}/windows-slash-path"
+copy_valid_repo "${windows_slash_path_repo}"
+windows_slash_path="C:""/""Users/example/repo/file.md"
+printf 'Run %s.\n' "${windows_slash_path}" >>"${windows_slash_path_repo}/docs/phase-51-closeout-evaluation.md"
+assert_fails_with \
+  "${windows_slash_path_repo}" \
+  "Forbidden Phase 51 closeout evaluation: workstation-local absolute path detected"
+
 windows_backslash_path_repo="${workdir}/windows-backslash-path"
 copy_valid_repo "${windows_backslash_path_repo}"
 windows_backslash_path="$(printf 'C:%bUsers%bexample%brepo%bfile.md' '\\' '\\' '\\' '\\')"
