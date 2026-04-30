@@ -62,6 +62,25 @@ forbidden_lines=(
   "tickets are authoritative for AegisOps records."
 )
 
+authority_verb_pattern="(is|are|becomes|become|remains|may[[:space:]]+be|can[[:space:]]+be|serves[[:space:]]+as|acts[[:space:]]+as)"
+
+forbidden_patterns=(
+  "24x7[[:space:]-]+staffed[[:space:]-]+soc[[:space:]]+(is|as|becomes|become|remains)[^.]*default"
+  "aegisops[[:space:]]+(assumes|uses|requires|defaults[[:space:]]+to)[^.]*24x7[[:space:]-]+staffed[[:space:]-]+soc"
+  "external[[:space:]-]+support[^.]*${authority_verb_pattern}[^.]*authoritative[^.]*aegisops"
+  "external[[:space:]-]+support[^.]*aegisops[^.]*${authority_verb_pattern}[^.]*authoritative"
+  "external[[:space:]-]+support[^.]*((can|could)[[:space:]]+|(is|are)[[:space:]]+(authorized|allowed)[[:space:]]+to[[:space:]]+|has[[:space:]]+authority[[:space:]]+to[[:space:]]+)(approve|execute|mutate)[^.]*aegisops"
+  "(^|[^[:alnum:]_])ai[^.]*${authority_verb_pattern}[^.]*authoritative[^.]*aegisops"
+  "(^|[^[:alnum:]_])ai[^.]*aegisops[^.]*${authority_verb_pattern}[^.]*authoritative"
+  "(^|[^[:alnum:]_])ai[^.]*((can|could)[[:space:]]+|(is|are)[[:space:]]+(authorized|allowed)[[:space:]]+to[[:space:]]+|has[[:space:]]+authority[[:space:]]+to[[:space:]]+)(approve|execute)[^.]*aegisops"
+  "(^|[^[:alnum:]_])wazuh[^.]*${authority_verb_pattern}[^.]*authoritative[^.]*aegisops"
+  "(^|[^[:alnum:]_])wazuh[^.]*aegisops[^.]*${authority_verb_pattern}[^.]*authoritative"
+  "(^|[^[:alnum:]_])shuffle[^.]*${authority_verb_pattern}[^.]*authoritative[^.]*aegisops"
+  "(^|[^[:alnum:]_])shuffle[^.]*aegisops[^.]*${authority_verb_pattern}[^.]*authoritative"
+  "(^|[^[:alnum:]_])tickets?[^.]*${authority_verb_pattern}[^.]*authoritative[^.]*aegisops"
+  "(^|[^[:alnum:]_])tickets?[^.]*aegisops[^.]*${authority_verb_pattern}[^.]*authoritative"
+)
+
 if [[ ! -f "${doc_path}" ]]; then
   echo "Missing Phase 51.4 SMB personas and jobs-to-be-done document: ${doc_path}" >&2
   exit 1
@@ -87,8 +106,15 @@ if ! grep -Eq '^- \*\*Date\*\*: [0-9]{4}-[0-9]{2}-[0-9]{2}$' "${doc_path}"; then
 fi
 
 for line in "${forbidden_lines[@]}"; do
-  if grep -Fq -- "${line}" "${doc_path}"; then
+  if grep -Fiq -- "${line}" "${doc_path}"; then
     echo "Forbidden Phase 51.4 personas authority or staffing claim: ${line}" >&2
+    exit 1
+  fi
+done
+
+for pattern in "${forbidden_patterns[@]}"; do
+  if grep -Eiq -- "${pattern}" "${doc_path}"; then
+    echo "Forbidden Phase 51.4 personas authority or staffing claim matched: ${pattern}" >&2
     exit 1
   fi
 done

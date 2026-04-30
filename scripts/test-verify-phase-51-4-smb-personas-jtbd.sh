@@ -121,6 +121,14 @@ assert_fails_with \
   "${external_support_authority_repo}" \
   "Forbidden Phase 51.4 personas authority or staffing claim: External support may approve AegisOps actions."
 
+external_support_authoritative_reworded_repo="${workdir}/external-support-authoritative-reworded"
+create_valid_repo "${external_support_authoritative_reworded_repo}"
+printf '%s\n' "External Support may be authoritative for AegisOps records." \
+  >>"${external_support_authoritative_reworded_repo}/docs/phase-51-4-smb-personas-jobs-to-be-done.md"
+assert_fails_with \
+  "${external_support_authoritative_reworded_repo}" \
+  "Forbidden Phase 51.4 personas authority or staffing claim matched: external[[:space:]-]+support[^.]*(is|are|becomes|become|remains|may[[:space:]]+be|can[[:space:]]+be|serves[[:space:]]+as|acts[[:space:]]+as)[^.]*authoritative[^.]*aegisops"
+
 ai_authority_repo="${workdir}/ai-authority"
 create_valid_repo "${ai_authority_repo}"
 printf '%s\n' "AI is authoritative for AegisOps records." \
@@ -129,6 +137,14 @@ assert_fails_with \
   "${ai_authority_repo}" \
   "Forbidden Phase 51.4 personas authority or staffing claim: AI is authoritative for AegisOps records."
 
+ai_execution_reworded_repo="${workdir}/ai-execution-reworded"
+create_valid_repo "${ai_execution_reworded_repo}"
+printf '%s\n' "ai can execute AegisOps actions." \
+  >>"${ai_execution_reworded_repo}/docs/phase-51-4-smb-personas-jobs-to-be-done.md"
+assert_fails_with \
+  "${ai_execution_reworded_repo}" \
+  "Forbidden Phase 51.4 personas authority or staffing claim matched: (^|[^[:alnum:]_])ai[^.]*((can|could)[[:space:]]+|(is|are)[[:space:]]+(authorized|allowed)[[:space:]]+to[[:space:]]+|has[[:space:]]+authority[[:space:]]+to[[:space:]]+)(approve|execute)[^.]*aegisops"
+
 staffing_drift_repo="${workdir}/staffing-drift"
 create_valid_repo "${staffing_drift_repo}"
 printf '%s\n' "24x7 staffed SOC is the default operating model." \
@@ -136,6 +152,14 @@ printf '%s\n' "24x7 staffed SOC is the default operating model." \
 assert_fails_with \
   "${staffing_drift_repo}" \
   "Forbidden Phase 51.4 personas authority or staffing claim: 24x7 staffed SOC is the default operating model."
+
+staffing_case_drift_repo="${workdir}/staffing-case-drift"
+create_valid_repo "${staffing_case_drift_repo}"
+printf '%s\n' "AegisOps uses a 24x7 staffed soc as the default model." \
+  >>"${staffing_case_drift_repo}/docs/phase-51-4-smb-personas-jobs-to-be-done.md"
+assert_fails_with \
+  "${staffing_case_drift_repo}" \
+  "Forbidden Phase 51.4 personas authority or staffing claim matched: 24x7[[:space:]-]+staffed[[:space:]-]+soc[[:space:]]+(is|as|becomes|become|remains)[^.]*default"
 
 workstation_path_repo="${workdir}/workstation-local-path"
 create_valid_repo "${workstation_path_repo}"
