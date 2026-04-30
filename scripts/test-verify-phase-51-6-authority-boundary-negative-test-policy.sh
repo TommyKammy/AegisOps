@@ -222,6 +222,14 @@ assert_fails_with \
   "${wazuh_close_repo}" \
   "Forbidden Phase 51.6 authority-boundary negative-test policy claim: Wazuh alert status may close AegisOps records"
 
+wazuh_gate_repo="${workdir}/wazuh-gate"
+create_valid_repo "${wazuh_gate_repo}"
+printf '%s\n' "Wazuh alert status may gate AegisOps records." \
+  >>"${wazuh_gate_repo}/docs/phase-51-6-authority-boundary-negative-test-policy.md"
+assert_fails_with \
+  "${wazuh_gate_repo}" \
+  "Forbidden Phase 51.6 authority-boundary negative-test policy claim: Wazuh alert status may gate AegisOps records"
+
 shuffle_reconcile_repo="${workdir}/shuffle-reconcile"
 create_valid_repo "${shuffle_reconcile_repo}"
 printf '%s\n' "Shuffle workflow success may reconcile AegisOps records." \
@@ -229,6 +237,30 @@ printf '%s\n' "Shuffle workflow success may reconcile AegisOps records." \
 assert_fails_with \
   "${shuffle_reconcile_repo}" \
   "Forbidden Phase 51.6 authority-boundary negative-test policy claim: Shuffle workflow success may reconcile AegisOps records"
+
+shuffle_release_repo="${workdir}/shuffle-release"
+create_valid_repo "${shuffle_release_repo}"
+printf '%s\n' "Shuffle may release AegisOps records." \
+  >>"${shuffle_release_repo}/docs/phase-51-6-authority-boundary-negative-test-policy.md"
+assert_fails_with \
+  "${shuffle_release_repo}" \
+  "Forbidden Phase 51.6 authority-boundary negative-test policy claim: Shuffle may release AegisOps records"
+
+ticket_approve_repo="${workdir}/ticket-approve"
+create_valid_repo "${ticket_approve_repo}"
+printf '%s\n' "Ticket may approve." \
+  >>"${ticket_approve_repo}/docs/phase-51-6-authority-boundary-negative-test-policy.md"
+assert_fails_with \
+  "${ticket_approve_repo}" \
+  "Forbidden Phase 51.6 authority-boundary negative-test policy claim: Ticket may approve"
+
+downstream_closeout_repo="${workdir}/downstream-closeout"
+create_valid_repo "${downstream_closeout_repo}"
+printf '%s\n' "Downstream may close out." \
+  >>"${downstream_closeout_repo}/docs/phase-51-6-authority-boundary-negative-test-policy.md"
+assert_fails_with \
+  "${downstream_closeout_repo}" \
+  "Forbidden Phase 51.6 authority-boundary negative-test policy claim: Downstream may close out"
 
 workstation_path_repo="${workdir}/workstation-local-path"
 create_valid_repo "${workstation_path_repo}"
