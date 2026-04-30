@@ -108,18 +108,21 @@ forbidden_lines=(
 canonicalize_policy_text() {
   perl -0pe '
     s/\r\n?/\n/g;
-    s/[[:space:]]+/ /g;
-    s/[[:punct:]]+(?= |$)//g;
     $_ = lc $_;
+    s/[[:punct:]]+/ /g;
+    s/[[:space:]]+/ /g;
+    s/^ //;
+    s/ $//;
   ' "$1"
 }
 
 canonicalize_claim() {
   printf '%s' "$1" | perl -0pe '
-    s/^\s+|\s+$//g;
-    s/[[:space:]]+/ /g;
-    s/[[:punct:]]+$//g;
     $_ = lc $_;
+    s/[[:punct:]]+/ /g;
+    s/[[:space:]]+/ /g;
+    s/^ //;
+    s/ $//;
   '
 }
 

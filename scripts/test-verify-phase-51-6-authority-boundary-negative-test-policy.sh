@@ -256,7 +256,7 @@ assert_fails_with \
 
 downstream_closeout_repo="${workdir}/downstream-closeout"
 create_valid_repo "${downstream_closeout_repo}"
-printf '%s\n' "Downstream may close out." \
+printf '%s\n' "Downstream may close-out." \
   >>"${downstream_closeout_repo}/docs/phase-51-6-authority-boundary-negative-test-policy.md"
 assert_fails_with \
   "${downstream_closeout_repo}" \
