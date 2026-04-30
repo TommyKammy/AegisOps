@@ -132,28 +132,28 @@ def build_action_review_record_index(
         list[ReconciliationRecord],
     ] = defaultdict(list)
     for reconciliation in reconciliations:
-        for action_request_id in service._assistant_ids_from_mapping(
+        for action_request_id in service._ai_trace_lifecycle_service.ids_from_mapping(
             reconciliation.subject_linkage,
             "action_request_ids",
         ):
             reconciliations_by_action_request_id[action_request_id].append(
                 reconciliation
             )
-        for approval_decision_id in service._assistant_ids_from_mapping(
+        for approval_decision_id in service._ai_trace_lifecycle_service.ids_from_mapping(
             reconciliation.subject_linkage,
             "approval_decision_ids",
         ):
             reconciliations_by_approval_decision_id[approval_decision_id].append(
                 reconciliation
             )
-        for action_execution_id in service._assistant_ids_from_mapping(
+        for action_execution_id in service._ai_trace_lifecycle_service.ids_from_mapping(
             reconciliation.subject_linkage,
             "action_execution_ids",
         ):
             reconciliations_by_action_execution_id[action_execution_id].append(
                 reconciliation
             )
-        for delegation_id in service._assistant_ids_from_mapping(
+        for delegation_id in service._ai_trace_lifecycle_service.ids_from_mapping(
             reconciliation.subject_linkage,
             "delegation_ids",
         ):

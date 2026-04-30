@@ -51,7 +51,7 @@ def action_review_timeline(
     execution_actor_identities: tuple[str, ...] = ()
     if action_execution is not None:
         delegation_details["delegation_id"] = action_execution.delegation_id
-        execution_actor_identities = service._assistant_merge_ids(
+        execution_actor_identities = service._ai_trace_lifecycle_service.merge_ids(
             action_execution.provenance.get("initiated_by"),
             action_execution.provenance.get("delegation_issuer"),
         )
@@ -137,7 +137,7 @@ def action_review_timeline(
             actor_identities=(
                 ()
                 if action_execution is None
-                else service._assistant_ids_from_mapping(
+                else service._ai_trace_lifecycle_service.ids_from_mapping(
                     action_execution.provenance,
                     "delegation_issuer",
                 )

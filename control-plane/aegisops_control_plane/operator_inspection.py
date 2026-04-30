@@ -72,22 +72,7 @@ class OperatorInspectionServiceDependencies(Protocol):
     def _alert_escalation_boundary(self, alert: AlertRecord) -> str:
         ...
 
-    def _assistant_evidence_records_for_context(
-        self,
-        *,
-        alert_ids: tuple[str, ...],
-        case_ids: tuple[str, ...],
-        evidence_ids: tuple[str, ...],
-        exclude_evidence_id: str | None,
-    ) -> tuple[EvidenceRecord, ...]:
-        ...
-
-    def _assistant_ids_from_mapping(
-        self,
-        mapping: Mapping[str, object],
-        key: str,
-    ) -> tuple[str, ...]:
-        ...
+    _ai_trace_lifecycle_service: Any
 
     def list_lifecycle_transitions(
         self,
@@ -692,14 +677,16 @@ class OperatorInspectionReadSurface:
             if alert.analytic_signal_id is not None
             else None
         )
-        evidence_records = self._service._assistant_evidence_records_for_context(
-            alert_ids=(alert.alert_id,),
-            case_ids=(),
-            evidence_ids=self._service._assistant_ids_from_mapping(
-                reconciliation.subject_linkage,
-                "evidence_ids",
-            ),
-            exclude_evidence_id=None,
+        evidence_records = (
+            self._service._ai_trace_lifecycle_service.evidence_records_for_context(
+                alert_ids=(alert.alert_id,),
+                case_ids=(),
+                evidence_ids=self._service._ai_trace_lifecycle_service.ids_from_mapping(
+                    reconciliation.subject_linkage,
+                    "evidence_ids",
+                ),
+                exclude_evidence_id=None,
+            )
         )
         source_systems = self._service._merge_linked_ids(
             reconciliation.subject_linkage.get("source_systems"),

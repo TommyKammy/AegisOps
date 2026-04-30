@@ -38,11 +38,13 @@ class ReadinessOperabilityHelper:
         config: Any,
         store: Any,
         action_review_inspection_boundary: Any,
+        ai_trace_lifecycle: Any,
     ) -> None:
         self._service = service
         self._config = config
         self._store = store
         self._action_review_inspection_boundary = action_review_inspection_boundary
+        self._ai_trace_lifecycle = ai_trace_lifecycle
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._service, name)
@@ -151,12 +153,12 @@ class ReadinessOperabilityHelper:
             if reconciliation is None:
                 continue
             candidate_action_request_ids.update(
-                self._assistant_ids_from_mapping(
+                self._ai_trace_lifecycle.ids_from_mapping(
                     reconciliation.subject_linkage,
                     "action_request_ids",
                 )
             )
-            for approval_decision_id in self._assistant_ids_from_mapping(
+            for approval_decision_id in self._ai_trace_lifecycle.ids_from_mapping(
                 reconciliation.subject_linkage,
                 "approval_decision_ids",
             ):
@@ -167,13 +169,13 @@ class ReadinessOperabilityHelper:
                 if approval_decision is not None:
                     candidate_action_request_ids.add(approval_decision.action_request_id)
             execution_ids.update(
-                self._assistant_ids_from_mapping(
+                self._ai_trace_lifecycle.ids_from_mapping(
                     reconciliation.subject_linkage,
                     "action_execution_ids",
                 )
             )
             unresolved_delegation_ids.update(
-                self._assistant_ids_from_mapping(
+                self._ai_trace_lifecycle.ids_from_mapping(
                     reconciliation.subject_linkage,
                     "delegation_ids",
                 )
@@ -295,7 +297,7 @@ class ReadinessOperabilityHelper:
             for reconciliation in self._store.list(ReconciliationRecord):
                 matched_action_request_ids = {
                     action_request_id
-                    for action_request_id in self._assistant_ids_from_mapping(
+                    for action_request_id in self._ai_trace_lifecycle.ids_from_mapping(
                         reconciliation.subject_linkage,
                         "action_request_ids",
                     )
@@ -303,7 +305,7 @@ class ReadinessOperabilityHelper:
                 }
                 matched_action_request_ids.update(
                     approval_action_request_ids_by_id[approval_decision_id]
-                    for approval_decision_id in self._assistant_ids_from_mapping(
+                    for approval_decision_id in self._ai_trace_lifecycle.ids_from_mapping(
                         reconciliation.subject_linkage,
                         "approval_decision_ids",
                     )
@@ -311,7 +313,7 @@ class ReadinessOperabilityHelper:
                 )
                 matched_action_request_ids.update(
                     current_execution_request_ids_by_execution_id[action_execution_id]
-                    for action_execution_id in self._assistant_ids_from_mapping(
+                    for action_execution_id in self._ai_trace_lifecycle.ids_from_mapping(
                         reconciliation.subject_linkage,
                         "action_execution_ids",
                     )
@@ -319,7 +321,7 @@ class ReadinessOperabilityHelper:
                 )
                 matched_action_request_ids.update(
                     current_execution_request_ids_by_delegation_id[delegation_id]
-                    for delegation_id in self._assistant_ids_from_mapping(
+                    for delegation_id in self._ai_trace_lifecycle.ids_from_mapping(
                         reconciliation.subject_linkage,
                         "delegation_ids",
                     )
@@ -920,28 +922,28 @@ class ReadinessOperabilityHelper:
             list[ReconciliationRecord],
         ] = defaultdict(list)
         for reconciliation in readiness_records.reconciliations:
-            for action_request_id in self._assistant_ids_from_mapping(
+            for action_request_id in self._ai_trace_lifecycle.ids_from_mapping(
                 reconciliation.subject_linkage,
                 "action_request_ids",
             ):
                 reconciliations_by_action_request_id[action_request_id].append(
                     reconciliation
                 )
-            for approval_decision_id in self._assistant_ids_from_mapping(
+            for approval_decision_id in self._ai_trace_lifecycle.ids_from_mapping(
                 reconciliation.subject_linkage,
                 "approval_decision_ids",
             ):
                 reconciliations_by_approval_decision_id[approval_decision_id].append(
                     reconciliation
                 )
-            for action_execution_id in self._assistant_ids_from_mapping(
+            for action_execution_id in self._ai_trace_lifecycle.ids_from_mapping(
                 reconciliation.subject_linkage,
                 "action_execution_ids",
             ):
                 reconciliations_by_action_execution_id[action_execution_id].append(
                     reconciliation
                 )
-            for delegation_id in self._assistant_ids_from_mapping(
+            for delegation_id in self._ai_trace_lifecycle.ids_from_mapping(
                 reconciliation.subject_linkage,
                 "delegation_ids",
             ):

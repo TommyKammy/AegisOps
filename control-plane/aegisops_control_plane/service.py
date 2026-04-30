@@ -995,9 +995,6 @@ class AegisOpsControlPlaneService(CaseWorkflowFacade, ExternalEvidenceFacade):
             record_id=record_id,
         )
 
-    def _assistant_primary_linked_id(self, linked_ids: tuple[str, ...]) -> str | None:
-        return self._ai_trace_lifecycle_service.primary_linked_id(linked_ids)
-
     def create_reviewed_action_request_from_advisory(
         self,
         *,
@@ -1102,124 +1099,6 @@ class AegisOpsControlPlaneService(CaseWorkflowFacade, ExternalEvidenceFacade):
     def _reconciliation_is_wazuh_origin(self, record: ReconciliationRecord) -> bool:
         return self._detection_intake_service.reconciliation_resolver.reconciliation_is_wazuh_origin(
             record
-        )
-
-    def _assistant_ids_from_value(self, value: object) -> tuple[str, ...]:
-        return self._ai_trace_lifecycle_service.ids_from_value(value)
-
-    def _assistant_ids_from_mapping(
-        self,
-        mapping: Mapping[str, object],
-        key: str,
-    ) -> tuple[str, ...]:
-        return self._ai_trace_lifecycle_service.ids_from_mapping(mapping, key)
-
-    def _assistant_merge_ids(
-        self,
-        existing_values: object,
-        incoming_values: object,
-    ) -> tuple[str, ...]:
-        return self._ai_trace_lifecycle_service.merge_ids(
-            existing_values,
-            incoming_values,
-        )
-
-    def _assistant_action_lineage_ids(
-        self,
-        record: ControlPlaneRecord,
-    ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
-        return self._ai_trace_lifecycle_service.action_lineage_ids(record)
-
-    def _assistant_merge_action_request_linkage(
-        self,
-        *,
-        linked_alert_ids: tuple[str, ...],
-        linked_case_ids: tuple[str, ...],
-        linked_finding_ids: tuple[str, ...],
-        action_request: ActionRequestRecord,
-    ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
-        return self._ai_trace_lifecycle_service.merge_action_request_linkage(
-            linked_alert_ids=linked_alert_ids,
-            linked_case_ids=linked_case_ids,
-            linked_finding_ids=linked_finding_ids,
-            action_request=action_request,
-        )
-
-    def _assistant_action_execution_for_delegation_id(
-        self,
-        delegation_id: str,
-    ) -> ActionExecutionRecord | None:
-        return self._ai_trace_lifecycle_service.action_execution_for_delegation_id(
-            delegation_id
-        )
-
-    def _assistant_ai_trace_records_for_context(
-        self,
-        record: ControlPlaneRecord,
-    ) -> tuple[AITraceRecord, ...]:
-        return self._ai_trace_lifecycle_service.ai_trace_records_for_context(record)
-
-    def _assistant_ai_trace_evidence_ids(
-        self,
-        ai_trace_record: AITraceRecord,
-    ) -> tuple[str, ...]:
-        return self._ai_trace_lifecycle_service.ai_trace_evidence_ids(ai_trace_record)
-
-    def _assistant_linked_evidence_ids(self, record: ControlPlaneRecord) -> tuple[str, ...]:
-        return self._ai_trace_lifecycle_service.linked_evidence_ids(record)
-
-    def _assistant_evidence_siblings(self, record: EvidenceRecord) -> tuple[str, ...]:
-        return self._ai_trace_lifecycle_service.evidence_siblings(record)
-
-    def _assistant_evidence_records_for_context(
-        self,
-        *,
-        alert_ids: tuple[str, ...],
-        case_ids: tuple[str, ...],
-        evidence_ids: tuple[str, ...],
-        exclude_evidence_id: str | None,
-    ) -> tuple[EvidenceRecord, ...]:
-        return self._ai_trace_lifecycle_service.evidence_records_for_context(
-            alert_ids=alert_ids,
-            case_ids=case_ids,
-            evidence_ids=evidence_ids,
-            exclude_evidence_id=exclude_evidence_id,
-        )
-
-    def _assistant_recommendation_records_for_context(
-        self,
-        *,
-        record: ControlPlaneRecord,
-        alert_ids: tuple[str, ...],
-        case_ids: tuple[str, ...],
-        ai_trace_records: tuple[AITraceRecord, ...],
-        exclude_recommendation_id: str | None,
-    ) -> tuple[RecommendationRecord, ...]:
-        return self._ai_trace_lifecycle_service.recommendation_records_for_context(
-            record=record,
-            alert_ids=alert_ids,
-            case_ids=case_ids,
-            ai_trace_records=ai_trace_records,
-            exclude_recommendation_id=exclude_recommendation_id,
-        )
-
-    def _assistant_reconciliation_records_for_context(
-        self,
-        *,
-        record: ControlPlaneRecord,
-        alert_ids: tuple[str, ...],
-        case_ids: tuple[str, ...],
-        finding_ids: tuple[str, ...],
-        evidence_ids: tuple[str, ...],
-        exclude_reconciliation_id: str | None,
-    ) -> tuple[ReconciliationRecord, ...]:
-        return self._ai_trace_lifecycle_service.reconciliation_records_for_context(
-            record=record,
-            alert_ids=alert_ids,
-            case_ids=case_ids,
-            finding_ids=finding_ids,
-            evidence_ids=evidence_ids,
-            exclude_reconciliation_id=exclude_reconciliation_id,
         )
 
     @staticmethod

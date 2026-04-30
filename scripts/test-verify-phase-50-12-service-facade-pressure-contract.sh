@@ -232,6 +232,26 @@ Phase 50.12.4 then moved the casework write compatibility delegates out of `Aegi
 EOF
 assert_passes "${phase50_12_4_closeout_repo}"
 
+phase50_12_5_closeout_repo="${workdir}/phase50-12-5-closeout"
+create_valid_repo "${phase50_12_5_closeout_repo}"
+printf '%s\n' \
+  "control-plane/aegisops_control_plane/service.py max_lines=1498 max_effective_lines=1338 max_facade_methods=103 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.12.5 issue=#1020" \
+  >"${phase50_12_5_closeout_repo}/docs/maintainability-hotspot-baseline.txt"
+cat >"${phase50_12_5_closeout_repo}/docs/phase-50-maintainability-closeout.md" <<'EOF'
+# Phase 50 Maintainability Closeout
+
+Phase 50.12.5 for #1020 moved assistant residual lifecycle helper delegates onto the AI trace lifecycle boundary.
+
+- `max_lines=1498`
+- `max_effective_lines=1338`
+- `max_facade_methods=103`
+- `phase=50.12.5`
+- `issue=#1020`
+
+Phase 50.12.5 then removed the remaining assistant residual lifecycle helper delegates from `AegisOpsControlPlaneService` and routed direct consumers through `control-plane/aegisops_control_plane/ai_trace_lifecycle.py`, preserving assistant context, advisory output, recommendation draft, live assistant workflow, readiness, and action-review linkage behavior.
+EOF
+assert_passes "${phase50_12_5_closeout_repo}"
+
 missing_contract_repo="${workdir}/missing-contract"
 create_valid_repo "${missing_contract_repo}"
 rm "${missing_contract_repo}/docs/adr/0009-phase-50-12-service-facade-pressure-contract.md"

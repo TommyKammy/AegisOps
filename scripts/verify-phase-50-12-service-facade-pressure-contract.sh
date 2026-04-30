@@ -121,10 +121,13 @@ done
 
 starting_service_baseline_entry="control-plane/aegisops_control_plane/service.py max_lines=1812 max_effective_lines=1632 max_facade_methods=125 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.11.7 issue=#1007"
 phase50_12_4_service_baseline_entry="control-plane/aegisops_control_plane/service.py max_lines=1619 max_effective_lines=1445 max_facade_methods=117 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.12.4 issue=#1019"
+phase50_12_5_service_baseline_entry="control-plane/aegisops_control_plane/service.py max_lines=1498 max_effective_lines=1338 max_facade_methods=103 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.12.5 issue=#1020"
 service_entry="$(grep -Fx -- "${starting_service_baseline_entry}" "${baseline_path}" || true)"
 phase50_12_4_service_entry="$(grep -Fx -- "${phase50_12_4_service_baseline_entry}" "${baseline_path}" || true)"
+phase50_12_5_service_entry="$(grep -Fx -- "${phase50_12_5_service_baseline_entry}" "${baseline_path}" || true)"
 service_entry_count="$(printf '%s\n' "${service_entry}" | sed '/^$/d' | wc -l | tr -d ' ')"
 phase50_12_4_service_entry_count="$(printf '%s\n' "${phase50_12_4_service_entry}" | sed '/^$/d' | wc -l | tr -d ' ')"
+phase50_12_5_service_entry_count="$(printf '%s\n' "${phase50_12_5_service_entry}" | sed '/^$/d' | wc -l | tr -d ' ')"
 service_path_entry_count="$(
   awk -v prefix="control-plane/aegisops_control_plane/service.py " \
     'index($0, prefix) == 1 { count += 1 } END { print count + 0 }' \
@@ -154,6 +157,28 @@ if [[ "${phase50_12_4_service_entry_count}" -eq 1 ]]; then
   for phrase in "${phase50_12_4_closeout_phrases[@]}"; do
     if ! grep -Fq -- "${phrase}" "${closeout_path}"; then
       echo "Phase 50.12.4 baseline requires closeout evidence: ${phrase}" >&2
+      exit 1
+    fi
+  done
+  echo "Phase 50.12 service facade pressure contract fixes residual clusters, starting measurements, sub-1500 target ceilings, fallback rules, authority non-goals, migration order, and validation commands."
+  exit 0
+fi
+if [[ "${phase50_12_5_service_entry_count}" -eq 1 ]]; then
+  if [[ ! -f "${closeout_path}" ]]; then
+    echo "Phase 50.12.5 baseline requires docs/phase-50-maintainability-closeout.md evidence." >&2
+    exit 1
+  fi
+  phase50_12_5_closeout_phrases=(
+    "Phase 50.12.5 then removed the remaining assistant residual lifecycle helper delegates from \`AegisOpsControlPlaneService\` and routed direct consumers through \`control-plane/aegisops_control_plane/ai_trace_lifecycle.py\`, preserving assistant context, advisory output, recommendation draft, live assistant workflow, readiness, and action-review linkage behavior."
+    "- \`max_lines=1498\`"
+    "- \`max_effective_lines=1338\`"
+    "- \`max_facade_methods=103\`"
+    "- \`phase=50.12.5\`"
+    "- \`issue=#1020\`"
+  )
+  for phrase in "${phase50_12_5_closeout_phrases[@]}"; do
+    if ! grep -Fq -- "${phrase}" "${closeout_path}"; then
+      echo "Phase 50.12.5 baseline requires closeout evidence: ${phrase}" >&2
       exit 1
     fi
   done

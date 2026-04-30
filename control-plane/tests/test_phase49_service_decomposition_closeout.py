@@ -66,8 +66,8 @@ class Phase49ServiceDecompositionCloseoutTests(unittest.TestCase):
         metadata = self._baseline_metadata()
 
         self.assertEqual(metadata["adr_exception"], "ADR-0003")
-        self.assertEqual(metadata["phase"], "50.12.4")
-        self.assertEqual(metadata["issue"], "#1019")
+        self.assertEqual(metadata["phase"], "50.12.5")
+        self.assertEqual(metadata["issue"], "#1020")
         self.assertEqual(metadata["facade_class"], "AegisOpsControlPlaneService")
         self.assertLessEqual(len(service_text.splitlines()), int(metadata["max_lines"]))
         self.assertLessEqual(
@@ -78,7 +78,7 @@ class Phase49ServiceDecompositionCloseoutTests(unittest.TestCase):
             self._facade_method_count(metadata["facade_class"]),
             int(metadata["max_facade_methods"]),
         )
-        self.assertGreater(int(metadata["max_lines"]), 1500)
+        self.assertLessEqual(int(metadata["max_lines"]), 1500)
         self.assertGreater(int(metadata["max_facade_methods"]), 50)
 
         adr = self._read("docs/adr/0003-phase-49-service-decomposition-boundaries.md")
