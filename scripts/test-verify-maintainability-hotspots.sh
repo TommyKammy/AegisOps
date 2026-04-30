@@ -165,7 +165,7 @@ fi
 phase50_11_regrowth_repo="${workdir}/phase50-11-regrowth"
 create_repo \
   "${phase50_11_regrowth_repo}" \
-  "docs/maintainability-hotspot-baseline.txt" "control-plane/aegisops_control_plane/service.py max_lines=1812 max_effective_lines=1632 max_facade_methods=125 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.11.7 issue=#1007" \
+  "docs/maintainability-hotspot-baseline.txt" "control-plane/aegisops_control_plane/service.py max_lines=1773 max_effective_lines=1589 max_facade_methods=125 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.12.2 issue=#1017" \
   "control-plane/aegisops_control_plane/service.py" "class AegisOpsControlPlaneService:
     def describe_runtime(self):
         auth_principal = 'trusted-runtime-boundary'
@@ -176,16 +176,16 @@ create_repo \
         restore_backup_export = action_reconciliation
         evidence_admission = restore_backup_export
         return evidence_admission"
-append_repeated_lines "${phase50_11_regrowth_repo}" "control-plane/aegisops_control_plane/service.py" "phase50_11_growth_line" 1803
+append_repeated_lines "${phase50_11_regrowth_repo}" "control-plane/aegisops_control_plane/service.py" "phase50_11_growth_line" 1764
 git -C "${phase50_11_regrowth_repo}" add .
 git -C "${phase50_11_regrowth_repo}" commit -q -m "phase 50.11 regrowth past accepted closeout"
 assert_fails_with "${phase50_11_regrowth_repo}" "Maintainability hotspot baseline limits were exceeded"
-if ! grep -F "lines=1813 exceeds max_lines=1812" "${fail_stderr}" >/dev/null; then
+if ! grep -F "lines=1774 exceeds max_lines=1773" "${fail_stderr}" >/dev/null; then
   echo "Expected failure output to report the Phase 50.11 line-count limit." >&2
   cat "${fail_stderr}" >&2
   exit 1
 fi
-if ! grep -F "effective_lines=1813 exceeds max_effective_lines=1632" "${fail_stderr}" >/dev/null; then
+if ! grep -F "effective_lines=1774 exceeds max_effective_lines=1589" "${fail_stderr}" >/dev/null; then
   echo "Expected failure output to report the Phase 50.11 effective-line limit." >&2
   cat "${fail_stderr}" >&2
   exit 1

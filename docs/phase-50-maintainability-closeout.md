@@ -12,20 +12,20 @@ The maintainability verifier still reports one remaining accepted hotspot:
 
 - `control-plane/aegisops_control_plane/service.py`
 
-That result is expected because `AegisOpsControlPlaneService` remains the public facade after the Phase 50.11 DTO/snapshot, runtime-event, action-review inspection, assistant-advisory, and detection/case-linkage helper extraction work. The final Phase 50.11.7 closeout for #1007 records the accepted residual ceiling as:
+That result is expected because `AegisOpsControlPlaneService` remains the public facade after the Phase 50.11 DTO/snapshot, runtime-event, action-review inspection, assistant-advisory, and detection/case-linkage helper extraction work accepted in #1007. Phase 50.12.2 for #1017 further extracted constructor composition assignment pressure and records the accepted residual ceiling as:
 
-- `max_lines=1812`
-- `max_effective_lines=1632`
+- `max_lines=1773`
+- `max_effective_lines=1589`
 - `max_facade_methods=125`
 - `facade_class=AegisOpsControlPlaneService`
 - `adr_exception=ADR-0003`
-- `phase=50.11.7`
-- `issue=#1007`
+- `phase=50.12.2`
+- `issue=#1017`
 
 The measured closeout state is:
 
-- `physical_lines=1812`
-- `effective_lines=1632`
+- `physical_lines=1773`
+- `effective_lines=1589`
 - `AegisOpsControlPlaneService methods=125`
 
 The baseline is lower than the Phase 50.10.6 ceiling of `max_lines=3003`, `max_effective_lines=2704`, and `max_facade_methods=167`. It is also below the ADR-0008 Phase 50.11 target ceiling of `max_lines <= 2700`, `max_effective_lines <= 2450`, and `max_facade_methods <= 150`.

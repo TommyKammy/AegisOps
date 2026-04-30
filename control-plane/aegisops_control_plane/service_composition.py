@@ -371,8 +371,63 @@ def build_control_plane_service_composition(
     )
 
 
+def install_control_plane_service_composition(
+    *,
+    service: Any,
+    composition: ControlPlaneServiceComposition,
+) -> None:
+    assignments = {
+        "_store": composition.store,
+        "_reconciliation": composition.reconciliation,
+        "_shuffle": composition.shuffle,
+        "_isolated_executor": composition.isolated_executor,
+        "_assistant_provider_adapter": composition.assistant_provider_adapter,
+        "_reviewed_slice_policy": composition.reviewed_slice_policy,
+        "_ai_trace_lifecycle_service": composition.ai_trace_lifecycle_service,
+        "_assistant_context_assembler": composition.assistant_context_assembler,
+        "_assistant_advisory_coordinator": composition.assistant_advisory_coordinator,
+        "_live_assistant_workflow_coordinator": (
+            composition.live_assistant_workflow_coordinator
+        ),
+        "_action_review_inspection_boundary": (
+            composition.action_review_inspection_boundary
+        ),
+        "_operator_inspection_read_surface": (
+            composition.operator_inspection_read_surface
+        ),
+        "_action_review_write_surface": composition.action_review_write_surface,
+        "_evidence_linkage_service": composition.evidence_linkage_service,
+        "_case_workflow_service": composition.case_workflow_service,
+        "_detection_intake_service": composition.detection_intake_service,
+        "_execution_coordinator": composition.execution_coordinator,
+        "_action_orchestration_boundary": composition.action_orchestration_boundary,
+        "_reconciliation_orchestration_boundary": (
+            composition.reconciliation_orchestration_boundary
+        ),
+        "_action_lifecycle_write_coordinator": (
+            composition.action_lifecycle_write_coordinator
+        ),
+        "_endpoint_evidence_pack_adapter": (
+            composition.endpoint_evidence_pack_adapter
+        ),
+        "_misp_context_adapter": composition.misp_context_adapter,
+        "_external_evidence_boundary": composition.external_evidence_boundary,
+        "_osquery_host_context_adapter": composition.osquery_host_context_adapter,
+        "_runtime_boundary_service": composition.runtime_boundary_service,
+        "_readiness_operability_helper": composition.readiness_operability_helper,
+        "_restore_readiness_service": composition.restore_readiness_service,
+        "_runtime_restore_readiness_diagnostics_service": (
+            composition.runtime_restore_readiness_diagnostics_service
+        ),
+        "_persistence_lifecycle_service": composition.persistence_lifecycle_service,
+    }
+    for attribute_name, collaborator in assignments.items():
+        setattr(service, attribute_name, collaborator)
+
+
 __all__ = [
     "ControlPlaneServiceComposition",
     "ControlPlaneServiceCompositionDependencies",
     "build_control_plane_service_composition",
+    "install_control_plane_service_composition",
 ]
