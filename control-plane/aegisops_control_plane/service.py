@@ -1502,43 +1502,6 @@ class AegisOpsControlPlaneService(ExternalEvidenceFacade):
             record,
         )
 
-    def _ingest_analytic_signal_admission(
-        self,
-        admission: AnalyticSignalAdmission,
-    ) -> FindingAlertIngestResult:
-        return self._detection_intake_service.ingest_analytic_signal_admission(
-            admission
-        )
-
-    def _attach_native_detection_context(
-        self,
-        *,
-        record: NativeDetectionRecord,
-        ingest_result: FindingAlertIngestResult,
-        substrate_detection_record_id: str,
-    ) -> FindingAlertIngestResult:
-        return self._detection_intake_service.attach_native_detection_context(
-            record=record,
-            ingest_result=ingest_result,
-            substrate_detection_record_id=substrate_detection_record_id,
-        )
-
-    def _with_native_detection_admission_provenance(
-        self,
-        record: NativeDetectionRecord,
-        *,
-        admission_kind: str,
-        admission_channel: str,
-    ) -> NativeDetectionRecord:
-        if _normalize_admission_provenance(record.metadata.get("admission_provenance")) is not None:
-            return record
-        metadata = dict(record.metadata)
-        metadata["admission_provenance"] = {
-            "admission_kind": admission_kind,
-            "admission_channel": admission_channel,
-        }
-        return replace(record, metadata=metadata)
-
     def reconcile_action_execution(
         self,
         *,
@@ -1575,57 +1538,6 @@ class AegisOpsControlPlaneService(ExternalEvidenceFacade):
     @staticmethod
     def _linked_id_exists(existing_values: object, candidate: str) -> bool:
         return isinstance(existing_values, (list, tuple)) and candidate in existing_values
-
-    def _link_case_to_analytic_signals(
-        self,
-        analytic_signal_ids: tuple[str, ...],
-        case_id: str | None,
-    ) -> None:
-        self._detection_intake_service._link_case_to_analytic_signals(
-            analytic_signal_ids,
-            case_id,
-        )
-
-    def _list_alert_evidence_records(
-        self,
-        *,
-        alert_id: str,
-        case_id: str | None,
-    ) -> tuple[EvidenceRecord, ...]:
-        return self._detection_intake_service._list_alert_evidence_records(
-            alert_id=alert_id,
-            case_id=case_id,
-        )
-
-    def _link_case_to_alert_reconciliations(
-        self,
-        *,
-        alert_id: str,
-        case_id: str,
-        evidence_ids: tuple[str, ...],
-    ) -> None:
-        self._detection_intake_service._link_case_to_alert_reconciliations(
-            alert_id=alert_id,
-            case_id=case_id,
-            evidence_ids=evidence_ids,
-        )
-
-    def _resolve_analytic_signal_id(
-        self,
-        *,
-        analytic_signal_id: str | None,
-        finding_id: str,
-        correlation_key: str,
-        substrate_detection_record_id: str | None,
-        latest_reconciliation: ReconciliationRecord | None,
-    ) -> str:
-        return self._detection_intake_service.resolve_analytic_signal_id(
-            analytic_signal_id=analytic_signal_id,
-            finding_id=finding_id,
-            correlation_key=correlation_key,
-            substrate_detection_record_id=substrate_detection_record_id,
-            latest_reconciliation=latest_reconciliation,
-        )
 
     def _require_empty_authoritative_restore_target(self) -> None:
         diagnostics_service = self._runtime_restore_readiness_diagnostics_service
@@ -1853,16 +1765,6 @@ class AegisOpsControlPlaneService(ExternalEvidenceFacade):
         return self._detection_intake_service.case_lifecycle_for_disposition(
             disposition
         )
-
-    @staticmethod
-    def _normalize_substrate_detection_record_id(
-        substrate_key: str,
-        substrate_detection_record_id: str,
-    ) -> str:
-        namespaced_prefix = f"{substrate_key}:"
-        if substrate_detection_record_id.startswith(namespaced_prefix):
-            return substrate_detection_record_id
-        return f"{namespaced_prefix}{substrate_detection_record_id}"
 
     @staticmethod
     def _next_identifier(prefix: str) -> str:

@@ -658,15 +658,17 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
         self.assertIsInstance(delegate_call.func.value.value, ast.Name)
         self.assertEqual(delegate_call.func.value.value.id, "self")
 
-    def test_phase50_detection_linkage_helpers_live_with_detection_intake(
+    def test_phase50_detection_linkage_helpers_leave_service_facade(
         self,
     ) -> None:
         service_source = self._read("control-plane/aegisops_control_plane/service.py")
         detection_source = self._read(
             "control-plane/aegisops_control_plane/detection_lifecycle.py"
         )
+        case_source = self._read("control-plane/aegisops_control_plane/case_workflow.py")
         service_tree = ast.parse(service_source)
         detection_tree = ast.parse(detection_source)
+        case_tree = ast.parse(case_source)
         service_class = next(
             node
             for node in service_tree.body
@@ -679,42 +681,52 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
             if isinstance(node, ast.ClassDef)
             and node.name == "DetectionIntakeService"
         )
+        case_linkage_class = next(
+            node
+            for node in case_tree.body
+            if isinstance(node, ast.ClassDef)
+            and node.name == "CaseDetectionLinkageHelper"
+        )
 
-        moved_helper_names = {
+        case_linkage_helper_names = {
             "_link_case_to_analytic_signals",
             "_list_alert_evidence_records",
             "_link_case_to_alert_reconciliations",
+        }
+        detection_helper_names = {
+            "ingest_analytic_signal_admission",
+            "attach_native_detection_context",
+            "resolve_analytic_signal_id",
+        }
+        removed_service_helper_names = {
+            *case_linkage_helper_names,
+            "_ingest_analytic_signal_admission",
+            "_attach_native_detection_context",
+            "_with_native_detection_admission_provenance",
+            "_resolve_analytic_signal_id",
         }
         detection_method_names = {
             node.name
             for node in detection_class.body
             if isinstance(node, ast.FunctionDef)
         }
-        self.assertTrue(moved_helper_names.issubset(detection_method_names))
+        case_linkage_method_names = {
+            node.name
+            for node in case_linkage_class.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        self.assertTrue(detection_helper_names.issubset(detection_method_names))
+        self.assertTrue(case_linkage_helper_names.issubset(case_linkage_method_names))
 
         service_methods = {
             node.name: node
             for node in service_class.body
             if isinstance(node, ast.FunctionDef)
         }
-        for helper_name in moved_helper_names:
-            service_method = service_methods[helper_name]
-            calls = [
-                node
-                for node in ast.walk(service_method)
-                if isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and node.func.attr == helper_name
-                and isinstance(node.func.value, ast.Attribute)
-                and node.func.value.attr == "_detection_intake_service"
-                and isinstance(node.func.value.value, ast.Name)
-                and node.func.value.value.id == "self"
-            ]
-            self.assertEqual(
-                len(calls),
-                1,
-                f"{helper_name} should remain only as a facade compatibility delegate",
-            )
+        self.assertFalse(
+            removed_service_helper_names & service_methods.keys(),
+            "detection and case-linkage residual helpers should not remain service facade methods",
+        )
 
     def test_phase50_10_5_lifecycle_transition_callers_bypass_facade_delegates(
         self,
