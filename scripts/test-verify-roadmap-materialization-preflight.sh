@@ -181,6 +181,41 @@ assert_fails_with_json \
   "open predecessor child issue with narrative accepted text"
 
 write_graph
+jq '(.issues[] | select(.number == 913) | .state) = "OPEN" | (.issues[] | select(.number == 913) | .body) += "\nExplicitly accepted by owner: true\n"' "${graph_path}" >"${graph_path}.tmp"
+mv "${graph_path}.tmp" "${graph_path}"
+assert_fails_with_json \
+  '.pass == false and .fail == true and .phase_classification["48.7"] == "materialized_open" and .invalid_phase_id == "48.7" and .invalid_field == "issue_state" and .invalid_issue_number == 913' \
+  "open predecessor child issue with alternate acceptance field"
+
+write_graph
+jq '(.issues[] | select(.number == 913) | .state) = "OPEN" | (.issues[] | select(.number == 913) | .body) += "\nExplicit owner acceptance: yes!\n"' "${graph_path}" >"${graph_path}.tmp"
+mv "${graph_path}.tmp" "${graph_path}"
+assert_fails_with_json \
+  '.pass == false and .fail == true and .phase_classification["48.7"] == "materialized_open" and .invalid_phase_id == "48.7" and .invalid_field == "issue_state" and .invalid_issue_number == 913' \
+  "open predecessor child issue with punctuated acceptance marker"
+
+write_graph
+jq '(.issues[] | select(.number == 913) | .state) = "OPEN" | (.issues[] | select(.number == 913) | .body) += "\nExplicit owner acceptance: yes (confirmed)\n"' "${graph_path}" >"${graph_path}.tmp"
+mv "${graph_path}.tmp" "${graph_path}"
+assert_fails_with_json \
+  '.pass == false and .fail == true and .phase_classification["48.7"] == "materialized_open" and .invalid_phase_id == "48.7" and .invalid_field == "issue_state" and .invalid_issue_number == 913' \
+  "open predecessor child issue with qualified acceptance marker"
+
+write_graph
+jq '(.issues[] | select(.number == 913) | .state) = "OPEN" | (.issues[] | select(.number == 913) | .body) += "\nExplicit owner accept: yes\n"' "${graph_path}" >"${graph_path}.tmp"
+mv "${graph_path}.tmp" "${graph_path}"
+assert_fails_with_json \
+  '.pass == false and .fail == true and .phase_classification["48.7"] == "materialized_open" and .invalid_phase_id == "48.7" and .invalid_field == "issue_state" and .invalid_issue_number == 913' \
+  "open predecessor child issue with shortened acceptance field"
+
+write_graph
+jq '(.issues[] | select(.number == 913) | .state) = "OPEN" | (.issues[] | select(.number == 913) | .body) += "\nExplicit owner acceptance: yess\n"' "${graph_path}" >"${graph_path}.tmp"
+mv "${graph_path}.tmp" "${graph_path}"
+assert_fails_with_json \
+  '.pass == false and .fail == true and .phase_classification["48.7"] == "materialized_open" and .invalid_phase_id == "48.7" and .invalid_field == "issue_state" and .invalid_issue_number == 913' \
+  "open predecessor child issue with misspelled acceptance value"
+
+write_graph
 jq '(.issues[] | select(.number == 913) | .state) = "OPEN" | (.issues[] | select(.number == 913) | .body) += "\nExplicit owner acceptance: yes\n"' "${graph_path}" >"${graph_path}.tmp"
 mv "${graph_path}.tmp" "${graph_path}"
 assert_passes

@@ -26,9 +26,7 @@ LINT_KEYS = (
     "metadata_errors",
     "high_risk_blocking_ambiguity",
 )
-OWNER_ACCEPTANCE_RE = re.compile(
-    r"(?im)^\s*(?:explicit owner acceptance|explicitly accepted(?: by owner)?)\s*:\s*(?:yes|true|accepted)\s*$"
-)
+OWNER_ACCEPTANCE_RE = re.compile(r"(?m)^Explicit owner acceptance: yes$")
 
 
 def parse_args() -> argparse.Namespace:
