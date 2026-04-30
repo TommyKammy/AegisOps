@@ -397,7 +397,7 @@ class Phase24LiveAssistantSurfaceValidationTests(ServicePersistenceTestBase):
 
         stdout = io.StringIO()
         with mock.patch(
-            "aegisops_control_plane.service._phase24_live_assistant_citations_from_context",
+            "aegisops_control_plane.live_assistant_workflow.phase24_live_assistant_citations_from_context",
             return_value=(),
         ):
             main.main(

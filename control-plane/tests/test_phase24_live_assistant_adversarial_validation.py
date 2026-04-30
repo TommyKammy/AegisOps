@@ -274,7 +274,7 @@ class Phase24LiveAssistantAdversarialValidationTests(ServicePersistenceTestBase)
         )
 
         with mock.patch(
-            "aegisops_control_plane.service._phase24_live_assistant_citations_from_context",
+            "aegisops_control_plane.live_assistant_workflow.phase24_live_assistant_citations_from_context",
             return_value=(),
         ):
             snapshot = service.run_live_assistant_workflow(

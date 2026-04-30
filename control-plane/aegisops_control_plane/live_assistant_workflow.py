@@ -4,7 +4,8 @@ from copy import copy
 from dataclasses import replace
 from datetime import datetime, timezone
 import json
-from typing import Any, Callable, Protocol
+import re
+from typing import Any, Callable, Iterable, Protocol
 
 from .ai_trace_lifecycle import AITraceLifecycleService
 from .assistant_provider import (
@@ -15,6 +16,192 @@ from .assistant_provider import (
     provider_exception_failure_metadata,
 )
 from .models import AITraceRecord, RecommendationRecord
+from .service_snapshots import (
+    AnalystAssistantContextSnapshot,
+    LiveAssistantWorkflowSnapshot,
+)
+
+_PHASE24_WORKFLOW_FAMILY = "first_live_assistant_summary_family"
+
+
+def _dedupe_strings(values: Iterable[str]) -> tuple[str, ...]:
+    deduped: list[str] = []
+    for value in values:
+        if value not in deduped:
+            deduped.append(value)
+    return tuple(deduped)
+
+
+def phase24_live_assistant_unresolved_reasons(
+    uncertainty_flags: Iterable[str],
+) -> tuple[str, ...]:
+    mapping = {
+        "missing_supporting_citations": "required citations are missing",
+        "missing_evidence_citation": "linked evidence required for the summary is missing",
+        "conflicting_reviewed_context": (
+            "reviewed records conflict on lifecycle state, ownership, scope, or evidence-backed facts"
+        ),
+        "ambiguous_identity_alias_only": (
+            "the requested summary would require the assistant to collapse identity ambiguity"
+        ),
+        "reviewed_casework_identity_ambiguity": (
+            "reviewed multi-source casework still contains unresolved identity ambiguity"
+        ),
+        "authority_overreach": (
+            "the requested summary would widen into approval, delegation, execution, or policy interpretation"
+        ),
+        "scope_expansion_attempt": (
+            "the requested summary would widen beyond the reviewed record chain"
+        ),
+        "prompt_injection_attempt": (
+            "the requested summary would follow prompt-injection or instruction-override text instead of reviewed records"
+        ),
+        "provider_generation_failed": (
+            "the bounded live assistant did not return a trusted summary within the reviewed retry budget"
+        ),
+    }
+    reasons: list[str] = []
+    for flag in uncertainty_flags:
+        reason = mapping.get(str(flag))
+        if reason is not None and reason not in reasons:
+            reasons.append(reason)
+    return tuple(reasons)
+
+
+def phase24_live_assistant_prompt_injection_flags(text: object) -> tuple[str, ...]:
+    if not isinstance(text, str):
+        return ()
+
+    lowered = text.lower()
+    normalized = re.sub(r"[\W_]+", " ", lowered)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    flags: list[str] = []
+    prompt_injection_terms = (
+        r"\bignore(?:\s+all)?\s+previous\s+instructions\b",
+        r"\bdisregard\s+previous\s+instructions\b",
+        r"\boverride\s+previous\s+instructions\b",
+        r"\breveal\s+(?:the\s+)?hidden\s+system\s+prompt\b",
+        r"\breveal\s+(?:the\s+)?system\s+prompt\b",
+        r"\bshow\s+(?:the\s+)?system\s+prompt\b",
+        r"\breveal\s+(?:the\s+)?developer\s+message\b",
+    )
+    if any(re.search(term, normalized) for term in prompt_injection_terms):
+        flags.append("prompt_injection_attempt")
+    return _dedupe_strings(tuple(flags))
+
+
+def phase24_live_assistant_citations_from_context(
+    snapshot: AnalystAssistantContextSnapshot,
+) -> tuple[dict[str, object], ...]:
+    citations: list[dict[str, object]] = []
+    seen: set[tuple[object, ...]] = set()
+
+    def append_citation(
+        *,
+        record_family: str,
+        record_id: str,
+        claim: str,
+        evidence_id: str | None,
+        reviewed_context_field: str | None,
+    ) -> None:
+        key = (record_family, record_id, claim, evidence_id, reviewed_context_field)
+        if key in seen:
+            return
+        seen.add(key)
+        citations.append(
+            {
+                "record_family": record_family,
+                "record_id": record_id,
+                "claim": claim,
+                "evidence_id": evidence_id,
+                "reviewed_context_field": reviewed_context_field,
+            }
+        )
+
+    if snapshot.record_family == "case":
+        append_citation(
+            record_family="case",
+            record_id=snapshot.record_id,
+            claim="Reviewed case lifecycle and scope remain anchored on the case record.",
+            evidence_id=None,
+            reviewed_context_field=None,
+        )
+    elif snapshot.record_family == "alert":
+        append_citation(
+            record_family="alert",
+            record_id=snapshot.record_id,
+            claim="Reviewed alert lifecycle remains anchored on the alert record.",
+            evidence_id=None,
+            reviewed_context_field=None,
+        )
+
+    for alert_id in snapshot.linked_alert_ids:
+        append_citation(
+            record_family="alert",
+            record_id=alert_id,
+            claim="Reviewed alert linkage preserves the bounded live assistant chain.",
+            evidence_id=None,
+            reviewed_context_field=None,
+        )
+    for case_id in snapshot.linked_case_ids:
+        append_citation(
+            record_family="case",
+            record_id=case_id,
+            claim="Reviewed case linkage preserves the bounded live assistant chain.",
+            evidence_id=None,
+            reviewed_context_field=None,
+        )
+    for evidence_id in snapshot.linked_evidence_ids:
+        append_citation(
+            record_family="evidence",
+            record_id=evidence_id,
+            claim="Linked reviewed evidence supports the live assistant summary.",
+            evidence_id=evidence_id,
+            reviewed_context_field=None,
+        )
+
+    for context_field in ("asset", "identity", "privilege", "source", "provenance"):
+        if context_field in snapshot.reviewed_context:
+            append_citation(
+                record_family=snapshot.record_family,
+                record_id=snapshot.record_id,
+                claim=(
+                    f"Reviewed context field {context_field} remains within the reviewed record chain."
+                ),
+                evidence_id=None,
+                reviewed_context_field=context_field,
+            )
+
+    return tuple(citations)
+
+
+def phase24_live_assistant_snapshot(
+    *,
+    workflow_task: str,
+    summary: str,
+    citations: tuple[dict[str, object], ...],
+    unresolved_reasons: tuple[str, ...],
+) -> LiveAssistantWorkflowSnapshot:
+    status = "unresolved" if unresolved_reasons else "ready"
+    return LiveAssistantWorkflowSnapshot(
+        workflow_family=_PHASE24_WORKFLOW_FAMILY,
+        workflow_task=workflow_task,
+        status=status,
+        summary=summary,
+        citations=citations,
+        unresolved_reasons=unresolved_reasons,
+        operator_follow_up=phase24_live_assistant_follow_up(status),
+    )
+
+
+def phase24_live_assistant_follow_up(status: str) -> str:
+    if status == "ready":
+        return (
+            "Review the cited records before any approval, delegation, execution, or policy decision."
+        )
+    return (
+        "Review the unresolved reasons against the cited records before any approval, delegation, execution, or policy decision."
+    )
 
 
 class LiveAssistantWorkflowServiceDependencies(Protocol):

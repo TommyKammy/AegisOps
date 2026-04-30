@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import logging
-import re
 import uuid
 from typing import Iterable, Iterator, Mapping, Protocol, Type, TypeVar
 
@@ -15,6 +14,8 @@ _DATETIME_TYPE = datetime
 
 from . import action_review_projection as _action_review_projection
 from .action_policy import evaluate_action_policy_record
+from . import assistant_advisory as _assistant_advisory
+from . import live_assistant_workflow as _live_assistant_workflow
 from .assistant_provider import (
     AssistantProviderFailure,
     AssistantProviderResult,
@@ -398,231 +399,6 @@ def _normalize_admission_provenance(
     return normalized
 
 
-def _advisory_inspection_snapshot_from_context(
-    snapshot: AnalystAssistantContextSnapshot,
-) -> AdvisoryInspectionSnapshot:
-    advisory_output = snapshot.advisory_output
-    return AdvisoryInspectionSnapshot(
-        read_only=True,
-        record_family=snapshot.record_family,
-        record_id=snapshot.record_id,
-        output_kind=str(advisory_output["output_kind"]),
-        status=str(advisory_output["status"]),
-        cited_summary=dict(advisory_output["cited_summary"]),
-        key_observations=tuple(advisory_output["key_observations"]),
-        unresolved_questions=tuple(advisory_output["unresolved_questions"]),
-        candidate_recommendations=tuple(advisory_output["candidate_recommendations"]),
-        citations=tuple(advisory_output["citations"]),
-        uncertainty_flags=tuple(advisory_output["uncertainty_flags"]),
-        reviewed_context=dict(snapshot.reviewed_context),
-        linked_alert_ids=snapshot.linked_alert_ids,
-        linked_case_ids=snapshot.linked_case_ids,
-        linked_evidence_ids=snapshot.linked_evidence_ids,
-        linked_recommendation_ids=snapshot.linked_recommendation_ids,
-        linked_reconciliation_ids=snapshot.linked_reconciliation_ids,
-    )
-
-
-def _recommendation_draft_snapshot_from_context(
-    snapshot: AnalystAssistantContextSnapshot,
-) -> RecommendationDraftSnapshot:
-    advisory_output = snapshot.advisory_output
-    return RecommendationDraftSnapshot(
-        read_only=True,
-        record_family=snapshot.record_family,
-        record_id=snapshot.record_id,
-        recommendation_draft={
-            "source_output_kind": advisory_output["output_kind"],
-            "status": advisory_output["status"],
-            "review_lifecycle_state": snapshot.record.get("lifecycle_state"),
-            "cited_summary": advisory_output["cited_summary"],
-            "candidate_recommendations": advisory_output["candidate_recommendations"],
-            "unresolved_questions": advisory_output["unresolved_questions"],
-            "citations": advisory_output["citations"],
-            "uncertainty_flags": advisory_output["uncertainty_flags"],
-        },
-        reviewed_context=dict(snapshot.reviewed_context),
-        linked_alert_ids=snapshot.linked_alert_ids,
-        linked_case_ids=snapshot.linked_case_ids,
-        linked_evidence_ids=snapshot.linked_evidence_ids,
-        linked_recommendation_ids=snapshot.linked_recommendation_ids,
-        linked_reconciliation_ids=snapshot.linked_reconciliation_ids,
-    )
-
-
-def _phase24_live_assistant_unresolved_reasons(
-    uncertainty_flags: Iterable[str],
-) -> tuple[str, ...]:
-    mapping = {
-        "missing_supporting_citations": "required citations are missing",
-        "missing_evidence_citation": "linked evidence required for the summary is missing",
-        "conflicting_reviewed_context": (
-            "reviewed records conflict on lifecycle state, ownership, scope, or evidence-backed facts"
-        ),
-        "ambiguous_identity_alias_only": (
-            "the requested summary would require the assistant to collapse identity ambiguity"
-        ),
-        "reviewed_casework_identity_ambiguity": (
-            "reviewed multi-source casework still contains unresolved identity ambiguity"
-        ),
-        "authority_overreach": (
-            "the requested summary would widen into approval, delegation, execution, or policy interpretation"
-        ),
-        "scope_expansion_attempt": (
-            "the requested summary would widen beyond the reviewed record chain"
-        ),
-        "prompt_injection_attempt": (
-            "the requested summary would follow prompt-injection or instruction-override text instead of reviewed records"
-        ),
-        "provider_generation_failed": (
-            "the bounded live assistant did not return a trusted summary within the reviewed retry budget"
-        ),
-    }
-    reasons: list[str] = []
-    for flag in uncertainty_flags:
-        reason = mapping.get(str(flag))
-        if reason is not None and reason not in reasons:
-            reasons.append(reason)
-    return tuple(reasons)
-
-
-def _phase24_live_assistant_prompt_injection_flags(text: object) -> tuple[str, ...]:
-    if not isinstance(text, str):
-        return ()
-
-    lowered = text.lower()
-    normalized = re.sub(r"[\W_]+", " ", lowered)
-    normalized = re.sub(r"\s+", " ", normalized).strip()
-    flags: list[str] = []
-    prompt_injection_terms = (
-        r"\bignore(?:\s+all)?\s+previous\s+instructions\b",
-        r"\bdisregard\s+previous\s+instructions\b",
-        r"\boverride\s+previous\s+instructions\b",
-        r"\breveal\s+(?:the\s+)?hidden\s+system\s+prompt\b",
-        r"\breveal\s+(?:the\s+)?system\s+prompt\b",
-        r"\bshow\s+(?:the\s+)?system\s+prompt\b",
-        r"\breveal\s+(?:the\s+)?developer\s+message\b",
-    )
-    if any(re.search(term, normalized) for term in prompt_injection_terms):
-        flags.append("prompt_injection_attempt")
-    return _dedupe_strings(tuple(flags))
-
-
-def _phase24_live_assistant_citations_from_context(
-    snapshot: AnalystAssistantContextSnapshot,
-) -> tuple[dict[str, object], ...]:
-    citations: list[dict[str, object]] = []
-    seen: set[tuple[object, ...]] = set()
-
-    def append_citation(
-        *,
-        record_family: str,
-        record_id: str,
-        claim: str,
-        evidence_id: str | None,
-        reviewed_context_field: str | None,
-    ) -> None:
-        key = (record_family, record_id, claim, evidence_id, reviewed_context_field)
-        if key in seen:
-            return
-        seen.add(key)
-        citations.append(
-            {
-                "record_family": record_family,
-                "record_id": record_id,
-                "claim": claim,
-                "evidence_id": evidence_id,
-                "reviewed_context_field": reviewed_context_field,
-            }
-        )
-
-    lifecycle_state = snapshot.record.get("lifecycle_state")
-    if snapshot.record_family == "case":
-        append_citation(
-            record_family="case",
-            record_id=snapshot.record_id,
-            claim="Reviewed case lifecycle and scope remain anchored on the case record.",
-            evidence_id=None,
-            reviewed_context_field=None,
-        )
-    elif snapshot.record_family == "alert":
-        append_citation(
-            record_family="alert",
-            record_id=snapshot.record_id,
-            claim="Reviewed alert lifecycle remains anchored on the alert record.",
-            evidence_id=None,
-            reviewed_context_field=None,
-        )
-
-    for alert_id in snapshot.linked_alert_ids:
-        append_citation(
-            record_family="alert",
-            record_id=alert_id,
-            claim="Reviewed alert linkage preserves the bounded live assistant chain.",
-            evidence_id=None,
-            reviewed_context_field=None,
-        )
-    for case_id in snapshot.linked_case_ids:
-        append_citation(
-            record_family="case",
-            record_id=case_id,
-            claim="Reviewed case linkage preserves the bounded live assistant chain.",
-            evidence_id=None,
-            reviewed_context_field=None,
-        )
-    for evidence_id in snapshot.linked_evidence_ids:
-        append_citation(
-            record_family="evidence",
-            record_id=evidence_id,
-            claim="Linked reviewed evidence supports the live assistant summary.",
-            evidence_id=evidence_id,
-            reviewed_context_field=None,
-        )
-
-    for context_field in ("asset", "identity", "privilege", "source", "provenance"):
-        if context_field in snapshot.reviewed_context:
-            append_citation(
-                record_family=snapshot.record_family,
-                record_id=snapshot.record_id,
-                claim=(
-                    f"Reviewed context field {context_field} remains within the reviewed record chain."
-                ),
-                evidence_id=None,
-                reviewed_context_field=context_field,
-            )
-
-    return tuple(citations)
-
-
-def _phase24_live_assistant_follow_up(status: str) -> str:
-    if status == "ready":
-        return (
-            "Review the cited records before any approval, delegation, execution, or policy decision."
-        )
-    return (
-        "Review the unresolved reasons against the cited records before any approval, delegation, execution, or policy decision."
-    )
-
-
-def _phase24_live_assistant_snapshot(
-    *,
-    workflow_task: str,
-    summary: str,
-    citations: tuple[dict[str, object], ...],
-    unresolved_reasons: tuple[str, ...],
-) -> LiveAssistantWorkflowSnapshot:
-    status = "unresolved" if unresolved_reasons else "ready"
-    return LiveAssistantWorkflowSnapshot(
-        workflow_family=_PHASE24_WORKFLOW_FAMILY,
-        workflow_task=workflow_task,
-        status=status,
-        summary=summary,
-        citations=citations,
-        unresolved_reasons=unresolved_reasons,
-        operator_follow_up=_phase24_live_assistant_follow_up(status),
-    )
-
-
 class AegisOpsControlPlaneService(ExternalEvidenceFacade):
     """Minimal local runtime skeleton for the first control-plane service."""
 
@@ -670,22 +446,24 @@ class AegisOpsControlPlaneService(ExternalEvidenceFacade):
                 action_review_detail_snapshot_factory=ActionReviewDetailSnapshot,
                 assistant_context_snapshot_factory=AnalystAssistantContextSnapshot,
                 advisory_snapshot_from_context=(
-                    _advisory_inspection_snapshot_from_context
+                    _assistant_advisory.advisory_inspection_snapshot_from_context
                 ),
                 recommendation_draft_snapshot_from_context=(
-                    _recommendation_draft_snapshot_from_context
+                    _assistant_advisory.recommendation_draft_snapshot_from_context
                 ),
-                live_assistant_snapshot_factory=_phase24_live_assistant_snapshot,
+                live_assistant_snapshot_factory=(
+                    _live_assistant_workflow.phase24_live_assistant_snapshot
+                ),
                 live_assistant_citations_from_context=(
-                    lambda snapshot: _phase24_live_assistant_citations_from_context(
+                    lambda snapshot: _live_assistant_workflow.phase24_live_assistant_citations_from_context(
                         snapshot
                     )
                 ),
                 live_assistant_unresolved_reasons=(
-                    _phase24_live_assistant_unresolved_reasons
+                    _live_assistant_workflow.phase24_live_assistant_unresolved_reasons
                 ),
                 live_assistant_prompt_injection_flags=(
-                    _phase24_live_assistant_prompt_injection_flags
+                    _live_assistant_workflow.phase24_live_assistant_prompt_injection_flags
                 ),
                 startup_status_snapshot_factory=StartupStatusSnapshot,
                 readiness_diagnostics_snapshot_factory=ReadinessDiagnosticsSnapshot,
