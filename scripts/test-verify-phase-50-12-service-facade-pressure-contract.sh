@@ -294,6 +294,40 @@ The baseline is lower than the Phase 50.11.7 ceiling of `max_lines=1812`, `max_e
 EOF
 assert_passes "${phase50_12_7_closeout_repo}"
 
+phase50_13_5_closeout_repo="${workdir}/phase50-13-5-closeout"
+create_valid_repo "${phase50_13_5_closeout_repo}"
+printf '%s\n' \
+  "control-plane/aegisops_control_plane/service.py max_lines=1393 max_effective_lines=1241 max_facade_methods=95 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.13.5 issue=#1035" \
+  >"${phase50_13_5_closeout_repo}/docs/maintainability-hotspot-baseline.txt"
+cat >"${phase50_13_5_closeout_repo}/docs/phase-50-maintainability-closeout.md" <<'EOF'
+# Phase 50 Maintainability Closeout
+
+Phase 50.13.5 records the accepted final `service.py` residual closeout after the Phase 50.11.7 ordered DTO/helper extraction sequence, the Phase 50.12.2/50.12.3/50.12.4/50.12.5/50.12.6 facade-pressure reductions, and the Phase 50.13 facade inventory, internal rewiring, private guard relocation, and compatibility delegate consolidation work governed by ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, and ADR-0010.
+
+- `max_lines=1393`
+- `max_effective_lines=1241`
+- `max_facade_methods=95`
+- `phase=50.13.5`
+- `issue=#1035`
+
+The measured Phase 50.13.5 closeout state is:
+
+- `physical_lines=1393`
+- `effective_lines=1241`
+- `AegisOpsControlPlaneService methods=95`
+
+The Phase 50.13 target of `AegisOpsControlPlaneService <= 85` methods was not reached safely; the retained `95` facade methods are accepted only as an ADR-0003 facade-preservation exception because the remaining public compatibility entrypoints continue to protect existing callers while delegating into extracted boundaries.
+EOF
+assert_passes "${phase50_13_5_closeout_repo}"
+
+phase50_13_5_missing_measured_evidence_repo="${workdir}/phase50-13-5-missing-measured-evidence"
+cp -R "${phase50_13_5_closeout_repo}" "${phase50_13_5_missing_measured_evidence_repo}"
+perl -0pi -e 's/- `AegisOpsControlPlaneService methods=95`\n//g' \
+  "${phase50_13_5_missing_measured_evidence_repo}/docs/phase-50-maintainability-closeout.md"
+assert_fails_with \
+  "${phase50_13_5_missing_measured_evidence_repo}" \
+  "Phase 50.13.5 baseline requires closeout evidence: - \`AegisOpsControlPlaneService methods=95\`"
+
 missing_contract_repo="${workdir}/missing-contract"
 create_valid_repo "${missing_contract_repo}"
 rm "${missing_contract_repo}/docs/adr/0009-phase-50-12-service-facade-pressure-contract.md"

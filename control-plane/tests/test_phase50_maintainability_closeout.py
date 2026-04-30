@@ -80,8 +80,8 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
         facade_methods = self._facade_method_count(metadata["facade_class"])
 
         self.assertEqual(metadata["adr_exception"], "ADR-0003")
-        self.assertEqual(metadata["phase"], "50.13.3")
-        self.assertEqual(metadata["issue"], "#1033")
+        self.assertEqual(metadata["phase"], "50.13.5")
+        self.assertEqual(metadata["issue"], "#1035")
         self.assertEqual(metadata["facade_class"], "AegisOpsControlPlaneService")
         self.assertEqual(int(metadata["max_lines"]), physical_lines)
         self.assertEqual(int(metadata["max_effective_lines"]), effective_lines)
@@ -108,6 +108,8 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
             "Phase 50.12.6",
             "Phase 50.12.7",
             "Phase 50.13.3",
+            "Phase 50.13.4",
+            "Phase 50.13.5",
             "control-plane/aegisops_control_plane/service.py",
             "control-plane/aegisops_control_plane/case_workflow.py",
             "control-plane/aegisops_control_plane/action_review_write_surface.py",
@@ -120,11 +122,14 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
             "max_lines=1393",
             "max_effective_lines=1241",
             "max_facade_methods=95",
+            "phase=50.13.5",
+            "issue=#1035",
             "physical_lines=1393",
             "effective_lines=1241",
             "max_lines <= 1500",
             "max_effective_lines <= 1350",
             "max_facade_methods <= 95",
+            "Phase 50.13 target of `AegisOpsControlPlaneService <= 85` methods was not reached",
             "ADR-0007",
             "ADR-0008",
             "ADR-0009",
@@ -138,6 +143,8 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
             "#1018",
             "#1019",
             "#1020",
+            "#1034",
+            "#1035",
             "remaining accepted hotspot",
             "facade dispatch, compatibility entrypoints, runtime-boundary guards, and lifecycle/write-path delegates",
             "reviewed action approval policy helpers",
@@ -256,6 +263,7 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
             "regrowth_repo",
             "phase50_11_regrowth_repo",
             "phase50_12_final_regrowth_repo",
+            "phase50_13_final_regrowth_repo",
             "Maintainability hotspot baseline limits were exceeded",
             "lines=960 exceeds max_lines=959",
             "effective_lines=960 exceeds max_effective_lines=959",
@@ -263,6 +271,8 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
             "effective_lines=1774 exceeds max_effective_lines=1589",
             "lines=1452 exceeds max_lines=1451",
             "effective_lines=1452 exceeds max_effective_lines=1294",
+            "lines=1394 exceeds max_lines=1393",
+            "effective_lines=1394 exceeds max_effective_lines=1241",
             "max_facade_methods=0",
         ):
             self.assertIn(required, verifier_test)

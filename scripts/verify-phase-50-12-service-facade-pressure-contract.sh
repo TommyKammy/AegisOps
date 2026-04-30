@@ -124,16 +124,19 @@ phase50_12_4_service_baseline_entry="control-plane/aegisops_control_plane/servic
 phase50_12_5_service_baseline_entry="control-plane/aegisops_control_plane/service.py max_lines=1498 max_effective_lines=1338 max_facade_methods=103 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.12.5 issue=#1020"
 phase50_12_6_service_baseline_entry="control-plane/aegisops_control_plane/service.py max_lines=1451 max_effective_lines=1294 max_facade_methods=100 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.12.6 issue=#1021"
 phase50_12_7_service_baseline_entry="control-plane/aegisops_control_plane/service.py max_lines=1451 max_effective_lines=1294 max_facade_methods=100 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.12.7 issue=#1022"
+phase50_13_5_service_baseline_entry="control-plane/aegisops_control_plane/service.py max_lines=1393 max_effective_lines=1241 max_facade_methods=95 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.13.5 issue=#1035"
 service_entry="$(grep -Fx -- "${starting_service_baseline_entry}" "${baseline_path}" || true)"
 phase50_12_4_service_entry="$(grep -Fx -- "${phase50_12_4_service_baseline_entry}" "${baseline_path}" || true)"
 phase50_12_5_service_entry="$(grep -Fx -- "${phase50_12_5_service_baseline_entry}" "${baseline_path}" || true)"
 phase50_12_6_service_entry="$(grep -Fx -- "${phase50_12_6_service_baseline_entry}" "${baseline_path}" || true)"
 phase50_12_7_service_entry="$(grep -Fx -- "${phase50_12_7_service_baseline_entry}" "${baseline_path}" || true)"
+phase50_13_5_service_entry="$(grep -Fx -- "${phase50_13_5_service_baseline_entry}" "${baseline_path}" || true)"
 service_entry_count="$(printf '%s\n' "${service_entry}" | sed '/^$/d' | wc -l | tr -d ' ')"
 phase50_12_4_service_entry_count="$(printf '%s\n' "${phase50_12_4_service_entry}" | sed '/^$/d' | wc -l | tr -d ' ')"
 phase50_12_5_service_entry_count="$(printf '%s\n' "${phase50_12_5_service_entry}" | sed '/^$/d' | wc -l | tr -d ' ')"
 phase50_12_6_service_entry_count="$(printf '%s\n' "${phase50_12_6_service_entry}" | sed '/^$/d' | wc -l | tr -d ' ')"
 phase50_12_7_service_entry_count="$(printf '%s\n' "${phase50_12_7_service_entry}" | sed '/^$/d' | wc -l | tr -d ' ')"
+phase50_13_5_service_entry_count="$(printf '%s\n' "${phase50_13_5_service_entry}" | sed '/^$/d' | wc -l | tr -d ' ')"
 service_path_entry_count="$(
   awk -v prefix="control-plane/aegisops_control_plane/service.py " \
     'index($0, prefix) == 1 { count += 1 } END { print count + 0 }' \
@@ -231,6 +234,33 @@ if [[ "${phase50_12_7_service_entry_count}" -eq 1 ]]; then
   for phrase in "${phase50_12_7_closeout_phrases[@]}"; do
     if ! grep -Fq -- "${phrase}" "${closeout_path}"; then
       echo "Phase 50.12.7 baseline requires closeout evidence: ${phrase}" >&2
+      exit 1
+    fi
+  done
+  echo "Phase 50.12 service facade pressure contract fixes residual clusters, starting measurements, sub-1500 target ceilings, fallback rules, authority non-goals, migration order, and validation commands."
+  exit 0
+fi
+if [[ "${phase50_13_5_service_entry_count}" -eq 1 ]]; then
+  if [[ ! -f "${closeout_path}" ]]; then
+    echo "Phase 50.13.5 baseline requires docs/phase-50-maintainability-closeout.md evidence." >&2
+    exit 1
+  fi
+  phase50_13_5_closeout_phrases=(
+    "Phase 50.13.5 records the accepted final \`service.py\` residual closeout after the Phase 50.11.7 ordered DTO/helper extraction sequence, the Phase 50.12.2/50.12.3/50.12.4/50.12.5/50.12.6 facade-pressure reductions, and the Phase 50.13 facade inventory, internal rewiring, private guard relocation, and compatibility delegate consolidation work governed by ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, and ADR-0010."
+    "The measured Phase 50.13.5 closeout state is:"
+    "- \`physical_lines=1393\`"
+    "- \`effective_lines=1241\`"
+    "- \`AegisOpsControlPlaneService methods=95\`"
+    "The Phase 50.13 target of \`AegisOpsControlPlaneService <= 85\` methods was not reached safely; the retained \`95\` facade methods are accepted only as an ADR-0003 facade-preservation exception because the remaining public compatibility entrypoints continue to protect existing callers while delegating into extracted boundaries."
+    "- \`max_lines=1393\`"
+    "- \`max_effective_lines=1241\`"
+    "- \`max_facade_methods=95\`"
+    "- \`phase=50.13.5\`"
+    "- \`issue=#1035\`"
+  )
+  for phrase in "${phase50_13_5_closeout_phrases[@]}"; do
+    if ! grep -Fq -- "${phrase}" "${closeout_path}"; then
+      echo "Phase 50.13.5 baseline requires closeout evidence: ${phrase}" >&2
       exit 1
     fi
   done
