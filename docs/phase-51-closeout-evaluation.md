@@ -1,6 +1,6 @@
 # Phase 51 Closeout Evaluation
 
-- **Status**: Accepted with lifecycle closeout pending
+- **Status**: Accepted with lifecycle closed; Phase 52 preflight reconciliation pending
 - **Date**: 2026-05-01
 - **Owner**: AegisOps maintainers
 - **Related Issues**: #1041, #1042, #1043, #1044, #1045, #1046, #1047, #1048, #1049
@@ -9,7 +9,7 @@
 
 Phase 51 is accepted as a repo-owned replacement-readiness contract. The Phase 51 docs, ADR, focused verifiers, and materialization guard agree that AegisOps is a governed SMB SecOps operating-experience control plane above Wazuh and Shuffle, not a broad GA replacement for every SIEM or SOAR capability.
 
-Phase 52 is the next materialization target after this closeout is made authoritative by closing or explicitly owner-accepting the Phase 51 Epic and closeout issue. Until that lifecycle state is recorded, the Phase 52 preflight must continue to fail closed with `phase_classification["51"] = "materialized_open"`.
+Phase 52 is the next materialization target after repo-owned graph and preflight state are reconciled with the now-closed Phase 51 issue lifecycle. Until that reconciliation is recorded in the repo-owned materialization graph and proven by the Phase 52 preflight, the preflight must continue to fail closed with `phase_classification["51"] = "materialized_open"`.
 
 ## Child Issue Outcomes
 
@@ -22,7 +22,7 @@ Phase 52 is the next materialization target after this closeout is made authorit
 | #1046 | Phase 51.5 competitive gap matrix | Closed. `docs/phase-51-5-competitive-gap-matrix.md` maps P0/P1 gaps to Phase 52-67 or explicit deferral. |
 | #1047 | Phase 51.6 authority-boundary negative-test policy | Closed. `docs/phase-51-6-authority-boundary-negative-test-policy.md` covers AI, Wazuh, Shuffle, tickets, evidence, browser state, UI cache, downstream receipts, and demo data. |
 | #1048 | Phase 51.7 roadmap materialization guard | Closed. `docs/roadmap-materialization-preflight-contract.md`, `docs/automation/roadmap-materialization-phase-graph.json`, and preflight fixtures bind Phase 51 before Phase 52+. |
-| #1049 | Phase 51.8 closeout evaluation | Open while this evaluation is under review. This issue is the remaining lifecycle item before Phase 52 may be materialized. |
+| #1049 | Phase 51.8 closeout evaluation | Closed. The accepted closeout record remains a documentation and verifier boundary, not Phase 52 implementation. |
 
 ## Verification Summary
 
@@ -60,14 +60,14 @@ CODEX_SUPERVISOR_CONFIG=<supervisor-config-path> \
 bash scripts/roadmap-materialization-preflight.sh --graph docs/automation/roadmap-materialization-phase-graph.json --target-phase 52 --issue-source github
 ```
 
-That check correctly failed while #1041 and #1049 remain open:
+That check now fails after #1041 and #1049 closed because the repo-owned graph still records Phase 51 as open. The remaining Phase 52 preflight blocker is repo-owned graph reconciliation, not GitHub issue lifecycle.
 
 - `pass=false`
 - `invalid_phase_id="51"`
-- `invalid_field="issue_state"`
-- `invalid_issue_number=1041`
+- `invalid_field="phase_completion_state"`
+- `invalid_issue_number=null`
 - `phase_classification["51"]="materialized_open"`
-- `suggested_next_safe_action="close or explicitly accept every predecessor Epic and child issue before dependent scheduling"`
+- `suggested_next_safe_action="complete and evaluate the materialized predecessor phase before dependent scheduling"`
 
 ## Alignment Check
 
@@ -82,10 +82,10 @@ That check correctly failed while #1041 and #1049 remain open:
 
 - Phase 51 does not implement Phase 52 setup, guided onboarding, executable stack, Wazuh profile, Shuffle profile, AI daily operations, SIEM breadth, SOAR breadth, packaging, RC, or GA work.
 - Phase 51 does not prove GA replacement readiness. It proves the repo-owned replacement boundary, gate vocabulary, personas, competitive gaps, negative-test policy, and materialization guard needed before Phase 52+ work starts.
-- Phase 52 materialization remains blocked until the Phase 51 Epic and this closeout issue are closed or explicitly owner-accepted. This is the expected fail-closed lifecycle guard, not a verifier failure.
+- Phase 52 materialization remains blocked until the repo-owned graph and preflight output are reconciled with the closed Phase 51 issue lifecycle. This is the expected fail-closed graph/preflight guard, not a GitHub lifecycle blocker.
 
 ## Phase 52 Recommendation
 
-Materialize Phase 52 next after closing or explicitly owner-accepting #1041 and #1049, then rerun the Phase 52 preflight command above. Phase 52 must remain scoped to setup and guided onboarding and must cite the Phase 51 replacement boundary, gate contract, persona matrix, competitive gap matrix, authority-boundary negative-test policy, and materialization guard.
+Materialize Phase 52 next after the repo-owned materialization graph records Phase 51 as complete and evaluated, then rerun the Phase 52 preflight command above. Phase 52 must remain scoped to setup and guided onboarding and must cite the Phase 51 replacement boundary, gate contract, persona matrix, competitive gap matrix, authority-boundary negative-test policy, and materialization guard.
 
-Do not materialize Phase 52 while the live preflight reports Phase 51 as `materialized_open`.
+Do not materialize Phase 52 while repo-owned graph or preflight state still reports Phase 51 as `materialized_open`, stale, missing, or otherwise unreconciled.

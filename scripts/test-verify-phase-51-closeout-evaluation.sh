@@ -58,11 +58,11 @@ assert_fails_with \
 
 missing_phase52_guard_repo="${workdir}/missing-phase52-guard"
 copy_valid_repo "${missing_phase52_guard_repo}"
-perl -0pi -e 's/Do not materialize Phase 52 while the live preflight reports Phase 51 as `materialized_open`\.//' \
+perl -0pi -e 's/Do not materialize Phase 52 while repo-owned graph or preflight state still reports Phase 51 as `materialized_open`, stale, missing, or otherwise unreconciled\.//' \
   "${missing_phase52_guard_repo}/docs/phase-51-closeout-evaluation.md"
 assert_fails_with \
   "${missing_phase52_guard_repo}" \
-  'Missing required closeout term in docs/phase-51-closeout-evaluation.md: Do not materialize Phase 52 while the live preflight reports Phase 51 as `materialized_open`.'
+  'Missing required closeout term in docs/phase-51-closeout-evaluation.md: Do not materialize Phase 52 while repo-owned graph or preflight state still reports Phase 51 as `materialized_open`, stale, missing, or otherwise unreconciled.'
 
 ga_overclaim_repo="${workdir}/ga-overclaim"
 copy_valid_repo "${ga_overclaim_repo}"
