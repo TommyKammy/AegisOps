@@ -57,8 +57,8 @@ required_phrases=(
   "Phase 67 is GA and must not be materialized until the GA gate evidence exists."
   "GA must reject broad GA overclaim before real-user or design-partner evidence exists."
   "The gate contract rejects broad GA overclaim before evidence exists."
-  "GA can be claimed without real-user or design-partner evidence."
-  "Wazuh, Shuffle, AI, tickets, evidence systems, dashboards, demo data, browser state, UI cache, downstream receipts, or operator-facing summaries are authoritative for gate acceptance."
+  "- GA can be claimed without real-user or design-partner evidence."
+  "- Wazuh, Shuffle, AI, tickets, evidence systems, dashboards, demo data, browser state, UI cache, downstream receipts, or operator-facing summaries are authoritative for gate acceptance."
   'Run `bash scripts/verify-phase-51-3-pilot-beta-rc-ga-gate-contract.sh`.'
   'Run `bash scripts/test-verify-phase-51-3-pilot-beta-rc-ga-gate-contract.sh`.'
   'Run `node <codex-supervisor-root>/dist/index.js issue-lint 1044 --config <supervisor-config-path>`.'
@@ -87,14 +87,14 @@ if [[ ! -f "${doc_path}" ]]; then
 fi
 
 for heading in "${required_headings[@]}"; do
-  if ! grep -Fq -- "${heading}" "${doc_path}"; then
+  if ! grep -Fxq -- "${heading}" "${doc_path}"; then
     echo "Missing Phase 51.3 gate contract heading: ${heading}" >&2
     exit 1
   fi
 done
 
 for phrase in "${required_phrases[@]}"; do
-  if ! grep -Fq -- "${phrase}" "${doc_path}"; then
+  if ! grep -Fxq -- "${phrase}" "${doc_path}"; then
     echo "Missing Phase 51.3 gate contract statement: ${phrase}" >&2
     exit 1
   fi

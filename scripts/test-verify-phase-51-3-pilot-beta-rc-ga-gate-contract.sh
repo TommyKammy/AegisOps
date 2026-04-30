@@ -56,6 +56,15 @@ remove_text_from_contract() {
     "${target}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
 }
 
+replace_text_in_contract() {
+  local target="$1"
+  local old_text="$2"
+  local new_text="$3"
+
+  perl -0pi -e "s#\\Q${old_text}\\E#${new_text}#" \
+    "${target}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
+}
+
 insert_after_heading() {
   local target="$1"
   local heading="$2"
@@ -83,6 +92,26 @@ rm "${missing_contract_repo}/docs/phase-51-3-pilot-beta-rc-ga-gate-contract.md"
 assert_fails_with \
   "${missing_contract_repo}" \
   "Missing Phase 51.3 pilot beta RC GA gate contract"
+
+modified_heading_repo="${workdir}/modified-heading"
+create_valid_repo "${modified_heading_repo}"
+replace_text_in_contract \
+  "${modified_heading_repo}" \
+  "# Phase 51.3 Pilot, Beta, RC, and GA Gate Contract" \
+  "# Phase 51.3 Pilot, Beta, RC, and GA Gate Contract (Draft)"
+assert_fails_with \
+  "${modified_heading_repo}" \
+  "Missing Phase 51.3 gate contract heading: # Phase 51.3 Pilot, Beta, RC, and GA Gate Contract"
+
+modified_required_statement_repo="${workdir}/modified-required-statement"
+create_valid_repo "${modified_required_statement_repo}"
+replace_text_in_contract \
+  "${modified_required_statement_repo}" \
+  "Phase 66 is RC. Phase 67 is GA." \
+  "Phase 66 is RC. Phase 67 is GA. Draft claim."
+assert_fails_with \
+  "${modified_required_statement_repo}" \
+  "Missing Phase 51.3 gate contract statement: Phase 66 is RC. Phase 67 is GA."
 
 missing_rc_ga_repo="${workdir}/missing-rc-ga-distinction"
 create_valid_repo "${missing_rc_ga_repo}"
