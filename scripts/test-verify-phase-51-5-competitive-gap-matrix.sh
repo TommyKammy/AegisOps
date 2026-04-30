@@ -147,6 +147,22 @@ assert_fails_with \
   "${enterprise_reworded_repo}" \
   "Forbidden Phase 51.5 competitive gap matrix claim: AegisOps fully replaces enterprise SOAR."
 
+bullet_wazuh_replacement_repo="${workdir}/bullet-wazuh-replacement"
+create_valid_repo "${bullet_wazuh_replacement_repo}"
+printf '%s\n' "- AegisOps replaces every Wazuh detector family" \
+  >>"${bullet_wazuh_replacement_repo}/docs/phase-51-5-competitive-gap-matrix.md"
+assert_fails_with \
+  "${bullet_wazuh_replacement_repo}" \
+  "Forbidden Phase 51.5 competitive gap matrix claim matched: (^|[^[:alnum:]_])aegisops[^.]*replaces[[:space:]]+every[[:space:]]+wazuh[[:space:]]+detector"
+
+list_shuffle_replacement_repo="${workdir}/list-shuffle-replacement"
+create_valid_repo "${list_shuffle_replacement_repo}"
+printf '%s\n' "1. AegisOps replaces every Shuffle integration catalog" \
+  >>"${list_shuffle_replacement_repo}/docs/phase-51-5-competitive-gap-matrix.md"
+assert_fails_with \
+  "${list_shuffle_replacement_repo}" \
+  "Forbidden Phase 51.5 competitive gap matrix claim matched: (^|[^[:alnum:]_])aegisops[^.]*replaces[[:space:]]+every[[:space:]]+shuffle[[:space:]]+integration"
+
 wazuh_authority_repo="${workdir}/wazuh-authority"
 create_valid_repo "${wazuh_authority_repo}"
 printf '%s\n' "Wazuh is authoritative for AegisOps records." \
