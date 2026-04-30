@@ -38,8 +38,16 @@ class InspectionStore(Protocol):
     def list(self, record_type: Type[RecordT]) -> tuple[RecordT, ...]:
         ...
 
+    def list_lifecycle_transitions(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> tuple[LifecycleTransitionRecord, ...]:
+        ...
+
 
 class OperatorInspectionServiceDependencies(Protocol):
+    _assistant_context_assembler: Any
     _store: InspectionStore
 
     def _require_reviewed_operator_alert_record(self, alert: AlertRecord) -> AlertRecord:
@@ -74,21 +82,7 @@ class OperatorInspectionServiceDependencies(Protocol):
 
     _ai_trace_lifecycle_service: Any
 
-    def list_lifecycle_transitions(
-        self,
-        record_family: str,
-        record_id: str,
-    ) -> tuple[LifecycleTransitionRecord, ...]:
-        ...
-
     def _require_non_empty_string(self, value: str, field_name: str) -> str:
-        ...
-
-    def inspect_assistant_context(
-        self,
-        record_family: str,
-        record_id: str,
-    ) -> object:
         ...
 
     def _require_reviewed_operator_case(self, case_id: str) -> CaseRecord:
@@ -764,7 +758,7 @@ class OperatorInspectionReadSurface:
             lineage=lineage,
             lifecycle_transitions=tuple(
                 self._record_to_dict(transition)
-                for transition in self._service.list_lifecycle_transitions(
+                for transition in self._service._store.list_lifecycle_transitions(
                     "alert", alert.alert_id
                 )
             ),
@@ -779,7 +773,12 @@ class OperatorInspectionReadSurface:
     def inspect_case_detail(self, case_id: str) -> object:
         case = self._service._require_reviewed_operator_case(case_id)
         case_id = case.case_id
-        context_snapshot = self._service.inspect_assistant_context("case", case_id)
+        context_snapshot = (
+            self._service._assistant_context_assembler.inspect_assistant_context(
+                "case",
+                case_id,
+            )
+        )
         observation_records = tuple(
             self._record_to_dict(record)
             for record in self._service._observations_for_case(case_id)

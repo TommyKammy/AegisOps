@@ -205,11 +205,9 @@ def phase24_live_assistant_follow_up(status: str) -> str:
 
 
 class LiveAssistantWorkflowServiceDependencies(Protocol):
+    _assistant_context_assembler: object
     _assistant_provider_adapter: object
     _store: object
-
-    def inspect_assistant_context(self, record_family: str, record_id: str) -> object:
-        ...
 
     def persist_record(
         self,
@@ -301,7 +299,12 @@ class LiveAssistantWorkflowCoordinator:
                 f"workflow_task {workflow_task!r} requires record_family {expected_record_family!r}"
             )
 
-        context_snapshot = self._service.inspect_assistant_context(record_family, record_id)
+        context_snapshot = (
+            self._service._assistant_context_assembler.inspect_assistant_context(
+                record_family,
+                record_id,
+            )
+        )
         if workflow_task == "queue_triage_summary":
             self._service._require_reviewed_alert_scoped_queue_summary_read(
                 context_snapshot

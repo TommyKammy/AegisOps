@@ -15,15 +15,11 @@ _PHASE26_REVIEWED_COORDINATION_TARGET_TYPES = frozenset(("zammad", "glpi"))
 
 
 class ExecutionCoordinatorServiceDependencies(Protocol):
+    _assistant_advisory_coordinator: object
+    _assistant_context_assembler: object
     _store: object
     _shuffle: object
     _isolated_executor: object
-
-    def inspect_assistant_context(self, record_family: str, record_id: str) -> object:
-        ...
-
-    def render_recommendation_draft(self, record_family: str, record_id: str) -> object:
-        ...
 
     def persist_record(
         self,

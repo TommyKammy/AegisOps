@@ -1198,7 +1198,7 @@ class AssistantContextAssembler:
             ),
             lifecycle_transitions=tuple(
                 self._record_to_dict(transition)
-                for transition in self._service.list_lifecycle_transitions(
+                for transition in self._service._store.list_lifecycle_transitions(
                     record_family,
                     record_id,
                 )

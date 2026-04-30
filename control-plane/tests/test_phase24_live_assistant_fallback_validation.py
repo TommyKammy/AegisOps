@@ -43,7 +43,7 @@ class Phase24LiveAssistantFallbackValidationTests(ServicePersistenceTestBase):
         service._assistant_provider_adapter = mock.Mock()
 
         with mock.patch.object(
-            service,
+            service._assistant_context_assembler,
             "inspect_assistant_context",
             return_value=unresolved_context,
         ):
@@ -124,7 +124,7 @@ class Phase24LiveAssistantFallbackValidationTests(ServicePersistenceTestBase):
         service._assistant_provider_adapter = mock.Mock()
 
         with mock.patch.object(
-            service,
+            service._assistant_context_assembler,
             "inspect_assistant_context",
             return_value=unresolved_context,
         ):
@@ -171,7 +171,7 @@ class Phase24LiveAssistantFallbackValidationTests(ServicePersistenceTestBase):
         service._assistant_provider_adapter = mock.Mock()
 
         with mock.patch.object(
-            service,
+            service._assistant_context_assembler,
             "inspect_assistant_context",
             return_value=unresolved_context,
         ):
