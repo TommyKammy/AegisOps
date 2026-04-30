@@ -108,7 +108,7 @@ class AssistantAdvisoryPersistenceTests(ServicePersistenceTestBase):
         service_method_names = {
             node.name
             for node in service_class.body
-            if isinstance(node, ast.FunctionDef)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
         }
 
         residual_assistant_helpers = {
