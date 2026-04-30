@@ -214,7 +214,10 @@ def build_control_plane_service_composition(
         coordination_reference_signature=dependencies.coordination_reference_signature,
         dedupe_strings=dependencies.dedupe_strings,
     )
-    action_review_write_surface = ActionReviewWriteSurface(service)
+    action_review_write_surface = ActionReviewWriteSurface(
+        service,
+        merge_reviewed_context=dependencies.merge_reviewed_context,
+    )
     evidence_linkage_service = EvidenceLinkageService(
         store=resolved_store,
         require_non_empty_string=service._require_non_empty_string,

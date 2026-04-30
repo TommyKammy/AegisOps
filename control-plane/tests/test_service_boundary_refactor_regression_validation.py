@@ -685,6 +685,54 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
             "reviewed action approval policy helpers should live with the approval write surface",
         )
 
+    def test_phase50_12_6_action_review_visibility_helpers_leave_service_facade(
+        self,
+    ) -> None:
+        service_source = self._read("control-plane/aegisops_control_plane/service.py")
+        write_surface_source = self._read(
+            "control-plane/aegisops_control_plane/action_review_write_surface.py"
+        )
+        service_tree = ast.parse(service_source)
+        write_surface_tree = ast.parse(write_surface_source)
+        service_class = next(
+            node
+            for node in service_tree.body
+            if isinstance(node, ast.ClassDef)
+            and node.name == "AegisOpsControlPlaneService"
+        )
+        write_surface_class = next(
+            node
+            for node in write_surface_tree.body
+            if isinstance(node, ast.ClassDef)
+            and node.name == "ActionReviewWriteSurface"
+        )
+        service_method_names = {
+            node.name
+            for node in service_class.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        write_surface_method_names = {
+            node.name
+            for node in write_surface_class.body
+            if isinstance(node, ast.FunctionDef)
+        }
+
+        visibility_helper_names = {
+            "_require_review_bound_action_request",
+            "_require_action_review_visibility_context_record",
+            "_persist_action_review_visibility_context_record",
+        }
+        self.assertFalse(
+            visibility_helper_names & service_method_names,
+            "action review visibility persistence helpers should not remain "
+            "service facade methods",
+        )
+        self.assertTrue(
+            visibility_helper_names.issubset(write_surface_method_names),
+            "action review visibility persistence helpers should live with the "
+            "write surface that records the reviewed context",
+        )
+
     def test_phase50_9_3_persistence_restore_and_status_helpers_leave_service_facade(
         self,
     ) -> None:
