@@ -5,7 +5,6 @@ from collections import Counter
 from dataclasses import fields, replace
 from datetime import datetime, timezone
 import hashlib
-import ipaddress
 import json
 import logging
 import re
@@ -80,6 +79,7 @@ from .service_snapshots import (
     StartupStatusSnapshot,
     _json_ready,
 )
+from .structured_events import sanitize_structured_event_fields
 
 
 RecordT = TypeVar("RecordT", bound=ControlPlaneRecord)
@@ -282,53 +282,6 @@ _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY: dict[str, str] = {
     "ai_trace": "ai_trace_id",
     "reconciliation": "reconciliation_id",
 }
-
-def _classify_network_identifier(value: object) -> str:
-    if not isinstance(value, str) or not value.strip():
-        return "missing"
-    try:
-        peer_ip = ipaddress.ip_address(value.strip())
-    except ValueError:
-        return "invalid"
-    if peer_ip.is_loopback:
-        return "loopback"
-    if peer_ip.is_private:
-        return "private"
-    if peer_ip.is_global:
-        return "public"
-    return "special"
-
-
-def _count_identity_values(value: object) -> int:
-    if isinstance(value, (tuple, list)):
-        return sum(
-            1 for item in value if isinstance(item, str) and item.strip()
-        )
-    if isinstance(value, str) and value.strip():
-        return 1
-    return 0
-
-
-def _sanitize_structured_event_fields(
-    fields: Mapping[str, object],
-) -> dict[str, object]:
-    sanitized: dict[str, object] = {}
-    for key, value in fields.items():
-        normalized_key = str(key)
-        if normalized_key == "peer_addr":
-            sanitized["peer_addr_class"] = _classify_network_identifier(value)
-            continue
-        if normalized_key.endswith("_identity"):
-            sanitized[f"{normalized_key}_present"] = (
-                _count_identity_values(value) > 0
-            )
-            continue
-        if normalized_key.endswith("_identities"):
-            sanitized[f"{normalized_key}_count"] = _count_identity_values(value)
-            continue
-        sanitized[normalized_key] = _json_ready(value)
-    return sanitized
-
 
 def _record_to_dict(record: ControlPlaneRecord) -> dict[str, object]:
     return {
@@ -916,7 +869,7 @@ class AegisOpsControlPlaneService(ExternalEvidenceFacade):
             "event": event,
             "service_name": "aegisops-control-plane",
             "occurred_at": datetime.now(timezone.utc).isoformat(),
-            **_sanitize_structured_event_fields(fields),
+            **sanitize_structured_event_fields(fields),
         }
         self._logger.log(level, json.dumps(payload, sort_keys=True, separators=(",", ":")))
 
