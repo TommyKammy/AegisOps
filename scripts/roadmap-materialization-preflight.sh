@@ -26,6 +26,9 @@ LINT_KEYS = (
     "metadata_errors",
     "high_risk_blocking_ambiguity",
 )
+OWNER_ACCEPTANCE_RE = re.compile(
+    r"(?im)^\s*(?:explicit owner acceptance|explicitly accepted(?: by owner)?)\s*:\s*(?:yes|true|accepted)\s*$"
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -182,7 +185,9 @@ def phase_done(phase: dict) -> bool:
 
 def issue_closed_or_accepted(issue: dict) -> bool:
     state = str(issue.get("state", "")).lower()
-    return state == "closed" or issue.get("explicitly_accepted") is True
+    if state == "closed" or issue.get("explicitly_accepted") is True:
+        return True
+    return bool(OWNER_ACCEPTANCE_RE.search(issue.get("body") or ""))
 
 
 def load_graph(path: str) -> dict:

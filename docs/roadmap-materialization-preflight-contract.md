@@ -23,7 +23,7 @@ The preflight input set is a phase graph snapshot. It must be assembled from rep
 | `epic_issue_number` | Each materialized phase | GitHub Epic issue number. Missing or malformed values classify the phase as `missing`. |
 | `child_issue_numbers` | Each materialized phase | Complete child issue list expected for the phase. Empty or incomplete lists classify the phase as `missing` unless the phase is explicitly deferred. |
 | `issue_number` | Epic and child issue records | GitHub issue number used for lint and dependency checks. |
-| `issue_state` | Epic and child issue records | GitHub lifecycle state, for example open, closed, explicitly accepted, or unknown. Unknown and open states fail closed for dependent scheduling. |
+| `issue_state` | Epic and child issue records | GitHub lifecycle state, for example open, closed, explicitly accepted, or unknown. Unknown and open states fail closed for dependent scheduling unless the issue body contains the exact owner-acceptance marker. |
 | `Part of:` | Child issue metadata | Required codex-supervisor parent binding. It must explicitly point to the authoritative Epic issue. |
 | `Depends on:` | Epic and child issue metadata | Required dependency field. Placeholder values, TODO text, sample issue numbers, and ambiguous prose are invalid. |
 | `Parallelizable:` | Epic and child issue metadata | Required scheduling field. Missing or malformed values are invalid. |
@@ -48,7 +48,7 @@ The preflight must classify each phase from authoritative lifecycle fields, issu
 | `merge_or_evaluation_needed` | Implementation appears merged or complete, but required evaluation, closure, or explicit deferral is absent. | Run or record the evaluation gate before scheduling dependent phases. |
 | `done` | Required issues are materialized, lint-clean, complete, and evaluated, or the phase is explicitly deferred by an authoritative phase record. | Allow the next phase gate to evaluate. |
 
-Unknown, partially trusted, or conflicting input must classify as `blocked` with a concrete `invalid_field`. The preflight must fail closed instead of inferring success from naming conventions, issue labels, nearby comments, or operator-facing summaries.
+Unknown, partially trusted, or conflicting input must classify as `blocked` with a concrete `invalid_field`. The preflight must fail closed instead of inferring success from naming conventions, issue labels, nearby comments, narrative uses of the word accepted, or operator-facing summaries.
 
 ## 4. Required Outputs
 
@@ -94,6 +94,8 @@ Phase 51 protects the Phase 52+ replacement-readiness waves from starting before
 
 Phase 52+ must not be created, scheduled, or executed until the Phase 51 Epic and child issue set are materialized, lint-clean, and closed or explicitly accepted by the owner.
 
+Explicit owner acceptance for an open predecessor issue must be recorded in that issue body as `Explicit owner acceptance: yes`. Labels, comments, roadmap prose, and narrative mentions of acceptance are not sufficient.
+
 The authoritative Phase 51 binding is:
 
 - Phase 51 Epic #1041
@@ -106,7 +108,7 @@ For Phase 52+ scheduling, the preflight must:
 3. Child issues need real `Part of:` issue numbers that point to the authoritative Epic.
 4. Confirm `Depends on:` must contain true scheduler blockers only. Narrative, historical, or roadmap-context relationships must not be encoded as live blockers.
 5. Confirm every Phase 51 Epic and child issue is lint-clean with `execution_ready=yes`, `missing_required=none`, `metadata_errors=none`, `missing_recommended=none`, and `high_risk_blocking_ambiguity=none`.
-6. Confirm every Phase 51 Epic and child issue is closed or explicitly accepted by the owner before Phase 52+ materialization proceeds.
+6. Confirm every Phase 51 Epic and child issue is closed or explicitly accepted by the owner before Phase 52+ materialization proceeds. Open-but-accepted issues must carry the exact `Explicit owner acceptance: yes` body marker.
 7. Reject missing Epic, missing child, missing `Part of:`, missing `Depends on:`, missing `Execution order`, non-lint-clean, open, and placeholder-dependency issue sets.
 
 ## 7. Example Outcomes
@@ -121,7 +123,7 @@ For Phase 52+ scheduling, the preflight must:
 | Missing execution order | A Phase 51 child issue lacks an `Execution order` section. | `blocked` | `fail=true`, `invalid_field="Execution order"`, `suggested_next_safe_action="add the required execution-order metadata and rerun issue-lint"` |
 | Placeholder or non-real dependency | A child issue has `Depends on: TBD`, a sample issue number, or an issue number outside the authoritative phase graph instead of an explicit authoritative dependency or `none`. | `blocked` | `fail=true`, `invalid_phase_id="48.7"`, `invalid_field="Depends on:"`, `suggested_next_safe_action="replace the placeholder dependency and rerun issue-lint"` |
 | Non-lint-clean issue | `issue-lint` reports `execution_ready=no` or `metadata_errors` is not `none` for a required Epic or child issue. | `blocked` | `fail=true`, `invalid_field="metadata_errors"`, `invalid_issue_number=<issue-number>`, `suggested_next_safe_action="repair the issue body and rerun issue-lint"` |
-| Open predecessor issue | A Phase 51 child issue is still open and has no explicit owner acceptance. | `materialized_open` | `fail=true`, `invalid_field="issue_state"`, `suggested_next_safe_action="close or explicitly accept every predecessor Epic and child issue before dependent scheduling"` |
+| Open predecessor issue | A Phase 51 child issue is still open and has no `Explicit owner acceptance: yes` body marker. | `materialized_open` | `fail=true`, `invalid_field="issue_state"`, `suggested_next_safe_action="close or explicitly accept every predecessor Epic and child issue before dependent scheduling"` |
 | Evaluation still needed | Required issues are closed or merged, but `phase_evaluation_state` is missing or still open. | `merge_or_evaluation_needed` | `fail=true`, `invalid_field="phase_evaluation_state"`, `suggested_next_safe_action="record evaluation closure or explicit deferral before dependent scheduling"` |
 
 ## 8. Repo-Owned Preflight Invocation

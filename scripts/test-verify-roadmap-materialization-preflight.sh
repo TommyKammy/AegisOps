@@ -173,6 +173,18 @@ assert_fails_with_json \
   '.pass == false and .fail == true and .phase_classification["48.7"] == "materialized_open" and .invalid_phase_id == "48.7" and .invalid_field == "issue_state" and .invalid_issue_number == 913' \
   "open predecessor child issue"
 
+write_graph
+jq '(.issues[] | select(.number == 913) | .state) = "OPEN" | (.issues[] | select(.number == 913) | .body) += "\nAccepted in roadmap closeout notes.\n"' "${graph_path}" >"${graph_path}.tmp"
+mv "${graph_path}.tmp" "${graph_path}"
+assert_fails_with_json \
+  '.pass == false and .fail == true and .phase_classification["48.7"] == "materialized_open" and .invalid_phase_id == "48.7" and .invalid_field == "issue_state" and .invalid_issue_number == 913' \
+  "open predecessor child issue with narrative accepted text"
+
+write_graph
+jq '(.issues[] | select(.number == 913) | .state) = "OPEN" | (.issues[] | select(.number == 913) | .body) += "\nExplicit owner acceptance: yes\n"' "${graph_path}" >"${graph_path}.tmp"
+mv "${graph_path}.tmp" "${graph_path}"
+assert_passes
+
 write_phase51_graph() {
   target_phase="52"
   expected_done_phase="51"

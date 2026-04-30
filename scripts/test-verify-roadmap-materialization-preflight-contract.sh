@@ -32,6 +32,7 @@ Graph input: docs/automation/roadmap-materialization-phase-graph.json
 
 Phase 49.0/49 must not start before Phase 48, Phase 48.5, Phase 48.6, and Phase 48.7 gates are materialized, lint-clean, and evaluated or explicitly deferred.
 Phase 52+ must not be created, scheduled, or executed until the Phase 51 Epic and child issue set are materialized, lint-clean, and closed or explicitly accepted by the owner.
+Explicit owner acceptance for an open predecessor issue must be recorded in that issue body as `Explicit owner acceptance: yes`.
 Phase 51 Epic #1041.
 Phase 51 child issues #1042, #1043, #1044, #1045, #1046, #1047, #1048, and #1049.
 Child issues need real `Part of:` issue numbers that point to the authoritative Epic.
