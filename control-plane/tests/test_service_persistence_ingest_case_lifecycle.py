@@ -373,11 +373,13 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             native_result,
         )
         self.assertIs(
-            service._ingest_analytic_signal_admission(admission),
+            service._detection_intake_service.ingest_analytic_signal_admission(
+                admission
+            ),
             ingest_result,
         )
         self.assertIs(
-            service._attach_native_detection_context(
+            service._detection_intake_service.attach_native_detection_context(
                 record=native_record,
                 ingest_result=ingest_result,
                 substrate_detection_record_id="substrate-delegated-001",
@@ -428,7 +430,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             attribution,
         )
         self.assertEqual(
-            service._resolve_analytic_signal_id(
+            service._detection_intake_service.resolve_analytic_signal_id(
                 analytic_signal_id=None,
                 finding_id="finding-delegated-001",
                 correlation_key="claim:delegated",
@@ -833,12 +835,12 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             metadata={},
         )
 
-        linked = service._attach_native_detection_context(
+        linked = service._detection_intake_service.attach_native_detection_context(
             record=native_record,
             ingest_result=updated_result,
             substrate_detection_record_id="substrate-detection-native-link-001",
         )
-        relinked = service._attach_native_detection_context(
+        relinked = service._detection_intake_service.attach_native_detection_context(
             record=native_record,
             ingest_result=followup_result,
             substrate_detection_record_id="substrate-detection-native-link-001",
@@ -4698,7 +4700,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             RuntimeError,
             "synthetic native-context reconciliation failure",
         ):
-            failing_service._attach_native_detection_context(
+            failing_service._detection_intake_service.attach_native_detection_context(
                 record=native_record,
                 ingest_result=replace(
                     created,
@@ -4764,7 +4766,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             LookupError,
             "Alert 'alert-[^']+' references missing case 'case-missing-direct-native-001'",
         ):
-            service._attach_native_detection_context(
+            service._detection_intake_service.attach_native_detection_context(
                 record=native_record,
                 ingest_result=replace(created, alert=broken_alert),
                 substrate_detection_record_id="substrate-detection-missing-direct-native-002",

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import hmac
 import logging
-from typing import TYPE_CHECKING, Mapping
+from typing import TYPE_CHECKING, Callable, Mapping
 import uuid
 
 from .adapters.wazuh import WazuhAlertAdapter
@@ -22,6 +23,7 @@ from .models import (
     HuntRunRecord,
     LeadRecord,
     LifecycleTransitionRecord,
+    NativeDetectionRecord,
     ObservationRecord,
     ReconciliationRecord,
     RecommendationRecord,
@@ -477,6 +479,48 @@ class DetectionReconciliationResolver:
         )
 
 
+class NativeDetectionAdmissionHelper:
+    def __init__(
+        self,
+        service: AegisOpsControlPlaneService,
+        *,
+        normalize_admission_provenance: Callable[[object], dict[str, str] | None],
+    ) -> None:
+        self._service = service
+        self._normalize_admission_provenance = normalize_admission_provenance
+
+    def with_native_detection_admission_provenance(
+        self,
+        record: NativeDetectionRecord,
+        *,
+        admission_kind: str,
+        admission_channel: str,
+    ) -> NativeDetectionRecord:
+        if (
+            self._normalize_admission_provenance(
+                record.metadata.get("admission_provenance")
+            )
+            is not None
+        ):
+            return record
+        metadata = dict(record.metadata)
+        metadata["admission_provenance"] = {
+            "admission_kind": admission_kind,
+            "admission_channel": admission_channel,
+        }
+        return replace(record, metadata=metadata)
+
+    def normalize_substrate_detection_record_id(
+        self,
+        substrate_key: str,
+        substrate_detection_record_id: str,
+    ) -> str:
+        namespaced_prefix = f"{substrate_key}:"
+        if substrate_detection_record_id.startswith(namespaced_prefix):
+            return substrate_detection_record_id
+        return f"{namespaced_prefix}{substrate_detection_record_id}"
+
+
 class LiveWazuhIntakeHandler:
     def __init__(
         self,
@@ -581,7 +625,7 @@ class LiveWazuhIntakeHandler:
             )
 
         adapter = WazuhAlertAdapter()
-        native_record = service._with_native_detection_admission_provenance(
+        native_record = self._intake.with_native_detection_admission_provenance(
             adapter.build_native_detection_record(native_alert),
             admission_kind="live",
             admission_channel="live_wazuh_webhook",

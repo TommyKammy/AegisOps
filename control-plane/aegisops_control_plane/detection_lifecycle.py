@@ -8,7 +8,9 @@ from .detection_lifecycle_helpers import (
     DetectionLifecycleTransitionHelper,
     DetectionReconciliationResolver,
     LiveWazuhIntakeHandler,
+    NativeDetectionAdmissionHelper,
 )
+from .case_workflow import CaseDetectionLinkageHelper
 from .detection_native_context import NativeDetectionContextAttacher
 from .models import (
     AnalyticSignalAdmission,
@@ -76,6 +78,11 @@ class DetectionIntakeService:
             merge_reviewed_context=merge_reviewed_context,
             normalize_admission_provenance=normalize_admission_provenance,
         )
+        self._native_admission_helper = NativeDetectionAdmissionHelper(
+            service,
+            normalize_admission_provenance=normalize_admission_provenance,
+        )
+        self._case_detection_linkage_helper = CaseDetectionLinkageHelper(service)
         self.lifecycle_transition_helper = DetectionLifecycleTransitionHelper(service)
         self.reconciliation_resolver = DetectionReconciliationResolver(service)
         self.wazuh_intake_handler = LiveWazuhIntakeHandler(service, self)
@@ -159,9 +166,11 @@ class DetectionIntakeService:
                     f"Alert {alert_id!r} references missing case {resolved_case_id!r}"
                 )
 
-            evidence_records = self._list_alert_evidence_records(
-                alert_id=alert.alert_id,
-                case_id=resolved_case_id,
+            evidence_records = (
+                self._case_detection_linkage_helper._list_alert_evidence_records(
+                    alert_id=alert.alert_id,
+                    case_id=resolved_case_id,
+                )
             )
             if not evidence_records:
                 raise ValueError(
@@ -254,11 +263,11 @@ class DetectionIntakeService:
                 )
             )
             if promoted_alert.analytic_signal_id is not None:
-                self._link_case_to_analytic_signals(
+                self._case_detection_linkage_helper._link_case_to_analytic_signals(
                     (promoted_alert.analytic_signal_id,),
                     promoted_case.case_id,
                 )
-            self._link_case_to_alert_reconciliations(
+            self._case_detection_linkage_helper._link_case_to_alert_reconciliations(
                 alert_id=promoted_alert.alert_id,
                 case_id=promoted_case.case_id,
                 evidence_ids=merged_evidence_ids,
@@ -271,7 +280,7 @@ class DetectionIntakeService:
         record: NativeDetectionRecord,
     ) -> FindingAlertIngestResult:
         service = self._service
-        record = service._with_native_detection_admission_provenance(
+        record = self.with_native_detection_admission_provenance(
             record,
             admission_kind="replay",
             admission_channel="fixture_replay",
@@ -311,9 +320,11 @@ class DetectionIntakeService:
             admission.substrate_detection_record_id or record.native_record_id,
             "substrate_detection_record_id/native_record_id",
         )
-        substrate_detection_record_id = service._normalize_substrate_detection_record_id(
-            record_substrate_key,
-            raw_substrate_detection_record_id,
+        substrate_detection_record_id = (
+            self._native_admission_helper.normalize_substrate_detection_record_id(
+                record_substrate_key,
+                raw_substrate_detection_record_id,
+            )
         )
         admission = AnalyticSignalAdmission(
             finding_id=admission.finding_id,
@@ -375,7 +386,7 @@ class DetectionIntakeService:
                 alert=state.alert,
                 admission_reviewed_context=admission.reviewed_context,
             )
-            self._link_case_to_analytic_signals(
+            self._case_detection_linkage_helper._link_case_to_analytic_signals(
                 state.linked_signal_ids,
                 state.alert.case_id,
             )
@@ -760,112 +771,18 @@ class DetectionIntakeService:
             return None
         return parsed
 
-    def _link_case_to_analytic_signals(
+    def with_native_detection_admission_provenance(
         self,
-        analytic_signal_ids: tuple[str, ...],
-        case_id: str | None,
-    ) -> None:
-        if case_id is None:
-            return
-
-        service = self._service
-        for analytic_signal_id in analytic_signal_ids:
-            existing_signal = service._store.get(
-                AnalyticSignalRecord,
-                analytic_signal_id,
-            )
-            if existing_signal is None:
-                continue
-            linked_case_ids = service._merge_linked_ids(
-                existing_signal.case_ids,
-                case_id,
-            )
-            if linked_case_ids == existing_signal.case_ids:
-                continue
-            service.persist_record(
-                AnalyticSignalRecord(
-                    analytic_signal_id=existing_signal.analytic_signal_id,
-                    substrate_detection_record_id=(
-                        existing_signal.substrate_detection_record_id
-                    ),
-                    finding_id=existing_signal.finding_id,
-                    alert_ids=existing_signal.alert_ids,
-                    case_ids=linked_case_ids,
-                    correlation_key=existing_signal.correlation_key,
-                    first_seen_at=existing_signal.first_seen_at,
-                    last_seen_at=existing_signal.last_seen_at,
-                    lifecycle_state=existing_signal.lifecycle_state,
-                    reviewed_context=existing_signal.reviewed_context,
-                )
-            )
-
-    def _list_alert_evidence_records(
-        self,
+        record: NativeDetectionRecord,
         *,
-        alert_id: str,
-        case_id: str | None,
-    ) -> tuple[EvidenceRecord, ...]:
-        evidence_records: list[EvidenceRecord] = []
-        for evidence in self._service._store.list(EvidenceRecord):
-            if evidence.alert_id == alert_id or (
-                case_id is not None and evidence.case_id == case_id
-            ):
-                evidence_records.append(evidence)
-        return tuple(evidence_records)
-
-    def _link_case_to_alert_reconciliations(
-        self,
-        *,
-        alert_id: str,
-        case_id: str,
-        evidence_ids: tuple[str, ...],
-    ) -> None:
-        service = self._service
-        for reconciliation in service._store.list(ReconciliationRecord):
-            if reconciliation.alert_id != alert_id:
-                continue
-            subject_linkage = dict(reconciliation.subject_linkage)
-            updated_case_ids = service._merge_linked_ids(
-                subject_linkage.get("case_ids"),
-                case_id,
-            )
-            updated_evidence_ids = service._merge_linked_ids(
-                subject_linkage.get("evidence_ids"),
-                None,
-            )
-            for evidence_id in evidence_ids:
-                updated_evidence_ids = service._merge_linked_ids(
-                    updated_evidence_ids,
-                    evidence_id,
-                )
-            if (
-                tuple(subject_linkage.get("case_ids", ())) == updated_case_ids
-                and tuple(subject_linkage.get("evidence_ids", ()))
-                == updated_evidence_ids
-            ):
-                continue
-            subject_linkage["case_ids"] = updated_case_ids
-            subject_linkage["evidence_ids"] = updated_evidence_ids
-            service.persist_record(
-                ReconciliationRecord(
-                    reconciliation_id=reconciliation.reconciliation_id,
-                    subject_linkage=subject_linkage,
-                    alert_id=reconciliation.alert_id,
-                    finding_id=reconciliation.finding_id,
-                    analytic_signal_id=reconciliation.analytic_signal_id,
-                    execution_run_id=reconciliation.execution_run_id,
-                    linked_execution_run_ids=(
-                        reconciliation.linked_execution_run_ids
-                    ),
-                    correlation_key=reconciliation.correlation_key,
-                    first_seen_at=reconciliation.first_seen_at,
-                    last_seen_at=reconciliation.last_seen_at,
-                    ingest_disposition=reconciliation.ingest_disposition,
-                    mismatch_summary=reconciliation.mismatch_summary,
-                    compared_at=reconciliation.compared_at,
-                    lifecycle_state=reconciliation.lifecycle_state,
-                )
-            )
+        admission_kind: str,
+        admission_channel: str,
+    ) -> NativeDetectionRecord:
+        return self._native_admission_helper.with_native_detection_admission_provenance(
+            record,
+            admission_kind=admission_kind,
+            admission_channel=admission_channel,
+        )
 
     def triage_disposition_matches_current_state(
         self,

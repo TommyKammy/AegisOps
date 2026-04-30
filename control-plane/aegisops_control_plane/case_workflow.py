@@ -7,14 +7,129 @@ from typing import TYPE_CHECKING, Callable, Mapping
 from .evidence_linkage import EvidenceLinkageService
 from .models import (
     AlertRecord,
+    AnalyticSignalRecord,
     CaseRecord,
+    EvidenceRecord,
     LeadRecord,
     ObservationRecord,
     RecommendationRecord,
+    ReconciliationRecord,
 )
 
 if TYPE_CHECKING:
     from .service import AegisOpsControlPlaneService
+
+
+class CaseDetectionLinkageHelper:
+    def __init__(self, service: AegisOpsControlPlaneService) -> None:
+        self._service = service
+
+    def _link_case_to_analytic_signals(
+        self,
+        analytic_signal_ids: tuple[str, ...],
+        case_id: str | None,
+    ) -> None:
+        if case_id is None:
+            return
+
+        service = self._service
+        for analytic_signal_id in analytic_signal_ids:
+            existing_signal = service._store.get(
+                AnalyticSignalRecord,
+                analytic_signal_id,
+            )
+            if existing_signal is None:
+                continue
+            linked_case_ids = service._merge_linked_ids(
+                existing_signal.case_ids,
+                case_id,
+            )
+            if linked_case_ids == existing_signal.case_ids:
+                continue
+            service.persist_record(
+                AnalyticSignalRecord(
+                    analytic_signal_id=existing_signal.analytic_signal_id,
+                    substrate_detection_record_id=(
+                        existing_signal.substrate_detection_record_id
+                    ),
+                    finding_id=existing_signal.finding_id,
+                    alert_ids=existing_signal.alert_ids,
+                    case_ids=linked_case_ids,
+                    correlation_key=existing_signal.correlation_key,
+                    first_seen_at=existing_signal.first_seen_at,
+                    last_seen_at=existing_signal.last_seen_at,
+                    lifecycle_state=existing_signal.lifecycle_state,
+                    reviewed_context=existing_signal.reviewed_context,
+                )
+            )
+
+    def _list_alert_evidence_records(
+        self,
+        *,
+        alert_id: str,
+        case_id: str | None,
+    ) -> tuple[EvidenceRecord, ...]:
+        evidence_records: list[EvidenceRecord] = []
+        for evidence in self._service._store.list(EvidenceRecord):
+            if evidence.alert_id == alert_id or (
+                case_id is not None and evidence.case_id == case_id
+            ):
+                evidence_records.append(evidence)
+        return tuple(evidence_records)
+
+    def _link_case_to_alert_reconciliations(
+        self,
+        *,
+        alert_id: str,
+        case_id: str,
+        evidence_ids: tuple[str, ...],
+    ) -> None:
+        service = self._service
+        for reconciliation in service._store.list(ReconciliationRecord):
+            if reconciliation.alert_id != alert_id:
+                continue
+            subject_linkage = dict(reconciliation.subject_linkage)
+            updated_case_ids = service._merge_linked_ids(
+                subject_linkage.get("case_ids"),
+                case_id,
+            )
+            updated_evidence_ids = service._merge_linked_ids(
+                subject_linkage.get("evidence_ids"),
+                None,
+            )
+            for evidence_id in evidence_ids:
+                updated_evidence_ids = service._merge_linked_ids(
+                    updated_evidence_ids,
+                    evidence_id,
+                )
+            if (
+                tuple(subject_linkage.get("case_ids", ())) == updated_case_ids
+                and tuple(subject_linkage.get("evidence_ids", ()))
+                == updated_evidence_ids
+            ):
+                continue
+            subject_linkage["case_ids"] = updated_case_ids
+            subject_linkage["evidence_ids"] = updated_evidence_ids
+            service.persist_record(
+                ReconciliationRecord(
+                    reconciliation_id=reconciliation.reconciliation_id,
+                    subject_linkage=subject_linkage,
+                    alert_id=reconciliation.alert_id,
+                    finding_id=reconciliation.finding_id,
+                    analytic_signal_id=reconciliation.analytic_signal_id,
+                    execution_run_id=reconciliation.execution_run_id,
+                    linked_execution_run_ids=(
+                        reconciliation.linked_execution_run_ids
+                    ),
+                    correlation_key=reconciliation.correlation_key,
+                    ingest_disposition=reconciliation.ingest_disposition,
+                    lifecycle_state=reconciliation.lifecycle_state,
+                    compared_at=reconciliation.compared_at,
+                    first_seen_at=reconciliation.first_seen_at,
+                    last_seen_at=reconciliation.last_seen_at,
+                    mismatch_summary=reconciliation.mismatch_summary,
+                )
+            )
 
 
 class CaseWorkflowService:
