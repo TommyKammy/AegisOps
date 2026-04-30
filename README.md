@@ -17,6 +17,7 @@ Current scope:
 Canonical cross-phase boundary reference:
 
 - `docs/non-goals-and-expansion-guardrails.md`
+- `docs/adr/0011-phase-51-1-replacement-boundary.md` defines the Phase 51.1 SMB SecOps replacement boundary: AegisOps replaces the operating experience above Wazuh and Shuffle, not their internals or every SIEM/SOAR capability.
 
 Phase 44-47 closure contracts:
 
