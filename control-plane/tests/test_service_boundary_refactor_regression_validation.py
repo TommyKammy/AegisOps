@@ -593,6 +593,27 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
             and node.value.id == "self"
             and isinstance(getattr(node, "ctx", None), ast.Store)
         ]
+        direct_setattr_calls = [
+            node
+            for node in ast.walk(constructor)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "setattr"
+            and (
+                (
+                    len(node.args) >= 1
+                    and isinstance(node.args[0], ast.Name)
+                    and node.args[0].id == "self"
+                )
+                or any(
+                    keyword.arg in {"obj", "target"}
+                    and isinstance(keyword.value, ast.Name)
+                    and keyword.value.id == "self"
+                    for keyword in node.keywords
+                )
+            )
+        ]
+        facade_self_wiring = self_assignments + direct_setattr_calls
         constructor_call_names = {
             node.func.id
             for node in ast.walk(constructor)
@@ -601,9 +622,10 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
         }
 
         self.assertLessEqual(
-            len(self_assignments),
+            len(facade_self_wiring),
             2,
-            "facade constructor should not directly assign composition collaborators",
+            "facade constructor should not directly assign or setattr "
+            "composition collaborators",
         )
         self.assertNotIn(
             "ControlPlaneServiceCompositionDependencies",
