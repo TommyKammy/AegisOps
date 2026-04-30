@@ -69,6 +69,24 @@ valid_repo="${workdir}/valid"
 create_valid_repo "${valid_repo}"
 assert_passes "${valid_repo}"
 
+alternate_date_repo="${workdir}/alternate-date"
+create_valid_repo "${alternate_date_repo}"
+replace_text_in_doc \
+  "${alternate_date_repo}" \
+  "- **Date**: 2026-05-01" \
+  "- **Date**: 2026-04-30"
+assert_passes "${alternate_date_repo}"
+
+invalid_date_repo="${workdir}/invalid-date"
+create_valid_repo "${invalid_date_repo}"
+replace_text_in_doc \
+  "${invalid_date_repo}" \
+  "- **Date**: 2026-05-01" \
+  "- **Date**: May 1, 2026"
+assert_fails_with \
+  "${invalid_date_repo}" \
+  "Missing or invalid Phase 51.4 personas date line (- **Date**: YYYY-MM-DD)."
+
 missing_doc_repo="${workdir}/missing-doc"
 create_valid_repo "${missing_doc_repo}"
 rm "${missing_doc_repo}/docs/phase-51-4-smb-personas-jobs-to-be-done.md"

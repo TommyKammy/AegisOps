@@ -24,7 +24,6 @@ required_headings=(
 
 required_phrases=(
   "- **Status**: Accepted"
-  "- **Date**: 2026-05-01"
   "- **Related Issues**: #1041, #1042, #1045"
   "This document defines product-planning personas and jobs-to-be-done for the post-Phase50 SMB replacement roadmap."
   "This document changes documentation and verification only. It does not implement RBAC, UI, support, AI, admin, Wazuh, Shuffle, ticketing, or evidence-system behavior."
@@ -81,6 +80,11 @@ for phrase in "${required_phrases[@]}"; do
     exit 1
   fi
 done
+
+if ! grep -Eq '^- \*\*Date\*\*: [0-9]{4}-[0-9]{2}-[0-9]{2}$' "${doc_path}"; then
+  echo "Missing or invalid Phase 51.4 personas date line (- **Date**: YYYY-MM-DD)." >&2
+  exit 1
+fi
 
 for line in "${forbidden_lines[@]}"; do
   if grep -Fq -- "${line}" "${doc_path}"; then
