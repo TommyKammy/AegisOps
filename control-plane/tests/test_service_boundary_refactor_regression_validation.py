@@ -644,15 +644,21 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
         write_surface_source = self._read(
             "control-plane/aegisops_control_plane/action_review_write_surface.py"
         )
+        service_tree = ast.parse(service_source)
         service_class = next(
             node
-            for node in ast.parse(service_source).body
+            for node in service_tree.body
             if isinstance(node, ast.ClassDef)
             and node.name == "AegisOpsControlPlaneService"
         )
         service_method_names = {
             node.name
             for node in service_class.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        service_module_function_names = {
+            node.name
+            for node in service_tree.body
             if isinstance(node, ast.FunctionDef)
         }
         write_surface_functions = {
@@ -669,6 +675,10 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
         self.assertFalse(
             approval_policy_helpers & service_method_names,
             "reviewed action approval policy helpers should not remain service facade methods",
+        )
+        self.assertFalse(
+            approval_policy_helpers & service_module_function_names,
+            "reviewed action approval policy helpers should not remain service module functions",
         )
         self.assertTrue(
             approval_policy_helpers.issubset(write_surface_functions),

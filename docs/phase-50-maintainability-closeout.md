@@ -1,6 +1,6 @@
 # Phase 50 Maintainability Closeout
 
-Phase 50.11.7 closes the ordered residual `service.py` DTO/helper extraction sequence governed by ADR-0004, ADR-0005, ADR-0006, ADR-0007, and ADR-0008.
+Phase 50.12.3 updates the accepted `service.py` residual closeout after the Phase 50.11.7 ordered DTO/helper extraction sequence and the Phase 50.12.2/50.12.3 facade-pressure reductions governed by ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, and ADR-0009.
 
 This closeout is validation and documentation only. It does not change runtime behavior, public APIs, approval, execution, reconciliation, assistant, ticket, ML, endpoint, network, browser, optional-evidence, restore, readiness, or operator authority.
 
