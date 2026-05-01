@@ -78,6 +78,14 @@ assert_fails_with \
   "${bypassed_legacy_import_repo}" \
   "Missing Phase 52.5.2 documented legacy import compatibility check: aegisops_control_plane.service:AegisOpsControlPlaneService"
 
+missing_control_plane_root_repo="${workdir}/missing-control-plane-root"
+create_valid_repo "${missing_control_plane_root_repo}"
+rm -rf "${missing_control_plane_root_repo}/control-plane"
+assert_fails_with \
+  "${import_verifier}" \
+  "${missing_control_plane_root_repo}" \
+  "Missing or unreadable Phase 52.5.2 control-plane root for import compatibility verifier:"
+
 unclassified_flat_module_repo="${workdir}/unclassified-flat-module"
 create_valid_repo "${unclassified_flat_module_repo}"
 printf '%s\n' "\"\"\"Unclassified root-level fixture module.\"\"\"" \

@@ -16,6 +16,11 @@ if [[ ! -f "${doc_path}" ]]; then
   exit 1
 fi
 
+if [[ ! -d "${control_plane_root}" || ! -r "${control_plane_root}" || ! -x "${control_plane_root}" ]]; then
+  echo "Missing or unreadable Phase 52.5.2 control-plane root for import compatibility verifier: ${control_plane_root}" >&2
+  exit 1
+fi
+
 for import_spec in "${required_imports[@]}"; do
   if ! grep -Fq -- "${import_spec}" "${doc_path}"; then
     echo "Missing Phase 52.5.2 documented legacy import compatibility check: ${import_spec}" >&2
