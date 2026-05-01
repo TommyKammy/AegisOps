@@ -24,6 +24,7 @@ Canonical cross-phase boundary reference:
 - [Phase 51.6 authority-boundary negative-test policy](docs/phase-51-6-authority-boundary-negative-test-policy.md) defines the fail-closed negative-test classes later AI, Wazuh, Shuffle, ticket, evidence, browser, UI cache, downstream receipt, and demo-data work must cite.
 - [Phase 52.1 CLI command contract](docs/phase-52-1-cli-command-contract.md) defines the first-user stack command contract for `init`, `up`, `doctor`, `seed-demo`, `status`, `open`, `logs`, and `down`.
 - [Phase 52.2 SMB single-node profile model](docs/phase-52-2-smb-single-node-profile-model.md) defines the `smb-single-node` setup profile sections, mode labels, generated-config expectations, validation rules, and authority boundary.
+- [Phase 52.3 combined dependency matrix](docs/deployment/combined-dependency-matrix.md) defines first-user stack dependency expectations, host footprint, ports, volumes, certificate requirements, incompatibilities, and host-preflight follow-up fields.
 
 ## Product positioning
 
@@ -46,6 +47,8 @@ The Phase 51.6 authority-boundary negative-test policy is defined by the [Phase 
 The Phase 52.1 first-user CLI command contract is defined by the [Phase 52.1 CLI command contract](docs/phase-52-1-cli-command-contract.md).
 
 The Phase 52.2 first-user SMB single-node profile model is defined by the [Phase 52.2 SMB single-node profile model](docs/phase-52-2-smb-single-node-profile-model.md).
+
+The Phase 52.3 first-user combined dependency matrix is defined by the [Phase 52.3 combined dependency matrix](docs/deployment/combined-dependency-matrix.md).
 
 Wazuh detects, AegisOps decides, records, and reconciles, and Shuffle executes reviewed delegated routine work.
 
