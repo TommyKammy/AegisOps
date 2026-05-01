@@ -157,6 +157,13 @@ def _build_recommendation_example(
             f"recommendation {recommendation.recommendation_id} references alert "
             f"{alert_record.alert_id} without authoritative state at requested snapshot"
         )
+    _reject_post_snapshot_record_mutation(
+        service=service,
+        record_family="alert",
+        record_id=alert_record.alert_id,
+        snapshot_timestamp=snapshot_timestamp,
+        recommendation_id=recommendation.recommendation_id,
+    )
 
     source_family = _nested_string(
         alert_record.reviewed_context,
@@ -166,6 +173,25 @@ def _build_recommendation_example(
         raise Phase29ShadowDatasetGenerationError(
             f"recommendation {recommendation.recommendation_id} is missing reviewed source family linkage"
         )
+
+    case_transition = _latest_lifecycle_transition_as_of(
+        service,
+        "case",
+        case_record.case_id,
+        snapshot_timestamp,
+    )
+    if case_transition is None:
+        raise Phase29ShadowDatasetGenerationError(
+            f"recommendation {recommendation.recommendation_id} references case "
+            f"{case_record.case_id} without authoritative state at requested snapshot"
+        )
+    _reject_post_snapshot_record_mutation(
+        service=service,
+        record_family="case",
+        record_id=case_record.case_id,
+        snapshot_timestamp=snapshot_timestamp,
+        recommendation_id=recommendation.recommendation_id,
+    )
 
     linked_evidence = _linked_evidence_records(
         store=store,
@@ -185,18 +211,6 @@ def _build_recommendation_example(
         case_id=case_record.case_id,
         snapshot_timestamp=snapshot_timestamp,
     )
-
-    case_transition = _latest_lifecycle_transition_as_of(
-        service,
-        "case",
-        case_record.case_id,
-        snapshot_timestamp,
-    )
-    if case_transition is None:
-        raise Phase29ShadowDatasetGenerationError(
-            f"recommendation {recommendation.recommendation_id} references case "
-            f"{case_record.case_id} without authoritative state at requested snapshot"
-        )
 
     features: dict[str, object] = {
         "source_family": _feature_entry(
@@ -403,6 +417,30 @@ def _latest_lifecycle_transition_as_of(
     return transitions[-1]
 
 
+def _reject_post_snapshot_record_mutation(
+    *,
+    service: object,
+    record_family: str,
+    record_id: str,
+    snapshot_timestamp: datetime,
+    recommendation_id: str,
+) -> None:
+    list_transitions = getattr(service, "list_lifecycle_transitions", None)
+    if not callable(list_transitions):
+        raise TypeError("service must expose list_lifecycle_transitions")
+    later_transitions = tuple(
+        transition
+        for transition in list_transitions(record_family, record_id)
+        if transition.transitioned_at > snapshot_timestamp
+    )
+    if later_transitions:
+        raise Phase29ShadowDatasetGenerationError(
+            f"recommendation {recommendation_id} references {record_family} {record_id} "
+            "with post-snapshot lifecycle mutations; historical record body cannot be "
+            "reconstructed safely"
+        )
+
+
 def _feature_entry(
     *,
     value: object,
@@ -488,7 +526,12 @@ def _parse_optional_aware_datetime(value: object) -> datetime | None:
     raw_value = _optional_string(value)
     if raw_value is None:
         return None
-    parsed = datetime.fromisoformat(raw_value.replace("Z", "+00:00"))
+    try:
+        parsed = datetime.fromisoformat(raw_value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise Phase29ShadowDatasetGenerationError(
+            f"expected timezone-aware ISO timestamp, got {raw_value!r}: {exc}"
+        ) from exc
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise Phase29ShadowDatasetGenerationError(
             f"expected timezone-aware ISO timestamp, got {raw_value!r}"

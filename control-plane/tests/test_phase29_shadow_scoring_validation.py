@@ -14,6 +14,7 @@ for candidate in (CONTROL_PLANE_ROOT, TESTS_ROOT):
 
 
 from aegisops_control_plane.models import EvidenceRecord, ReconciliationRecord
+import aegisops_control_plane.phase29_shadow_scoring as legacy_shadow_scoring
 from aegisops_control_plane.ml_shadow.dataset import (
     Phase29ShadowDatasetSnapshot,
     generate_reviewed_shadow_dataset,
@@ -81,6 +82,52 @@ class Phase29ShadowScoringValidationTests(ServicePersistenceTestBase):
             for record_type in (EvidenceRecord, ReconciliationRecord)
         }
         self.assertEqual(final_record_counts, initial_record_counts)
+
+    def test_legacy_shadow_scoring_import_path_preserves_adapter_surface(self) -> None:
+        _store, _service, dataset_snapshot, decided_at = self._build_shadow_dataset_snapshot()
+
+        scored_snapshot = legacy_shadow_scoring.score_shadow_dataset_offline(
+            dataset_snapshot=dataset_snapshot,
+            scoring_spec_version="phase29-shadow-scoring-v1",
+            model_family="baseline-isolation-forest",
+            model_version="candidate-2026-04-20",
+            training_data_snapshot_id=dataset_snapshot.snapshot_id,
+            feature_schema_version="phase29-shadow-features-v1",
+            label_schema_version="phase29-shadow-labels-v1",
+            lineage_review_note_id="note-phase29-shadow-001",
+            scored_at=decided_at + timedelta(minutes=1),
+            shadow_output_type="legacy_shadow_recommendation",
+        )
+
+        self.assertIsInstance(
+            scored_snapshot,
+            legacy_shadow_scoring.Phase29OfflineShadowScoringSnapshot,
+        )
+        self.assertEqual(scored_snapshot.shadow_output_type, "legacy_shadow_recommendation")
+        self.assertEqual(scored_snapshot.scored_examples, scored_snapshot.results)
+        result = scored_snapshot.scored_examples[0]
+        self.assertIsInstance(result, legacy_shadow_scoring.Phase29ShadowScoreResult)
+        self.assertEqual(result.shadow_output_type, "legacy_shadow_recommendation")
+        self.assertEqual(result.feature_frequencies_at_inference_time, {})
+
+        scorer = legacy_shadow_scoring.Phase29ShadowStreamingBaselineScorer(
+            scoring_spec_version="phase29-shadow-streaming-v1",
+            model_family="river-half-space-trees",
+            model_version="shadow-stream-2026-04-20",
+            feature_schema_version="phase29-shadow-features-v1",
+            label_schema_version="phase29-shadow-labels-v1",
+            lineage_review_note_id="note-phase29-shadow-001",
+            shadow_output_type="legacy_stream_recommendation",
+        )
+        streaming_result = scorer.score_example(
+            dataset_example=dataset_snapshot.examples[0],
+            input_snapshot_id=dataset_snapshot.snapshot_id,
+            rendered_at=decided_at + timedelta(minutes=2),
+        )
+
+        self.assertIsInstance(streaming_result, legacy_shadow_scoring.Phase29ShadowScoreResult)
+        self.assertEqual(streaming_result.shadow_output_type, "legacy_stream_recommendation")
+        self.assertEqual(streaming_result.feature_frequencies_at_inference_time, {})
 
     def test_offline_shadow_scoring_fails_closed_when_training_snapshot_binding_drifts(self) -> None:
         _store, _service, dataset_snapshot, decided_at = self._build_shadow_dataset_snapshot()

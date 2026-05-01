@@ -91,6 +91,12 @@ def build_phase29_evidently_drift_visibility_report(
     report_status = "shadow-ready"
     if any(subject.status == "degraded" for subject in subjects):
         report_status = "degraded"
+    elif any(
+        subject.correlation_status == "drift-detected"
+        or subject.feature_drift_count > 0
+        for subject in subjects
+    ):
+        report_status = "drift-detected"
     elif any(subject.status == "unresolved" for subject in subjects):
         report_status = "unresolved"
 
@@ -216,6 +222,8 @@ def _build_subject_visibility(
         status = "degraded"
     elif degraded_feature_seen:
         status = "degraded"
+    elif correlation_status == "drift-detected":
+        status = "unresolved"
 
     return Phase29SubjectDriftVisibility(
         subject_record_family=subject_record_family,

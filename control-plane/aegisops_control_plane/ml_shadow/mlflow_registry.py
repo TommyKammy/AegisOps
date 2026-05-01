@@ -321,6 +321,16 @@ def _resolve_experiment_id(
     experiment = client.get_experiment_by_name(experiment_name)
     if experiment is not None:
         return experiment.experiment_id
+    if _MLFLOW_LOOKUP_EXCEPTIONS:
+        try:
+            return client.create_experiment(experiment_name, tags=experiment_tags)
+        except _MLFLOW_LOOKUP_EXCEPTIONS as exc:
+            if not _is_resource_already_exists(exc):
+                raise
+            experiment = client.get_experiment_by_name(experiment_name)
+            if experiment is None:
+                raise
+            return experiment.experiment_id
     return client.create_experiment(experiment_name, tags=experiment_tags)
 
 
@@ -340,17 +350,37 @@ def _ensure_registered_model(
         existing = client.get_registered_model(registered_model_name)
     if existing is not None:
         return
+    registered_model_tags = {
+        "aegisops.registry_posture": "shadow-only",
+        "aegisops.authority_path": "outside-control-plane",
+    }
+    registered_model_description = (
+        "Shadow-only candidate registry namespace for Phase 29 reviewed ML lineage. "
+        "This registry does not confer control-plane authority."
+    )
+    if _MLFLOW_LOOKUP_EXCEPTIONS:
+        try:
+            client.create_registered_model(
+                registered_model_name,
+                tags=registered_model_tags,
+                description=registered_model_description,
+            )
+            return
+        except _MLFLOW_LOOKUP_EXCEPTIONS as exc:
+            if not _is_resource_already_exists(exc):
+                raise
+            if client.get_registered_model(registered_model_name) is None:
+                raise
+            return
     client.create_registered_model(
         registered_model_name,
-        tags={
-            "aegisops.registry_posture": "shadow-only",
-            "aegisops.authority_path": "outside-control-plane",
-        },
-        description=(
-            "Shadow-only candidate registry namespace for Phase 29 reviewed ML lineage. "
-            "This registry does not confer control-plane authority."
-        ),
+        tags=registered_model_tags,
+        description=registered_model_description,
     )
+
+
+def _is_resource_already_exists(exc: Exception) -> bool:
+    return getattr(exc, "error_code", None) == "RESOURCE_ALREADY_EXISTS"
 
 
 def _is_missing_registered_model_lookup(
