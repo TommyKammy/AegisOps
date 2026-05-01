@@ -99,6 +99,54 @@ assert_fails_with \
   "${missing_phase51_citation_repo}" \
   "Missing Phase 52.1 CLI command contract statement: This command contract cites the Phase 51.6 authority-boundary negative-test policy"
 
+missing_command_field_repo="${workdir}/missing-command-field"
+create_valid_repo "${missing_command_field_repo}"
+remove_text_from_contract "${missing_command_field_repo}" \
+  '- `command`: the invoked command name.'
+assert_fails_with \
+  "${missing_command_field_repo}" \
+  "Missing or empty Phase 52.1 shared output field: command"
+
+missing_summary_field_repo="${workdir}/missing-summary-field"
+create_valid_repo "${missing_summary_field_repo}"
+remove_text_from_contract "${missing_summary_field_repo}" \
+  '- `summary`: a short human-readable operator summary.'
+assert_fails_with \
+  "${missing_summary_field_repo}" \
+  "Missing or empty Phase 52.1 shared output field: summary"
+
+missing_next_actions_field_repo="${workdir}/missing-next-actions-field"
+create_valid_repo "${missing_next_actions_field_repo}"
+remove_text_from_contract "${missing_next_actions_field_repo}" \
+  '- `next_actions`: zero or more safe follow-up commands or prerequisite actions.'
+assert_fails_with \
+  "${missing_next_actions_field_repo}" \
+  "Missing or empty Phase 52.1 shared output field: next_actions"
+
+missing_evidence_field_repo="${workdir}/missing-evidence-field"
+create_valid_repo "${missing_evidence_field_repo}"
+remove_text_from_contract "${missing_evidence_field_repo}" \
+  '- `evidence`: zero or more readiness evidence references, never authoritative workflow truth.'
+assert_fails_with \
+  "${missing_evidence_field_repo}" \
+  "Missing or empty Phase 52.1 shared output field: evidence"
+
+missing_result_field_repo="${workdir}/missing-result-field"
+create_valid_repo "${missing_result_field_repo}"
+remove_text_from_contract "${missing_result_field_repo}" \
+  '- `result`: one of `ok`, `skipped`, `mocked`, `degraded`, or `failed`.'
+assert_fails_with \
+  "${missing_result_field_repo}" \
+  "Missing or empty Phase 52.1 shared output field: result"
+
+invalid_result_field_repo="${workdir}/invalid-result-field"
+create_valid_repo "${invalid_result_field_repo}"
+perl -0pi -e 's/- `result`: one of `ok`, `skipped`, `mocked`, `degraded`, or `failed`\./- `result`: one of `ok` or `failed`./g' \
+  "${invalid_result_field_repo}/docs/phase-52-1-cli-command-contract.md"
+assert_fails_with \
+  "${invalid_result_field_repo}" \
+  "Invalid Phase 52.1 shared output result field"
+
 cli_truth_repo="${workdir}/cli-truth"
 create_valid_repo "${cli_truth_repo}"
 printf '%s\n' "CLI status is workflow truth." \
@@ -136,6 +184,16 @@ create_valid_repo "${missing_readme_link_repo}"
 printf '%s\n' "# AegisOps" "Phase 52.1 CLI command contract exists." >"${missing_readme_link_repo}/README.md"
 assert_fails_with \
   "${missing_readme_link_repo}" \
+  "README must link the Phase 52.1 CLI command contract."
+
+commented_readme_link_repo="${workdir}/commented-readme-link"
+create_valid_repo "${commented_readme_link_repo}"
+printf '%s\n' \
+  "# AegisOps" \
+  "<!-- [Phase 52.1 CLI command contract](docs/phase-52-1-cli-command-contract.md) -->" \
+  >"${commented_readme_link_repo}/README.md"
+assert_fails_with \
+  "${commented_readme_link_repo}" \
   "README must link the Phase 52.1 CLI command contract."
 
 echo "Phase 52.1 CLI command contract verifier tests passed."

@@ -29,7 +29,6 @@ required_phrases=(
   "AegisOps control-plane records remain authoritative for alert, case, evidence, approval, action request, execution receipt, reconciliation, audit, release, gate, limitation, and closeout truth."
   'This command contract cites the Phase 51.6 authority-boundary negative-test policy in `docs/phase-51-6-authority-boundary-negative-test-policy.md`.'
   'Every command must emit structured operator-facing output with:'
-  '- `result`: one of `ok`, `skipped`, `mocked`, `degraded`, or `failed`.'
   "| Command | Purpose | Required inputs | Expected outputs | Failure behavior | Safe retry guidance |"
   'Before reviewed Wazuh and Shuffle product profiles exist, commands must report unavailable substrate work as explicit `skipped` or `mocked` states.'
   '`skipped` and `mocked` states must not be reported as false success.'
@@ -46,6 +45,7 @@ required_phrases=(
 )
 
 commands=(init up doctor seed-demo status open logs down)
+shared_output_fields=(command result summary next_actions evidence)
 
 forbidden_claims=(
   "CLI status is workflow truth"
@@ -77,6 +77,18 @@ for phrase in "${required_phrases[@]}"; do
     exit 1
   fi
 done
+
+for field in "${shared_output_fields[@]}"; do
+  if ! grep -Eq -- "^- \`${field}\`: [^[:space:]].+$" "${doc_path}"; then
+    echo "Missing or empty Phase 52.1 shared output field: ${field}" >&2
+    exit 1
+  fi
+done
+
+if ! grep -Fxq -- '- `result`: one of `ok`, `skipped`, `mocked`, `degraded`, or `failed`.' "${doc_path}"; then
+  echo "Invalid Phase 52.1 shared output result field: expected one of ok, skipped, mocked, degraded, or failed." >&2
+  exit 1
+fi
 
 for command in "${commands[@]}"; do
   if ! grep -Eq "^\| \`${command}\` \| [^|]+ \| [^|]+ \| [^|]+ \| [^|]+ \| [^|]+ \|$" "${doc_path}"; then
@@ -128,6 +140,10 @@ readme_rendered_markdown="$(
     }
     !in_fenced_block { print }
   ' "${readme_path}" | perl -pe 's/`[^`]*`//g'
+)"
+
+readme_rendered_markdown="$(
+  perl -0pe 's/<!--.*?-->//gs' <<<"${readme_rendered_markdown}"
 )"
 
 if ! grep -Eq '\[[^]]+\]\(docs/phase-52-1-cli-command-contract\.md\)' <<<"${readme_rendered_markdown}"; then
