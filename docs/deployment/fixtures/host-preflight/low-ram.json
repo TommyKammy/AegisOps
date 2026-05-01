@@ -1,0 +1,14 @@
+{
+  "fixture": "low-ram",
+  "overall_state": "fail",
+  "mocked": false,
+  "results": [
+    {
+      "check": "RAM",
+      "state": "fail",
+      "source": "fixture",
+      "summary": "Host reports less than 16 GB RAM.",
+      "safe_next_action": "move setup to a host that satisfies the minimum rehearsal RAM tier"
+    }
+  ]
+}

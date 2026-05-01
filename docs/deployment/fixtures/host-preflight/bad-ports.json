@@ -1,0 +1,14 @@
+{
+  "fixture": "bad-ports",
+  "overall_state": "fail",
+  "mocked": false,
+  "results": [
+    {
+      "check": "Ports",
+      "state": "fail",
+      "source": "fixture",
+      "summary": "A reviewed proxy-public port is already bound or a backend/database port is directly published.",
+      "safe_next_action": "free the conflicting port and keep backend/database ports internal"
+    }
+  ]
+}

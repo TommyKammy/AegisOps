@@ -27,6 +27,7 @@ Canonical cross-phase boundary reference:
 - [Phase 52.3 combined dependency matrix](docs/deployment/combined-dependency-matrix.md) defines first-user stack dependency expectations, host footprint, ports, volumes, certificate requirements, incompatibilities, and host-preflight follow-up fields.
 - [Phase 52.4 compose generator contract](docs/deployment/compose-generator-contract.md) defines generated Compose shape, proxy-only ingress, snapshot expectations, and manual-editing rejection for the executable first-user stack.
 - [Phase 52.5 env secrets certs contract](docs/deployment/env-secrets-certs-contract.md) defines generated runtime env config, ignored secret/cert paths, demo token/cert posture, and fail-closed secret validation for the executable first-user stack.
+- [Phase 52.6 host preflight contract](docs/deployment/host-preflight-contract.md) defines Docker, Compose, RAM, disk, port, `vm.max_map_count`, and profile-validity readiness checks and fixture expectations for the executable first-user stack.
 
 ## Product positioning
 
@@ -55,6 +56,8 @@ The Phase 52.3 first-user combined dependency matrix is defined by the [Phase 52
 The Phase 52.4 first-user compose generator contract is defined by the [Phase 52.4 compose generator contract](docs/deployment/compose-generator-contract.md).
 
 The Phase 52.5 first-user env secrets certs contract is defined by the [Phase 52.5 env secrets certs contract](docs/deployment/env-secrets-certs-contract.md).
+
+The Phase 52.6 first-user host preflight contract is defined by the [Phase 52.6 host preflight contract](docs/deployment/host-preflight-contract.md).
 
 Wazuh detects, AegisOps decides, records, and reconciles, and Shuffle executes reviewed delegated routine work.
 

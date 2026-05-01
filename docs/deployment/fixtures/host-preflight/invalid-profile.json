@@ -1,0 +1,14 @@
+{
+  "fixture": "invalid-profile",
+  "overall_state": "fail",
+  "mocked": false,
+  "results": [
+    {
+      "check": "Profile validity",
+      "state": "fail",
+      "source": "fixture",
+      "summary": "Profile is missing, unknown, placeholder-backed, inferred, or not release-bound.",
+      "safe_next_action": "select a reviewed smb-single-node profile and release-bound revision"
+    }
+  ]
+}

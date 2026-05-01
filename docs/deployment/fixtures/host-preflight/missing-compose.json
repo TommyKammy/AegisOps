@@ -1,0 +1,14 @@
+{
+  "fixture": "missing-compose",
+  "overall_state": "fail",
+  "mocked": false,
+  "results": [
+    {
+      "check": "Docker Compose",
+      "state": "fail",
+      "source": "fixture",
+      "summary": "Docker Compose plugin is missing.",
+      "safe_next_action": "install Docker Compose plugin v2.24 or newer before setup"
+    }
+  ]
+}
