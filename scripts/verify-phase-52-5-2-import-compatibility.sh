@@ -41,6 +41,22 @@ required_imports=(
   "aegisops_control_plane.actions.review.action_review_visibility:action_review_runtime_visibility"
   "aegisops_control_plane.action_review_write_surface:ActionReviewWriteSurface"
   "aegisops_control_plane.actions.review.action_review_write_surface:ActionReviewWriteSurface"
+  "aegisops_control_plane.action_lifecycle_write_coordinator:ActionLifecycleWriteCoordinator"
+  "aegisops_control_plane.actions.action_lifecycle_write_coordinator:ActionLifecycleWriteCoordinator"
+  "aegisops_control_plane.action_policy:evaluate_action_policy_record"
+  "aegisops_control_plane.actions.action_policy:evaluate_action_policy_record"
+  "aegisops_control_plane.action_receipt_validation:MissingReceiptValueError"
+  "aegisops_control_plane.actions.action_receipt_validation:MissingReceiptValueError"
+  "aegisops_control_plane.action_reconciliation_orchestration:ActionOrchestrationBoundary"
+  "aegisops_control_plane.actions.action_reconciliation_orchestration:ActionOrchestrationBoundary"
+  "aegisops_control_plane.execution_coordinator:ExecutionCoordinator"
+  "aegisops_control_plane.actions.execution_coordinator:ExecutionCoordinator"
+  "aegisops_control_plane.execution_coordinator_action_requests:ReviewedActionRequestCoordinator"
+  "aegisops_control_plane.actions.execution_coordinator_action_requests:ReviewedActionRequestCoordinator"
+  "aegisops_control_plane.execution_coordinator_delegation:ApprovedActionDelegationCoordinator"
+  "aegisops_control_plane.actions.execution_coordinator_delegation:ApprovedActionDelegationCoordinator"
+  "aegisops_control_plane.execution_coordinator_reconciliation:ActionExecutionReconciliationCoordinator"
+  "aegisops_control_plane.actions.execution_coordinator_reconciliation:ActionExecutionReconciliationCoordinator"
 )
 
 if [[ ! -f "${doc_path}" ]]; then

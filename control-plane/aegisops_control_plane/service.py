@@ -12,7 +12,7 @@ from typing import Iterable, Iterator, Mapping, Protocol, Type, TypeVar
 
 _DATETIME_TYPE = datetime
 
-from .action_policy import evaluate_action_policy_record
+from .actions.action_policy import evaluate_action_policy_record
 from .assistant import assistant_advisory as _assistant_advisory
 from .assistant import live_assistant_workflow as _live_assistant_workflow
 from .assistant.assistant_provider import (
