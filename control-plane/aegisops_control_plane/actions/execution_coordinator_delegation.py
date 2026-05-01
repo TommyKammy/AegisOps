@@ -115,7 +115,7 @@ class ApprovedActionDelegationCoordinator:
         action_request: ActionRequestRecord
         approval_decision: ApprovalDecisionRecord
         approval_decision_id: str
-        with self._service._store.transaction():
+        with self._service._store.transaction(isolation_level="SERIALIZABLE"):
             action_request, approval_decision = self._load_approved_delegation_context(
                 action_request_id=action_request_id,
                 approved_payload=normalized_payload,
@@ -252,7 +252,13 @@ class ApprovedActionDelegationCoordinator:
                     )
                 raise exc from recording_error
             raise
-        self._service._emit_action_execution_delegated_event(execution)
+        try:
+            self._service._emit_action_execution_delegated_event(execution)
+        except Exception:
+            self._service._logger.exception(
+                "failed to emit action execution delegated event",
+                extra={"action_execution_id": execution.action_execution_id},
+            )
         return execution
 
     @staticmethod
