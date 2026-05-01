@@ -59,6 +59,26 @@ shared_fields=(
   "authority_boundary"
 )
 
+expected_mode_for_section() {
+  local section="$1"
+
+  case "${section}" in
+    "AegisOps" | "PostgreSQL" | "Proxy")
+      printf '%s\n' "required"
+      ;;
+    "Wazuh" | "Shuffle")
+      printf '%s\n' "deferred"
+      ;;
+    "Demo source")
+      printf '%s\n' "demo-only"
+      ;;
+    *)
+      echo "Unknown Phase 52.2 profile section: ${section}" >&2
+      return 1
+      ;;
+  esac
+}
+
 forbidden_claims=(
   "Generated config is production truth"
   "Generated config is workflow truth"
@@ -118,7 +138,8 @@ for field in "${shared_fields[@]}"; do
 done
 
 for section in "${sections[@]}"; do
-  if ! grep -Eq "^\| ${section} \| \`(required|deferred|demo-only)\` \| [^|[:space:]][^|]* \| [^|[:space:]][^|]* \| [^|[:space:]][^|]* \|$" <<<"${doc_rendered_markdown}"; then
+  mode="$(expected_mode_for_section "${section}")"
+  if ! grep -Eq "^\| ${section} \| \`${mode}\` \| [^|[:space:]][^|]* \| [^|[:space:]][^|]* \| [^|[:space:]][^|]* \|$" <<<"${doc_rendered_markdown}"; then
     echo "Missing complete Phase 52.2 profile section row: ${section}" >&2
     exit 1
   fi
@@ -128,11 +149,27 @@ contains_forbidden_outside_forbidden_section() {
   local claim="$1"
 
   awk -v claim="${claim}" '
+    BEGIN { claim_lower = tolower(claim) }
     /^## 7\. Forbidden Claims$/ { in_forbidden_claims = 1; next }
     /^## / && in_forbidden_claims { in_forbidden_claims = 0 }
-    !in_forbidden_claims && index($0, claim) { found = 1 }
+    !in_forbidden_claims && index(tolower($0), claim_lower) { found = 1 }
     END { exit(found ? 0 : 1) }
   ' "${doc_path}"
+}
+
+contains_placeholder_secret_valid_claim() {
+  awk '
+    /^## 7\. Forbidden Claims$/ { in_forbidden_claims = 1; next }
+    /^## / && in_forbidden_claims { in_forbidden_claims = 0 }
+    {
+      line = tolower($0)
+      negative_context = line ~ /(must fail|fail closed|fails validation|invalid|must not|cannot|not satisfy)/
+      if (!in_forbidden_claims && !negative_context && line ~ /(^|[^[:alnum:]_])placeholder secrets?[[:space:]]+(are|is|count as|counts as|may be|can be|remain|stays)[[:space:]]+([^.]*[^[:alnum:]_])?(valid|trusted|accepted|production)([^[:alnum:]_]|$)/) {
+        found = 1
+      }
+    }
+    END { exit(found ? 0 : 1) }
+  ' <<<"${doc_rendered_markdown}"
 }
 
 for claim in "${forbidden_claims[@]}"; do
@@ -142,7 +179,7 @@ for claim in "${forbidden_claims[@]}"; do
   fi
 done
 
-if grep -Eiq "^placeholder secrets? (are|is|count as|counts as|may be|can be|remain|stays) (valid|trusted|accepted|production)" <<<"${doc_rendered_markdown}"; then
+if contains_placeholder_secret_valid_claim; then
   echo "Forbidden Phase 52.2 SMB single-node profile model claim: placeholder secrets accepted as valid credentials" >&2
   exit 1
 fi

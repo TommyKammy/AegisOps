@@ -91,6 +91,14 @@ assert_fails_with \
   "${missing_mode_repo}" \
   "Missing complete Phase 52.2 profile section row: Proxy"
 
+wrong_mode_repo="${workdir}/wrong-mode"
+create_valid_repo "${wrong_mode_repo}"
+perl -0pi -e 's/\| Proxy \| `required` \|/\| Proxy \| `deferred` \|/g' \
+  "${wrong_mode_repo}/docs/phase-52-2-smb-single-node-profile-model.md"
+assert_fails_with \
+  "${wrong_mode_repo}" \
+  "Missing complete Phase 52.2 profile section row: Proxy"
+
 missing_field_repo="${workdir}/missing-authority-field"
 create_valid_repo "${missing_field_repo}"
 remove_text_from_contract "${missing_field_repo}" \
@@ -115,6 +123,14 @@ assert_fails_with \
   "${generated_truth_repo}" \
   "Forbidden Phase 52.2 SMB single-node profile model claim: Generated config is production truth"
 
+generated_truth_variant_repo="${workdir}/generated-truth-variant"
+create_valid_repo "${generated_truth_variant_repo}"
+printf '%s\n' "- generated config is production truth." \
+  >>"${generated_truth_variant_repo}/docs/phase-52-2-smb-single-node-profile-model.md"
+assert_fails_with \
+  "${generated_truth_variant_repo}" \
+  "Forbidden Phase 52.2 SMB single-node profile model claim: Generated config is production truth"
+
 workflow_truth_repo="${workdir}/workflow-truth"
 create_valid_repo "${workflow_truth_repo}"
 printf '%s\n' "Generated config is workflow truth." \
@@ -137,6 +153,14 @@ printf '%s\n' "placeholder secret can be trusted production credentials." \
   >>"${placeholder_secret_variant_repo}/docs/phase-52-2-smb-single-node-profile-model.md"
 assert_fails_with \
   "${placeholder_secret_variant_repo}" \
+  "Forbidden Phase 52.2 SMB single-node profile model claim: placeholder secrets accepted as valid credentials"
+
+placeholder_secret_bullet_repo="${workdir}/placeholder-secret-bullet"
+create_valid_repo "${placeholder_secret_bullet_repo}"
+printf '%s\n' "- Placeholder secrets may be accepted." \
+  >>"${placeholder_secret_bullet_repo}/docs/phase-52-2-smb-single-node-profile-model.md"
+assert_fails_with \
+  "${placeholder_secret_bullet_repo}" \
   "Forbidden Phase 52.2 SMB single-node profile model claim: placeholder secrets accepted as valid credentials"
 
 local_path_repo="${workdir}/local-path"
