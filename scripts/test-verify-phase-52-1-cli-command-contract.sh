@@ -260,12 +260,28 @@ assert_fails_with \
   "${file_uri_path_repo}" \
   "Forbidden Phase 52.1 CLI command contract: workstation-local absolute path detected"
 
+inline_code_path_repo="${workdir}/inline-code-path"
+create_valid_repo "${inline_code_path_repo}"
+printf 'Use `%s%s/aegisops` for setup.\n' "/" "tmp" \
+  >>"${inline_code_path_repo}/docs/phase-52-1-cli-command-contract.md"
+assert_fails_with \
+  "${inline_code_path_repo}" \
+  "Forbidden Phase 52.1 CLI command contract: workstation-local absolute path detected"
+
 windows_drive_path_repo="${workdir}/windows-drive-path"
 create_valid_repo "${windows_drive_path_repo}"
 printf 'Use %s:%s%s for setup.\n' "D" "\\" "aegisops" \
   >>"${windows_drive_path_repo}/docs/phase-52-1-cli-command-contract.md"
 assert_fails_with \
   "${windows_drive_path_repo}" \
+  "Forbidden Phase 52.1 CLI command contract: workstation-local absolute path detected"
+
+inline_code_windows_drive_path_repo="${workdir}/inline-code-windows-drive-path"
+create_valid_repo "${inline_code_windows_drive_path_repo}"
+printf 'Use `%s:%s%s` for setup.\n' "D" "\\" "aegisops" \
+  >>"${inline_code_windows_drive_path_repo}/docs/phase-52-1-cli-command-contract.md"
+assert_fails_with \
+  "${inline_code_windows_drive_path_repo}" \
   "Forbidden Phase 52.1 CLI command contract: workstation-local absolute path detected"
 
 missing_readme_link_repo="${workdir}/missing-readme-link"

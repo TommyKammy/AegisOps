@@ -139,8 +139,8 @@ for claim in "${forbidden_claims[@]}"; do
   fi
 done
 
-path_token_boundary="(^|[[:space:]'\"(<{=])"
-path_token_chars="[^[:space:]'\" )>}|]"
+path_token_boundary="(^|[[:space:]'\"\`(<{=])"
+path_token_chars="[^[:space:]'\"\` )>}|]"
 unix_absolute_path="/${path_token_chars}+"
 windows_drive_path="[A-Za-z]:[\\\\/]${path_token_chars}*"
 local_path_token="(${unix_absolute_path}|${windows_drive_path})"
