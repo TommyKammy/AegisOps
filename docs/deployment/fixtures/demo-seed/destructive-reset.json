@@ -14,6 +14,9 @@
       "authority": "demo_rehearsal_only",
       "production_claim": false,
       "truth_surfaces": [],
+      "fixture_provenance": "docs/deployment/fixtures/demo-seed/destructive-reset.json",
+      "demo_source_family": "demo-fixture",
+      "reviewed_at": null,
       "presentation": "demo-only alert rehearsal"
     }
   ],
@@ -30,7 +33,8 @@
       "customer_evidence",
       "approval",
       "execution",
-      "reconciliation"
+      "reconciliation",
+      "closeout"
     ]
   }
 }

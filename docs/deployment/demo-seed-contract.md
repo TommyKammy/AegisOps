@@ -63,7 +63,7 @@ Reset selectors must be structured as `{"bundle":"phase-52-7-demo-seed","labels"
 Demo seed validation must reject any record, bundle, reset plan, or presentation that:
 
 - omits the required demo labels;
-- sets `production_claim=true` or attaches production, gate, customer-evidence, approval, execution, or reconciliation truth surfaces;
+- sets `production_claim=true` or attaches production, gate, customer-evidence, approval, execution, reconciliation, or closeout truth surfaces;
 - treats fake credentials, sample credentials, demo tokens, demo certificates, demo source state, or fixture provenance as valid production credentials or production readiness;
 - allows reset selectors to delete production, imported, customer-private, or unlabeled records;
 - infers tenant, account, repository, issue, environment, customer, source, approval, execution, or reconciliation linkage from naming convention, path shape, comments, or nearby metadata; or

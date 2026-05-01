@@ -16,6 +16,9 @@
       "truth_surfaces": [
         "production"
       ],
+      "fixture_provenance": "docs/deployment/fixtures/demo-seed/production-claim.json",
+      "demo_source_family": "demo-fixture",
+      "reviewed_at": null,
       "presentation": "production alert"
     }
   ],

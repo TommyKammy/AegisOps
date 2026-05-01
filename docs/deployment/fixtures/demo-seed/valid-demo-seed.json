@@ -14,6 +14,9 @@
       "authority": "demo_rehearsal_only",
       "production_claim": false,
       "truth_surfaces": [],
+      "fixture_provenance": "docs/deployment/fixtures/demo-seed/valid-demo-seed.json",
+      "demo_source_family": "demo-fixture",
+      "reviewed_at": null,
       "presentation": "demo-only alert rehearsal"
     },
     {
@@ -27,6 +30,9 @@
       "authority": "demo_rehearsal_only",
       "production_claim": false,
       "truth_surfaces": [],
+      "linked_demo_alert_id": "demo-alert-001",
+      "analyst_owner": null,
+      "rehearsal_status": "rehearsal",
       "presentation": "demo-only case rehearsal"
     }
   ],
@@ -50,7 +56,8 @@
       "customer_evidence",
       "approval",
       "execution",
-      "reconciliation"
+      "reconciliation",
+      "closeout"
     ]
   }
 }

@@ -128,6 +128,16 @@ assert_fails_with \
   "${valid_missing_label_repo}" \
   "Invalid Phase 52.7 demo seed fixture state for valid-demo-seed.json: expected valid"
 
+valid_missing_demo_alert_field_repo="${workdir}/valid-missing-demo-alert-field"
+create_valid_repo "${valid_missing_demo_alert_field_repo}"
+set_fixture_json_value \
+  "${valid_missing_demo_alert_field_repo}" \
+  "valid-demo-seed.json" \
+  "del payload['records'][0]['fixture_provenance']"
+assert_fails_with \
+  "${valid_missing_demo_alert_field_repo}" \
+  "Invalid Phase 52.7 demo seed fixture state for valid-demo-seed.json: expected valid"
+
 negative_label_false_pass_repo="${workdir}/negative-label-false-pass"
 create_valid_repo "${negative_label_false_pass_repo}"
 set_fixture_json_value \
@@ -173,7 +183,7 @@ create_valid_repo "${production_claim_false_pass_repo}"
 set_fixture_json_value \
   "${production_claim_false_pass_repo}" \
   "production-claim.json" \
-  "payload['records'][0]['production_claim'] = False; payload['records'][0]['truth_surfaces'] = []; payload['records'][0]['authority'] = 'demo_rehearsal_only'; payload['production_exclusion']['may_satisfy_production_truth'] = False; payload['production_exclusion']['blocked_truth_surfaces'] = ['production', 'gate', 'customer_evidence', 'approval', 'execution', 'reconciliation']"
+  "payload['records'][0]['production_claim'] = False; payload['records'][0]['truth_surfaces'] = []; payload['records'][0]['authority'] = 'demo_rehearsal_only'; payload['records'][0]['presentation'] = 'demo-only alert rehearsal'; payload['production_exclusion']['may_satisfy_production_truth'] = False; payload['production_exclusion']['blocked_truth_surfaces'] = ['production', 'gate', 'customer_evidence', 'approval', 'execution', 'reconciliation', 'closeout']"
 assert_fails_with \
   "${production_claim_false_pass_repo}" \
   "Invalid Phase 52.7 demo seed fixture state for production-claim.json: expected rejection"

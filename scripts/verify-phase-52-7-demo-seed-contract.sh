@@ -196,6 +196,54 @@ truth_surfaces = {
     "approval",
     "execution",
     "reconciliation",
+    "closeout",
+}
+
+
+def has_non_empty_string(record, field):
+    return isinstance(record.get(field), str) and bool(record.get(field).strip())
+
+
+def has_field(record, field):
+    return field in record
+
+
+type_requirements = {
+    "demo-alert": {
+        "presentation": "demo-only alert rehearsal",
+        "non_empty": ("id", "fixture_provenance", "demo_source_family"),
+        "present": ("reviewed_at",),
+    },
+    "demo-case": {
+        "presentation": "demo-only case rehearsal",
+        "non_empty": ("id", "linked_demo_alert_id", "rehearsal_status"),
+        "present": ("analyst_owner",),
+    },
+    "demo-evidence": {
+        "presentation": "demo-only evidence rehearsal",
+        "non_empty": ("id", "linked_demo_case_id", "fixture_path", "provenance_note"),
+        "present": (),
+    },
+    "demo-action-request": {
+        "presentation": "demo-only action rehearsal",
+        "non_empty": ("id", "linked_demo_case_id", "requested_action"),
+        "present": ("non_production_scope",),
+    },
+    "demo-approval": {
+        "presentation": "demo-only approval rehearsal",
+        "non_empty": ("id", "linked_demo_action_request_id"),
+        "present": ("reviewer_placeholder",),
+    },
+    "demo-execution-receipt": {
+        "presentation": "demo-only execution rehearsal",
+        "non_empty": ("id", "linked_demo_action_request_id", "mocked_executor_note"),
+        "present": (),
+    },
+    "demo-reconciliation-note": {
+        "presentation": "demo-only reconciliation rehearsal",
+        "non_empty": ("id", "linked_demo_execution_receipt_id", "outcome_placeholder"),
+        "present": (),
+    },
 }
 
 
@@ -207,6 +255,20 @@ def rejection_reasons(payload):
         return reasons
 
     for record in records:
+        record_type = record.get("type")
+        requirements = type_requirements.get(record_type)
+        if requirements is None:
+            reasons.append("missing demo record type contract")
+        else:
+            for field in requirements["non_empty"]:
+                if not has_non_empty_string(record, field):
+                    reasons.append(f"missing {record_type} field {field}")
+            for field in requirements["present"]:
+                if not has_field(record, field):
+                    reasons.append(f"missing {record_type} field {field}")
+            if record.get("presentation") != requirements["presentation"]:
+                reasons.append(f"missing {record_type} presentation")
+
         labels = set(record.get("labels") or [])
         if not required_labels.issubset(labels):
             reasons.append("missing required demo label")
