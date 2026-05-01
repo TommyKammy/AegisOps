@@ -650,7 +650,7 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
             executions[0].provenance["dispatch_failure"]["error_type"],
             "ValueError",
         )
-    def test_service_fail_closes_when_shuffle_finalization_fails_after_dispatch(
+    def test_service_keeps_dispatched_shuffle_execution_recoverable_when_finalization_fails(
         self,
     ) -> None:
         store, _ = make_store()
@@ -745,18 +745,17 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
 
         executions = store.list(ActionExecutionRecord)
         self.assertEqual(len(executions), 1)
-        self.assertEqual(executions[0].lifecycle_state, "failed")
+        self.assertEqual(executions[0].lifecycle_state, "dispatching")
         self.assertEqual(executions[0].execution_surface_type, "automation_substrate")
         self.assertEqual(executions[0].execution_surface_id, "shuffle")
-        self.assertTrue(
-            executions[0].execution_run_id.startswith("pending-dispatch-delegation-")
-        )
+        self.assertTrue(executions[0].execution_run_id.startswith("shuffle-run-"))
+        self.assertNotIn("dispatch_failure", executions[0].provenance)
         self.assertEqual(
-            executions[0].provenance["dispatch_failure"]["error_type"],
+            executions[0].provenance["dispatch_finalization_failure"]["error_type"],
             "RuntimeError",
         )
         self.assertEqual(
-            executions[0].provenance["dispatch_failure"]["error"],
+            executions[0].provenance["dispatch_finalization_failure"]["error"],
             "synthetic finalization failure",
         )
     def test_service_fail_closes_when_shuffle_receipt_omits_adapter(self) -> None:

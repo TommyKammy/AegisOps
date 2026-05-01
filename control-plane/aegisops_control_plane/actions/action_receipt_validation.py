@@ -34,7 +34,7 @@ def require_receipt_string_value(value: object, field_name: str) -> str:
     ):
         raise MissingReceiptValueError(field_name)
 
-    return value
+    return normalized_value
 
 
 def require_receipt_https_url_value(value: object, field_name: str) -> str:

@@ -133,6 +133,7 @@ class ActionExecutionReconciliationCoordinator:
         else:
             execution_run_id = latest_execution["execution_run_id"]
             last_seen_at = latest_execution["observed_at"]
+            observed_execution_surface_type = latest_execution["execution_surface_type"]
             observed_execution_surface_id = latest_execution["execution_surface_id"]
             observed_idempotency_key = latest_execution["idempotency_key"]
             observed_approval_decision_id = latest_execution.get("approval_decision_id")
@@ -171,7 +172,8 @@ class ActionExecutionReconciliationCoordinator:
                     "duplicate downstream executions observed for one approved request"
                 )
             elif (
-                observed_execution_surface_id != execution_surface_id
+                observed_execution_surface_type != execution_surface_type
+                or observed_execution_surface_id != execution_surface_id
                 or observed_idempotency_key != action_request.idempotency_key
             ):
                 ingest_disposition = "mismatch"
@@ -462,6 +464,7 @@ class ActionExecutionReconciliationCoordinator:
         normalized: list[dict[str, object]] = []
         for execution in observed_executions:
             execution_run_id = execution.get("execution_run_id")
+            execution_surface_type = execution.get("execution_surface_type")
             execution_surface_id = execution.get("execution_surface_id")
             idempotency_key = execution.get("idempotency_key")
             observed_at = execution.get("observed_at")
@@ -475,6 +478,10 @@ class ActionExecutionReconciliationCoordinator:
             ticket_reference_url = execution.get("ticket_reference_url")
             if not isinstance(execution_run_id, str):
                 raise ValueError("observed execution must include string execution_run_id")
+            if not isinstance(execution_surface_type, str):
+                raise ValueError(
+                    "observed execution must include string execution_surface_type"
+                )
             if not isinstance(execution_surface_id, str):
                 raise ValueError(
                     "observed execution must include string execution_surface_id"
@@ -522,6 +529,7 @@ class ActionExecutionReconciliationCoordinator:
             normalized.append(
                 {
                     "execution_run_id": execution_run_id,
+                    "execution_surface_type": execution_surface_type,
                     "execution_surface_id": execution_surface_id,
                     "idempotency_key": idempotency_key,
                     "observed_at": observed_at,

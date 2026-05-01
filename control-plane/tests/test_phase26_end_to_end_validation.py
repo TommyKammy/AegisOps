@@ -123,6 +123,7 @@ class Phase26EndToEndValidationTests(unittest.TestCase):
             observed_executions=(
                 {
                     "execution_run_id": execution.execution_run_id,
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "shuffle",
                     "idempotency_key": seeded["action_request"].idempotency_key,
                     "approval_decision_id": seeded["approval"].approval_decision_id,
@@ -253,6 +254,7 @@ class Phase26EndToEndValidationTests(unittest.TestCase):
             observed_executions=(
                 {
                     "execution_run_id": execution.execution_run_id,
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "shuffle",
                     "idempotency_key": seeded["action_request"].idempotency_key,
                     "approval_decision_id": seeded["approval"].approval_decision_id,
@@ -274,6 +276,7 @@ class Phase26EndToEndValidationTests(unittest.TestCase):
                 },
                 {
                     "execution_run_id": "shuffle-run-phase26-duplicate-secondary-001",
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "shuffle",
                     "idempotency_key": seeded["action_request"].idempotency_key,
                     "approval_decision_id": seeded["approval"].approval_decision_id,
@@ -339,6 +342,7 @@ class Phase26EndToEndValidationTests(unittest.TestCase):
             observed_executions=(
                 {
                     "execution_run_id": execution.execution_run_id,
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "shuffle",
                     "idempotency_key": seeded["action_request"].idempotency_key,
                     "approval_decision_id": seeded["approval"].approval_decision_id,

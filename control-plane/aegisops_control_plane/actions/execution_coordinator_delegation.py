@@ -174,6 +174,7 @@ class ApprovedActionDelegationCoordinator:
             )
         receipt = None
         execution_run_id: str
+        finalized_provenance: dict[str, object]
         try:
             receipt = adapter.dispatch_approved_action(
                 delegation_id=delegation_id,
@@ -195,6 +196,11 @@ class ApprovedActionDelegationCoordinator:
             execution_run_id = self._require_receipt_string_attribute(
                 receipt,
                 "execution_run_id",
+            )
+            finalized_provenance = self._finalized_execution_provenance(
+                execution=predispatch_execution,
+                receipt=receipt,
+                execution_surface_id=execution_surface_id,
             )
         except Exception as exc:
             self._mark_dispatch_failure(
@@ -218,21 +224,21 @@ class ApprovedActionDelegationCoordinator:
                     replace(
                         stored_execution,
                         execution_run_id=execution_run_id,
-                        provenance=self._finalized_execution_provenance(
-                            execution=stored_execution,
-                            receipt=receipt,
-                            execution_surface_id=execution_surface_id,
-                        ),
+                        provenance=finalized_provenance,
                         lifecycle_state="queued",
                     ),
                     transitioned_at=delegated_at,
                 )
         except Exception as exc:
-            self._mark_dispatch_failure(
-                execution=predispatch_execution,
-                error=exc,
-                receipt=receipt,
-            )
+            try:
+                self._record_dispatch_finalization_failure(
+                    execution=predispatch_execution,
+                    execution_run_id=execution_run_id,
+                    finalized_provenance=finalized_provenance,
+                    error=exc,
+                )
+            except Exception:
+                pass
             raise
         self._service._emit_action_execution_delegated_event(execution)
         return execution
@@ -455,13 +461,50 @@ class ApprovedActionDelegationCoordinator:
                 ActionExecutionRecord,
                 execution.action_execution_id,
             )
-            if current_execution is None or current_execution.lifecycle_state != "dispatching":
+            if (
+                current_execution is None
+                or current_execution.lifecycle_state != "dispatching"
+            ):
                 return
             self._service.persist_record(
                 replace(
                     current_execution,
                     provenance=failure_provenance,
                     lifecycle_state="failed",
+                ),
+                transitioned_at=failure_at,
+            )
+
+    def _record_dispatch_finalization_failure(
+        self,
+        *,
+        execution: ActionExecutionRecord,
+        execution_run_id: str,
+        finalized_provenance: Mapping[str, object],
+        error: Exception,
+    ) -> None:
+        failure_provenance = dict(finalized_provenance)
+        failure_provenance["dispatch_finalization_failure"] = {
+            "error": str(error),
+            "error_type": type(error).__name__,
+        }
+        failure_at = datetime.now(timezone.utc)
+        with self._service._store.transaction():
+            current_execution = self._service._store.get(
+                ActionExecutionRecord,
+                execution.action_execution_id,
+            )
+            if (
+                current_execution is None
+                or current_execution.lifecycle_state != "dispatching"
+            ):
+                return
+            self._service.persist_record(
+                replace(
+                    current_execution,
+                    execution_run_id=execution_run_id,
+                    provenance=failure_provenance,
+                    lifecycle_state="dispatching",
                 ),
                 transitioned_at=failure_at,
             )

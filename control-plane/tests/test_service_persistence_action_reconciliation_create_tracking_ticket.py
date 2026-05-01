@@ -686,6 +686,7 @@ class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenc
             observed_executions=(
                 {
                     "execution_run_id": execution.execution_run_id,
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "shuffle",
                     "idempotency_key": "idempotency-create-ticket-reconcile-001",
                     "approval_decision_id": execution.approval_decision_id,
@@ -824,6 +825,7 @@ class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenc
             observed_executions=(
                 {
                     "execution_run_id": execution.execution_run_id,
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "shuffle",
                     "idempotency_key": "idempotency-create-ticket-reconcile-drift-001",
                     "approval_decision_id": execution.approval_decision_id,
@@ -944,6 +946,7 @@ class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenc
         downstream_binding = execution.provenance["downstream_binding"]
         observed_execution = {
             "execution_run_id": execution.execution_run_id,
+            "execution_surface_type": "automation_substrate",
             "execution_surface_id": "shuffle",
             "idempotency_key": "idempotency-create-ticket-duplicate-receipt-001",
             "approval_decision_id": execution.approval_decision_id,
@@ -1074,6 +1077,7 @@ class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenc
             observed_executions=(
                 {
                     "execution_run_id": execution.execution_run_id,
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "shuffle",
                     "idempotency_key": "idempotency-create-ticket-missing-authoritative-001",
                     "observed_at": compared_at,
@@ -1183,6 +1187,7 @@ class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenc
                 observed_executions=(
                     {
                         "execution_run_id": "shuffle-run-blank-receipt-001",
+                        "execution_surface_type": "automation_substrate",
                         "execution_surface_id": "shuffle",
                         "idempotency_key": "idempotency-create-ticket-blank-receipt-001",
                         "observed_at": support.datetime(
@@ -1235,6 +1240,7 @@ class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenc
                 observed_executions=(
                     {
                         "execution_run_id": "shuffle-run-placeholder-receipt-001",
+                        "execution_surface_type": "automation_substrate",
                         "execution_surface_id": "shuffle",
                         "idempotency_key": "idempotency-create-ticket-blank-receipt-001",
                         "observed_at": support.datetime(
@@ -1287,6 +1293,7 @@ class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenc
                 observed_executions=(
                     {
                         "execution_run_id": "shuffle-run-unreachable-url-001",
+                        "execution_surface_type": "automation_substrate",
                         "execution_surface_id": "shuffle",
                         "idempotency_key": "idempotency-create-ticket-blank-receipt-001",
                         "observed_at": support.datetime(
@@ -1372,6 +1379,7 @@ class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenc
             observed_executions=(
                 {
                     "execution_run_id": "exec-001",
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "n8n",
                     "idempotency_key": "idempotency-001",
                     "observed_at": support.datetime(
@@ -1381,6 +1389,7 @@ class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenc
                 },
                 {
                     "execution_run_id": "exec-002",
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "n8n",
                     "idempotency_key": "idempotency-001",
                     "observed_at": support.datetime(
@@ -1401,6 +1410,7 @@ class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenc
             observed_executions=(
                 {
                     "execution_run_id": "exec-003",
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "shuffle",
                     "idempotency_key": "idempotency-999",
                     "observed_at": support.datetime(
@@ -1421,6 +1431,7 @@ class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenc
             observed_executions=(
                 {
                     "execution_run_id": "exec-004",
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "n8n",
                     "idempotency_key": "idempotency-001",
                     "observed_at": support.datetime(

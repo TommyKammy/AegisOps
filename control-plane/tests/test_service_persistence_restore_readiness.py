@@ -622,6 +622,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             observed_executions=(
                 {
                     "execution_run_id": execution.execution_run_id,
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "shuffle",
                     "idempotency_key": approved_request.idempotency_key,
                     "approval_decision_id": execution.approval_decision_id,
@@ -6169,6 +6170,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             observed_executions=(
                 {
                     "execution_run_id": primary_execution.execution_run_id,
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "shuffle",
                     "idempotency_key": approved_primary_request.idempotency_key,
                     "approval_decision_id": primary_execution.approval_decision_id,

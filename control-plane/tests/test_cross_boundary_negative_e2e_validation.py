@@ -206,6 +206,7 @@ class CrossBoundaryNegativeE2EValidationTests(unittest.TestCase):
             observed_executions=(
                 {
                     "execution_run_id": execution.execution_run_id,
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "shuffle",
                     "idempotency_key": seeded["action_request"].idempotency_key,
                     "approval_decision_id": seeded["approval"].approval_decision_id,
@@ -301,6 +302,7 @@ class CrossBoundaryNegativeE2EValidationTests(unittest.TestCase):
                     observed_executions=(
                         {
                             "execution_run_id": execution.execution_run_id,
+                            "execution_surface_type": "automation_substrate",
                             "execution_surface_id": "shuffle",
                             "idempotency_key": seeded["action_request"].idempotency_key,
                             "approval_decision_id": seeded[
