@@ -23,6 +23,7 @@ Canonical cross-phase boundary reference:
 - [Phase 51.5 competitive gap matrix](docs/phase-51-5-competitive-gap-matrix.md) compares the replacement operating-experience target against standalone Wazuh, standalone Shuffle, manual SOC/ticket workflow, and common SMB SIEM/SOAR expectations.
 - [Phase 51.6 authority-boundary negative-test policy](docs/phase-51-6-authority-boundary-negative-test-policy.md) defines the fail-closed negative-test classes later AI, Wazuh, Shuffle, ticket, evidence, browser, UI cache, downstream receipt, and demo-data work must cite.
 - [Phase 52.1 CLI command contract](docs/phase-52-1-cli-command-contract.md) defines the first-user stack command contract for `init`, `up`, `doctor`, `seed-demo`, `status`, `open`, `logs`, and `down`.
+- [Phase 52.2 SMB single-node profile model](docs/phase-52-2-smb-single-node-profile-model.md) defines the `smb-single-node` setup profile sections, mode labels, generated-config expectations, validation rules, and authority boundary.
 
 ## Product positioning
 
@@ -43,6 +44,8 @@ The Phase 51.5 competitive gap matrix is defined by the [Phase 51.5 competitive 
 The Phase 51.6 authority-boundary negative-test policy is defined by the [Phase 51.6 authority-boundary negative-test policy](docs/phase-51-6-authority-boundary-negative-test-policy.md).
 
 The Phase 52.1 first-user CLI command contract is defined by the [Phase 52.1 CLI command contract](docs/phase-52-1-cli-command-contract.md).
+
+The Phase 52.2 first-user SMB single-node profile model is defined by the [Phase 52.2 SMB single-node profile model](docs/phase-52-2-smb-single-node-profile-model.md).
 
 Wazuh detects, AegisOps decides, records, and reconciles, and Shuffle executes reviewed delegated routine work.
 
