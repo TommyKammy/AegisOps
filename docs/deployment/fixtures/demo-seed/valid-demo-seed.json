@@ -1,0 +1,49 @@
+{
+  "bundle": "phase-52-7-demo-seed",
+  "mode": "demo",
+  "profile": "smb-single-node",
+  "records": [
+    {
+      "id": "demo-alert-001",
+      "type": "demo-alert",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "authority": "demo_rehearsal_only",
+      "production_claim": false,
+      "truth_surfaces": [],
+      "presentation": "demo-only alert rehearsal"
+    },
+    {
+      "id": "demo-case-001",
+      "type": "demo-case",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "authority": "demo_rehearsal_only",
+      "production_claim": false,
+      "truth_surfaces": [],
+      "presentation": "demo-only case rehearsal"
+    }
+  ],
+  "reset": {
+    "scope": "demo-bundle-only",
+    "selector": "bundle=phase-52-7-demo-seed AND label=demo-only AND label=first-user-rehearsal AND label=not-production-truth",
+    "deletes_production_records": false
+  },
+  "production_exclusion": {
+    "may_satisfy_production_truth": false,
+    "blocked_truth_surfaces": [
+      "production",
+      "gate",
+      "customer_evidence",
+      "approval",
+      "execution",
+      "reconciliation"
+    ]
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "bundle": "phase-52-7-demo-seed",
+  "mode": "demo",
+  "profile": "smb-single-node",
+  "records": [
+    {
+      "id": "demo-alert-missing-label",
+      "type": "demo-alert",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal"
+      ],
+      "authority": "demo_rehearsal_only",
+      "production_claim": false,
+      "truth_surfaces": [],
+      "presentation": "demo-only alert rehearsal"
+    }
+  ],
+  "reset": {
+    "scope": "demo-bundle-only",
+    "selector": "bundle=phase-52-7-demo-seed AND label=demo-only AND label=first-user-rehearsal",
+    "deletes_production_records": false
+  },
+  "production_exclusion": {
+    "may_satisfy_production_truth": false,
+    "blocked_truth_surfaces": [
+      "production",
+      "gate",
+      "customer_evidence",
+      "approval",
+      "execution",
+      "reconciliation"
+    ]
+  }
+}

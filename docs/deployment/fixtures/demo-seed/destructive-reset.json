@@ -1,0 +1,36 @@
+{
+  "bundle": "phase-52-7-demo-seed",
+  "mode": "demo",
+  "profile": "smb-single-node",
+  "records": [
+    {
+      "id": "demo-alert-destructive-reset",
+      "type": "demo-alert",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "authority": "demo_rehearsal_only",
+      "production_claim": false,
+      "truth_surfaces": [],
+      "presentation": "demo-only alert rehearsal"
+    }
+  ],
+  "reset": {
+    "scope": "all-records",
+    "selector": "profile=smb-single-node",
+    "deletes_production_records": true
+  },
+  "production_exclusion": {
+    "may_satisfy_production_truth": false,
+    "blocked_truth_surfaces": [
+      "production",
+      "gate",
+      "customer_evidence",
+      "approval",
+      "execution",
+      "reconciliation"
+    ]
+  }
+}
