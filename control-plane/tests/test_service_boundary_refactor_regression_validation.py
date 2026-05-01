@@ -1006,7 +1006,7 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
     def test_phase50_5_second_hotspot_boundary_methods_are_split(self) -> None:
         targets = {
             (
-                "control-plane/aegisops_control_plane/assistant_context.py",
+                "control-plane/aegisops_control_plane/assistant/assistant_context.py",
                 "AssistantContextAssembler",
                 "inspect_assistant_context",
             ): {
