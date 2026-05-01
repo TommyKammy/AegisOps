@@ -31,6 +31,10 @@ class AssistantProviderTransport(Protocol):
 class AssistantProviderTimeout(RuntimeError):
     """Raised when the provider transport exceeds the reviewed timeout budget."""
 
+    def __init__(self, *args: object, retryable: bool = True) -> None:
+        super().__init__(*args)
+        self.retryable = retryable
+
 
 @dataclass(frozen=True)
 class AssistantProviderAttemptFailure:
@@ -203,6 +207,8 @@ class AssistantProviderAdapter:
                         detail=failure_metadata["detail"],
                     )
                 )
+                if not exc.retryable:
+                    break
             except Exception as exc:  # noqa: BLE001
                 failure_metadata = provider_exception_failure_metadata(exc)
                 failures.append(
@@ -231,7 +237,9 @@ class AssistantProviderAdapter:
             generated_at=generated_at,
             reviewed_input_refs=tuple(reviewed_input_refs),
             output_text=None,
-            attempt_count=self._max_attempts,
+            attempt_count=(
+                failures[-1].attempt_number if failures else self._max_attempts
+            ),
             request_provenance=request_provenance,
             response_provenance={},
             failures=tuple(failures),
@@ -265,7 +273,8 @@ class AssistantProviderAdapter:
         worker.join(timeout=self._request_timeout_seconds)
         if worker.is_alive():
             raise AssistantProviderTimeout(
-                f"provider request timed out after {self._request_timeout_seconds:g} seconds"
+                f"provider request timed out after {self._request_timeout_seconds:g} seconds",
+                retryable=False,
             )
         outcome_kind, outcome_value = result_queue.get_nowait()
         if outcome_kind == "error":
