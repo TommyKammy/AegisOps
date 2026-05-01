@@ -1,0 +1,68 @@
+{
+  "fixture": "false-success",
+  "phase": "52.8",
+  "overall_state": "ok",
+  "full_stack_success": true,
+  "requires_phase_53_or_54_completion": false,
+  "authority_boundary": "clean-host smoke output is validation evidence only",
+  "contract_coverage": [
+    "compose",
+    "env/secrets/certs",
+    "host preflight",
+    "demo seed"
+  ],
+  "sequence": [
+    {
+      "step": 1,
+      "command": "init",
+      "state": "mocked",
+      "missing_prerequisite": "runtime config generator implementation",
+      "closing_phase": "Phase 53",
+      "safe_next_action": "replace fixture-backed init later",
+      "contract_refs": [
+        "docs/phase-52-1-cli-command-contract.md",
+        "docs/deployment/env-secrets-certs-contract.md"
+      ],
+      "evidence_role": "setup fixture evidence only"
+    },
+    {
+      "step": 2,
+      "command": "up",
+      "state": "skipped",
+      "missing_prerequisite": "Wazuh and Shuffle product profiles are not implemented",
+      "closing_phase": "Phase 53",
+      "safe_next_action": "replace skipped startup later",
+      "contract_refs": [
+        "docs/phase-52-1-cli-command-contract.md",
+        "docs/deployment/compose-generator-contract.md"
+      ],
+      "evidence_role": "startup skip evidence only"
+    },
+    {
+      "step": 3,
+      "command": "doctor",
+      "state": "mocked",
+      "missing_prerequisite": "live host preflight implementation",
+      "closing_phase": "Phase 53",
+      "safe_next_action": "replace fixture-backed doctor later",
+      "contract_refs": [
+        "docs/phase-52-1-cli-command-contract.md",
+        "docs/deployment/host-preflight-contract.md"
+      ],
+      "evidence_role": "host preflight fixture evidence only"
+    },
+    {
+      "step": 4,
+      "command": "seed-demo",
+      "state": "mocked",
+      "missing_prerequisite": "demo seed command implementation",
+      "closing_phase": "Phase 54",
+      "safe_next_action": "replace fixture-backed seed-demo later",
+      "contract_refs": [
+        "docs/phase-52-1-cli-command-contract.md",
+        "docs/deployment/demo-seed-contract.md"
+      ],
+      "evidence_role": "demo rehearsal fixture evidence only"
+    }
+  ]
+}
