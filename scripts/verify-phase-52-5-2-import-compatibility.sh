@@ -105,6 +105,14 @@ required_imports=(
   "aegisops_control_plane.evidence.external_evidence_osquery:OsqueryExternalEvidenceHelper"
   "aegisops_control_plane.external_evidence_endpoint:EndpointExternalEvidenceHelper"
   "aegisops_control_plane.evidence.external_evidence_endpoint:EndpointExternalEvidenceHelper"
+  "aegisops_control_plane.phase29_shadow_dataset:Phase29ShadowDatasetSnapshot"
+  "aegisops_control_plane.ml_shadow.dataset:Phase29ShadowDatasetSnapshot"
+  "aegisops_control_plane.phase29_shadow_scoring:Phase29ShadowScoringError"
+  "aegisops_control_plane.ml_shadow.scoring:Phase29ShadowScoringError"
+  "aegisops_control_plane.phase29_evidently_drift_visibility:Phase29EvidentlyDriftVisibilityReport"
+  "aegisops_control_plane.ml_shadow.drift_visibility:Phase29EvidentlyDriftVisibilityReport"
+  "aegisops_control_plane.phase29_mlflow_shadow_model_registry:Phase29MlflowShadowModelTrackingResult"
+  "aegisops_control_plane.ml_shadow.mlflow_registry:Phase29MlflowShadowModelTrackingResult"
 )
 
 if [[ ! -f "${doc_path}" ]]; then

@@ -12,7 +12,7 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 
 from aegisops_control_plane.models import EvidenceRecord, ReconciliationRecord
-from aegisops_control_plane.phase29_shadow_dataset import (
+from aegisops_control_plane.ml_shadow.dataset import (
     Phase29ShadowDatasetGenerationError,
     generate_reviewed_shadow_dataset,
 )

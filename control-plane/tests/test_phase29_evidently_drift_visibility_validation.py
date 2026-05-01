@@ -14,11 +14,11 @@ for candidate in (CONTROL_PLANE_ROOT, TESTS_ROOT):
 
 
 from aegisops_control_plane.models import EvidenceRecord, ReconciliationRecord
-from aegisops_control_plane.phase29_evidently_drift_visibility import (
+from aegisops_control_plane.ml_shadow.drift_visibility import (
     Phase29EvidentlyDriftVisibilityError,
     build_phase29_evidently_drift_visibility_report,
 )
-from aegisops_control_plane.phase29_shadow_dataset import (
+from aegisops_control_plane.ml_shadow.dataset import (
     Phase29ShadowDatasetSnapshot,
     generate_reviewed_shadow_dataset,
 )

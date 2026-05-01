@@ -34,7 +34,7 @@ The approved scaffold packages under `control-plane/aegisops_control_plane/` are
 | `actions/review/` | `actions.review` | Package scaffold retained as the owner for reviewed-action projection, visibility, timeline, chain, inspection, path health, coordination, index, and write-surface modules moved in Phase 52.5.4. |
 | `evidence/` | `evidence` | Package retained as the owner for external evidence boundary, facade, MISP, osquery, and endpoint evidence helper modules moved in Phase 52.5.7. |
 | `assistant/` | `assistant` | Package scaffold retained as the owner for assistant context, advisory, provider, trace lifecycle, and workflow modules moved in Phase 52.5.3. |
-| `ml_shadow/` | `ml_shadow` | Package scaffold only; no reviewed ML shadow-mode move yet. |
+| `ml_shadow/` | `ml_shadow` | Package retained as the owner for ML shadow dataset, scoring, registry, and drift visibility modules moved in Phase 52.5.8. |
 | `reporting/` | `reporting` | Package scaffold retained as the owner for audit and pilot reporting export modules moved in Phase 52.5.3. |
 
 The existing `adapters/` package remains the approved adapter package marker from earlier phases.
@@ -171,9 +171,22 @@ Phase 52.5.7 extends the verifier so moved ingestion and external-evidence modul
 - `aegisops_control_plane.external_evidence_endpoint:EndpointExternalEvidenceHelper`
 - `aegisops_control_plane.evidence.external_evidence_endpoint:EndpointExternalEvidenceHelper`
 
+Phase 52.5.8 extends the verifier so moved ML shadow modules are checked through both legacy Phase 29 root imports and target `ml_shadow` package imports:
+
+- `aegisops_control_plane.phase29_shadow_dataset:Phase29ShadowDatasetSnapshot`
+- `aegisops_control_plane.ml_shadow.dataset:Phase29ShadowDatasetSnapshot`
+- `aegisops_control_plane.phase29_shadow_scoring:Phase29ShadowScoringError`
+- `aegisops_control_plane.ml_shadow.scoring:Phase29ShadowScoringError`
+- `aegisops_control_plane.phase29_evidently_drift_visibility:Phase29EvidentlyDriftVisibilityReport`
+- `aegisops_control_plane.ml_shadow.drift_visibility:Phase29EvidentlyDriftVisibilityReport`
+- `aegisops_control_plane.phase29_mlflow_shadow_model_registry:Phase29MlflowShadowModelTrackingResult`
+- `aegisops_control_plane.ml_shadow.mlflow_registry:Phase29MlflowShadowModelTrackingResult`
+
 ## 5. Layout Guardrail Skeleton
 
 The layout guardrail skeleton rejects new flat root-level Python modules unless the Phase 52.5.1 inventory or the Phase 52.5.2 approved scaffold package set classifies them.
+
+Phase 52.5.8 tightens the guardrail so phase-numbered Python filenames in the production control-plane package must be compatibility shims. Domain-owned implementations must use non-phase-numbered module names under their target package.
 
 The guardrail intentionally accepts the current repository baseline after the scaffold markers are classified in ADR-0012.
 

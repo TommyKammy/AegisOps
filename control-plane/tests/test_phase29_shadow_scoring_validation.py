@@ -14,11 +14,11 @@ for candidate in (CONTROL_PLANE_ROOT, TESTS_ROOT):
 
 
 from aegisops_control_plane.models import EvidenceRecord, ReconciliationRecord
-from aegisops_control_plane.phase29_shadow_dataset import (
+from aegisops_control_plane.ml_shadow.dataset import (
     Phase29ShadowDatasetSnapshot,
     generate_reviewed_shadow_dataset,
 )
-from aegisops_control_plane.phase29_shadow_scoring import (
+from aegisops_control_plane.ml_shadow.scoring import (
     Phase29ShadowScoringError,
     Phase29ShadowStreamingBaselineScorer,
     score_shadow_dataset_offline,

@@ -142,15 +142,19 @@ The layout inventory does not change authorization, provenance, reconciliation, 
 | `ingestion/detection_native_context.py` | `ingestion` | Owns native detection context behavior while preserving provenance tests. |
 | `ingestion/evidence_linkage.py` | `ingestion` | Owns evidence linkage behavior while preserving direct-link constraints. |
 | `live_assistant_workflow.py` | `assistant` | Compatibility shim only for the moved live assistant workflow owner. |
-| `ml_shadow/__init__.py` | `ml_shadow` | Package scaffold marker only; no ML shadow-mode module moves are approved by the marker. |
+| `ml_shadow/__init__.py` | `ml_shadow` | Package marker for reviewed ML shadow-mode modules. |
+| `ml_shadow/dataset.py` | `ml_shadow` | Owns shadow dataset lineage while preserving reviewed dataset checks. |
+| `ml_shadow/drift_visibility.py` | `ml_shadow` | Owns ML shadow drift visibility while preserving subordinate ML posture. |
+| `ml_shadow/mlflow_registry.py` | `ml_shadow` | Owns shadow registry behavior while preserving no model-as-authority regression. |
+| `ml_shadow/scoring.py` | `ml_shadow` | Owns shadow scoring behavior while preserving subordinate recommendation checks. |
 | `models.py` | `core` | Move only with authoritative model import compatibility and schema regression tests. |
 | `operations.py` | `runtime` | Compatibility shim only for the moved operations boundary owner. |
 | `operator_inspection.py` | `reporting` | Move only with operator inspection derivation tests from authoritative records. |
 | `persistence_lifecycle.py` | `core` | Move only with persistence lifecycle ownership and all-or-nothing mutation tests. |
-| `phase29_evidently_drift_visibility.py` | `ml_shadow` | Move only with ML shadow drift visibility ownership and subordinate ML posture. |
-| `phase29_mlflow_shadow_model_registry.py` | `ml_shadow` | Move only with shadow registry ownership and no model-as-authority regression. |
-| `phase29_shadow_dataset.py` | `ml_shadow` | Move only with shadow dataset ownership and reviewed dataset lineage checks. |
-| `phase29_shadow_scoring.py` | `ml_shadow` | Move only with shadow scoring ownership and subordinate recommendation checks. |
+| `phase29_evidently_drift_visibility.py` | `ml_shadow` | Compatibility shim only for the moved ML shadow drift visibility owner. |
+| `phase29_mlflow_shadow_model_registry.py` | `ml_shadow` | Compatibility shim only for the moved shadow registry owner. |
+| `phase29_shadow_dataset.py` | `ml_shadow` | Compatibility shim only for the moved shadow dataset owner. |
+| `phase29_shadow_scoring.py` | `ml_shadow` | Compatibility shim only for the moved shadow scoring owner. |
 | `pilot_reporting_export.py` | `reporting` | Compatibility shim only for the moved pilot reporting export owner. |
 | `publishable_paths.py` | `core` | Move only with publishable path hygiene ownership and workstation-local path tests. |
 | `readiness_contracts.py` | `runtime` | Compatibility shim only for the moved readiness contract owner. |

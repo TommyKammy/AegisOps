@@ -63,6 +63,8 @@ for package in "${required_packages[@]}"; do
     allowed_marker="Ingestion lifecycle, case workflow, and evidence linkage modules."
   elif [[ "${package}" == "evidence" ]]; then
     allowed_marker="External evidence boundary and helper modules."
+  elif [[ "${package}" == "ml_shadow" ]]; then
+    allowed_marker="Reviewed ML shadow-mode package."
   else
     allowed_marker="Package scaffold only"
   fi

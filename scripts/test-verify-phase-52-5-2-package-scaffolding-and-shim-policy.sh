@@ -95,6 +95,18 @@ assert_fails_with \
   "${unclassified_flat_module_repo}" \
   "Phase 52.5.2 layout guardrail found unclassified flat root-level modules: new_flat_module.py"
 
+phase_numbered_production_repo="${workdir}/phase-numbered-production-module"
+create_valid_repo "${phase_numbered_production_repo}"
+printf '%s\n' "\"\"\"Phase-numbered production fixture module.\"\"\"" \
+  >"${phase_numbered_production_repo}/control-plane/aegisops_control_plane/phase52_new_owner.py"
+cat >>"${phase_numbered_production_repo}/docs/adr/0012-phase-52-5-1-control-plane-layout-inventory-and-migration-contract.md" <<'EOF'
+| `phase52_new_owner.py` | `core` | Owns fixture behavior and should fail the phase-numbered production guardrail. |
+EOF
+assert_fails_with \
+  "${guardrail_verifier}" \
+  "${phase_numbered_production_repo}" \
+  "Phase 52.5.2 layout guardrail found phase-numbered production modules without compatibility-shim classification: phase52_new_owner.py"
+
 local_path_repo="${workdir}/local-path"
 create_valid_repo "${local_path_repo}"
 printf 'Evidence: /%s/example/AegisOps/package-policy.md\n' "Users" \
