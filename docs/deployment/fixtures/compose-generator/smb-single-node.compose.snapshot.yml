@@ -1,0 +1,102 @@
+name: aegisops-smb-single-node
+
+x-aegisops-authority-boundary: generated-compose-output-is-setup-runtime-posture-evidence-only
+
+services:
+  aegisops:
+    image: ${AEGISOPS_IMAGE_REF:?set-reviewed-release-bound-image}
+    env_file:
+      - ${AEGISOPS_RUNTIME_ENV_FILE:-<runtime-env-file>}
+    environment:
+      AEGISOPS_PROFILE_ID: smb-single-node
+      AEGISOPS_CONTROL_PLANE_POSTGRES_DSN_REF: ${AEGISOPS_CONTROL_PLANE_POSTGRES_DSN_REF:?set-trusted-secret-ref}
+      AEGISOPS_PROXY_BOUNDARY_SECRET_REF: ${AEGISOPS_PROXY_BOUNDARY_SECRET_REF:?set-trusted-secret-ref}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8080"
+    networks:
+      - internal
+      - proxy
+
+  postgres:
+    image: postgres:16.4
+    environment:
+      POSTGRES_DB: ${AEGISOPS_POSTGRES_DB:-aegisops_control_plane}
+      POSTGRES_USER: ${AEGISOPS_POSTGRES_USER:-aegisops_control_plane}
+      POSTGRES_PASSWORD_FILE: ${AEGISOPS_POSTGRES_PASSWORD_FILE:?set-trusted-secret-file}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - postgres-backup:/aegisops/postgres-backup
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
+  proxy:
+    image: nginx:1.27.0
+    depends_on:
+      - aegisops
+    ports:
+      - "${AEGISOPS_PROXY_HTTP_PORT:-80}:80"
+      - "${AEGISOPS_PROXY_HTTPS_PORT:-443}:443"
+    environment:
+      AEGISOPS_PROXY_ROUTE_MAP_REF: ${AEGISOPS_PROXY_ROUTE_MAP_REF:?set-reviewed-route-map-ref}
+      AEGISOPS_PROXY_TLS_CERT_REF: ${AEGISOPS_PROXY_TLS_CERT_REF:?set-trusted-cert-ref}
+      AEGISOPS_PROXY_TLS_KEY_REF: ${AEGISOPS_PROXY_TLS_KEY_REF:?set-trusted-key-ref}
+      AEGISOPS_PROXY_BOUNDARY_SECRET_REF: ${AEGISOPS_PROXY_BOUNDARY_SECRET_REF:?set-trusted-secret-ref}
+    networks:
+      - proxy
+      - internal
+
+  wazuh:
+    image: ${AEGISOPS_WAZUH_IMAGE_REF:-deferred-wazuh-profile-placeholder}
+    profiles:
+      - deferred-wazuh
+    environment:
+      AEGISOPS_WAZUH_MODE: deferred
+      AEGISOPS_WAZUH_INGEST_ROUTE: ${AEGISOPS_WAZUH_INGEST_ROUTE:-/wazuh/ingest}
+      AEGISOPS_WAZUH_INGEST_SECRET_REF: ${AEGISOPS_WAZUH_INGEST_SECRET_REF:?set-trusted-secret-ref}
+    expose:
+      - "55000"
+    networks:
+      - internal
+
+  shuffle:
+    image: ${AEGISOPS_SHUFFLE_IMAGE_REF:-deferred-shuffle-profile-placeholder}
+    profiles:
+      - deferred-shuffle
+    environment:
+      AEGISOPS_SHUFFLE_MODE: deferred
+      AEGISOPS_SHUFFLE_CALLBACK_ROUTE: ${AEGISOPS_SHUFFLE_CALLBACK_ROUTE:-/shuffle/callback}
+      AEGISOPS_SHUFFLE_CREDENTIAL_REF: ${AEGISOPS_SHUFFLE_CREDENTIAL_REF:?set-trusted-secret-ref}
+    expose:
+      - "3001"
+    networks:
+      - internal
+
+  demo-source:
+    image: ${AEGISOPS_DEMO_SOURCE_IMAGE_REF:-demo-source-placeholder}
+    profiles:
+      - demo
+    environment:
+      AEGISOPS_DEMO_MODE: "true"
+      AEGISOPS_DEMO_FIXTURE_BUNDLE_REF: ${AEGISOPS_DEMO_FIXTURE_BUNDLE_REF:-<demo-fixture-bundle>}
+      AEGISOPS_DEMO_CREDENTIAL_POLICY: no-production-credentials
+    networks:
+      - internal
+
+networks:
+  internal:
+    internal: true
+  proxy:
+
+volumes:
+  postgres-data:
+  postgres-backup:
