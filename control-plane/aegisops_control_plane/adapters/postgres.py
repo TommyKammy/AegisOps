@@ -26,7 +26,7 @@ from ..models import (
     ReconciliationRecord,
     RecommendationRecord,
 )
-from ..readiness_contracts import (
+from ..runtime.readiness_contracts import (
     ReadinessDiagnosticsAggregates,
     ReadinessReviewPathRecords,
 )

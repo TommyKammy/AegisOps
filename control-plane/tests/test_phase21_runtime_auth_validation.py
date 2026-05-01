@@ -152,7 +152,7 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
         self.assertIsInstance(service._runtime_boundary_service, RuntimeBoundaryService)
         self.assertEqual(
             type(service._runtime_boundary_service).__module__,
-            "aegisops_control_plane.runtime_boundary",
+            "aegisops_control_plane.runtime.runtime_boundary",
         )
         self.assertIsInstance(
             service._restore_readiness_service,
@@ -160,7 +160,7 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
         )
         self.assertEqual(
             type(service._restore_readiness_service).__module__,
-            "aegisops_control_plane.restore_readiness",
+            "aegisops_control_plane.runtime.restore_readiness",
         )
 
         with mock.patch.object(

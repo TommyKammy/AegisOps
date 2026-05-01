@@ -1,13 +1,9 @@
+"""Compatibility shim for the operations module."""
+
 from __future__ import annotations
 
-from .restore_readiness import RestoreReadinessService
-from .runtime_boundary import RuntimeBoundaryService
-from .runtime_restore_readiness_diagnostics import (
-    RuntimeRestoreReadinessDiagnosticsService,
-)
+import sys
 
-__all__ = [
-    "RestoreReadinessService",
-    "RuntimeBoundaryService",
-    "RuntimeRestoreReadinessDiagnosticsService",
-]
+from .runtime import operations as _impl
+
+sys.modules[__name__] = _impl

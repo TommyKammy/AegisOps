@@ -117,6 +117,37 @@ Phase 52.5.5 extends the verifier so moved action execution, lifecycle, policy, 
 - `aegisops_control_plane.execution_coordinator_reconciliation:ActionExecutionReconciliationCoordinator`
 - `aegisops_control_plane.actions.execution_coordinator_reconciliation:ActionExecutionReconciliationCoordinator`
 
+Phase 52.5.6 extends the verifier so moved runtime, readiness, restore, snapshot, operations, CLI, entrypoint, and HTTP surface modules are checked through both legacy root imports and target `runtime` or `api` package imports:
+
+- `aegisops_control_plane.runtime_boundary:RuntimeBoundaryService`
+- `aegisops_control_plane.runtime.runtime_boundary:RuntimeBoundaryService`
+- `aegisops_control_plane.readiness_contracts:ReadinessDiagnosticsAggregates`
+- `aegisops_control_plane.runtime.readiness_contracts:ReadinessDiagnosticsAggregates`
+- `aegisops_control_plane.readiness_operability:ReadinessOperabilityHelper`
+- `aegisops_control_plane.runtime.readiness_operability:ReadinessOperabilityHelper`
+- `aegisops_control_plane.restore_readiness:RestoreReadinessService`
+- `aegisops_control_plane.runtime.restore_readiness:RestoreReadinessService`
+- `aegisops_control_plane.restore_readiness_projection:_ReadinessHealthProjection`
+- `aegisops_control_plane.runtime.restore_readiness_projection:_ReadinessHealthProjection`
+- `aegisops_control_plane.restore_readiness_backup_restore:_BackupRestoreFlow`
+- `aegisops_control_plane.runtime.restore_readiness_backup_restore:_BackupRestoreFlow`
+- `aegisops_control_plane.runtime_restore_readiness_diagnostics:RuntimeRestoreReadinessDiagnosticsService`
+- `aegisops_control_plane.runtime.runtime_restore_readiness_diagnostics:RuntimeRestoreReadinessDiagnosticsService`
+- `aegisops_control_plane.service_snapshots:RuntimeSnapshot`
+- `aegisops_control_plane.runtime.service_snapshots:RuntimeSnapshot`
+- `aegisops_control_plane.operations:RuntimeBoundaryService`
+- `aegisops_control_plane.runtime.operations:RuntimeBoundaryService`
+- `aegisops_control_plane.cli:build_parser`
+- `aegisops_control_plane.api.cli:build_parser`
+- `aegisops_control_plane.entrypoint_support:normalize_alert_id`
+- `aegisops_control_plane.api.entrypoint_support:normalize_alert_id`
+- `aegisops_control_plane.http_surface:HttpSurfaceContext`
+- `aegisops_control_plane.api.http_surface:HttpSurfaceContext`
+- `aegisops_control_plane.http_protected_surface:authenticate_protected_write`
+- `aegisops_control_plane.api.http_protected_surface:authenticate_protected_write`
+- `aegisops_control_plane.http_runtime_surface:runtime_read_response`
+- `aegisops_control_plane.api.http_runtime_surface:runtime_read_response`
+
 ## 5. Layout Guardrail Skeleton
 
 The layout guardrail skeleton rejects new flat root-level Python modules unless the Phase 52.5.1 inventory or the Phase 52.5.2 approved scaffold package set classifies them.

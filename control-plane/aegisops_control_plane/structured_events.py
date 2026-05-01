@@ -3,7 +3,7 @@ from __future__ import annotations
 import ipaddress
 from typing import Mapping
 
-from .service_snapshots import _json_ready
+from .runtime.service_snapshots import _json_ready
 
 
 def _classify_network_identifier(value: object) -> str:

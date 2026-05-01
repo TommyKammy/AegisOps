@@ -43,11 +43,11 @@ from .models import (
     ReconciliationRecord,
     RecommendationRecord,
 )
-from .readiness_contracts import (
+from .runtime.readiness_contracts import (
     ReadinessDiagnosticsAggregates,
     resolve_current_readiness_runtime_status,
 )
-from .runtime_boundary import RuntimeBoundaryService
+from .runtime.runtime_boundary import RuntimeBoundaryService
 from .reviewed_slice_policy import (
     REVIEWED_LIVE_SLICE_LABEL,
     ReviewedSlicePolicy,
@@ -60,7 +60,7 @@ from .service_composition import (
     build_control_plane_service_composition,
     install_control_plane_service_composition,
 )
-from .service_snapshots import (
+from .runtime.service_snapshots import (
     ActionReviewDetailSnapshot,
     AdvisoryInspectionSnapshot,
     AlertDetailSnapshot,

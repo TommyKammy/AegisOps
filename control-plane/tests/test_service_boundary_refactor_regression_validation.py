@@ -146,7 +146,7 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
     ) -> None:
         service_source = self._read("control-plane/aegisops_control_plane/service.py")
         runtime_boundary_source = self._read(
-            "control-plane/aegisops_control_plane/runtime_boundary.py"
+            "control-plane/aegisops_control_plane/runtime/runtime_boundary.py"
         )
         structured_events_source = self._read(
             "control-plane/aegisops_control_plane/structured_events.py"
@@ -806,10 +806,10 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
     ) -> None:
         service_source = self._read("control-plane/aegisops_control_plane/service.py")
         backup_restore_source = self._read(
-            "control-plane/aegisops_control_plane/restore_readiness_backup_restore.py"
+            "control-plane/aegisops_control_plane/runtime/restore_readiness_backup_restore.py"
         )
         projection_source = self._read(
-            "control-plane/aegisops_control_plane/restore_readiness_projection.py"
+            "control-plane/aegisops_control_plane/runtime/restore_readiness_projection.py"
         )
         persistence_source = self._read(
             "control-plane/aegisops_control_plane/persistence_lifecycle.py"
