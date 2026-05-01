@@ -240,15 +240,16 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
         )
         service.persist_record(action_request)
 
+        execution_surface_id = "n8n"
         reconciliation = service.reconcile_action_execution(
             action_request_id="action-request-surface-type-drift-001",
             execution_surface_type="automation_substrate",
-            execution_surface_id="n8n",
+            execution_surface_id=execution_surface_id,
             observed_executions=(
                 {
                     "execution_run_id": "exec-surface-type-drift-001",
                     "execution_surface_type": "executor",
-                    "execution_surface_id": "n8n",
+                    "execution_surface_id": execution_surface_id,
                     "idempotency_key": "idempotency-surface-type-drift-001",
                     "observed_at": datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc),
                 },
