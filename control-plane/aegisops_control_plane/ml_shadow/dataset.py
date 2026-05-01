@@ -214,9 +214,11 @@ def _build_recommendation_example(
         linked_evidence=linked_evidence
     )
     latest_reconciliation = _latest_reconciliation(
+        service=service,
         store=store,
         alert_id=alert_record.alert_id,
         case_id=case_record.case_id,
+        recommendation_id=recommendation.recommendation_id,
         snapshot_timestamp=snapshot_timestamp,
     )
 
@@ -371,14 +373,22 @@ def _select_anchor_evidence(
                 "missing required reviewed provenance on anchor evidence "
                 f"{evidence.evidence_id}: {', '.join(missing_fields)}"
             )
+    if len(anchor_evidence) > 1:
+        anchor_ids = ", ".join(evidence.evidence_id for evidence in anchor_evidence)
+        raise Phase29ShadowDatasetGenerationError(
+            f"recommendation {recommendation_id} has multiple reviewed provenance "
+            f"anchors: {anchor_ids}"
+        )
     return anchor_evidence[0]
 
 
 def _latest_reconciliation(
     *,
+    service: object,
     store: object,
     alert_id: str,
     case_id: str,
+    recommendation_id: str,
     snapshot_timestamp: datetime,
 ) -> ReconciliationRecord | None:
     matching = [
@@ -395,13 +405,21 @@ def _latest_reconciliation(
     ]
     if not matching:
         return None
-    return sorted(
+    latest = sorted(
         matching,
         key=lambda reconciliation: (
             reconciliation.compared_at,
             reconciliation.reconciliation_id,
         ),
     )[-1]
+    _reject_post_snapshot_record_mutation(
+        service=service,
+        record_family="reconciliation",
+        record_id=latest.reconciliation_id,
+        snapshot_timestamp=snapshot_timestamp,
+        recommendation_id=recommendation_id,
+    )
+    return latest
 
 
 def _latest_lifecycle_transition_as_of(
