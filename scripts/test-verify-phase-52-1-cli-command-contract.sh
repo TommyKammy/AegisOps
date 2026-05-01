@@ -75,6 +75,14 @@ assert_fails_with \
   "${missing_command_repo}" \
   "Missing complete Phase 52.1 CLI command row: seed-demo"
 
+whitespace_command_cell_repo="${workdir}/whitespace-command-cell"
+create_valid_repo "${whitespace_command_cell_repo}"
+perl -0pi -e 's/\| `status` \| [^|]+ \|/| `status` |     |/g' \
+  "${whitespace_command_cell_repo}/docs/phase-52-1-cli-command-contract.md"
+assert_fails_with \
+  "${whitespace_command_cell_repo}" \
+  "Missing complete Phase 52.1 CLI command row: status"
+
 missing_retry_repo="${workdir}/missing-retry"
 create_valid_repo "${missing_retry_repo}"
 remove_text_from_contract "${missing_retry_repo}" \

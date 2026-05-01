@@ -106,7 +106,7 @@ for phrase in "${required_phrases[@]}"; do
 done
 
 for command in "${commands[@]}"; do
-  if ! grep -Eq "^\| \`${command}\` \| [^|]+ \| [^|]+ \| [^|]+ \| [^|]+ \| [^|]+ \|$" <<<"${doc_rendered_markdown}"; then
+  if ! grep -Eq "^\| \`${command}\` \| [^|[:space:]][^|]* \| [^|[:space:]][^|]* \| [^|[:space:]][^|]* \| [^|[:space:]][^|]* \| [^|[:space:]][^|]* \|$" <<<"${doc_rendered_markdown}"; then
     echo "Missing complete Phase 52.1 CLI command row: ${command}" >&2
     exit 1
   fi
