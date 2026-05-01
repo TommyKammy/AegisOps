@@ -384,6 +384,19 @@ class EndpointExternalEvidenceHelper:
                 raise ValueError(
                     "artifacts must not contain duplicate artifact_id values within one request"
                 )
+            seen_artifact_ids: set[str] = set()
+            for attachment in attachments:
+                artifact_id = self._service._normalize_optional_string(
+                    attachment.provenance.get("artifact_id"),
+                    "attachment.provenance.artifact_id",
+                )
+                if artifact_id is None:
+                    continue
+                if artifact_id in seen_artifact_ids:
+                    raise ValueError(
+                        "artifacts must not contain duplicate artifact_id values within one request"
+                    )
+                seen_artifact_ids.add(artifact_id)
 
             existing_by_source_record_id = {
                 record.source_record_id: record
