@@ -75,12 +75,17 @@ The layout inventory does not change authorization, provenance, reconciliation, 
 | `adapters/shuffle.py` | `adapters` | Move only within adapter family while Shuffle remains subordinate execution context. |
 | `adapters/wazuh.py` | `adapters` | Move only within adapter family while Wazuh remains subordinate detection context. |
 | `api/__init__.py` | `api` | Package scaffold marker only; no HTTP, CLI, endpoint, or protected-surface module moves are approved by the marker. |
-| `ai_trace_lifecycle.py` | `assistant` | Move only with assistant trace lifecycle ownership and subordinate-output checks. |
-| `assistant/__init__.py` | `assistant` | Package scaffold marker only; no assistant module moves are approved by the marker. |
-| `assistant_advisory.py` | `assistant` | Move only with advisory ownership and no advisory-as-authority regression tests. |
-| `assistant_context.py` | `assistant` | Move only with direct anchored-context read rules. |
-| `assistant_provider.py` | `assistant` | Move only with provider boundary ownership and no placeholder credential acceptance. |
-| `audit_export.py` | `reporting` | Move only with export snapshot consistency and no partial durable write on failure. |
+| `ai_trace_lifecycle.py` | `assistant` | Compatibility shim only for the moved assistant trace lifecycle owner. |
+| `assistant/__init__.py` | `assistant` | Package marker for assistant-owned modules. |
+| `assistant/ai_trace_lifecycle.py` | `assistant` | Owns assistant trace lifecycle helpers while preserving subordinate-output checks. |
+| `assistant/assistant_advisory.py` | `assistant` | Owns advisory coordination while preserving no advisory-as-authority behavior. |
+| `assistant/assistant_context.py` | `assistant` | Owns assistant context assembly while preserving direct anchored-context read rules. |
+| `assistant/assistant_provider.py` | `assistant` | Owns provider boundary behavior while preserving no placeholder credential acceptance. |
+| `assistant/live_assistant_workflow.py` | `assistant` | Owns live assistant workflow behavior while preserving subordinate output checks. |
+| `assistant_advisory.py` | `assistant` | Compatibility shim only for the moved assistant advisory owner. |
+| `assistant_context.py` | `assistant` | Compatibility shim only for the moved assistant context owner. |
+| `assistant_provider.py` | `assistant` | Compatibility shim only for the moved assistant provider owner. |
+| `audit_export.py` | `reporting` | Compatibility shim only for the moved audit export owner. |
 | `case_workflow.py` | `core` | Move only with authoritative case workflow ownership and lifecycle state tests. |
 | `cli.py` | `api` | Move only after CLI import compatibility and command behavior are preserved. |
 | `config.py` | `runtime` | Move only with runtime config ownership and no sample secret acceptance. |
@@ -104,7 +109,7 @@ The layout inventory does not change authorization, provenance, reconciliation, 
 | `http_runtime_surface.py` | `api` | Move only with runtime HTTP surface ownership and unchanged readiness behavior. |
 | `http_surface.py` | `api` | Move only with public HTTP surface ownership and route compatibility tests. |
 | `ingestion/__init__.py` | `ingestion` | Package scaffold marker only; no detection intake module moves are approved by the marker. |
-| `live_assistant_workflow.py` | `assistant` | Move only with live assistant workflow ownership and subordinate output checks. |
+| `live_assistant_workflow.py` | `assistant` | Compatibility shim only for the moved live assistant workflow owner. |
 | `ml_shadow/__init__.py` | `ml_shadow` | Package scaffold marker only; no ML shadow-mode module moves are approved by the marker. |
 | `models.py` | `core` | Move only with authoritative model import compatibility and schema regression tests. |
 | `operations.py` | `runtime` | Move only with operations boundary ownership and unchanged operator command behavior. |
@@ -114,12 +119,14 @@ The layout inventory does not change authorization, provenance, reconciliation, 
 | `phase29_mlflow_shadow_model_registry.py` | `ml_shadow` | Move only with shadow registry ownership and no model-as-authority regression. |
 | `phase29_shadow_dataset.py` | `ml_shadow` | Move only with shadow dataset ownership and reviewed dataset lineage checks. |
 | `phase29_shadow_scoring.py` | `ml_shadow` | Move only with shadow scoring ownership and subordinate recommendation checks. |
-| `pilot_reporting_export.py` | `reporting` | Move only with pilot reporting ownership and snapshot-consistent export tests. |
+| `pilot_reporting_export.py` | `reporting` | Compatibility shim only for the moved pilot reporting export owner. |
 | `publishable_paths.py` | `core` | Move only with publishable path hygiene ownership and workstation-local path tests. |
 | `readiness_contracts.py` | `runtime` | Move only with readiness contract ownership and unchanged fail-closed readiness checks. |
 | `readiness_operability.py` | `runtime` | Move only with readiness operability ownership and no status-as-truth drift. |
 | `record_validation.py` | `core` | Move only with authoritative record validation ownership and malformed input tests. |
-| `reporting/__init__.py` | `reporting` | Package scaffold marker only; no audit, pilot reporting, or operator inspection module moves are approved by the marker. |
+| `reporting/__init__.py` | `reporting` | Package marker for reporting-owned modules. |
+| `reporting/audit_export.py` | `reporting` | Owns audit export behavior while preserving snapshot consistency and no partial durable write on failure. |
+| `reporting/pilot_reporting_export.py` | `reporting` | Owns pilot reporting export behavior while preserving snapshot-consistent export tests. |
 | `restore_readiness.py` | `runtime` | Move only with restore readiness ownership and clean failed-restore state tests. |
 | `restore_readiness_backup_restore.py` | `runtime` | Move only with backup/restore ownership and all-or-nothing restore tests. |
 | `restore_readiness_projection.py` | `runtime` | Move only with restore projection derivation tests from authoritative state. |

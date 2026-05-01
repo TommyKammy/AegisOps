@@ -10,13 +10,13 @@ from .adapters.n8n import N8NReconciliationAdapter
 from .adapters.osquery import OsqueryHostContextAdapter
 from .adapters.postgres import PostgresControlPlaneStore
 from .adapters.shuffle import ShuffleActionAdapter
-from .ai_trace_lifecycle import AITraceLifecycleService
-from .assistant_advisory import AssistantAdvisoryCoordinator
-from .assistant_context import (
+from .assistant.ai_trace_lifecycle import AITraceLifecycleService
+from .assistant.assistant_advisory import AssistantAdvisoryCoordinator
+from .assistant.assistant_context import (
     AssistantContextAssembler,
     _advisory_text_claims_authority_or_scope_expansion,
 )
-from .assistant_provider import AssistantProviderAdapter
+from .assistant.assistant_provider import AssistantProviderAdapter
 from .action_lifecycle_write_coordinator import ActionLifecycleWriteCoordinator
 from .action_reconciliation_orchestration import (
     ActionOrchestrationBoundary,
@@ -30,7 +30,7 @@ from .detection_lifecycle import DetectionIntakeService
 from .evidence_linkage import EvidenceLinkageService
 from .execution_coordinator import ExecutionCoordinator
 from .external_evidence_boundary import ExternalEvidenceBoundary
-from .live_assistant_workflow import LiveAssistantWorkflowCoordinator
+from .assistant.live_assistant_workflow import LiveAssistantWorkflowCoordinator
 from .models import ControlPlaneRecord, ReconciliationRecord
 from .operator_inspection import OperatorInspectionReadSurface
 from .persistence_lifecycle import PersistenceLifecycleService

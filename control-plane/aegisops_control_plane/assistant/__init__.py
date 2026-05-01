@@ -1,1 +1,1 @@
-"""Package scaffold only for future assistant modules."""
+"""Package scaffold only; assistant domain modules are owned here."""
