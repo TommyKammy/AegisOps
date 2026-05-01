@@ -896,9 +896,11 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
     ) -> None:
         service_source = self._read("control-plane/aegisops_control_plane/service.py")
         detection_source = self._read(
-            "control-plane/aegisops_control_plane/detection_lifecycle.py"
+            "control-plane/aegisops_control_plane/ingestion/detection_lifecycle.py"
         )
-        case_source = self._read("control-plane/aegisops_control_plane/case_workflow.py")
+        case_source = self._read(
+            "control-plane/aegisops_control_plane/ingestion/case_workflow.py"
+        )
         service_tree = ast.parse(service_source)
         detection_tree = ast.parse(detection_source)
         case_tree = ast.parse(case_source)
@@ -969,7 +971,7 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
             "control-plane/aegisops_control_plane/service_composition.py"
         )
         endpoint_source = self._read(
-            "control-plane/aegisops_control_plane/external_evidence_endpoint.py"
+            "control-plane/aegisops_control_plane/evidence/external_evidence_endpoint.py"
         )
         service_tree = ast.parse(service_source)
         service_class = next(
@@ -1020,7 +1022,7 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
                 },
             },
             (
-                "control-plane/aegisops_control_plane/detection_lifecycle.py",
+                "control-plane/aegisops_control_plane/ingestion/detection_lifecycle.py",
                 "DetectionIntakeService",
                 "ingest_analytic_signal_admission",
             ): {
