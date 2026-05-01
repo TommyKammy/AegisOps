@@ -136,7 +136,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         )
         self.assertEqual(
             type(readiness_operability_helper).__module__,
-            "aegisops_control_plane.readiness_operability",
+            "aegisops_control_plane.runtime.readiness_operability",
         )
         for helper_name in (
             "_collect_readiness_review_snapshots",

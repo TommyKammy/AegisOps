@@ -34,11 +34,11 @@ from .assistant.live_assistant_workflow import LiveAssistantWorkflowCoordinator
 from .models import ControlPlaneRecord, ReconciliationRecord
 from .operator_inspection import OperatorInspectionReadSurface
 from .persistence_lifecycle import PersistenceLifecycleService
-from .readiness_operability import ReadinessOperabilityHelper
-from .restore_readiness import RestoreReadinessService
+from .runtime.readiness_operability import ReadinessOperabilityHelper
+from .runtime.restore_readiness import RestoreReadinessService
 from .reviewed_slice_policy import ReviewedSlicePolicy
-from .runtime_boundary import RuntimeBoundaryService
-from .runtime_restore_readiness_diagnostics import (
+from .runtime.runtime_boundary import RuntimeBoundaryService
+from .runtime.runtime_restore_readiness_diagnostics import (
     RuntimeRestoreReadinessDiagnosticsService,
 )
 

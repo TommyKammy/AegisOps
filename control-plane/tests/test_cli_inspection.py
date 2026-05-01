@@ -59,7 +59,7 @@ class ControlPlaneCliInspectionTests(ControlPlaneCliInspectionTestBase):
         )
 
     def test_cli_renders_wazuh_business_hours_analyst_queue_view(self) -> None:
-        CliInspectionWorkflowFamilyTests.test_cli_renders_wazuh_business_hours_analyst_queue_view(
+        CliInspectionWorkflowFamilyTests.test_cli_renders_reviewed_wazuh_business_hours_analyst_queue_view(
             self
         )
 
@@ -153,7 +153,7 @@ class CliInspectionVerifierCompatibilityTests(unittest.TestCase):
     def test_cli_renders_wazuh_business_hours_analyst_queue_view(self) -> None:
         self._run_split_case(
             CliInspectionWorkflowFamilyTests,
-            "test_cli_renders_wazuh_business_hours_analyst_queue_view",
+            "test_cli_renders_reviewed_wazuh_business_hours_analyst_queue_view",
         )
 
     def test_cli_renders_identity_rich_analyst_queue_view_with_reviewed_context(

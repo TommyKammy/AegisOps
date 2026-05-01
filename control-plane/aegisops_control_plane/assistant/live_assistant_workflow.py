@@ -16,7 +16,7 @@ from .assistant_provider import (
     provider_exception_failure_metadata,
 )
 from ..models import AITraceRecord, RecommendationRecord
-from ..service_snapshots import (
+from ..runtime.service_snapshots import (
     AnalystAssistantContextSnapshot,
     LiveAssistantWorkflowSnapshot,
 )
