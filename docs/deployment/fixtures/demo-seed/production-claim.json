@@ -21,7 +21,14 @@
   ],
   "reset": {
     "scope": "demo-bundle-only",
-    "selector": "bundle=phase-52-7-demo-seed AND label=demo-only AND label=first-user-rehearsal AND label=not-production-truth",
+    "selector": {
+      "bundle": "phase-52-7-demo-seed",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ]
+    },
     "deletes_production_records": false
   },
   "production_exclusion": {

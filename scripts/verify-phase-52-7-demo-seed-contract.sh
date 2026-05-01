@@ -34,6 +34,7 @@ required_phrases=(
   "| Record type | Required demo fields | Presentation rule | Production exclusion |"
   "| Label | Required value | Validation rule |"
   "| Reset boundary | Required behavior | Rejection rule |"
+  'Reset selectors must be structured as `{"bundle":"phase-52-7-demo-seed","labels":["demo-only","first-user-rehearsal","not-production-truth"]}` or an equivalent object with the same bundle and label constraints.'
   "| Fixture | Expected validity | Required rejection |"
   'Run `bash scripts/verify-phase-52-7-demo-seed-contract.sh`.'
   'Run `bash scripts/test-verify-phase-52-7-demo-seed-contract.sh`.'
@@ -211,7 +212,7 @@ def rejection_reasons(payload):
             reasons.append("missing required demo label")
         if record.get("production_claim") is not False:
             reasons.append("demo record claims production truth")
-        if any(surface in set(record.get("truth_surfaces") or []) for surface in truth_surfaces):
+        if record.get("truth_surfaces") != []:
             reasons.append("demo record claims production truth")
         if record.get("authority") != "demo_rehearsal_only":
             reasons.append("demo record claims production truth")
@@ -220,6 +221,16 @@ def rejection_reasons(payload):
     if reset.get("deletes_production_records") is not False:
         reasons.append("reset deletes production records")
     if reset.get("scope") != "demo-bundle-only":
+        reasons.append("reset deletes production records")
+    selector = reset.get("selector")
+    selector_labels = set()
+    if isinstance(selector, dict) and isinstance(selector.get("labels"), list):
+        selector_labels = set(selector.get("labels") or [])
+    if (
+        not isinstance(selector, dict)
+        or selector.get("bundle") != "phase-52-7-demo-seed"
+        or not required_labels.issubset(selector_labels)
+    ):
         reasons.append("reset deletes production records")
 
     exclusion = payload.get("production_exclusion") or {}

@@ -143,10 +143,30 @@ create_valid_repo "${destructive_reset_false_pass_repo}"
 set_fixture_json_value \
   "${destructive_reset_false_pass_repo}" \
   "destructive-reset.json" \
-  "payload['reset']['deletes_production_records'] = False; payload['reset']['scope'] = 'demo-bundle-only'"
+  "payload['reset']['deletes_production_records'] = False; payload['reset']['scope'] = 'demo-bundle-only'; payload['reset']['selector'] = {'bundle': 'phase-52-7-demo-seed', 'labels': ['demo-only', 'first-user-rehearsal', 'not-production-truth']}"
 assert_fails_with \
   "${destructive_reset_false_pass_repo}" \
   "Invalid Phase 52.7 demo seed fixture state for destructive-reset.json: expected rejection"
+
+valid_broad_reset_selector_repo="${workdir}/valid-broad-reset-selector"
+create_valid_repo "${valid_broad_reset_selector_repo}"
+set_fixture_json_value \
+  "${valid_broad_reset_selector_repo}" \
+  "valid-demo-seed.json" \
+  "payload['reset']['selector'] = {'bundle': 'phase-52-7-demo-seed', 'labels': ['demo-only', 'first-user-rehearsal']}"
+assert_fails_with \
+  "${valid_broad_reset_selector_repo}" \
+  "Invalid Phase 52.7 demo seed fixture state for valid-demo-seed.json: expected valid"
+
+valid_string_reset_selector_repo="${workdir}/valid-string-reset-selector"
+create_valid_repo "${valid_string_reset_selector_repo}"
+set_fixture_json_value \
+  "${valid_string_reset_selector_repo}" \
+  "valid-demo-seed.json" \
+  "payload['reset']['selector'] = 'bundle=phase-52-7-demo-seed AND label=demo-only AND label=first-user-rehearsal AND label=not-production-truth'"
+assert_fails_with \
+  "${valid_string_reset_selector_repo}" \
+  "Invalid Phase 52.7 demo seed fixture state for valid-demo-seed.json: expected valid"
 
 production_claim_false_pass_repo="${workdir}/production-claim-false-pass"
 create_valid_repo "${production_claim_false_pass_repo}"
@@ -157,6 +177,16 @@ set_fixture_json_value \
 assert_fails_with \
   "${production_claim_false_pass_repo}" \
   "Invalid Phase 52.7 demo seed fixture state for production-claim.json: expected rejection"
+
+valid_custom_truth_surface_repo="${workdir}/valid-custom-truth-surface"
+create_valid_repo "${valid_custom_truth_surface_repo}"
+set_fixture_json_value \
+  "${valid_custom_truth_surface_repo}" \
+  "valid-demo-seed.json" \
+  "payload['records'][0]['truth_surfaces'] = ['demo_only_projection']"
+assert_fails_with \
+  "${valid_custom_truth_surface_repo}" \
+  "Invalid Phase 52.7 demo seed fixture state for valid-demo-seed.json: expected valid"
 
 demo_truth_repo="${workdir}/demo-production-truth"
 create_valid_repo "${demo_truth_repo}"

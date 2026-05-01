@@ -56,6 +56,8 @@ Rendered operator surfaces must show these labels directly or through an equival
 
 Reset output is operator guidance and cleanup evidence for the demo bundle only.
 
+Reset selectors must be structured as `{"bundle":"phase-52-7-demo-seed","labels":["demo-only","first-user-rehearsal","not-production-truth"]}` or an equivalent object with the same bundle and label constraints.
+
 ## 6. Production Exclusion Rules
 
 Demo seed validation must reject any record, bundle, reset plan, or presentation that:
