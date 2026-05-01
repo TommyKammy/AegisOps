@@ -118,6 +118,17 @@ for index in $(seq 1 1393); do
 done
 assert_fails_with "${service_growth_repo}" "rejects service.py growth beyond the accepted Phase 50.13.5 ceiling"
 
+method_growth_repo="${workdir}/method-growth"
+create_fixture "${method_growth_repo}"
+{
+  echo "class AegisOpsControlPlaneService:"
+  for index in $(seq 1 96); do
+    printf '    def method_%04d(self):\n' "${index}"
+    printf '        return %d\n' "${index}"
+  done
+} >"${method_growth_repo}/control-plane/aegisops_control_plane/service.py"
+assert_fails_with "${method_growth_repo}" "facade_methods=96 exceeds 95"
+
 missing_doc_repo="${workdir}/missing-doc"
 create_fixture "${missing_doc_repo}"
 perl -0pi -e 's/Compatibility shims are for public or legacy callers, not for package-internal dependency direction\.\n//' \
