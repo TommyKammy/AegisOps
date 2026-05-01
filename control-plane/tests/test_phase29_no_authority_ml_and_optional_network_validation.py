@@ -27,15 +27,15 @@ from aegisops_control_plane.models import (
     RecommendationRecord,
     ReconciliationRecord,
 )
-from aegisops_control_plane.phase29_evidently_drift_visibility import (
+from aegisops_control_plane.ml_shadow.drift_visibility import (
     Phase29EvidentlyDriftVisibilityError,
     build_phase29_evidently_drift_visibility_report,
 )
-from aegisops_control_plane.phase29_shadow_dataset import (
+from aegisops_control_plane.ml_shadow.dataset import (
     Phase29ShadowDatasetSnapshot,
     generate_reviewed_shadow_dataset,
 )
-from aegisops_control_plane.phase29_shadow_scoring import (
+from aegisops_control_plane.ml_shadow.scoring import (
     Phase29ShadowScoringError,
     score_shadow_dataset_offline,
 )

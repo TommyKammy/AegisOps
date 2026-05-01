@@ -14,13 +14,13 @@ for candidate in (CONTROL_PLANE_ROOT, TESTS_ROOT):
         sys.path.insert(0, str(candidate))
 
 
-import aegisops_control_plane.phase29_mlflow_shadow_model_registry as mlflow_shadow_model_registry
+import aegisops_control_plane.ml_shadow.mlflow_registry as mlflow_shadow_model_registry
 from aegisops_control_plane.models import EvidenceRecord, ReconciliationRecord
-from aegisops_control_plane.phase29_mlflow_shadow_model_registry import (
+from aegisops_control_plane.ml_shadow.mlflow_registry import (
     Phase29MlflowShadowModelRegistryError,
     track_shadow_model_with_mlflow,
 )
-from aegisops_control_plane.phase29_shadow_dataset import (
+from aegisops_control_plane.ml_shadow.dataset import (
     Phase29ShadowDatasetSnapshot,
     generate_reviewed_shadow_dataset,
 )
@@ -172,6 +172,36 @@ class UnexpectedRegisteredModelLookupClient(FakeMlflowClient):
         )
 
 
+class CreateExperimentRaceClient(FakeMlflowClient):
+    def create_experiment(
+        self,
+        name: str,
+        tags: dict[str, str] | None = None,
+    ) -> str:
+        self._experiments_by_name[name] = _FakeExperiment("exp-race", name)
+        raise _FakeMlflowLookupError(
+            f"Experiment(name={name}) already exists",
+            error_code="RESOURCE_ALREADY_EXISTS",
+        )
+
+
+class CreateRegisteredModelRaceClient(FakeMlflowClient):
+    def create_registered_model(
+        self,
+        name: str,
+        tags: dict[str, str] | None = None,
+        description: str | None = None,
+    ) -> _FakeRegisteredModel:
+        self.registered_models[name] = {
+            "tags": dict(tags or {}),
+            "description": description,
+        }
+        raise _FakeMlflowLookupError(
+            f"Registered Model with name={name} already exists",
+            error_code="RESOURCE_ALREADY_EXISTS",
+        )
+
+
 class Phase29MlflowShadowModelRegistryValidationTests(ServicePersistenceTestBase):
     def test_tracker_records_mlflow_shadow_run_and_registry_lineage(self) -> None:
         store, _service, dataset_snapshot, decided_at = self._build_shadow_dataset_snapshot()
@@ -304,6 +334,69 @@ class Phase29MlflowShadowModelRegistryValidationTests(ServicePersistenceTestBase
                 dataset_snapshot=dataset_snapshot,
                 experiment_name="phase29-shadow-model-training",
                 run_name="missing-registry-namespace",
+                registered_model_name="shadow.models.github_audit_xgboost",
+                model_source_uri="models:/shadow.models.github_audit_xgboost/artifacts/model.pkl",
+                model_family="xgboost",
+                model_version="candidate-2026-04-20",
+                training_spec_version="phase29-shadow-training-v1",
+                feature_schema_version="phase29-shadow-features-v1",
+                label_schema_version="phase29-shadow-labels-v1",
+                lineage_review_note_id="note-phase29-shadow-001",
+                evaluation_metrics={"precision_at_5": 0.8},
+                evaluation_metadata={"evaluation_window": "2026-04-01/2026-04-20"},
+                run_timestamp=decided_at,
+            )
+
+        self.assertEqual(result.registered_model_version, "1")
+        self.assertIn("shadow.models.github_audit_xgboost", client.registered_models)
+
+    def test_tracker_recovers_when_experiment_create_races_with_existing_resource(self) -> None:
+        _store, _service, dataset_snapshot, decided_at = self._build_shadow_dataset_snapshot()
+        client = CreateExperimentRaceClient()
+
+        with mock.patch.object(
+            mlflow_shadow_model_registry,
+            "_MLFLOW_LOOKUP_EXCEPTIONS",
+            (_FakeMlflowLookupError,),
+        ):
+            result = track_shadow_model_with_mlflow(
+                client=client,
+                dataset_snapshot=dataset_snapshot,
+                experiment_name="phase29-shadow-model-training",
+                run_name="experiment-create-race",
+                registered_model_name="shadow.models.github_audit_xgboost",
+                model_source_uri="models:/shadow.models.github_audit_xgboost/artifacts/model.pkl",
+                model_family="xgboost",
+                model_version="candidate-2026-04-20",
+                training_spec_version="phase29-shadow-training-v1",
+                feature_schema_version="phase29-shadow-features-v1",
+                label_schema_version="phase29-shadow-labels-v1",
+                lineage_review_note_id="note-phase29-shadow-001",
+                evaluation_metrics={"precision_at_5": 0.8},
+                evaluation_metadata={"evaluation_window": "2026-04-01/2026-04-20"},
+                run_timestamp=decided_at,
+            )
+
+        self.assertEqual(result.run_id, "run-1")
+        self.assertEqual(
+            client.get_experiment_by_name("phase29-shadow-model-training").experiment_id,
+            "exp-race",
+        )
+
+    def test_tracker_recovers_when_registered_model_create_races_with_existing_resource(self) -> None:
+        _store, _service, dataset_snapshot, decided_at = self._build_shadow_dataset_snapshot()
+        client = CreateRegisteredModelRaceClient()
+
+        with mock.patch.object(
+            mlflow_shadow_model_registry,
+            "_MLFLOW_LOOKUP_EXCEPTIONS",
+            (_FakeMlflowLookupError,),
+        ):
+            result = track_shadow_model_with_mlflow(
+                client=client,
+                dataset_snapshot=dataset_snapshot,
+                experiment_name="phase29-shadow-model-training",
+                run_name="registered-model-create-race",
                 registered_model_name="shadow.models.github_audit_xgboost",
                 model_source_uri="models:/shadow.models.github_audit_xgboost/artifacts/model.pkl",
                 model_family="xgboost",

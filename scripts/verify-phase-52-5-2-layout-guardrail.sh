@@ -53,7 +53,11 @@ row_pattern = re.compile(
     r"^\| `(?P<module>[^`]+\.py)` \| `(?P<family>[^`]+)` \| (?P<contract>[^|][^|]*) \|$",
     re.MULTILINE,
 )
-classified_modules = {match.group("module") for match in row_pattern.finditer(doc_text)}
+classified_module_contracts = {
+    match.group("module"): match.group("contract").strip()
+    for match in row_pattern.finditer(doc_text)
+}
+classified_modules = set(classified_module_contracts)
 
 unclassified_flat_modules: list[str] = []
 for path in package_root.glob("*.py"):
@@ -62,6 +66,16 @@ for path in package_root.glob("*.py"):
         unclassified_flat_modules.append(relative)
 
 missing_scaffold_markers = []
+phase_numbered_production_modules = []
+phase_numbered_name_pattern = re.compile(r"^phase\d+_.*\.py$")
+for path in package_root.rglob("*.py"):
+    relative = path.relative_to(package_root).as_posix()
+    if not phase_numbered_name_pattern.match(path.name):
+        continue
+    contract = classified_module_contracts.get(relative)
+    if contract is None or not contract.startswith("Compatibility shim only"):
+        phase_numbered_production_modules.append(relative)
+
 for scaffold_root in approved_scaffold_roots:
     init_relative = f"{scaffold_root}/__init__.py"
     init_path = package_root / init_relative
@@ -92,7 +106,16 @@ if missing_scaffold_markers:
     )
     sys.exit(1)
 
+if phase_numbered_production_modules:
+    print(
+        "Phase 52.5.2 layout guardrail found phase-numbered production modules "
+        "without compatibility-shim classification: "
+        + ", ".join(sorted(phase_numbered_production_modules)),
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
 print(
-    "Phase 52.5.2 layout guardrail accepts the current classified baseline and rejects new unclassified flat root-level modules."
+    "Phase 52.5.2 layout guardrail accepts the current classified baseline and rejects new unclassified or phase-numbered production modules."
 )
 PY

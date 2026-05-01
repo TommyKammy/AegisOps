@@ -272,17 +272,16 @@ Shadow-mode ML may inform reviewer attention. It must not redefine the durable c
 
 ## 9. Module naming posture
 
-The current Python implementation keeps the Phase 29 shadow-mode helpers under phase-local module names.
+The current Python implementation keeps the Phase 29 shadow-mode helpers under the `ml_shadow` package with domain-oriented module names.
 
-For this reviewed boundary, `phase29_shadow_dataset.py`, `phase29_shadow_scoring.py`, `phase29_mlflow_shadow_model_registry.py`, and `phase29_evidently_drift_visibility.py` must keep the current phase-local module names.
+For this reviewed boundary, the production implementations live under `ml_shadow/dataset.py`, `ml_shadow/scoring.py`, `ml_shadow/mlflow_registry.py`, and `ml_shadow/drift_visibility.py`.
+The legacy `phase29_shadow_dataset.py`, `phase29_shadow_scoring.py`, `phase29_mlflow_shadow_model_registry.py`, and `phase29_evidently_drift_visibility.py` modules remain compatibility shims only.
 
-That naming remains intentional because these modules currently implement one boundary-reviewed Phase 29 slice rather than a settled cross-phase domain package.
+That naming remains intentional because these modules are now owned by the reviewed ML shadow domain package while their class and function contracts continue to identify the bounded Phase 29 slice.
 
-Keeping the phase-local names makes the reviewed scope explicit: this code exists to support the bounded Phase 29 shadow dataset, shadow scoring, MLflow lineage, and drift visibility surfaces without implying that the repository has already approved a broader domain-oriented ML subsystem.
+Keeping the compatibility shims makes the reviewed scope explicit for legacy callers without letting phase-numbered filenames remain the production identity.
 
-Renaming these modules to domain-oriented names now would add churn without a second reviewed consumer, and it would risk overstating stability for interfaces that are still tied to this specific reviewed boundary.
-
-Later roadmap work may revisit this posture if the same reviewed contracts need to serve multiple phases or a clearly approved cross-phase package boundary. At that point, a rename or package extraction should happen deliberately across code, tests, scripts, and docs rather than by accidental drift.
+Later roadmap work may revisit the public class and function names if the same reviewed contracts need to serve multiple phases or a clearly approved cross-phase package boundary. That work must happen deliberately across code, tests, scripts, and docs rather than by accidental drift.
 
 ## 10. Alignment Notes
 

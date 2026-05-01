@@ -96,15 +96,18 @@ class Phase29MlShadowModeBoundaryDocsTests(unittest.TestCase):
 
         for term in (
             "Module naming posture",
+            "`ml_shadow/dataset.py`",
+            "`ml_shadow/scoring.py`",
+            "`ml_shadow/mlflow_registry.py`",
+            "`ml_shadow/drift_visibility.py`",
             "`phase29_shadow_dataset.py`",
             "`phase29_shadow_scoring.py`",
             "`phase29_mlflow_shadow_model_registry.py`",
             "`phase29_evidently_drift_visibility.py`",
-            "keep the current phase-local module names",
-            "boundary-reviewed Phase 29 slice",
+            "compatibility shims only",
+            "bounded Phase 29 slice",
             "domain-oriented",
-            "Later roadmap work",
-            "rename",
+            "production identity",
         ):
             self.assertIn(term, text)
 

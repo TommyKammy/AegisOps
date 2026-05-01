@@ -14,11 +14,11 @@ for candidate in (CONTROL_PLANE_ROOT, TESTS_ROOT):
 
 
 from aegisops_control_plane.models import EvidenceRecord, ReconciliationRecord
-from aegisops_control_plane.phase29_evidently_drift_visibility import (
+from aegisops_control_plane.ml_shadow.drift_visibility import (
     Phase29EvidentlyDriftVisibilityError,
     build_phase29_evidently_drift_visibility_report,
 )
-from aegisops_control_plane.phase29_shadow_dataset import (
+from aegisops_control_plane.ml_shadow.dataset import (
     Phase29ShadowDatasetSnapshot,
     generate_reviewed_shadow_dataset,
 )
@@ -177,6 +177,43 @@ class Phase29EvidentlyDriftVisibilityValidationTests(ServicePersistenceTestBase)
                 rendered_at=rendered_at,
                 stale_feature_after=timedelta(minutes=30),
             )
+
+    def test_drift_only_subject_rolls_up_as_drift_detected(self) -> None:
+        _store, _service, reference_snapshot, _candidate_snapshot, rendered_at = (
+            self._build_drift_snapshots()
+        )
+        reference_example = reference_snapshot.examples[0]
+        candidate_snapshot = Phase29ShadowDatasetSnapshot(
+            snapshot_id="snapshot-phase29-drift-only-candidate",
+            extraction_spec_version=reference_snapshot.extraction_spec_version,
+            snapshot_timestamp=reference_snapshot.snapshot_timestamp,
+            example_count=1,
+            examples=(
+                {
+                    **reference_example,
+                    "features": {
+                        **reference_example["features"],
+                        "source_family": {
+                            **reference_example["features"]["source_family"],
+                            "value": "entra_id",
+                        },
+                    },
+                },
+            ),
+        )
+
+        report = build_phase29_evidently_drift_visibility_report(
+            reference_snapshot=reference_snapshot,
+            candidate_snapshot=candidate_snapshot,
+            rendered_at=rendered_at,
+            stale_feature_after=timedelta(days=1),
+        )
+
+        self.assertEqual(report.status, "drift-detected")
+        subject = report.subjects[0]
+        self.assertEqual(subject.correlation_status, "drift-detected")
+        self.assertEqual(subject.status, "unresolved")
+        self.assertEqual(subject.feature_drift_count, 1)
 
     def _build_drift_snapshots(
         self,
