@@ -192,7 +192,7 @@ assert_fails_with \
 workstation_path_repo="${workdir}/workstation-local-path"
 create_valid_repo "${workstation_path_repo}"
 workstation_path="$(printf '/%s/%s/gap-matrix.md' "Users" "example")"
-printf '%s\n' "Matrix path:file://${workstation_path}" \
+printf '%s%s%s\n' "Matrix path:" "file:" "//${workstation_path}" \
   >>"${workstation_path_repo}/docs/phase-51-5-competitive-gap-matrix.md"
 assert_fails_with \
   "${workstation_path_repo}" \
