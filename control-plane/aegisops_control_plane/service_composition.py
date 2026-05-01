@@ -22,8 +22,8 @@ from .action_reconciliation_orchestration import (
     ActionOrchestrationBoundary,
     ReconciliationOrchestrationBoundary,
 )
-from .action_review_inspection import ActionReviewInspectionBoundary
-from .action_review_write_surface import ActionReviewWriteSurface
+from .actions.review.action_review_inspection import ActionReviewInspectionBoundary
+from .actions.review.action_review_write_surface import ActionReviewWriteSurface
 from .case_workflow import CaseWorkflowService
 from .config import RuntimeConfig
 from .detection_lifecycle import DetectionIntakeService

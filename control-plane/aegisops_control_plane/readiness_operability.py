@@ -5,8 +5,8 @@ from collections.abc import Iterable, Mapping
 from datetime import datetime, timezone
 from typing import Any
 
-from . import action_review_projection as _action_review_projection
-from .action_review_projection import _ActionReviewRecordIndex
+from .actions.review import action_review_projection as _action_review_projection
+from .actions.review.action_review_projection import _ActionReviewRecordIndex
 from .models import (
     AITraceRecord,
     ActionExecutionRecord,

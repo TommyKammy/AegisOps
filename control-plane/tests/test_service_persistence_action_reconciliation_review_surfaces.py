@@ -14,9 +14,38 @@ from aegisops_control_plane import action_review_projection
 from aegisops_control_plane import action_review_chain
 from aegisops_control_plane import action_review_coordination
 from aegisops_control_plane import action_review_index
+from aegisops_control_plane import action_review_inspection
 from aegisops_control_plane import action_review_path_health
 from aegisops_control_plane import action_review_timeline
 from aegisops_control_plane import action_review_visibility
+from aegisops_control_plane import action_review_write_surface
+from aegisops_control_plane.actions.review import (
+    action_review_chain as action_review_package_chain,
+)
+from aegisops_control_plane.actions.review import (
+    action_review_coordination as action_review_package_coordination,
+)
+from aegisops_control_plane.actions.review import (
+    action_review_index as action_review_package_index,
+)
+from aegisops_control_plane.actions.review import (
+    action_review_inspection as action_review_package_inspection,
+)
+from aegisops_control_plane.actions.review import (
+    action_review_path_health as action_review_package_path_health,
+)
+from aegisops_control_plane.actions.review import (
+    action_review_projection as action_review_package_projection,
+)
+from aegisops_control_plane.actions.review import (
+    action_review_timeline as action_review_package_timeline,
+)
+from aegisops_control_plane.actions.review import (
+    action_review_visibility as action_review_package_visibility,
+)
+from aegisops_control_plane.actions.review import (
+    action_review_write_surface as action_review_package_write_surface,
+)
 from _service_persistence_support import (
     ActionExecutionRecord,
     ActionRequestRecord,
@@ -36,6 +65,23 @@ from _service_persistence_support import (
 )
 
 class ActionReviewSurfacePersistenceTests(ServicePersistenceTestBase):
+    def test_action_review_modules_live_under_actions_review_with_legacy_shims(
+        self,
+    ) -> None:
+        self.assertEqual(
+            tuple(pathlib.Path(action_review_package_projection.__file__).parts[-3:]),
+            ("actions", "review", "action_review_projection.py"),
+        )
+        self.assertIs(action_review_projection, action_review_package_projection)
+        self.assertIs(action_review_chain, action_review_package_chain)
+        self.assertIs(action_review_coordination, action_review_package_coordination)
+        self.assertIs(action_review_index, action_review_package_index)
+        self.assertIs(action_review_inspection, action_review_package_inspection)
+        self.assertIs(action_review_path_health, action_review_package_path_health)
+        self.assertIs(action_review_timeline, action_review_package_timeline)
+        self.assertIs(action_review_visibility, action_review_package_visibility)
+        self.assertIs(action_review_write_surface, action_review_package_write_surface)
+
     def test_action_review_projection_shim_preserves_focused_public_imports(
         self,
     ) -> None:
