@@ -144,6 +144,55 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
         loopback_gate.assert_called_once_with(handler)
         service.authenticate_protected_surface_request.assert_not_called()
 
+    def test_operator_write_auth_allows_loopback_local_role_after_loopback_gate(
+        self,
+    ) -> None:
+        service = _build_service()
+        handler = mock.Mock()
+        handler.client_address = ("127.0.0.1", 44321)
+        handler.headers.get.return_value = None
+        loopback_gate = mock.Mock()
+
+        principal = authenticate_protected_write(
+            service=service,
+            handler=handler,
+            request_path="/operator/promote-alert-to-case",
+            require_loopback_operator_request_fn=loopback_gate,
+        )
+
+        loopback_gate.assert_called_once_with(handler)
+        self.assertEqual(principal.identity, "loopback-local-operator")
+        self.assertEqual(principal.role, "loopback_local")
+        self.assertEqual(principal.access_path, "loopback_direct")
+
+    def test_operator_write_auth_rejects_claimed_loopback_role_from_reviewed_proxy(
+        self,
+    ) -> None:
+        service = _build_service(host=TEST_NON_LOOPBACK_HOST)
+        handler = mock.Mock()
+        handler.client_address = ("10.10.0.5", 44321)
+        headers = {
+            "X-Forwarded-Proto": "https",
+            "X-AegisOps-Proxy-Secret": REVIEWED_SURFACE_PROXY_SECRET,
+            "X-AegisOps-Proxy-Service-Account": REVIEWED_PROXY_SERVICE_ACCOUNT,
+            "X-AegisOps-Authenticated-IdP": "authentik",
+            "X-AegisOps-Authenticated-Subject": "authentik-user-001",
+            "X-AegisOps-Authenticated-Identity": "loopback-local-operator",
+            "X-AegisOps-Authenticated-Role": "loopback_local",
+        }
+        handler.headers.get.side_effect = headers.get
+
+        with self.assertRaisesRegex(
+            PermissionError,
+            "protected control-plane surface role is not authorized for this endpoint",
+        ):
+            authenticate_protected_write(
+                service=service,
+                handler=handler,
+                request_path="/operator/promote-alert-to-case",
+                require_loopback_operator_request_fn=lambda _handler: None,
+            )
+
     def test_operational_runtime_surfaces_are_extracted_into_dedicated_collaborators(
         self,
     ) -> None:

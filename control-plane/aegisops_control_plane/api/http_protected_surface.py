@@ -3,7 +3,7 @@ from __future__ import annotations
 from http.server import BaseHTTPRequestHandler
 from typing import Callable
 
-from .entrypoint_support import require_loopback_operator_request
+from .entrypoint_support import peer_addr_is_loopback, require_loopback_operator_request
 from ..service import AegisOpsControlPlaneService
 
 
@@ -11,6 +11,7 @@ READ_ONLY_PROTECTED_ROLES = ("analyst", "approver", "platform_admin")
 PLATFORM_ADMIN_ROLES = ("platform_admin",)
 OPERATOR_ANALYST_ROLES = ("analyst",)
 OPERATOR_APPROVER_ROLES = ("approver",)
+LOOPBACK_OPERATOR_ROLES = ("loopback_local",)
 
 PROTECTED_READ_ROLES_BY_PATH: dict[str, tuple[str, ...]] = {
     "/runtime": PLATFORM_ADMIN_ROLES,
@@ -86,6 +87,9 @@ def authenticate_protected_write(
 
     if request_path in OPERATOR_ANALYST_PATHS | OPERATOR_APPROVER_PATHS:
         require_loopback_operator_request_fn(handler)
+        peer_addr = handler.client_address[0] if handler.client_address else None
+        if peer_addr_is_loopback(peer_addr):
+            allowed_roles = allowed_roles + LOOPBACK_OPERATOR_ROLES
 
     return _authenticate_protected_surface(
         service=service,
