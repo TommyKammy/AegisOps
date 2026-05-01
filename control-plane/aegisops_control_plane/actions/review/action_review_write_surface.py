@@ -6,7 +6,7 @@ import logging
 from typing import Callable, Mapping, TYPE_CHECKING, Protocol
 
 from . import action_review_projection as _action_review_projection
-from ...action_policy import evaluate_action_policy_record
+from ..action_policy import evaluate_action_policy_record
 from ...models import (
     ActionRequestRecord,
     AlertRecord,

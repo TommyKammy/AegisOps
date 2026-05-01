@@ -353,3 +353,33 @@ Each follow-up extraction issue should:
 - verify that the resulting slice still aligns with the reviewed Phase 19-21 documents before merging.
 
 This document is the decomposition contract for future `service.py` extraction work. Later issues may rename internal classes during implementation if the resulting ownership and dependency direction remain materially identical to the boundaries defined here.
+
+## 11. Phase 52.5 Facade Freeze And Package Import Rule
+
+No new implementation-heavy behavior belongs in `service.py` after Phase 52.5.
+The accepted Phase 50.13.5 facade ceiling remains the freeze line: `1393` physical lines, `1241` effective lines, and `95` `AegisOpsControlPlaneService` methods under the ADR-0003 facade-preservation exception.
+New workflow logic, policy decisions, adapter orchestration, DTO shaping, readiness or restore behavior, evidence handling, action governance, assistant assembly, ingestion logic, and API or CLI transport handling belong in the package owner for that domain rather than in the public service facade.
+
+`service.py` may retain public compatibility entrypoints when existing callers still rely on them, but those methods should stay narrow delegates into collaborators or package-owned helpers.
+If a future issue needs more than delegation, the expected response is a new decomposition decision or a package-owned implementation slice, not silent facade growth.
+
+Internal control-plane modules must import moved implementation owners from their domain packages:
+
+- `assistant/` owns assistant context, advisory, provider, trace lifecycle, and live workflow implementations.
+- `reporting/` owns audit and pilot reporting export implementations.
+- `actions/` and `actions/review/` own action policy, lifecycle, execution, reconciliation, and reviewed-action implementations.
+- `runtime/` owns runtime boundary, readiness, restore, operations, diagnostics, and service snapshot implementations.
+- `api/` owns CLI, entrypoint, protected-surface, runtime-surface, and HTTP-surface implementations.
+- `ingestion/` owns detection lifecycle, native detection context, case workflow, and evidence linkage implementations.
+- `evidence/` owns external evidence boundary, facade, MISP, osquery, and endpoint helper implementations.
+- `ml_shadow/` owns Phase 29 shadow dataset, scoring, registry, and drift visibility implementations.
+
+Compatibility shims are for public or legacy callers, not for package-internal dependency direction.
+Package-owned modules must not reach through root-level moved-module shims such as `aegisops_control_plane.action_policy` when a package owner such as `aegisops_control_plane.actions.action_policy` exists.
+Legacy imports remain available where promised by ADR-0013, but internal dependency direction should now point at the owning package unless the import is an intentional public facade boundary such as `AegisOpsControlPlaneService`.
+
+The focused guardrail for this freeze is:
+
+`bash scripts/verify-phase-52-5-9-service-facade-freeze.sh`
+
+Run it with `bash scripts/verify-maintainability-hotspots.sh` and `bash scripts/verify-phase-52-5-2-import-compatibility.sh` when closing a package-migration or service-facade issue.
