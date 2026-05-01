@@ -55,6 +55,12 @@ Thumbs.db
 docker-compose.override.yml
 docker-compose.local.yml
 
+# Generated first-user runtime config, secrets, and certificates
+control-plane/deployment/first-boot/generated/
+control-plane/deployment/first-boot/runtime/
+control-plane/deployment/first-boot/secrets/
+control-plane/deployment/first-boot/certs/
+
 # Rendered Wazuh integration artifacts may contain live bearer material
 ossec.integration.rendered.xml
 *.ossec.integration.rendered.xml
