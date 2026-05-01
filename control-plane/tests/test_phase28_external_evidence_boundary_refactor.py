@@ -269,7 +269,10 @@ class Phase28ExternalEvidenceBoundaryRefactorTests(unittest.TestCase):
             CONTROL_PLANE_ROOT / "aegisops_control_plane" / "service.py"
         ).read_text(encoding="utf-8")
         facade_source = (
-            CONTROL_PLANE_ROOT / "aegisops_control_plane" / "external_evidence_facade.py"
+            CONTROL_PLANE_ROOT
+            / "aegisops_control_plane"
+            / "evidence"
+            / "external_evidence_facade.py"
         ).read_text(encoding="utf-8")
         public_route_names = (
             "attach_misp_context",

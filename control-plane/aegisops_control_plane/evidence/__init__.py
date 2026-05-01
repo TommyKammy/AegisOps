@@ -1,1 +1,1 @@
-"""Package scaffold only for future evidence boundary modules."""
+"""External evidence boundary and helper modules."""

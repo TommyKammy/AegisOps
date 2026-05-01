@@ -1,1 +1,1 @@
-"""Package scaffold only for future ingestion lifecycle modules."""
+"""Ingestion lifecycle, case workflow, and evidence linkage modules."""

@@ -52,9 +52,9 @@ from .reviewed_slice_policy import (
     REVIEWED_LIVE_SLICE_LABEL,
     ReviewedSlicePolicy,
 )
-from .case_workflow import CaseWorkflowFacade
-from .detection_lifecycle_helpers import LATEST_LIFECYCLE_TRANSITION_UNSET
-from .external_evidence_facade import ExternalEvidenceFacade
+from .ingestion.case_workflow import CaseWorkflowFacade
+from .ingestion.detection_lifecycle_helpers import LATEST_LIFECYCLE_TRANSITION_UNSET
+from .evidence.external_evidence_facade import ExternalEvidenceFacade
 from .service_composition import (
     ControlPlaneServiceCompositionDependencies,
     build_control_plane_service_composition,
