@@ -433,7 +433,7 @@ class Phase23ApprovalSurfaceValidationTests(unittest.TestCase):
             self.assertIn("expected one of: approver", error_payload["message"])
             self.assertEqual(
                 authenticate_mock.call_args_list[0].kwargs["allowed_roles"],
-                ("approver",),
+                ("approver", "loopback_local"),
             )
             stored_request = service.get_record(
                 type(action_request),
