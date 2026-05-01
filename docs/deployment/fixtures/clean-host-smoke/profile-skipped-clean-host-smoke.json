@@ -1,0 +1,68 @@
+{
+  "fixture": "profile-skipped-clean-host-smoke",
+  "phase": "52.8",
+  "overall_state": "skipped",
+  "full_stack_success": false,
+  "requires_phase_53_or_54_completion": false,
+  "authority_boundary": "clean-host smoke output is validation evidence only",
+  "contract_coverage": [
+    "compose",
+    "env/secrets/certs",
+    "host preflight",
+    "demo seed"
+  ],
+  "sequence": [
+    {
+      "step": 1,
+      "command": "init",
+      "state": "skipped",
+      "missing_prerequisite": "profile-backed init is not implemented",
+      "closing_phase": "Phase 53",
+      "safe_next_action": "keep init skipped until profile-backed setup exists",
+      "contract_refs": [
+        "docs/phase-52-1-cli-command-contract.md",
+        "docs/deployment/env-secrets-certs-contract.md"
+      ],
+      "evidence_role": "setup skip evidence only"
+    },
+    {
+      "step": 2,
+      "command": "up",
+      "state": "skipped",
+      "missing_prerequisite": "Wazuh and Shuffle product profiles are not implemented",
+      "closing_phase": "Phase 53",
+      "safe_next_action": "keep profile startup skipped until the owning profile phase replaces this skeleton",
+      "contract_refs": [
+        "docs/phase-52-1-cli-command-contract.md",
+        "docs/deployment/compose-generator-contract.md"
+      ],
+      "evidence_role": "startup skip evidence only"
+    },
+    {
+      "step": 3,
+      "command": "doctor",
+      "state": "skipped",
+      "missing_prerequisite": "live clean-host preflight is not implemented",
+      "closing_phase": "Phase 53",
+      "safe_next_action": "keep doctor skipped until live preflight exists",
+      "contract_refs": [
+        "docs/phase-52-1-cli-command-contract.md",
+        "docs/deployment/host-preflight-contract.md"
+      ],
+      "evidence_role": "preflight skip evidence only"
+    },
+    {
+      "step": 4,
+      "command": "seed-demo",
+      "state": "skipped",
+      "missing_prerequisite": "demo seed command is not implemented",
+      "closing_phase": "Phase 54",
+      "safe_next_action": "keep seed-demo skipped until demo seed execution exists",
+      "contract_refs": [
+        "docs/phase-52-1-cli-command-contract.md",
+        "docs/deployment/demo-seed-contract.md"
+      ],
+      "evidence_role": "demo seed skip evidence only"
+    }
+  ]
+}
