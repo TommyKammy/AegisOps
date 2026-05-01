@@ -33,9 +33,9 @@ The approved scaffold packages under `control-plane/aegisops_control_plane/` are
 | `actions/` | `actions` | Package scaffold only; no action lifecycle or coordination move yet. |
 | `actions/review/` | `actions.review` | Package scaffold only; no reviewed-action surface move yet. |
 | `evidence/` | `evidence` | Package scaffold only; no evidence boundary or facade move yet. |
-| `assistant/` | `assistant` | Package scaffold only; no assistant context, advisory, provider, or workflow move yet. |
+| `assistant/` | `assistant` | Package scaffold retained as the owner for assistant context, advisory, provider, trace lifecycle, and workflow modules moved in Phase 52.5.3. |
 | `ml_shadow/` | `ml_shadow` | Package scaffold only; no reviewed ML shadow-mode move yet. |
-| `reporting/` | `reporting` | Package scaffold only; no audit, pilot reporting, or inspection move yet. |
+| `reporting/` | `reporting` | Package scaffold retained as the owner for audit and pilot reporting export modules moved in Phase 52.5.3. |
 
 The existing `adapters/` package remains the approved adapter package marker from earlier phases.
 
@@ -51,13 +51,30 @@ Compatibility shims cannot make Wazuh, Shuffle, tickets, assistant output, gener
 
 Removing a legacy import path requires explicit caller evidence that covers internal imports, CLI imports, HTTP imports, tests, operator runbooks, and documented external usage where applicable.
 
-## 4. Initial Import Compatibility Checks
+## 4. Import Compatibility Checks
 
 The initial import compatibility verifier covers `aegisops_control_plane.service:AegisOpsControlPlaneService` and `aegisops_control_plane.models:AlertRecord` as stable legacy imports.
 
 Later child issues that move modules must add at least one legacy import check for each moved module before changing internal callers.
 
 An import compatibility check that bypasses the legacy path and validates only the new package path is incomplete because it does not prove existing callers keep working.
+
+Phase 52.5.3 extends the verifier so each moved assistant and reporting module is checked through both the legacy root import and the target package import:
+
+- `aegisops_control_plane.ai_trace_lifecycle:AITraceLifecycleService`
+- `aegisops_control_plane.assistant.ai_trace_lifecycle:AITraceLifecycleService`
+- `aegisops_control_plane.assistant_advisory:AssistantAdvisoryCoordinator`
+- `aegisops_control_plane.assistant.assistant_advisory:AssistantAdvisoryCoordinator`
+- `aegisops_control_plane.assistant_context:AssistantContextAssembler`
+- `aegisops_control_plane.assistant.assistant_context:AssistantContextAssembler`
+- `aegisops_control_plane.assistant_provider:AssistantProviderAdapter`
+- `aegisops_control_plane.assistant.assistant_provider:AssistantProviderAdapter`
+- `aegisops_control_plane.live_assistant_workflow:LiveAssistantWorkflowCoordinator`
+- `aegisops_control_plane.assistant.live_assistant_workflow:LiveAssistantWorkflowCoordinator`
+- `aegisops_control_plane.audit_export:export_audit_retention_baseline`
+- `aegisops_control_plane.reporting.audit_export:export_audit_retention_baseline`
+- `aegisops_control_plane.pilot_reporting_export:export_pilot_executive_summary`
+- `aegisops_control_plane.reporting.pilot_reporting_export:export_pilot_executive_summary`
 
 ## 5. Layout Guardrail Skeleton
 

@@ -9,6 +9,20 @@ control_plane_root="${repo_root}/control-plane"
 required_imports=(
   "aegisops_control_plane.service:AegisOpsControlPlaneService"
   "aegisops_control_plane.models:AlertRecord"
+  "aegisops_control_plane.ai_trace_lifecycle:AITraceLifecycleService"
+  "aegisops_control_plane.assistant.ai_trace_lifecycle:AITraceLifecycleService"
+  "aegisops_control_plane.assistant_advisory:AssistantAdvisoryCoordinator"
+  "aegisops_control_plane.assistant.assistant_advisory:AssistantAdvisoryCoordinator"
+  "aegisops_control_plane.assistant_context:AssistantContextAssembler"
+  "aegisops_control_plane.assistant.assistant_context:AssistantContextAssembler"
+  "aegisops_control_plane.assistant_provider:AssistantProviderAdapter"
+  "aegisops_control_plane.assistant.assistant_provider:AssistantProviderAdapter"
+  "aegisops_control_plane.live_assistant_workflow:LiveAssistantWorkflowCoordinator"
+  "aegisops_control_plane.assistant.live_assistant_workflow:LiveAssistantWorkflowCoordinator"
+  "aegisops_control_plane.audit_export:export_audit_retention_baseline"
+  "aegisops_control_plane.reporting.audit_export:export_audit_retention_baseline"
+  "aegisops_control_plane.pilot_reporting_export:export_pilot_executive_summary"
+  "aegisops_control_plane.reporting.pilot_reporting_export:export_pilot_executive_summary"
 )
 
 if [[ ! -f "${doc_path}" ]]; then

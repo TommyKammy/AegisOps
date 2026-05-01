@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 import pathlib
 import sys
+import threading
 import time
 import unittest
 from unittest import mock
@@ -66,6 +67,53 @@ class AssistantProviderAdapterValidationTests(unittest.TestCase):
             result.failure_summary,
         )
         self.assertLess(elapsed, 0.15)
+
+    def test_adapter_does_not_retry_while_timed_out_transport_is_still_running(
+        self,
+    ) -> None:
+        started = threading.Event()
+        release = threading.Event()
+        transport = mock.Mock()
+
+        def blocked_transport(*, request: dict[str, object]) -> dict[str, object]:
+            self.assertEqual(request["timeout_seconds"], 0.01)
+            started.set()
+            release.wait(timeout=1)
+            return {
+                "provider_request_id": "provider-request-late-001",
+                "provider_response_id": "provider-response-late-001",
+                "provider_transcript_id": "provider-transcript-late-001",
+                "model_version": "model-version-2026-05-01",
+                "output_text": "Late response.",
+            }
+
+        transport.send_request.side_effect = blocked_transport
+        adapter = AssistantProviderAdapter(
+            provider_identity="openai",
+            model_identity="gpt-5.4",
+            prompt_version="phase24-case-summary-v1",
+            request_timeout_seconds=0.01,
+            max_attempts=2,
+            transport=transport,
+        )
+
+        try:
+            result = adapter.generate(
+                workflow_family="first_live_assistant_summary_family",
+                workflow_task="case_summary",
+                transcript=[{"role": "user", "content": "Summarize case-001."}],
+                reviewed_input_refs=("case-001",),
+                metadata={"record_family": "case", "record_id": "case-001"},
+            )
+
+            self.assertTrue(started.wait(timeout=1))
+            self.assertEqual(result.status, "timeout")
+            self.assertEqual(result.attempt_count, 1)
+            self.assertEqual(len(result.failures), 1)
+            self.assertEqual(result.failures[0].failure_kind, "timeout")
+            self.assertEqual(transport.send_request.call_count, 1)
+        finally:
+            release.set()
 
     def test_adapter_retries_bounded_timeout_failures_and_records_no_memory_provenance(
         self,
