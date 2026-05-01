@@ -1232,6 +1232,60 @@ class CliInspectionActionReviewTests(ControlPlaneCliInspectionTestBase):
                 self.assertEqual(review["review_state"], review_state)
                 self.assertIsNone(review["coordination_ticket_outcome"])
 
+    def test_cli_inspect_case_detail_surfaces_canceled_manual_fallback_outcome(
+        self,
+    ) -> None:
+        _, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        seeded = self._seed_create_tracking_ticket_request(
+            service=service,
+            promoted_case=promoted_case,
+            reviewed_at=reviewed_at,
+            suffix="canceled-manual-fallback-001",
+            coordination_reference_id=(
+                "coord-ref-cli-create-ticket-canceled-manual-fallback-001"
+            ),
+        )
+        service.persist_record(
+            replace(
+                seeded["action_request"],
+                lifecycle_state="canceled",
+            )
+        )
+        service.record_action_review_manual_fallback(
+            action_request_id=seeded["action_request"].action_request_id,
+            fallback_at=reviewed_at + timedelta(minutes=45),
+            fallback_actor_identity="analyst-003",
+            authority_boundary="approved_human_fallback",
+            reason=(
+                "The reviewed create-ticket automation path was canceled after approval."
+            ),
+            action_taken=(
+                "Opened the reviewed tracking ticket manually after cancellation."
+            ),
+            verification_evidence_ids=(evidence_id,),
+        )
+
+        stdout = io.StringIO()
+        main.main(
+            ["inspect-case-detail", "--case-id", promoted_case.case_id],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        review = payload["current_action_review"]
+        self.assertEqual(review["review_state"], "canceled")
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["status"],
+            "manual_fallback",
+        )
+        self.assertEqual(
+            review["coordination_ticket_outcome"]["manual_fallback"]["action_taken"],
+            "Opened the reviewed tracking ticket manually after cancellation.",
+        )
+
     def test_cli_inspect_case_detail_surfaces_create_tracking_ticket_timeout(
         self,
     ) -> None:

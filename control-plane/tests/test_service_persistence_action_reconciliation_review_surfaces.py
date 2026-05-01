@@ -787,6 +787,156 @@ class ActionReviewSurfacePersistenceTests(ServicePersistenceTestBase):
             action_review["mismatch_inspection"]["reconciliation_id"],
             reconciliation.reconciliation_id,
         )
+
+    def test_action_review_rejects_previous_execution_reconciliation_after_retry(
+        self,
+    ) -> None:
+        _, service, promoted_case, _evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        action_request = service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-surface-retry-lineage-001",
+                approval_decision_id=None,
+                case_id=promoted_case.case_id,
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                idempotency_key="idempotency-surface-retry-lineage-001",
+                target_scope={
+                    "record_family": "case",
+                    "record_id": promoted_case.case_id,
+                    "case_id": promoted_case.case_id,
+                    "alert_id": promoted_case.alert_id,
+                    "finding_id": promoted_case.finding_id,
+                    "recipient_identity": "repo-owner-retry-001",
+                },
+                payload_hash="payload-hash-surface-retry-lineage-001",
+                requested_at=reviewed_at,
+                expires_at=reviewed_at + timedelta(hours=4),
+                lifecycle_state="pending_approval",
+                requester_identity="analyst-001",
+                requested_payload={
+                    "action_type": "notify_identity_owner",
+                    "recipient_identity": "repo-owner-retry-001",
+                    "message_intent": (
+                        "Notify the accountable owner after reviewed approval."
+                    ),
+                    "escalation_reason": (
+                        "Reviewed evidence requires bounded owner notification."
+                    ),
+                },
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "approval",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-surface-retry-lineage-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=reviewed_at + timedelta(hours=4),
+            )
+        )
+        action_request = service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="executing",
+            )
+        )
+        previous_execution = service.persist_record(
+            ActionExecutionRecord(
+                action_execution_id="action-execution-surface-retry-previous-001",
+                action_request_id=action_request.action_request_id,
+                approval_decision_id=approval.approval_decision_id,
+                delegation_id="delegation-surface-retry-previous-001",
+                execution_surface_type="automation_substrate",
+                execution_surface_id="shuffle",
+                execution_run_id="execution-run-surface-retry-previous-001",
+                idempotency_key=action_request.idempotency_key,
+                target_scope=dict(action_request.target_scope),
+                approved_payload=dict(action_request.requested_payload),
+                payload_hash=action_request.payload_hash,
+                delegated_at=reviewed_at + timedelta(minutes=10),
+                expires_at=action_request.expires_at,
+                provenance={"initiated_by": "operator-review"},
+                lifecycle_state="failed",
+            )
+        )
+        current_execution = service.persist_record(
+            ActionExecutionRecord(
+                action_execution_id="action-execution-surface-retry-current-001",
+                action_request_id=action_request.action_request_id,
+                approval_decision_id=approval.approval_decision_id,
+                delegation_id="delegation-surface-retry-current-001",
+                execution_surface_type="automation_substrate",
+                execution_surface_id="shuffle",
+                execution_run_id="execution-run-surface-retry-current-001",
+                idempotency_key=action_request.idempotency_key,
+                target_scope=dict(action_request.target_scope),
+                approved_payload=dict(action_request.requested_payload),
+                payload_hash=action_request.payload_hash,
+                delegated_at=reviewed_at + timedelta(minutes=20),
+                expires_at=action_request.expires_at,
+                provenance={"initiated_by": "operator-review"},
+                lifecycle_state="running",
+            )
+        )
+        stale_reconciliation = service.persist_record(
+            support.ReconciliationRecord(
+                reconciliation_id="reconciliation-surface-retry-previous-001",
+                subject_linkage={
+                    "action_request_ids": (action_request.action_request_id,),
+                    "approval_decision_ids": (approval.approval_decision_id,),
+                    "action_execution_ids": (
+                        previous_execution.action_execution_id,
+                    ),
+                    "delegation_ids": (previous_execution.delegation_id,),
+                },
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                analytic_signal_id=None,
+                execution_run_id=previous_execution.execution_run_id,
+                linked_execution_run_ids=(previous_execution.execution_run_id,),
+                correlation_key="surface-retry-previous-001",
+                first_seen_at=reviewed_at + timedelta(minutes=30),
+                last_seen_at=reviewed_at + timedelta(minutes=31),
+                ingest_disposition="matched",
+                mismatch_summary="previous retry execution receipt must not leak forward",
+                compared_at=reviewed_at + timedelta(minutes=32),
+                lifecycle_state="matched",
+            )
+        )
+
+        case_snapshot = service.inspect_case_detail(promoted_case.case_id).to_dict()
+        action_review = case_snapshot["current_action_review"]
+
+        self.assertEqual(
+            action_review["action_execution_id"],
+            current_execution.action_execution_id,
+        )
+        self.assertIsNone(action_review["reconciliation_id"])
+        self.assertEqual(
+            action_review["timeline"][4]["record_id"],
+            None,
+        )
+        self.assertEqual(
+            action_review["reconciliation_detail"]["authoritative_aegisops_state"],
+            "missing",
+        )
+        self.assertNotEqual(
+            action_review["reconciliation_id"],
+            stale_reconciliation.reconciliation_id,
+        )
+
     def test_service_analyst_queue_prefetches_action_review_records_once_per_inspection(
         self,
     ) -> None:

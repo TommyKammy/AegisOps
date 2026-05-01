@@ -132,6 +132,19 @@ def _latest_action_review_reconciliation(
         )
         return action_execution.delegation_id in subject_delegation_ids
 
+    def _has_execution_or_delegation_lineage(
+        reconciliation: ReconciliationRecord,
+    ) -> bool:
+        subject_action_execution_ids = service._ai_trace_lifecycle_service.ids_from_mapping(
+            reconciliation.subject_linkage,
+            "action_execution_ids",
+        )
+        subject_delegation_ids = service._ai_trace_lifecycle_service.ids_from_mapping(
+            reconciliation.subject_linkage,
+            "delegation_ids",
+        )
+        return bool(subject_action_execution_ids or subject_delegation_ids)
+
     def _matches_review_lineage(reconciliation: ReconciliationRecord) -> bool:
         if _matches_current_execution_lineage(reconciliation):
             return True
@@ -183,6 +196,20 @@ def _latest_action_review_reconciliation(
                 matches.append(reconciliation)
     if not matches:
         return None
+    if action_execution is not None:
+        current_execution_matches = [
+            record for record in matches if _matches_current_execution_lineage(record)
+        ]
+        if current_execution_matches:
+            matches = current_execution_matches
+        else:
+            matches = [
+                record
+                for record in matches
+                if not _has_execution_or_delegation_lineage(record)
+            ]
+        if not matches:
+            return None
     matches.sort(
         key=lambda record: (
             1 if _matches_current_execution_lineage(record) else 0,

@@ -28,9 +28,15 @@ def action_review_coordination_ticket_outcome(
     requested_payload = action_request.requested_payload
     if requested_payload.get("action_type") != "create_tracking_ticket":
         return None
+    manual_fallback = None
+    if isinstance(runtime_visibility, Mapping):
+        manual_fallback_entry = runtime_visibility.get("manual_fallback")
+        if isinstance(manual_fallback_entry, Mapping):
+            manual_fallback = dict(manual_fallback_entry)
     if (
         action_execution is None
         and reconciliation is None
+        and manual_fallback is None
         and review_state in {"rejected", "expired", "superseded", "canceled"}
     ):
         return None
@@ -41,11 +47,6 @@ def action_review_coordination_ticket_outcome(
         action_execution=action_execution,
         path_health=path_health,
     )
-    manual_fallback = None
-    if isinstance(runtime_visibility, Mapping):
-        manual_fallback_entry = runtime_visibility.get("manual_fallback")
-        if isinstance(manual_fallback_entry, Mapping):
-            manual_fallback = dict(manual_fallback_entry)
 
     if (
         reconciliation is not None

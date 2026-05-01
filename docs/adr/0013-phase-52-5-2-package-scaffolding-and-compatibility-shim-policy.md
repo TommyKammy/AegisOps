@@ -76,7 +76,8 @@ Phase 52.5.3 extends the verifier so each moved assistant and reporting module i
 - `aegisops_control_plane.pilot_reporting_export:export_pilot_executive_summary`
 - `aegisops_control_plane.reporting.pilot_reporting_export:export_pilot_executive_summary`
 
-Phase 52.5.4 extends the verifier so each moved action-review module is checked through both the legacy root import and the target `actions.review` package import:
+Phase 52.5.4 extends the verifier so each moved action-review module is checked through both the legacy root import and the target `actions.review` package import.
+This extends ADR-0013 beyond the original Phase 52.5.2 scaffold-only baseline; the Section 8 non-goals describe that original baseline, while this list records later compatibility coverage for moved modules:
 
 - `aegisops_control_plane.action_review_chain:action_review_chains_for_scope`
 - `aegisops_control_plane.actions.review.action_review_chain:action_review_chains_for_scope`
