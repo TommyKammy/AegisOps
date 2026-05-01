@@ -237,8 +237,20 @@ class ApprovedActionDelegationCoordinator:
                     finalized_provenance=finalized_provenance,
                     error=exc,
                 )
-            except Exception:
-                pass
+            except Exception as recording_error:
+                self._service._logger.exception(
+                    "failed to persist dispatch finalization failure metadata",
+                    extra={
+                        "action_execution_id": predispatch_execution.action_execution_id,
+                        "execution_run_id": execution_run_id,
+                    },
+                )
+                if hasattr(exc, "add_note"):
+                    exc.add_note(
+                        "failed to persist dispatch finalization failure metadata: "
+                        f"{type(recording_error).__name__}: {recording_error}"
+                    )
+                raise exc from recording_error
             raise
         self._service._emit_action_execution_delegated_event(execution)
         return execution
