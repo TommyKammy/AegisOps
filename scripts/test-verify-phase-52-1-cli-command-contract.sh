@@ -99,6 +99,16 @@ assert_fails_with \
   "${missing_phase51_citation_repo}" \
   "Missing Phase 52.1 CLI command contract statement: This command contract cites the Phase 51.6 authority-boundary negative-test policy"
 
+commented_heading_repo="${workdir}/commented-heading"
+create_valid_repo "${commented_heading_repo}"
+remove_text_from_contract "${commented_heading_repo}" \
+  '# Phase 52.1 CLI Command Contract'
+printf '%s\n' '<!-- # Phase 52.1 CLI Command Contract -->' \
+  >>"${commented_heading_repo}/docs/phase-52-1-cli-command-contract.md"
+assert_fails_with \
+  "${commented_heading_repo}" \
+  "Missing Phase 52.1 CLI command contract heading: # Phase 52.1 CLI Command Contract"
+
 missing_command_field_repo="${workdir}/missing-command-field"
 create_valid_repo "${missing_command_field_repo}"
 remove_text_from_contract "${missing_command_field_repo}" \
@@ -139,6 +149,19 @@ assert_fails_with \
   "${missing_result_field_repo}" \
   "Missing or empty Phase 52.1 shared output field: result"
 
+fenced_result_field_repo="${workdir}/fenced-result-field"
+create_valid_repo "${fenced_result_field_repo}"
+remove_text_from_contract "${fenced_result_field_repo}" \
+  '- `result`: one of `ok`, `skipped`, `mocked`, `degraded`, or `failed`.'
+printf '%s\n' \
+  '```markdown' \
+  '- `result`: one of `ok`, `skipped`, `mocked`, `degraded`, or `failed`.' \
+  '```' \
+  >>"${fenced_result_field_repo}/docs/phase-52-1-cli-command-contract.md"
+assert_fails_with \
+  "${fenced_result_field_repo}" \
+  "Missing or empty Phase 52.1 shared output field: result"
+
 invalid_result_field_repo="${workdir}/invalid-result-field"
 create_valid_repo "${invalid_result_field_repo}"
 perl -0pi -e 's/- `result`: one of `ok`, `skipped`, `mocked`, `degraded`, or `failed`\./- `result`: one of `ok` or `failed`./g' \
@@ -170,6 +193,19 @@ printf '%s\n' "Phase 52 completes Shuffle profiles." \
 assert_fails_with \
   "${shuffle_complete_repo}" \
   "Forbidden Phase 52.1 CLI command contract claim: Phase 52 completes Shuffle profiles"
+
+fenced_command_row_repo="${workdir}/fenced-command-row"
+create_valid_repo "${fenced_command_row_repo}"
+remove_text_from_contract "${fenced_command_row_repo}" \
+  '| `logs` | Show bounded logs for selected first-user stack components. | Initialized workspace; `<log-selector>` or default selector; optional time window. | Bounded log stream or retained log path; redaction and truncation notice; evidence references only. | Fail closed if the selector is ambiguous, logs cannot be bounded, redaction cannot run, or log text is used as authoritative workflow truth. | Safe to retry with a narrower selector or time window. Retry must not require destructive cleanup. |'
+printf '%s\n' \
+  '```markdown' \
+  '| `logs` | Show bounded logs for selected first-user stack components. | Initialized workspace; `<log-selector>` or default selector; optional time window. | Bounded log stream or retained log path; redaction and truncation notice; evidence references only. | Fail closed if the selector is ambiguous, logs cannot be bounded, redaction cannot run, or log text is used as authoritative workflow truth. | Safe to retry with a narrower selector or time window. Retry must not require destructive cleanup. |' \
+  '```' \
+  >>"${fenced_command_row_repo}/docs/phase-52-1-cli-command-contract.md"
+assert_fails_with \
+  "${fenced_command_row_repo}" \
+  "Missing complete Phase 52.1 CLI command row: logs"
 
 local_path_repo="${workdir}/local-path"
 create_valid_repo "${local_path_repo}"

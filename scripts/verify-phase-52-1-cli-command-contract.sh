@@ -69,34 +69,44 @@ if [[ ! -f "${doc_path}" ]]; then
   exit 1
 fi
 
+doc_rendered_markdown="$(
+  awk '
+    /^[[:space:]]*(```|~~~)/ {
+      in_fenced_block = !in_fenced_block
+      next
+    }
+    !in_fenced_block { print }
+  ' "${doc_path}" | perl -0pe 's/<!--.*?-->//gs'
+)"
+
 for heading in "${required_headings[@]}"; do
-  if ! grep -Fxq -- "${heading}" "${doc_path}"; then
+  if ! grep -Fxq -- "${heading}" <<<"${doc_rendered_markdown}"; then
     echo "Missing Phase 52.1 CLI command contract heading: ${heading}" >&2
     exit 1
   fi
 done
 
 for field in "${shared_output_fields[@]}"; do
-  if ! grep -Eq -- "^- \`${field}\`: [^[:space:]].+$" "${doc_path}"; then
+  if ! grep -Eq -- "^- \`${field}\`: [^[:space:]].+$" <<<"${doc_rendered_markdown}"; then
     echo "Missing or empty Phase 52.1 shared output field: ${field}" >&2
     exit 1
   fi
 done
 
-if ! grep -Fxq -- '- `result`: one of `ok`, `skipped`, `mocked`, `degraded`, or `failed`.' "${doc_path}"; then
+if ! grep -Fxq -- '- `result`: one of `ok`, `skipped`, `mocked`, `degraded`, or `failed`.' <<<"${doc_rendered_markdown}"; then
   echo "Invalid Phase 52.1 shared output result field: expected one of ok, skipped, mocked, degraded, or failed." >&2
   exit 1
 fi
 
 for phrase in "${required_phrases[@]}"; do
-  if ! grep -Fq -- "${phrase}" "${doc_path}"; then
+  if ! grep -Fq -- "${phrase}" <<<"${doc_rendered_markdown}"; then
     echo "Missing Phase 52.1 CLI command contract statement: ${phrase}" >&2
     exit 1
   fi
 done
 
 for command in "${commands[@]}"; do
-  if ! grep -Eq "^\| \`${command}\` \| [^|]+ \| [^|]+ \| [^|]+ \| [^|]+ \| [^|]+ \|$" "${doc_path}"; then
+  if ! grep -Eq "^\| \`${command}\` \| [^|]+ \| [^|]+ \| [^|]+ \| [^|]+ \| [^|]+ \|$" <<<"${doc_rendered_markdown}"; then
     echo "Missing complete Phase 52.1 CLI command row: ${command}" >&2
     exit 1
   fi
