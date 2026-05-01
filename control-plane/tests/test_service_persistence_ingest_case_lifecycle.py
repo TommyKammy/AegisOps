@@ -3840,6 +3840,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             observed_executions=(
                 {
                     "execution_run_id": "exec-queue-001",
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "n8n",
                     "idempotency_key": "idempotency-queue-001",
                     "observed_at": datetime(2026, 4, 5, 12, 20, tzinfo=timezone.utc),

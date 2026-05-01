@@ -7,7 +7,7 @@ import json
 from typing import Iterable, Mapping, Protocol
 
 from . import external_evidence_osquery as _external_evidence_osquery
-from .execution_coordinator import _approved_payload_binding_hash, _json_ready
+from .actions.execution_coordinator import _approved_payload_binding_hash, _json_ready
 from .models import (
     ActionRequestRecord,
     ApprovalDecisionRecord,

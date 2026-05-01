@@ -2409,6 +2409,7 @@ class AssistantAdvisoryPersistenceTests(ServicePersistenceTestBase):
             observed_executions=(
                 {
                     "execution_run_id": execution.execution_run_id,
+                    "execution_surface_type": "executor",
                     "execution_surface_id": "isolated-executor",
                     "idempotency_key": execution.idempotency_key,
                     "observed_at": compared_at,

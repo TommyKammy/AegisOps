@@ -518,6 +518,7 @@ class ControlPlaneCliInspectionTestBase(unittest.TestCase):
             observed_executions=(
                 {
                     "execution_run_id": "shuffle-run-cli-timeline-observed-002",
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "shuffle",
                     "idempotency_key": approved_request.idempotency_key,
                     "approval_decision_id": action_execution.approval_decision_id,

@@ -229,6 +229,7 @@ class ReviewedActionRequestPersistenceTests(ServicePersistenceTestBase):
             observed_executions=(
                 {
                     "execution_run_id": execution.execution_run_id,
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "shuffle",
                     "idempotency_key": approved_request.idempotency_key,
                     "approval_decision_id": execution.approval_decision_id,
@@ -420,6 +421,7 @@ class ReviewedActionRequestPersistenceTests(ServicePersistenceTestBase):
             observed_executions=(
                 {
                     "execution_run_id": execution.execution_run_id,
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "shuffle",
                     "idempotency_key": approved_request.idempotency_key,
                     "approval_decision_id": execution.approval_decision_id,
@@ -601,6 +603,7 @@ class ReviewedActionRequestPersistenceTests(ServicePersistenceTestBase):
             observed_executions=(
                 {
                     "execution_run_id": execution.execution_run_id,
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "n8n",
                     "idempotency_key": approved_request.idempotency_key,
                     "approval_decision_id": execution.approval_decision_id,
@@ -711,6 +714,7 @@ class ReviewedActionRequestPersistenceTests(ServicePersistenceTestBase):
                     observed_executions=(
                         {
                             "execution_run_id": execution.execution_run_id,
+                            "execution_surface_type": "automation_substrate",
                             "execution_surface_id": "shuffle",
                             "idempotency_key": approved_request.idempotency_key,
                             "approval_decision_id": execution.approval_decision_id,
@@ -799,6 +803,7 @@ class ReviewedActionRequestPersistenceTests(ServicePersistenceTestBase):
             observed_executions=(
                 {
                     "execution_run_id": execution.execution_run_id,
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "shuffle",
                     "idempotency_key": approved_request.idempotency_key,
                     "approval_decision_id": execution.approval_decision_id,
@@ -906,6 +911,7 @@ class ReviewedActionRequestPersistenceTests(ServicePersistenceTestBase):
                 observed_executions=(
                     {
                         "execution_run_id": execution.execution_run_id,
+                        "execution_surface_type": "automation_substrate",
                         "execution_surface_id": "shuffle",
                         "idempotency_key": approved_request.idempotency_key,
                         "observed_at": observed_at,

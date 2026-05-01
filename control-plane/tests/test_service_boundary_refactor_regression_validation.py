@@ -741,7 +741,7 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
             "control-plane/aegisops_control_plane/operator_inspection.py"
         )
         action_request_source = self._read(
-            "control-plane/aegisops_control_plane/execution_coordinator_action_requests.py"
+            "control-plane/aegisops_control_plane/actions/execution_coordinator_action_requests.py"
         )
         service_tree = ast.parse(service_source)
         operator_tree = ast.parse(operator_source)

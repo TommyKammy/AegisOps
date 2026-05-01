@@ -209,6 +209,7 @@ class Phase22EndToEndValidationTests(unittest.TestCase):
             observed_executions=(
                 {
                     "execution_run_id": "shuffle-run-phase22-unexpected-001",
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "shuffle",
                     "idempotency_key": approved_request.idempotency_key,
                     "approval_decision_id": execution.approval_decision_id,

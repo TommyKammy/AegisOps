@@ -17,8 +17,8 @@ from .assistant.assistant_context import (
     _advisory_text_claims_authority_or_scope_expansion,
 )
 from .assistant.assistant_provider import AssistantProviderAdapter
-from .action_lifecycle_write_coordinator import ActionLifecycleWriteCoordinator
-from .action_reconciliation_orchestration import (
+from .actions.action_lifecycle_write_coordinator import ActionLifecycleWriteCoordinator
+from .actions.action_reconciliation_orchestration import (
     ActionOrchestrationBoundary,
     ReconciliationOrchestrationBoundary,
 )
@@ -28,7 +28,7 @@ from .case_workflow import CaseWorkflowService
 from .config import RuntimeConfig
 from .detection_lifecycle import DetectionIntakeService
 from .evidence_linkage import EvidenceLinkageService
-from .execution_coordinator import ExecutionCoordinator
+from .actions.execution_coordinator import ExecutionCoordinator
 from .external_evidence_boundary import ExternalEvidenceBoundary
 from .assistant.live_assistant_workflow import LiveAssistantWorkflowCoordinator
 from .models import ControlPlaneRecord, ReconciliationRecord

@@ -108,6 +108,7 @@ class ExecutionCoordinatorBoundaryTests(unittest.TestCase):
         observed_executions = (
             {
                 "execution_run_id": "shuffle-run-001",
+                "execution_surface_type": "automation_substrate",
                 "execution_surface_id": "shuffle",
                 "idempotency_key": "idem-001",
                 "approval_decision_id": "approval-001",
@@ -282,6 +283,7 @@ class ExecutionCoordinatorBoundaryTests(unittest.TestCase):
         observed_executions = (
             {
                 "execution_run_id": "shuffle-run-001",
+                "execution_surface_type": "automation_substrate",
                 "execution_surface_id": "shuffle",
                 "idempotency_key": "idem-001",
                 "approval_decision_id": "approval-001",
@@ -569,6 +571,7 @@ class ExecutionCoordinatorBoundaryTests(unittest.TestCase):
         observed_executions = (
             {
                 "execution_run_id": "shuffle-run-001",
+                "execution_surface_type": "automation_substrate",
                 "execution_surface_id": "shuffle",
                 "idempotency_key": "idem-001",
                 "approval_decision_id": "approval-001",
@@ -643,6 +646,7 @@ class ExecutionCoordinatorBoundaryTests(unittest.TestCase):
         observed_executions = (
             {
                 "execution_run_id": "shuffle-run-001",
+                "execution_surface_type": "automation_substrate",
                 "execution_surface_id": "shuffle",
                 "idempotency_key": "idem-001",
                 "approval_decision_id": "approval-001",

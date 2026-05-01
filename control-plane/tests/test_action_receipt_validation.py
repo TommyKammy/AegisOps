@@ -12,11 +12,20 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 from aegisops_control_plane.action_receipt_validation import (
     MissingReceiptValueError,
+    require_receipt_string_value,
     require_receipt_https_url_value,
 )
 
 
 class ActionReceiptValidationTests(unittest.TestCase):
+    def test_string_value_returns_normalized_value_without_surrounding_whitespace(
+        self,
+    ) -> None:
+        self.assertEqual(
+            require_receipt_string_value(" receipt-001 ", "external_receipt_id"),
+            "receipt-001",
+        )
+
     def test_https_url_value_returns_normalized_url_without_surrounding_whitespace(
         self,
     ) -> None:

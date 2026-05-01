@@ -95,6 +95,7 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
                 observed_executions=(
                     {
                         "execution_run_id": "exec-001",
+                        "execution_surface_type": "automation_substrate",
                         "execution_surface_id": "n8n",
                         "idempotency_key": "idempotency-001",
                         "observed_at": datetime(2026, 4, 5, 12, 5),
@@ -134,12 +135,14 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
             observed_executions=(
                 {
                     "execution_run_id": "exec-001",
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "n8n",
                     "idempotency_key": "idempotency-001",
                     "observed_at": datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc),
                 },
                 {
                     "execution_run_id": "exec-001",
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "n8n",
                     "idempotency_key": "idempotency-001",
                     "observed_at": datetime(2026, 4, 5, 12, 6, tzinfo=timezone.utc),
@@ -187,6 +190,7 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
             observed_executions=(
                 {
                     "execution_run_id": "executor-run-001",
+                    "execution_surface_type": "executor",
                     "execution_surface_id": "isolated-executor",
                     "idempotency_key": "idempotency-001",
                     "observed_at": datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc),
@@ -210,6 +214,55 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
         self.assertEqual(
             reconciliation.subject_linkage["execution_surface_ids"],
             ("isolated-executor",),
+        )
+
+    def test_service_reconcile_action_execution_treats_surface_type_drift_as_mismatch(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        action_request = ActionRequestRecord(
+            action_request_id="action-request-surface-type-drift-001",
+            approval_decision_id="approval-surface-type-drift-001",
+            case_id=None,
+            alert_id=None,
+            finding_id="finding-surface-type-drift-001",
+            idempotency_key="idempotency-surface-type-drift-001",
+            target_scope={"asset_id": "asset-001"},
+            payload_hash="payload-hash-surface-type-drift-001",
+            requested_at=requested_at,
+            expires_at=None,
+            lifecycle_state="approved",
+        )
+        service.persist_record(action_request)
+
+        execution_surface_id = "n8n"
+        reconciliation = service.reconcile_action_execution(
+            action_request_id="action-request-surface-type-drift-001",
+            execution_surface_type="automation_substrate",
+            execution_surface_id=execution_surface_id,
+            observed_executions=(
+                {
+                    "execution_run_id": "exec-surface-type-drift-001",
+                    "execution_surface_type": "executor",
+                    "execution_surface_id": execution_surface_id,
+                    "idempotency_key": "idempotency-surface-type-drift-001",
+                    "observed_at": datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc),
+                },
+            ),
+            compared_at=datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc),
+            stale_after=datetime(2026, 4, 5, 12, 30, tzinfo=timezone.utc),
+        )
+
+        self.assertEqual(reconciliation.ingest_disposition, "mismatch")
+        self.assertEqual(reconciliation.lifecycle_state, "mismatched")
+        self.assertEqual(
+            reconciliation.mismatch_summary,
+            "execution surface/idempotency mismatch between approved request and observed execution",
         )
     def test_service_reconciles_shuffle_run_back_into_authoritative_action_execution(
         self,
@@ -283,6 +336,7 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
             observed_executions=(
                 {
                     "execution_run_id": execution.execution_run_id,
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "shuffle",
                     "idempotency_key": "idempotency-routine-reconcile-001",
                     "approval_decision_id": execution.approval_decision_id,
@@ -395,6 +449,7 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
             observed_executions=(
                 {
                     "execution_run_id": execution.execution_run_id,
+                    "execution_surface_type": "executor",
                     "execution_surface_id": "isolated-executor",
                     "idempotency_key": "idempotency-executor-reconcile-001",
                     "observed_at": compared_at,
@@ -492,6 +547,7 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
             observed_executions=(
                 {
                     "execution_run_id": execution.execution_run_id,
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "n8n",
                     "idempotency_key": execution.idempotency_key,
                     "approval_decision_id": execution.approval_decision_id,
@@ -586,6 +642,7 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
             observed_executions=(
                 {
                     "execution_run_id": "shuffle-run-unexpected-001",
+                    "execution_surface_type": "automation_substrate",
                     "execution_surface_id": "shuffle",
                     "idempotency_key": execution.idempotency_key,
                     "approval_decision_id": execution.approval_decision_id,

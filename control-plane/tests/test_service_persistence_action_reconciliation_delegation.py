@@ -31,6 +31,79 @@ from _service_persistence_support import (
 )
 
 class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
+    def _build_approved_shuffle_delegation_context(
+        self,
+        *,
+        approval_decision_id: str,
+        action_request_id: str,
+        idempotency_key: str,
+    ) -> tuple[object, AegisOpsControlPlaneService, dict[str, object], datetime]:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        expires_at = datetime(2026, 4, 5, 13, 0, tzinfo=timezone.utc)
+        approved_target_scope = {"asset_id": "workstation-001"}
+        approved_payload = _phase20_notify_identity_owner_payload(
+            recipient_identity="repo-owner-001",
+            case_id="case-001",
+            alert_id="alert-001",
+            finding_id="finding-001",
+        )
+        payload_hash = _approved_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
+        service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id=approval_decision_id,
+                action_request_id=action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=approved_target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+                approved_expires_at=expires_at,
+            )
+        )
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id=action_request_id,
+                approval_decision_id=approval_decision_id,
+                case_id="case-001",
+                alert_id="alert-001",
+                finding_id="finding-001",
+                idempotency_key=idempotency_key,
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=expires_at,
+                lifecycle_state="approved",
+                requested_payload=approved_payload,
+                policy_basis={
+                    "severity": "low",
+                    "target_scope": "single_asset",
+                    "action_reversibility": "reversible",
+                    "asset_criticality": "standard",
+                    "identity_criticality": "standard",
+                    "blast_radius": "single_target",
+                    "execution_constraint": "routine_allowed",
+                },
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "shuffle",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+        return store, service, approved_payload, delegated_at
+
     def test_service_evaluates_action_policy_into_approval_and_isolated_executor(
         self,
     ) -> None:
@@ -311,6 +384,74 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
             service.get_record(ActionExecutionRecord, execution.action_execution_id),
             execution,
         )
+
+    def test_service_serializes_action_execution_idempotency_claim(
+        self,
+    ) -> None:
+        store, service, approved_payload, delegated_at = (
+            self._build_approved_shuffle_delegation_context(
+                approval_decision_id="approval-routine-serializable-001",
+                action_request_id="action-request-routine-serializable-001",
+                idempotency_key="idempotency-routine-serializable-001",
+            )
+        )
+
+        with mock.patch.object(
+            store,
+            "transaction",
+            wraps=store.transaction,
+        ) as transaction_mock:
+            execution = service.delegate_approved_action_to_shuffle(
+                action_request_id="action-request-routine-serializable-001",
+                approved_payload=approved_payload,
+                delegated_at=delegated_at,
+                delegation_issuer="control-plane-service",
+            )
+
+        self.assertEqual(execution.lifecycle_state, "queued")
+        self.assertTrue(
+            any(
+                call.kwargs.get("isolation_level") == "SERIALIZABLE"
+                for call in transaction_mock.call_args_list
+            )
+        )
+
+    def test_service_treats_delegated_event_emission_as_best_effort(
+        self,
+    ) -> None:
+        store, service, approved_payload, delegated_at = (
+            self._build_approved_shuffle_delegation_context(
+                approval_decision_id="approval-routine-event-failure-001",
+                action_request_id="action-request-routine-event-failure-001",
+                idempotency_key="idempotency-routine-event-failure-001",
+            )
+        )
+
+        with (
+            mock.patch.object(
+                service,
+                "_emit_action_execution_delegated_event",
+                side_effect=RuntimeError("synthetic delegated event failure"),
+            ),
+            mock.patch.object(service._logger, "exception") as logger_exception,
+        ):
+            execution = service.delegate_approved_action_to_shuffle(
+                action_request_id="action-request-routine-event-failure-001",
+                approved_payload=approved_payload,
+                delegated_at=delegated_at,
+                delegation_issuer="control-plane-service",
+            )
+
+        self.assertEqual(execution.lifecycle_state, "queued")
+        self.assertEqual(
+            store.get(ActionExecutionRecord, execution.action_execution_id),
+            execution,
+        )
+        logger_exception.assert_called_once_with(
+            "failed to emit action execution delegated event",
+            extra={"action_execution_id": execution.action_execution_id},
+        )
+
     def test_service_does_not_emit_action_execution_delegated_log_before_commit(
         self,
     ) -> None:
@@ -650,7 +791,7 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
             executions[0].provenance["dispatch_failure"]["error_type"],
             "ValueError",
         )
-    def test_service_fail_closes_when_shuffle_finalization_fails_after_dispatch(
+    def test_service_keeps_dispatched_shuffle_execution_recoverable_when_finalization_fails(
         self,
     ) -> None:
         store, _ = make_store()
@@ -745,20 +886,136 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
 
         executions = store.list(ActionExecutionRecord)
         self.assertEqual(len(executions), 1)
-        self.assertEqual(executions[0].lifecycle_state, "failed")
+        self.assertEqual(executions[0].lifecycle_state, "dispatching")
         self.assertEqual(executions[0].execution_surface_type, "automation_substrate")
         self.assertEqual(executions[0].execution_surface_id, "shuffle")
-        self.assertTrue(
-            executions[0].execution_run_id.startswith("pending-dispatch-delegation-")
-        )
+        self.assertTrue(executions[0].execution_run_id.startswith("shuffle-run-"))
+        self.assertNotIn("dispatch_failure", executions[0].provenance)
         self.assertEqual(
-            executions[0].provenance["dispatch_failure"]["error_type"],
+            executions[0].provenance["dispatch_finalization_failure"]["error_type"],
             "RuntimeError",
         )
         self.assertEqual(
-            executions[0].provenance["dispatch_failure"]["error"],
+            executions[0].provenance["dispatch_finalization_failure"]["error"],
             "synthetic finalization failure",
         )
+
+    def test_service_preserves_finalization_failure_recording_error_context(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+        delegated_at = datetime(2026, 4, 5, 12, 5, tzinfo=timezone.utc)
+        expires_at = datetime(2026, 4, 5, 13, 0, tzinfo=timezone.utc)
+        approved_target_scope = {"asset_id": "workstation-001"}
+        approved_payload = _phase20_notify_identity_owner_payload(
+            recipient_identity="repo-owner-001",
+            case_id="case-001",
+            alert_id="alert-001",
+            finding_id="finding-001",
+        )
+        payload_hash = _approved_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
+        service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-routine-recording-failure-001",
+                action_request_id="action-request-routine-recording-failure-001",
+                approver_identities=("approver-001",),
+                target_snapshot=approved_target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+                approved_expires_at=expires_at,
+            )
+        )
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-routine-recording-failure-001",
+                approval_decision_id="approval-routine-recording-failure-001",
+                case_id="case-001",
+                alert_id="alert-001",
+                finding_id="finding-001",
+                idempotency_key="idempotency-routine-recording-failure-001",
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=expires_at,
+                lifecycle_state="approved",
+                requested_payload=approved_payload,
+                policy_basis={
+                    "severity": "low",
+                    "target_scope": "single_asset",
+                    "action_reversibility": "reversible",
+                    "asset_criticality": "standard",
+                    "identity_criticality": "standard",
+                    "blast_radius": "single_target",
+                    "execution_constraint": "routine_allowed",
+                },
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "shuffle",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+        original_persist_record = service.persist_record
+
+        def persist_record_with_finalization_failure(
+            record: object,
+            **kwargs: object,
+        ) -> object:
+            if (
+                isinstance(record, support.ActionExecutionRecord)
+                and record.lifecycle_state == "queued"
+            ):
+                raise RuntimeError("synthetic finalization failure")
+            return original_persist_record(record, **kwargs)
+
+        recording_error = RuntimeError(
+            "synthetic failure metadata recording failure"
+        )
+        with (
+            mock.patch.object(
+                service._execution_coordinator._delegation,
+                "_record_dispatch_finalization_failure",
+                side_effect=recording_error,
+            ),
+            mock.patch.object(
+                service,
+                "persist_record",
+                side_effect=persist_record_with_finalization_failure,
+            ),
+            mock.patch.object(service._logger, "exception") as logger_exception,
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "synthetic finalization failure",
+            ) as raised:
+                service.delegate_approved_action_to_shuffle(
+                    action_request_id="action-request-routine-recording-failure-001",
+                    approved_payload=approved_payload,
+                    delegated_at=delegated_at,
+                    delegation_issuer="control-plane-service",
+                )
+
+        self.assertIs(raised.exception.__cause__, recording_error)
+        logger_exception.assert_called_once_with(
+            "failed to persist dispatch finalization failure metadata",
+            extra={
+                "action_execution_id": mock.ANY,
+                "execution_run_id": mock.ANY,
+            },
+        )
+
     def test_service_fail_closes_when_shuffle_receipt_omits_adapter(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
