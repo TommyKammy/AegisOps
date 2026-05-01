@@ -135,6 +135,16 @@ assert_fails_with \
   "${reordered_fixture_repo}" \
   "Invalid Phase 52.8 clean-host smoke fixture state for valid-clean-host-smoke.json: expected valid"
 
+misassigned_contract_refs_repo="${workdir}/misassigned-contract-refs"
+create_valid_repo "${misassigned_contract_refs_repo}"
+set_fixture_json_value \
+  "${misassigned_contract_refs_repo}" \
+  "valid-clean-host-smoke.json" \
+  "payload['sequence'][1]['contract_refs'], payload['sequence'][2]['contract_refs'] = payload['sequence'][2]['contract_refs'], payload['sequence'][1]['contract_refs']"
+assert_fails_with \
+  "${misassigned_contract_refs_repo}" \
+  "Invalid Phase 52.8 clean-host smoke fixture state for valid-clean-host-smoke.json: expected valid"
+
 false_success_not_rejected_repo="${workdir}/false-success-not-rejected"
 create_valid_repo "${false_success_not_rejected_repo}"
 set_fixture_json_value \

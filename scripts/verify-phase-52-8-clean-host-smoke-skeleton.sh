@@ -233,6 +233,24 @@ required_contract_refs = set(sys.argv[7:])
 required_order = ["init", "up", "doctor", "seed-demo"]
 allowed_states = {"mocked", "skipped"}
 required_coverage = {"compose", "env/secrets/certs", "host preflight", "demo seed"}
+required_refs_by_command = {
+    "init": {
+        "docs/phase-52-1-cli-command-contract.md",
+        "docs/deployment/env-secrets-certs-contract.md",
+    },
+    "up": {
+        "docs/phase-52-1-cli-command-contract.md",
+        "docs/deployment/compose-generator-contract.md",
+    },
+    "doctor": {
+        "docs/phase-52-1-cli-command-contract.md",
+        "docs/deployment/host-preflight-contract.md",
+    },
+    "seed-demo": {
+        "docs/phase-52-1-cli-command-contract.md",
+        "docs/deployment/demo-seed-contract.md",
+    },
+}
 truth_markers = (
     "workflow truth",
     "source truth",
@@ -293,6 +311,7 @@ def rejection_reasons(payload):
     for expected_step, step in enumerate(sequence, start=1):
         if step.get("step") != expected_step:
             reasons.append("invalid step number")
+        command = step.get("command")
         state = step.get("state")
         if state not in allowed_states:
             reasons.append("invalid step state")
@@ -306,6 +325,11 @@ def rejection_reasons(payload):
             reasons.append("missing contract refs")
         else:
             seen_contract_refs.update(contract_refs)
+            expected_refs = required_refs_by_command.get(command)
+            if expected_refs is None:
+                reasons.append("invalid command")
+            elif expected_refs.difference(contract_refs):
+                reasons.append("missing contract refs")
 
     if not seen_states.intersection(allowed_states):
         reasons.append("missing mocked or skipped states")
