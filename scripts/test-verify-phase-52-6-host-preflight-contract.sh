@@ -80,9 +80,34 @@ path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 PY
 }
 
+set_first_fixture_result_state() {
+  local target="$1"
+  local fixture="$2"
+  local state="$3"
+
+  python3 - "$target/docs/deployment/fixtures/host-preflight/${fixture}" "${state}" <<'PY'
+import json
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+state = sys.argv[2]
+payload = json.loads(path.read_text(encoding="utf-8"))
+payload["results"][0]["state"] = state
+path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+PY
+}
+
 valid_repo="${workdir}/valid"
 create_valid_repo "${valid_repo}"
 assert_passes "${valid_repo}"
+
+mixed_positive_fixture_repo="${workdir}/mixed-positive-fixture"
+create_valid_repo "${mixed_positive_fixture_repo}"
+set_first_fixture_result_state "${mixed_positive_fixture_repo}" "valid-pass.json" "fail"
+assert_fails_with \
+  "${mixed_positive_fixture_repo}" \
+  "Invalid Phase 52.6 host preflight fixture state for valid-pass.json: expected all results to be pass"
 
 missing_contract_repo="${workdir}/missing-contract"
 create_valid_repo "${missing_contract_repo}"

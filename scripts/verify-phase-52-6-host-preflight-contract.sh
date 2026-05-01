@@ -290,6 +290,13 @@ for expectation in expectations:
         if result["state"] not in allowed_states:
             print(f"Unknown Phase 52.6 result state in {filename}", file=sys.stderr)
             sys.exit(1)
+    if expected_state != "fail" and any(result["state"] != expected_state for result in results):
+        print(
+            f"Invalid Phase 52.6 host preflight fixture state for {filename}: "
+            f"expected all results to be {expected_state}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     if expected_state == "fail":
         if not any(
             result.get("check") == required_check and result.get("state") == "fail"
