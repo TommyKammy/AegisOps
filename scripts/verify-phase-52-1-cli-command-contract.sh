@@ -64,19 +64,28 @@ forbidden_claims=(
   "Logs are authoritative workflow truth"
 )
 
+rendered_markdown_without_code_blocks() {
+  local markdown_path="$1"
+
+  awk '
+    /^[[:space:]]*(```|~~~)/ {
+      in_fenced_block = !in_fenced_block
+      next
+    }
+    in_fenced_block { next }
+    substr($0, 1, 1) == "\t" { next }
+    substr($0, 1, 4) == "    " { next }
+    { print }
+  ' "${markdown_path}" | perl -0pe 's/<!--.*?-->//gs'
+}
+
 if [[ ! -f "${doc_path}" ]]; then
   echo "Missing Phase 52.1 CLI command contract: ${doc_path}" >&2
   exit 1
 fi
 
 doc_rendered_markdown="$(
-  awk '
-    /^[[:space:]]*(```|~~~)/ {
-      in_fenced_block = !in_fenced_block
-      next
-    }
-    !in_fenced_block { print }
-  ' "${doc_path}" | perl -0pe 's/<!--.*?-->//gs'
+  rendered_markdown_without_code_blocks "${doc_path}"
 )"
 
 for heading in "${required_headings[@]}"; do
@@ -130,12 +139,11 @@ for claim in "${forbidden_claims[@]}"; do
   fi
 done
 
-mac_user_home="$(printf '/%s/' 'Users')"
-unix_user_home="$(printf '/%s/' 'home')"
-windows_user_profile_backslash="$(printf '[A-Za-z]:\\\\%s\\\\' 'Users')"
-windows_user_profile_slash="$(printf '[A-Za-z]:/%s/' 'Users')"
 path_token_boundary="(^|[[:space:]'\"(<{=])"
-local_path_token="(${mac_user_home}|${unix_user_home}|${windows_user_profile_backslash}|${windows_user_profile_slash})[^[:space:]'\" )>}]*"
+path_token_chars="[^[:space:]'\" )>}|]"
+unix_absolute_path="/${path_token_chars}+"
+windows_drive_path="[A-Za-z]:[\\\\/]${path_token_chars}*"
+local_path_token="(${unix_absolute_path}|${windows_drive_path})"
 
 if grep -Eq "(${path_token_boundary}${local_path_token}|file:///?${local_path_token})" "${doc_path}"; then
   echo "Forbidden Phase 52.1 CLI command contract: workstation-local absolute path detected" >&2
@@ -148,17 +156,7 @@ if [[ ! -f "${readme_path}" ]]; then
 fi
 
 readme_rendered_markdown="$(
-  awk '
-    /^[[:space:]]*(```|~~~)/ {
-      in_fenced_block = !in_fenced_block
-      next
-    }
-    !in_fenced_block { print }
-  ' "${readme_path}" | perl -pe 's/`[^`]*`//g'
-)"
-
-readme_rendered_markdown="$(
-  perl -0pe 's/<!--.*?-->//gs' <<<"${readme_rendered_markdown}"
+  rendered_markdown_without_code_blocks "${readme_path}" | perl -pe 's/`[^`]*`//g'
 )"
 
 if ! grep -Eq '\[[^]]+\]\(docs/phase-52-1-cli-command-contract\.md\)' <<<"${readme_rendered_markdown}"; then

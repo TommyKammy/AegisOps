@@ -117,6 +117,16 @@ assert_fails_with \
   "${commented_heading_repo}" \
   "Missing Phase 52.1 CLI command contract heading: # Phase 52.1 CLI Command Contract"
 
+indented_heading_repo="${workdir}/indented-heading"
+create_valid_repo "${indented_heading_repo}"
+remove_text_from_contract "${indented_heading_repo}" \
+  '# Phase 52.1 CLI Command Contract'
+printf '%s\n' '    # Phase 52.1 CLI Command Contract' \
+  >>"${indented_heading_repo}/docs/phase-52-1-cli-command-contract.md"
+assert_fails_with \
+  "${indented_heading_repo}" \
+  "Missing Phase 52.1 CLI command contract heading: # Phase 52.1 CLI Command Contract"
+
 missing_command_field_repo="${workdir}/missing-command-field"
 create_valid_repo "${missing_command_field_repo}"
 remove_text_from_contract "${missing_command_field_repo}" \
@@ -215,12 +225,47 @@ assert_fails_with \
   "${fenced_command_row_repo}" \
   "Missing complete Phase 52.1 CLI command row: logs"
 
+indented_command_row_repo="${workdir}/indented-command-row"
+create_valid_repo "${indented_command_row_repo}"
+remove_text_from_contract "${indented_command_row_repo}" \
+  '| `logs` | Show bounded logs for selected first-user stack components. | Initialized workspace; `<log-selector>` or default selector; optional time window. | Bounded log stream or retained log path; redaction and truncation notice; evidence references only. | Fail closed if the selector is ambiguous, logs cannot be bounded, redaction cannot run, or log text is used as authoritative workflow truth. | Safe to retry with a narrower selector or time window. Retry must not require destructive cleanup. |'
+printf '%s\n' \
+  '    | `logs` | Show bounded logs for selected first-user stack components. | Initialized workspace; `<log-selector>` or default selector; optional time window. | Bounded log stream or retained log path; redaction and truncation notice; evidence references only. | Fail closed if the selector is ambiguous, logs cannot be bounded, redaction cannot run, or log text is used as authoritative workflow truth. | Safe to retry with a narrower selector or time window. Retry must not require destructive cleanup. |' \
+  >>"${indented_command_row_repo}/docs/phase-52-1-cli-command-contract.md"
+assert_fails_with \
+  "${indented_command_row_repo}" \
+  "Missing complete Phase 52.1 CLI command row: logs"
+
 local_path_repo="${workdir}/local-path"
 create_valid_repo "${local_path_repo}"
 printf 'Use /%s/example/AegisOps for setup.\n' "Users" \
   >>"${local_path_repo}/docs/phase-52-1-cli-command-contract.md"
 assert_fails_with \
   "${local_path_repo}" \
+  "Forbidden Phase 52.1 CLI command contract: workstation-local absolute path detected"
+
+temp_path_repo="${workdir}/temp-path"
+create_valid_repo "${temp_path_repo}"
+printf 'Use /%s/aegisops for setup.\n' "tmp" \
+  >>"${temp_path_repo}/docs/phase-52-1-cli-command-contract.md"
+assert_fails_with \
+  "${temp_path_repo}" \
+  "Forbidden Phase 52.1 CLI command contract: workstation-local absolute path detected"
+
+file_uri_path_repo="${workdir}/file-uri-path"
+create_valid_repo "${file_uri_path_repo}"
+printf 'Use file:///%s/aegisops for setup.\n' "tmp" \
+  >>"${file_uri_path_repo}/docs/phase-52-1-cli-command-contract.md"
+assert_fails_with \
+  "${file_uri_path_repo}" \
+  "Forbidden Phase 52.1 CLI command contract: workstation-local absolute path detected"
+
+windows_drive_path_repo="${workdir}/windows-drive-path"
+create_valid_repo "${windows_drive_path_repo}"
+printf 'Use %s:%s%s for setup.\n' "D" "\\" "aegisops" \
+  >>"${windows_drive_path_repo}/docs/phase-52-1-cli-command-contract.md"
+assert_fails_with \
+  "${windows_drive_path_repo}" \
   "Forbidden Phase 52.1 CLI command contract: workstation-local absolute path detected"
 
 missing_readme_link_repo="${workdir}/missing-readme-link"
@@ -238,6 +283,16 @@ printf '%s\n' \
   >"${commented_readme_link_repo}/README.md"
 assert_fails_with \
   "${commented_readme_link_repo}" \
+  "README must link the Phase 52.1 CLI command contract."
+
+indented_readme_link_repo="${workdir}/indented-readme-link"
+create_valid_repo "${indented_readme_link_repo}"
+printf '%s\n' \
+  "# AegisOps" \
+  "    [Phase 52.1 CLI command contract](docs/phase-52-1-cli-command-contract.md)" \
+  >"${indented_readme_link_repo}/README.md"
+assert_fails_with \
+  "${indented_readme_link_repo}" \
   "README must link the Phase 52.1 CLI command contract."
 
 echo "Phase 52.1 CLI command contract verifier tests passed."
