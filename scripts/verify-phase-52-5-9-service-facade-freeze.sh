@@ -170,19 +170,50 @@ def service_baseline_metadata() -> dict[str, str]:
 
 def module_name_for(path: pathlib.Path) -> str:
     relative = path.relative_to(package_root).with_suffix("")
-    return "aegisops_control_plane." + ".".join(relative.parts)
+    parts = list(relative.parts)
+    if parts and parts[-1] == "__init__":
+        parts = parts[:-1]
+    if not parts:
+        return "aegisops_control_plane"
+    return "aegisops_control_plane." + ".".join(parts)
 
 
-def resolved_import_module(current_module: str, node: ast.ImportFrom) -> str | None:
+def is_domain_module(current_module: str) -> bool:
+    return any(
+        current_module == domain_root[:-1] or current_module.startswith(domain_root)
+        for domain_root in domain_roots
+    )
+
+
+def resolved_import_module(
+    current_module: str,
+    node: ast.ImportFrom,
+    *,
+    from_package_init: bool,
+) -> str | None:
     if node.level == 0:
         return node.module
-    package_parts = current_module.split(".")[:-1]
+    package_parts = current_module.split(".")
+    if not from_package_init:
+        package_parts = package_parts[:-1]
     if node.level > len(package_parts) + 1:
         return None
     anchor = package_parts[: len(package_parts) - node.level + 1]
     if node.module:
         anchor.extend(node.module.split("."))
     return ".".join(anchor)
+
+
+def legacy_import_violations(
+    imported_module: str | None,
+    node: ast.ImportFrom,
+) -> list[str]:
+    if imported_module is None:
+        return []
+    candidates = [imported_module]
+    if imported_module:
+        candidates.extend(f"{imported_module}.{alias.name}" for alias in node.names)
+    return [candidate for candidate in candidates if candidate in legacy_owner_modules]
 
 
 metadata = service_baseline_metadata()
@@ -235,7 +266,7 @@ if exceeded:
 violations: list[str] = []
 for path in sorted(package_root.rglob("*.py")):
     current_module = module_name_for(path)
-    if not current_module.startswith(domain_roots):
+    if not is_domain_module(current_module):
         continue
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -244,8 +275,12 @@ for path in sorted(package_root.rglob("*.py")):
         sys.exit(1)
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
-            imported_module = resolved_import_module(current_module, node)
-            if imported_module in legacy_owner_modules:
+            imported_module = resolved_import_module(
+                current_module,
+                node,
+                from_package_init=path.name == "__init__.py",
+            )
+            for imported_module in legacy_import_violations(imported_module, node):
                 relative_path = path.relative_to(repo_root).as_posix()
                 owner = legacy_owner_modules[imported_module]
                 violations.append(

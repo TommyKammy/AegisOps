@@ -110,6 +110,25 @@ def evaluate(record):
 EOF
 assert_fails_with "${plain_legacy_import_repo}" "imports aegisops_control_plane.action_policy; use aegisops_control_plane.actions.action_policy"
 
+root_shim_from_import_repo="${workdir}/root-shim-from-import"
+create_fixture "${root_shim_from_import_repo}"
+cat >"${root_shim_from_import_repo}/control-plane/aegisops_control_plane/actions/review/action_review_write_surface.py" <<'EOF'
+from aegisops_control_plane import action_policy
+
+def evaluate(record):
+    return action_policy.evaluate_action_policy_record(record)
+EOF
+assert_fails_with "${root_shim_from_import_repo}" "imports aegisops_control_plane.action_policy; use aegisops_control_plane.actions.action_policy"
+
+package_init_legacy_import_repo="${workdir}/package-init-legacy-import"
+create_fixture "${package_init_legacy_import_repo}"
+cat >"${package_init_legacy_import_repo}/control-plane/aegisops_control_plane/actions/__init__.py" <<'EOF'
+from ..action_policy import evaluate_action_policy_record
+
+__all__ = ["evaluate_action_policy_record"]
+EOF
+assert_fails_with "${package_init_legacy_import_repo}" "imports aegisops_control_plane.action_policy; use aegisops_control_plane.actions.action_policy"
+
 service_growth_repo="${workdir}/service-growth"
 create_fixture "${service_growth_repo}"
 for index in $(seq 1 1393); do
