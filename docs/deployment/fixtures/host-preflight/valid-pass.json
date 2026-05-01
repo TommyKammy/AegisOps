@@ -1,0 +1,56 @@
+{
+  "fixture": "valid-pass",
+  "overall_state": "pass",
+  "mocked": false,
+  "results": [
+    {
+      "check": "Docker engine",
+      "state": "pass",
+      "source": "fixture",
+      "summary": "Docker Engine 24 is present on the reviewed local context.",
+      "safe_next_action": "continue setup readiness review"
+    },
+    {
+      "check": "Docker Compose",
+      "state": "pass",
+      "source": "fixture",
+      "summary": "Docker Compose plugin v2.24 or newer is present.",
+      "safe_next_action": "continue setup readiness review"
+    },
+    {
+      "check": "RAM",
+      "state": "pass",
+      "source": "fixture",
+      "summary": "Host reports at least 16 GB RAM.",
+      "safe_next_action": "continue setup readiness review"
+    },
+    {
+      "check": "Disk",
+      "state": "pass",
+      "source": "fixture",
+      "summary": "Host reports at least 250 GB disk and separate backup capacity.",
+      "safe_next_action": "continue setup readiness review"
+    },
+    {
+      "check": "Ports",
+      "state": "pass",
+      "source": "fixture",
+      "summary": "Only reviewed proxy-public ports are host-published.",
+      "safe_next_action": "continue setup readiness review"
+    },
+    {
+      "check": "vm.max_map_count",
+      "state": "pass",
+      "source": "fixture",
+      "summary": "Linux host reports vm.max_map_count at or above 262144.",
+      "safe_next_action": "continue setup readiness review"
+    },
+    {
+      "check": "Profile validity",
+      "state": "pass",
+      "source": "fixture",
+      "summary": "Profile is smb-single-node with a reviewed mode and release-bound revision.",
+      "safe_next_action": "continue setup readiness review"
+    }
+  ]
+}

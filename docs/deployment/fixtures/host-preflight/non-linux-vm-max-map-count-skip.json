@@ -1,0 +1,14 @@
+{
+  "fixture": "non-linux-vm-max-map-count-skip",
+  "overall_state": "skip",
+  "mocked": false,
+  "results": [
+    {
+      "check": "vm.max_map_count",
+      "state": "skip",
+      "source": "fixture",
+      "summary": "Non-Linux host class does not expose vm.max_map_count.",
+      "safe_next_action": "record the platform-specific skip reason before setup"
+    }
+  ]
+}

@@ -73,6 +73,8 @@ jobs:
           bash scripts/test-verify-roadmap-materialization-preflight.sh
           bash scripts/verify-phase-51-closeout-evaluation.sh
           bash scripts/test-verify-phase-51-closeout-evaluation.sh
+          bash scripts/verify-phase-52-6-host-preflight-contract.sh
+          bash scripts/test-verify-phase-52-6-host-preflight-contract.sh
           bash scripts/verify-support-playbook-break-glass-rehearsal.sh
           bash scripts/verify-response-action-safety-model-doc.sh
           bash scripts/verify-requirements-baseline-control-plane-thesis.sh

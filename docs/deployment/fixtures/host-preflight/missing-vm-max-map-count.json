@@ -1,0 +1,14 @@
+{
+  "fixture": "missing-vm-max-map-count",
+  "overall_state": "fail",
+  "mocked": false,
+  "results": [
+    {
+      "check": "vm.max_map_count",
+      "state": "fail",
+      "source": "fixture",
+      "summary": "Linux host did not report vm.max_map_count.",
+      "safe_next_action": "set and verify vm.max_map_count before setup"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "fixture": "mocked-pass",
+  "overall_state": "mocked",
+  "mocked": true,
+  "results": [
+    {
+      "check": "Docker engine",
+      "state": "mocked",
+      "source": "test-double",
+      "summary": "Fixture simulates Docker Engine 24 without claiming live host readiness.",
+      "safe_next_action": "rerun against live host before setup"
+    }
+  ]
+}

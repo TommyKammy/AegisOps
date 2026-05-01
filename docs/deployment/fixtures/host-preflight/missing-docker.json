@@ -1,0 +1,14 @@
+{
+  "fixture": "missing-docker",
+  "overall_state": "fail",
+  "mocked": false,
+  "results": [
+    {
+      "check": "Docker engine",
+      "state": "fail",
+      "source": "fixture",
+      "summary": "Docker Engine is missing.",
+      "safe_next_action": "install a reviewed Docker Engine before setup"
+    }
+  ]
+}
