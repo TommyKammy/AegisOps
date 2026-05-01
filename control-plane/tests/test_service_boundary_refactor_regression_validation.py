@@ -316,10 +316,10 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
     ) -> None:
         service_source = self._read("control-plane/aegisops_control_plane/service.py")
         projection_source = self._read(
-            "control-plane/aegisops_control_plane/action_review_projection.py"
+            "control-plane/aegisops_control_plane/actions/review/action_review_projection.py"
         )
         inspection_boundary_source = self._read(
-            "control-plane/aegisops_control_plane/action_review_inspection.py"
+            "control-plane/aegisops_control_plane/actions/review/action_review_inspection.py"
         )
         service_tree = ast.parse(service_source)
         projection_tree = ast.parse(projection_source)
@@ -421,7 +421,7 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
         self,
     ) -> None:
         write_surface_source = self._read(
-            "control-plane/aegisops_control_plane/action_review_write_surface.py"
+            "control-plane/aegisops_control_plane/actions/review/action_review_write_surface.py"
         )
         readiness_operability_source = self._read(
             "control-plane/aegisops_control_plane/readiness_operability.py"
@@ -642,7 +642,7 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
     ) -> None:
         service_source = self._read("control-plane/aegisops_control_plane/service.py")
         write_surface_source = self._read(
-            "control-plane/aegisops_control_plane/action_review_write_surface.py"
+            "control-plane/aegisops_control_plane/actions/review/action_review_write_surface.py"
         )
         service_tree = ast.parse(service_source)
         service_class = next(
@@ -690,7 +690,7 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
     ) -> None:
         service_source = self._read("control-plane/aegisops_control_plane/service.py")
         write_surface_source = self._read(
-            "control-plane/aegisops_control_plane/action_review_write_surface.py"
+            "control-plane/aegisops_control_plane/actions/review/action_review_write_surface.py"
         )
         service_tree = ast.parse(service_source)
         write_surface_tree = ast.parse(write_surface_source)

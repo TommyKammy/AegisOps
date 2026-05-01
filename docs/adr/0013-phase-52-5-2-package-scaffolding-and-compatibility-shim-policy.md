@@ -31,7 +31,7 @@ The approved scaffold packages under `control-plane/aegisops_control_plane/` are
 | `runtime/` | `runtime` | Package scaffold only; no startup, config, readiness, or restore move yet. |
 | `ingestion/` | `ingestion` | Package scaffold only; no detection lifecycle move yet. |
 | `actions/` | `actions` | Package scaffold only; no action lifecycle or coordination move yet. |
-| `actions/review/` | `actions.review` | Package scaffold only; no reviewed-action surface move yet. |
+| `actions/review/` | `actions.review` | Package scaffold retained as the owner for reviewed-action projection, visibility, timeline, chain, inspection, path health, coordination, index, and write-surface modules moved in Phase 52.5.4. |
 | `evidence/` | `evidence` | Package scaffold only; no evidence boundary or facade move yet. |
 | `assistant/` | `assistant` | Package scaffold retained as the owner for assistant context, advisory, provider, trace lifecycle, and workflow modules moved in Phase 52.5.3. |
 | `ml_shadow/` | `ml_shadow` | Package scaffold only; no reviewed ML shadow-mode move yet. |
@@ -75,6 +75,28 @@ Phase 52.5.3 extends the verifier so each moved assistant and reporting module i
 - `aegisops_control_plane.reporting.audit_export:export_audit_retention_baseline`
 - `aegisops_control_plane.pilot_reporting_export:export_pilot_executive_summary`
 - `aegisops_control_plane.reporting.pilot_reporting_export:export_pilot_executive_summary`
+
+Phase 52.5.4 extends the verifier so each moved action-review module is checked through both the legacy root import and the target `actions.review` package import.
+This extends ADR-0013 beyond the original Phase 52.5.2 scaffold-only baseline; the Section 8 non-goals describe that original baseline, while this list records later compatibility coverage for moved modules:
+
+- `aegisops_control_plane.action_review_chain:action_review_chains_for_scope`
+- `aegisops_control_plane.actions.review.action_review_chain:action_review_chains_for_scope`
+- `aegisops_control_plane.action_review_coordination:action_review_coordination_ticket_outcome`
+- `aegisops_control_plane.actions.review.action_review_coordination:action_review_coordination_ticket_outcome`
+- `aegisops_control_plane.action_review_index:build_action_review_record_index`
+- `aegisops_control_plane.actions.review.action_review_index:build_action_review_record_index`
+- `aegisops_control_plane.action_review_inspection:ActionReviewInspectionBoundary`
+- `aegisops_control_plane.actions.review.action_review_inspection:ActionReviewInspectionBoundary`
+- `aegisops_control_plane.action_review_path_health:action_review_path_health`
+- `aegisops_control_plane.actions.review.action_review_path_health:action_review_path_health`
+- `aegisops_control_plane.action_review_projection:build_action_review_record_index`
+- `aegisops_control_plane.actions.review.action_review_projection:build_action_review_record_index`
+- `aegisops_control_plane.action_review_timeline:action_review_timeline`
+- `aegisops_control_plane.actions.review.action_review_timeline:action_review_timeline`
+- `aegisops_control_plane.action_review_visibility:action_review_runtime_visibility`
+- `aegisops_control_plane.actions.review.action_review_visibility:action_review_runtime_visibility`
+- `aegisops_control_plane.action_review_write_surface:ActionReviewWriteSurface`
+- `aegisops_control_plane.actions.review.action_review_write_surface:ActionReviewWriteSurface`
 
 ## 5. Layout Guardrail Skeleton
 
