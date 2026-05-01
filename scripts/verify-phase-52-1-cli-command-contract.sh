@@ -29,6 +29,11 @@ required_phrases=(
   "AegisOps control-plane records remain authoritative for alert, case, evidence, approval, action request, execution receipt, reconciliation, audit, release, gate, limitation, and closeout truth."
   'This command contract cites the Phase 51.6 authority-boundary negative-test policy in `docs/phase-51-6-authority-boundary-negative-test-policy.md`.'
   'Every command must emit structured operator-facing output with:'
+  '- `command`: the invoked command name.'
+  '- `result`: one of `ok`, `skipped`, `mocked`, `degraded`, or `failed`.'
+  '- `summary`: a short human-readable operator summary.'
+  '- `next_actions`: zero or more safe follow-up commands or prerequisite actions.'
+  '- `evidence`: zero or more readiness evidence references, never authoritative workflow truth.'
   "| Command | Purpose | Required inputs | Expected outputs | Failure behavior | Safe retry guidance |"
   'Before reviewed Wazuh and Shuffle product profiles exist, commands must report unavailable substrate work as explicit `skipped` or `mocked` states.'
   '`skipped` and `mocked` states must not be reported as false success.'
@@ -71,13 +76,6 @@ for heading in "${required_headings[@]}"; do
   fi
 done
 
-for phrase in "${required_phrases[@]}"; do
-  if ! grep -Fq -- "${phrase}" "${doc_path}"; then
-    echo "Missing Phase 52.1 CLI command contract statement: ${phrase}" >&2
-    exit 1
-  fi
-done
-
 for field in "${shared_output_fields[@]}"; do
   if ! grep -Eq -- "^- \`${field}\`: [^[:space:]].+$" "${doc_path}"; then
     echo "Missing or empty Phase 52.1 shared output field: ${field}" >&2
@@ -89,6 +87,13 @@ if ! grep -Fxq -- '- `result`: one of `ok`, `skipped`, `mocked`, `degraded`, or 
   echo "Invalid Phase 52.1 shared output result field: expected one of ok, skipped, mocked, degraded, or failed." >&2
   exit 1
 fi
+
+for phrase in "${required_phrases[@]}"; do
+  if ! grep -Fq -- "${phrase}" "${doc_path}"; then
+    echo "Missing Phase 52.1 CLI command contract statement: ${phrase}" >&2
+    exit 1
+  fi
+done
 
 for command in "${commands[@]}"; do
   if ! grep -Eq "^\| \`${command}\` \| [^|]+ \| [^|]+ \| [^|]+ \| [^|]+ \| [^|]+ \|$" "${doc_path}"; then
