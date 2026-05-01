@@ -66,6 +66,14 @@ assert_fails_with \
   "${missing_readme_link_repo}" \
   "Missing README Phase 52.10 closeout link: [Phase 52.10 closeout evaluation](docs/phase-52-closeout-evaluation.md)"
 
+missing_child_issue_lint_repo="${workdir}/missing-child-issue-lint"
+copy_valid_repo "${missing_child_issue_lint_repo}"
+perl -0pi -e 's/node <codex-supervisor-root>\/dist\/index\.js issue-lint 1068 --config <supervisor-config-path>\n//' \
+  "${missing_child_issue_lint_repo}/docs/phase-52-closeout-evaluation.md"
+assert_fails_with \
+  "${missing_child_issue_lint_repo}" \
+  "Missing required closeout term in docs/phase-52-closeout-evaluation.md: node <codex-supervisor-root>/dist/index.js issue-lint 1068 --config <supervisor-config-path>"
+
 missing_phase53_blockers_repo="${workdir}/missing-phase53-blockers"
 copy_valid_repo "${missing_phase53_blockers_repo}"
 perl -0pi -e 's/Explicit blockers for Phase 53 are live Wazuh profile implementation, reviewed Wazuh version pinning, trusted Wazuh secret references, Wazuh volume separation, Wazuh ingest route binding, and replacement of fixture-backed `init`, `up`, and `doctor` checks with live profile-backed behavior\.//' \
