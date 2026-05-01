@@ -558,6 +558,107 @@ class Phase29ShadowDatasetGenerationValidationTests(ServicePersistenceTestBase):
                 snapshot_timestamp=decided_at,
             )
 
+    def test_generator_fails_closed_when_linked_evidence_mutates_after_snapshot(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Historical snapshots must reject newer evidence bodies.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            observation_id=observation.observation_id,
+            triage_owner="analyst-001",
+            triage_rationale="Do not infer historical evidence provenance from current records.",
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            lead_id=lead.lead_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep shadow evidence features snapshot-consistent.",
+        )
+        decided_at = reviewed_at + timedelta(minutes=5)
+        accepted_recommendation = service.persist_record(
+            replace(recommendation, lifecycle_state="accepted"),
+            transitioned_at=decided_at,
+        )
+        anchor_evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-phase29-post-snapshot-evidence-anchor-001",
+                source_record_id="reviewed-source-phase29-post-snapshot-evidence-001",
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                source_system="github_audit",
+                collector_identity="fixture://reviewed/post-snapshot-evidence-anchor",
+                acquired_at=reviewed_at,
+                derivation_relationship="reviewed_context_anchor",
+                lifecycle_state="linked",
+                provenance={
+                    "classification": "authoritative-anchor",
+                    "source_id": "github-audit-event-post-snapshot-evidence-001",
+                    "timestamp": reviewed_at.isoformat(),
+                    "reviewed_by": "analyst-001",
+                    "ambiguity_badge": "unresolved",
+                },
+                content={"summary": {"kind": "post-snapshot-evidence-anchor"}},
+            )
+        )
+        linked_case = service.persist_record(
+            replace(
+                promoted_case,
+                evidence_ids=(*promoted_case.evidence_ids, anchor_evidence.evidence_id),
+            )
+        )
+        service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-phase29-post-snapshot-evidence-001",
+                subject_linkage={
+                    "alert_ids": (linked_case.alert_id,),
+                    "case_ids": (linked_case.case_id,),
+                    "recommendation_ids": (accepted_recommendation.recommendation_id,),
+                },
+                alert_id=linked_case.alert_id,
+                finding_id=linked_case.finding_id,
+                analytic_signal_id=None,
+                execution_run_id=None,
+                linked_execution_run_ids=(),
+                correlation_key=f"case:{linked_case.case_id}:post-snapshot-evidence-health",
+                first_seen_at=reviewed_at,
+                last_seen_at=decided_at,
+                ingest_disposition="matched",
+                mismatch_summary="Historical source-health state",
+                compared_at=decided_at,
+                lifecycle_state="resolved",
+            )
+        )
+        service.persist_record(
+            replace(
+                anchor_evidence,
+                lifecycle_state="superseded",
+                provenance={
+                    **anchor_evidence.provenance,
+                    "ambiguity_badge": "later-rewrite",
+                },
+            ),
+            transitioned_at=decided_at + timedelta(minutes=10),
+        )
+
+        with self.assertRaisesRegex(
+            Phase29ShadowDatasetGenerationError,
+            "post-snapshot lifecycle mutations",
+        ):
+            generate_reviewed_shadow_dataset(
+                service,
+                extraction_spec_version="phase29-shadow-dataset-v1",
+                snapshot_timestamp=decided_at,
+            )
+
     def test_generator_wraps_malformed_anchor_timestamp_in_dataset_error(self) -> None:
         _store, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()

@@ -198,6 +198,14 @@ def _build_recommendation_example(
         evidence_ids=case_record.evidence_ids,
         snapshot_timestamp=snapshot_timestamp,
     )
+    for evidence in linked_evidence:
+        _reject_post_snapshot_record_mutation(
+            service=service,
+            record_family="evidence",
+            record_id=evidence.evidence_id,
+            snapshot_timestamp=snapshot_timestamp,
+            recommendation_id=recommendation.recommendation_id,
+        )
     anchor_evidence = _select_anchor_evidence(
         recommendation_id=recommendation.recommendation_id,
         linked_evidence=linked_evidence,
