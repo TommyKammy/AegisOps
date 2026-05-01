@@ -31,6 +31,7 @@ Canonical cross-phase boundary reference:
 - [Phase 52.7 demo seed contract](docs/deployment/demo-seed-contract.md) defines demo-only seed records, required labels, reset boundaries, and production-exclusion fixtures for the executable first-user stack.
 - [Phase 52.8 clean-host smoke skeleton](docs/deployment/clean-host-smoke-skeleton.md) defines the mocked/skipped `init -> up -> doctor -> seed-demo` fixture path and false-success rejection rules for the executable first-user stack.
 - [Phase 52.9 first-user stack overview](docs/deployment/first-user-stack.md) defines the few-command first-user path, troubleshooting links, pre-GA status, and authority boundary for the executable first-user stack.
+- [Phase 52.10 closeout evaluation](docs/phase-52-closeout-evaluation.md) records the Phase 52 child issue outcomes, focused verifier results, issue-lint summary, accepted limitations, and Phase 53/54 materialization recommendation.
 
 ## Product positioning
 
@@ -67,6 +68,8 @@ The Phase 52.7 first-user demo seed contract is defined by the [Phase 52.7 demo 
 The Phase 52.8 first-user clean-host smoke skeleton is defined by the [Phase 52.8 clean-host smoke skeleton](docs/deployment/clean-host-smoke-skeleton.md).
 
 The Phase 52.9 first-user stack overview is defined by the [Phase 52.9 first-user stack overview](docs/deployment/first-user-stack.md).
+
+The Phase 52.10 closeout evaluation is defined by the [Phase 52.10 closeout evaluation](docs/phase-52-closeout-evaluation.md).
 
 Wazuh detects, AegisOps decides, records, and reconciles, and Shuffle executes reviewed delegated routine work.
 
