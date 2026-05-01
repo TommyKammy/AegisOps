@@ -88,6 +88,7 @@ fi
 doc_rendered_markdown="$(
   rendered_markdown_without_code_blocks "${doc_path}"
 )"
+doc_raw_markdown="$(cat "${doc_path}")"
 
 for heading in "${required_headings[@]}"; do
   if ! grep -Fxq -- "${heading}" <<<"${doc_rendered_markdown}"; then
@@ -105,6 +106,7 @@ done
 
 contains_forbidden_outside_forbidden_section() {
   local claim="$1"
+  local markdown="$2"
 
   awk -v claim="${claim}" '
     BEGIN { claim_lower = tolower(claim) }
@@ -112,11 +114,11 @@ contains_forbidden_outside_forbidden_section() {
     /^## / && in_forbidden_claims { in_forbidden_claims = 0 }
     !in_forbidden_claims && index(tolower($0), claim_lower) { found = 1 }
     END { exit(found ? 0 : 1) }
-  ' <<<"${doc_rendered_markdown}"
+  ' <<<"${markdown}"
 }
 
 for claim in "${forbidden_claims[@]}"; do
-  if contains_forbidden_outside_forbidden_section "${claim}"; then
+  if contains_forbidden_outside_forbidden_section "${claim}" "${doc_raw_markdown}"; then
     echo "Forbidden Phase 52.5.1 layout contract claim: ${claim}" >&2
     exit 1
   fi

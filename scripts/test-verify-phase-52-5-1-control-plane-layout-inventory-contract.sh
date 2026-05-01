@@ -77,6 +77,25 @@ assert_fails_with \
   "${behavior_change_repo}" \
   "Forbidden Phase 52.5.1 layout contract claim: This contract changes runtime behavior."
 
+fenced_behavior_change_repo="${workdir}/fenced-behavior-change-claim"
+create_valid_repo "${fenced_behavior_change_repo}"
+{
+  printf '%s\n' '```'
+  printf '%s\n' "This contract changes runtime behavior."
+  printf '%s\n' '```'
+} >>"${fenced_behavior_change_repo}/${contract_path}"
+assert_fails_with \
+  "${fenced_behavior_change_repo}" \
+  "Forbidden Phase 52.5.1 layout contract claim: This contract changes runtime behavior."
+
+commented_behavior_change_repo="${workdir}/commented-behavior-change-claim"
+create_valid_repo "${commented_behavior_change_repo}"
+printf '%s\n' "<!-- This contract changes runtime behavior. -->" \
+  >>"${commented_behavior_change_repo}/${contract_path}"
+assert_fails_with \
+  "${commented_behavior_change_repo}" \
+  "Forbidden Phase 52.5.1 layout contract claim: This contract changes runtime behavior."
+
 wazuh_profile_repo="${workdir}/wazuh-profile-claim"
 create_valid_repo "${wazuh_profile_repo}"
 printf '%s\n' "This contract implements Wazuh product profiles." \
