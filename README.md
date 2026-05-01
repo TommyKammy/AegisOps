@@ -30,6 +30,7 @@ Canonical cross-phase boundary reference:
 - [Phase 52.6 host preflight contract](docs/deployment/host-preflight-contract.md) defines Docker, Compose, RAM, disk, port, `vm.max_map_count`, and profile-validity readiness checks and fixture expectations for the executable first-user stack.
 - [Phase 52.7 demo seed contract](docs/deployment/demo-seed-contract.md) defines demo-only seed records, required labels, reset boundaries, and production-exclusion fixtures for the executable first-user stack.
 - [Phase 52.8 clean-host smoke skeleton](docs/deployment/clean-host-smoke-skeleton.md) defines the mocked/skipped `init -> up -> doctor -> seed-demo` fixture path and false-success rejection rules for the executable first-user stack.
+- [Phase 52.9 first-user stack overview](docs/deployment/first-user-stack.md) defines the few-command first-user path, troubleshooting links, pre-GA status, and authority boundary for the executable first-user stack.
 
 ## Product positioning
 
@@ -64,6 +65,8 @@ The Phase 52.6 first-user host preflight contract is defined by the [Phase 52.6 
 The Phase 52.7 first-user demo seed contract is defined by the [Phase 52.7 demo seed contract](docs/deployment/demo-seed-contract.md).
 
 The Phase 52.8 first-user clean-host smoke skeleton is defined by the [Phase 52.8 clean-host smoke skeleton](docs/deployment/clean-host-smoke-skeleton.md).
+
+The Phase 52.9 first-user stack overview is defined by the [Phase 52.9 first-user stack overview](docs/deployment/first-user-stack.md).
 
 Wazuh detects, AegisOps decides, records, and reconciles, and Shuffle executes reviewed delegated routine work.
 
