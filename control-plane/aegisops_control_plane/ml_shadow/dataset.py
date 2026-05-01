@@ -414,7 +414,10 @@ def _latest_lifecycle_transition_as_of(
     )
     if not transitions:
         return None
-    return transitions[-1]
+    return max(
+        transitions,
+        key=lambda transition: (transition.transitioned_at, transition.transition_id),
+    )
 
 
 def _reject_post_snapshot_record_mutation(
