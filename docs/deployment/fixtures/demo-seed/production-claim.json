@@ -1,0 +1,47 @@
+{
+  "bundle": "phase-52-7-demo-seed",
+  "mode": "demo",
+  "profile": "smb-single-node",
+  "records": [
+    {
+      "id": "demo-alert-production-claim",
+      "type": "demo-alert",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "authority": "production",
+      "production_claim": true,
+      "truth_surfaces": [
+        "production"
+      ],
+      "fixture_provenance": "docs/deployment/fixtures/demo-seed/production-claim.json",
+      "demo_source_family": "demo-fixture",
+      "reviewed_at": null,
+      "presentation": "production alert"
+    }
+  ],
+  "reset": {
+    "scope": "demo-bundle-only",
+    "selector": {
+      "bundle": "phase-52-7-demo-seed",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ]
+    },
+    "deletes_production_records": false
+  },
+  "production_exclusion": {
+    "may_satisfy_production_truth": true,
+    "blocked_truth_surfaces": [
+      "gate",
+      "customer_evidence",
+      "approval",
+      "execution",
+      "reconciliation"
+    ]
+  }
+}
