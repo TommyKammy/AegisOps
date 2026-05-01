@@ -318,9 +318,7 @@ def _build_recommendation_example(
                 "label_field_path": "lifecycle_state",
                 "label_decision_basis": "reviewed recommendation lifecycle_state",
                 "label_decided_at": label_transition.transitioned_at.isoformat(),
-                "label_reviewed_by": (
-                    _first_actor_identity(label_transition) or recommendation.review_owner
-                ),
+                "label_reviewed_by": _first_actor_identity(label_transition),
                 "label_linked_subject_record_id": recommendation.recommendation_id,
             },
         },

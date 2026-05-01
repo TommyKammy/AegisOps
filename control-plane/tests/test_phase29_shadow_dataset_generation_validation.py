@@ -34,6 +34,22 @@ class _UnsortedLifecycleTransitionService:
         )
 
 
+class _RedactedRecommendationAttributionService:
+    def __init__(self, inner: object) -> None:
+        self._inner = inner
+        self._store = inner._store
+
+    def list_lifecycle_transitions(
+        self,
+        record_family: str,
+        record_id: str,
+    ) -> tuple[object, ...]:
+        transitions = self._inner.list_lifecycle_transitions(record_family, record_id)
+        if record_family != "recommendation":
+            return transitions
+        return tuple(replace(transition, attribution={}) for transition in transitions)
+
+
 class Phase29ShadowDatasetGenerationValidationTests(ServicePersistenceTestBase):
     def test_generator_emits_reproducible_shadow_examples_with_lineage(self) -> None:
         _store, service, promoted_case, evidence_id, reviewed_at = (
@@ -365,6 +381,82 @@ class Phase29ShadowDatasetGenerationValidationTests(ServicePersistenceTestBase):
             example["features"]["source_health_ingest_disposition"]["value"],
             "stale",
         )
+
+    def test_generator_does_not_backfill_label_reviewer_from_live_recommendation(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Historical label provenance must stay transition-derived.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            observation_id=observation.observation_id,
+            triage_owner="analyst-001",
+            triage_rationale="Reject live recommendation owner fallback for old labels.",
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            lead_id=lead.lead_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep label reviewer provenance immutable.",
+        )
+        accepted_at = reviewed_at + timedelta(minutes=5)
+        accepted_recommendation = service.persist_record(
+            replace(recommendation, lifecycle_state="accepted"),
+            transitioned_at=accepted_at,
+        )
+        anchor_evidence = service.persist_record(
+            EvidenceRecord(
+                evidence_id="evidence-phase29-label-reviewer-anchor-001",
+                source_record_id="reviewed-source-phase29-label-reviewer-001",
+                alert_id=promoted_case.alert_id,
+                case_id=promoted_case.case_id,
+                source_system="github_audit",
+                collector_identity="fixture://reviewed/label-reviewer-anchor",
+                acquired_at=reviewed_at,
+                derivation_relationship="reviewed_context_anchor",
+                lifecycle_state="linked",
+                provenance={
+                    "classification": "authoritative-anchor",
+                    "source_id": "github-audit-event-label-reviewer-001",
+                    "timestamp": reviewed_at.isoformat(),
+                    "reviewed_by": "analyst-001",
+                },
+                content={"summary": {"kind": "label-reviewer-anchor"}},
+            )
+        )
+        service.persist_record(
+            replace(
+                promoted_case,
+                evidence_ids=(*promoted_case.evidence_ids, anchor_evidence.evidence_id),
+            )
+        )
+        service.persist_record(
+            replace(accepted_recommendation, review_owner="analyst-999"),
+            transitioned_at=accepted_at + timedelta(minutes=10),
+        )
+
+        snapshot = generate_reviewed_shadow_dataset(
+            _RedactedRecommendationAttributionService(service),
+            extraction_spec_version="phase29-shadow-dataset-v1",
+            snapshot_timestamp=accepted_at,
+        )
+
+        self.assertEqual(snapshot.example_count, 1)
+        example = snapshot.examples[0]
+        self.assertEqual(example["label"]["value"], "accepted")
+        self.assertEqual(
+            example["label"]["provenance"]["label_decided_at"],
+            accepted_at.isoformat(),
+        )
+        self.assertIsNone(example["label"]["provenance"]["label_reviewed_by"])
 
     def test_generator_selects_latest_lifecycle_transition_from_unsorted_listing(
         self,
