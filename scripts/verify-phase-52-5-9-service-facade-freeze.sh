@@ -243,15 +243,22 @@ for path in sorted(package_root.rglob("*.py")):
         print(f"Could not parse {path.relative_to(repo_root).as_posix()}: {exc}", file=sys.stderr)
         sys.exit(1)
     for node in ast.walk(tree):
-        if not isinstance(node, ast.ImportFrom):
-            continue
-        imported_module = resolved_import_module(current_module, node)
-        if imported_module in legacy_owner_modules:
-            relative_path = path.relative_to(repo_root).as_posix()
-            owner = legacy_owner_modules[imported_module]
-            violations.append(
-                f"{relative_path}:{node.lineno} imports {imported_module}; use {owner}"
-            )
+        if isinstance(node, ast.ImportFrom):
+            imported_module = resolved_import_module(current_module, node)
+            if imported_module in legacy_owner_modules:
+                relative_path = path.relative_to(repo_root).as_posix()
+                owner = legacy_owner_modules[imported_module]
+                violations.append(
+                    f"{relative_path}:{node.lineno} imports {imported_module}; use {owner}"
+                )
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name in legacy_owner_modules:
+                    relative_path = path.relative_to(repo_root).as_posix()
+                    owner = legacy_owner_modules[alias.name]
+                    violations.append(
+                        f"{relative_path}:{node.lineno} imports {alias.name}; use {owner}"
+                    )
 
 if violations:
     print(

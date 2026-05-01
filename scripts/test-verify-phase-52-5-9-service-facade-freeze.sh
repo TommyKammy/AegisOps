@@ -100,6 +100,16 @@ perl -0pi -e 's/from \.\.action_policy import evaluate_action_policy_record/from
   "${legacy_import_repo}/control-plane/aegisops_control_plane/actions/review/action_review_write_surface.py"
 assert_fails_with "${legacy_import_repo}" "imports aegisops_control_plane.action_policy; use aegisops_control_plane.actions.action_policy"
 
+plain_legacy_import_repo="${workdir}/plain-legacy-import"
+create_fixture "${plain_legacy_import_repo}"
+cat >"${plain_legacy_import_repo}/control-plane/aegisops_control_plane/actions/review/action_review_write_surface.py" <<'EOF'
+import aegisops_control_plane.action_policy as action_policy
+
+def evaluate(record):
+    return action_policy.evaluate_action_policy_record(record)
+EOF
+assert_fails_with "${plain_legacy_import_repo}" "imports aegisops_control_plane.action_policy; use aegisops_control_plane.actions.action_policy"
+
 service_growth_repo="${workdir}/service-growth"
 create_fixture "${service_growth_repo}"
 for index in $(seq 1 1393); do
