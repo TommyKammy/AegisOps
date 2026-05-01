@@ -33,7 +33,7 @@ required_phrases=(
   "Legacy import paths remain available during migration through compatibility shims or direct re-export modules until all documented internal, CLI, HTTP, test, and operator callers have migrated."
   "Removing a legacy import path requires a later transition policy that lists the affected import path, replacement import path, caller evidence, deprecation window, focused regression test, and rollback path."
   "If caller evidence is incomplete, malformed, or ambiguous, the old import path stays available."
-  "Phase 52.5.1 does not approve production module moves, import rewrites, package renames, directory renames, Wazuh profile work, Shuffle profile work, runtime behavior changes, deployment behavior changes, or authority-boundary changes."
+  "Phase 52.5.1 does not itself approve any additional production module moves, import rewrites beyond the documented compatibility shims, package renames, directory renames, Wazuh profile work, Shuffle profile work, runtime behavior changes, deployment behavior changes, or authority-boundary changes."
   'Run `bash scripts/verify-phase-52-5-1-control-plane-layout-inventory-contract.sh`.'
   'Run `bash scripts/test-verify-phase-52-5-1-control-plane-layout-inventory-contract.sh`.'
   'Run `node <codex-supervisor-root>/dist/index.js issue-lint 1085 --config <supervisor-config-path>`.'

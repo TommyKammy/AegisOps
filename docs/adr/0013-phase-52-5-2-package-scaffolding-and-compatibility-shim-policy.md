@@ -29,10 +29,10 @@ The approved scaffold packages under `control-plane/aegisops_control_plane/` are
 | `core/` | `core` | Package scaffold only; no production ownership move yet. |
 | `api/` | `api` | Package scaffold only; no HTTP, CLI, or protected-surface move yet. |
 | `runtime/` | `runtime` | Package scaffold only; no startup, config, readiness, or restore move yet. |
-| `ingestion/` | `ingestion` | Package scaffold only; no detection lifecycle move yet. |
+| `ingestion/` | `ingestion` | Package retained as the owner for detection lifecycle, detection helpers, native detection context, case workflow, and evidence linkage modules moved in Phase 52.5.7. |
 | `actions/` | `actions` | Package scaffold only; no action lifecycle or coordination move yet. |
 | `actions/review/` | `actions.review` | Package scaffold retained as the owner for reviewed-action projection, visibility, timeline, chain, inspection, path health, coordination, index, and write-surface modules moved in Phase 52.5.4. |
-| `evidence/` | `evidence` | Package scaffold only; no evidence boundary or facade move yet. |
+| `evidence/` | `evidence` | Package retained as the owner for external evidence boundary, facade, MISP, osquery, and endpoint evidence helper modules moved in Phase 52.5.7. |
 | `assistant/` | `assistant` | Package scaffold retained as the owner for assistant context, advisory, provider, trace lifecycle, and workflow modules moved in Phase 52.5.3. |
 | `ml_shadow/` | `ml_shadow` | Package scaffold only; no reviewed ML shadow-mode move yet. |
 | `reporting/` | `reporting` | Package scaffold retained as the owner for audit and pilot reporting export modules moved in Phase 52.5.3. |
@@ -147,6 +147,29 @@ Phase 52.5.6 extends the verifier so moved runtime, readiness, restore, snapshot
 - `aegisops_control_plane.api.http_protected_surface:authenticate_protected_write`
 - `aegisops_control_plane.http_runtime_surface:runtime_read_response`
 - `aegisops_control_plane.api.http_runtime_surface:runtime_read_response`
+
+Phase 52.5.7 extends the verifier so moved ingestion and external-evidence modules are checked through both legacy root imports and target `ingestion` or `evidence` package imports:
+
+- `aegisops_control_plane.detection_lifecycle:DetectionIntakeService`
+- `aegisops_control_plane.ingestion.detection_lifecycle:DetectionIntakeService`
+- `aegisops_control_plane.detection_lifecycle_helpers:DetectionLifecycleTransitionHelper`
+- `aegisops_control_plane.ingestion.detection_lifecycle_helpers:DetectionLifecycleTransitionHelper`
+- `aegisops_control_plane.detection_native_context:NativeDetectionContextAttacher`
+- `aegisops_control_plane.ingestion.detection_native_context:NativeDetectionContextAttacher`
+- `aegisops_control_plane.case_workflow:CaseWorkflowService`
+- `aegisops_control_plane.ingestion.case_workflow:CaseWorkflowService`
+- `aegisops_control_plane.evidence_linkage:EvidenceLinkageService`
+- `aegisops_control_plane.ingestion.evidence_linkage:EvidenceLinkageService`
+- `aegisops_control_plane.external_evidence_boundary:ExternalEvidenceBoundary`
+- `aegisops_control_plane.evidence.external_evidence_boundary:ExternalEvidenceBoundary`
+- `aegisops_control_plane.external_evidence_facade:ExternalEvidenceFacade`
+- `aegisops_control_plane.evidence.external_evidence_facade:ExternalEvidenceFacade`
+- `aegisops_control_plane.external_evidence_misp:MispExternalEvidenceHelper`
+- `aegisops_control_plane.evidence.external_evidence_misp:MispExternalEvidenceHelper`
+- `aegisops_control_plane.external_evidence_osquery:OsqueryExternalEvidenceHelper`
+- `aegisops_control_plane.evidence.external_evidence_osquery:OsqueryExternalEvidenceHelper`
+- `aegisops_control_plane.external_evidence_endpoint:EndpointExternalEvidenceHelper`
+- `aegisops_control_plane.evidence.external_evidence_endpoint:EndpointExternalEvidenceHelper`
 
 ## 5. Layout Guardrail Skeleton
 

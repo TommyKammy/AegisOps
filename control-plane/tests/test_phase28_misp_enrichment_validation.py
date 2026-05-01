@@ -253,6 +253,68 @@ class Phase28MispEnrichmentValidationTests(ServicePersistenceTestBase):
         self.assertTrue(evidence.provenance["conflict_present"])
         self.assertEqual(evidence.provenance["ambiguity_badge"], "unresolved")
 
+    def test_attach_misp_context_rejects_invalid_reviewer_and_timestamp_before_writes(
+        self,
+    ) -> None:
+        store, service, promoted_case, _, reviewed_at = self._build_in_scope_case(
+            misp_enrichment_enabled=True
+        )
+        anchor_evidence = self._attach_anchor_evidence(
+            service=service,
+            promoted_case=promoted_case,
+            reviewed_at=reviewed_at,
+            indicator_value="validation.example",
+        )
+        evidence_before = store.list(EvidenceRecord)
+
+        with self.assertRaisesRegex(ValueError, "reviewed_by must be a non-empty string"):
+            service.attach_misp_context(
+                case_id=promoted_case.case_id,
+                admitting_evidence_id=anchor_evidence.evidence_id,
+                queried_object_type="domain",
+                queried_object_value="validation.example",
+                looked_up_at=reviewed_at,
+                reviewed_by="   ",
+                event_id="misp-event-validation-001",
+                event_info="Invalid reviewer should fail closed",
+                iocs=(
+                    {
+                        "type": "domain",
+                        "value": "validation.example",
+                    },
+                ),
+                citation_url="https://misp.example/events/view/validation",
+                staleness_marker={
+                    "state": "fresh",
+                    "evaluated_at": reviewed_at.isoformat(),
+                },
+            )
+
+        with self.assertRaisesRegex(ValueError, "looked_up_at must be timezone-aware"):
+            service.attach_misp_context(
+                case_id=promoted_case.case_id,
+                admitting_evidence_id=anchor_evidence.evidence_id,
+                queried_object_type="domain",
+                queried_object_value="validation.example",
+                looked_up_at=datetime(2026, 4, 18, 0, 0),
+                reviewed_by="analyst-001",
+                event_id="misp-event-validation-002",
+                event_info="Naive timestamp should fail closed",
+                iocs=(
+                    {
+                        "type": "domain",
+                        "value": "validation.example",
+                    },
+                ),
+                citation_url="https://misp.example/events/view/validation",
+                staleness_marker={
+                    "state": "fresh",
+                    "evaluated_at": reviewed_at.isoformat(),
+                },
+            )
+
+        self.assertEqual(store.list(EvidenceRecord), evidence_before)
+
     def test_attach_misp_context_rejects_disabled_mode_without_writes(self) -> None:
         store, service, promoted_case, _, reviewed_at = self._build_in_scope_case(
             misp_enrichment_enabled=False

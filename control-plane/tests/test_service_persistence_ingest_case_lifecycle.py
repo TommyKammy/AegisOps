@@ -718,7 +718,7 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
         )
         materially_updated = service.ingest_finding_alert(
             finding_id="finding-merge-002",
-            analytic_signal_id="signal-merge-001",
+            analytic_signal_id="signal-merge-002",
             substrate_detection_record_id="substrate-detection-merge-002",
             correlation_key="claim:asset-repo-001:privilege-review",
             first_seen_at=first_seen_at,
@@ -750,7 +750,10 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
             merged_reviewed_context,
         )
         self.assertEqual(
-            service.get_record(AnalyticSignalRecord, created.alert.analytic_signal_id).reviewed_context,
+            service.get_record(
+                AnalyticSignalRecord,
+                materially_updated.alert.analytic_signal_id,
+            ).reviewed_context,
             service.get_record(AlertRecord, created.alert.alert_id).reviewed_context,
         )
 
@@ -5015,6 +5018,54 @@ class IngestCaseLifecyclePersistenceTests(ServicePersistenceTestBase):
                 "signal-collision-001",
             ).correlation_key,
             created.reconciliation.correlation_key,
+        )
+
+    def test_service_rejects_supplied_analytic_signal_id_from_other_finding(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        first_seen_at = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+
+        created = service.ingest_finding_alert(
+            finding_id="finding-signal-collision-001",
+            analytic_signal_id="signal-collision-001",
+            substrate_detection_record_id="substrate-detection-collision-001",
+            correlation_key="claim:host-001:signal-collision",
+            first_seen_at=first_seen_at,
+            last_seen_at=first_seen_at,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                "Analytic signal 'signal-collision-001' already belongs to "
+                "finding 'finding-signal-collision-001'; cannot bind it to "
+                "finding 'finding-signal-collision-002'"
+            ),
+        ):
+            service.ingest_finding_alert(
+                finding_id="finding-signal-collision-002",
+                analytic_signal_id="signal-collision-001",
+                substrate_detection_record_id="substrate-detection-collision-002",
+                correlation_key="claim:host-001:signal-collision",
+                first_seen_at=first_seen_at,
+                last_seen_at=first_seen_at + timedelta(minutes=15),
+                materially_new_work=True,
+            )
+
+        self.assertEqual(len(store.list(AlertRecord)), 1)
+        self.assertEqual(len(store.list(AnalyticSignalRecord)), 1)
+        self.assertEqual(len(store.list(ReconciliationRecord)), 1)
+        self.assertEqual(
+            service.get_record(
+                AnalyticSignalRecord,
+                "signal-collision-001",
+            ).finding_id,
+            created.alert.finding_id,
         )
 
     def test_service_inspects_analytic_signal_records_as_first_class_records(self) -> None:

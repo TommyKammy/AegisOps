@@ -59,7 +59,14 @@ for package in "${required_packages[@]}"; do
     echo "Missing Phase 52.5.2 target package marker: control-plane/aegisops_control_plane/${package}/__init__.py" >&2
     exit 1
   fi
-  if [[ -s "${init_path}" ]] && ! grep -Fq "Package scaffold only" "${init_path}"; then
+  if [[ "${package}" == "ingestion" ]]; then
+    allowed_marker="Ingestion lifecycle, case workflow, and evidence linkage modules."
+  elif [[ "${package}" == "evidence" ]]; then
+    allowed_marker="External evidence boundary and helper modules."
+  else
+    allowed_marker="Package scaffold only"
+  fi
+  if [[ -s "${init_path}" ]] && ! grep -Fq "${allowed_marker}" "${init_path}"; then
     echo "Phase 52.5.2 package marker must state scaffold-only posture: control-plane/aegisops_control_plane/${package}/__init__.py" >&2
     exit 1
   fi

@@ -842,6 +842,168 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
             persisted,
         )
 
+    def test_ingest_endpoint_evidence_artifacts_allows_binary_analysis_before_file_sample(
+        self,
+    ) -> None:
+        _store, service, promoted_case, anchor_evidence_id, reviewed_at = (
+            self._build_host_bound_case()
+        )
+        action_request = service.create_endpoint_evidence_collection_request(
+            case_id=promoted_case.case_id,
+            admitting_evidence_id=anchor_evidence_id,
+            requester_identity="analyst-001",
+            host_identifier="host-001",
+            evidence_gap="Need bounded file analysis to understand the reviewed sample.",
+            artifact_classes=("file_sample", "binary_analysis"),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+        )
+        self._approve_action_request(
+            service,
+            action_request.action_request_id,
+            decided_at=action_request.requested_at + timedelta(minutes=5),
+        )
+
+        ingested = service.ingest_endpoint_evidence_artifacts(
+            action_request_id=action_request.action_request_id,
+            artifacts=(
+                {
+                    "artifact_class": "binary_analysis",
+                    "artifact_id": "binary-analysis-out-of-order-001",
+                    "source_artifact_id": "analysis-out-of-order-001",
+                    "derived_from_artifact_id": "sample-out-of-order-001",
+                    "collected_at": reviewed_at + timedelta(minutes=3),
+                    "collector_identity": "capa",
+                    "tool_name": "capa",
+                    "tool_version": "7.0.1",
+                    "source_boundary": "endpoint_evidence_pack",
+                    "citation_kind": "bounded_derivative",
+                    "description": "Derived binary-analysis findings over the reviewed file sample.",
+                    "content": {
+                        "summary": "Matched capabilities from the bounded sample.",
+                    },
+                },
+                {
+                    "artifact_class": "file_sample",
+                    "artifact_id": "sample-out-of-order-001",
+                    "source_artifact_id": "collector-sample-out-of-order-001",
+                    "collected_at": reviewed_at,
+                    "collector_identity": "velociraptor",
+                    "tool_name": "Velociraptor",
+                    "tool_version": "0.7.2",
+                    "source_boundary": "endpoint_evidence_pack",
+                    "citation_kind": "raw_collected_output",
+                    "description": "Collected reviewed file sample for binary analysis.",
+                    "content": {
+                        "path": "/opt/suspicious/out-of-order.dll",
+                        "sha256": "d" * 64,
+                    },
+                },
+            ),
+            admitted_by="analyst-001",
+        )
+
+        self.assertEqual(len(ingested), 2)
+        by_artifact_class = {
+            record.provenance["artifact_class"]: record for record in ingested
+        }
+        file_sample = by_artifact_class["file_sample"]
+        analysis = by_artifact_class["binary_analysis"]
+        self.assertEqual(
+            analysis.provenance["derived_from_artifact_id"],
+            "sample-out-of-order-001",
+        )
+        self.assertEqual(
+            analysis.provenance["derived_from_evidence_id"],
+            file_sample.evidence_id,
+        )
+        self.assertEqual(
+            analysis.content["artifact"]["derived_from_evidence_id"],
+            file_sample.evidence_id,
+        )
+
+    def test_ingest_endpoint_evidence_artifacts_rejects_duplicate_artifact_ids_before_writes(
+        self,
+    ) -> None:
+        store, service, promoted_case, anchor_evidence_id, reviewed_at = (
+            self._build_host_bound_case()
+        )
+        action_request = service.create_endpoint_evidence_collection_request(
+            case_id=promoted_case.case_id,
+            admitting_evidence_id=anchor_evidence_id,
+            requester_identity="analyst-001",
+            host_identifier="host-001",
+            evidence_gap="Need endpoint evidence to resolve the reviewed host-state gap.",
+            artifact_classes=("collection_manifest",),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+        )
+        self._approve_action_request(
+            service,
+            action_request.action_request_id,
+            decided_at=action_request.requested_at + timedelta(minutes=5),
+        )
+        base_adapter = service._endpoint_evidence_pack_adapter
+
+        class _SkewedSourceRecordAdapter:
+            source_system = base_adapter.source_system
+
+            def normalize_requested_artifact_classes(self, value: object) -> tuple[str, ...]:
+                return base_adapter.normalize_requested_artifact_classes(value)
+
+            def build_attachment(self, **kwargs: object) -> object:
+                attachment = base_adapter.build_attachment(**kwargs)
+                return replace(
+                    attachment,
+                    source_record_id=(
+                        f"{attachment.source_record_id}/source/"
+                        f"{attachment.provenance['source_id']}"
+                    ),
+                )
+
+        service._endpoint_evidence_pack_adapter = _SkewedSourceRecordAdapter()
+        before_ids = {record.evidence_id for record in store.list(EvidenceRecord)}
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "artifacts must not contain duplicate artifact_id values within one request",
+        ):
+            service.ingest_endpoint_evidence_artifacts(
+                action_request_id=action_request.action_request_id,
+                artifacts=(
+                    {
+                        "artifact_class": "collection_manifest",
+                        "artifact_id": "manifest-duplicate-001",
+                        "source_artifact_id": "collector-manifest-duplicate-a",
+                        "collected_at": reviewed_at,
+                        "collector_identity": "velociraptor",
+                        "tool_name": "Velociraptor",
+                        "tool_version": "0.7.2",
+                        "source_boundary": "endpoint_evidence_pack",
+                        "citation_kind": "raw_collected_output",
+                        "description": "First reviewed manifest.",
+                        "content": {"requested_paths": ("/opt/duplicate-a",)},
+                    },
+                    {
+                        "artifact_class": "collection_manifest",
+                        "artifact_id": "manifest-duplicate-001",
+                        "source_artifact_id": "collector-manifest-duplicate-b",
+                        "collected_at": reviewed_at + timedelta(minutes=1),
+                        "collector_identity": "velociraptor",
+                        "tool_name": "Velociraptor",
+                        "tool_version": "0.7.2",
+                        "source_boundary": "endpoint_evidence_pack",
+                        "citation_kind": "raw_collected_output",
+                        "description": "Second reviewed manifest with a duplicate artifact id.",
+                        "content": {"requested_paths": ("/opt/duplicate-b",)},
+                    },
+                ),
+                admitted_by="analyst-001",
+            )
+
+        self.assertEqual(
+            {record.evidence_id for record in store.list(EvidenceRecord)},
+            before_ids,
+        )
+
     def test_ingest_endpoint_evidence_artifacts_persists_yara_augmentation_for_file_sample(
         self,
     ) -> None:

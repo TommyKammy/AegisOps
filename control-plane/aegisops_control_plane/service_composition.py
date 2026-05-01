@@ -24,12 +24,12 @@ from .actions.action_reconciliation_orchestration import (
 )
 from .actions.review.action_review_inspection import ActionReviewInspectionBoundary
 from .actions.review.action_review_write_surface import ActionReviewWriteSurface
-from .case_workflow import CaseWorkflowService
+from .ingestion.case_workflow import CaseWorkflowService
 from .config import RuntimeConfig
-from .detection_lifecycle import DetectionIntakeService
-from .evidence_linkage import EvidenceLinkageService
+from .ingestion.detection_lifecycle import DetectionIntakeService
+from .ingestion.evidence_linkage import EvidenceLinkageService
 from .actions.execution_coordinator import ExecutionCoordinator
-from .external_evidence_boundary import ExternalEvidenceBoundary
+from .evidence.external_evidence_boundary import ExternalEvidenceBoundary
 from .assistant.live_assistant_workflow import LiveAssistantWorkflowCoordinator
 from .models import ControlPlaneRecord, ReconciliationRecord
 from .operator_inspection import OperatorInspectionReadSurface
