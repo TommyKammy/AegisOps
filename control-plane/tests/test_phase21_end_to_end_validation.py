@@ -261,6 +261,20 @@ class Phase21EndToEndValidationTests(unittest.TestCase):
         self.assertIn('"event":"wazuh_ingest_rejected"', joined_logs)
         self.assertIn('"reason":"missing_bearer_secret"', joined_logs)
 
+    def test_live_wazuh_ingest_accepts_case_insensitive_bearer_scheme(self) -> None:
+        _store, service = self._build_service()
+
+        admitted = service.ingest_wazuh_alert(
+            raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
+            authorization_header=f"bearer {REVIEWED_SHARED_SECRET}",
+            forwarded_proto="https",
+            reverse_proxy_secret_header=REVIEWED_WAZUH_PROXY_SECRET,
+            peer_addr="127.0.0.1",
+        )
+
+        self.assertEqual(admitted.disposition, "created")
+        self.assertIsNotNone(admitted.alert.alert_id)
+
     def test_phase21_end_to_end_restore_and_readiness_preserve_phase20_live_path(
         self,
     ) -> None:

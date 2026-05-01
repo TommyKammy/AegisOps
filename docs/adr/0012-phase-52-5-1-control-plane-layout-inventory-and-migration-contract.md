@@ -14,9 +14,9 @@
 
 ## 1. Purpose
 
-Phase 52.5.1 records the current `control-plane/aegisops_control_plane/` Python package layout before any package moves happen.
+Phase 52.5.1 recorded the initial `control-plane/aegisops_control_plane/` Python package layout before package moves began, and this accepted contract now tracks the current authoritative owner rows as later Phase 52.5 child issues land.
 
-The inventory assigns every current Python file in the package to a target package family so later child issues can move modules deliberately instead of inferring ownership from filename shape or nearby metadata.
+The inventory assigns every current Python file in the package to a target package family so child issues can move modules deliberately instead of inferring ownership from filename shape or nearby metadata. Rows under package directories are the authoritative owners; flat root rows that say compatibility shim only are temporary legacy import shims.
 
 This contract is documentation and verification only.
 
@@ -200,7 +200,7 @@ The public package rename is deferred because external and internal callers curr
 
 The outer directory rename is deferred because `control-plane/` is already the approved repository-structure baseline for live control-plane code and must stay distinct from `postgres/control-plane/` persistence-contract assets.
 
-Phase 52.5.1 does not approve production module moves, import rewrites, package renames, directory renames, Wazuh profile work, Shuffle profile work, runtime behavior changes, deployment behavior changes, or authority-boundary changes.
+Phase 52.5.1 does not itself approve any additional production module moves, import rewrites beyond the documented compatibility shims, package renames, directory renames, Wazuh profile work, Shuffle profile work, runtime behavior changes, deployment behavior changes, or authority-boundary changes.
 
 ## 7. Forbidden Claims
 
@@ -221,8 +221,8 @@ Run `node <codex-supervisor-root>/dist/index.js issue-lint 1085 --config <superv
 
 ## 9. Non-Goals
 
-- No production module is moved.
-- No production import path is changed.
+- No production module is moved except the authoritative owner rows documented in this inventory by later Phase 52.5 child issues.
+- No production import path is changed except the documented compatibility shims that preserve legacy imports while callers migrate.
 - No public package name is changed.
 - No outer repository directory is changed.
 - No runtime behavior, HTTP behavior, CLI behavior, deployment behavior, Wazuh behavior, Shuffle behavior, ticket behavior, assistant behavior, evidence behavior, ML behavior, reporting behavior, backup behavior, restore behavior, readiness behavior, or durable-state side effect is changed.

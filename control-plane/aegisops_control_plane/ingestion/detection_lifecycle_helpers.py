@@ -351,7 +351,9 @@ class DetectionReconciliationResolver:
     ) -> str:
         service = self._service
         if analytic_signal_id is not None:
-            return analytic_signal_id
+            normalized_analytic_signal_id = analytic_signal_id.strip()
+            if normalized_analytic_signal_id:
+                return normalized_analytic_signal_id
 
         existing_signal_ids = service._merge_linked_ids(
             (
@@ -578,7 +580,11 @@ class LiveWazuhIntakeHandler:
             )
 
         scheme, separator, supplied_secret = (authorization_header or "").partition(" ")
-        if separator == "" or scheme != "Bearer" or supplied_secret.strip() == "":
+        if (
+            separator == ""
+            or scheme.strip().casefold() != "bearer"
+            or supplied_secret.strip() == ""
+        ):
             service._emit_structured_event(
                 logging.WARNING,
                 "wazuh_ingest_rejected",

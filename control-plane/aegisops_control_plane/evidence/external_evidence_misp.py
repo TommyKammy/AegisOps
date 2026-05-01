@@ -218,6 +218,14 @@ class MispExternalEvidenceHelper:
             observation_scope_statement,
             "observation_scope_statement",
         )
+        reviewed_by = self._service._require_non_empty_string(
+            reviewed_by,
+            "reviewed_by",
+        )
+        looked_up_at = self._service._require_aware_datetime(
+            looked_up_at,
+            "looked_up_at",
+        )
         if normalized_scope_statement is None and observation_id is not None:
             raise ValueError(
                 "observation_id requires observation_scope_statement for MISP attachment"
@@ -315,14 +323,8 @@ class MispExternalEvidenceHelper:
                         alert_id=current_case.alert_id,
                         case_id=current_case.case_id,
                         supporting_evidence_ids=(evidence.evidence_id,),
-                        author_identity=self._service._require_non_empty_string(
-                            reviewed_by,
-                            "reviewed_by",
-                        ),
-                        observed_at=self._service._require_aware_datetime(
-                            looked_up_at,
-                            "looked_up_at",
-                        ),
+                        author_identity=reviewed_by,
+                        observed_at=looked_up_at,
                         scope_statement=normalized_scope_statement,
                         lifecycle_state="confirmed",
                         provenance=attachment.observation_provenance,

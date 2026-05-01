@@ -842,6 +842,85 @@ class Phase28EndpointEvidencePackValidationTests(unittest.TestCase):
             persisted,
         )
 
+    def test_ingest_endpoint_evidence_artifacts_allows_binary_analysis_before_file_sample(
+        self,
+    ) -> None:
+        _store, service, promoted_case, anchor_evidence_id, reviewed_at = (
+            self._build_host_bound_case()
+        )
+        action_request = service.create_endpoint_evidence_collection_request(
+            case_id=promoted_case.case_id,
+            admitting_evidence_id=anchor_evidence_id,
+            requester_identity="analyst-001",
+            host_identifier="host-001",
+            evidence_gap="Need bounded file analysis to understand the reviewed sample.",
+            artifact_classes=("file_sample", "binary_analysis"),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+        )
+        self._approve_action_request(
+            service,
+            action_request.action_request_id,
+            decided_at=action_request.requested_at + timedelta(minutes=5),
+        )
+
+        ingested = service.ingest_endpoint_evidence_artifacts(
+            action_request_id=action_request.action_request_id,
+            artifacts=(
+                {
+                    "artifact_class": "binary_analysis",
+                    "artifact_id": "binary-analysis-out-of-order-001",
+                    "source_artifact_id": "analysis-out-of-order-001",
+                    "derived_from_artifact_id": "sample-out-of-order-001",
+                    "collected_at": reviewed_at + timedelta(minutes=3),
+                    "collector_identity": "capa",
+                    "tool_name": "capa",
+                    "tool_version": "7.0.1",
+                    "source_boundary": "endpoint_evidence_pack",
+                    "citation_kind": "bounded_derivative",
+                    "description": "Derived binary-analysis findings over the reviewed file sample.",
+                    "content": {
+                        "summary": "Matched capabilities from the bounded sample.",
+                    },
+                },
+                {
+                    "artifact_class": "file_sample",
+                    "artifact_id": "sample-out-of-order-001",
+                    "source_artifact_id": "collector-sample-out-of-order-001",
+                    "collected_at": reviewed_at,
+                    "collector_identity": "velociraptor",
+                    "tool_name": "Velociraptor",
+                    "tool_version": "0.7.2",
+                    "source_boundary": "endpoint_evidence_pack",
+                    "citation_kind": "raw_collected_output",
+                    "description": "Collected reviewed file sample for binary analysis.",
+                    "content": {
+                        "path": "/opt/suspicious/out-of-order.dll",
+                        "sha256": "d" * 64,
+                    },
+                },
+            ),
+            admitted_by="analyst-001",
+        )
+
+        self.assertEqual(len(ingested), 2)
+        by_artifact_class = {
+            record.provenance["artifact_class"]: record for record in ingested
+        }
+        file_sample = by_artifact_class["file_sample"]
+        analysis = by_artifact_class["binary_analysis"]
+        self.assertEqual(
+            analysis.provenance["derived_from_artifact_id"],
+            "sample-out-of-order-001",
+        )
+        self.assertEqual(
+            analysis.provenance["derived_from_evidence_id"],
+            file_sample.evidence_id,
+        )
+        self.assertEqual(
+            analysis.content["artifact"]["derived_from_evidence_id"],
+            file_sample.evidence_id,
+        )
+
     def test_ingest_endpoint_evidence_artifacts_persists_yara_augmentation_for_file_sample(
         self,
     ) -> None:

@@ -639,6 +639,16 @@ class DetectionIntakeService:
                 f"Analytic signal {inputs.analytic_signal_id!r} already belongs to "
                 f"correlation key {existing_signal.correlation_key!r}"
             )
+        if (
+            existing_signal is not None
+            and existing_signal.finding_id is not None
+            and existing_signal.finding_id != inputs.finding_id
+        ):
+            raise ValueError(
+                f"Analytic signal {inputs.analytic_signal_id!r} already belongs to "
+                f"finding {existing_signal.finding_id!r}; cannot bind it to "
+                f"finding {inputs.finding_id!r}"
+            )
         signal_first_seen = inputs.first_seen_at
         if existing_signal is not None and existing_signal.first_seen_at is not None:
             signal_first_seen = min(existing_signal.first_seen_at, inputs.first_seen_at)

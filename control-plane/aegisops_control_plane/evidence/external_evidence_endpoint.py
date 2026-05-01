@@ -396,16 +396,14 @@ class EndpointExternalEvidenceHelper:
                 evidence_records=existing_by_source_record_id.values(),
             )
             persisted: list[EvidenceRecord] = []
-            for attachment in attachments:
-                artifact_class = self._service._require_non_empty_string(
+
+            def artifact_class_for(attachment: object) -> str:
+                return self._service._require_non_empty_string(
                     attachment.provenance.get("artifact_class"),
                     "attachment.provenance.artifact_class",
                 )
-                if artifact_class == "binary_analysis":
-                    attachment = self._resolve_binary_analysis_attachment(
-                        attachment=attachment,
-                        indexed_artifacts=indexed_artifacts,
-                    )
+
+            def persist_or_reuse_attachment(attachment: object) -> None:
                 existing = existing_by_source_record_id.get(attachment.source_record_id)
                 if existing is not None:
                     if (
@@ -423,7 +421,7 @@ class EndpointExternalEvidenceHelper:
                             "artifact replay conflicted with previously admitted evidence"
                         )
                     persisted.append(existing)
-                    continue
+                    return
                 evidence = self._service.persist_record(
                     EvidenceRecord(
                         evidence_id=self._service._next_identifier("evidence"),
@@ -447,6 +445,20 @@ class EndpointExternalEvidenceHelper:
                 )
                 if artifact_id is not None:
                     indexed_artifacts[artifact_id] = evidence
+
+            for attachment in attachments:
+                if artifact_class_for(attachment) == "binary_analysis":
+                    continue
+                persist_or_reuse_attachment(attachment)
+            for attachment in attachments:
+                if artifact_class_for(attachment) != "binary_analysis":
+                    continue
+                persist_or_reuse_attachment(
+                    self._resolve_binary_analysis_attachment(
+                        attachment=attachment,
+                        indexed_artifacts=indexed_artifacts,
+                    )
+                )
             current_case = self._service._require_reviewed_operator_case(case.case_id)
             merged_case_evidence_ids = current_case.evidence_ids
             for evidence in persisted:
