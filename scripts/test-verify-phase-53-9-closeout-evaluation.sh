@@ -77,6 +77,14 @@ assert_fails_with \
   "${missing_subordinate_posture_repo}" \
   "Missing required Phase 53 closeout term in docs/phase-53-closeout-evaluation.md: Wazuh remains a subordinate detection substrate."
 
+missing_namespace_repo="${workdir}/missing-namespace"
+copy_valid_repo "${missing_namespace_repo}"
+perl -0pi -e 's/Canonical implementation namespace remains `aegisops\.control_plane`; `aegisops_control_plane` is retained for compatibility only\.\n\n//' \
+  "${missing_namespace_repo}/docs/phase-53-closeout-evaluation.md"
+assert_fails_with \
+  "${missing_namespace_repo}" \
+  'Missing required Phase 53 closeout term in docs/phase-53-closeout-evaluation.md: Canonical implementation namespace remains `aegisops.control_plane`; `aegisops_control_plane` is retained for compatibility only.'
+
 missing_source_health_repo="${workdir}/missing-source-health"
 copy_valid_repo "${missing_source_health_repo}"
 perl -0pi -e 's/\| Source health \| Deferred source-health projection\. \| Subordinate source-health projection states for Wazuh manager, dashboard, indexer, intake, signal freshness, parser, volume, credential, unavailable, stale, degraded, and mismatched posture\. \|\n//' \
@@ -92,6 +100,14 @@ perl -0pi -e 's/\| Sample signal evidence \| Existing Wazuh fixture families for
 assert_fails_with \
   "${missing_sample_signal_repo}" \
   'Missing required Phase 53 closeout term in docs/phase-53-closeout-evaluation.md: | Sample signal evidence | Existing Wazuh fixture families for earlier source work. | Reviewed SMB single-node SSH authentication failure Wazuh alert and analytic-signal fixtures tied to Phase 53.4 parser mapping evidence. |'
+
+missing_broad_unittest_repo="${workdir}/missing-broad-unittest"
+copy_valid_repo "${missing_broad_unittest_repo}"
+perl -0pi -e 's/^- `PYTHONPATH="\$\{PWD\}\/control-plane:\$\{PWD\}\/control-plane\/tests" python3 -m unittest discover -s control-plane\/tests -p '\''test_\*\.py'\''`\n//m' \
+  "${missing_broad_unittest_repo}/docs/phase-53-closeout-evaluation.md"
+assert_fails_with \
+  "${missing_broad_unittest_repo}" \
+  'Missing required Phase 53 closeout term in docs/phase-53-closeout-evaluation.md: `PYTHONPATH="${PWD}/control-plane:${PWD}/control-plane/tests" python3 -m unittest discover -s control-plane/tests -p '\''test_*.py'\''`'
 
 missing_child_issue_lint_repo="${workdir}/missing-child-issue-lint"
 copy_valid_repo "${missing_child_issue_lint_repo}"

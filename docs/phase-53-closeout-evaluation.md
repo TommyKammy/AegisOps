@@ -11,6 +11,8 @@ Phase 53 is accepted as the Wazuh product profile MVP evidence baseline for the 
 
 Wazuh remains a subordinate detection substrate. Wazuh detections are analytic signals until admitted and linked by AegisOps. AegisOps control-plane records remain authoritative for alert, case, evidence, approval, action request, execution receipt, reconciliation, audit, limitation, source admission, release, gate, and closeout truth.
 
+Canonical implementation namespace remains `aegisops.control_plane`; `aegisops_control_plane` is retained for compatibility only.
+
 This closeout does not claim Phase 54 Shuffle profile work is complete, Phase 55 guided first-user journey work is complete, Phase 61 SIEM breadth is complete, AegisOps is Beta, RC, GA, self-service commercially ready, or a replacement for every SIEM/SOAR capability.
 
 ## Child Issue Outcomes
@@ -94,7 +96,7 @@ Focused negative-test evidence:
 
 Broad control-plane test evidence:
 
-- `python3 -m unittest discover -s control-plane/tests -p 'test_*.py'`
+- `PYTHONPATH="${PWD}/control-plane:${PWD}/control-plane/tests" python3 -m unittest discover -s control-plane/tests -p 'test_*.py'`
 
 Issue-lint evidence for #1135 through #1144:
 
