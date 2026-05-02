@@ -243,6 +243,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             pathlib.Path(__file__).resolve().parents[1]
             / "aegisops"
             / "control_plane"
+            / "runtime"
             / "restore_readiness_backup_restore.py"
         )
 
@@ -276,6 +277,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             pathlib.Path(__file__).resolve().parents[1]
             / "aegisops"
             / "control_plane"
+            / "runtime"
             / "restore_readiness_projection.py"
         )
 

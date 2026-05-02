@@ -52,9 +52,9 @@ class Phase5013InternalCallerRewiringTests(unittest.TestCase):
             "render_recommendation_draft",
         }
         focused_modules = (
-            "control-plane/aegisops_control_plane/assistant_context.py",
+            "control-plane/aegisops_control_plane/assistant/assistant_context.py",
             "control-plane/aegisops_control_plane/actions/execution_coordinator_action_requests.py",
-            "control-plane/aegisops_control_plane/live_assistant_workflow.py",
+            "control-plane/aegisops_control_plane/assistant/live_assistant_workflow.py",
             "control-plane/aegisops_control_plane/operator_inspection.py",
         )
 

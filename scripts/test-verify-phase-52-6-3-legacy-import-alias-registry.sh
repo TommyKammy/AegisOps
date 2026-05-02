@@ -100,11 +100,10 @@ import sys
 path = Path(sys.argv[1])
 text = path.read_text()
 text = text.replace(
-    "        sys.modules[legacy_module] = target\n",
+    "        target = importlib.import_module(self._target_name)\n",
     "        from types import ModuleType\n"
-    "        proxy = ModuleType(legacy_module)\n"
+    "        proxy = ModuleType(self._alias_name)\n"
     "        proxy.export_audit_retention_baseline = object()\n"
-    "        sys.modules[legacy_module] = proxy\n"
     "        target = proxy\n",
 )
 path.write_text(text)
