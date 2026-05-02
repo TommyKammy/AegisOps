@@ -92,6 +92,15 @@ assert_fails_with \
   "${legacy_impl_file_repo}" \
   "Phase 52.7.6 guardrail rejected legacy implementation files: __init__.py, service.py"
 
+nested_legacy_impl_file_repo="${workdir}/nested-legacy-implementation-file"
+create_repo_copy "${nested_legacy_impl_file_repo}"
+mkdir -p "${nested_legacy_impl_file_repo}/control-plane/aegisops_control_plane/core"
+printf '%s\n' '"""Stale nested legacy implementation file."""' \
+  >"${nested_legacy_impl_file_repo}/control-plane/aegisops_control_plane/core/legacy_import_aliases.py"
+assert_fails_with \
+  "${nested_legacy_impl_file_repo}" \
+  "Phase 52.7.6 guardrail rejected legacy implementation files: __init__.py, core/legacy_import_aliases.py"
+
 canonical_root_growth_repo="${workdir}/canonical-root-growth"
 create_repo_copy "${canonical_root_growth_repo}"
 printf '%s\n' '"""Unclassified canonical root file."""' \

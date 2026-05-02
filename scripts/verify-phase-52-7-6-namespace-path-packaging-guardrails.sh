@@ -85,7 +85,9 @@ retained_root_files = {
     "structured_events.py",
 }
 
-legacy_root_files = sorted(path.name for path in legacy_root.glob("*.py"))
+legacy_root_files = sorted(
+    path.relative_to(legacy_root).as_posix() for path in legacy_root.rglob("*.py")
+)
 if legacy_root_files != ["__init__.py"]:
     print(
         "Phase 52.7.6 guardrail rejected legacy implementation files: "
