@@ -133,29 +133,71 @@ for component in "${components[@]}"; do
     exit 1
   fi
 
-  if ! awk -v component="${component}" '
+  expected_image="wazuh/wazuh-${component}:4.12.0"
+  if ! awk -v component="${component}" -v expected_image="${expected_image}" '
+    function trim(value) {
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      return value
+    }
+    function list_has_items() {
+      if (active_list == "ports" && list_items > 0) {
+        ports = 1
+      } else if (active_list == "volumes" && list_items > 0) {
+        volumes = 1
+      } else if (active_list == "certificates" && list_items > 0) {
+        certificates = 1
+      }
+      active_list = ""
+      list_items = 0
+    }
+    function value_after_key(line, key) {
+      sub("^    " key ":[[:space:]]*", "", line)
+      return trim(line)
+    }
     $0 == "  " component ":" {
       in_component = 1
       required = version = image = ports = volumes = certificates = resources = boundary = 0
+      active_list = ""
+      list_items = 0
       next
     }
-    /^version_matrix:/ && in_component { in_component = 0 }
-    /^  [a-z][a-z0-9_-]*:[[:space:]]*$/ && in_component { in_component = 0 }
-    in_component && /required: true/ { required = 1 }
-    in_component && /version: 4\.12\.0/ { version = 1 }
-    in_component && /image: wazuh\/wazuh-[a-z]+:4\.12\.0/ { image = 1 }
-    in_component && /ports:/ { ports = 1 }
-    in_component && /volumes:/ { volumes = 1 }
-    in_component && /certificates:/ { certificates = 1 }
-    in_component && /resource_expectation:/ { resources = 1 }
-    in_component && /boundary:/ { boundary = 1 }
-    END { exit(required && version && image && ports && volumes && certificates && resources && boundary ? 0 : 1) }
+    in_component && (/^version_matrix:/ || /^  [a-z][a-z0-9_-]*:[[:space:]]*$/) {
+      list_has_items()
+      in_component = 0
+      next
+    }
+    in_component && /^    [a-z_]+:/ { list_has_items() }
+    in_component && $0 == "    required: true" { required = 1 }
+    in_component && $0 == "    version: 4.12.0" { version = 1 }
+    in_component && $0 == "    image: " expected_image { image = 1 }
+    in_component && $0 == "    ports:" {
+      active_list = "ports"
+      list_items = 0
+      next
+    }
+    in_component && $0 == "    volumes:" {
+      active_list = "volumes"
+      list_items = 0
+      next
+    }
+    in_component && $0 == "    certificates:" {
+      active_list = "certificates"
+      list_items = 0
+      next
+    }
+    in_component && active_list != "" && /^      - [^[:space:]]/ { list_items++ }
+    in_component && /^    resource_expectation:/ && value_after_key($0, "resource_expectation") != "" { resources = 1 }
+    in_component && /^    boundary:/ && value_after_key($0, "boundary") != "" { boundary = 1 }
+    END {
+      list_has_items()
+      exit(required && version && image && ports && volumes && certificates && resources && boundary ? 0 : 1)
+    }
   ' "${profile_path}"; then
     echo "Missing complete Phase 53.1 Wazuh profile artifact component: ${component}" >&2
     exit 1
   fi
 
-  if ! awk -v component="${component}" '
+  if ! awk -v component="${component}" -v expected_incompatible="Wazuh 3.x, unreviewed Wazuh 5.x, latest, rc, beta" '
     /version_matrix:/ { in_matrix = 1; next }
     /^profile_expectations:/ { in_matrix = 0 }
     in_matrix && $0 == "  - component: " component {
@@ -164,9 +206,9 @@ for component in "${components[@]}"; do
       next
     }
     in_matrix && /^  - component:/ && in_component { in_component = 0 }
-    in_component && /version: 4\.12\.0/ { version = 1 }
-    in_component && /pin_type: exact/ { pin = 1 }
-    in_component && /latest, rc, beta/ { incompatible = 1 }
+    in_component && $0 == "    version: 4.12.0" { version = 1 }
+    in_component && $0 == "    pin_type: exact" { pin = 1 }
+    in_component && $0 == "    incompatible_versions: " expected_incompatible { incompatible = 1 }
     END { exit(version && pin && incompatible ? 0 : 1) }
   ' "${profile_path}"; then
     echo "Missing complete Phase 53.1 Wazuh profile artifact version matrix row: ${component}" >&2

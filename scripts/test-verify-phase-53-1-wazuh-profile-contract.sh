@@ -124,6 +124,46 @@ assert_fails_with \
   "${missing_certificates_repo}" \
   "Missing complete Phase 53.1 Wazuh profile artifact component: dashboard"
 
+wrong_dashboard_image_repo="${workdir}/wrong-dashboard-image"
+create_valid_repo "${wrong_dashboard_image_repo}"
+perl -0pi -e 's/image: wazuh\/wazuh-dashboard:4\.12\.0/image: wazuh\/wazuh-manager:4.12.0/' \
+  "${wrong_dashboard_image_repo}/docs/deployment/profiles/smb-single-node/wazuh/profile.yaml"
+assert_fails_with \
+  "${wrong_dashboard_image_repo}" \
+  "Missing complete Phase 53.1 Wazuh profile artifact component: dashboard"
+
+empty_ports_repo="${workdir}/empty-ports"
+create_valid_repo "${empty_ports_repo}"
+perl -0pi -e 's/    ports:\n      - 1514\/tcp internal agent event intake\n      - 1514\/udp internal agent event intake\n      - 1515\/tcp internal agent enrollment\n      - 55000\/tcp internal manager API\n/    ports:\n/' \
+  "${empty_ports_repo}/docs/deployment/profiles/smb-single-node/wazuh/profile.yaml"
+assert_fails_with \
+  "${empty_ports_repo}" \
+  "Missing complete Phase 53.1 Wazuh profile artifact component: manager"
+
+empty_volumes_repo="${workdir}/empty-volumes"
+create_valid_repo "${empty_volumes_repo}"
+perl -0pi -e 's/    volumes:\n      - wazuh-indexer-data\n      - wazuh-indexer-backup\n/    volumes:\n/' \
+  "${empty_volumes_repo}/docs/deployment/profiles/smb-single-node/wazuh/profile.yaml"
+assert_fails_with \
+  "${empty_volumes_repo}" \
+  "Missing complete Phase 53.1 Wazuh profile artifact component: indexer"
+
+blank_boundary_repo="${workdir}/blank-boundary"
+create_valid_repo "${blank_boundary_repo}"
+perl -0pi -e 's/    boundary: Dashboard state is operator-facing substrate context only and cannot become AegisOps workflow truth\./    boundary: /' \
+  "${blank_boundary_repo}/docs/deployment/profiles/smb-single-node/wazuh/profile.yaml"
+assert_fails_with \
+  "${blank_boundary_repo}" \
+  "Missing complete Phase 53.1 Wazuh profile artifact component: dashboard"
+
+missing_matrix_incompatibility_repo="${workdir}/missing-matrix-incompatibility"
+create_valid_repo "${missing_matrix_incompatibility_repo}"
+perl -0pi -e 's/incompatible_versions: Wazuh 3\.x, unreviewed Wazuh 5\.x, latest, rc, beta/incompatible_versions: latest, rc, beta/g' \
+  "${missing_matrix_incompatibility_repo}/docs/deployment/profiles/smb-single-node/wazuh/profile.yaml"
+assert_fails_with \
+  "${missing_matrix_incompatibility_repo}" \
+  "Missing complete Phase 53.1 Wazuh profile artifact version matrix row: manager"
+
 workflow_truth_repo="${workdir}/workflow-truth"
 create_valid_repo "${workflow_truth_repo}"
 printf '%s\n' "Wazuh status is AegisOps workflow truth." \
