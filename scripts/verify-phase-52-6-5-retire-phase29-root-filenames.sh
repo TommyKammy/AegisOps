@@ -164,15 +164,12 @@ if legacy_scoring.Phase29ShadowScoringError is not canonical_scoring.Phase29Shad
         file=sys.stderr,
     )
     sys.exit(1)
-for compatibility_attribute in (
-    "feature_frequencies_at_inference_time",
-    "scored_examples",
-):
-    owners = (
-        legacy_scoring.Phase29ShadowScoreResult,
-        legacy_scoring.Phase29OfflineShadowScoringSnapshot,
-    )
-    if not any(hasattr(owner, compatibility_attribute) for owner in owners):
+expected_compatibility_owners = {
+    "feature_frequencies_at_inference_time": legacy_scoring.Phase29ShadowScoreResult,
+    "scored_examples": legacy_scoring.Phase29OfflineShadowScoringSnapshot,
+}
+for compatibility_attribute, owner in expected_compatibility_owners.items():
+    if not hasattr(owner, compatibility_attribute):
         print(
             "Phase 52.6.5 legacy scoring wrapper is missing "
             + compatibility_attribute,

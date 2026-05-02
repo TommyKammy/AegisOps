@@ -81,6 +81,14 @@ assert_fails_with \
   "${wrong_scoring_owner_repo}" \
   "Phase 52.6.5 Phase29 alias target mismatch for aegisops_control_plane.phase29_shadow_scoring"
 
+wrong_attribute_owner_repo="${workdir}/wrong-attribute-owner"
+create_valid_repo "${wrong_attribute_owner_repo}"
+perl -0pi -e 's/class Phase29ShadowScoreResult\(_impl\.Phase29ShadowScoreResult\):\n    \@property\n    def feature_frequencies_at_inference_time\(self\) -> Mapping\[str, object\]:\n        return \{}\n\n\nclass Phase29OfflineShadowScoringSnapshot\(_impl\.Phase29OfflineShadowScoringSnapshot\):/class Phase29ShadowScoreResult(_impl.Phase29ShadowScoreResult):\n    pass\n\n\nclass Phase29OfflineShadowScoringSnapshot(_impl.Phase29OfflineShadowScoringSnapshot):\n    \@property\n    def feature_frequencies_at_inference_time(self) -> Mapping[str, object]:\n        return {}/' \
+  "${wrong_attribute_owner_repo}/control-plane/aegisops_control_plane/ml_shadow/legacy_scoring_adapter.py"
+assert_fails_with \
+  "${wrong_attribute_owner_repo}" \
+  "Phase 52.6.5 legacy scoring wrapper is missing feature_frequencies_at_inference_time"
+
 retained_blocker_repo="${workdir}/retained-blocker"
 create_valid_repo "${retained_blocker_repo}"
 perl -0pi -e 's/RETAINED_COMPATIBILITY_BLOCKERS: dict\[str, str\] = \{/RETAINED_COMPATIBILITY_BLOCKERS: dict[str, str] = {\n    "aegisops_control_plane.phase29_shadow_dataset": "stale blocker.",/' \
