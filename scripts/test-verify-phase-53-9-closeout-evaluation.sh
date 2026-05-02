@@ -93,6 +93,14 @@ assert_fails_with \
   "${missing_sample_signal_repo}" \
   'Missing required Phase 53 closeout term in docs/phase-53-closeout-evaluation.md: | Sample signal evidence | Existing Wazuh fixture families for earlier source work. | Reviewed SMB single-node SSH authentication failure Wazuh alert and analytic-signal fixtures tied to Phase 53.4 parser mapping evidence. |'
 
+missing_child_issue_lint_repo="${workdir}/missing-child-issue-lint"
+copy_valid_repo "${missing_child_issue_lint_repo}"
+perl -0pi -e 's/^- `node <codex-supervisor-root>\/dist\/index\.js issue-lint 1139 --config <supervisor-config-path>`: .*?\n//m' \
+  "${missing_child_issue_lint_repo}/docs/phase-53-closeout-evaluation.md"
+assert_fails_with \
+  "${missing_child_issue_lint_repo}" \
+  "Missing required Phase 53 closeout term in docs/phase-53-closeout-evaluation.md: node <codex-supervisor-root>/dist/index.js issue-lint 1139 --config <supervisor-config-path>"
+
 phase61_overclaim_repo="${workdir}/phase61-overclaim"
 copy_valid_repo "${phase61_overclaim_repo}"
 printf '%s\n' "Phase 61 SIEM breadth is complete" >>"${phase61_overclaim_repo}/docs/phase-53-closeout-evaluation.md"

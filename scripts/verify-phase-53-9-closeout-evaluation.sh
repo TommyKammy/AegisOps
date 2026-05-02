@@ -94,6 +94,14 @@ This closeout does not claim Phase 54 Shuffle profile work is complete, Phase 55
 `bash scripts/verify-phase-53-9-closeout-evaluation.sh`
 `bash scripts/test-verify-phase-53-9-closeout-evaluation.sh`
 node <codex-supervisor-root>/dist/index.js issue-lint 1135 --config <supervisor-config-path>
+node <codex-supervisor-root>/dist/index.js issue-lint 1136 --config <supervisor-config-path>
+node <codex-supervisor-root>/dist/index.js issue-lint 1137 --config <supervisor-config-path>
+node <codex-supervisor-root>/dist/index.js issue-lint 1138 --config <supervisor-config-path>
+node <codex-supervisor-root>/dist/index.js issue-lint 1139 --config <supervisor-config-path>
+node <codex-supervisor-root>/dist/index.js issue-lint 1140 --config <supervisor-config-path>
+node <codex-supervisor-root>/dist/index.js issue-lint 1141 --config <supervisor-config-path>
+node <codex-supervisor-root>/dist/index.js issue-lint 1142 --config <supervisor-config-path>
+node <codex-supervisor-root>/dist/index.js issue-lint 1143 --config <supervisor-config-path>
 node <codex-supervisor-root>/dist/index.js issue-lint 1144 --config <supervisor-config-path>
 execution_ready=yes
 missing_required=none
