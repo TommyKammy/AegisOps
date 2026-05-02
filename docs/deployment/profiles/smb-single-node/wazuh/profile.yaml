@@ -1,0 +1,74 @@
+profile_id: smb-single-node
+product_profile: wazuh
+profile_contract_version: 2026-05-03
+status: accepted-contract
+related_issues:
+  - 1135
+  - 1136
+authority_boundary: Wazuh provides subordinate detection substrate signals only; Wazuh manager, indexer, dashboard, generated config, alerts, status, rule state, certificate state, and version state cannot close, approve, execute, reconcile, release, gate, or mutate authoritative AegisOps records.
+components:
+  manager:
+    required: true
+    version: 4.12.0
+    image: wazuh/wazuh-manager:4.12.0
+    ports:
+      - 1514/tcp internal agent event intake
+      - 1514/udp internal agent event intake
+      - 1515/tcp internal agent enrollment
+      - 55000/tcp internal manager API
+    volumes:
+      - wazuh-manager-data
+      - wazuh-manager-rules
+      - wazuh-manager-logs
+    certificates:
+      - wazuh-manager-api-tls
+      - wazuh-ingest-shared-secret-ref
+    resource_expectation: 2 vCPU, 6 GB RAM, 120 GB durable substrate storage
+    boundary: Manager status and alert state remain subordinate signal context until admitted and linked by AegisOps.
+  indexer:
+    required: true
+    version: 4.12.0
+    image: wazuh/wazuh-indexer:4.12.0
+    ports:
+      - 9200/tcp internal indexer API
+      - 9300/tcp internal cluster transport
+    volumes:
+      - wazuh-indexer-data
+      - wazuh-indexer-backup
+    certificates:
+      - wazuh-indexer-tls
+      - wazuh-indexer-admin-client-cert
+    resource_expectation: 2 vCPU, 12 GB RAM, 250 GB durable substrate storage plus backup capacity
+    boundary: Indexer contents and search status are detection substrate evidence only, not AegisOps source or workflow truth.
+  dashboard:
+    required: true
+    version: 4.12.0
+    image: wazuh/wazuh-dashboard:4.12.0
+    ports:
+      - 5601/tcp internal dashboard UI through reviewed proxy only
+    volumes:
+      - wazuh-dashboard-config
+    certificates:
+      - wazuh-dashboard-tls
+      - wazuh-dashboard-indexer-client-cert
+    resource_expectation: 1 vCPU, 2 GB RAM, bounded config/log storage
+    boundary: Dashboard state is operator-facing substrate context only and cannot become AegisOps workflow truth.
+version_matrix:
+  - component: manager
+    version: 4.12.0
+    pin_type: exact
+    incompatible_versions: Wazuh 3.x, unreviewed Wazuh 5.x, latest, rc, beta
+  - component: indexer
+    version: 4.12.0
+    pin_type: exact
+    incompatible_versions: Wazuh 3.x, unreviewed Wazuh 5.x, latest, rc, beta
+  - component: dashboard
+    version: 4.12.0
+    pin_type: exact
+    incompatible_versions: Wazuh 3.x, unreviewed Wazuh 5.x, latest, rc, beta
+profile_expectations:
+  resource_floor: Recommended first-user host remains 8 vCPU, 32 GB RAM, and 500 GB durable disk with Wazuh growth accounted for separately from PostgreSQL.
+  ingress: Wazuh manager, indexer, and dashboard ports are internal or substrate-owned; AegisOps receives Wazuh signals only through the reviewed proxy intake route.
+  volumes: Wazuh manager, indexer, dashboard, logs, rules, certificates, and backups are separate from AegisOps PostgreSQL state and AegisOps evidence custody.
+  certificates: Certificate and secret references are trusted custody references only; placeholder, sample, fake, TODO, unsigned, or inline secret values are invalid.
+  source_health: Source-health projection is deferred to a later Phase 53 child issue and cannot use Wazuh dashboard or manager state as authoritative workflow truth.
