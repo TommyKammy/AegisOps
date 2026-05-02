@@ -41,9 +41,12 @@ required_manifest_commands=(
   "bash scripts/test-verify-ci-phase-28-workflow-coverage.sh"
 )
 
+verifier_commands="$("${runner_path}" --print all-verifiers)"
+shell_test_commands="$("${runner_path}" --print all-shell-tests)"
+
 for command in "${required_manifest_commands[@]}"; do
-  if ! "${runner_path}" --print all-verifiers | grep -Fqx -- "${command}" >/dev/null && \
-     ! "${runner_path}" --print all-shell-tests | grep -Fqx -- "${command}" >/dev/null; then
+  if ! grep -Fqx -- "${command}" <<<"${verifier_commands}" && \
+     ! grep -Fqx -- "${command}" <<<"${shell_test_commands}"; then
     echo "Missing required phase-contract command from shared runner output: ${command}" >&2
     exit 1
   fi
