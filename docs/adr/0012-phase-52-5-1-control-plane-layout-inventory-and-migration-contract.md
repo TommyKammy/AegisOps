@@ -107,11 +107,11 @@ The layout inventory does not change authorization, provenance, reconciliation, 
 | `assistant_advisory.py` | `assistant` | Compatibility shim only for the moved assistant advisory owner. |
 | `assistant_context.py` | `assistant` | Compatibility shim only for the moved assistant context owner. |
 | `assistant_provider.py` | `assistant` | Compatibility shim only for the moved assistant provider owner. |
-| `audit_export.py` | `reporting` | Compatibility shim only for the moved audit export owner. |
 | `case_workflow.py` | `ingestion` | Compatibility shim only for the moved case workflow owner. |
 | `cli.py` | `api` | Compatibility shim only for the moved CLI owner. |
 | `config.py` | `runtime` | Move only with runtime config ownership and no sample secret acceptance. |
 | `core/__init__.py` | `core` | Package scaffold marker only; no authoritative model, persistence, service, or validation module moves are approved by the marker. |
+| `core/legacy_import_aliases.py` | `core` | Owns the bounded legacy import alias registry while preserving explicit owner metadata and no runtime behavior change. |
 | `detection_lifecycle.py` | `ingestion` | Compatibility shim only for the moved detection lifecycle owner. |
 | `detection_lifecycle_helpers.py` | `ingestion` | Compatibility shim only for the moved detection helper owner. |
 | `detection_native_context.py` | `ingestion` | Compatibility shim only for the moved native detection context owner. |

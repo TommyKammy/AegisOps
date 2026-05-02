@@ -14,9 +14,9 @@
 
 ## 1. Purpose
 
-Phase 52.6.1 records the root-level compatibility surface under `control-plane/aegisops_control_plane/` before any physical root shim deletion is approved.
+Phase 52.6.1 records the root-level compatibility surface under `control-plane/aegisops_control_plane/` before broad physical root shim deletion is approved.
 
-This contract is documentation and verification only. It does not delete shims, change imports, rename the public package, change the outer `control-plane/` directory, start Wazuh profile work, start Shuffle profile work, or alter runtime behavior.
+This contract is documentation and verification only. Phase 52.6.3 removes only `audit_export.py` as the proof-of-pattern alias-registry candidate; it does not delete broad shim sets, rename the public package, change the outer `control-plane/` directory, start Wazuh profile work, start Shuffle profile work, or alter runtime behavior.
 
 ## 2. Authority Boundary
 
@@ -28,7 +28,7 @@ The root shim inventory does not change authorization, provenance, reconciliatio
 
 ## 3. Phase 52.5 Root File Baseline
 
-The Phase 52.5 closeout baseline for root-level Python files under `control-plane/aegisops_control_plane/` is `63`.
+The Phase 52.6.3 root-level Python file count under `control-plane/aegisops_control_plane/` is `62` after the approved `audit_export.py` alias-registry proof of pattern.
 
 The baseline counts only direct `.py` files in `control-plane/aegisops_control_plane/`; package-owned files below subdirectories are tracked by ADR-0012 and stay outside this root shim baseline.
 
@@ -68,7 +68,6 @@ If caller evidence is incomplete, malformed, ambiguous, or inferred only from na
 | `assistant_advisory.py` | `assistant` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
 | `assistant_context.py` | `assistant` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
 | `assistant_provider.py` | `assistant` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `audit_export.py` | `reporting` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
 | `case_workflow.py` | `ingestion` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
 | `cli.py` | `api` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
 | `config.py` | `runtime` | retained owner | Retain physically until a later owner-move issue proves identical behavior and caller compatibility. |
@@ -146,11 +145,15 @@ Run `bash scripts/test-verify-phase-52-6-1-root-shim-inventory-contract.sh`.
 
 Run `bash scripts/verify-publishable-path-hygiene.sh`.
 
-Run `node <codex-supervisor-root>/dist/index.js issue-lint 1106 --config <supervisor-config-path>`.
+Run `bash scripts/verify-phase-52-6-3-legacy-import-alias-registry.sh`.
+
+Run `bash scripts/test-verify-phase-52-6-3-legacy-import-alias-registry.sh`.
+
+Run `node <codex-supervisor-root>/dist/index.js issue-lint 1108 --config <supervisor-config-path>`.
 
 ## 10. Non-Goals
 
-- No root-level shim is deleted.
+- Only `audit_export.py` is removed as the Phase 52.6.3 alias-registry proof of pattern.
 - No import path is changed.
 - No public package name is changed.
 - No outer repository directory is changed.
