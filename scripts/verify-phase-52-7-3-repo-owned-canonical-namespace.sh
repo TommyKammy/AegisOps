@@ -76,6 +76,7 @@ approved_legacy_text_files = {
     "docs/phase-50-maintainability-closeout.md",
     "docs/phase-52-5-closeout-evaluation.md",
     "docs/phase-52-6-closeout-evaluation.md",
+    "docs/phase-52-7-closeout-evaluation.md",
     "scripts/test-verify-control-plane-runtime-skeleton.sh",
     "scripts/test-verify-customer-like-rehearsal-environment.sh",
     "scripts/test-verify-maintainability-hotspots.sh",
@@ -102,6 +103,7 @@ approved_legacy_text_files = {
     "scripts/test-verify-phase-52-7-4-physical-layout-migration.sh",
     "scripts/test-verify-phase-52-7-5-root-shim-reduction.sh",
     "scripts/test-verify-phase-52-7-6-namespace-path-packaging-guardrails.sh",
+    "scripts/test-verify-phase-52-7-closeout-evaluation.sh",
     "scripts/test-verify-phase-9-control-plane-runtime-boundary-validation.sh",
     "scripts/verify-control-plane-runtime-skeleton.sh",
     "scripts/verify-maintainability-hotspots.sh",
@@ -131,6 +133,7 @@ approved_legacy_text_files = {
     "scripts/verify-phase-52-7-4-physical-layout-migration.sh",
     "scripts/verify-phase-52-7-5-root-shim-reduction.sh",
     "scripts/verify-phase-52-7-6-namespace-path-packaging-guardrails.sh",
+    "scripts/verify-phase-52-7-closeout-evaluation.sh",
 } | approved_legacy_python_files
 
 legacy_import_pattern = re.compile(r"\baegisops_control_plane(?:\.|\b)")
