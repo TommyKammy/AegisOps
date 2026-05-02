@@ -64,8 +64,17 @@ assert_fails_with \
 
 missing_alias_repo="${workdir}/missing-alias"
 create_repo_copy "${missing_alias_repo}"
+alias_file="${missing_alias_repo}/control-plane/aegisops/control_plane/core/legacy_import_aliases.py"
+if ! grep -Fq '"aegisops_control_plane.action_policy": _alias(' "${alias_file}"; then
+  echo "Fixture setup failed: expected aegisops_control_plane.action_policy alias entry not found in legacy_import_aliases.py before mutation" >&2
+  exit 1
+fi
 perl -0pi -e 's/    "aegisops_control_plane.action_policy": _alias\(\n        "aegisops_control_plane.action_policy",\n        "aegisops_control_plane.actions.action_policy",\n        "actions",\n        "actions\/action_policy.py",\n    \),\n//' \
-  "${missing_alias_repo}/control-plane/aegisops/control_plane/core/legacy_import_aliases.py"
+  "${alias_file}"
+if grep -Fq '"aegisops_control_plane.action_policy": _alias(' "${alias_file}"; then
+  echo "Fixture setup failed: aegisops_control_plane.action_policy alias entry still present in legacy_import_aliases.py after mutation" >&2
+  exit 1
+fi
 assert_fails_with \
   "${missing_alias_repo}" \
   "Phase 52.7.5 root shim reduction missing canonical alias: aegisops.control_plane.action_policy"
