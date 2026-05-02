@@ -145,6 +145,7 @@ The layout inventory does not change authorization, provenance, reconciliation, 
 | `ml_shadow/__init__.py` | `ml_shadow` | Package marker for reviewed ML shadow-mode modules. |
 | `ml_shadow/dataset.py` | `ml_shadow` | Owns shadow dataset lineage while preserving reviewed dataset checks. |
 | `ml_shadow/drift_visibility.py` | `ml_shadow` | Owns ML shadow drift visibility while preserving subordinate ML posture. |
+| `ml_shadow/legacy_scoring_adapter.py` | `ml_shadow` | Owns legacy scoring import compatibility while canonical scoring remains under `ml_shadow/scoring.py`. |
 | `ml_shadow/mlflow_registry.py` | `ml_shadow` | Owns shadow registry behavior while preserving no model-as-authority regression. |
 | `ml_shadow/scoring.py` | `ml_shadow` | Owns shadow scoring behavior while preserving subordinate recommendation checks. |
 | `models.py` | `core` | Move only with authoritative model import compatibility and schema regression tests. |
