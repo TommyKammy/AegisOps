@@ -1111,8 +1111,7 @@ class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenc
         self.assertEqual(reconciliation.lifecycle_state, "mismatched")
         self.assertEqual(
             reconciliation.mismatch_summary,
-            "coordination receipt mismatch between authoritative action execution "
-            "and observed downstream execution",
+            "observed shuffle execution lacks an authoritative AegisOps delegation record",
         )
     def test_service_rejects_blank_create_tracking_ticket_receipt_identifiers(
         self,
