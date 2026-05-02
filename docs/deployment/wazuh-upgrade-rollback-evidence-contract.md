@@ -50,9 +50,10 @@ Wazuh upgrade and rollback evidence validation must fail closed when:
 
 - `docs/deployment/profiles/smb-single-node/wazuh/upgrade-rollback-evidence.yaml` is missing;
 - the contract document is missing;
-- manager, indexer, or dashboard component coverage is missing;
+- manager, indexer, or dashboard component coverage is missing or lacks component-level `version_before`, `version_after`, or `rollback_target` evidence;
 - `version_before` or `version_after` evidence is missing;
 - rollback owner or rollback trigger evidence is missing;
+- rollback trigger evidence is placeholder-like or leaves rollback to broad operator discretion without a reviewed condition;
 - evidence references are missing or only cite Wazuh-owned state;
 - known limitations are missing;
 - profile-change handoff expectations are missing;
@@ -84,7 +85,7 @@ Run `bash scripts/verify-publishable-path-hygiene.sh`.
 
 Run `node <codex-supervisor-root>/dist/index.js issue-lint 1142 --config <supervisor-config-path>`.
 
-The verifier must fail when the upgrade and rollback evidence contract or artifact is missing, when version before or after evidence is missing, when rollback owner or trigger evidence is missing, when evidence references or known limitations are missing, when profile-change handoff expectations are missing, when Wazuh version or rollback state is promoted into AegisOps authority, when full upgrader behavior is claimed, or when publishable guidance uses workstation-local absolute paths.
+The verifier must fail when the upgrade and rollback evidence contract or artifact is missing, when version before or after evidence is missing, when rollback owner or trigger evidence is missing or placeholder-like, when component-level rollback targets are missing, when evidence references or known limitations are missing, when profile-change handoff expectations are missing, when Wazuh version or rollback state is promoted into AegisOps authority, when full upgrader behavior is claimed, or when publishable guidance uses workstation-local absolute paths.
 
 ## 8. Non-Goals
 

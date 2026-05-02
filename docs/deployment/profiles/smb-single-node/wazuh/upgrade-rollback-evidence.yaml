@@ -68,8 +68,10 @@ negative_validation_tests:
   - missing-version-before
   - missing-version-after
   - missing-rollback-trigger
+  - placeholder-rollback-trigger
   - missing-evidence-references
   - missing-known-limitations
   - missing-profile-change-handoff
+  - missing-component-rollback-target
   - full-upgrader-claim
   - version-state-as-release-truth

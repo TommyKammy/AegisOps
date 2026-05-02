@@ -108,6 +108,14 @@ assert_fails_with \
   "${missing_trigger_repo}" \
   "Missing Phase 53.7 Wazuh upgrade rollback top-level rollback trigger: rollback_trigger"
 
+placeholder_trigger_repo="${workdir}/placeholder-trigger"
+create_valid_repo "${placeholder_trigger_repo}"
+perl -0pi -e 's/^rollback_trigger:.*$/rollback_trigger: operator decides later/m' \
+  "${placeholder_trigger_repo}/docs/deployment/profiles/smb-single-node/wazuh/upgrade-rollback-evidence.yaml"
+assert_fails_with \
+  "${placeholder_trigger_repo}" \
+  "Forbidden Phase 53.7 Wazuh upgrade rollback placeholder rollback trigger: rollback_trigger: operator decides later"
+
 missing_evidence_reference_repo="${workdir}/missing-evidence-reference"
 create_valid_repo "${missing_evidence_reference_repo}"
 perl -0pi -e 's/^  - aegisops-release-gate-record\n//m' \
@@ -131,6 +139,14 @@ perl -0pi -e 's/^profile_change_handoff:\n(?:  .*\n)+component_evidence:/compone
 assert_fails_with \
   "${missing_handoff_repo}" \
   "Missing Phase 53.7 Wazuh upgrade rollback artifact term: profile_change_handoff:"
+
+missing_component_rollback_target_repo="${workdir}/missing-component-rollback-target"
+create_valid_repo "${missing_component_rollback_target_repo}"
+perl -0pi -e 's/^    rollback_target: last-reviewed-indexer-profile-version\n//m' \
+  "${missing_component_rollback_target_repo}/docs/deployment/profiles/smb-single-node/wazuh/upgrade-rollback-evidence.yaml"
+assert_fails_with \
+  "${missing_component_rollback_target_repo}" \
+  "Missing Phase 53.7 Wazuh upgrade rollback component evidence indexer field: rollback_target"
 
 full_upgrader_claim_repo="${workdir}/full-upgrader-claim"
 create_valid_repo "${full_upgrader_claim_repo}"

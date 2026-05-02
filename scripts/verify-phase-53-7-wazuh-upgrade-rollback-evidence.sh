@@ -93,9 +93,11 @@ required_negative_tests=(
   missing-version-before
   missing-version-after
   missing-rollback-trigger
+  placeholder-rollback-trigger
   missing-evidence-references
   missing-known-limitations
   missing-profile-change-handoff
+  missing-component-rollback-target
   full-upgrader-claim
   version-state-as-release-truth
 )
@@ -187,18 +189,83 @@ require_top_level_scalar() {
   fi
 }
 
-require_top_level_nonempty_scalar() {
+require_top_level_nonplaceholder_scalar() {
   local file_path="$1"
   local key="$2"
   local label="$3"
 
-  if ! awk -v key="${key}" '
-    $0 ~ ("^" key ": .+") {
+  if ! awk -v key="${key}" -v label="${label}" '
+    function trim(value) {
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      return value
+    }
+    $0 ~ ("^" key ":") {
+      line = $0
+      sub(/[[:space:]]+#.*/, "", line)
+      sub(("^" key ":"), "", line)
+      value = trim(line)
+      gsub(/^["'\'']|["'\'']$/, "", value)
+      value = trim(value)
+      if (value == "") {
+        missing = 1
+        next
+      }
+      lower_value = tolower(value)
+      if (lower_value ~ /^(tbd|to be determined|to be decided|operator.*later|operator.*decides|operator.*discretion|decide later|discretionary|placeholder)$/ ||
+          lower_value ~ /^tbd([[:space:][:punct:]]|$)/) {
+        placeholder = value
+        next
+      }
       found = 1
+    }
+    END {
+      if (found) {
+        exit 0
+      }
+      if (placeholder != "") {
+        printf "Forbidden Phase 53.7 Wazuh upgrade rollback placeholder %s: %s: %s\n", label, key, placeholder > "/dev/stderr"
+      } else {
+        printf "Missing Phase 53.7 Wazuh upgrade rollback top-level %s: %s\n", label, key > "/dev/stderr"
+      }
+      exit 1
+    }
+  ' "${file_path}"; then
+    exit 1
+  fi
+}
+
+require_component_evidence_field() {
+  local file_path="$1"
+  local component="$2"
+  local field="$3"
+
+  if ! awk -v component="${component}" -v field="${field}" '
+    $0 == "component_evidence:" {
+      in_component_evidence = 1
+      next
+    }
+    in_component_evidence && /^[^[:space:]][^:]*:/ {
+      in_component_evidence = 0
+      in_target_component = 0
+    }
+    in_component_evidence && $0 ~ ("^  " component ":[[:space:]]*(#.*)?$") {
+      in_target_component = 1
+      next
+    }
+    in_component_evidence && in_target_component && /^  [^[:space:]][^:]*:/ {
+      in_target_component = 0
+    }
+    in_component_evidence && in_target_component {
+      line = $0
+      sub(/[[:space:]]+#.*/, "", line)
+      if (line ~ ("^    " field ": .+")) {
+        found = 1
+      }
     }
     END { exit(found ? 0 : 1) }
   ' "${file_path}"; then
-    echo "Missing Phase 53.7 Wazuh upgrade rollback top-level ${label}: ${key}" >&2
+    echo "Missing Phase 53.7 Wazuh upgrade rollback component evidence ${component} field: ${field}" >&2
     exit 1
   fi
 }
@@ -291,7 +358,7 @@ done
 require_top_level_scalar "${artifact_path}" "version_before" "4.12.0" "version before"
 require_top_level_scalar "${artifact_path}" "version_after" "<reviewed-target-wazuh-version>" "version after"
 require_top_level_scalar "${artifact_path}" "rollback_owner" "aegisops-release-owner" "rollback owner"
-require_top_level_nonempty_scalar "${artifact_path}" "rollback_trigger" "rollback trigger"
+require_top_level_nonplaceholder_scalar "${artifact_path}" "rollback_trigger" "rollback trigger"
 
 for component in "${required_components[@]}"; do
   require_top_level_list_item "${artifact_path}" "components" "${component}" "component"
@@ -303,6 +370,9 @@ for component in "${required_components[@]}"; do
     echo "Missing Phase 53.7 Wazuh upgrade rollback component evidence: ${component}" >&2
     exit 1
   fi
+  require_component_evidence_field "${artifact_path}" "${component}" "version_before"
+  require_component_evidence_field "${artifact_path}" "${component}" "version_after"
+  require_component_evidence_field "${artifact_path}" "${component}" "rollback_target"
 done
 
 for field in "${required_evidence_fields[@]}"; do
@@ -366,4 +436,4 @@ if ! grep -Eq '\[[^]]+\]\(docs/deployment/wazuh-upgrade-rollback-evidence-contra
   exit 1
 fi
 
-echo "Phase 53.7 Wazuh upgrade rollback evidence contract is present and rejects missing owner, versions, evidence, limitations, full-upgrader claims, authority promotion, and workstation-local paths."
+echo "Phase 53.7 Wazuh upgrade rollback evidence contract is present and rejects missing owner, versions, rollback posture, component rollback targets, evidence, limitations, full-upgrader claims, authority promotion, and workstation-local paths."
