@@ -83,6 +83,22 @@ assert_fails_with \
   "${legacy_text_repo}" \
   "README.md:1 mentions aegisops_control_plane; use aegisops.control_plane or document an approved compatibility exception"
 
+legacy_docs_repo="${workdir}/legacy-docs"
+create_valid_repo "${legacy_docs_repo}"
+printf 'Run `python3 -m aegisops_control_plane.cli`.\n' \
+  >"${legacy_docs_repo}/docs/runbook.md"
+assert_fails_with \
+  "${legacy_docs_repo}" \
+  "docs/runbook.md:1 mentions aegisops_control_plane; use aegisops.control_plane or document an approved compatibility exception"
+
+legacy_script_repo="${workdir}/legacy-script"
+create_valid_repo "${legacy_script_repo}"
+printf '#!/usr/bin/env bash\npython3 -m aegisops_control_plane.cli\n' \
+  >"${legacy_script_repo}/scripts/run-control-plane.sh"
+assert_fails_with \
+  "${legacy_script_repo}" \
+  "scripts/run-control-plane.sh:2 mentions aegisops_control_plane; use aegisops.control_plane or document an approved compatibility exception"
+
 missing_bridge_repo="${workdir}/missing-bridge"
 create_valid_repo "${missing_bridge_repo}"
 rm -f "${missing_bridge_repo}/control-plane/aegisops/control_plane/__init__.py"
