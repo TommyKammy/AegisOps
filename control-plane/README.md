@@ -16,7 +16,8 @@ Current scaffold:
 
 - `main.py` is the local entrypoint for the reviewed long-running control-plane runtime service plus read-only runtime, record-family, and reconciliation inspection views without assuming deployment tooling.
 - `main.py` also exposes read-only analyst-assistant context inspection for control-plane records, reviewed context, and linked evidence.
-- `aegisops_control_plane/` contains the initial service module, boundary-aware adapters, and environment-backed runtime config.
+- `aegisops/control_plane/` contains the canonical service module, boundary-aware adapters, and environment-backed runtime config.
+- `aegisops_control_plane/` is retained as the legacy compatibility package for existing import paths.
 - `tests/` contains focused service-root tests for the local runtime skeleton.
 - `config/local.env.sample` defines non-secret local placeholders for PostgreSQL, OpenSearch, and n8n integration boundaries.
 - `deployment/first-boot/` contains reviewed Phase 16 bootstrap and entrypoint skeletons for the narrow first-boot control-plane, PostgreSQL, and reverse-proxy contract.
