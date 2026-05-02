@@ -42,6 +42,7 @@ Canonical cross-phase boundary reference:
 - [Phase 53.6 Wazuh source-health projection contract](docs/deployment/wazuh-source-health-projection-contract.md) defines manager, dashboard, indexer, intake, signal freshness, parser, volume, credential, unavailable, stale, degraded, and mismatched source-health projection states for the Wazuh profile.
 - [Phase 53.7 Wazuh upgrade rollback evidence contract](docs/deployment/wazuh-upgrade-rollback-evidence-contract.md) defines version before/after, rollback owner, rollback trigger, evidence references, known limitations, and profile-change handoff expectations without implementing a Wazuh upgrader.
 - [Phase 53.8 Wazuh authority-boundary negative tests](docs/deployment/wazuh-authority-boundary-negative-tests.md) define focused fail-closed checks for raw Wazuh status case closure and Wazuh-triggered Shuffle runs without AegisOps delegation.
+- [Phase 53.9 closeout evaluation](docs/phase-53-closeout-evaluation.md) records the Wazuh profile MVP outcomes, subordinate authority posture, verifier evidence, accepted limitations, and bounded Phase 54/55/61 handoff.
 
 ## Product positioning
 
@@ -100,6 +101,8 @@ The Phase 53.6 Wazuh source-health projection contract is defined by the [Phase 
 The Phase 53.7 Wazuh upgrade rollback evidence contract is defined by the [Phase 53.7 Wazuh upgrade rollback evidence contract](docs/deployment/wazuh-upgrade-rollback-evidence-contract.md).
 
 The Phase 53.8 Wazuh authority-boundary negative tests are defined by the [Phase 53.8 Wazuh authority-boundary negative tests](docs/deployment/wazuh-authority-boundary-negative-tests.md).
+
+The Phase 53.9 closeout evaluation is defined by the [Phase 53.9 closeout evaluation](docs/phase-53-closeout-evaluation.md).
 
 Wazuh detects, AegisOps decides, records, and reconciles, and Shuffle executes reviewed delegated routine work.
 
