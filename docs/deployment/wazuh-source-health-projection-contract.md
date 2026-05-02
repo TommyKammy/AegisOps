@@ -52,14 +52,16 @@ This contract cites the Phase 51.6 authority-boundary negative-test policy in `d
 
 ## 5. Projection Rules
 
-- All required components must be represented before the aggregate projection can be `available`.
-- `stale_source` must be derived from the last accepted Wazuh signal recorded by AegisOps, not from dashboard freshness text alone.
-- `parser_failure` must stay visible and must prevent a false healthy aggregate projection.
-- `volume_anomaly` must stay visible and must not become incident, case, or evidence truth by itself.
-- `credential_degraded` must use redacted state only and must reject placeholder, sample, fake, TODO, unsigned, inline, or committed credential material.
-- Unavailable manager, dashboard, indexer, intake, or credential posture must stay visible as subordinate health context.
-- Mismatched profile, route, component identity, custody reference, or source linkage must fail closed instead of inferring success.
-- No source-health state may close, approve, execute, reconcile, release, gate, or mutate authoritative AegisOps records.
+| Rule | Required behavior | Authority boundary |
+| --- | --- | --- |
+| all-required-components-available | All required components must be represented before the aggregate projection can be `available`. | Aggregate health remains subordinate context only. |
+| stale-last-accepted-signal | `stale_source` must be derived from the last accepted Wazuh signal recorded by AegisOps, not from dashboard freshness text alone. | Dashboard freshness text cannot become AegisOps lifecycle truth. |
+| parser-failure-visible | `parser_failure` must stay visible and must prevent a false healthy aggregate projection. | Parser diagnostics cannot rewrite case truth. |
+| volume-anomaly-visible | `volume_anomaly` must stay visible and must not become incident, case, or evidence truth by itself. | Volume counters are source-health context only. |
+| credential-degraded-redacted | `credential_degraded` must use redacted state only and must reject placeholder, sample, fake, TODO, unsigned, inline, or committed credential material. | Credential posture must not expose secret material or validate placeholders. |
+| manager-dashboard-indexer-unavailable-visible | Unavailable manager, dashboard, indexer, intake, or credential posture must stay visible as subordinate health context. | Component availability cannot close, approve, execute, reconcile, release, gate, or mutate AegisOps records. |
+| component-mismatch-visible | Mismatched profile, route, component identity, custody reference, or source linkage must fail closed instead of inferring success. | Linkage must come from explicit AegisOps admission and binding. |
+| no-authority-mutation | No source-health state may close, approve, execute, reconcile, release, gate, or mutate authoritative AegisOps records. | AegisOps control-plane records remain authoritative. |
 
 ## 6. Validation Rules
 

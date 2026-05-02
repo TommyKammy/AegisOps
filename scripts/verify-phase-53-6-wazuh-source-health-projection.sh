@@ -248,6 +248,10 @@ done
 
 for rule in "${required_rules[@]}"; do
   require_top_level_list_item "${artifact_path}" "projection_rules" "${rule}" "rule"
+  if ! grep -Fq -- "| ${rule} |" <<<"${contract_rendered_markdown}"; then
+    echo "Missing Phase 53.6 Wazuh source-health projection contract rule row: ${rule}" >&2
+    exit 1
+  fi
 done
 
 for claim in "${forbidden_claims[@]}"; do

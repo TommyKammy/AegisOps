@@ -148,6 +148,14 @@ assert_fails_with \
   "${missing_rule_repo}" \
   "Missing Phase 53.6 Wazuh source-health rule: credential-degraded-redacted"
 
+missing_contract_rule_repo="${workdir}/missing-contract-rule"
+create_valid_repo "${missing_contract_rule_repo}"
+perl -0pi -e 's/^\| no-authority-mutation \|.*\n//m' \
+  "${missing_contract_rule_repo}/docs/deployment/wazuh-source-health-projection-contract.md"
+assert_fails_with \
+  "${missing_contract_rule_repo}" \
+  "Missing Phase 53.6 Wazuh source-health projection contract rule row: no-authority-mutation"
+
 secret_looking_value_repo="${workdir}/secret-looking-value"
 create_valid_repo "${secret_looking_value_repo}"
 printf '%s\n' "health_secret: CorrectHorseBatteryStaple42" \
