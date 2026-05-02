@@ -5,6 +5,7 @@ set -euo pipefail
 repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 doc_path="${repo_root}/docs/adr/0016-phase-52-7-1-namespace-and-layout-inventory-contract.md"
 package_root="${repo_root}/control-plane/aegisops_control_plane"
+proposed_package_root="${repo_root}/control-plane/aegisops/control_plane"
 
 required_headings=(
   "# ADR-0016: Phase 52.7.1 Namespace and Layout Inventory Contract"
@@ -88,6 +89,11 @@ if [[ ! -d "${package_root}" ]]; then
   exit 1
 fi
 
+if [[ -d "${proposed_package_root}" ]]; then
+  echo "Phase 52.7.1 namespace/layout inventory rejected: proposed package path already exists at control-plane/aegisops/control_plane/" >&2
+  exit 1
+fi
+
 for required_path in \
   "${repo_root}/control-plane/main.py" \
   "${repo_root}/.github/workflows/ci.yml" \
@@ -95,7 +101,8 @@ for required_path in \
   "${repo_root}/scripts/test-verify-phase-52-7-1-namespace-layout-inventory-contract.sh"
 do
   if [[ ! -f "${required_path}" ]]; then
-    echo "Phase 52.7.1 file movement rejected: missing current path ${required_path#${repo_root}/}" >&2
+    required_path_display="${required_path#"${repo_root}/"}"
+    echo "Phase 52.7.1 file movement rejected: missing current path ${required_path_display}" >&2
     exit 1
   fi
 done
@@ -232,10 +239,13 @@ print(
 )
 PY
 
-if [[ -x "${repo_root}/scripts/verify-phase-52-5-1-control-plane-layout-inventory-contract.sh" ]]; then
-  bash "${repo_root}/scripts/verify-phase-52-5-1-control-plane-layout-inventory-contract.sh" "${repo_root}" >/dev/null
-fi
-
-if [[ -x "${repo_root}/scripts/verify-phase-52-6-1-root-shim-inventory-contract.sh" ]]; then
-  bash "${repo_root}/scripts/verify-phase-52-6-1-root-shim-inventory-contract.sh" "${repo_root}" >/dev/null
-fi
+for prerequisite in \
+  "${repo_root}/scripts/verify-phase-52-5-1-control-plane-layout-inventory-contract.sh" \
+  "${repo_root}/scripts/verify-phase-52-6-1-root-shim-inventory-contract.sh"
+do
+  if [[ ! -f "${prerequisite}" ]]; then
+    echo "Missing prerequisite verifier: $(basename "${prerequisite}")" >&2
+    exit 1
+  fi
+  bash "${prerequisite}" "${repo_root}" >/dev/null
+done

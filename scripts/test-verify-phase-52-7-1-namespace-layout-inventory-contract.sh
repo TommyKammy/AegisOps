@@ -85,11 +85,11 @@ assert_fails_with \
 
 wrong_proposed_namespace_repo="${workdir}/wrong-proposed-namespace"
 create_valid_repo "${wrong_proposed_namespace_repo}"
-perl -0pi -e 's/aegisops\.control_plane/aegisops.controlplane/g' \
+perl -0pi -e 's{^\| \x60proposed canonical namespace\x60 \| \x60aegisops_control_plane\x60 \| \x60\Kaegisops\.control_plane(?=\x60 \|)}{aegisops.controlplane}m' \
   "${wrong_proposed_namespace_repo}/${contract_path}"
 assert_fails_with \
   "${wrong_proposed_namespace_repo}" \
-  'Missing Phase 52.7.1 namespace/layout statement: The proposed canonical namespace `aegisops.control_plane` is a future target only.'
+  "Phase 52.7.1 namespace inventory proposed reference mismatch for proposed canonical namespace: expected aegisops.control_plane, got aegisops.controlplane"
 
 package_moved_repo="${workdir}/package-moved"
 create_valid_repo "${package_moved_repo}"
@@ -99,6 +99,13 @@ mv "${package_moved_repo}/control-plane/aegisops_control_plane" \
 assert_fails_with \
   "${package_moved_repo}" \
   "Phase 52.7.1 file movement rejected: missing current package path control-plane/aegisops_control_plane/"
+
+proposed_package_added_repo="${workdir}/proposed-package-added"
+create_valid_repo "${proposed_package_added_repo}"
+mkdir -p "${proposed_package_added_repo}/control-plane/aegisops/control_plane"
+assert_fails_with \
+  "${proposed_package_added_repo}" \
+  "Phase 52.7.1 namespace/layout inventory rejected: proposed package path already exists at control-plane/aegisops/control_plane/"
 
 entrypoint_moved_repo="${workdir}/entrypoint-moved"
 create_valid_repo "${entrypoint_moved_repo}"
@@ -123,6 +130,20 @@ printf '%s\n' 'The `aegisops.control_plane` namespace is importable now.' \
 assert_fails_with \
   "${importable_namespace_repo}" \
   'Forbidden Phase 52.7.1 namespace/layout claim: The `aegisops.control_plane` namespace is importable now.'
+
+non_executable_prerequisite_repo="${workdir}/non-executable-prerequisite"
+create_valid_repo "${non_executable_prerequisite_repo}"
+chmod -x \
+  "${non_executable_prerequisite_repo}/scripts/verify-phase-52-5-1-control-plane-layout-inventory-contract.sh" \
+  "${non_executable_prerequisite_repo}/scripts/verify-phase-52-6-1-root-shim-inventory-contract.sh"
+assert_passes "${non_executable_prerequisite_repo}"
+
+missing_prerequisite_repo="${workdir}/missing-prerequisite"
+create_valid_repo "${missing_prerequisite_repo}"
+rm "${missing_prerequisite_repo}/scripts/verify-phase-52-5-1-control-plane-layout-inventory-contract.sh"
+assert_fails_with \
+  "${missing_prerequisite_repo}" \
+  "Missing prerequisite verifier: verify-phase-52-5-1-control-plane-layout-inventory-contract.sh"
 
 local_path_repo="${workdir}/local-path"
 create_valid_repo "${local_path_repo}"
