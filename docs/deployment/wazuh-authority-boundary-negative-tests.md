@@ -39,7 +39,7 @@ Wazuh status, Wazuh alert status, Wazuh dashboard state, Wazuh manager state, Wa
 
 Run `bash scripts/verify-phase-53-8-wazuh-authority-boundary-negative-tests.sh`.
 
-Run `python3 -m unittest control-plane.tests.test_cross_boundary_negative_e2e_validation.CrossBoundaryNegativeE2EValidationTests.test_raw_wazuh_status_cannot_close_aegisops_case control-plane.tests.test_cross_boundary_negative_e2e_validation.CrossBoundaryNegativeE2EValidationTests.test_wazuh_triggered_shuffle_run_without_aegisops_delegation_is_mismatched`.
+From the repository root, run `PYTHONPATH="${PWD}/control-plane:${PWD}/control-plane/tests" python3 -m unittest test_cross_boundary_negative_e2e_validation.CrossBoundaryNegativeE2EValidationTests.test_raw_wazuh_status_cannot_close_aegisops_case test_cross_boundary_negative_e2e_validation.CrossBoundaryNegativeE2EValidationTests.test_wazuh_triggered_shuffle_run_without_aegisops_delegation_is_mismatched`.
 
 Run Wazuh source-health tests with `bash scripts/verify-phase-53-6-wazuh-source-health-projection.sh`.
 

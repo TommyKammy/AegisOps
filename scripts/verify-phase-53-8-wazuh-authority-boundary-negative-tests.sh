@@ -84,8 +84,9 @@ if ! grep -Eq '\[[^]]+\]\(docs/deployment/wazuh-authority-boundary-negative-test
   exit 1
 fi
 
-python3 -m unittest \
-  control-plane.tests.test_cross_boundary_negative_e2e_validation.CrossBoundaryNegativeE2EValidationTests.test_raw_wazuh_status_cannot_close_aegisops_case \
-  control-plane.tests.test_cross_boundary_negative_e2e_validation.CrossBoundaryNegativeE2EValidationTests.test_wazuh_triggered_shuffle_run_without_aegisops_delegation_is_mismatched
+PYTHONPATH="${repo_root}/control-plane:${repo_root}/control-plane/tests" \
+  python3 -m unittest \
+  test_cross_boundary_negative_e2e_validation.CrossBoundaryNegativeE2EValidationTests.test_raw_wazuh_status_cannot_close_aegisops_case \
+  test_cross_boundary_negative_e2e_validation.CrossBoundaryNegativeE2EValidationTests.test_wazuh_triggered_shuffle_run_without_aegisops_delegation_is_mismatched
 
 echo "Phase 53.8 Wazuh authority-boundary negative tests reject raw Wazuh case closure and direct Wazuh-to-Shuffle shortcut reconciliation."
