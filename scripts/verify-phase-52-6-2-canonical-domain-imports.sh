@@ -111,6 +111,7 @@ approved_legacy_text_files = {
     "docs/adr/0015-phase-52-6-3-legacy-import-alias-registry.md",
     "docs/control-plane-service-internal-boundaries.md",
     "docs/phase-52-5-closeout-evaluation.md",
+    "docs/phase-52-6-closeout-evaluation.md",
 } | approved_legacy_python_files
 
 
