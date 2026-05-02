@@ -180,6 +180,39 @@ contains_forbidden_claim_in_section() {
   ' "${contract_path}"
 }
 
+contains_unbounded_fleet_claim() {
+  awk '
+    function has_fleet_term(value) {
+      return value ~ /(fleet[-[:space:]]*(scale|wide|management|manager|enrollment|onboarding)|bulk[-[:space:]]*(agent|endpoint|enrollment)|mass[-[:space:]]*(agent|endpoint|enrollment))/
+    }
+
+    function is_allowed_fleet_line(value) {
+      return value ~ /(fleet-scale wazuh agent management remains out of scope|fleet_management_scope:[[:space:]]*out-of-scope|do-not-enroll-fleet|fleet-management-overclaim|no fleet-scale wazuh agent management|does not implement fleet-scale|do not enroll a fleet|claims fleet-scale wazuh agent management|must fail when)/
+    }
+
+    FNR == 1 {
+      in_forbidden_claims = 0
+    }
+
+    {
+      if ($0 ~ /^## 9\. Forbidden Claims$/) {
+        in_forbidden_claims = 1
+      } else if ($0 ~ /^## / && in_forbidden_claims) {
+        in_forbidden_claims = 0
+      }
+
+      line = tolower($0)
+      if (!in_forbidden_claims && has_fleet_term(line) && !is_allowed_fleet_line(line)) {
+        found = 1
+      }
+    }
+
+    END {
+      exit(found ? 0 : 1)
+    }
+  ' "$@"
+}
+
 if [[ ! -f "${contract_path}" ]]; then
   echo "Missing Phase 53.5 Wazuh agent enrollment helper contract: ${contract_path}" >&2
   exit 1
@@ -263,11 +296,9 @@ for claim in "${forbidden_claims[@]}"; do
   fi
 done
 
-if grep -Eiq 'fleet[-[:space:]]*(scale|wide|management|manager|enrollment|onboarding)|bulk[-[:space:]]*(agent|endpoint|enrollment)|mass[-[:space:]]*(agent|endpoint|enrollment)' "${contract_path}" "${artifact_path}"; then
-  if ! grep -Eiq 'fleet-scale Wazuh agent management remains out of scope|Fleet-scale Wazuh agent management remains out of scope|fleet_management_scope: out-of-scope|do-not-enroll-fleet|No fleet-scale Wazuh agent management' "${contract_path}" "${artifact_path}"; then
-    echo "Forbidden Phase 53.5 Wazuh enrollment helper claim: fleet management overclaim detected" >&2
-    exit 1
-  fi
+if contains_unbounded_fleet_claim "${contract_path}" "${artifact_path}"; then
+  echo "Forbidden Phase 53.5 Wazuh enrollment helper claim: fleet management overclaim detected" >&2
+  exit 1
 fi
 
 path_token_boundary="(^|[[:space:]'\"\`(<{=])"

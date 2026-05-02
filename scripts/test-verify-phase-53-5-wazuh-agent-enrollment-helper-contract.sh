@@ -148,6 +148,22 @@ assert_fails_with \
   "${missing_forbidden_claim_repo}" \
   "Missing Phase 53.5 Wazuh forbidden claim: Phase 53.5 implements fleet-scale Wazuh agent management"
 
+contract_fleet_overclaim_repo="${workdir}/contract-fleet-overclaim"
+create_valid_repo "${contract_fleet_overclaim_repo}"
+printf '%s\n' "This helper supports fleet-wide agent enrollment." \
+  >>"${contract_fleet_overclaim_repo}/docs/deployment/wazuh-agent-enrollment-helper-contract.md"
+assert_fails_with \
+  "${contract_fleet_overclaim_repo}" \
+  "Forbidden Phase 53.5 Wazuh enrollment helper claim: fleet management overclaim detected"
+
+artifact_fleet_overclaim_repo="${workdir}/artifact-fleet-overclaim"
+create_valid_repo "${artifact_fleet_overclaim_repo}"
+printf '%s\n' "supported_mode: bulk-agent-enrollment" \
+  >>"${artifact_fleet_overclaim_repo}/docs/deployment/profiles/smb-single-node/wazuh/agent-enrollment-helper.yaml"
+assert_fails_with \
+  "${artifact_fleet_overclaim_repo}" \
+  "Forbidden Phase 53.5 Wazuh enrollment helper claim: fleet management overclaim detected"
+
 agent_truth_repo="${workdir}/agent-truth"
 create_valid_repo "${agent_truth_repo}"
 printf '%s\n' "Wazuh agent enrollment is AegisOps workflow truth." \
