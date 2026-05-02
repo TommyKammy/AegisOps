@@ -149,6 +149,48 @@ has_uncommented_exact_line() {
   ' "${file_path}"
 }
 
+require_top_level_false_scalar() {
+  local file_path="$1"
+  local key="$2"
+  local label="$3"
+
+  if ! awk -v key="${key}" -v label="${label}" '
+    function trim(value) {
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      return value
+    }
+    /^[[:space:]]*#/ { next }
+    $0 ~ ("^" key ":") {
+      line = $0
+      sub(/[[:space:]]+#.*/, "", line)
+      sub(("^" key ":"), "", line)
+      value = trim(line)
+      gsub(/^["'\'']|["'\'']$/, "", value)
+      value = tolower(trim(value))
+      count += 1
+      if (value != "false") {
+        invalid = value
+      }
+    }
+    END {
+      if (count == 1 && invalid == "") {
+        exit 0
+      }
+      if (count == 0) {
+        printf "Missing Phase 53.7 Wazuh upgrade rollback top-level boolean scalar: %s\n", key > "/dev/stderr"
+      } else if (count > 1) {
+        printf "Forbidden Phase 53.7 Wazuh upgrade rollback duplicate top-level boolean scalar: %s\n", key > "/dev/stderr"
+      } else {
+        printf "Forbidden Phase 53.7 Wazuh upgrade rollback %s\n", label > "/dev/stderr"
+      }
+      exit 1
+    }
+  ' "${file_path}"; then
+    exit 1
+  fi
+}
+
 require_top_level_list_item() {
   local file_path="$1"
   local section="$2"
@@ -169,6 +211,34 @@ require_top_level_list_item() {
     END { exit(found ? 0 : 1) }
   ' "${file_path}"; then
     echo "Missing Phase 53.7 Wazuh upgrade rollback ${label}: ${item}" >&2
+    exit 1
+  fi
+}
+
+require_nested_mapping_field() {
+  local file_path="$1"
+  local section="$2"
+  local field="$3"
+  local label="$4"
+
+  if ! awk -v section="${section}" -v field="${field}" '
+    $0 == section ":" {
+      in_section = 1
+      next
+    }
+    in_section && /^[^[:space:]][^:]*:/ {
+      in_section = 0
+    }
+    in_section {
+      line = $0
+      sub(/[[:space:]]+#.*/, "", line)
+      if (line ~ ("^  " field ":[[:space:]]+.+")) {
+        found = 1
+      }
+    }
+    END { exit(found ? 0 : 1) }
+  ' "${file_path}"; then
+    echo "Missing Phase 53.7 Wazuh upgrade rollback ${label}: ${field}" >&2
     exit 1
   fi
 }
@@ -363,15 +433,15 @@ contract_rendered_markdown="$(
   rendered_markdown_without_code_blocks "${contract_path}"
 )"
 
-if has_uncommented_exact_line "full_upgrader_implemented: true" "${artifact_path}"; then
-  echo "Forbidden Phase 53.7 Wazuh upgrade rollback artifact: full upgrader implementation claim detected" >&2
-  exit 1
-fi
+require_top_level_false_scalar \
+  "${artifact_path}" \
+  "full_upgrader_implemented" \
+  "artifact: full upgrader implementation claim detected"
 
-if has_uncommented_exact_line "upgrade_automation_allowed: true" "${artifact_path}"; then
-  echo "Forbidden Phase 53.7 Wazuh upgrade rollback artifact: upgrade automation claim detected" >&2
-  exit 1
-fi
+require_top_level_false_scalar \
+  "${artifact_path}" \
+  "upgrade_automation_allowed" \
+  "artifact: upgrade automation claim detected"
 
 for heading in "${required_headings[@]}"; do
   if ! grep -Fxq -- "${heading}" <<<"${contract_rendered_markdown}"; then
@@ -398,6 +468,14 @@ require_top_level_version_scalar "${artifact_path}" "version_before" "version be
 require_top_level_version_scalar "${artifact_path}" "version_after" "version after" "true"
 require_top_level_nonplaceholder_scalar "${artifact_path}" "rollback_owner" "rollback owner"
 require_top_level_nonplaceholder_scalar "${artifact_path}" "rollback_trigger" "rollback trigger"
+
+for handoff_field in target recipient review_state next_action; do
+  require_nested_mapping_field \
+    "${artifact_path}" \
+    "profile_change_handoff" \
+    "${handoff_field}" \
+    "profile change handoff field"
+done
 
 for component in "${required_components[@]}"; do
   require_top_level_list_item "${artifact_path}" "components" "${component}" "component"

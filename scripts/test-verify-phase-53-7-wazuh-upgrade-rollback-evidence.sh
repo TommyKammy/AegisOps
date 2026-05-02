@@ -190,6 +190,22 @@ assert_fails_with \
   "${missing_handoff_repo}" \
   "Missing Phase 53.7 Wazuh upgrade rollback artifact term: profile_change_handoff:"
 
+missing_handoff_target_repo="${workdir}/missing-handoff-target"
+create_valid_repo "${missing_handoff_target_repo}"
+perl -0pi -e 's/^  target:.*\n//m' \
+  "${missing_handoff_target_repo}/docs/deployment/profiles/smb-single-node/wazuh/upgrade-rollback-evidence.yaml"
+assert_fails_with \
+  "${missing_handoff_target_repo}" \
+  "Missing Phase 53.7 Wazuh upgrade rollback profile change handoff field: target"
+
+empty_handoff_recipient_repo="${workdir}/empty-handoff-recipient"
+create_valid_repo "${empty_handoff_recipient_repo}"
+perl -0pi -e 's/^  recipient:.*$/  recipient:/m' \
+  "${empty_handoff_recipient_repo}/docs/deployment/profiles/smb-single-node/wazuh/upgrade-rollback-evidence.yaml"
+assert_fails_with \
+  "${empty_handoff_recipient_repo}" \
+  "Missing Phase 53.7 Wazuh upgrade rollback profile change handoff field: recipient"
+
 missing_component_rollback_target_repo="${workdir}/missing-component-rollback-target"
 create_valid_repo "${missing_component_rollback_target_repo}"
 perl -0pi -e 's/^    rollback_target: last-reviewed-indexer-profile-version\n//m' \
@@ -206,6 +222,22 @@ assert_fails_with \
   "${full_upgrader_claim_repo}" \
   "Forbidden Phase 53.7 Wazuh upgrade rollback artifact: full upgrader implementation claim detected"
 
+quoted_full_upgrader_claim_repo="${workdir}/quoted-full-upgrader-claim"
+create_valid_repo "${quoted_full_upgrader_claim_repo}"
+perl -0pi -e 's/full_upgrader_implemented: false/full_upgrader_implemented: "True"/' \
+  "${quoted_full_upgrader_claim_repo}/docs/deployment/profiles/smb-single-node/wazuh/upgrade-rollback-evidence.yaml"
+assert_fails_with \
+  "${quoted_full_upgrader_claim_repo}" \
+  "Forbidden Phase 53.7 Wazuh upgrade rollback artifact: full upgrader implementation claim detected"
+
+duplicate_full_upgrader_claim_repo="${workdir}/duplicate-full-upgrader-claim"
+create_valid_repo "${duplicate_full_upgrader_claim_repo}"
+perl -0pi -e 's/full_upgrader_implemented: false/full_upgrader_implemented: false\nfull_upgrader_implemented: True/' \
+  "${duplicate_full_upgrader_claim_repo}/docs/deployment/profiles/smb-single-node/wazuh/upgrade-rollback-evidence.yaml"
+assert_fails_with \
+  "${duplicate_full_upgrader_claim_repo}" \
+  "Forbidden Phase 53.7 Wazuh upgrade rollback duplicate top-level boolean scalar: full_upgrader_implemented"
+
 upgrade_automation_claim_repo="${workdir}/upgrade-automation-claim"
 create_valid_repo "${upgrade_automation_claim_repo}"
 perl -0pi -e 's/upgrade_automation_allowed: false/upgrade_automation_allowed: true/' \
@@ -213,6 +245,22 @@ perl -0pi -e 's/upgrade_automation_allowed: false/upgrade_automation_allowed: tr
 assert_fails_with \
   "${upgrade_automation_claim_repo}" \
   "Forbidden Phase 53.7 Wazuh upgrade rollback artifact: upgrade automation claim detected"
+
+numeric_upgrade_automation_claim_repo="${workdir}/numeric-upgrade-automation-claim"
+create_valid_repo "${numeric_upgrade_automation_claim_repo}"
+perl -0pi -e 's/upgrade_automation_allowed: false/upgrade_automation_allowed: 1/' \
+  "${numeric_upgrade_automation_claim_repo}/docs/deployment/profiles/smb-single-node/wazuh/upgrade-rollback-evidence.yaml"
+assert_fails_with \
+  "${numeric_upgrade_automation_claim_repo}" \
+  "Forbidden Phase 53.7 Wazuh upgrade rollback artifact: upgrade automation claim detected"
+
+duplicate_upgrade_automation_claim_repo="${workdir}/duplicate-upgrade-automation-claim"
+create_valid_repo "${duplicate_upgrade_automation_claim_repo}"
+perl -0pi -e 's/upgrade_automation_allowed: false/upgrade_automation_allowed: false\nupgrade_automation_allowed: "true"/' \
+  "${duplicate_upgrade_automation_claim_repo}/docs/deployment/profiles/smb-single-node/wazuh/upgrade-rollback-evidence.yaml"
+assert_fails_with \
+  "${duplicate_upgrade_automation_claim_repo}" \
+  "Forbidden Phase 53.7 Wazuh upgrade rollback duplicate top-level boolean scalar: upgrade_automation_allowed"
 
 authority_truth_repo="${workdir}/authority-truth"
 create_valid_repo "${authority_truth_repo}"
