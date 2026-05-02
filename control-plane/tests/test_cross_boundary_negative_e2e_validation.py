@@ -365,6 +365,109 @@ class CrossBoundaryNegativeE2EValidationTests(unittest.TestCase):
                 )
                 self.assertNotEqual(current_case.lifecycle_state, "closed")
 
+    def test_raw_wazuh_status_cannot_close_aegisops_case(self) -> None:
+        store, service, promoted_case, reviewed_at = self._build_wazuh_case()
+        baseline_case = store.get(CaseRecord, promoted_case.case_id)
+        baseline_alert = store.get(AlertRecord, promoted_case.alert_id)
+        baseline_reconciliation_count = len(store.list(ReconciliationRecord))
+        self.assertIsNotNone(baseline_case)
+        self.assertIsNotNone(baseline_alert)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "Wazuh status is subordinate detection context",
+        ):
+            service.record_case_disposition(
+                case_id=promoted_case.case_id,
+                disposition="closed_resolved",
+                rationale=(
+                    "Wazuh alert status is closed in the dashboard, so close the "
+                    "AegisOps case."
+                ),
+                recorded_at=reviewed_at + timedelta(minutes=30),
+            )
+
+        current_case = store.get(CaseRecord, promoted_case.case_id)
+        current_alert = store.get(AlertRecord, promoted_case.alert_id)
+        self.assertIsNotNone(current_case)
+        self.assertIsNotNone(current_alert)
+        self.assertEqual(current_case.lifecycle_state, baseline_case.lifecycle_state)
+        self.assertEqual(current_alert.lifecycle_state, baseline_alert.lifecycle_state)
+        self.assertEqual(
+            len(store.list(ReconciliationRecord)),
+            baseline_reconciliation_count,
+        )
+
+    def test_wazuh_triggered_shuffle_run_without_aegisops_delegation_is_mismatched(
+        self,
+    ) -> None:
+        store, service, promoted_case, reviewed_at = self._build_wazuh_case()
+        baseline_case = store.get(CaseRecord, promoted_case.case_id)
+        baseline_execution_count = len(store.list(ActionExecutionRecord))
+        self.assertIsNotNone(baseline_case)
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-wazuh-shortcut-001",
+                approval_decision_id="approval-wazuh-shortcut-001",
+                case_id=promoted_case.case_id,
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                idempotency_key="idempotency-wazuh-shortcut-001",
+                target_scope={"asset_id": "workstation-001"},
+                payload_hash="payload-hash-wazuh-shortcut-001",
+                requested_at=reviewed_at + timedelta(minutes=5),
+                expires_at=None,
+                lifecycle_state="approved",
+                requested_payload={
+                    "action_type": "notify_identity_owner",
+                    "recipient_identity": "repo-owner-001",
+                    "message_intent": "Notify owner about reviewed Wazuh signal.",
+                },
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "shuffle",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+
+        reconciliation = service.reconcile_action_execution(
+            action_request_id="action-request-wazuh-shortcut-001",
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(
+                {
+                    "execution_run_id": "wazuh-direct-shuffle-run-001",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                    "idempotency_key": "idempotency-wazuh-shortcut-001",
+                    "approval_decision_id": "approval-wazuh-shortcut-001",
+                    "delegation_id": "wazuh-origin-shortcut-001",
+                    "payload_hash": "payload-hash-wazuh-shortcut-001",
+                    "observed_at": reviewed_at + timedelta(minutes=10),
+                    "status": "success",
+                    "source_system": "wazuh",
+                },
+            ),
+            compared_at=reviewed_at + timedelta(minutes=10),
+            stale_after=reviewed_at + timedelta(hours=1),
+        )
+
+        current_case = store.get(CaseRecord, promoted_case.case_id)
+        self.assertIsNotNone(current_case)
+        self.assertEqual(reconciliation.ingest_disposition, "mismatch")
+        self.assertEqual(reconciliation.lifecycle_state, "mismatched")
+        self.assertEqual(
+            reconciliation.mismatch_summary,
+            "observed shuffle execution lacks an authoritative AegisOps delegation record",
+        )
+        self.assertEqual(current_case.lifecycle_state, baseline_case.lifecycle_state)
+        self.assertEqual(
+            len(store.list(ActionExecutionRecord)),
+            baseline_execution_count,
+        )
+
     def test_endpoint_evidence_missing_provenance_is_not_promoted(self) -> None:
         phase28_helper = phase28_tests.Phase28EndpointEvidencePackValidationTests()
         store, service, promoted_case, anchor_evidence_id, reviewed_at = (
@@ -564,6 +667,14 @@ class CrossBoundaryNegativeE2EValidationTests(unittest.TestCase):
             record_type.__name__: len(store.list(record_type))
             for record_type in _AUTHORITATIVE_RECORD_TYPES
         }
+
+    @staticmethod
+    def _build_wazuh_case():
+        cli_helper = cli_support.ControlPlaneCliInspectionTestBase()
+        store, service, promoted_case, _evidence_id, reviewed_at = (
+            cli_helper._build_phase19_in_scope_case()
+        )
+        return store, service, promoted_case, reviewed_at
 
 
 if __name__ == "__main__":

@@ -470,6 +470,13 @@ class CaseWorkflowService:
         rationale = service._require_non_empty_string(rationale, "rationale")
         recorded_at = service._require_aware_datetime(recorded_at, "recorded_at")
         lifecycle_state = service._case_lifecycle_for_disposition(disposition)
+        if lifecycle_state == "closed" and _rationale_uses_wazuh_status_as_authority(
+            rationale
+        ):
+            raise ValueError(
+                "Wazuh status is subordinate detection context and cannot close "
+                "an AegisOps case without an authoritative AegisOps disposition basis"
+            )
         with service._store.transaction():
             case = service._require_reviewed_operator_case(case_id)
             alert = None
@@ -508,3 +515,18 @@ class CaseWorkflowService:
                     transitioned_at=recorded_at,
                 )
         return updated_case
+
+
+def _rationale_uses_wazuh_status_as_authority(rationale: str) -> bool:
+    normalized = " ".join(rationale.lower().split())
+    if "wazuh" not in normalized:
+        return False
+    subordinate_status_terms = (
+        "alert status",
+        "dashboard",
+        "manager status",
+        "active response",
+        "workflow truth",
+        "case truth",
+    )
+    return any(term in normalized for term in subordinate_status_terms)

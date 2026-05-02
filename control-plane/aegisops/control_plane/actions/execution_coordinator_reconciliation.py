@@ -191,6 +191,12 @@ class ActionExecutionReconciliationCoordinator:
                     "execution run identity mismatch between authoritative action execution "
                     "and observed downstream execution"
                 )
+            elif require_binding_identifiers and authoritative_execution is None:
+                ingest_disposition = "mismatch"
+                lifecycle_state = "mismatched"
+                mismatch_summary = (
+                    "observed shuffle execution lacks an authoritative AegisOps delegation record"
+                )
             elif (
                 authoritative_execution is not None
                 and authoritative_execution.execution_surface_type == "automation_substrate"
