@@ -34,6 +34,7 @@ Canonical cross-phase boundary reference:
 - [Phase 52.10 closeout evaluation](docs/phase-52-closeout-evaluation.md) records the Phase 52 child issue outcomes, focused verifier results, issue-lint summary, accepted limitations, and Phase 53/54 materialization recommendation.
 - [Phase 52.5 closeout evaluation](docs/phase-52-5-closeout-evaluation.md) records the Phase 52.5 package-layout hardening outcomes, moved modules, compatibility shims, verifier results, accepted limitations, and bounded Phase 53 readiness recommendation.
 - [Phase 52.6 closeout evaluation](docs/phase-52-6-closeout-evaluation.md) records the Phase 52.6 compatibility-shim deprecation outcomes, root package count reduction, retained owners and blockers, verifier results, and bounded Phase 53 readiness recommendation.
+- [Phase 52.7 closeout evaluation](docs/phase-52-7-closeout-evaluation.md) records the Phase 52.7 namespace normalization outcomes, root owner reduction, compatibility behavior, namespace/path guardrails, verifier results, and bounded Phase 53 readiness recommendation.
 
 ## Product positioning
 
@@ -76,6 +77,8 @@ The Phase 52.10 closeout evaluation is defined by the [Phase 52.10 closeout eval
 The Phase 52.5 package-layout hardening closeout is defined by the [Phase 52.5 closeout evaluation](docs/phase-52-5-closeout-evaluation.md).
 
 The Phase 52.6 compatibility-shim deprecation closeout is defined by the [Phase 52.6 closeout evaluation](docs/phase-52-6-closeout-evaluation.md).
+
+The Phase 52.7 namespace normalization closeout is defined by the [Phase 52.7 closeout evaluation](docs/phase-52-7-closeout-evaluation.md).
 
 Wazuh detects, AegisOps decides, records, and reconciles, and Shuffle executes reviewed delegated routine work.
 

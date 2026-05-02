@@ -125,6 +125,7 @@ approved_legacy_path_text_files = {
     "docs/adr/0018-phase-52-7-6-namespace-path-packaging-guardrails.md",
     "docs/phase-52-5-closeout-evaluation.md",
     "docs/phase-52-6-closeout-evaluation.md",
+    "docs/phase-52-7-closeout-evaluation.md",
     "docs/control-plane-service-internal-boundaries.md",
     "docs/maintainability-decomposition-thresholds.md",
     "docs/phase-45-daily-soc-queue-and-operator-ux-hardening-boundary.md",
@@ -168,6 +169,7 @@ approved_legacy_path_text_files = {
     "scripts/verify-phase-52-7-4-physical-layout-migration.sh",
     "scripts/verify-phase-52-7-5-root-shim-reduction.sh",
     "scripts/verify-phase-52-7-6-namespace-path-packaging-guardrails.sh",
+    "scripts/verify-phase-52-7-closeout-evaluation.sh",
     "scripts/test-verify-phase-52-5-1-control-plane-layout-inventory-contract.sh",
     "scripts/test-verify-phase-52-5-2-package-scaffolding-and-shim-policy.sh",
     "scripts/test-verify-phase-52-6-1-root-shim-inventory-contract.sh",
@@ -181,6 +183,7 @@ approved_legacy_path_text_files = {
     "scripts/test-verify-phase-52-7-4-physical-layout-migration.sh",
     "scripts/test-verify-phase-52-7-5-root-shim-reduction.sh",
     "scripts/test-verify-phase-52-7-6-namespace-path-packaging-guardrails.sh",
+    "scripts/test-verify-phase-52-7-closeout-evaluation.sh",
 }
 
 def rel(path: Path) -> str:
