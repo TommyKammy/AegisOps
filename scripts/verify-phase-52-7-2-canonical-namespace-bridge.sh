@@ -23,7 +23,12 @@ for required_path in \
   fi
 done
 
-if grep -R -E '(/Users/[^[:space:]]+|/home/[^[:space:]]+|[A-Za-z]:\\Users\\)' \
+mac_home_segment="Users"
+linux_home_segment="home"
+windows_home_segment="Users"
+workstation_path_pattern="(/${mac_home_segment}/[^[:space:]]+|/${linux_home_segment}/[^[:space:]]+|[A-Za-z]:\\\\${windows_home_segment}\\\\)"
+
+if grep -R -E "${workstation_path_pattern}" \
   "${doc_path}" \
   "${bridge_root}" \
   "${repo_root}/control-plane/tests/test_phase52_7_2_canonical_namespace_bridge.py" >/dev/null; then
