@@ -15,7 +15,8 @@ fail_stderr="${workdir}/fail.err"
 
 create_runtime_repo() {
   local target="$1"
-  mkdir -p "${target}/control-plane/aegisops_control_plane/adapters"
+  mkdir -p "${target}/control-plane/aegisops_control_plane"
+  mkdir -p "${target}/control-plane/aegisops/control_plane/adapters"
   mkdir -p "${target}/control-plane/tests"
   mkdir -p "${target}/control-plane/config"
 
@@ -28,20 +29,20 @@ EOF
   cat <<'EOF' > "${target}/control-plane/aegisops_control_plane/__init__.py"
 """Fixture package."""
 EOF
-  cat <<'EOF' > "${target}/control-plane/aegisops_control_plane/config.py"
+  cat <<'EOF' > "${target}/control-plane/aegisops/control_plane/config.py"
 class RuntimeConfig:
     pass
 EOF
-  cat <<'EOF' > "${target}/control-plane/aegisops_control_plane/service.py"
+  cat <<'EOF' > "${target}/control-plane/aegisops/control_plane/service.py"
 class AegisOpsControlPlaneService:
     pass
 EOF
-  cat <<'EOF' > "${target}/control-plane/aegisops_control_plane/adapters/__init__.py"
+  cat <<'EOF' > "${target}/control-plane/aegisops/control_plane/adapters/__init__.py"
 """Fixture adapters."""
 EOF
-  : > "${target}/control-plane/aegisops_control_plane/adapters/opensearch.py"
-  : > "${target}/control-plane/aegisops_control_plane/adapters/postgres.py"
-  : > "${target}/control-plane/aegisops_control_plane/adapters/n8n.py"
+  : > "${target}/control-plane/aegisops/control_plane/adapters/opensearch.py"
+  : > "${target}/control-plane/aegisops/control_plane/adapters/postgres.py"
+  : > "${target}/control-plane/aegisops/control_plane/adapters/n8n.py"
   : > "${target}/control-plane/tests/test_runtime_skeleton.py"
   cat <<'EOF' > "${target}/control-plane/config/local.env.sample"
 AEGISOPS_CONTROL_PLANE_HOST=127.0.0.1
@@ -107,8 +108,8 @@ assert_passes "${passing_repo}"
 failing_repo="${workdir}/failing"
 mkdir -p "${failing_repo}"
 create_runtime_repo "${failing_repo}"
-rm "${failing_repo}/control-plane/aegisops_control_plane/adapters/n8n.py"
-assert_fails_with "${failing_repo}" "Missing control-plane runtime skeleton file: control-plane/aegisops_control_plane/adapters/n8n.py"
+rm "${failing_repo}/control-plane/aegisops/control_plane/adapters/n8n.py"
+assert_fails_with "${failing_repo}" "Missing control-plane runtime skeleton file: control-plane/aegisops/control_plane/adapters/n8n.py"
 
 unexpected_env_repo="${workdir}/unexpected-env"
 mkdir -p "${unexpected_env_repo}"

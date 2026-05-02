@@ -23,12 +23,12 @@ required_artifacts=(
   "control-plane/README.md"
   "control-plane/main.py"
   "control-plane/aegisops_control_plane/__init__.py"
-  "control-plane/aegisops_control_plane/config.py"
-  "control-plane/aegisops_control_plane/service.py"
-  "control-plane/aegisops_control_plane/adapters/__init__.py"
-  "control-plane/aegisops_control_plane/adapters/opensearch.py"
-  "control-plane/aegisops_control_plane/adapters/postgres.py"
-  "control-plane/aegisops_control_plane/adapters/n8n.py"
+  "control-plane/aegisops/control_plane/config.py"
+  "control-plane/aegisops/control_plane/service.py"
+  "control-plane/aegisops/control_plane/adapters/__init__.py"
+  "control-plane/aegisops/control_plane/adapters/opensearch.py"
+  "control-plane/aegisops/control_plane/adapters/postgres.py"
+  "control-plane/aegisops/control_plane/adapters/n8n.py"
   "control-plane/tests/test_runtime_skeleton.py"
   "control-plane/config/local.env.sample"
   "postgres/control-plane/README.md"
@@ -40,7 +40,8 @@ create_repo() {
   mkdir -p "${target}/.codex-supervisor" "${target}/.github/workflows" \
     "${target}/apps/operator-ui" "${target}/config" "${target}/docs" "${target}/ingest" "${target}/n8n" \
     "${target}/opensearch" "${target}/proxy" "${target}/scripts" \
-    "${target}/sigma" "${target}/control-plane/aegisops_control_plane/adapters" \
+    "${target}/sigma" "${target}/control-plane/aegisops_control_plane" \
+    "${target}/control-plane/aegisops/control_plane/adapters" \
     "${target}/control-plane/tests" "${target}/control-plane/config" \
     "${target}/postgres/control-plane"
   git -C "${target}" init -q
