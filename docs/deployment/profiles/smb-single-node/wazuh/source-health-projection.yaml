@@ -1,0 +1,108 @@
+profile_id: smb-single-node
+product_profile: wazuh
+source_health_projection_contract_version: 2026-05-03
+status: accepted-contract
+related_issues:
+  - 1135
+  - 1138
+  - 1141
+projection_owner: aegisops-control-plane
+substrate_owner: wazuh
+authority_boundary: Wazuh source-health projection is subordinate detection-substrate context only; manager, dashboard, indexer, intake, freshness, parser, volume, credential, unavailable, stale, degraded, and mismatched states cannot close, approve, execute, reconcile, release, gate, or mutate authoritative AegisOps records.
+authority_mutation_allowed: false
+raw_secret_values_allowed: false
+placeholder_credentials_valid: false
+workflow_truth_source: aegisops-record-chain-only
+components:
+  - manager
+  - dashboard
+  - indexer
+  - intake
+  - signal_freshness
+  - parser
+  - volume
+  - credential
+states:
+  - available
+  - degraded
+  - stale_source
+  - parser_failure
+  - volume_anomaly
+  - credential_degraded
+  - unavailable
+  - mismatched
+projection_rules:
+  - all-required-components-available
+  - stale-last-accepted-signal
+  - parser-failure-visible
+  - volume-anomaly-visible
+  - credential-degraded-redacted
+  - manager-dashboard-indexer-unavailable-visible
+  - component-mismatch-visible
+  - no-authority-mutation
+component_state_coverage:
+  manager:
+    allowed_states:
+      - available
+      - degraded
+      - unavailable
+      - mismatched
+    authority_note: Manager state remains subordinate signal-source context only.
+  dashboard:
+    allowed_states:
+      - available
+      - degraded
+      - unavailable
+      - mismatched
+    authority_note: Dashboard state remains operator-facing substrate context only.
+  indexer:
+    allowed_states:
+      - available
+      - degraded
+      - unavailable
+      - mismatched
+    authority_note: Indexer state remains substrate evidence context only.
+  intake:
+    allowed_states:
+      - available
+      - credential_degraded
+      - unavailable
+      - mismatched
+    authority_note: Intake acknowledgement is transport evidence until AegisOps admission and linkage.
+  signal_freshness:
+    allowed_states:
+      - available
+      - stale_source
+      - unavailable
+    authoritative_input: last accepted Wazuh signal recorded by AegisOps
+  parser:
+    allowed_states:
+      - available
+      - degraded
+      - parser_failure
+    authority_note: Parser failure blocks false healthy projection but does not rewrite record truth.
+  volume:
+    allowed_states:
+      - available
+      - degraded
+      - volume_anomaly
+    authority_note: Volume anomaly is operator context, not incident or case truth.
+  credential:
+    allowed_states:
+      - available
+      - credential_degraded
+      - unavailable
+      - mismatched
+    redaction_required: true
+    secret_material_allowed: false
+negative_validation_tests:
+  - missing-degraded-state
+  - missing-unavailable-state
+  - missing-stale-source-state
+  - missing-parser-failure-state
+  - missing-volume-anomaly-state
+  - missing-credential-degraded-state
+  - missing-mismatched-state
+  - health-status-as-workflow-truth
+  - credential-degraded-secret-leak
+  - placeholder-credential-valid
