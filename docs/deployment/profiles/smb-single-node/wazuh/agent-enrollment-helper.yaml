@@ -1,0 +1,52 @@
+profile_id: smb-single-node
+product_profile: wazuh
+profile_contract_version: 2026-05-03
+agent_enrollment_helper_contract_version: 2026-05-03
+status: accepted-contract
+related_issues:
+  - 1135
+  - 1136
+  - 1140
+authority_boundary: Wazuh agent enrollment state remains subordinate setup context only; it cannot close, approve, execute, reconcile, release, gate, admit a source, or mutate authoritative AegisOps records.
+endpoint_scope: one-reviewed-endpoint
+fleet_management_scope: out-of-scope
+manager_host_placeholder: <wazuh-manager-host>
+agent_name_placeholder: <first-endpoint-agent-name>
+enrollment_secret_custody: AEGISOPS_WAZUH_AGENT_ENROLLMENT_SECRET_FILE or AEGISOPS_WAZUH_AGENT_ENROLLMENT_SECRET_OPENBAO_PATH
+raw_secret_values_allowed: false
+committed_customer_values_allowed: false
+workstation_local_paths_allowed: false
+wazuh_active_response_authority_allowed: false
+aegisops_authority_mutation_allowed: false
+prerequisites:
+  - reviewed-smb-single-node-wazuh-profile
+  - reviewed-manager-enrollment-port
+  - reviewed-agent-enrollment-secret-custody
+  - one-endpoint-operator-approval
+  - rollback-owner-identified
+enrollment_steps:
+  - confirm-reviewed-manager-address
+  - confirm-secret-custody-reference
+  - install-agent-on-one-reviewed-endpoint
+  - enroll-agent-to-reviewed-manager
+  - verify-agent-appears-as-subordinate-signal-source
+rollback_steps:
+  - disable-or-uninstall-agent-on-first-endpoint
+  - remove-agent-registration-from-wazuh-manager
+  - revoke-or-rotate-enrollment-secret-if-used
+  - record-aegisops-owned-follow-up-if-signal-custody-changed
+safety_warnings:
+  - do-not-commit-secrets
+  - do-not-use-placeholder-credentials-as-valid
+  - do-not-enroll-fleet
+  - do-not-use-wazuh-status-as-aegisops-truth
+  - do-not-enable-active-response-authority
+  - do-not-use-workstation-local-absolute-paths
+negative_validation_tests:
+  - missing-safety-warning
+  - fleet-management-overclaim
+  - committed-enrollment-secret
+  - placeholder-credential-trusted
+  - workstation-local-absolute-path
+  - wazuh-agent-state-as-aegisops-source-truth
+  - active-response-authority-path
