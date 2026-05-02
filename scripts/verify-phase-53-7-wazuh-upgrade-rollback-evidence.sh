@@ -172,19 +172,57 @@ require_top_level_list_item() {
   fi
 }
 
-require_top_level_scalar() {
+require_top_level_version_scalar() {
   local file_path="$1"
   local key="$2"
-  local expected_value="$3"
-  local label="$4"
+  local label="$3"
+  local allow_review_placeholder="${4:-false}"
 
-  if ! awk -v key="${key}" -v expected_value="${expected_value}" '
-    $0 == key ": " expected_value {
-      found = 1
+  if ! awk -v key="${key}" -v label="${label}" -v allow_review_placeholder="${allow_review_placeholder}" '
+    function trim(value) {
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      return value
     }
-    END { exit(found ? 0 : 1) }
+    $0 ~ ("^" key ":") {
+      line = $0
+      sub(/[[:space:]]+#.*/, "", line)
+      sub(("^" key ":"), "", line)
+      value = trim(line)
+      gsub(/^["'\'']|["'\'']$/, "", value)
+      value = trim(value)
+      if (value == "") {
+        missing = 1
+        next
+      }
+      if (allow_review_placeholder == "true" && value == "<reviewed-target-wazuh-version>") {
+        found = 1
+        next
+      }
+      lower_value = tolower(value)
+      if (lower_value ~ /^(latest|current|active|floating|inferred|tbd|to be determined|placeholder)$/ ||
+          lower_value ~ /(beta|rc|snapshot|nightly|preview)/) {
+        invalid = value
+        next
+      }
+      if (value ~ /^[0-9]+([.][0-9]+){1,3}$/) {
+        found = 1
+        next
+      }
+      invalid = value
+    }
+    END {
+      if (found) {
+        exit 0
+      }
+      if (invalid != "") {
+        printf "Forbidden Phase 53.7 Wazuh upgrade rollback unreviewed %s: %s: %s\n", label, key, invalid > "/dev/stderr"
+      } else {
+        printf "Missing Phase 53.7 Wazuh upgrade rollback top-level %s: %s\n", label, key > "/dev/stderr"
+      }
+      exit 1
+    }
   ' "${file_path}"; then
-    echo "Missing Phase 53.7 Wazuh upgrade rollback top-level ${label}: ${key}: ${expected_value}" >&2
     exit 1
   fi
 }
@@ -355,9 +393,9 @@ for term in "${required_artifact_terms[@]}"; do
   fi
 done
 
-require_top_level_scalar "${artifact_path}" "version_before" "4.12.0" "version before"
-require_top_level_scalar "${artifact_path}" "version_after" "<reviewed-target-wazuh-version>" "version after"
-require_top_level_scalar "${artifact_path}" "rollback_owner" "aegisops-release-owner" "rollback owner"
+require_top_level_version_scalar "${artifact_path}" "version_before" "version before"
+require_top_level_version_scalar "${artifact_path}" "version_after" "version after" "true"
+require_top_level_nonplaceholder_scalar "${artifact_path}" "rollback_owner" "rollback owner"
 require_top_level_nonplaceholder_scalar "${artifact_path}" "rollback_trigger" "rollback trigger"
 
 for component in "${required_components[@]}"; do

@@ -62,6 +62,16 @@ valid_repo="${workdir}/valid"
 create_valid_repo "${valid_repo}"
 assert_passes "${valid_repo}"
 
+reviewed_future_values_repo="${workdir}/reviewed-future-values"
+create_valid_repo "${reviewed_future_values_repo}"
+perl -0pi -e 's/^version_before:.*$/version_before: 4.12.1/m;
+  s/^version_after:.*$/version_after: 4.13.0/m;
+  s/^rollback_owner:.*$/rollback_owner: secops-release-review-board/m;
+  s/^    version_before:.*$/    version_before: 4.12.1/mg;
+  s/^    version_after:.*$/    version_after: 4.13.0/mg' \
+  "${reviewed_future_values_repo}/docs/deployment/profiles/smb-single-node/wazuh/upgrade-rollback-evidence.yaml"
+assert_passes "${reviewed_future_values_repo}"
+
 missing_contract_repo="${workdir}/missing-contract"
 create_valid_repo "${missing_contract_repo}"
 rm "${missing_contract_repo}/docs/deployment/wazuh-upgrade-rollback-evidence-contract.md"
@@ -82,7 +92,15 @@ perl -0pi -e 's/^rollback_owner:.*\n//m' \
   "${missing_owner_repo}/docs/deployment/profiles/smb-single-node/wazuh/upgrade-rollback-evidence.yaml"
 assert_fails_with \
   "${missing_owner_repo}" \
-  "Missing Phase 53.7 Wazuh upgrade rollback top-level rollback owner: rollback_owner: aegisops-release-owner"
+  "Missing Phase 53.7 Wazuh upgrade rollback top-level rollback owner: rollback_owner"
+
+placeholder_owner_repo="${workdir}/placeholder-owner"
+create_valid_repo "${placeholder_owner_repo}"
+perl -0pi -e 's/^rollback_owner:.*$/rollback_owner: TBD/m' \
+  "${placeholder_owner_repo}/docs/deployment/profiles/smb-single-node/wazuh/upgrade-rollback-evidence.yaml"
+assert_fails_with \
+  "${placeholder_owner_repo}" \
+  "Forbidden Phase 53.7 Wazuh upgrade rollback placeholder rollback owner: rollback_owner: TBD"
 
 missing_version_before_repo="${workdir}/missing-version-before"
 create_valid_repo "${missing_version_before_repo}"
@@ -90,7 +108,15 @@ perl -0pi -e 's/^version_before:.*\n//m' \
   "${missing_version_before_repo}/docs/deployment/profiles/smb-single-node/wazuh/upgrade-rollback-evidence.yaml"
 assert_fails_with \
   "${missing_version_before_repo}" \
-  "Missing Phase 53.7 Wazuh upgrade rollback top-level version before: version_before: 4.12.0"
+  "Missing Phase 53.7 Wazuh upgrade rollback top-level version before: version_before"
+
+floating_version_before_repo="${workdir}/floating-version-before"
+create_valid_repo "${floating_version_before_repo}"
+perl -0pi -e 's/^version_before:.*$/version_before: latest/m' \
+  "${floating_version_before_repo}/docs/deployment/profiles/smb-single-node/wazuh/upgrade-rollback-evidence.yaml"
+assert_fails_with \
+  "${floating_version_before_repo}" \
+  "Forbidden Phase 53.7 Wazuh upgrade rollback unreviewed version before: version_before: latest"
 
 missing_version_after_repo="${workdir}/missing-version-after"
 create_valid_repo "${missing_version_after_repo}"
@@ -98,7 +124,15 @@ perl -0pi -e 's/^version_after:.*\n//m' \
   "${missing_version_after_repo}/docs/deployment/profiles/smb-single-node/wazuh/upgrade-rollback-evidence.yaml"
 assert_fails_with \
   "${missing_version_after_repo}" \
-  "Missing Phase 53.7 Wazuh upgrade rollback top-level version after: version_after: <reviewed-target-wazuh-version>"
+  "Missing Phase 53.7 Wazuh upgrade rollback top-level version after: version_after"
+
+rc_version_after_repo="${workdir}/rc-version-after"
+create_valid_repo "${rc_version_after_repo}"
+perl -0pi -e 's/^version_after:.*$/version_after: 4.13.0-rc1/m' \
+  "${rc_version_after_repo}/docs/deployment/profiles/smb-single-node/wazuh/upgrade-rollback-evidence.yaml"
+assert_fails_with \
+  "${rc_version_after_repo}" \
+  "Forbidden Phase 53.7 Wazuh upgrade rollback unreviewed version after: version_after: 4.13.0-rc1"
 
 missing_trigger_repo="${workdir}/missing-trigger"
 create_valid_repo "${missing_trigger_repo}"
