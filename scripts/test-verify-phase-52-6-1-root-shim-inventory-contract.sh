@@ -93,4 +93,12 @@ assert_fails_with \
   "${local_path_repo}" \
   "Forbidden Phase 52.6.1 root shim inventory: workstation-local absolute path detected"
 
+missing_publishable_hygiene_repo="${workdir}/missing-publishable-hygiene"
+create_valid_repo "${missing_publishable_hygiene_repo}"
+perl -0pi -e 's/\nRun `bash scripts\/verify-publishable-path-hygiene\.sh`\.\n//' \
+  "${missing_publishable_hygiene_repo}/${contract_path}"
+assert_fails_with \
+  "${missing_publishable_hygiene_repo}" \
+  "Missing Phase 52.6.1 root shim inventory statement: Run \`bash scripts/verify-publishable-path-hygiene.sh\`."
+
 echo "Phase 52.6.1 root shim inventory verifier negative and valid fixtures passed."

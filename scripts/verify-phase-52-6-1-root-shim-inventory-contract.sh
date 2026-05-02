@@ -39,6 +39,7 @@ required_phrases=(
   "If a prerequisite signal is missing, malformed, ambiguous, or only partially trusted, the deletion path fails closed and the root file stays available."
   "Run \`bash scripts/verify-phase-52-6-1-root-shim-inventory-contract.sh\`."
   "Run \`bash scripts/test-verify-phase-52-6-1-root-shim-inventory-contract.sh\`."
+  "Run \`bash scripts/verify-publishable-path-hygiene.sh\`."
   "Run \`node <codex-supervisor-root>/dist/index.js issue-lint 1106 --config <supervisor-config-path>\`."
 )
 
