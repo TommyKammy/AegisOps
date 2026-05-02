@@ -69,13 +69,13 @@ assert_fails_with \
   "${behavior_change_repo}" \
   "Forbidden Phase 52.6.1 root shim inventory claim: This contract changes runtime behavior."
 
-phase29_owner_repo="${workdir}/phase29-production-owner"
-create_valid_repo "${phase29_owner_repo}"
-perl -0pi -e 's/\| `phase29_shadow_dataset\.py` \| `ml_shadow` \| compatibility adapter \| Retain as a Phase29 legacy adapter; `ml_shadow\/dataset\.py` is the domain-owned `ml_shadow` implementation\. \|/\| `phase29_shadow_dataset.py` \| `ml_shadow` \| retained owner \| Retain as a Phase29 production owner. \|/' \
-  "${phase29_owner_repo}/${contract_path}"
+phase29_restored_repo="${workdir}/phase29-restored-root-file"
+create_valid_repo "${phase29_restored_repo}"
+printf '%s\n' "\"\"\"Fixture Phase29 root file intentionally restored.\"\"\"" \
+  >"${phase29_restored_repo}/control-plane/aegisops_control_plane/phase29_shadow_dataset.py"
 assert_fails_with \
-  "${phase29_owner_repo}" \
-  "Phase 52.6.1 root shim inventory must classify Phase29 root files as compatibility adapters separate from domain-owned ml_shadow implementations: phase29_shadow_dataset.py"
+  "${phase29_restored_repo}" \
+  "Phase 52.6.1 root shim inventory is missing root file rows: phase29_shadow_dataset.py"
 
 immediate_deletion_repo="${workdir}/immediate-deletion-claim"
 create_valid_repo "${immediate_deletion_repo}"
@@ -100,6 +100,14 @@ perl -0pi -e 's/\nRun `bash scripts\/verify-publishable-path-hygiene\.sh`\.\n//'
 assert_fails_with \
   "${missing_publishable_hygiene_repo}" \
   "Missing Phase 52.6.1 root shim inventory statement: Run \`bash scripts/verify-publishable-path-hygiene.sh\`."
+
+missing_phase5265_verifier_repo="${workdir}/missing-phase5265-verifier"
+create_valid_repo "${missing_phase5265_verifier_repo}"
+perl -0pi -e 's/\nRun `bash scripts\/verify-phase-52-6-5-retire-phase29-root-filenames\.sh`\.\n//' \
+  "${missing_phase5265_verifier_repo}/${contract_path}"
+assert_fails_with \
+  "${missing_phase5265_verifier_repo}" \
+  "Missing Phase 52.6.1 root shim inventory statement: Run \`bash scripts/verify-phase-52-6-5-retire-phase29-root-filenames.sh\`."
 
 subordinate_inventory_rows_repo="${workdir}/subordinate-inventory-rows"
 create_valid_repo "${subordinate_inventory_rows_repo}"

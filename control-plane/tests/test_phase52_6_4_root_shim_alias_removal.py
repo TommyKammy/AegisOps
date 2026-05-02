@@ -57,16 +57,12 @@ class Phase5264RootShimAliasRemovalTests(unittest.TestCase):
                     importlib.import_module(target_module),
                 )
 
-    def test_phase29_and_public_root_owners_stay_physical_blockers(self) -> None:
+    def test_public_root_owners_stay_physical_blockers(self) -> None:
         retained = {
             "models.py",
             "service.py",
             "config.py",
             "record_validation.py",
-            "phase29_shadow_dataset.py",
-            "phase29_shadow_scoring.py",
-            "phase29_evidently_drift_visibility.py",
-            "phase29_mlflow_shadow_model_registry.py",
             "assistant_context.py",
             "action_lifecycle_write_coordinator.py",
             "action_policy.py",

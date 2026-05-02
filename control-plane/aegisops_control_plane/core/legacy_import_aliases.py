@@ -164,6 +164,30 @@ LEGACY_IMPORT_ALIASES: dict[str, LegacyImportAlias] = {
         "runtime",
         "runtime/operations.py",
     ),
+    "aegisops_control_plane.phase29_evidently_drift_visibility": _alias(
+        "aegisops_control_plane.phase29_evidently_drift_visibility",
+        "aegisops_control_plane.ml_shadow.drift_visibility",
+        "ml_shadow",
+        "ml_shadow/drift_visibility.py",
+    ),
+    "aegisops_control_plane.phase29_mlflow_shadow_model_registry": _alias(
+        "aegisops_control_plane.phase29_mlflow_shadow_model_registry",
+        "aegisops_control_plane.ml_shadow.mlflow_registry",
+        "ml_shadow",
+        "ml_shadow/mlflow_registry.py",
+    ),
+    "aegisops_control_plane.phase29_shadow_dataset": _alias(
+        "aegisops_control_plane.phase29_shadow_dataset",
+        "aegisops_control_plane.ml_shadow.dataset",
+        "ml_shadow",
+        "ml_shadow/dataset.py",
+    ),
+    "aegisops_control_plane.phase29_shadow_scoring": _alias(
+        "aegisops_control_plane.phase29_shadow_scoring",
+        "aegisops_control_plane.ml_shadow.legacy_scoring_adapter",
+        "ml_shadow",
+        "ml_shadow/legacy_scoring_adapter.py",
+    ),
     "aegisops_control_plane.service_snapshots": _alias(
         "aegisops_control_plane.service_snapshots",
         "aegisops_control_plane.runtime.service_snapshots",
@@ -175,10 +199,6 @@ LEGACY_IMPORT_ALIASES: dict[str, LegacyImportAlias] = {
 RETAINED_COMPATIBILITY_BLOCKERS: dict[str, str] = {
     "aegisops_control_plane.service": "Public facade import path retained under ADR-0003 and ADR-0010.",
     "aegisops_control_plane.models": "Authoritative record model import path remains a root owner.",
-    "aegisops_control_plane.phase29_shadow_dataset": "Phase29 adapter still needs adapter-specific caller evidence.",
-    "aegisops_control_plane.phase29_shadow_scoring": "Phase29 adapter still needs adapter-specific caller evidence.",
-    "aegisops_control_plane.phase29_evidently_drift_visibility": "Phase29 adapter still needs adapter-specific caller evidence.",
-    "aegisops_control_plane.phase29_mlflow_shadow_model_registry": "Phase29 adapter still needs adapter-specific caller evidence.",
 }
 
 

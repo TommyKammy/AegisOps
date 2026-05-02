@@ -7,16 +7,27 @@ doc_path="${repo_root}/docs/adr/0015-phase-52-6-3-legacy-import-alias-registry.m
 registry_path="${repo_root}/control-plane/aegisops_control_plane/core/legacy_import_aliases.py"
 control_plane_root="${repo_root}/control-plane"
 removed_root_shim="${repo_root}/control-plane/aegisops_control_plane/audit_export.py"
+removed_phase29_root_shims=(
+  "${repo_root}/control-plane/aegisops_control_plane/phase29_shadow_dataset.py"
+  "${repo_root}/control-plane/aegisops_control_plane/phase29_shadow_scoring.py"
+  "${repo_root}/control-plane/aegisops_control_plane/phase29_evidently_drift_visibility.py"
+  "${repo_root}/control-plane/aegisops_control_plane/phase29_mlflow_shadow_model_registry.py"
+)
 
 required_phrases=(
   "# ADR-0015: Phase 52.6.3 Legacy Import Alias Registry"
   "- **Status**: Accepted"
   "- **Date**: 2026-05-02"
-  "- **Related Issues**: #1105, #1108"
+  "- **Related Issues**: #1105, #1108, #1110"
   "- **Depends On**: #1107"
   "The registry lives at \`control-plane/aegisops_control_plane/core/legacy_import_aliases.py\`."
   "| \`aegisops_control_plane.audit_export\` | \`aegisops_control_plane.reporting.audit_export\` | \`reporting\` | \`reporting/audit_export.py\` |"
+  "| \`aegisops_control_plane.phase29_shadow_dataset\` | \`aegisops_control_plane.ml_shadow.dataset\` | \`ml_shadow\` | \`ml_shadow/dataset.py\` |"
+  "| \`aegisops_control_plane.phase29_shadow_scoring\` | \`aegisops_control_plane.ml_shadow.legacy_scoring_adapter\` | \`ml_shadow\` | \`ml_shadow/legacy_scoring_adapter.py\` |"
+  "| \`aegisops_control_plane.phase29_evidently_drift_visibility\` | \`aegisops_control_plane.ml_shadow.drift_visibility\` | \`ml_shadow\` | \`ml_shadow/drift_visibility.py\` |"
+  "| \`aegisops_control_plane.phase29_mlflow_shadow_model_registry\` | \`aegisops_control_plane.ml_shadow.mlflow_registry\` | \`ml_shadow\` | \`ml_shadow/mlflow_registry.py\` |"
   "The \`audit_export.py\` root shim is the only Phase 52.6.3 physical deletion."
+  "Phase 52.6.5 retires the four Phase29 physical root filenames."
   "Alias rows without an explicit target owner fail verification."
   "An approved legacy import path disappearing without an alias row or retained physical shim fails verification."
   "Run \`bash scripts/verify-phase-52-6-3-legacy-import-alias-registry.sh\`."
@@ -38,6 +49,14 @@ if [[ -e "${removed_root_shim}" ]]; then
   echo "Phase 52.6.3 proof-of-pattern root shim should be removed: control-plane/aegisops_control_plane/audit_export.py" >&2
   exit 1
 fi
+
+for removed_phase29_root_shim in "${removed_phase29_root_shims[@]}"; do
+  if [[ -e "${removed_phase29_root_shim}" ]]; then
+    rel_removed="${removed_phase29_root_shim#"${repo_root}/"}"
+    echo "Phase 52.6.5 Phase29 root filename should be retired: ${rel_removed}" >&2
+    exit 1
+  fi
+done
 
 doc_text="$(cat "${doc_path}")"
 for phrase in "${required_phrases[@]}"; do
@@ -90,14 +109,34 @@ required_aliases = {
         "reporting/audit_export.py",
         "export_audit_retention_baseline",
     ),
+    "aegisops_control_plane.phase29_shadow_dataset": (
+        "aegisops_control_plane.ml_shadow.dataset",
+        "ml_shadow",
+        "ml_shadow/dataset.py",
+        "Phase29ShadowDatasetSnapshot",
+    ),
+    "aegisops_control_plane.phase29_shadow_scoring": (
+        "aegisops_control_plane.ml_shadow.legacy_scoring_adapter",
+        "ml_shadow",
+        "ml_shadow/legacy_scoring_adapter.py",
+        "Phase29ShadowScoreResult",
+    ),
+    "aegisops_control_plane.phase29_evidently_drift_visibility": (
+        "aegisops_control_plane.ml_shadow.drift_visibility",
+        "ml_shadow",
+        "ml_shadow/drift_visibility.py",
+        "Phase29EvidentlyDriftVisibilityReport",
+    ),
+    "aegisops_control_plane.phase29_mlflow_shadow_model_registry": (
+        "aegisops_control_plane.ml_shadow.mlflow_registry",
+        "ml_shadow",
+        "ml_shadow/mlflow_registry.py",
+        "Phase29MlflowShadowModelTrackingResult",
+    ),
 }
 required_blockers = {
     "aegisops_control_plane.service",
     "aegisops_control_plane.models",
-    "aegisops_control_plane.phase29_shadow_dataset",
-    "aegisops_control_plane.phase29_shadow_scoring",
-    "aegisops_control_plane.phase29_evidently_drift_visibility",
-    "aegisops_control_plane.phase29_mlflow_shadow_model_registry",
 }
 
 aliases = registry.LEGACY_IMPORT_ALIASES

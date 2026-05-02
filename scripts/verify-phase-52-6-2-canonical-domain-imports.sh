@@ -98,7 +98,10 @@ approved_legacy_python_files = {
     "scripts/test-verify-phase-52-6-2-canonical-domain-imports.sh",
     "scripts/verify-phase-52-6-3-legacy-import-alias-registry.sh",
     "scripts/test-verify-phase-52-6-3-legacy-import-alias-registry.sh",
+    "scripts/verify-phase-52-6-5-retire-phase29-root-filenames.sh",
+    "scripts/test-verify-phase-52-6-5-retire-phase29-root-filenames.sh",
     "control-plane/tests/test_phase52_6_3_legacy_import_alias_registry.py",
+    "control-plane/tests/test_phase52_6_5_phase29_root_filename_retirement.py",
 }
 
 approved_legacy_text_files = {
