@@ -149,6 +149,30 @@ has_uncommented_exact_line() {
   ' "${file_path}"
 }
 
+has_markdown_table_first_column() {
+  local expected="$1"
+
+  awk -v expected="${expected}" '
+    function trim(value) {
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      return value
+    }
+    /^[[:space:]]*\|/ {
+      column_count = split($0, columns, "|")
+      if (column_count < 3) {
+        next
+      }
+      first_column = trim(columns[2])
+      gsub(/^`|`$/, "", first_column)
+      if (first_column == expected) {
+        found = 1
+      }
+    }
+    END { exit(found ? 0 : 1) }
+  ' <<<"${contract_rendered_markdown}"
+}
+
 require_top_level_false_scalar() {
   local file_path="$1"
   local key="$2"
@@ -256,6 +280,7 @@ require_top_level_version_scalar() {
       return value
     }
     $0 ~ ("^" key ":") {
+      match_count += 1
       line = $0
       sub(/[[:space:]]+#.*/, "", line)
       sub(("^" key ":"), "", line)
@@ -283,6 +308,10 @@ require_top_level_version_scalar() {
       invalid = value
     }
     END {
+      if (match_count > 1) {
+        printf "Duplicate Phase 53.7 Wazuh upgrade rollback top-level %s: %s\n", label, key > "/dev/stderr"
+        exit 1
+      }
       if (found) {
         exit 0
       }
@@ -310,6 +339,7 @@ require_top_level_nonplaceholder_scalar() {
       return value
     }
     $0 ~ ("^" key ":") {
+      match_count += 1
       line = $0
       sub(/[[:space:]]+#.*/, "", line)
       sub(("^" key ":"), "", line)
@@ -329,6 +359,10 @@ require_top_level_nonplaceholder_scalar() {
       found = 1
     }
     END {
+      if (match_count > 1) {
+        printf "Duplicate Phase 53.7 Wazuh upgrade rollback top-level %s: %s\n", label, key > "/dev/stderr"
+        exit 1
+      }
       if (found) {
         exit 0
       }
@@ -369,12 +403,22 @@ require_component_evidence_field() {
       line = $0
       sub(/[[:space:]]+#.*/, "", line)
       if (line ~ ("^    " field ": .+")) {
+        field_count += 1
         found = 1
       }
     }
-    END { exit(found ? 0 : 1) }
+    END {
+      if (field_count > 1) {
+        printf "Duplicate Phase 53.7 Wazuh upgrade rollback component evidence %s field: %s\n", component, field > "/dev/stderr"
+        exit 1
+      }
+      if (found) {
+        exit 0
+      }
+      printf "Missing Phase 53.7 Wazuh upgrade rollback component evidence %s field: %s\n", component, field > "/dev/stderr"
+      exit 1
+    }
   ' "${file_path}"; then
-    echo "Missing Phase 53.7 Wazuh upgrade rollback component evidence ${component} field: ${field}" >&2
     exit 1
   fi
 }
@@ -479,7 +523,7 @@ done
 
 for component in "${required_components[@]}"; do
   require_top_level_list_item "${artifact_path}" "components" "${component}" "component"
-  if ! grep -Fq -- "| ${component} |" <<<"${contract_rendered_markdown}"; then
+  if ! has_markdown_table_first_column "${component}"; then
     echo "Missing Phase 53.7 Wazuh upgrade rollback contract component row: ${component}" >&2
     exit 1
   fi
@@ -494,7 +538,7 @@ done
 
 for field in "${required_evidence_fields[@]}"; do
   require_top_level_list_item "${artifact_path}" "required_evidence_fields" "${field}" "required evidence field"
-  if ! grep -Fq -- "\`${field}\`" <<<"${contract_rendered_markdown}"; then
+  if ! has_markdown_table_first_column "${field}"; then
     echo "Missing Phase 53.7 Wazuh upgrade rollback contract field row: ${field}" >&2
     exit 1
   fi

@@ -118,6 +118,14 @@ assert_fails_with \
   "${floating_version_before_repo}" \
   "Forbidden Phase 53.7 Wazuh upgrade rollback unreviewed version before: version_before: latest"
 
+duplicate_version_before_repo="${workdir}/duplicate-version-before"
+create_valid_repo "${duplicate_version_before_repo}"
+perl -0pi -e 's/^version_before:.*$/version_before: TBD\nversion_before: 4.12.0/m' \
+  "${duplicate_version_before_repo}/docs/deployment/profiles/smb-single-node/wazuh/upgrade-rollback-evidence.yaml"
+assert_fails_with \
+  "${duplicate_version_before_repo}" \
+  "Duplicate Phase 53.7 Wazuh upgrade rollback top-level version before: version_before"
+
 missing_version_after_repo="${workdir}/missing-version-after"
 create_valid_repo "${missing_version_after_repo}"
 perl -0pi -e 's/^version_after:.*\n//m' \
@@ -149,6 +157,14 @@ perl -0pi -e 's/^rollback_trigger:.*$/rollback_trigger: operator decides later/m
 assert_fails_with \
   "${placeholder_trigger_repo}" \
   "Forbidden Phase 53.7 Wazuh upgrade rollback placeholder rollback trigger: rollback_trigger: operator decides later"
+
+duplicate_rollback_owner_repo="${workdir}/duplicate-rollback-owner"
+create_valid_repo "${duplicate_rollback_owner_repo}"
+perl -0pi -e 's/^rollback_owner:.*$/rollback_owner: TBD\nrollback_owner: aegisops-release-owner/m' \
+  "${duplicate_rollback_owner_repo}/docs/deployment/profiles/smb-single-node/wazuh/upgrade-rollback-evidence.yaml"
+assert_fails_with \
+  "${duplicate_rollback_owner_repo}" \
+  "Duplicate Phase 53.7 Wazuh upgrade rollback top-level rollback owner: rollback_owner"
 
 missing_evidence_reference_repo="${workdir}/missing-evidence-reference"
 create_valid_repo "${missing_evidence_reference_repo}"
@@ -214,6 +230,14 @@ assert_fails_with \
   "${missing_component_rollback_target_repo}" \
   "Missing Phase 53.7 Wazuh upgrade rollback component evidence indexer field: rollback_target"
 
+duplicate_component_rollback_target_repo="${workdir}/duplicate-component-rollback-target"
+create_valid_repo "${duplicate_component_rollback_target_repo}"
+perl -0pi -e 's/^    rollback_target: last-reviewed-indexer-profile-version$/    rollback_target: TBD\n    rollback_target: last-reviewed-indexer-profile-version/m' \
+  "${duplicate_component_rollback_target_repo}/docs/deployment/profiles/smb-single-node/wazuh/upgrade-rollback-evidence.yaml"
+assert_fails_with \
+  "${duplicate_component_rollback_target_repo}" \
+  "Duplicate Phase 53.7 Wazuh upgrade rollback component evidence indexer field: rollback_target"
+
 full_upgrader_claim_repo="${workdir}/full-upgrader-claim"
 create_valid_repo "${full_upgrader_claim_repo}"
 perl -0pi -e 's/full_upgrader_implemented: false/full_upgrader_implemented: true/' \
@@ -261,6 +285,24 @@ perl -0pi -e 's/upgrade_automation_allowed: false/upgrade_automation_allowed: fa
 assert_fails_with \
   "${duplicate_upgrade_automation_claim_repo}" \
   "Forbidden Phase 53.7 Wazuh upgrade rollback duplicate top-level boolean scalar: upgrade_automation_allowed"
+
+missing_contract_component_row_repo="${workdir}/missing-contract-component-row"
+create_valid_repo "${missing_contract_component_row_repo}"
+perl -0pi -e 's/^\| manager \|.*\n//m' \
+  "${missing_contract_component_row_repo}/docs/deployment/wazuh-upgrade-rollback-evidence-contract.md"
+printf '%s\n' '| Example | manager | stray component mention only |' \
+  >>"${missing_contract_component_row_repo}/docs/deployment/wazuh-upgrade-rollback-evidence-contract.md"
+assert_fails_with \
+  "${missing_contract_component_row_repo}" \
+  "Missing Phase 53.7 Wazuh upgrade rollback contract component row: manager"
+
+missing_contract_field_row_repo="${workdir}/missing-contract-field-row"
+create_valid_repo "${missing_contract_field_row_repo}"
+perl -0pi -e 's/^\| `version_before` \|.*\n//m' \
+  "${missing_contract_field_row_repo}/docs/deployment/wazuh-upgrade-rollback-evidence-contract.md"
+assert_fails_with \
+  "${missing_contract_field_row_repo}" \
+  "Missing Phase 53.7 Wazuh upgrade rollback contract field row: version_before"
 
 authority_truth_repo="${workdir}/authority-truth"
 create_valid_repo "${authority_truth_repo}"
