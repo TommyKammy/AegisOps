@@ -36,6 +36,7 @@ Canonical cross-phase boundary reference:
 - [Phase 52.6 closeout evaluation](docs/phase-52-6-closeout-evaluation.md) records the Phase 52.6 compatibility-shim deprecation outcomes, root package count reduction, retained owners and blockers, verifier results, and bounded Phase 53 readiness recommendation.
 - [Phase 52.7 closeout evaluation](docs/phase-52-7-closeout-evaluation.md) records the Phase 52.7 namespace normalization outcomes, root owner reduction, compatibility behavior, namespace/path guardrails, verifier results, and bounded Phase 53 readiness recommendation.
 - [Phase 53.1 Wazuh profile contract](docs/deployment/wazuh-smb-single-node-profile-contract.md) defines the `smb-single-node` Wazuh manager, indexer, dashboard, resource, port, volume, certificate, and pinned-version expectations.
+- [Phase 53.2 Wazuh certificate and credential contract](docs/deployment/wazuh-certificate-credential-contract.md) defines certificate generation-wrapper posture, credential custody, default-credential rejection, rotation guidance, and no-live-secret validation for the Wazuh profile.
 
 ## Product positioning
 
@@ -82,6 +83,8 @@ The Phase 52.6 compatibility-shim deprecation closeout is defined by the [Phase 
 The Phase 52.7 namespace normalization closeout is defined by the [Phase 52.7 closeout evaluation](docs/phase-52-7-closeout-evaluation.md).
 
 The Phase 53.1 Wazuh profile contract is defined by the [Phase 53.1 Wazuh profile contract](docs/deployment/wazuh-smb-single-node-profile-contract.md).
+
+The Phase 53.2 Wazuh certificate and credential contract is defined by the [Phase 53.2 Wazuh certificate and credential contract](docs/deployment/wazuh-certificate-credential-contract.md).
 
 Wazuh detects, AegisOps decides, records, and reconciles, and Shuffle executes reviewed delegated routine work.
 
