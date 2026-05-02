@@ -84,6 +84,22 @@ assert_fails_with \
   "${missing_manager_repo}" \
   "Missing complete Phase 53.1 Wazuh component row: manager"
 
+missing_indexer_contract_repo="${workdir}/missing-indexer-contract"
+create_valid_repo "${missing_indexer_contract_repo}"
+remove_text_from_contract "${missing_indexer_contract_repo}" \
+  "| indexer | Yes | \`4.12.0\` | \`wazuh/wazuh-indexer:4.12.0\` | 2 vCPU, 12 GB RAM, 250 GB durable substrate storage plus backup capacity. | \`9200/tcp\` internal indexer API; \`9300/tcp\` internal cluster transport. | \`wazuh-indexer-data\`; \`wazuh-indexer-backup\`. | \`wazuh-indexer-tls\`; \`wazuh-indexer-admin-client-cert\`. | Indexer contents and search status are detection substrate evidence only, not AegisOps source or workflow truth. |"
+assert_fails_with \
+  "${missing_indexer_contract_repo}" \
+  "Missing complete Phase 53.1 Wazuh component row: indexer"
+
+missing_dashboard_contract_repo="${workdir}/missing-dashboard-contract"
+create_valid_repo "${missing_dashboard_contract_repo}"
+remove_text_from_contract "${missing_dashboard_contract_repo}" \
+  "| dashboard | Yes | \`4.12.0\` | \`wazuh/wazuh-dashboard:4.12.0\` | 1 vCPU, 2 GB RAM, bounded config/log storage. | \`5601/tcp\` internal dashboard UI through reviewed proxy only. | \`wazuh-dashboard-config\`. | \`wazuh-dashboard-tls\`; \`wazuh-dashboard-indexer-client-cert\`. | Dashboard state is operator-facing substrate context only and cannot become AegisOps workflow truth. |"
+assert_fails_with \
+  "${missing_dashboard_contract_repo}" \
+  "Missing complete Phase 53.1 Wazuh component row: dashboard"
+
 missing_indexer_profile_repo="${workdir}/missing-indexer-profile"
 create_valid_repo "${missing_indexer_profile_repo}"
 perl -0pi -e 's/\n  indexer:\n    required: true.*?(?=\n  dashboard:)/\n/s' \
@@ -178,7 +194,7 @@ printf '%s\n' "Placeholder secrets are valid credentials." \
   >>"${placeholder_secret_repo}/docs/deployment/wazuh-smb-single-node-profile-contract.md"
 assert_fails_with \
   "${placeholder_secret_repo}" \
-  "Forbidden Phase 53.1 Wazuh profile contract claim: Placeholder secrets are valid credentials"
+  "Forbidden Phase 53.1 Wazuh profile contract claim: placeholder secrets accepted as valid credentials"
 
 local_path_repo="${workdir}/local-path"
 create_valid_repo "${local_path_repo}"

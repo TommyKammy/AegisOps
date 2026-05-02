@@ -58,7 +58,6 @@ forbidden_claims=(
   "Wazuh indexer state is AegisOps evidence truth"
   "Wazuh version state is AegisOps release truth"
   "Source-health projection is AegisOps closeout truth"
-  "Placeholder secrets are valid credentials"
   "Raw forwarded headers are trusted identity"
   "Phase 53.1 implements Wazuh intake binding"
   "Phase 53.1 implements Wazuh certificate generation"
