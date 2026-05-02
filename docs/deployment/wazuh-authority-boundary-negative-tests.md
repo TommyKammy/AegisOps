@@ -1,7 +1,7 @@
 # Phase 53.8 Wazuh Authority-Boundary Negative Tests
 
 - **Status**: Accepted negative-test slice
-- **Date**: 2026-05-03
+- **Date**: 2026-05-02
 - **Owners**: AegisOps maintainers
 - **Related Baseline**: `docs/phase-51-6-authority-boundary-negative-test-policy.md`, `docs/deployment/wazuh-manager-intake-binding-contract.md`, `docs/deployment/wazuh-source-health-projection-contract.md`
 - **Related Issues**: #1135, #1138, #1141, #1143
