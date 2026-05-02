@@ -29,7 +29,7 @@ required_phrases=(
   "AegisOps control-plane records remain authoritative for alert, case, evidence, approval, action request, execution receipt, reconciliation, audit, limitation, release, gate, and closeout truth."
   "Wazuh, Shuffle, tickets, assistant output, generated config, CLI status, demo data, adapters, DTOs, projections, summaries, compatibility shims, alias rows, and operator-facing text remain subordinate context."
   "The root shim inventory does not change authorization, provenance, reconciliation, snapshot, backup, restore, export, readiness, assistant, evidence, action-execution, Wazuh, Shuffle, ticket, CLI, HTTP, or deployment behavior."
-  "The Phase 52.6.3 root-level Python file count under \`control-plane/aegisops_control_plane/\` is \`62\` after the approved \`audit_export.py\` alias-registry proof of pattern."
+  "The Phase 52.6.4 root-level Python file count under \`control-plane/aegisops_control_plane/\` is \`41\` after removing simple physical root shims covered by the legacy import alias registry and focused compatibility tests."
   "The baseline counts only direct \`.py\` files in \`control-plane/aegisops_control_plane/\`; package-owned files below subdirectories are tracked by ADR-0012 and stay outside this root shim baseline."
   "The Phase29 root files are legacy compatibility adapters only. They are not production owners."
   "The domain-owned implementations are the directly linked \`ml_shadow\` modules listed in the inventory. Any later removal plan must test both the legacy \`phase29_*\` import path and the domain-owned \`ml_shadow\` import path before deleting a root adapter."
@@ -205,9 +205,9 @@ if extra:
     )
     sys.exit(1)
 
-if len(actual_modules) != 62:
+if len(actual_modules) != 41:
     print(
-        f"Phase 52.6.1 root shim inventory expected Phase 52.6.3 root count of 62 files, found {len(actual_modules)}.",
+        f"Phase 52.6.1 root shim inventory expected Phase 52.6.4 root count of 41 files, found {len(actual_modules)}.",
         file=sys.stderr,
     )
     sys.exit(1)
@@ -228,9 +228,7 @@ if empty_decisions:
 
 required_classifications = {
     "retained owner",
-    "simple shim",
     "compatibility adapter",
-    "alias candidate",
     "retained compatibility blocker",
 }
 missing_classifications = sorted(required_classifications - {row[0] for row in rows.values()})

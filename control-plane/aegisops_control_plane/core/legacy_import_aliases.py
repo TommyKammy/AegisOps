@@ -23,12 +23,152 @@ class LegacyImportAlias:
             )
 
 
+def _alias(
+    legacy_module: str,
+    target_module: str,
+    target_family: str,
+    owner: str,
+) -> LegacyImportAlias:
+    return LegacyImportAlias(
+        legacy_module=legacy_module,
+        target_module=target_module,
+        target_family=target_family,
+        owner=owner,
+    )
+
+
 LEGACY_IMPORT_ALIASES: dict[str, LegacyImportAlias] = {
-    "aegisops_control_plane.audit_export": LegacyImportAlias(
-        legacy_module="aegisops_control_plane.audit_export",
-        target_module="aegisops_control_plane.reporting.audit_export",
-        target_family="reporting",
-        owner="reporting/audit_export.py",
+    "aegisops_control_plane.action_receipt_validation": _alias(
+        "aegisops_control_plane.action_receipt_validation",
+        "aegisops_control_plane.actions.action_receipt_validation",
+        "actions",
+        "actions/action_receipt_validation.py",
+    ),
+    "aegisops_control_plane.action_review_chain": _alias(
+        "aegisops_control_plane.action_review_chain",
+        "aegisops_control_plane.actions.review.action_review_chain",
+        "actions.review",
+        "actions/review/action_review_chain.py",
+    ),
+    "aegisops_control_plane.action_review_coordination": _alias(
+        "aegisops_control_plane.action_review_coordination",
+        "aegisops_control_plane.actions.review.action_review_coordination",
+        "actions.review",
+        "actions/review/action_review_coordination.py",
+    ),
+    "aegisops_control_plane.action_review_index": _alias(
+        "aegisops_control_plane.action_review_index",
+        "aegisops_control_plane.actions.review.action_review_index",
+        "actions.review",
+        "actions/review/action_review_index.py",
+    ),
+    "aegisops_control_plane.action_review_inspection": _alias(
+        "aegisops_control_plane.action_review_inspection",
+        "aegisops_control_plane.actions.review.action_review_inspection",
+        "actions.review",
+        "actions/review/action_review_inspection.py",
+    ),
+    "aegisops_control_plane.action_review_path_health": _alias(
+        "aegisops_control_plane.action_review_path_health",
+        "aegisops_control_plane.actions.review.action_review_path_health",
+        "actions.review",
+        "actions/review/action_review_path_health.py",
+    ),
+    "aegisops_control_plane.action_review_timeline": _alias(
+        "aegisops_control_plane.action_review_timeline",
+        "aegisops_control_plane.actions.review.action_review_timeline",
+        "actions.review",
+        "actions/review/action_review_timeline.py",
+    ),
+    "aegisops_control_plane.action_review_visibility": _alias(
+        "aegisops_control_plane.action_review_visibility",
+        "aegisops_control_plane.actions.review.action_review_visibility",
+        "actions.review",
+        "actions/review/action_review_visibility.py",
+    ),
+    "aegisops_control_plane.assistant_provider": _alias(
+        "aegisops_control_plane.assistant_provider",
+        "aegisops_control_plane.assistant.assistant_provider",
+        "assistant",
+        "assistant/assistant_provider.py",
+    ),
+    "aegisops_control_plane.audit_export": _alias(
+        "aegisops_control_plane.audit_export",
+        "aegisops_control_plane.reporting.audit_export",
+        "reporting",
+        "reporting/audit_export.py",
+    ),
+    "aegisops_control_plane.detection_lifecycle_helpers": _alias(
+        "aegisops_control_plane.detection_lifecycle_helpers",
+        "aegisops_control_plane.ingestion.detection_lifecycle_helpers",
+        "ingestion",
+        "ingestion/detection_lifecycle_helpers.py",
+    ),
+    "aegisops_control_plane.detection_native_context": _alias(
+        "aegisops_control_plane.detection_native_context",
+        "aegisops_control_plane.ingestion.detection_native_context",
+        "ingestion",
+        "ingestion/detection_native_context.py",
+    ),
+    "aegisops_control_plane.entrypoint_support": _alias(
+        "aegisops_control_plane.entrypoint_support",
+        "aegisops_control_plane.api.entrypoint_support",
+        "api",
+        "api/entrypoint_support.py",
+    ),
+    "aegisops_control_plane.execution_coordinator": _alias(
+        "aegisops_control_plane.execution_coordinator",
+        "aegisops_control_plane.actions.execution_coordinator",
+        "actions",
+        "actions/execution_coordinator.py",
+    ),
+    "aegisops_control_plane.execution_coordinator_delegation": _alias(
+        "aegisops_control_plane.execution_coordinator_delegation",
+        "aegisops_control_plane.actions.execution_coordinator_delegation",
+        "actions",
+        "actions/execution_coordinator_delegation.py",
+    ),
+    "aegisops_control_plane.execution_coordinator_reconciliation": _alias(
+        "aegisops_control_plane.execution_coordinator_reconciliation",
+        "aegisops_control_plane.actions.execution_coordinator_reconciliation",
+        "actions",
+        "actions/execution_coordinator_reconciliation.py",
+    ),
+    "aegisops_control_plane.external_evidence_endpoint": _alias(
+        "aegisops_control_plane.external_evidence_endpoint",
+        "aegisops_control_plane.evidence.external_evidence_endpoint",
+        "evidence",
+        "evidence/external_evidence_endpoint.py",
+    ),
+    "aegisops_control_plane.external_evidence_facade": _alias(
+        "aegisops_control_plane.external_evidence_facade",
+        "aegisops_control_plane.evidence.external_evidence_facade",
+        "evidence",
+        "evidence/external_evidence_facade.py",
+    ),
+    "aegisops_control_plane.external_evidence_misp": _alias(
+        "aegisops_control_plane.external_evidence_misp",
+        "aegisops_control_plane.evidence.external_evidence_misp",
+        "evidence",
+        "evidence/external_evidence_misp.py",
+    ),
+    "aegisops_control_plane.external_evidence_osquery": _alias(
+        "aegisops_control_plane.external_evidence_osquery",
+        "aegisops_control_plane.evidence.external_evidence_osquery",
+        "evidence",
+        "evidence/external_evidence_osquery.py",
+    ),
+    "aegisops_control_plane.operations": _alias(
+        "aegisops_control_plane.operations",
+        "aegisops_control_plane.runtime.operations",
+        "runtime",
+        "runtime/operations.py",
+    ),
+    "aegisops_control_plane.service_snapshots": _alias(
+        "aegisops_control_plane.service_snapshots",
+        "aegisops_control_plane.runtime.service_snapshots",
+        "runtime",
+        "runtime/service_snapshots.py",
     ),
 }
 
