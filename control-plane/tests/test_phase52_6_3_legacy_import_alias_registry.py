@@ -31,7 +31,7 @@ class LegacyImportAliasRegistryTests(unittest.TestCase):
 
         self.assertIs(legacy_module, owner_module)
         self.assertIs(legacy_from_package, owner_module)
-        self.assertIs(getattr(package, "audit_export"), owner_module)
+        self.assertIs(package.audit_export, owner_module)
         self.assertIs(
             legacy_module.export_audit_retention_baseline,
             owner_module.export_audit_retention_baseline,
