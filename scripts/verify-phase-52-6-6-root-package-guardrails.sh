@@ -81,7 +81,7 @@ expected_retained_owners = {
     "service_composition.py",
     "structured_events.py",
 }
-phase_numbered_pattern = re.compile(r"^phase\d+(?:_|\.py$)")
+phase_numbered_pattern = re.compile(r"^phase\d+")
 row_pattern = re.compile(
     r"^\| `(?P<module>[^`]+\.py)` \| `(?P<family>[^`]+)` \| "
     r"(?P<classification>[^|]+) \| (?P<decision>[^|][^|]*) \|$",

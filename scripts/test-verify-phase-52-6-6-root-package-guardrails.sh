@@ -72,6 +72,14 @@ assert_fails_with \
   "${phase_numbered_root_repo}" \
   "Phase 52.6.6 root package guardrail rejects phase-numbered root filenames: phase52_new_owner.py"
 
+phase_numbered_prefix_repo="${workdir}/phase-numbered-prefix-root"
+create_valid_repo "${phase_numbered_prefix_repo}"
+printf '%s\n' '"""Fixture phase-numbered prefix root file."""' \
+  >"${phase_numbered_prefix_repo}/control-plane/aegisops_control_plane/phase52foo.py"
+assert_fails_with \
+  "${phase_numbered_prefix_repo}" \
+  "Phase 52.6.6 root package guardrail rejects phase-numbered root filenames: phase52foo.py"
+
 missing_retained_owner_policy_repo="${workdir}/missing-retained-owner-policy"
 create_valid_repo "${missing_retained_owner_policy_repo}"
 perl -0pi -e 's/\n## 5\.3 Phase 52\.6\.6 Retained Root Owner Policy.*?(?=\n## 6\. Phase29 Boundary)//s' \

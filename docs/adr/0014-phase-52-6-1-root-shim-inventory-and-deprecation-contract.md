@@ -168,8 +168,6 @@ Run `bash scripts/verify-phase-52-5-2-layout-guardrail.sh`.
 
 Run `bash scripts/verify-phase-52-5-9-service-facade-freeze.sh`.
 
-Run `node <codex-supervisor-root>/dist/index.js issue-lint 1110 --config <supervisor-config-path>`.
-
 Run `node <codex-supervisor-root>/dist/index.js issue-lint 1111 --config <supervisor-config-path>`.
 
 ## 10. Non-Goals
