@@ -34,9 +34,9 @@ This contract cites the Phase 51.6 authority-boundary negative-test policy in `d
 
 | Component | Accepted version | Pin type | Known incompatible versions | Upgrade note |
 | --- | --- | --- | --- | --- |
-| manager | `4.12.0` | exact | Wazuh 3.x; unreviewed Wazuh 5.x; `latest`; RC; beta. | Upgrade evidence is deferred to a later Phase 53 child issue. |
-| indexer | `4.12.0` | exact | Wazuh 3.x; unreviewed Wazuh 5.x; `latest`; RC; beta. | Upgrade evidence is deferred to a later Phase 53 child issue. |
-| dashboard | `4.12.0` | exact | Wazuh 3.x; unreviewed Wazuh 5.x; `latest`; RC; beta. | Upgrade evidence is deferred to a later Phase 53 child issue. |
+| manager | `4.12.0` | exact | Wazuh 3.x; unreviewed Wazuh 5.x; `latest`; RC; beta. | Upgrade evidence expectations are defined by `docs/deployment/wazuh-upgrade-rollback-evidence-contract.md`. |
+| indexer | `4.12.0` | exact | Wazuh 3.x; unreviewed Wazuh 5.x; `latest`; RC; beta. | Upgrade evidence expectations are defined by `docs/deployment/wazuh-upgrade-rollback-evidence-contract.md`. |
+| dashboard | `4.12.0` | exact | Wazuh 3.x; unreviewed Wazuh 5.x; `latest`; RC; beta. | Upgrade evidence expectations are defined by `docs/deployment/wazuh-upgrade-rollback-evidence-contract.md`. |
 
 ## 5. Profile Expectations
 

@@ -1,0 +1,75 @@
+profile_id: smb-single-node
+product_profile: wazuh
+upgrade_rollback_evidence_contract_version: 2026-05-03
+status: accepted-contract
+related_issues:
+  - 1135
+  - 1136
+  - 1142
+evidence_owner: aegisops-release-evidence
+substrate_owner: wazuh
+authority_boundary: Wazuh upgrade and rollback evidence is subordinate release-evidence context only; Wazuh version, upgrade, rollback, manager, indexer, dashboard, source-health, and generated-config state cannot close, approve, execute, reconcile, release, gate, or mutate authoritative AegisOps records.
+authority_mutation_allowed: false
+full_upgrader_implemented: false
+upgrade_automation_allowed: false
+fleet_scale_management_allowed: false
+workflow_truth_source: aegisops-record-chain-only
+version_before: 4.12.0
+version_after: <reviewed-target-wazuh-version>
+rollback_owner: aegisops-release-owner
+rollback_trigger: reviewed validation failure, source-health mismatch, restore rehearsal failure, or release-gate rejection before profile-change acceptance
+components:
+  - manager
+  - indexer
+  - dashboard
+required_evidence_fields:
+  - version_before
+  - version_after
+  - rollback_owner
+  - rollback_trigger
+  - evidence_references
+  - known_limitations
+  - profile_change_handoff
+evidence_references:
+  - aegisops-release-gate-record
+  - wazuh-profile-diff-record
+  - source-health-projection-review
+  - backup-restore-rehearsal-record
+  - validation-rerun-result
+known_limitations:
+  - release-evidence-only
+  - no-full-wazuh-upgrader
+  - no-wazuh-upgrade-automation
+  - no-fleet-scale-wazuh-management
+  - no-beta-rc-ga-commercial-readiness-claim
+profile_change_handoff:
+  target: phase-53-closeout-release-evidence
+  recipient: aegisops-maintainers
+  review_state: pending-real-version-change
+  next_action: replace <reviewed-target-wazuh-version> with a reviewed target version before any future Wazuh profile version change is accepted
+component_evidence:
+  manager:
+    version_before: 4.12.0
+    version_after: <reviewed-target-wazuh-version>
+    rollback_target: last-reviewed-manager-profile-version
+    authority_note: Manager version remains subordinate substrate context only.
+  indexer:
+    version_before: 4.12.0
+    version_after: <reviewed-target-wazuh-version>
+    rollback_target: last-reviewed-indexer-profile-version
+    authority_note: Indexer version and contents are not AegisOps evidence truth.
+  dashboard:
+    version_before: 4.12.0
+    version_after: <reviewed-target-wazuh-version>
+    rollback_target: last-reviewed-dashboard-profile-version
+    authority_note: Dashboard version and UI state remain operator context only.
+negative_validation_tests:
+  - missing-rollback-owner
+  - missing-version-before
+  - missing-version-after
+  - missing-rollback-trigger
+  - missing-evidence-references
+  - missing-known-limitations
+  - missing-profile-change-handoff
+  - full-upgrader-claim
+  - version-state-as-release-truth

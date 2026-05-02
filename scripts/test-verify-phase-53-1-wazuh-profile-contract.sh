@@ -111,7 +111,7 @@ assert_fails_with \
 missing_dashboard_version_repo="${workdir}/missing-dashboard-version"
 create_valid_repo "${missing_dashboard_version_repo}"
 remove_text_from_contract "${missing_dashboard_version_repo}" \
-  "| dashboard | \`4.12.0\` | exact | Wazuh 3.x; unreviewed Wazuh 5.x; \`latest\`; RC; beta. | Upgrade evidence is deferred to a later Phase 53 child issue. |"
+  "| dashboard | \`4.12.0\` | exact | Wazuh 3.x; unreviewed Wazuh 5.x; \`latest\`; RC; beta. | Upgrade evidence expectations are defined by \`docs/deployment/wazuh-upgrade-rollback-evidence-contract.md\`. |"
 assert_fails_with \
   "${missing_dashboard_version_repo}" \
   "Missing complete Phase 53.1 Wazuh version matrix row: dashboard"
