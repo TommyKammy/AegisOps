@@ -11,13 +11,6 @@ if str(TESTS_ROOT) not in sys.path:
 
 import _service_persistence_support as support
 from aegisops.control_plane import action_review_projection
-from aegisops.control_plane import action_review_chain
-from aegisops.control_plane import action_review_coordination
-from aegisops.control_plane import action_review_index
-from aegisops.control_plane import action_review_inspection
-from aegisops.control_plane import action_review_path_health
-from aegisops.control_plane import action_review_timeline
-from aegisops.control_plane import action_review_visibility
 from aegisops.control_plane import action_review_write_surface
 from aegisops.control_plane.actions.review import (
     action_review_chain as action_review_package_chain,
@@ -46,6 +39,13 @@ from aegisops.control_plane.actions.review import (
 from aegisops.control_plane.actions.review import (
     action_review_write_surface as action_review_package_write_surface,
 )
+from aegisops_control_plane import action_review_chain
+from aegisops_control_plane import action_review_coordination
+from aegisops_control_plane import action_review_index
+from aegisops_control_plane import action_review_inspection
+from aegisops_control_plane import action_review_path_health
+from aegisops_control_plane import action_review_timeline
+from aegisops_control_plane import action_review_visibility
 from _service_persistence_support import (
     ActionExecutionRecord,
     ActionRequestRecord,

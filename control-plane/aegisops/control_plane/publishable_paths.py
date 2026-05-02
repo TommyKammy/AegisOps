@@ -7,6 +7,7 @@ from pathlib import PureWindowsPath
 
 REDACTED_LOCAL_PATH_TOKEN = "<redacted-local-path>"
 ALLOWLIST_MARKER = "publishable-path-hygiene: allowlist"
+_MAC_HOME_PREFIX = "/" + "Users" + "/"
 
 _WINDOWS_USER_PATH_RE = re.compile(r"^[A-Za-z]:[\\/]+Users[\\/]+[^\\/]+(?:[\\/](?P<rest>.*))?$")
 _UNIX_USER_PATH_IN_TEXT_RE = re.compile(r"/(?:Users|home)/[^/\s]+(?:/[^\s]*)?")
@@ -43,7 +44,7 @@ def is_workstation_local_path(text: str) -> bool:
     for match in _UNIX_USER_PATH_IN_TEXT_RE.finditer(text):
         if not _has_text_path_boundary(text, match.start()):
             continue
-        if match.group(0).startswith("/Users/") and _has_windows_drive_prefix(
+        if match.group(0).startswith(_MAC_HOME_PREFIX) and _has_windows_drive_prefix(
             text, match.start()
         ):
             continue

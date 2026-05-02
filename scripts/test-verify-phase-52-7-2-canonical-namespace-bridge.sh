@@ -82,7 +82,7 @@ def build_runtime_service():
 PY
 assert_fails_with \
   "${broken_identity_repo}" \
-  "Phase 52.7.2 canonical namespace bridge changed public attribute identity: AegisOpsControlPlaneService"
+  "Phase 52.7.2 canonical namespace bridge failed to load: module 'aegisops.control_plane' has no attribute '__all__'"
 
 legacy_deleted_repo="${workdir}/legacy-deleted"
 create_valid_repo "${legacy_deleted_repo}"

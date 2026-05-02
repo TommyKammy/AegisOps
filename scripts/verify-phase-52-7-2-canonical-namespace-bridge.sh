@@ -30,8 +30,7 @@ workstation_path_pattern="(/${mac_home_segment}/[^[:space:]]+|/${linux_home_segm
 
 if grep -R -E "${workstation_path_pattern}" \
   "${doc_path}" \
-  "${bridge_root}/__init__.py" \
-  "${bridge_package}/__init__.py" \
+  "${bridge_root}" \
   "${repo_root}/control-plane/tests/test_phase52_7_2_canonical_namespace_bridge.py" >/dev/null; then
   echo "Forbidden Phase 52.7.2 canonical namespace bridge: workstation-local absolute path detected" >&2
   exit 1
@@ -77,7 +76,7 @@ module_pairs = {
     "aegisops.control_plane.actions.review.action_review_chain": (
         "aegisops_control_plane.actions.review.action_review_chain"
     ),
-    "aegisops.control_plane.audit_export": "aegisops_control_plane.reporting.audit_export",
+    "aegisops.control_plane.reporting.audit_export": "aegisops_control_plane.reporting.audit_export",
 }
 
 for canonical_name, legacy_name in module_pairs.items():

@@ -214,10 +214,6 @@ def register_legacy_import_aliases(
         target = importlib.import_module(_canonical_module_name(alias.target_module))
         sys.modules[legacy_module] = target
         _bind_legacy_module_to_parent(legacy_module, target)
-        canonical_alias = _canonical_module_name(legacy_module)
-        if canonical_alias != legacy_module:
-            sys.modules[canonical_alias] = target
-            _bind_legacy_module_to_parent(canonical_alias, target)
         registered[legacy_module] = target
     return registered
 
