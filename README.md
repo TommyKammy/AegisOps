@@ -40,6 +40,7 @@ Canonical cross-phase boundary reference:
 - [Phase 53.3 Wazuh intake binding contract](docs/deployment/wazuh-manager-intake-binding-contract.md) defines the manager-to-AegisOps intake URL, reviewed proxy route, shared-secret custody reference, provenance fields, and analytic-signal admission boundary for Wazuh-origin events.
 - [Phase 53.5 Wazuh agent enrollment helper contract](docs/deployment/wazuh-agent-enrollment-helper-contract.md) defines the one-endpoint enrollment helper posture, prerequisites, rollback notes, safety warnings, and fleet-management exclusion for the Wazuh profile.
 - [Phase 53.6 Wazuh source-health projection contract](docs/deployment/wazuh-source-health-projection-contract.md) defines manager, dashboard, indexer, intake, signal freshness, parser, volume, credential, unavailable, stale, degraded, and mismatched source-health projection states for the Wazuh profile.
+- [Phase 53.7 Wazuh upgrade rollback evidence contract](docs/deployment/wazuh-upgrade-rollback-evidence-contract.md) defines version before/after, rollback owner, rollback trigger, evidence references, known limitations, and profile-change handoff expectations without implementing a Wazuh upgrader.
 
 ## Product positioning
 
@@ -94,6 +95,8 @@ The Phase 53.3 Wazuh intake binding contract is defined by the [Phase 53.3 Wazuh
 The Phase 53.5 Wazuh agent enrollment helper contract is defined by the [Phase 53.5 Wazuh agent enrollment helper contract](docs/deployment/wazuh-agent-enrollment-helper-contract.md).
 
 The Phase 53.6 Wazuh source-health projection contract is defined by the [Phase 53.6 Wazuh source-health projection contract](docs/deployment/wazuh-source-health-projection-contract.md).
+
+The Phase 53.7 Wazuh upgrade rollback evidence contract is defined by the [Phase 53.7 Wazuh upgrade rollback evidence contract](docs/deployment/wazuh-upgrade-rollback-evidence-contract.md).
 
 Wazuh detects, AegisOps decides, records, and reconciles, and Shuffle executes reviewed delegated routine work.
 
