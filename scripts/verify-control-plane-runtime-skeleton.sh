@@ -8,12 +8,12 @@ required_files=(
   "control-plane/README.md"
   "control-plane/main.py"
   "control-plane/aegisops_control_plane/__init__.py"
-  "control-plane/aegisops_control_plane/config.py"
-  "control-plane/aegisops_control_plane/service.py"
-  "control-plane/aegisops_control_plane/adapters/__init__.py"
-  "control-plane/aegisops_control_plane/adapters/opensearch.py"
-  "control-plane/aegisops_control_plane/adapters/postgres.py"
-  "control-plane/aegisops_control_plane/adapters/n8n.py"
+  "control-plane/aegisops/control_plane/config.py"
+  "control-plane/aegisops/control_plane/service.py"
+  "control-plane/aegisops/control_plane/adapters/__init__.py"
+  "control-plane/aegisops/control_plane/adapters/opensearch.py"
+  "control-plane/aegisops/control_plane/adapters/postgres.py"
+  "control-plane/aegisops/control_plane/adapters/n8n.py"
   "control-plane/tests/test_runtime_skeleton.py"
   "control-plane/config/local.env.sample"
 )
@@ -86,7 +86,7 @@ if grep -Eq '://[^<[:space:]]+:[^<[:space:]]+@' "${env_sample}"; then
   exit 1
 fi
 
-if ! grep -Fq 'AegisOpsControlPlaneService' "${repo_root}/control-plane/aegisops_control_plane/service.py"; then
+if ! grep -Fq 'AegisOpsControlPlaneService' "${repo_root}/control-plane/aegisops/control_plane/service.py"; then
   echo "Control-plane service module must define AegisOpsControlPlaneService." >&2
   exit 1
 fi

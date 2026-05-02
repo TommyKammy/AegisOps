@@ -32,12 +32,13 @@ for required_path in required_paths:
 
 approved_legacy_python_files = {
     "control-plane/aegisops/control_plane/__init__.py",
+    "control-plane/aegisops/control_plane/core/legacy_import_aliases.py",
     "control-plane/aegisops_control_plane/__init__.py",
-    "control-plane/aegisops_control_plane/core/legacy_import_aliases.py",
     "control-plane/tests/test_phase52_6_3_legacy_import_alias_registry.py",
     "control-plane/tests/test_phase52_6_4_root_shim_alias_removal.py",
     "control-plane/tests/test_phase52_6_5_phase29_root_filename_retirement.py",
     "control-plane/tests/test_phase52_7_2_canonical_namespace_bridge.py",
+    "control-plane/tests/test_phase52_7_4_physical_layout_migration.py",
 }
 
 approved_legacy_text_files = {
@@ -93,6 +94,7 @@ approved_legacy_text_files = {
     "scripts/test-verify-phase-52-7-1-namespace-layout-inventory-contract.sh",
     "scripts/test-verify-phase-52-7-2-canonical-namespace-bridge.sh",
     "scripts/test-verify-phase-52-7-3-repo-owned-canonical-namespace.sh",
+    "scripts/test-verify-phase-52-7-4-physical-layout-migration.sh",
     "scripts/test-verify-phase-9-control-plane-runtime-boundary-validation.sh",
     "scripts/verify-control-plane-runtime-skeleton.sh",
     "scripts/verify-maintainability-hotspots.sh",
@@ -119,6 +121,7 @@ approved_legacy_text_files = {
     "scripts/verify-phase-52-7-1-namespace-layout-inventory-contract.sh",
     "scripts/verify-phase-52-7-2-canonical-namespace-bridge.sh",
     "scripts/verify-phase-52-7-3-repo-owned-canonical-namespace.sh",
+    "scripts/verify-phase-52-7-4-physical-layout-migration.sh",
 } | approved_legacy_python_files
 
 legacy_import_pattern = re.compile(r"\baegisops_control_plane(?:\.|\b)")

@@ -7,7 +7,7 @@ import unittest
 
 
 CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
-PACKAGE_ROOT = CONTROL_PLANE_ROOT / "aegisops_control_plane"
+LEGACY_PACKAGE_ROOT = CONTROL_PLANE_ROOT / "aegisops_control_plane"
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
@@ -46,7 +46,9 @@ class Phase5265Phase29RootFilenameRetirementTests(unittest.TestCase):
 
         for legacy_module, target_module in expected_aliases.items():
             with self.subTest(legacy_module=legacy_module):
-                legacy_file = PACKAGE_ROOT / f"{legacy_module.rsplit('.', 1)[-1]}.py"
+                legacy_file = (
+                    LEGACY_PACKAGE_ROOT / f"{legacy_module.rsplit('.', 1)[-1]}.py"
+                )
                 self.assertFalse(legacy_file.exists(), legacy_file)
                 self.assertIn(legacy_module, registry.LEGACY_IMPORT_ALIASES)
                 self.assertEqual(

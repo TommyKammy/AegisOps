@@ -66,7 +66,7 @@ class Phase5272CanonicalNamespaceBridgeTests(unittest.TestCase):
             "aegisops.control_plane.actions.review.action_review_chain": (
                 "aegisops_control_plane.actions.review.action_review_chain"
             ),
-            "aegisops.control_plane.audit_export": (
+            "aegisops.control_plane.reporting.audit_export": (
                 "aegisops_control_plane.reporting.audit_export"
             ),
         }
@@ -76,6 +76,44 @@ class Phase5272CanonicalNamespaceBridgeTests(unittest.TestCase):
                 canonical = importlib.import_module(canonical_name)
                 legacy = importlib.import_module(legacy_name)
                 self.assertIs(canonical, legacy)
+
+    def test_legacy_root_aliases_do_not_publish_synthetic_canonical_modules(
+        self,
+    ) -> None:
+        script = textwrap.dedent(
+            """
+            import importlib
+            import pathlib
+            import sys
+
+            control_plane_root = pathlib.Path.cwd()
+            sys.path.insert(0, str(control_plane_root))
+
+            importlib.import_module("aegisops.control_plane")
+
+            synthetic_canonical_names = (
+                "aegisops.control_plane.action_review_chain",
+                "aegisops.control_plane.audit_export",
+                "aegisops.control_plane.phase29_shadow_dataset",
+            )
+            for module_name in synthetic_canonical_names:
+                if module_name in sys.modules:
+                    raise SystemExit(f"synthetic canonical module registered: {module_name}")
+                try:
+                    importlib.import_module(module_name)
+                except ModuleNotFoundError as exc:
+                    if exc.name == module_name:
+                        continue
+                    raise
+                raise SystemExit(f"synthetic canonical module imported: {module_name}")
+            """
+        )
+
+        subprocess.run(
+            [sys.executable, "-c", script],
+            check=True,
+            cwd=CONTROL_PLANE_ROOT,
+        )
 
     def test_legacy_imports_remain_available_after_canonical_bridge(self) -> None:
         importlib.import_module("aegisops.control_plane")

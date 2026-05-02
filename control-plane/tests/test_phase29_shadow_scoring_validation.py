@@ -14,7 +14,6 @@ for candidate in (CONTROL_PLANE_ROOT, TESTS_ROOT):
 
 
 from aegisops.control_plane.models import EvidenceRecord, ReconciliationRecord
-import aegisops.control_plane.phase29_shadow_scoring as legacy_shadow_scoring
 from aegisops.control_plane.ml_shadow.dataset import (
     Phase29ShadowDatasetSnapshot,
     generate_reviewed_shadow_dataset,
@@ -24,6 +23,7 @@ from aegisops.control_plane.ml_shadow.scoring import (
     Phase29ShadowStreamingBaselineScorer,
     score_shadow_dataset_offline,
 )
+import aegisops_control_plane.phase29_shadow_scoring as legacy_shadow_scoring
 from support.service_persistence import ServicePersistenceTestBase
 
 

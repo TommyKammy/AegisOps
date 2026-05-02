@@ -76,7 +76,7 @@ module_pairs = {
     "aegisops.control_plane.actions.review.action_review_chain": (
         "aegisops_control_plane.actions.review.action_review_chain"
     ),
-    "aegisops.control_plane.audit_export": "aegisops_control_plane.reporting.audit_export",
+    "aegisops.control_plane.reporting.audit_export": "aegisops_control_plane.reporting.audit_export",
 }
 
 for canonical_name, legacy_name in module_pairs.items():

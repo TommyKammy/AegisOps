@@ -266,11 +266,12 @@ class Phase28ExternalEvidenceBoundaryRefactorTests(unittest.TestCase):
         self,
     ) -> None:
         service_source = (
-            CONTROL_PLANE_ROOT / "aegisops_control_plane" / "service.py"
+            CONTROL_PLANE_ROOT / "aegisops" / "control_plane" / "service.py"
         ).read_text(encoding="utf-8")
         facade_source = (
             CONTROL_PLANE_ROOT
-            / "aegisops_control_plane"
+            / "aegisops"
+            / "control_plane"
             / "evidence"
             / "external_evidence_facade.py"
         ).read_text(encoding="utf-8")

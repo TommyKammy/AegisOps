@@ -10,4 +10,4 @@
 # relocation slice, so this baseline records the accepted current ceiling and
 # fails on silent re-growth. A future ADR or maintainability backlog must lower
 # or replace these limits before unrelated feature expansion lands in the facade.
-control-plane/aegisops_control_plane/service.py max_lines=1393 max_effective_lines=1241 max_facade_methods=95 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.13.5 issue=#1035
+control-plane/aegisops/control_plane/service.py max_lines=1393 max_effective_lines=1241 max_facade_methods=95 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.13.5 issue=#1035

@@ -10,8 +10,20 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
     @staticmethod
-    def _read(relative_path: str) -> str:
+    def _path(relative_path: str) -> pathlib.Path:
         path = REPO_ROOT / relative_path
+        if path.exists():
+            return path
+        canonical_relative_path = relative_path.replace(
+            "control-plane/aegisops_control_plane/",
+            "control-plane/aegisops/control_plane/",
+            1,
+        )
+        return REPO_ROOT / canonical_relative_path
+
+    @staticmethod
+    def _read(relative_path: str) -> str:
+        path = ServiceBoundaryRefactorRegressionValidationTests._path(relative_path)
         if not path.exists():
             raise AssertionError(f"expected regression module at {path}")
         return path.read_text(encoding="utf-8")

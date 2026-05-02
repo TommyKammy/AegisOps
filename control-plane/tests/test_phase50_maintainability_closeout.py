@@ -11,8 +11,19 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
 class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
-    def _read(self, relative_path: str) -> str:
+    def _path(self, relative_path: str) -> pathlib.Path:
         path = REPO_ROOT / relative_path
+        if path.exists():
+            return path
+        canonical_relative_path = relative_path.replace(
+            "control-plane/aegisops_control_plane/",
+            "control-plane/aegisops/control_plane/",
+            1,
+        )
+        return REPO_ROOT / canonical_relative_path
+
+    def _read(self, relative_path: str) -> str:
+        path = self._path(relative_path)
         if not path.exists():
             raise AssertionError(f"expected Phase 50 closeout artifact at {path}")
         return path.read_text(encoding="utf-8")
@@ -64,7 +75,7 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
     def _baseline_metadata(self) -> dict[str, str]:
         for line in self._read("docs/maintainability-hotspot-baseline.txt").splitlines():
             stripped = line.strip()
-            if stripped.startswith("control-plane/aegisops_control_plane/service.py"):
+            if stripped.startswith("control-plane/aegisops/control_plane/service.py"):
                 metadata: dict[str, str] = {}
                 for part in stripped.split()[1:]:
                     key, value = part.split("=", 1)
@@ -253,7 +264,7 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
         )
 
         self.assertIn("Known maintainability hotspot baseline remains present", result.stdout)
-        self.assertIn("control-plane/aegisops_control_plane/service.py", result.stdout)
+        self.assertIn("control-plane/aegisops/control_plane/service.py", result.stdout)
         self.assertNotIn("baseline limits were exceeded", result.stderr)
 
     def test_negative_verifier_coverage_keeps_regrowth_path(self) -> None:

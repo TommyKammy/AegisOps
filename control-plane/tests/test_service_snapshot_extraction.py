@@ -15,7 +15,7 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 class ServiceSnapshotExtractionTests(unittest.TestCase):
     def test_service_preserves_legacy_snapshot_imports_from_dto_module(self) -> None:
         from aegisops.control_plane import service
-        from aegisops.control_plane import service_snapshots
+        from aegisops_control_plane import service_snapshots
 
         snapshot_names = (
             "RuntimeSnapshot",

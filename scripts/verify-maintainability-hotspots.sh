@@ -69,13 +69,25 @@ def tracked_python_files() -> list[str]:
             str(repo_root),
             "ls-files",
             "--",
+            ":(glob)control-plane/aegisops/control_plane/**/*.py",
             ":(glob)control-plane/aegisops_control_plane/**/*.py",
         ],
         capture_output=True,
         text=True,
         check=True,
     )
-    return [line for line in result.stdout.splitlines() if line.endswith(".py")]
+    paths = {
+        line
+        for line in result.stdout.splitlines()
+        if line.endswith(".py") and (repo_root / line).is_file()
+    }
+    canonical_root = repo_root / "control-plane" / "aegisops" / "control_plane"
+    if canonical_root.exists():
+        paths.update(
+            path.relative_to(repo_root).as_posix()
+            for path in canonical_root.rglob("*.py")
+        )
+    return sorted(paths)
 
 
 def read_baseline() -> dict[str, dict[str, str]]:
