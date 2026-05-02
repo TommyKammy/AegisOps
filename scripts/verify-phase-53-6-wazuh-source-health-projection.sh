@@ -268,7 +268,7 @@ done
 
 for secret_scan_path in "${contract_path}" "${artifact_path}"; do
   if contains_secret_looking_value "${secret_scan_path}"; then
-    echo "Forbidden Phase 53.6 Wazuh source-health artifact: committed secret-looking value detected" >&2
+    echo "Forbidden Phase 53.6 Wazuh source-health artifact: committed secret-looking value detected in ${secret_scan_path}" >&2
     exit 1
   fi
 done
