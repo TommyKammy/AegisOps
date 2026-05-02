@@ -100,6 +100,14 @@ assert_fails_with \
   "${missing_unavailable_repo}" \
   "Missing Phase 53.6 Wazuh source-health state: unavailable"
 
+missing_stale_source_repo="${workdir}/missing-stale-source"
+create_valid_repo "${missing_stale_source_repo}"
+perl -0pi -e 's/^  - stale_source\n//m' \
+  "${missing_stale_source_repo}/docs/deployment/profiles/smb-single-node/wazuh/source-health-projection.yaml"
+assert_fails_with \
+  "${missing_stale_source_repo}" \
+  "Missing Phase 53.6 Wazuh source-health state: stale_source"
+
 missing_parser_failure_repo="${workdir}/missing-parser-failure"
 create_valid_repo "${missing_parser_failure_repo}"
 perl -0pi -e 's/^  - parser_failure\n//m' \
@@ -146,6 +154,14 @@ printf '%s\n' "health_secret: CorrectHorseBatteryStaple42" \
   >>"${secret_looking_value_repo}/docs/deployment/profiles/smb-single-node/wazuh/source-health-projection.yaml"
 assert_fails_with \
   "${secret_looking_value_repo}" \
+  "Forbidden Phase 53.6 Wazuh source-health artifact: committed secret-looking value detected"
+
+contract_secret_looking_value_repo="${workdir}/contract-secret-looking-value"
+create_valid_repo "${contract_secret_looking_value_repo}"
+printf '%s\n' "health_secret: CorrectHorseBatteryStaple42" \
+  >>"${contract_secret_looking_value_repo}/docs/deployment/wazuh-source-health-projection-contract.md"
+assert_fails_with \
+  "${contract_secret_looking_value_repo}" \
   "Forbidden Phase 53.6 Wazuh source-health artifact: committed secret-looking value detected"
 
 authority_truth_repo="${workdir}/authority-truth"
