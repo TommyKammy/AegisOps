@@ -164,12 +164,28 @@ assert_fails_with \
   "${secret_looking_value_repo}" \
   "Forbidden Phase 53.6 Wazuh source-health artifact: committed secret-looking value detected"
 
+quoted_secret_looking_value_repo="${workdir}/quoted-secret-looking-value"
+create_valid_repo "${quoted_secret_looking_value_repo}"
+printf '%s\n' 'health_token: "CorrectHorseBatteryStaple42"' \
+  >>"${quoted_secret_looking_value_repo}/docs/deployment/profiles/smb-single-node/wazuh/source-health-projection.yaml"
+assert_fails_with \
+  "${quoted_secret_looking_value_repo}" \
+  "Forbidden Phase 53.6 Wazuh source-health artifact: committed secret-looking value detected"
+
 contract_secret_looking_value_repo="${workdir}/contract-secret-looking-value"
 create_valid_repo "${contract_secret_looking_value_repo}"
 printf '%s\n' "health_secret: CorrectHorseBatteryStaple42" \
   >>"${contract_secret_looking_value_repo}/docs/deployment/wazuh-source-health-projection-contract.md"
 assert_fails_with \
   "${contract_secret_looking_value_repo}" \
+  "Forbidden Phase 53.6 Wazuh source-health artifact: committed secret-looking value detected"
+
+quoted_contract_secret_looking_value_repo="${workdir}/quoted-contract-secret-looking-value"
+create_valid_repo "${quoted_contract_secret_looking_value_repo}"
+printf '%s\n' "health_password: 'CorrectHorseBatteryStaple42'" \
+  >>"${quoted_contract_secret_looking_value_repo}/docs/deployment/wazuh-source-health-projection-contract.md"
+assert_fails_with \
+  "${quoted_contract_secret_looking_value_repo}" \
   "Forbidden Phase 53.6 Wazuh source-health artifact: committed secret-looking value detected"
 
 authority_truth_repo="${workdir}/authority-truth"
