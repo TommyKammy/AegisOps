@@ -5,10 +5,10 @@
 - **Owners**: AegisOps maintainers
 - **Related Baseline**: `docs/adr/0012-phase-52-5-1-control-plane-layout-inventory-and-migration-contract.md`
 - **Product**: AegisOps
-- **Related Issues**: #1105, #1106
+- **Related Issues**: #1105, #1106, #1110
 - **Depends On**: #1094
 - **Supersedes**: N/A
-- **Superseded By**: N/A
+- **Superseded By**: Phase 52.6.5 retires the Phase29 root filenames listed by this baseline.
 
 ---
 
@@ -28,7 +28,7 @@ The root shim inventory does not change authorization, provenance, reconciliatio
 
 ## 3. Phase 52.5 Root File Baseline
 
-The Phase 52.6.4 root-level Python file count under `control-plane/aegisops_control_plane/` is `41` after removing simple physical root shims covered by the legacy import alias registry and focused compatibility tests.
+The Phase 52.6.5 root-level Python file count under `control-plane/aegisops_control_plane/` is `37` after removing simple physical root shims and the Phase29 root filenames covered by the legacy import alias registry and focused compatibility tests.
 
 The baseline counts only direct `.py` files in `control-plane/aegisops_control_plane/`; package-owned files below subdirectories are tracked by ADR-0012 and stay outside this root shim baseline.
 
@@ -73,10 +73,6 @@ If caller evidence is incomplete, malformed, ambiguous, or inferred only from na
 | `models.py` | `core` | retained owner | Retain physically until a later owner-move issue proves identical behavior and caller compatibility. |
 | `operator_inspection.py` | `reporting` | retained owner | Retain physically until a later owner-move issue proves identical behavior and caller compatibility. |
 | `persistence_lifecycle.py` | `core` | retained owner | Retain physically until a later owner-move issue proves identical behavior and caller compatibility. |
-| `phase29_evidently_drift_visibility.py` | `ml_shadow` | compatibility adapter | Retain as a Phase29 legacy adapter; `ml_shadow/drift_visibility.py` is the domain-owned `ml_shadow` implementation. |
-| `phase29_mlflow_shadow_model_registry.py` | `ml_shadow` | compatibility adapter | Retain as a Phase29 legacy adapter; `ml_shadow/mlflow_registry.py` is the domain-owned `ml_shadow` implementation. |
-| `phase29_shadow_dataset.py` | `ml_shadow` | compatibility adapter | Retain as a Phase29 legacy adapter; `ml_shadow/dataset.py` is the domain-owned `ml_shadow` implementation. |
-| `phase29_shadow_scoring.py` | `ml_shadow` | compatibility adapter | Retain as a Phase29 legacy adapter; `ml_shadow/scoring.py` is the domain-owned `ml_shadow` implementation. |
 | `pilot_reporting_export.py` | `reporting` | alias candidate | Retain physically because Phase 49.5 reporting export docs and tests still name this root file directly. |
 | `publishable_paths.py` | `core` | retained owner | Retain physically until a later owner-move issue proves identical behavior and caller compatibility. |
 | `readiness_contracts.py` | `runtime` | alias candidate | Retain physically because Phase 47 responsibility-decomposition tests and docs still name this root file directly. |
@@ -98,13 +94,21 @@ Phase 52.6.4 removed these 21 simple physical root shims after adding explicit l
 
 `action_receipt_validation.py`, `action_review_chain.py`, `action_review_coordination.py`, `action_review_index.py`, `action_review_inspection.py`, `action_review_path_health.py`, `action_review_timeline.py`, `action_review_visibility.py`, `assistant_provider.py`, `detection_lifecycle_helpers.py`, `detection_native_context.py`, `entrypoint_support.py`, `execution_coordinator.py`, `execution_coordinator_delegation.py`, `execution_coordinator_reconciliation.py`, `external_evidence_endpoint.py`, `external_evidence_facade.py`, `external_evidence_misp.py`, `external_evidence_osquery.py`, `operations.py`, and `service_snapshots.py`.
 
-Retained blockers remain physical root files: real root owners (`config.py`, `models.py`, `record_validation.py`, and related core owners), the public `service.py` facade, Phase29 compatibility adapters, and root shim files that current regression tests still inspect directly.
+Retained blockers remain physical root files: real root owners (`config.py`, `models.py`, `record_validation.py`, and related core owners), the public `service.py` facade, and root shim files that current regression tests still inspect directly.
+
+## 5.2 Phase 52.6.5 Removed Phase29 Root Filename List
+
+Phase 52.6.5 removed these four Phase29-named root files after adding explicit legacy import alias rows and the focused `control-plane/tests/test_phase52_6_5_phase29_root_filename_retirement.py` regression:
+
+`phase29_shadow_dataset.py`, `phase29_shadow_scoring.py`, `phase29_evidently_drift_visibility.py`, and `phase29_mlflow_shadow_model_registry.py`.
+
+The production-owned implementations remain under `ml_shadow/dataset.py`, `ml_shadow/scoring.py`, `ml_shadow/drift_visibility.py`, and `ml_shadow/mlflow_registry.py`. The legacy scoring wrapper behavior that differs from canonical scoring now lives in `ml_shadow/legacy_scoring_adapter.py`.
 
 ## 6. Phase29 Boundary
 
-The Phase29 root files are legacy compatibility adapters only. They are not production owners.
+The retired Phase29 root filenames were legacy compatibility adapters only. They were not production owners.
 
-The domain-owned implementations are the directly linked `ml_shadow` modules listed in the inventory. Any later removal plan must test both the legacy `phase29_*` import path and the domain-owned `ml_shadow` import path before deleting a root adapter.
+The domain-owned implementations are the directly linked `ml_shadow` modules listed in the retired filename list. Legacy `phase29_*` import paths remain available only through the alias registry and focused compatibility tests.
 
 ## 7. Deprecation Decision Rules
 
@@ -136,11 +140,15 @@ Run `bash scripts/verify-phase-52-6-3-legacy-import-alias-registry.sh`.
 
 Run `bash scripts/test-verify-phase-52-6-3-legacy-import-alias-registry.sh`.
 
-Run `node <codex-supervisor-root>/dist/index.js issue-lint 1108 --config <supervisor-config-path>`.
+Run `bash scripts/verify-phase-52-6-5-retire-phase29-root-filenames.sh`.
+
+Run `bash scripts/test-verify-phase-52-6-5-retire-phase29-root-filenames.sh`.
+
+Run `node <codex-supervisor-root>/dist/index.js issue-lint 1110 --config <supervisor-config-path>`.
 
 ## 10. Non-Goals
 
-- Only `audit_export.py` is removed as the Phase 52.6.3 alias-registry proof of pattern.
+- No additional root file beyond the Phase 52.6.4 and Phase 52.6.5 deletion sets is removed by this update.
 - No import path is changed.
 - No public package name is changed.
 - No outer repository directory is changed.

@@ -23,16 +23,16 @@ required_headings=(
 required_phrases=(
   "- **Status**: Accepted"
   "- **Date**: 2026-05-02"
-  "- **Related Issues**: #1105, #1106"
+  "- **Related Issues**: #1105, #1106, #1110"
   "- **Depends On**: #1094"
   "This contract is documentation and verification only. Phase 52.6.3 removes only \`audit_export.py\` as the proof-of-pattern alias-registry candidate; it does not delete broad shim sets, rename the public package, change the outer \`control-plane/\` directory, start Wazuh profile work, start Shuffle profile work, or alter runtime behavior."
   "AegisOps control-plane records remain authoritative for alert, case, evidence, approval, action request, execution receipt, reconciliation, audit, limitation, release, gate, and closeout truth."
   "Wazuh, Shuffle, tickets, assistant output, generated config, CLI status, demo data, adapters, DTOs, projections, summaries, compatibility shims, alias rows, and operator-facing text remain subordinate context."
   "The root shim inventory does not change authorization, provenance, reconciliation, snapshot, backup, restore, export, readiness, assistant, evidence, action-execution, Wazuh, Shuffle, ticket, CLI, HTTP, or deployment behavior."
-  "The Phase 52.6.4 root-level Python file count under \`control-plane/aegisops_control_plane/\` is \`41\` after removing simple physical root shims covered by the legacy import alias registry and focused compatibility tests."
+  "The Phase 52.6.5 root-level Python file count under \`control-plane/aegisops_control_plane/\` is \`37\` after removing simple physical root shims and the Phase29 root filenames covered by the legacy import alias registry and focused compatibility tests."
   "The baseline counts only direct \`.py\` files in \`control-plane/aegisops_control_plane/\`; package-owned files below subdirectories are tracked by ADR-0012 and stay outside this root shim baseline."
-  "The Phase29 root files are legacy compatibility adapters only. They are not production owners."
-  "The domain-owned implementations are the directly linked \`ml_shadow\` modules listed in the inventory. Any later removal plan must test both the legacy \`phase29_*\` import path and the domain-owned \`ml_shadow\` import path before deleting a root adapter."
+  "The retired Phase29 root filenames were legacy compatibility adapters only. They were not production owners."
+  "The domain-owned implementations are the directly linked \`ml_shadow\` modules listed in the retired filename list. Legacy \`phase29_*\` import paths remain available only through the alias registry and focused compatibility tests."
   "Physical root shim deletion is allowed only when a later issue records the exact root file, replacement owner import path, caller evidence, deprecation window, focused legacy-import regression, rollback path, and authority-boundary impact."
   "Alias preservation is allowed only when the alias remains a narrow reference to the moved owner and does not make compatibility state, summary text, or module identity authoritative workflow truth."
   "Retained blockers stay physically present until the referenced compatibility policy is superseded by a later accepted ADR or issue-specific contract."
@@ -42,7 +42,9 @@ required_phrases=(
   "Run \`bash scripts/verify-publishable-path-hygiene.sh\`."
   "Run \`bash scripts/verify-phase-52-6-3-legacy-import-alias-registry.sh\`."
   "Run \`bash scripts/test-verify-phase-52-6-3-legacy-import-alias-registry.sh\`."
-  "Run \`node <codex-supervisor-root>/dist/index.js issue-lint 1108 --config <supervisor-config-path>\`."
+  "Run \`bash scripts/verify-phase-52-6-5-retire-phase29-root-filenames.sh\`."
+  "Run \`bash scripts/test-verify-phase-52-6-5-retire-phase29-root-filenames.sh\`."
+  "Run \`node <codex-supervisor-root>/dist/index.js issue-lint 1110 --config <supervisor-config-path>\`."
 )
 
 allowed_classifications=(
@@ -205,9 +207,9 @@ if extra:
     )
     sys.exit(1)
 
-if len(actual_modules) != 41:
+if len(actual_modules) != 37:
     print(
-        f"Phase 52.6.1 root shim inventory expected Phase 52.6.4 root count of 41 files, found {len(actual_modules)}.",
+        f"Phase 52.6.1 root shim inventory expected Phase 52.6.5 root count of 37 files, found {len(actual_modules)}.",
         file=sys.stderr,
     )
     sys.exit(1)
@@ -228,7 +230,6 @@ if empty_decisions:
 
 required_classifications = {
     "retained owner",
-    "compatibility adapter",
     "retained compatibility blocker",
 }
 missing_classifications = sorted(required_classifications - {row[0] for row in rows.values()})
@@ -241,16 +242,10 @@ if missing_classifications:
     sys.exit(1)
 
 phase29_modules = sorted(module for module in actual_modules if module.startswith("phase29_"))
-bad_phase29 = [
-    module
-    for module in phase29_modules
-    if rows[module][0] != "compatibility adapter"
-    or "domain-owned `ml_shadow` implementation" not in rows[module][1]
-]
-if bad_phase29:
+if phase29_modules:
     print(
-        "Phase 52.6.1 root shim inventory must classify Phase29 root files as compatibility adapters separate from domain-owned ml_shadow implementations: "
-        + ", ".join(bad_phase29),
+        "Phase 52.6.1 root shim inventory must not retain Phase29 root filenames after Phase 52.6.5: "
+        + ", ".join(phase29_modules),
         file=sys.stderr,
     )
     sys.exit(1)
@@ -265,6 +260,6 @@ if rows.get("service.py", ("", ""))[0] != "retained compatibility blocker":
 print(
     "Phase 52.6.1 root shim inventory classifies "
     f"{len(actual_modules)} root Python files, records the Phase 52.5 baseline, "
-    "separates Phase29 adapters from ml_shadow owners, and documents deprecation rules."
+    "keeps Phase29 root filenames retired, and documents deprecation rules."
 )
 PY

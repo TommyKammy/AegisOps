@@ -1,4 +1,4 @@
-"""Compatibility shim for the legacy Phase 29 shadow scoring import path."""
+"""Compatibility adapter for the legacy Phase 29 shadow scoring import path."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from dataclasses import replace
 from datetime import datetime
 from typing import Mapping
 
-from .ml_shadow import scoring as _impl
+from . import scoring as _impl
 
 
 Phase29ShadowScoringError = _impl.Phase29ShadowScoringError

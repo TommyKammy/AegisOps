@@ -5,7 +5,7 @@
 - **Owners**: AegisOps maintainers
 - **Related Baseline**: `docs/adr/0014-phase-52-6-1-root-shim-inventory-and-deprecation-contract.md`
 - **Product**: AegisOps
-- **Related Issues**: #1105, #1108
+- **Related Issues**: #1105, #1108, #1110
 - **Depends On**: #1107
 - **Supersedes**: N/A
 - **Superseded By**: N/A
@@ -29,8 +29,14 @@ Package initialization calls `register_legacy_import_aliases()` before public pa
 | Legacy import path | Target owner import path | Target family | Owner file |
 | --- | --- | --- | --- |
 | `aegisops_control_plane.audit_export` | `aegisops_control_plane.reporting.audit_export` | `reporting` | `reporting/audit_export.py` |
+| `aegisops_control_plane.phase29_shadow_dataset` | `aegisops_control_plane.ml_shadow.dataset` | `ml_shadow` | `ml_shadow/dataset.py` |
+| `aegisops_control_plane.phase29_shadow_scoring` | `aegisops_control_plane.ml_shadow.legacy_scoring_adapter` | `ml_shadow` | `ml_shadow/legacy_scoring_adapter.py` |
+| `aegisops_control_plane.phase29_evidently_drift_visibility` | `aegisops_control_plane.ml_shadow.drift_visibility` | `ml_shadow` | `ml_shadow/drift_visibility.py` |
+| `aegisops_control_plane.phase29_mlflow_shadow_model_registry` | `aegisops_control_plane.ml_shadow.mlflow_registry` | `ml_shadow` | `ml_shadow/mlflow_registry.py` |
 
 The `audit_export.py` root shim is the only Phase 52.6.3 physical deletion. The old import path remains available through the registry and must resolve to the exact same module object as `aegisops_control_plane.reporting.audit_export`.
+
+Phase 52.6.5 retires the four Phase29 physical root filenames. Dataset, drift visibility, and MLflow registry legacy paths resolve to the exact `ml_shadow` owner modules. The legacy scoring path resolves to `ml_shadow/legacy_scoring_adapter.py` because that import path deliberately preserves the old `scored_examples`, `feature_frequencies_at_inference_time`, and `shadow_output_type` wrapper behavior while canonical scoring remains owned by `ml_shadow/scoring.py`.
 
 ## 4. Retained Blockers
 
@@ -40,10 +46,6 @@ The following paths cannot safely move to the alias registry yet:
 | --- | --- |
 | `aegisops_control_plane.service` | Public facade import path retained under ADR-0003 and ADR-0010. |
 | `aegisops_control_plane.models` | Authoritative record model import path remains a root owner. |
-| `aegisops_control_plane.phase29_shadow_dataset` | Phase29 adapter still needs adapter-specific caller evidence. |
-| `aegisops_control_plane.phase29_shadow_scoring` | Phase29 adapter still needs adapter-specific caller evidence. |
-| `aegisops_control_plane.phase29_evidently_drift_visibility` | Phase29 adapter still needs adapter-specific caller evidence. |
-| `aegisops_control_plane.phase29_mlflow_shadow_model_registry` | Phase29 adapter still needs adapter-specific caller evidence. |
 
 ## 5. Fail-Closed Rules
 
