@@ -172,6 +172,14 @@ assert_fails_with \
   "${quoted_secret_looking_value_repo}" \
   "Forbidden Phase 53.6 Wazuh source-health artifact: committed secret-looking value detected"
 
+bypass_word_secret_looking_value_repo="${workdir}/bypass-word-secret-looking-value"
+create_valid_repo "${bypass_word_secret_looking_value_repo}"
+printf '%s\n' "health_secret: CorrectHorseBatteryStaple42 # custody reference" \
+  >>"${bypass_word_secret_looking_value_repo}/docs/deployment/profiles/smb-single-node/wazuh/source-health-projection.yaml"
+assert_fails_with \
+  "${bypass_word_secret_looking_value_repo}" \
+  "Forbidden Phase 53.6 Wazuh source-health artifact: committed secret-looking value detected"
+
 contract_secret_looking_value_repo="${workdir}/contract-secret-looking-value"
 create_valid_repo "${contract_secret_looking_value_repo}"
 printf '%s\n' "health_secret: CorrectHorseBatteryStaple42" \

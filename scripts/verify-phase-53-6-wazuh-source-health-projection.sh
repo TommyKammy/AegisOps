@@ -187,7 +187,7 @@ contains_secret_looking_value() {
     {
       line = tolower($0)
       if (line ~ /(secret|token|password|credential|api_key|apikey)[[:space:]]*:[[:space:]]*["'\''"]?[[:alnum:]_\/+=.-]{16,}["'\''"]?/ &&
-          line !~ /(custody|reference|allowed:[[:space:]]*false|valid:[[:space:]]*false|redacted|placeholder|<[^>]+>)/) {
+          line !~ /(allowed:[[:space:]]*false|valid:[[:space:]]*false|redacted|placeholder|<[^>]+>)/) {
         found = 1
       }
     }
