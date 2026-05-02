@@ -17,12 +17,12 @@ create_fixture() {
   local target="$1"
 
   mkdir -p \
-    "${target}/control-plane/aegisops_control_plane/actions/review" \
-    "${target}/control-plane/aegisops_control_plane/actions" \
+    "${target}/control-plane/aegisops/control_plane/actions/review" \
+    "${target}/control-plane/aegisops/control_plane/actions" \
     "${target}/docs"
 
   cat >"${target}/docs/maintainability-hotspot-baseline.txt" <<'EOF'
-control-plane/aegisops_control_plane/service.py max_lines=1393 max_effective_lines=1241 max_facade_methods=95 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.13.5 issue=#1035
+control-plane/aegisops/control_plane/service.py max_lines=1393 max_effective_lines=1241 max_facade_methods=95 facade_class=AegisOpsControlPlaneService adr_exception=ADR-0003 phase=50.13.5 issue=#1035
 EOF
 
   cat >"${target}/docs/control-plane-service-internal-boundaries.md" <<'EOF'
@@ -34,24 +34,24 @@ Compatibility shims are for public or legacy callers, not for package-internal d
 Run `bash scripts/verify-phase-52-5-9-service-facade-freeze.sh`.
 EOF
 
-  cat >"${target}/control-plane/aegisops_control_plane/service.py" <<'EOF'
+  cat >"${target}/control-plane/aegisops/control_plane/service.py" <<'EOF'
 class AegisOpsControlPlaneService:
     def describe_runtime(self):
         return "ok"
 EOF
 
-  cat >"${target}/control-plane/aegisops_control_plane/actions/action_policy.py" <<'EOF'
+  cat >"${target}/control-plane/aegisops/control_plane/actions/action_policy.py" <<'EOF'
 def evaluate_action_policy_record(record):
     return record
 EOF
 
-  cat >"${target}/control-plane/aegisops_control_plane/action_policy.py" <<'EOF'
+  cat >"${target}/control-plane/aegisops/control_plane/action_policy.py" <<'EOF'
 from .actions.action_policy import evaluate_action_policy_record
 
 __all__ = ["evaluate_action_policy_record"]
 EOF
 
-  cat >"${target}/control-plane/aegisops_control_plane/actions/review/action_review_write_surface.py" <<'EOF'
+  cat >"${target}/control-plane/aegisops/control_plane/actions/review/action_review_write_surface.py" <<'EOF'
 from ..action_policy import evaluate_action_policy_record
 
 def evaluate(record):
@@ -97,43 +97,43 @@ fi
 legacy_import_repo="${workdir}/legacy-import"
 create_fixture "${legacy_import_repo}"
 perl -0pi -e 's/from \.\.action_policy import evaluate_action_policy_record/from ...action_policy import evaluate_action_policy_record/' \
-  "${legacy_import_repo}/control-plane/aegisops_control_plane/actions/review/action_review_write_surface.py"
-assert_fails_with "${legacy_import_repo}" "imports aegisops_control_plane.action_policy; use aegisops_control_plane.actions.action_policy"
+  "${legacy_import_repo}/control-plane/aegisops/control_plane/actions/review/action_review_write_surface.py"
+assert_fails_with "${legacy_import_repo}" "imports aegisops.control_plane.action_policy; use aegisops.control_plane.actions.action_policy"
 
 plain_legacy_import_repo="${workdir}/plain-legacy-import"
 create_fixture "${plain_legacy_import_repo}"
-cat >"${plain_legacy_import_repo}/control-plane/aegisops_control_plane/actions/review/action_review_write_surface.py" <<'EOF'
-import aegisops_control_plane.action_policy as action_policy
+cat >"${plain_legacy_import_repo}/control-plane/aegisops/control_plane/actions/review/action_review_write_surface.py" <<'EOF'
+import aegisops.control_plane.action_policy as action_policy
 
 def evaluate(record):
     return action_policy.evaluate_action_policy_record(record)
 EOF
-assert_fails_with "${plain_legacy_import_repo}" "imports aegisops_control_plane.action_policy; use aegisops_control_plane.actions.action_policy"
+assert_fails_with "${plain_legacy_import_repo}" "imports aegisops.control_plane.action_policy; use aegisops.control_plane.actions.action_policy"
 
 root_shim_from_import_repo="${workdir}/root-shim-from-import"
 create_fixture "${root_shim_from_import_repo}"
-cat >"${root_shim_from_import_repo}/control-plane/aegisops_control_plane/actions/review/action_review_write_surface.py" <<'EOF'
-from aegisops_control_plane import action_policy
+cat >"${root_shim_from_import_repo}/control-plane/aegisops/control_plane/actions/review/action_review_write_surface.py" <<'EOF'
+from aegisops.control_plane import action_policy
 
 def evaluate(record):
     return action_policy.evaluate_action_policy_record(record)
 EOF
-assert_fails_with "${root_shim_from_import_repo}" "imports aegisops_control_plane.action_policy; use aegisops_control_plane.actions.action_policy"
+assert_fails_with "${root_shim_from_import_repo}" "imports aegisops.control_plane.action_policy; use aegisops.control_plane.actions.action_policy"
 
 package_init_legacy_import_repo="${workdir}/package-init-legacy-import"
 create_fixture "${package_init_legacy_import_repo}"
-cat >"${package_init_legacy_import_repo}/control-plane/aegisops_control_plane/actions/__init__.py" <<'EOF'
+cat >"${package_init_legacy_import_repo}/control-plane/aegisops/control_plane/actions/__init__.py" <<'EOF'
 from ..action_policy import evaluate_action_policy_record
 
 __all__ = ["evaluate_action_policy_record"]
 EOF
-assert_fails_with "${package_init_legacy_import_repo}" "imports aegisops_control_plane.action_policy; use aegisops_control_plane.actions.action_policy"
+assert_fails_with "${package_init_legacy_import_repo}" "imports aegisops.control_plane.action_policy; use aegisops.control_plane.actions.action_policy"
 
 service_growth_repo="${workdir}/service-growth"
 create_fixture "${service_growth_repo}"
 for index in $(seq 1 1393); do
   printf 'growth_line_%04d = %d\n' "${index}" "${index}" \
-    >>"${service_growth_repo}/control-plane/aegisops_control_plane/service.py"
+    >>"${service_growth_repo}/control-plane/aegisops/control_plane/service.py"
 done
 assert_fails_with "${service_growth_repo}" "rejects service.py growth beyond the accepted Phase 50.13.5 ceiling"
 
@@ -145,7 +145,7 @@ create_fixture "${method_growth_repo}"
     printf '    def method_%04d(self):\n' "${index}"
     printf '        return %d\n' "${index}"
   done
-} >"${method_growth_repo}/control-plane/aegisops_control_plane/service.py"
+} >"${method_growth_repo}/control-plane/aegisops/control_plane/service.py"
 assert_fails_with "${method_growth_repo}" "facade_methods=96 exceeds 95"
 
 missing_doc_repo="${workdir}/missing-doc"

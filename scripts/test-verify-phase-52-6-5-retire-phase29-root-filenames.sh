@@ -17,6 +17,8 @@ create_valid_repo() {
   local target="$1"
 
   mkdir -p "${target}/control-plane" "${target}/scripts"
+  cp -R "${repo_root}/control-plane/aegisops" \
+    "${target}/control-plane/aegisops"
   cp -R "${repo_root}/control-plane/aegisops_control_plane" \
     "${target}/control-plane/aegisops_control_plane"
   mkdir -p "${target}/control-plane/tests"
@@ -68,7 +70,7 @@ assert_fails_with \
 missing_alias_repo="${workdir}/missing-alias"
 create_valid_repo "${missing_alias_repo}"
 perl -0pi -e 's/    "aegisops_control_plane\.phase29_shadow_dataset": _alias\(.*?    \),\n//s' \
-  "${missing_alias_repo}/control-plane/aegisops_control_plane/core/legacy_import_aliases.py"
+  "${missing_alias_repo}/control-plane/aegisops/control_plane/core/legacy_import_aliases.py"
 assert_fails_with \
   "${missing_alias_repo}" \
   "Phase 52.6.5 missing Phase29 legacy alias: aegisops_control_plane.phase29_shadow_dataset"
@@ -76,7 +78,7 @@ assert_fails_with \
 wrong_scoring_owner_repo="${workdir}/wrong-scoring-owner"
 create_valid_repo "${wrong_scoring_owner_repo}"
 perl -0pi -e 's/aegisops_control_plane\.ml_shadow\.legacy_scoring_adapter/aegisops_control_plane.ml_shadow.scoring/' \
-  "${wrong_scoring_owner_repo}/control-plane/aegisops_control_plane/core/legacy_import_aliases.py"
+  "${wrong_scoring_owner_repo}/control-plane/aegisops/control_plane/core/legacy_import_aliases.py"
 assert_fails_with \
   "${wrong_scoring_owner_repo}" \
   "Phase 52.6.5 Phase29 alias target mismatch for aegisops_control_plane.phase29_shadow_scoring"
@@ -84,7 +86,7 @@ assert_fails_with \
 wrong_attribute_owner_repo="${workdir}/wrong-attribute-owner"
 create_valid_repo "${wrong_attribute_owner_repo}"
 perl -0pi -e 's/class Phase29ShadowScoreResult\(_impl\.Phase29ShadowScoreResult\):\n    \@property\n    def feature_frequencies_at_inference_time\(self\) -> Mapping\[str, object\]:\n        return \{}\n\n\nclass Phase29OfflineShadowScoringSnapshot\(_impl\.Phase29OfflineShadowScoringSnapshot\):/class Phase29ShadowScoreResult(_impl.Phase29ShadowScoreResult):\n    pass\n\n\nclass Phase29OfflineShadowScoringSnapshot(_impl.Phase29OfflineShadowScoringSnapshot):\n    \@property\n    def feature_frequencies_at_inference_time(self) -> Mapping[str, object]:\n        return {}/' \
-  "${wrong_attribute_owner_repo}/control-plane/aegisops_control_plane/ml_shadow/legacy_scoring_adapter.py"
+  "${wrong_attribute_owner_repo}/control-plane/aegisops/control_plane/ml_shadow/legacy_scoring_adapter.py"
 assert_fails_with \
   "${wrong_attribute_owner_repo}" \
   "Phase 52.6.5 legacy scoring wrapper is missing feature_frequencies_at_inference_time"
@@ -92,7 +94,7 @@ assert_fails_with \
 retained_blocker_repo="${workdir}/retained-blocker"
 create_valid_repo "${retained_blocker_repo}"
 perl -0pi -e 's/RETAINED_COMPATIBILITY_BLOCKERS: dict\[str, str\] = \{/RETAINED_COMPATIBILITY_BLOCKERS: dict[str, str] = {\n    "aegisops_control_plane.phase29_shadow_dataset": "stale blocker.",/' \
-  "${retained_blocker_repo}/control-plane/aegisops_control_plane/core/legacy_import_aliases.py"
+  "${retained_blocker_repo}/control-plane/aegisops/control_plane/core/legacy_import_aliases.py"
 assert_fails_with \
   "${retained_blocker_repo}" \
   "Phase 52.6.5 Phase29 path still listed as a retained blocker: aegisops_control_plane.phase29_shadow_dataset"

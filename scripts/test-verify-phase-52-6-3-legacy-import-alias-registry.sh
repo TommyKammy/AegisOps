@@ -5,7 +5,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 verifier="${repo_root}/scripts/verify-phase-52-6-3-legacy-import-alias-registry.sh"
 contract_path="docs/adr/0015-phase-52-6-3-legacy-import-alias-registry.md"
-registry_path="control-plane/aegisops_control_plane/core/legacy_import_aliases.py"
+registry_path="control-plane/aegisops/control_plane/core/legacy_import_aliases.py"
 
 workdir="$(mktemp -d)"
 trap 'rm -rf "${workdir}"' EXIT
@@ -20,6 +20,8 @@ create_valid_repo() {
 
   mkdir -p "${target}/docs/adr" "${target}/control-plane"
   cp "${repo_root}/${contract_path}" "${target}/${contract_path}"
+  cp -R "${repo_root}/control-plane/aegisops" \
+    "${target}/control-plane/aegisops"
   cp -R "${repo_root}/control-plane/aegisops_control_plane" \
     "${target}/control-plane/aegisops_control_plane"
 }
@@ -98,11 +100,10 @@ import sys
 path = Path(sys.argv[1])
 text = path.read_text()
 text = text.replace(
-    "        sys.modules[legacy_module] = target\n",
+    "        target = importlib.import_module(self._target_name)\n",
     "        from types import ModuleType\n"
-    "        proxy = ModuleType(legacy_module)\n"
+    "        proxy = ModuleType(self._alias_name)\n"
     "        proxy.export_audit_retention_baseline = object()\n"
-    "        sys.modules[legacy_module] = proxy\n"
     "        target = proxy\n",
 )
 path.write_text(text)

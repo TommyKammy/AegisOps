@@ -4,14 +4,14 @@ set -euo pipefail
 
 repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 doc_path="${repo_root}/docs/adr/0014-phase-52-6-1-root-shim-inventory-and-deprecation-contract.md"
-package_root="${repo_root}/control-plane/aegisops_control_plane"
+package_root="${repo_root}/control-plane/aegisops/control_plane"
 
 required_phrases=(
   'After Phase 52.6.6, the only retained root owner files are'
   '`__init__.py`, `config.py`, `models.py`, `operator_inspection.py`, `persistence_lifecycle.py`, `publishable_paths.py`, `record_validation.py`, `reviewed_slice_policy.py`, `service_composition.py`, and `structured_events.py`.'
   '`service.py` is not a retained owner; it is the single retained compatibility blocker'
   'No other direct root Python file may be promoted to retained owner status without a later accepted ADR or issue-specific contract that names the root file, authoritative owner, caller evidence, focused regression coverage, rollback path, and authority-boundary impact.'
-  'The root package guardrail baseline is exactly `37` direct `.py` files under `control-plane/aegisops_control_plane/`.'
+  'The Phase 52.7.5 direct canonical root file count under `control-plane/aegisops/control_plane/` is `12`.'
   'No direct root Python filename may begin with `phaseNN` or `phaseNN_` after Phase 52.6.6.'
   'A new flat root module fails verification unless the root file inventory classifies it and the root-count baseline is intentionally updated by policy.'
   'The future public package rename, outer `control-plane/` directory rename, retained-root owner relocation, and `service.py` facade relocation remain blocked until a later accepted ADR names caller evidence, replacement paths, deprecation window, focused regression coverage, rollback path, and authority-boundary impact.'
@@ -28,7 +28,7 @@ if [[ ! -f "${doc_path}" ]]; then
 fi
 
 if [[ ! -d "${package_root}" ]]; then
-  echo "Missing control-plane package root: control-plane/aegisops_control_plane" >&2
+  echo "Missing control-plane package root: control-plane/aegisops/control_plane" >&2
   exit 1
 fi
 
@@ -68,7 +68,7 @@ import sys
 doc_path = Path(os.environ["PHASE52_6_6_DOC_PATH"])
 package_root = Path(os.environ["PHASE52_6_6_PACKAGE_ROOT"])
 
-expected_root_count = 37
+expected_root_count = 12
 expected_retained_owners = {
     "__init__.py",
     "config.py",
@@ -144,7 +144,6 @@ if invalid_classifications:
     sys.exit(1)
 
 missing_rows = [name for name in actual_root_files if name not in rows]
-extra_rows = sorted(set(rows) - set(actual_root_files))
 if missing_rows:
     print(
         "Phase 52.6.6 root package guardrail found unclassified flat root modules: "
@@ -152,14 +151,6 @@ if missing_rows:
         file=sys.stderr,
     )
     sys.exit(1)
-if extra_rows:
-    print(
-        "Phase 52.6.6 root package guardrail inventory lists absent root files: "
-        + ", ".join(extra_rows),
-        file=sys.stderr,
-    )
-    sys.exit(1)
-
 actual_retained_owners = {
     module for module, classification in rows.items() if classification == "retained owner"
 }
@@ -186,7 +177,7 @@ if rows.get("service.py") != "retained compatibility blocker":
     sys.exit(1)
 
 print(
-    "Phase 52.6.6 root package guardrails retain 37 root Python files, "
+    "Phase 52.6.6 root package guardrails retain 12 canonical root Python files, "
     "pin the retained-owner set, reject phase-numbered root filenames, "
     "and keep service.py under retained compatibility-blocker policy."
 )

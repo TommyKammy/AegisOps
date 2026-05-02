@@ -118,6 +118,31 @@ No direct root Python filename may begin with `phaseNN` or `phaseNN_` after Phas
 
 A new flat root module fails verification unless the root file inventory classifies it and the root-count baseline is intentionally updated by policy.
 
+## 5.4 Phase 52.7.5 Canonical Root Shim Reduction
+
+After Phase 52.7.4 moved physical implementation ownership from `control-plane/aegisops_control_plane/` to `control-plane/aegisops/control_plane/`, Phase 52.7.5 removes the remaining simple canonical-root shim files that are covered by explicit canonical and legacy alias registry rows.
+
+The Phase 52.7.5 direct canonical root file count under `control-plane/aegisops/control_plane/` is `12`.
+
+The retained canonical root files are exactly `__init__.py`, `cli.py`, `config.py`, `models.py`, `operator_inspection.py`, `persistence_lifecycle.py`, `publishable_paths.py`, `record_validation.py`, `reviewed_slice_policy.py`, `service.py`, `service_composition.py`, and `structured_events.py`.
+
+`service.py` remains the single retained service-facade compatibility blocker. `cli.py` remains a retained runnable compatibility blocker because `python -m aegisops.control_plane.cli` cannot be preserved by a `sys.modules` alias alone. The other retained canonical root files remain retained owners until a later accepted ADR or issue-specific contract names the owner move, caller evidence, replacement import path, focused regression coverage, rollback path, and authority-boundary impact.
+
+Phase 52.7.5 removes these 25 simple canonical-root shim files after adding canonical and legacy alias registry coverage plus the focused `control-plane/tests/test_phase52_7_5_root_shim_reduction.py` regression:
+
+`action_lifecycle_write_coordinator.py`, `action_policy.py`, `action_reconciliation_orchestration.py`, `action_review_projection.py`, `action_review_write_surface.py`, `ai_trace_lifecycle.py`, `assistant_advisory.py`, `assistant_context.py`, `case_workflow.py`, `detection_lifecycle.py`, `evidence_linkage.py`, `execution_coordinator_action_requests.py`, `external_evidence_boundary.py`, `http_protected_surface.py`, `http_runtime_surface.py`, `http_surface.py`, `live_assistant_workflow.py`, `pilot_reporting_export.py`, `readiness_contracts.py`, `readiness_operability.py`, `restore_readiness.py`, `restore_readiness_backup_restore.py`, `restore_readiness_projection.py`, `runtime_boundary.py`, and `runtime_restore_readiness_diagnostics.py`.
+
+Compatibility status: canonical flat imports such as `aegisops.control_plane.action_policy` and legacy flat imports such as `aegisops_control_plane.action_policy` remain narrow aliases to the directly linked domain owner module. Alias rows and bridge behavior remain subordinate compatibility mechanisms, not workflow authority.
+
+Validation:
+
+- Run `bash scripts/verify-phase-52-7-5-root-shim-reduction.sh`.
+- Run `bash scripts/test-verify-phase-52-7-5-root-shim-reduction.sh`.
+- Run `python3 -m unittest control-plane/tests/test_phase52_7_5_root_shim_reduction.py`.
+- Run `bash scripts/verify-phase-52-5-2-import-compatibility.sh`.
+- Run `bash scripts/verify-phase-52-6-3-legacy-import-alias-registry.sh`.
+- Run `bash scripts/verify-phase-52-7-2-canonical-namespace-bridge.sh`.
+
 ## 6. Phase29 Boundary
 
 The retired Phase29 root filenames were legacy compatibility adapters only. They were not production owners.

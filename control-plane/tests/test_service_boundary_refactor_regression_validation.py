@@ -436,15 +436,15 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
             "control-plane/aegisops_control_plane/actions/review/action_review_write_surface.py"
         )
         readiness_operability_source = self._read(
-            "control-plane/aegisops_control_plane/readiness_operability.py"
+            "control-plane/aegisops_control_plane/runtime/readiness_operability.py"
         )
         service_source = self._read("control-plane/aegisops_control_plane/service.py")
         http_sources = "\n".join(
             self._read(relative_path)
             for relative_path in (
-                "control-plane/aegisops_control_plane/http_surface.py",
-                "control-plane/aegisops_control_plane/http_runtime_surface.py",
-                "control-plane/aegisops_control_plane/http_protected_surface.py",
+                "control-plane/aegisops_control_plane/api/http_surface.py",
+                "control-plane/aegisops_control_plane/api/http_runtime_surface.py",
+                "control-plane/aegisops_control_plane/api/http_protected_surface.py",
                 "control-plane/aegisops_control_plane/cli.py",
             )
         )

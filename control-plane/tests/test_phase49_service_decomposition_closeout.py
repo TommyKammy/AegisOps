@@ -99,14 +99,14 @@ class Phase49ServiceDecompositionCloseoutTests(unittest.TestCase):
 
     def test_phase49_extracted_boundary_modules_remain_present(self) -> None:
         expected_modules = (
-            "control-plane/aegisops_control_plane/detection_lifecycle.py",
-            "control-plane/aegisops_control_plane/case_workflow.py",
-            "control-plane/aegisops_control_plane/evidence_linkage.py",
-            "control-plane/aegisops_control_plane/ai_trace_lifecycle.py",
-            "control-plane/aegisops_control_plane/action_reconciliation_orchestration.py",
-            "control-plane/aegisops_control_plane/runtime_boundary.py",
-            "control-plane/aegisops_control_plane/restore_readiness.py",
-            "control-plane/aegisops_control_plane/runtime_restore_readiness_diagnostics.py",
+            "control-plane/aegisops_control_plane/ingestion/detection_lifecycle.py",
+            "control-plane/aegisops_control_plane/ingestion/case_workflow.py",
+            "control-plane/aegisops_control_plane/ingestion/evidence_linkage.py",
+            "control-plane/aegisops_control_plane/assistant/ai_trace_lifecycle.py",
+            "control-plane/aegisops_control_plane/actions/action_reconciliation_orchestration.py",
+            "control-plane/aegisops_control_plane/runtime/runtime_boundary.py",
+            "control-plane/aegisops_control_plane/runtime/restore_readiness.py",
+            "control-plane/aegisops_control_plane/runtime/runtime_restore_readiness_diagnostics.py",
         )
 
         for relative_path in expected_modules:

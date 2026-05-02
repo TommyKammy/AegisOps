@@ -19,6 +19,8 @@ create_valid_repo() {
 
   mkdir -p "${target}/docs/adr" "${target}/control-plane"
   cp "${repo_root}/${contract_path}" "${target}/${contract_path}"
+  cp -R "${repo_root}/control-plane/aegisops" \
+    "${target}/control-plane/aegisops"
   cp -R "${repo_root}/control-plane/aegisops_control_plane" \
     "${target}/control-plane/aegisops_control_plane"
 }
@@ -59,15 +61,15 @@ assert_passes "${valid_repo}"
 root_count_growth_repo="${workdir}/root-count-growth"
 create_valid_repo "${root_count_growth_repo}"
 printf '%s\n' '"""Fixture root file that must not pass without policy."""' \
-  >"${root_count_growth_repo}/control-plane/aegisops_control_plane/new_flat_owner.py"
+  >"${root_count_growth_repo}/control-plane/aegisops/control_plane/new_flat_owner.py"
 assert_fails_with \
   "${root_count_growth_repo}" \
-  "Phase 52.6.6 root package guardrail expected 37 direct root Python files, found 38."
+  "Phase 52.6.6 root package guardrail expected 12 direct root Python files, found 13."
 
 phase_numbered_root_repo="${workdir}/phase-numbered-root"
 create_valid_repo "${phase_numbered_root_repo}"
 printf '%s\n' '"""Fixture phase-numbered root file."""' \
-  >"${phase_numbered_root_repo}/control-plane/aegisops_control_plane/phase52_new_owner.py"
+  >"${phase_numbered_root_repo}/control-plane/aegisops/control_plane/phase52_new_owner.py"
 assert_fails_with \
   "${phase_numbered_root_repo}" \
   "Phase 52.6.6 root package guardrail rejects phase-numbered root filenames: phase52_new_owner.py"
@@ -75,7 +77,7 @@ assert_fails_with \
 phase_numbered_prefix_repo="${workdir}/phase-numbered-prefix-root"
 create_valid_repo "${phase_numbered_prefix_repo}"
 printf '%s\n' '"""Fixture phase-numbered prefix root file."""' \
-  >"${phase_numbered_prefix_repo}/control-plane/aegisops_control_plane/phase52foo.py"
+  >"${phase_numbered_prefix_repo}/control-plane/aegisops/control_plane/phase52foo.py"
 assert_fails_with \
   "${phase_numbered_prefix_repo}" \
   "Phase 52.6.6 root package guardrail rejects phase-numbered root filenames: phase52foo.py"
