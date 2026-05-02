@@ -98,9 +98,11 @@ approved_legacy_python_files = {
     "scripts/test-verify-phase-52-6-2-canonical-domain-imports.sh",
     "scripts/verify-phase-52-6-3-legacy-import-alias-registry.sh",
     "scripts/test-verify-phase-52-6-3-legacy-import-alias-registry.sh",
+    "control-plane/tests/test_phase52_6_3_legacy_import_alias_registry.py",
 }
 
 approved_legacy_text_files = {
+    "docs/adr/0012-phase-52-5-1-control-plane-layout-inventory-and-migration-contract.md",
     "docs/adr/0013-phase-52-5-2-package-scaffolding-and-compatibility-shim-policy.md",
     "docs/adr/0014-phase-52-6-1-root-shim-inventory-and-deprecation-contract.md",
     "docs/adr/0015-phase-52-6-3-legacy-import-alias-registry.md",

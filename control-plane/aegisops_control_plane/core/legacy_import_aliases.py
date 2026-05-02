@@ -53,5 +53,17 @@ def register_legacy_import_aliases(
             )
         target = importlib.import_module(alias.target_module)
         sys.modules[legacy_module] = target
+        _bind_legacy_module_to_parent(legacy_module, target)
         registered[legacy_module] = target
     return registered
+
+
+def _bind_legacy_module_to_parent(legacy_module: str, target: ModuleType) -> None:
+    parent_name, _, child_name = legacy_module.rpartition(".")
+    if not parent_name:
+        return
+
+    parent_module = sys.modules.get(parent_name)
+    if parent_module is None:
+        parent_module = importlib.import_module(parent_name)
+    setattr(parent_module, child_name, target)

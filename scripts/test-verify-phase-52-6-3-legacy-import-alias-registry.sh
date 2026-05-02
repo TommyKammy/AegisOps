@@ -89,4 +89,26 @@ assert_fails_with \
   "${local_path_repo}" \
   "Forbidden Phase 52.6.3 legacy import alias registry: workstation-local absolute path detected"
 
+behavior_drift_repo="${workdir}/behavior-drift"
+create_valid_repo "${behavior_drift_repo}"
+python3 - <<'PY' "${behavior_drift_repo}/${registry_path}"
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+text = text.replace(
+    "        sys.modules[legacy_module] = target\n",
+    "        from types import ModuleType\n"
+    "        proxy = ModuleType(legacy_module)\n"
+    "        proxy.export_audit_retention_baseline = object()\n"
+    "        sys.modules[legacy_module] = proxy\n"
+    "        target = proxy\n",
+)
+path.write_text(text)
+PY
+assert_fails_with \
+  "${behavior_drift_repo}" \
+  "Phase 52.6.3 legacy import alias changed module identity for aegisops_control_plane.audit_export"
+
 echo "Phase 52.6.3 legacy import alias registry verifier negative and valid fixtures passed."

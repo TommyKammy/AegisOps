@@ -26,8 +26,12 @@ class LegacyImportAliasRegistryTests(unittest.TestCase):
 
         legacy_module = importlib.import_module(alias)
         owner_module = importlib.import_module(owner)
+        package = importlib.import_module("aegisops_control_plane")
+        from aegisops_control_plane import audit_export as legacy_from_package
 
         self.assertIs(legacy_module, owner_module)
+        self.assertIs(legacy_from_package, owner_module)
+        self.assertIs(getattr(package, "audit_export"), owner_module)
         self.assertIs(
             legacy_module.export_audit_retention_baseline,
             owner_module.export_audit_retention_baseline,
