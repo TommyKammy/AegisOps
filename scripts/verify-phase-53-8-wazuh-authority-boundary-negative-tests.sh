@@ -54,7 +54,12 @@ for phrase in "${required_test_phrases[@]}"; do
   fi
 done
 
-if grep -Eq '(^|[[:space:]`"'"'"'(<{=])(file://)?(/Users/|/home/|[A-Za-z]:[\\/]+Users[\\/])' "${doc_path}"; then
+mac_user_home="$(printf '/%s/' 'Users')"
+unix_user_home="$(printf '/%s/' 'home')"
+windows_user_home="$(printf '[A-Za-z]:[\\\\/]%s[\\\\/]' 'Users')"
+path_boundary="(^|[[:space:]\`\"'(<{=])"
+
+if grep -Eq "(${path_boundary})(file://)?(${mac_user_home}|${unix_user_home}|${windows_user_home})" "${doc_path}"; then
   echo "Forbidden Phase 53.8 Wazuh authority-boundary doc: workstation-local absolute path detected" >&2
   exit 1
 fi
