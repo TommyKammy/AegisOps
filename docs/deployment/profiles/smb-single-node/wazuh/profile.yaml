@@ -71,4 +71,4 @@ profile_expectations:
   ingress: Wazuh manager, indexer, and dashboard ports are internal or substrate-owned; AegisOps receives Wazuh signals only through the reviewed proxy intake route.
   volumes: Wazuh manager, indexer, dashboard, logs, rules, certificates, and backups are separate from AegisOps PostgreSQL state and AegisOps evidence custody.
   certificates: Certificate and secret references are trusted custody references only; placeholder, sample, fake, TODO, unsigned, or inline secret values are invalid.
-  source_health: Source-health projection is deferred to a later Phase 53 child issue and cannot use Wazuh dashboard or manager state as authoritative workflow truth.
+  source_health: Source-health projection is defined by docs/deployment/wazuh-source-health-projection-contract.md and cannot use Wazuh dashboard or manager state as authoritative workflow truth.
