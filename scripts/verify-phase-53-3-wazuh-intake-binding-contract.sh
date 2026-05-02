@@ -154,6 +154,11 @@ has_uncommented_substring() {
   ' "${file_path}"
 }
 
+if grep -Eiq '^[[:space:]]*shared_secret_custody:[[:space:]]*($|<|todo|tbd|none|null|changeme|change-me|password|secret|sample|example|fake|dummy)' "${artifact_path}"; then
+  echo "Forbidden Phase 53.3 Wazuh intake binding artifact: missing secret custody reference" >&2
+  exit 1
+fi
+
 for term in "${required_artifact_terms[@]}"; do
   if ! has_uncommented_substring "${term}" "${artifact_path}"; then
     echo "Missing Phase 53.3 Wazuh intake binding artifact term: ${term}" >&2
@@ -184,11 +189,6 @@ fi
 
 if grep -Eiq '^[[:space:]]*intake_url:[[:space:]]*($|<|todo|tbd|none|null)' "${artifact_path}"; then
   echo "Forbidden Phase 53.3 Wazuh intake binding artifact: missing intake URL" >&2
-  exit 1
-fi
-
-if grep -Eiq '^[[:space:]]*shared_secret_custody:[[:space:]]*($|<|todo|tbd|none|null|changeme|change-me|password|secret|sample|example|fake|dummy)' "${artifact_path}"; then
-  echo "Forbidden Phase 53.3 Wazuh intake binding artifact: missing secret custody reference" >&2
   exit 1
 fi
 

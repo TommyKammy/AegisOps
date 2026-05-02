@@ -106,7 +106,7 @@ perl -0pi -e 's/^shared_secret_custody: .+$/shared_secret_custody: /m' \
   "${missing_secret_repo}/docs/deployment/profiles/smb-single-node/wazuh/intake-binding.yaml"
 assert_fails_with \
   "${missing_secret_repo}" \
-  "Missing Phase 53.3 Wazuh intake binding artifact term: shared_secret_custody"
+  "Forbidden Phase 53.3 Wazuh intake binding artifact: missing secret custody reference"
 
 placeholder_secret_repo="${workdir}/placeholder-secret"
 create_valid_repo "${placeholder_secret_repo}"
@@ -114,7 +114,7 @@ perl -0pi -e 's/^shared_secret_custody: .+$/shared_secret_custody: changeme/m' \
   "${placeholder_secret_repo}/docs/deployment/profiles/smb-single-node/wazuh/intake-binding.yaml"
 assert_fails_with \
   "${placeholder_secret_repo}" \
-  "Missing Phase 53.3 Wazuh intake binding artifact term: shared_secret_custody"
+  "Forbidden Phase 53.3 Wazuh intake binding artifact: missing secret custody reference"
 
 secret_looking_value_repo="${workdir}/secret-looking-value"
 create_valid_repo "${secret_looking_value_repo}"
