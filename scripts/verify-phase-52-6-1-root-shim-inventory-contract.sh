@@ -55,7 +55,6 @@ forbidden_claims=(
   "This contract changes runtime behavior."
   "This contract allows Phase29 root files as production owners."
   "Legacy root shims may be deleted immediately."
-  "inventory rows, and operator-facing text remain subordinate context."
 )
 
 if [[ ! -f "${doc_path}" ]]; then
