@@ -28,7 +28,7 @@ The root shim inventory does not change authorization, provenance, reconciliatio
 
 ## 3. Phase 52.5 Root File Baseline
 
-The Phase 52.6.3 root-level Python file count under `control-plane/aegisops_control_plane/` is `62` after the approved `audit_export.py` alias-registry proof of pattern.
+The Phase 52.6.4 root-level Python file count under `control-plane/aegisops_control_plane/` is `41` after removing simple physical root shims covered by the legacy import alias registry and focused compatibility tests.
 
 The baseline counts only direct `.py` files in `control-plane/aegisops_control_plane/`; package-owned files below subdirectories are tracked by ADR-0012 and stay outside this root shim baseline.
 
@@ -51,67 +51,54 @@ If caller evidence is incomplete, malformed, ambiguous, or inferred only from na
 | Root file | Target family | Classification | Deprecation decision |
 | --- | --- | --- | --- |
 | `__init__.py` | `core` | retained owner | Retain physically until a later owner-move issue proves identical behavior and caller compatibility. |
-| `action_lifecycle_write_coordinator.py` | `actions` | simple shim | Candidate for later deletion only after caller evidence, deprecation window, focused import regression, and rollback path are recorded. |
-| `action_policy.py` | `actions` | simple shim | Candidate for later deletion only after caller evidence, deprecation window, focused import regression, and rollback path are recorded. |
-| `action_receipt_validation.py` | `actions` | simple shim | Candidate for later deletion only after caller evidence, deprecation window, focused import regression, and rollback path are recorded. |
-| `action_reconciliation_orchestration.py` | `actions` | simple shim | Candidate for later deletion only after caller evidence, deprecation window, focused import regression, and rollback path are recorded. |
-| `action_review_chain.py` | `actions.review` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `action_review_coordination.py` | `actions.review` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `action_review_index.py` | `actions.review` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `action_review_inspection.py` | `actions.review` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `action_review_path_health.py` | `actions.review` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `action_review_projection.py` | `actions.review` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `action_review_timeline.py` | `actions.review` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `action_review_visibility.py` | `actions.review` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `action_review_write_surface.py` | `actions.review` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `ai_trace_lifecycle.py` | `assistant` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `assistant_advisory.py` | `assistant` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `assistant_context.py` | `assistant` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `assistant_provider.py` | `assistant` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `case_workflow.py` | `ingestion` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `cli.py` | `api` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
+| `action_lifecycle_write_coordinator.py` | `actions` | simple shim | Retain physically because Phase 47 responsibility-decomposition tests and docs still name this root file directly. |
+| `action_policy.py` | `actions` | simple shim | Retain physically because Phase 52.5 facade-freeze and canonical-domain-import verifier fixtures still name this root file directly. |
+| `action_reconciliation_orchestration.py` | `actions` | simple shim | Retain physically because Phase 49 closeout tests still assert this root file exists. |
+| `action_review_projection.py` | `actions.review` | alias candidate | Retain physically because Phase 50 maintainability tests and facade-convergence verifiers still name this root file directly. |
+| `action_review_write_surface.py` | `actions.review` | alias candidate | Retain physically because Phase 50 maintainability tests and facade-pressure verifiers still name this root file directly. |
+| `ai_trace_lifecycle.py` | `assistant` | alias candidate | Retain physically because Phase 49 and Phase 50 closeout tests still assert this root file exists. |
+| `assistant_advisory.py` | `assistant` | alias candidate | Retain physically because Phase 47 responsibility-decomposition tests and docs still name this root file directly. |
+| `assistant_context.py` | `assistant` | alias candidate | Retain physically because Phase 50 regression tests still inspect this root file directly; remove only after those tests move to the domain owner path. |
+| `case_workflow.py` | `ingestion` | alias candidate | Retain physically because Phase 49 and Phase 50 closeout tests still assert this root file exists. |
+| `cli.py` | `api` | alias candidate | Retain physically because service-boundary regression tests still inspect this root file directly. |
 | `config.py` | `runtime` | retained owner | Retain physically until a later owner-move issue proves identical behavior and caller compatibility. |
-| `detection_lifecycle.py` | `ingestion` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `detection_lifecycle_helpers.py` | `ingestion` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `detection_native_context.py` | `ingestion` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `entrypoint_support.py` | `api` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `evidence_linkage.py` | `ingestion` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `execution_coordinator.py` | `actions` | simple shim | Candidate for later deletion only after caller evidence, deprecation window, focused import regression, and rollback path are recorded. |
-| `execution_coordinator_action_requests.py` | `actions` | simple shim | Candidate for later deletion only after caller evidence, deprecation window, focused import regression, and rollback path are recorded. |
-| `execution_coordinator_delegation.py` | `actions` | simple shim | Candidate for later deletion only after caller evidence, deprecation window, focused import regression, and rollback path are recorded. |
-| `execution_coordinator_reconciliation.py` | `actions` | simple shim | Candidate for later deletion only after caller evidence, deprecation window, focused import regression, and rollback path are recorded. |
-| `external_evidence_boundary.py` | `evidence` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `external_evidence_endpoint.py` | `evidence` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `external_evidence_facade.py` | `evidence` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `external_evidence_misp.py` | `evidence` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `external_evidence_osquery.py` | `evidence` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `http_protected_surface.py` | `api` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `http_runtime_surface.py` | `api` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `http_surface.py` | `api` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `live_assistant_workflow.py` | `assistant` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
+| `detection_lifecycle.py` | `ingestion` | alias candidate | Retain physically because Phase 49 closeout tests still assert this root file exists; remove only after that compatibility assertion is superseded. |
+| `evidence_linkage.py` | `ingestion` | alias candidate | Retain physically because Phase 49 closeout tests still assert this root file exists. |
+| `execution_coordinator_action_requests.py` | `actions` | simple shim | Retain physically because Phase 50 maintainability tests still name this root file directly. |
+| `external_evidence_boundary.py` | `evidence` | alias candidate | Retain physically because Phase 47 and Phase 50 tests and verifiers still name this root file directly. |
+| `http_protected_surface.py` | `api` | alias candidate | Retain physically because service-boundary regression tests still inspect this root file directly. |
+| `http_runtime_surface.py` | `api` | alias candidate | Retain physically because service-boundary regression tests still inspect this root file directly. |
+| `http_surface.py` | `api` | alias candidate | Retain physically because service-boundary regression tests still inspect this root file directly. |
+| `live_assistant_workflow.py` | `assistant` | alias candidate | Retain physically because Phase 50 regression tests and docs still name this root file directly. |
 | `models.py` | `core` | retained owner | Retain physically until a later owner-move issue proves identical behavior and caller compatibility. |
-| `operations.py` | `runtime` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
 | `operator_inspection.py` | `reporting` | retained owner | Retain physically until a later owner-move issue proves identical behavior and caller compatibility. |
 | `persistence_lifecycle.py` | `core` | retained owner | Retain physically until a later owner-move issue proves identical behavior and caller compatibility. |
 | `phase29_evidently_drift_visibility.py` | `ml_shadow` | compatibility adapter | Retain as a Phase29 legacy adapter; `ml_shadow/drift_visibility.py` is the domain-owned `ml_shadow` implementation. |
 | `phase29_mlflow_shadow_model_registry.py` | `ml_shadow` | compatibility adapter | Retain as a Phase29 legacy adapter; `ml_shadow/mlflow_registry.py` is the domain-owned `ml_shadow` implementation. |
 | `phase29_shadow_dataset.py` | `ml_shadow` | compatibility adapter | Retain as a Phase29 legacy adapter; `ml_shadow/dataset.py` is the domain-owned `ml_shadow` implementation. |
 | `phase29_shadow_scoring.py` | `ml_shadow` | compatibility adapter | Retain as a Phase29 legacy adapter; `ml_shadow/scoring.py` is the domain-owned `ml_shadow` implementation. |
-| `pilot_reporting_export.py` | `reporting` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
+| `pilot_reporting_export.py` | `reporting` | alias candidate | Retain physically because Phase 49.5 reporting export docs and tests still name this root file directly. |
 | `publishable_paths.py` | `core` | retained owner | Retain physically until a later owner-move issue proves identical behavior and caller compatibility. |
-| `readiness_contracts.py` | `runtime` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `readiness_operability.py` | `runtime` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
+| `readiness_contracts.py` | `runtime` | alias candidate | Retain physically because Phase 47 responsibility-decomposition tests and docs still name this root file directly. |
+| `readiness_operability.py` | `runtime` | alias candidate | Retain physically because service-boundary regression tests still inspect this root file directly; remove only after those tests move to the domain owner path. |
 | `record_validation.py` | `core` | retained owner | Retain physically until a later owner-move issue proves identical behavior and caller compatibility. |
-| `restore_readiness.py` | `runtime` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `restore_readiness_backup_restore.py` | `runtime` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `restore_readiness_projection.py` | `runtime` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
+| `restore_readiness.py` | `runtime` | alias candidate | Retain physically because maintainability docs and Phase 49 closeout tests still name this root file directly. |
+| `restore_readiness_backup_restore.py` | `runtime` | alias candidate | Retain physically because restore-readiness persistence tests still inspect this root file directly; remove only after those tests move to the domain owner path. |
+| `restore_readiness_projection.py` | `runtime` | alias candidate | Retain physically because restore-readiness persistence tests still inspect this root file directly; remove only after those tests move to the domain owner path. |
 | `reviewed_slice_policy.py` | `core` | retained owner | Retain physically until a later owner-move issue proves identical behavior and caller compatibility. |
-| `runtime_boundary.py` | `runtime` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
-| `runtime_restore_readiness_diagnostics.py` | `runtime` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
+| `runtime_boundary.py` | `runtime` | alias candidate | Retain physically because Phase 49 closeout tests still assert this root file exists. |
+| `runtime_restore_readiness_diagnostics.py` | `runtime` | alias candidate | Retain physically because Phase 49 closeout tests still assert this root file exists. |
 | `service.py` | `core` | retained compatibility blocker | Retain physically until ADR-0003, ADR-0010, and a later facade transition issue prove the public facade import path can change safely. |
 | `service_composition.py` | `core` | retained owner | Retain physically until a later owner-move issue proves identical behavior and caller compatibility. |
-| `service_snapshots.py` | `runtime` | alias candidate | Candidate for later physical deletion only after caller evidence proves the direct owner import is stable and an alias-preservation test exists. |
 | `structured_events.py` | `core` | retained owner | Retain physically until a later owner-move issue proves identical behavior and caller compatibility. |
+
+## 5.1 Phase 52.6.4 Removed Shim List
+
+Phase 52.6.4 removed these 21 simple physical root shims after adding explicit legacy import alias rows and the focused `control-plane/tests/test_phase52_6_4_root_shim_alias_removal.py` regression:
+
+`action_receipt_validation.py`, `action_review_chain.py`, `action_review_coordination.py`, `action_review_index.py`, `action_review_inspection.py`, `action_review_path_health.py`, `action_review_timeline.py`, `action_review_visibility.py`, `assistant_provider.py`, `detection_lifecycle_helpers.py`, `detection_native_context.py`, `entrypoint_support.py`, `execution_coordinator.py`, `execution_coordinator_delegation.py`, `execution_coordinator_reconciliation.py`, `external_evidence_endpoint.py`, `external_evidence_facade.py`, `external_evidence_misp.py`, `external_evidence_osquery.py`, `operations.py`, and `service_snapshots.py`.
+
+Retained blockers remain physical root files: real root owners (`config.py`, `models.py`, `record_validation.py`, and related core owners), the public `service.py` facade, Phase29 compatibility adapters, and root shim files that current regression tests still inspect directly.
 
 ## 6. Phase29 Boundary
 

@@ -59,7 +59,7 @@ assert_passes "${valid_repo}"
 
 missing_owner_repo="${workdir}/missing-owner"
 create_valid_repo "${missing_owner_repo}"
-perl -0pi -e 's/owner="reporting\/audit_export\.py"/owner=""/' \
+perl -0pi -e 's/"reporting\/audit_export\.py"/""/' \
   "${missing_owner_repo}/${registry_path}"
 assert_fails_with \
   "${missing_owner_repo}" \
