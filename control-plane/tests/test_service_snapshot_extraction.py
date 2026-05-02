@@ -14,8 +14,8 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 class ServiceSnapshotExtractionTests(unittest.TestCase):
     def test_service_preserves_legacy_snapshot_imports_from_dto_module(self) -> None:
-        from aegisops_control_plane import service
-        from aegisops_control_plane import service_snapshots
+        from aegisops.control_plane import service
+        from aegisops.control_plane import service_snapshots
 
         snapshot_names = (
             "RuntimeSnapshot",
@@ -44,7 +44,7 @@ class ServiceSnapshotExtractionTests(unittest.TestCase):
                 self.assertEqual(snapshot_class.__module__, service_snapshots.__name__)
 
     def test_snapshot_to_dict_preserves_tuple_and_datetime_json_shape(self) -> None:
-        from aegisops_control_plane.service import ReconciliationStatusSnapshot
+        from aegisops.control_plane.service import ReconciliationStatusSnapshot
 
         compared_at = datetime(2026, 4, 30, 12, 34, 56, tzinfo=timezone.utc)
         snapshot = ReconciliationStatusSnapshot(

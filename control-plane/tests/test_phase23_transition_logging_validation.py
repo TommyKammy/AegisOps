@@ -26,7 +26,7 @@ from _service_persistence_support import (
     timedelta,
     timezone,
 )
-from aegisops_control_plane.models import HuntRecord, HuntRunRecord
+from aegisops.control_plane.models import HuntRecord, HuntRunRecord
 
 
 class Phase23TransitionLoggingValidationTests(ServicePersistenceTestBase):

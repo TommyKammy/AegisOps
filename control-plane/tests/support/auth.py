@@ -9,7 +9,7 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
 
-from aegisops_control_plane.service import AuthenticatedRuntimePrincipal
+from aegisops.control_plane.service import AuthenticatedRuntimePrincipal
 
 
 REVIEWED_PROXY_SERVICE_ACCOUNT = "svc-aegisops-proxy-control-plane"

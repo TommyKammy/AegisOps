@@ -15,7 +15,7 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
 from _service_persistence_support import ServicePersistenceTestBase
-from aegisops_control_plane.assistant.assistant_provider import (
+from aegisops.control_plane.assistant.assistant_provider import (
     AssistantProviderAdapter,
     AssistantProviderResult,
 )
@@ -274,7 +274,7 @@ class Phase24LiveAssistantAdversarialValidationTests(ServicePersistenceTestBase)
         )
 
         with mock.patch(
-            "aegisops_control_plane.assistant.live_assistant_workflow.phase24_live_assistant_citations_from_context",
+            "aegisops.control_plane.assistant.live_assistant_workflow.phase24_live_assistant_citations_from_context",
             return_value=(),
         ):
             snapshot = service.run_live_assistant_workflow(

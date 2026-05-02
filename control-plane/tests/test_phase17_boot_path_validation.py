@@ -16,9 +16,9 @@ DOCKER_COMPOSE_DRY_RUN_TIMEOUT_SECONDS = 120
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
-from aegisops_control_plane.config import RuntimeConfig
-from aegisops_control_plane.models import AlertRecord
-from aegisops_control_plane.service import AegisOpsControlPlaneService
+from aegisops.control_plane.config import RuntimeConfig
+from aegisops.control_plane.models import AlertRecord
+from aegisops.control_plane.service import AegisOpsControlPlaneService
 from postgres_test_support import FakePostgresBackend, make_store
 
 
@@ -40,8 +40,8 @@ class Phase17BootPathValidationTests(unittest.TestCase):
                     (
                         (
                             "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN="
-                            "postgresql://aegisops_control_plane:secret@postgres:5432/"
-                            "aegisops_control_plane"
+                            "postgresql://aegisops.control_plane:secret@postgres:5432/"
+                            "aegisops.control_plane"
                         ),
                         "AEGISOPS_CONTROL_PLANE_POSTGRES_PASSWORD=secret",
                         "",
@@ -71,8 +71,8 @@ class Phase17BootPathValidationTests(unittest.TestCase):
                     (
                         (
                             "AEGISOPS_CONTROL_PLANE_POSTGRES_DSN="
-                            "postgresql://aegisops_control_plane:secret@postgres:5432/"
-                            "aegisops_control_plane"
+                            "postgresql://aegisops.control_plane:secret@postgres:5432/"
+                            "aegisops.control_plane"
                         ),
                         "AEGISOPS_CONTROL_PLANE_POSTGRES_PASSWORD=secret",
                         "",

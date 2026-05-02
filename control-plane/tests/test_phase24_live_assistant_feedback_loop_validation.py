@@ -15,11 +15,11 @@ from _service_persistence_support import (
     RecommendationRecord,
     ServicePersistenceTestBase,
 )
-from aegisops_control_plane.assistant.assistant_provider import (
+from aegisops.control_plane.assistant.assistant_provider import (
     AssistantProviderAdapter,
     AssistantProviderResult,
 )
-from aegisops_control_plane.assistant.live_assistant_workflow import (
+from aegisops.control_plane.assistant.live_assistant_workflow import (
     phase24_live_assistant_citations_from_context,
 )
 

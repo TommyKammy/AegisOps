@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import json
 import re
 
-from aegisops_control_plane.adapters.postgres import PostgresControlPlaneStore
+from aegisops.control_plane.adapters.postgres import PostgresControlPlaneStore
 
 
 _MISSING_SORT_TIMESTAMP = datetime.min.replace(tzinfo=timezone.utc)

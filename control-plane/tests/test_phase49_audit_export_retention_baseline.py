@@ -12,9 +12,9 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
 
-from aegisops_control_plane.config import RuntimeConfig
-from aegisops_control_plane.models import EvidenceRecord
-from aegisops_control_plane.service import AegisOpsControlPlaneService
+from aegisops.control_plane.config import RuntimeConfig
+from aegisops.control_plane.models import EvidenceRecord
+from aegisops.control_plane.service import AegisOpsControlPlaneService
 from postgres_test_support import make_store
 
 

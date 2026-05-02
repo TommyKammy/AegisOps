@@ -7,13 +7,13 @@ import json
 import sys
 from typing import Sequence, TextIO
 
-from aegisops_control_plane.api import cli, http_surface
-from aegisops_control_plane.api.entrypoint_support import (
+from aegisops.control_plane.api import cli, http_surface
+from aegisops.control_plane.api.entrypoint_support import (
     MAX_WAZUH_INGEST_BODY_BYTES,
     read_json_file as _read_json_file,
     require_loopback_operator_request as _require_loopback_operator_request,
 )
-from aegisops_control_plane.service import (
+from aegisops.control_plane.service import (
     AegisOpsControlPlaneService,
     build_runtime_service,
 )

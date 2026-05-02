@@ -14,9 +14,9 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
 
-from aegisops_control_plane.models import ReconciliationRecord
-from aegisops_control_plane.models import ActionRequestRecord
-from aegisops_control_plane.models import LifecycleTransitionRecord
+from aegisops.control_plane.models import ReconciliationRecord
+from aegisops.control_plane.models import ActionRequestRecord
+from aegisops.control_plane.models import LifecycleTransitionRecord
 
 
 @dataclass
