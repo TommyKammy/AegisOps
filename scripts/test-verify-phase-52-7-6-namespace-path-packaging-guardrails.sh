@@ -42,7 +42,13 @@ create_repo_copy() {
   cp "${repo_root}/scripts/verify-phase-52-7-5-root-shim-reduction.sh" "${target}/scripts/"
   cp "${repo_root}/scripts/verify-phase-52-7-6-namespace-path-packaging-guardrails.sh" "${target}/scripts/"
   cp "${repo_root}/scripts/verify-publishable-path-hygiene.sh" "${target}/scripts/"
-  cp "${repo_root}"/scripts/test-verify-phase-52-{5,6,7}-*.sh "${target}/scripts/" 2>/dev/null || true
+  local phase_test_scripts=()
+  shopt -s nullglob
+  phase_test_scripts=("${repo_root}"/scripts/test-verify-phase-52-{5,6,7}-*.sh)
+  shopt -u nullglob
+  if ((${#phase_test_scripts[@]})); then
+    cp "${phase_test_scripts[@]}" "${target}/scripts/"
+  fi
   cp "${repo_root}/.github/workflows/ci.yml" "${target}/.github/workflows/ci.yml"
   git -C "${target}" init -q
   git -C "${target}" config user.name "Codex Test"
