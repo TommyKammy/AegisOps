@@ -1,0 +1,48 @@
+profile_id: smb-single-node
+product_profile: wazuh
+profile_contract_version: 2026-05-03
+intake_binding_contract_version: 2026-05-03
+status: accepted-contract
+related_issues:
+  - 1135
+  - 1136
+  - 1137
+  - 1138
+authority_boundary: Wazuh-origin input remains subordinate candidate analytic-signal context until AegisOps admits it and links it to an AegisOps-owned record; Wazuh manager, indexer, dashboard, alert, rule, timestamp, webhook acknowledgement, generated config, and forwarded headers cannot close, approve, execute, reconcile, release, gate, or mutate authoritative AegisOps records.
+intake_url: /intake/wazuh
+proxy_route: aegisops-proxy:/intake/wazuh -> aegisops-control-plane:/intake/wazuh
+manager_delivery: reviewed-proxy-only
+shared_secret_custody: AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET_FILE or AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET_OPENBAO_PATH
+raw_secret_values_allowed: false
+forwarded_headers_trusted: false
+source_linkage_inference_allowed: false
+admission_posture: candidate-analytic-signal-until-aegisops-admission-and-linkage
+pre_admission_authority: false
+provenance_fields:
+  - source_family
+  - source_system
+  - source_component
+  - source_id
+  - event_id
+  - event_timestamp
+  - wazuh_manager_id
+  - wazuh_rule_id
+  - wazuh_rule_level
+  - ingest_channel
+  - admission_channel
+  - secret_custody_reference
+  - proxy_route
+  - reviewed_by
+negative_admission_tests:
+  - missing_intake_url
+  - missing_secret_custody_reference
+  - missing_wazuh_provenance_fields
+  - raw_forwarded_headers_trusted
+  - inferred_source_linkage
+  - pre_admission_case_truth
+  - webhook_acknowledgement_as_reconciliation_truth
+admission_result:
+  admitted_record_owner: aegisops-control-plane
+  subordinate_payload_preservation: required
+  alert_case_evidence_authority: aegisops-record-chain-only
+  direct_wazuh_to_shuffle_shortcut_allowed: false
