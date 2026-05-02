@@ -88,6 +88,14 @@ assert_fails_with \
   "${missing_retained_owner_policy_repo}" \
   "Missing Phase 52.6.6 retained root owner policy statement: After Phase 52.6.6, the only retained root owner files are"
 
+truncated_retained_owner_policy_repo="${workdir}/truncated-retained-owner-policy"
+create_valid_repo "${truncated_retained_owner_policy_repo}"
+perl -0pi -e 's/No other direct root Python file may be promoted to retained owner status without a later accepted ADR or issue-specific contract that names the root file, authoritative owner, caller evidence, focused regression coverage, rollback path, and authority-boundary impact\./No other direct root Python file may be promoted to retained owner status without a later accepted ADR or issue-specific contract/' \
+  "${truncated_retained_owner_policy_repo}/${contract_path}"
+assert_fails_with \
+  "${truncated_retained_owner_policy_repo}" \
+  "Missing Phase 52.6.6 retained root owner policy statement: No other direct root Python file may be promoted to retained owner status without a later accepted ADR or issue-specific contract that names the root file, authoritative owner, caller evidence, focused regression coverage, rollback path, and authority-boundary impact."
+
 extra_retained_owner_repo="${workdir}/extra-retained-owner"
 create_valid_repo "${extra_retained_owner_repo}"
 perl -0pi -e 's/\| `action_policy\.py` \| `actions` \| simple shim \|/\| `action_policy.py` \| `actions` \| retained owner \|/' \
@@ -95,6 +103,14 @@ perl -0pi -e 's/\| `action_policy\.py` \| `actions` \| simple shim \|/\| `action
 assert_fails_with \
   "${extra_retained_owner_repo}" \
   "Phase 52.6.6 retained root owner set mismatch: unexpected retained owner rows: action_policy.py"
+
+invalid_classification_repo="${workdir}/invalid-classification"
+create_valid_repo "${invalid_classification_repo}"
+perl -0pi -e 's/\| `action_policy\.py` \| `actions` \| simple shim \|/\| `action_policy.py` \| `actions` \| simple shim typo \|/' \
+  "${invalid_classification_repo}/${contract_path}"
+assert_fails_with \
+  "${invalid_classification_repo}" \
+  "Phase 52.6.6 root package guardrail found invalid root inventory classifications: action_policy.py: simple shim typo"
 
 service_policy_removed_repo="${workdir}/service-policy-removed"
 create_valid_repo "${service_policy_removed_repo}"

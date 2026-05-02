@@ -10,7 +10,7 @@ required_phrases=(
   'After Phase 52.6.6, the only retained root owner files are'
   '`__init__.py`, `config.py`, `models.py`, `operator_inspection.py`, `persistence_lifecycle.py`, `publishable_paths.py`, `record_validation.py`, `reviewed_slice_policy.py`, `service_composition.py`, and `structured_events.py`.'
   '`service.py` is not a retained owner; it is the single retained compatibility blocker'
-  'No other direct root Python file may be promoted to retained owner status without a later accepted ADR or issue-specific contract'
+  'No other direct root Python file may be promoted to retained owner status without a later accepted ADR or issue-specific contract that names the root file, authoritative owner, caller evidence, focused regression coverage, rollback path, and authority-boundary impact.'
   'The root package guardrail baseline is exactly `37` direct `.py` files under `control-plane/aegisops_control_plane/`.'
   'No direct root Python filename may begin with `phaseNN` or `phaseNN_` after Phase 52.6.6.'
   'A new flat root module fails verification unless the root file inventory classifies it and the root-count baseline is intentionally updated by policy.'
@@ -81,6 +81,13 @@ expected_retained_owners = {
     "service_composition.py",
     "structured_events.py",
 }
+allowed_classifications = {
+    "retained owner",
+    "simple shim",
+    "compatibility adapter",
+    "alias candidate",
+    "retained compatibility blocker",
+}
 phase_numbered_pattern = re.compile(r"^phase\d+")
 row_pattern = re.compile(
     r"^\| `(?P<module>[^`]+\.py)` \| `(?P<family>[^`]+)` \| "
@@ -109,16 +116,29 @@ if len(actual_root_files) != expected_root_count:
 doc_text = doc_path.read_text(encoding="utf-8")
 rows: dict[str, str] = {}
 duplicates: set[str] = set()
+invalid_classifications: list[str] = []
 for match in row_pattern.finditer(doc_text):
     module = match.group("module")
     if module in rows:
         duplicates.add(module)
-    rows[module] = match.group("classification").strip()
+    classification = match.group("classification").strip()
+    if classification not in allowed_classifications:
+        invalid_classifications.append(f"{module}: {classification}")
+    rows[module] = classification
 
 if duplicates:
     print(
         "Phase 52.6.6 root package guardrail found duplicate root inventory rows: "
         + ", ".join(sorted(duplicates)),
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+if invalid_classifications:
+    print(
+        "Phase 52.6.6 root package guardrail found invalid root inventory "
+        "classifications: "
+        + ", ".join(sorted(invalid_classifications)),
         file=sys.stderr,
     )
     sys.exit(1)
