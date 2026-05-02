@@ -166,6 +166,22 @@ assert_fails_with \
   "${missing_known_limitation_repo}" \
   "Missing Phase 53.7 Wazuh upgrade rollback known limitation: no-full-wazuh-upgrader"
 
+prefixed_authority_key_repo="${workdir}/prefixed-authority-key"
+create_valid_repo "${prefixed_authority_key_repo}"
+perl -0pi -e 's/^authority_mutation_allowed: false$/disable_authority_mutation_allowed: false/m' \
+  "${prefixed_authority_key_repo}/docs/deployment/profiles/smb-single-node/wazuh/upgrade-rollback-evidence.yaml"
+assert_fails_with \
+  "${prefixed_authority_key_repo}" \
+  "Missing Phase 53.7 Wazuh upgrade rollback artifact term: authority_mutation_allowed: false"
+
+prefixed_components_section_repo="${workdir}/prefixed-components-section"
+create_valid_repo "${prefixed_components_section_repo}"
+perl -0pi -e 's/^components:$/my_components:/m' \
+  "${prefixed_components_section_repo}/docs/deployment/profiles/smb-single-node/wazuh/upgrade-rollback-evidence.yaml"
+assert_fails_with \
+  "${prefixed_components_section_repo}" \
+  "Missing Phase 53.7 Wazuh upgrade rollback artifact term: components:"
+
 missing_handoff_repo="${workdir}/missing-handoff"
 create_valid_repo "${missing_handoff_repo}"
 perl -0pi -e 's/^profile_change_handoff:\n(?:  .*\n)+component_evidence:/component_evidence:/m' \

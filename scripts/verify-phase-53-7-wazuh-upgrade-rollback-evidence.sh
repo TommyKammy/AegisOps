@@ -131,16 +131,17 @@ rendered_markdown_without_code_blocks() {
   ' "${markdown_path}" | perl -0pe 's/<!--.*?-->//gs'
 }
 
-has_uncommented_substring() {
-  local needle="$1"
+has_uncommented_exact_line() {
+  local expected="$1"
   local file_path="$2"
 
-  awk -v needle="${needle}" '
+  awk -v expected="${expected}" '
     /^[[:space:]]*#/ { next }
     {
       line = $0
       sub(/[[:space:]]+#.*/, "", line)
-      if (index(line, needle)) {
+      sub(/[[:space:]]+$/, "", line)
+      if (line == expected) {
         found = 1
       }
     }
@@ -362,12 +363,12 @@ contract_rendered_markdown="$(
   rendered_markdown_without_code_blocks "${contract_path}"
 )"
 
-if has_uncommented_substring "full_upgrader_implemented: true" "${artifact_path}"; then
+if has_uncommented_exact_line "full_upgrader_implemented: true" "${artifact_path}"; then
   echo "Forbidden Phase 53.7 Wazuh upgrade rollback artifact: full upgrader implementation claim detected" >&2
   exit 1
 fi
 
-if has_uncommented_substring "upgrade_automation_allowed: true" "${artifact_path}"; then
+if has_uncommented_exact_line "upgrade_automation_allowed: true" "${artifact_path}"; then
   echo "Forbidden Phase 53.7 Wazuh upgrade rollback artifact: upgrade automation claim detected" >&2
   exit 1
 fi
@@ -387,7 +388,7 @@ for phrase in "${required_phrases[@]}"; do
 done
 
 for term in "${required_artifact_terms[@]}"; do
-  if ! has_uncommented_substring "${term}" "${artifact_path}"; then
+  if ! has_uncommented_exact_line "${term}" "${artifact_path}"; then
     echo "Missing Phase 53.7 Wazuh upgrade rollback artifact term: ${term}" >&2
     exit 1
   fi
@@ -404,7 +405,7 @@ for component in "${required_components[@]}"; do
     echo "Missing Phase 53.7 Wazuh upgrade rollback contract component row: ${component}" >&2
     exit 1
   fi
-  if ! has_uncommented_substring "  ${component}:" "${artifact_path}"; then
+  if ! has_uncommented_exact_line "  ${component}:" "${artifact_path}"; then
     echo "Missing Phase 53.7 Wazuh upgrade rollback component evidence: ${component}" >&2
     exit 1
   fi
