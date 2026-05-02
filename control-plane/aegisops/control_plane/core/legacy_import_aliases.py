@@ -211,11 +211,25 @@ def register_legacy_import_aliases(
             raise ValueError(
                 f"legacy import alias key mismatch: {legacy_module} != {alias.legacy_module}"
             )
-        target = importlib.import_module(alias.target_module)
+        target = importlib.import_module(_canonical_module_name(alias.target_module))
         sys.modules[legacy_module] = target
         _bind_legacy_module_to_parent(legacy_module, target)
+        canonical_alias = _canonical_module_name(legacy_module)
+        if canonical_alias != legacy_module:
+            sys.modules[canonical_alias] = target
+            _bind_legacy_module_to_parent(canonical_alias, target)
         registered[legacy_module] = target
     return registered
+
+
+def _canonical_module_name(module_name: str) -> str:
+    if module_name == "aegisops_control_plane":
+        return "aegisops.control_plane"
+    if module_name.startswith("aegisops_control_plane."):
+        return "aegisops.control_plane" + module_name.removeprefix(
+            "aegisops_control_plane"
+        )
+    return module_name
 
 
 def _bind_legacy_module_to_parent(legacy_module: str, target: ModuleType) -> None:
@@ -225,5 +239,8 @@ def _bind_legacy_module_to_parent(legacy_module: str, target: ModuleType) -> Non
 
     parent_module = sys.modules.get(parent_name)
     if parent_module is None:
-        parent_module = importlib.import_module(parent_name)
+        if parent_name == "aegisops_control_plane":
+            return
+        parent_module = importlib.import_module(_canonical_module_name(parent_name))
+        sys.modules[parent_name] = parent_module
     setattr(parent_module, child_name, target)

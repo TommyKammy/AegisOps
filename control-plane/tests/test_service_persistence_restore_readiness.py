@@ -136,7 +136,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
         )
         self.assertEqual(
             type(readiness_operability_helper).__module__,
-            "aegisops_control_plane.runtime.readiness_operability",
+            "aegisops.control_plane.runtime.readiness_operability",
         )
         for helper_name in (
             "_collect_readiness_review_snapshots",
@@ -241,7 +241,8 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
     def test_backup_restore_validation_does_not_import_postgres_adapter(self) -> None:
         module_path = (
             pathlib.Path(__file__).resolve().parents[1]
-            / "aegisops_control_plane"
+            / "aegisops"
+            / "control_plane"
             / "restore_readiness_backup_restore.py"
         )
 
@@ -273,7 +274,8 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
     def test_readiness_projection_does_not_import_postgres_adapter(self) -> None:
         module_path = (
             pathlib.Path(__file__).resolve().parents[1]
-            / "aegisops_control_plane"
+            / "aegisops"
+            / "control_plane"
             / "restore_readiness_projection.py"
         )
 

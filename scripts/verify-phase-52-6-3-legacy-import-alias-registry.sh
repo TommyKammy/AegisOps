@@ -4,7 +4,7 @@ set -euo pipefail
 
 repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 doc_path="${repo_root}/docs/adr/0015-phase-52-6-3-legacy-import-alias-registry.md"
-registry_path="${repo_root}/control-plane/aegisops_control_plane/core/legacy_import_aliases.py"
+registry_path="${repo_root}/control-plane/aegisops/control_plane/core/legacy_import_aliases.py"
 control_plane_root="${repo_root}/control-plane"
 removed_root_shim="${repo_root}/control-plane/aegisops_control_plane/audit_export.py"
 removed_phase29_root_shims=(

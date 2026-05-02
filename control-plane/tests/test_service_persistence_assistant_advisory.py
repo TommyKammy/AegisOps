@@ -69,7 +69,8 @@ class AssistantAdvisoryPersistenceTests(ServicePersistenceTestBase):
     ) -> None:
         service_source = (
             pathlib.Path(__file__).resolve().parents[1]
-            / "aegisops_control_plane"
+            / "aegisops"
+            / "control_plane"
             / "service.py"
         ).read_text()
         service_functions = {
@@ -95,7 +96,8 @@ class AssistantAdvisoryPersistenceTests(ServicePersistenceTestBase):
     ) -> None:
         service_source = (
             pathlib.Path(__file__).resolve().parents[1]
-            / "aegisops_control_plane"
+            / "aegisops"
+            / "control_plane"
             / "service.py"
         ).read_text()
         service_tree = ast.parse(service_source)

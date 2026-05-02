@@ -9,12 +9,23 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
 class Phase5013InternalCallerRewiringTests(unittest.TestCase):
+    def _path(self, relative_path: str) -> pathlib.Path:
+        path = REPO_ROOT / relative_path
+        if path.exists():
+            return path
+        canonical_relative_path = relative_path.replace(
+            "control-plane/aegisops_control_plane/",
+            "control-plane/aegisops/control_plane/",
+            1,
+        )
+        return REPO_ROOT / canonical_relative_path
+
     def _service_facade_delegate_calls(
         self,
         relative_path: str,
         forbidden_methods: set[str],
     ) -> list[str]:
-        source = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        source = self._path(relative_path).read_text(encoding="utf-8")
         tree = ast.parse(source, filename=relative_path)
         calls: list[str] = []
         for node in ast.walk(tree):

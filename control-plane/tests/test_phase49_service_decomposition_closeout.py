@@ -9,8 +9,19 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
 class Phase49ServiceDecompositionCloseoutTests(unittest.TestCase):
-    def _read(self, relative_path: str) -> str:
+    def _path(self, relative_path: str) -> pathlib.Path:
         path = REPO_ROOT / relative_path
+        if path.exists():
+            return path
+        canonical_relative_path = relative_path.replace(
+            "control-plane/aegisops_control_plane/",
+            "control-plane/aegisops/control_plane/",
+            1,
+        )
+        return REPO_ROOT / canonical_relative_path
+
+    def _read(self, relative_path: str) -> str:
+        path = self._path(relative_path)
         if not path.exists():
             raise AssertionError(f"expected Phase 49.0 closeout artifact at {path}")
         return path.read_text(encoding="utf-8")
@@ -51,7 +62,7 @@ class Phase49ServiceDecompositionCloseoutTests(unittest.TestCase):
     def _baseline_metadata(self) -> dict[str, str]:
         for line in self._read("docs/maintainability-hotspot-baseline.txt").splitlines():
             stripped = line.strip()
-            if stripped.startswith("control-plane/aegisops_control_plane/service.py"):
+            if stripped.startswith("control-plane/aegisops/control_plane/service.py"):
                 metadata: dict[str, str] = {}
                 for part in stripped.split()[1:]:
                     key, value = part.split("=", 1)
@@ -99,7 +110,7 @@ class Phase49ServiceDecompositionCloseoutTests(unittest.TestCase):
         )
 
         for relative_path in expected_modules:
-            self.assertTrue((REPO_ROOT / relative_path).is_file(), relative_path)
+            self.assertTrue(self._path(relative_path).is_file(), relative_path)
 
     def test_phase49_focused_regression_suites_cover_extracted_boundaries(self) -> None:
         defined_tests = self._defined_test_names(

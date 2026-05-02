@@ -30,7 +30,8 @@ workstation_path_pattern="(/${mac_home_segment}/[^[:space:]]+|/${linux_home_segm
 
 if grep -R -E "${workstation_path_pattern}" \
   "${doc_path}" \
-  "${bridge_root}" \
+  "${bridge_root}/__init__.py" \
+  "${bridge_package}/__init__.py" \
   "${repo_root}/control-plane/tests/test_phase52_7_2_canonical_namespace_bridge.py" >/dev/null; then
   echo "Forbidden Phase 52.7.2 canonical namespace bridge: workstation-local absolute path detected" >&2
   exit 1

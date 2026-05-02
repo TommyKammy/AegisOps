@@ -7,7 +7,8 @@ import unittest
 
 
 CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
-PACKAGE_ROOT = CONTROL_PLANE_ROOT / "aegisops_control_plane"
+CANONICAL_PACKAGE_ROOT = CONTROL_PLANE_ROOT / "aegisops" / "control_plane"
+LEGACY_PACKAGE_ROOT = CONTROL_PLANE_ROOT / "aegisops_control_plane"
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
@@ -45,7 +46,9 @@ class Phase5264RootShimAliasRemovalTests(unittest.TestCase):
 
         for legacy_module, target_module in REMOVED_ROOT_SHIM_ALIASES.items():
             with self.subTest(legacy_module=legacy_module):
-                legacy_file = PACKAGE_ROOT / f"{legacy_module.rsplit('.', 1)[-1]}.py"
+                legacy_file = (
+                    LEGACY_PACKAGE_ROOT / f"{legacy_module.rsplit('.', 1)[-1]}.py"
+                )
                 self.assertFalse(legacy_file.exists(), legacy_file)
                 self.assertIn(legacy_module, registry.LEGACY_IMPORT_ALIASES)
                 self.assertEqual(
@@ -57,7 +60,7 @@ class Phase5264RootShimAliasRemovalTests(unittest.TestCase):
                     importlib.import_module(target_module),
                 )
 
-    def test_public_root_owners_stay_physical_blockers(self) -> None:
+    def test_public_root_owners_moved_to_canonical_physical_package(self) -> None:
         retained = {
             "models.py",
             "service.py",
@@ -91,8 +94,14 @@ class Phase5264RootShimAliasRemovalTests(unittest.TestCase):
             "runtime_restore_readiness_diagnostics.py",
         }
 
-        missing = sorted(name for name in retained if not (PACKAGE_ROOT / name).is_file())
+        missing = sorted(
+            name for name in retained if not (CANONICAL_PACKAGE_ROOT / name).is_file()
+        )
         self.assertEqual(missing, [])
+        legacy_files = sorted(
+            name for name in retained if (LEGACY_PACKAGE_ROOT / name).exists()
+        )
+        self.assertEqual(legacy_files, [])
 
 
 if __name__ == "__main__":
