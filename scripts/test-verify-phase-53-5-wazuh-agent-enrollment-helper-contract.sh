@@ -114,7 +114,7 @@ perl -0pi -e 's/^enrollment_secret_custody: .+$/enrollment_secret_custody: /m' \
   "${missing_secret_custody_repo}/docs/deployment/profiles/smb-single-node/wazuh/agent-enrollment-helper.yaml"
 assert_fails_with \
   "${missing_secret_custody_repo}" \
-  "Missing Phase 53.5 Wazuh agent enrollment helper artifact term: enrollment_secret_custody"
+  "Missing Phase 53.5 Wazuh agent enrollment helper artifact term: enrollment_secret_custody: AEGISOPS_WAZUH_AGENT_ENROLLMENT_SECRET_FILE or AEGISOPS_WAZUH_AGENT_ENROLLMENT_SECRET_OPENBAO_PATH"
 
 secret_looking_value_repo="${workdir}/secret-looking-value"
 create_valid_repo "${secret_looking_value_repo}"
