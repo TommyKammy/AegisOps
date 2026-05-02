@@ -101,4 +101,12 @@ assert_fails_with \
   "${missing_publishable_hygiene_repo}" \
   "Missing Phase 52.6.1 root shim inventory statement: Run \`bash scripts/verify-publishable-path-hygiene.sh\`."
 
+subordinate_inventory_rows_repo="${workdir}/subordinate-inventory-rows"
+create_valid_repo "${subordinate_inventory_rows_repo}"
+perl -0pi -e 's/alias rows, and operator-facing text remain subordinate context/alias rows, inventory rows, and operator-facing text remain subordinate context/' \
+  "${subordinate_inventory_rows_repo}/${contract_path}"
+assert_fails_with \
+  "${subordinate_inventory_rows_repo}" \
+  "Missing Phase 52.6.1 root shim inventory statement: Wazuh, Shuffle, tickets, assistant output, generated config, CLI status, demo data, adapters, DTOs, projections, summaries, compatibility shims, alias rows, and operator-facing text remain subordinate context."
+
 echo "Phase 52.6.1 root shim inventory verifier negative and valid fixtures passed."

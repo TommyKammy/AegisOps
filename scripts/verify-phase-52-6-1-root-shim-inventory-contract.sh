@@ -27,7 +27,7 @@ required_phrases=(
   "- **Depends On**: #1094"
   "This contract is documentation and verification only. It does not delete shims, change imports, rename the public package, change the outer \`control-plane/\` directory, start Wazuh profile work, start Shuffle profile work, or alter runtime behavior."
   "AegisOps control-plane records remain authoritative for alert, case, evidence, approval, action request, execution receipt, reconciliation, audit, limitation, release, gate, and closeout truth."
-  "Wazuh, Shuffle, tickets, assistant output, generated config, CLI status, demo data, adapters, DTOs, projections, summaries, compatibility shims, alias rows, inventory rows, and operator-facing text remain subordinate context."
+  "Wazuh, Shuffle, tickets, assistant output, generated config, CLI status, demo data, adapters, DTOs, projections, summaries, compatibility shims, alias rows, and operator-facing text remain subordinate context."
   "The root shim inventory does not change authorization, provenance, reconciliation, snapshot, backup, restore, export, readiness, assistant, evidence, action-execution, Wazuh, Shuffle, ticket, CLI, HTTP, or deployment behavior."
   "The Phase 52.5 closeout baseline for root-level Python files under \`control-plane/aegisops_control_plane/\` is \`63\`."
   "The baseline counts only direct \`.py\` files in \`control-plane/aegisops_control_plane/\`; package-owned files below subdirectories are tracked by ADR-0012 and stay outside this root shim baseline."
@@ -55,6 +55,7 @@ forbidden_claims=(
   "This contract changes runtime behavior."
   "This contract allows Phase29 root files as production owners."
   "Legacy root shims may be deleted immediately."
+  "inventory rows, and operator-facing text remain subordinate context."
 )
 
 if [[ ! -f "${doc_path}" ]]; then
