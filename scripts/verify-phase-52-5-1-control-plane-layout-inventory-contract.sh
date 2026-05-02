@@ -30,7 +30,7 @@ required_phrases=(
   "The layout inventory does not change authorization, provenance, reconciliation, snapshot, backup, restore, export, readiness, assistant, evidence, or action-execution behavior."
   'The public Python package name `aegisops_control_plane` remains unchanged throughout Phase 52.5.1 and later child issues unless a later accepted ADR explicitly approves a rename.'
   'The outer `control-plane/` directory remains unchanged because it is the reviewed repository home for live control-plane application code, service bootstrapping, adapters, tests, and service-local documentation.'
-  "Legacy import paths remain available during migration through compatibility shims or direct re-export modules until all documented internal, CLI, HTTP, test, and operator callers have migrated."
+  "Legacy import paths remain available during migration through compatibility shims, direct re-export modules, or approved entries in the legacy import alias registry until all documented internal, CLI, HTTP, test, and operator callers have migrated."
   "Removing a legacy import path requires a later transition policy that lists the affected import path, replacement import path, caller evidence, deprecation window, focused regression test, and rollback path."
   "If caller evidence is incomplete, malformed, or ambiguous, the old import path stays available."
   "Phase 52.5.1 does not itself approve any additional production module moves, import rewrites beyond the documented compatibility shims, package renames, directory renames, Wazuh profile work, Shuffle profile work, runtime behavior changes, deployment behavior changes, or authority-boundary changes."
@@ -159,7 +159,7 @@ row_pattern = re.compile(
     re.MULTILINE,
 )
 
-rows: dict[str, str] = {}
+rows: dict[str, tuple[str, str]] = {}
 duplicates: set[str] = set()
 invalid_families: list[str] = []
 empty_contracts: list[str] = []
@@ -169,7 +169,7 @@ for match in row_pattern.finditer(doc_text):
     contract = match.group("contract").strip()
     if module in rows:
         duplicates.add(module)
-    rows[module] = family
+    rows[module] = (family, contract)
     if family not in allowed:
         invalid_families.append(f"{module}: {family}")
     if not contract:
@@ -190,7 +190,11 @@ if duplicates:
     sys.exit(1)
 
 missing = [module for module in actual_modules if module not in rows]
-extra = sorted(set(rows) - set(actual_modules))
+extra = sorted(
+    module
+    for module, (_, contract) in rows.items()
+    if module not in actual_modules and "Compatibility shim only" not in contract
+)
 if missing:
     print(
         "Phase 52.5.1 layout inventory is missing module rows: "
@@ -220,7 +224,7 @@ if empty_contracts:
     )
     sys.exit(1)
 
-missing_families = sorted(allowed - set(rows.values()))
+missing_families = sorted(allowed - {family for family, _ in rows.values()})
 if missing_families:
     print(
         "Phase 52.5.1 layout inventory does not use required target families: "
