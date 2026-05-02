@@ -38,6 +38,7 @@ Canonical cross-phase boundary reference:
 - [Phase 53.1 Wazuh profile contract](docs/deployment/wazuh-smb-single-node-profile-contract.md) defines the `smb-single-node` Wazuh manager, indexer, dashboard, resource, port, volume, certificate, and pinned-version expectations.
 - [Phase 53.2 Wazuh certificate and credential contract](docs/deployment/wazuh-certificate-credential-contract.md) defines certificate generation-wrapper posture, credential custody, default-credential rejection, rotation guidance, and no-live-secret validation for the Wazuh profile.
 - [Phase 53.3 Wazuh intake binding contract](docs/deployment/wazuh-manager-intake-binding-contract.md) defines the manager-to-AegisOps intake URL, reviewed proxy route, shared-secret custody reference, provenance fields, and analytic-signal admission boundary for Wazuh-origin events.
+- [Phase 53.5 Wazuh agent enrollment helper contract](docs/deployment/wazuh-agent-enrollment-helper-contract.md) defines the one-endpoint enrollment helper posture, prerequisites, rollback notes, safety warnings, and fleet-management exclusion for the Wazuh profile.
 
 ## Product positioning
 
@@ -88,6 +89,8 @@ The Phase 53.1 Wazuh profile contract is defined by the [Phase 53.1 Wazuh profil
 The Phase 53.2 Wazuh certificate and credential contract is defined by the [Phase 53.2 Wazuh certificate and credential contract](docs/deployment/wazuh-certificate-credential-contract.md).
 
 The Phase 53.3 Wazuh intake binding contract is defined by the [Phase 53.3 Wazuh intake binding contract](docs/deployment/wazuh-manager-intake-binding-contract.md).
+
+The Phase 53.5 Wazuh agent enrollment helper contract is defined by the [Phase 53.5 Wazuh agent enrollment helper contract](docs/deployment/wazuh-agent-enrollment-helper-contract.md).
 
 Wazuh detects, AegisOps decides, records, and reconciles, and Shuffle executes reviewed delegated routine work.
 
