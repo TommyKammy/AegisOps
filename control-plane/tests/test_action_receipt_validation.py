@@ -10,7 +10,7 @@ CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
-from aegisops_control_plane.actions.action_receipt_validation import (
+from aegisops.control_plane.actions.action_receipt_validation import (
     MissingReceiptValueError,
     require_receipt_string_value,
     require_receipt_https_url_value,

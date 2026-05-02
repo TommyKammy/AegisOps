@@ -12,7 +12,7 @@ CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
-from aegisops_control_plane.publishable_paths import is_workstation_local_path
+from aegisops.control_plane.publishable_paths import is_workstation_local_path
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]

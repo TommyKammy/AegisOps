@@ -14,15 +14,15 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
 
-from aegisops_control_plane.adapters.osquery import OsqueryHostContextAdapter
-from aegisops_control_plane.config import RuntimeConfig
-from aegisops_control_plane.models import (
+from aegisops.control_plane.adapters.osquery import OsqueryHostContextAdapter
+from aegisops.control_plane.config import RuntimeConfig
+from aegisops.control_plane.models import (
     ActionRequestRecord,
     CaseRecord,
     EvidenceRecord,
     ObservationRecord,
 )
-from aegisops_control_plane.service import AegisOpsControlPlaneService
+from aegisops.control_plane.service import AegisOpsControlPlaneService
 from postgres_test_support import make_store
 from tests.support.fixtures import load_wazuh_fixture
 

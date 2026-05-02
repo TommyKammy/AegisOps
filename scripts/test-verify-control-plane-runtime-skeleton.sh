@@ -23,7 +23,7 @@ create_runtime_repo() {
 # Fixture
 EOF
   cat <<'EOF' > "${target}/control-plane/main.py"
-from aegisops_control_plane.service import build_runtime_service
+from aegisops.control_plane.service import build_runtime_service
 EOF
   cat <<'EOF' > "${target}/control-plane/aegisops_control_plane/__init__.py"
 """Fixture package."""

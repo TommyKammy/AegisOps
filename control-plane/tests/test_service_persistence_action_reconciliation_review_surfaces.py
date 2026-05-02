@@ -10,40 +10,40 @@ if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
 import _service_persistence_support as support
-from aegisops_control_plane import action_review_projection
-from aegisops_control_plane import action_review_chain
-from aegisops_control_plane import action_review_coordination
-from aegisops_control_plane import action_review_index
-from aegisops_control_plane import action_review_inspection
-from aegisops_control_plane import action_review_path_health
-from aegisops_control_plane import action_review_timeline
-from aegisops_control_plane import action_review_visibility
-from aegisops_control_plane import action_review_write_surface
-from aegisops_control_plane.actions.review import (
+from aegisops.control_plane import action_review_projection
+from aegisops.control_plane import action_review_chain
+from aegisops.control_plane import action_review_coordination
+from aegisops.control_plane import action_review_index
+from aegisops.control_plane import action_review_inspection
+from aegisops.control_plane import action_review_path_health
+from aegisops.control_plane import action_review_timeline
+from aegisops.control_plane import action_review_visibility
+from aegisops.control_plane import action_review_write_surface
+from aegisops.control_plane.actions.review import (
     action_review_chain as action_review_package_chain,
 )
-from aegisops_control_plane.actions.review import (
+from aegisops.control_plane.actions.review import (
     action_review_coordination as action_review_package_coordination,
 )
-from aegisops_control_plane.actions.review import (
+from aegisops.control_plane.actions.review import (
     action_review_index as action_review_package_index,
 )
-from aegisops_control_plane.actions.review import (
+from aegisops.control_plane.actions.review import (
     action_review_inspection as action_review_package_inspection,
 )
-from aegisops_control_plane.actions.review import (
+from aegisops.control_plane.actions.review import (
     action_review_path_health as action_review_package_path_health,
 )
-from aegisops_control_plane.actions.review import (
+from aegisops.control_plane.actions.review import (
     action_review_projection as action_review_package_projection,
 )
-from aegisops_control_plane.actions.review import (
+from aegisops.control_plane.actions.review import (
     action_review_timeline as action_review_package_timeline,
 )
-from aegisops_control_plane.actions.review import (
+from aegisops.control_plane.actions.review import (
     action_review_visibility as action_review_package_visibility,
 )
-from aegisops_control_plane.actions.review import (
+from aegisops.control_plane.actions.review import (
     action_review_write_surface as action_review_package_write_surface,
 )
 from _service_persistence_support import (

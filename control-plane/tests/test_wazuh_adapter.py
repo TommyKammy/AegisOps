@@ -13,7 +13,7 @@ TESTS_ROOT = pathlib.Path(__file__).resolve().parent
 if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
-from aegisops_control_plane.adapters.wazuh import WazuhAlertAdapter
+from aegisops.control_plane.adapters.wazuh import WazuhAlertAdapter
 from support.fixtures import load_wazuh_fixture
 
 

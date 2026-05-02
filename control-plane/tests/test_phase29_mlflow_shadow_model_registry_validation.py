@@ -14,13 +14,13 @@ for candidate in (CONTROL_PLANE_ROOT, TESTS_ROOT):
         sys.path.insert(0, str(candidate))
 
 
-import aegisops_control_plane.ml_shadow.mlflow_registry as mlflow_shadow_model_registry
-from aegisops_control_plane.models import EvidenceRecord, ReconciliationRecord
-from aegisops_control_plane.ml_shadow.mlflow_registry import (
+import aegisops.control_plane.ml_shadow.mlflow_registry as mlflow_shadow_model_registry
+from aegisops.control_plane.models import EvidenceRecord, ReconciliationRecord
+from aegisops.control_plane.ml_shadow.mlflow_registry import (
     Phase29MlflowShadowModelRegistryError,
     track_shadow_model_with_mlflow,
 )
-from aegisops_control_plane.ml_shadow.dataset import (
+from aegisops.control_plane.ml_shadow.dataset import (
     Phase29ShadowDatasetSnapshot,
     generate_reviewed_shadow_dataset,
 )

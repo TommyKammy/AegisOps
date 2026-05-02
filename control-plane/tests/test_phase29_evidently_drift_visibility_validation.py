@@ -13,12 +13,12 @@ for candidate in (CONTROL_PLANE_ROOT, TESTS_ROOT):
         sys.path.insert(0, str(candidate))
 
 
-from aegisops_control_plane.models import EvidenceRecord, ReconciliationRecord
-from aegisops_control_plane.ml_shadow.drift_visibility import (
+from aegisops.control_plane.models import EvidenceRecord, ReconciliationRecord
+from aegisops.control_plane.ml_shadow.drift_visibility import (
     Phase29EvidentlyDriftVisibilityError,
     build_phase29_evidently_drift_visibility_report,
 )
-from aegisops_control_plane.ml_shadow.dataset import (
+from aegisops.control_plane.ml_shadow.dataset import (
     Phase29ShadowDatasetSnapshot,
     generate_reviewed_shadow_dataset,
 )

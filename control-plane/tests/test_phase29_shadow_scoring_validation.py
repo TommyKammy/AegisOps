@@ -13,13 +13,13 @@ for candidate in (CONTROL_PLANE_ROOT, TESTS_ROOT):
         sys.path.insert(0, str(candidate))
 
 
-from aegisops_control_plane.models import EvidenceRecord, ReconciliationRecord
-import aegisops_control_plane.phase29_shadow_scoring as legacy_shadow_scoring
-from aegisops_control_plane.ml_shadow.dataset import (
+from aegisops.control_plane.models import EvidenceRecord, ReconciliationRecord
+import aegisops.control_plane.phase29_shadow_scoring as legacy_shadow_scoring
+from aegisops.control_plane.ml_shadow.dataset import (
     Phase29ShadowDatasetSnapshot,
     generate_reviewed_shadow_dataset,
 )
-from aegisops_control_plane.ml_shadow.scoring import (
+from aegisops.control_plane.ml_shadow.scoring import (
     Phase29ShadowScoringError,
     Phase29ShadowStreamingBaselineScorer,
     score_shadow_dataset_offline,

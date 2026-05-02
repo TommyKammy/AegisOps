@@ -22,7 +22,7 @@ import pathlib
 import subprocess
 import sys
 
-from aegisops_control_plane.publishable_paths import ALLOWLIST_MARKER, is_workstation_local_path
+from aegisops.control_plane.publishable_paths import ALLOWLIST_MARKER, is_workstation_local_path
 
 repo_root = pathlib.Path(os.environ["AEGISOPS_REPO_ROOT"])
 

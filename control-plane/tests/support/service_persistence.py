@@ -13,16 +13,16 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
 
-from aegisops_control_plane.config import RuntimeConfig
-from aegisops_control_plane.models import (
+from aegisops.control_plane.config import RuntimeConfig
+from aegisops.control_plane.models import (
     AITraceRecord,
     CaseRecord,
     EvidenceRecord,
     RecommendationRecord,
     ReconciliationRecord,
 )
-from aegisops_control_plane.adapters.wazuh import WazuhAlertAdapter
-from aegisops_control_plane.service import (
+from aegisops.control_plane.adapters.wazuh import WazuhAlertAdapter
+from aegisops.control_plane.service import (
     AegisOpsControlPlaneService,
     AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES,
 )

@@ -10,7 +10,7 @@ CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
-from aegisops_control_plane.config import OpenBaoKVv2SecretTransport, RuntimeConfig
+from aegisops.control_plane.config import OpenBaoKVv2SecretTransport, RuntimeConfig
 
 
 class _MutableOpenBaoTransport:

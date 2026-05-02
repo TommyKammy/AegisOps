@@ -11,11 +11,11 @@ if str(TESTS_ROOT) not in sys.path:
 
 import _service_persistence_support as support
 from _service_persistence_support import ServicePersistenceTestBase
-import aegisops_control_plane.service as service_module
-from aegisops_control_plane.ingestion.case_workflow import CaseWorkflowService
-from aegisops_control_plane.ingestion.detection_lifecycle import DetectionIntakeService
-from aegisops_control_plane.ingestion.evidence_linkage import EvidenceLinkageService
-from aegisops_control_plane.models import AlertRecord, AnalyticSignalRecord, CaseRecord
+import aegisops.control_plane.service as service_module
+from aegisops.control_plane.ingestion.case_workflow import CaseWorkflowService
+from aegisops.control_plane.ingestion.detection_lifecycle import DetectionIntakeService
+from aegisops.control_plane.ingestion.evidence_linkage import EvidenceLinkageService
+from aegisops.control_plane.models import AlertRecord, AnalyticSignalRecord, CaseRecord
 
 REVIEWED_PROXY_SECRET = "reviewed-proxy-secret"  # noqa: S105 - test fixture secret
 

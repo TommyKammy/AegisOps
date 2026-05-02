@@ -9,7 +9,7 @@ CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
-from aegisops_control_plane.structured_events import sanitize_structured_event_fields
+from aegisops.control_plane.structured_events import sanitize_structured_event_fields
 
 
 class StructuredEventSanitizationTests(unittest.TestCase):

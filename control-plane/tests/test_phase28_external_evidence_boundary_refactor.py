@@ -12,11 +12,11 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
 
-from aegisops_control_plane.config import RuntimeConfig
-from aegisops_control_plane.evidence import external_evidence_boundary
-from aegisops_control_plane.evidence import external_evidence_endpoint
-from aegisops_control_plane.evidence import external_evidence_facade
-from aegisops_control_plane.service import AegisOpsControlPlaneService
+from aegisops.control_plane.config import RuntimeConfig
+from aegisops.control_plane.evidence import external_evidence_boundary
+from aegisops.control_plane.evidence import external_evidence_endpoint
+from aegisops.control_plane.evidence import external_evidence_facade
+from aegisops.control_plane.service import AegisOpsControlPlaneService
 from postgres_test_support import make_store
 
 

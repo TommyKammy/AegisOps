@@ -15,9 +15,9 @@ if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
 from support.service_persistence import ServicePersistenceTestBase
-from aegisops_control_plane.config import RuntimeConfig
-from aegisops_control_plane.api.http_protected_surface import authenticate_protected_write
-from aegisops_control_plane.service import (
+from aegisops.control_plane.config import RuntimeConfig
+from aegisops.control_plane.api.http_protected_surface import authenticate_protected_write
+from aegisops.control_plane.service import (
     AegisOpsControlPlaneService,
     ActionExecutionRecord,
     ActionRequestRecord,

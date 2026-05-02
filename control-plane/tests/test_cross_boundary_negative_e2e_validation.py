@@ -16,8 +16,8 @@ for candidate in (CONTROL_PLANE_ROOT, TESTS_ROOT):
 
 
 from _cli_inspection_support import ControlPlaneCliInspectionTestBase
-from aegisops_control_plane.assistant.assistant_provider import AssistantProviderAdapter
-from aegisops_control_plane.models import (
+from aegisops.control_plane.assistant.assistant_provider import AssistantProviderAdapter
+from aegisops.control_plane.models import (
     AITraceRecord,
     ActionExecutionRecord,
     ActionRequestRecord,
@@ -30,15 +30,15 @@ from aegisops_control_plane.models import (
     RecommendationRecord,
     ReconciliationRecord,
 )
-from aegisops_control_plane.ml_shadow.drift_visibility import (
+from aegisops.control_plane.ml_shadow.drift_visibility import (
     build_phase29_evidently_drift_visibility_report,
 )
-from aegisops_control_plane.ml_shadow.dataset import Phase29ShadowDatasetSnapshot
-from aegisops_control_plane.ml_shadow.scoring import (
+from aegisops.control_plane.ml_shadow.dataset import Phase29ShadowDatasetSnapshot
+from aegisops.control_plane.ml_shadow.scoring import (
     Phase29ShadowScoringError,
     score_shadow_dataset_offline,
 )
-from aegisops_control_plane.service import AegisOpsControlPlaneService
+from aegisops.control_plane.service import AegisOpsControlPlaneService
 import _cli_inspection_support as cli_support
 import test_phase28_endpoint_evidence_pack_validation as phase28_tests
 import test_phase29_no_authority_ml_and_optional_network_validation as phase29_tests

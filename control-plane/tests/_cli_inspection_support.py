@@ -22,10 +22,10 @@ if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
 import main
-from aegisops_control_plane.config import RuntimeConfig
-from aegisops_control_plane.adapters.wazuh import WazuhAlertAdapter
-from aegisops_control_plane.actions.execution_coordinator import _approved_payload_binding_hash
-from aegisops_control_plane.models import (
+from aegisops.control_plane.config import RuntimeConfig
+from aegisops.control_plane.adapters.wazuh import WazuhAlertAdapter
+from aegisops.control_plane.actions.execution_coordinator import _approved_payload_binding_hash
+from aegisops.control_plane.models import (
     AITraceRecord,
     ActionExecutionRecord,
     ActionRequestRecord,
@@ -37,7 +37,7 @@ from aegisops_control_plane.models import (
     RecommendationRecord,
     ReconciliationRecord,
 )
-from aegisops_control_plane.service import (
+from aegisops.control_plane.service import (
     AegisOpsControlPlaneService,
     AuthenticatedRuntimePrincipal,
 )

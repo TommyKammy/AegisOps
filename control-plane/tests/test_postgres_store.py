@@ -12,13 +12,13 @@ CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
-import aegisops_control_plane.adapters.postgres as postgres_adapter
-import aegisops_control_plane.record_validation as record_validation
-from aegisops_control_plane.adapters.postgres import (
+import aegisops.control_plane.adapters.postgres as postgres_adapter
+import aegisops.control_plane.record_validation as record_validation
+from aegisops.control_plane.adapters.postgres import (
     PostgresControlPlaneStore,
     _LIFECYCLE_STATES_BY_FAMILY,
 )
-from aegisops_control_plane.models import (
+from aegisops.control_plane.models import (
     AITraceRecord,
     ActionExecutionRecord,
     ActionRequestRecord,

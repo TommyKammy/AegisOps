@@ -18,7 +18,7 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 import main  # type: ignore[import-not-found]
 
 from _service_persistence_support import ServicePersistenceTestBase
-from aegisops_control_plane.assistant.assistant_provider import AssistantProviderResult
+from aegisops.control_plane.assistant.assistant_provider import AssistantProviderResult
 
 
 class Phase24LiveAssistantSurfaceValidationTests(ServicePersistenceTestBase):
@@ -397,7 +397,7 @@ class Phase24LiveAssistantSurfaceValidationTests(ServicePersistenceTestBase):
 
         stdout = io.StringIO()
         with mock.patch(
-            "aegisops_control_plane.assistant.live_assistant_workflow.phase24_live_assistant_citations_from_context",
+            "aegisops.control_plane.assistant.live_assistant_workflow.phase24_live_assistant_citations_from_context",
             return_value=(),
         ):
             main.main(

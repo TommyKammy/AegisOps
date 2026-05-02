@@ -21,9 +21,9 @@ if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
 import main
-from aegisops_control_plane.config import RuntimeConfig
-from aegisops_control_plane.models import ApprovalDecisionRecord
-from aegisops_control_plane.service import (
+from aegisops.control_plane.config import RuntimeConfig
+from aegisops.control_plane.models import ApprovalDecisionRecord
+from aegisops.control_plane.service import (
     AegisOpsControlPlaneService,
     AuthenticatedRuntimePrincipal,
 )
