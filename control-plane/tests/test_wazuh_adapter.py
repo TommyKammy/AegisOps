@@ -421,6 +421,51 @@ class WazuhAlertAdapterTests(unittest.TestCase):
             expected_profile,
         )
 
+    def test_adapter_maps_phase53_sample_detection_fixture_to_expected_signal_shape(
+        self,
+    ) -> None:
+        adapter = WazuhAlertAdapter()
+
+        record = adapter.build_native_detection_record(
+            _load_fixture("phase53-smb-single-node-ssh-auth-failure-alert.json")
+        )
+        expected_mapping = _load_fixture(
+            "phase53-smb-single-node-ssh-auth-failure-analytic-signal.json"
+        )
+
+        self.assertEqual(record.native_record_id, "1731595600.1112223")
+        self.assertEqual(record.metadata["reviewed_source_profile"], expected_mapping)
+        self.assertEqual(
+            adapter.build_analytic_signal_admission(record).reviewed_context,
+            expected_mapping,
+        )
+
+    def test_adapter_rejects_phase53_detection_fixture_missing_required_provenance(
+        self,
+    ) -> None:
+        adapter = WazuhAlertAdapter()
+        alert = _load_fixture("phase53-smb-single-node-ssh-auth-failure-alert.json")
+        alert["data"].pop("secret_custody_reference")
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "data.secret_custody_reference must be a non-empty string",
+        ):
+            adapter.build_native_detection_record(alert)
+
+    def test_adapter_rejects_phase53_detection_fixture_missing_product_profile(
+        self,
+    ) -> None:
+        adapter = WazuhAlertAdapter()
+        alert = _load_fixture("phase53-smb-single-node-ssh-auth-failure-alert.json")
+        alert["data"].pop("product_profile")
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "data.product_profile must be a non-empty string",
+        ):
+            adapter.build_native_detection_record(alert)
+
     def test_adapter_uses_login_fields_when_reviewed_identity_names_are_absent(
         self,
     ) -> None:
