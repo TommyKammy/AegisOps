@@ -177,7 +177,7 @@ class RuntimeSkeletonTests(unittest.TestCase):
             )
 
     def test_cli_module_owns_parser_and_command_dispatch(self) -> None:
-        from aegisops_control_plane import cli
+        from aegisops_control_plane.api import cli
 
         parser = cli.build_parser()
         parsed = parser.parse_args(["runtime"])
@@ -191,7 +191,7 @@ class RuntimeSkeletonTests(unittest.TestCase):
         self.assertEqual(payload["persistence_mode"], "postgresql")
 
     def test_http_surface_module_owns_request_handler_construction(self) -> None:
-        from aegisops_control_plane import http_surface
+        from aegisops_control_plane.api import http_surface
 
         service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops")
@@ -206,7 +206,7 @@ class RuntimeSkeletonTests(unittest.TestCase):
         self.assertTrue(issubclass(handler_class, BaseHTTPRequestHandler))
 
     def test_http_surface_dispatch_uses_declared_route_tables(self) -> None:
-        from aegisops_control_plane import http_surface
+        from aegisops_control_plane.api import http_surface
 
         self.assertIn("/inspect-records", http_surface.HTTP_GET_ROUTES)
         self.assertIn(
@@ -235,7 +235,7 @@ class RuntimeSkeletonTests(unittest.TestCase):
     def test_readyz_uses_current_readiness_diagnostics_status(self) -> None:
         from http.server import ThreadingHTTPServer
 
-        from aegisops_control_plane import http_surface
+        from aegisops_control_plane.api import http_surface
 
         readiness_snapshot = mock.Mock()
         readiness_snapshot.to_dict.return_value = {
@@ -282,7 +282,7 @@ class RuntimeSkeletonTests(unittest.TestCase):
         service.inspect_readiness_diagnostics.assert_called_once_with()
 
     def test_readyz_runtime_status_fails_closed_for_unknown_status(self) -> None:
-        from aegisops_control_plane.readiness_contracts import (
+        from aegisops_control_plane.runtime.readiness_contracts import (
             resolve_readyz_runtime_status,
         )
 

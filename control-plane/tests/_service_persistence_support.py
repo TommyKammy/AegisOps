@@ -16,7 +16,7 @@ CONTROL_PLANE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
-from aegisops_control_plane.assistant_context import (
+from aegisops_control_plane.assistant.assistant_context import (
     _reviewed_context_identifier_citations,
 )
 from aegisops_control_plane.config import RuntimeConfig
@@ -40,7 +40,7 @@ from aegisops_control_plane.models import (
     RecommendationRecord,
 )
 from aegisops_control_plane.adapters.wazuh import WazuhAlertAdapter
-from aegisops_control_plane.execution_coordinator import _approved_payload_binding_hash
+from aegisops_control_plane.actions.execution_coordinator import _approved_payload_binding_hash
 from aegisops_control_plane.service import (
     AegisOpsControlPlaneService,
     AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES,

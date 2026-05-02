@@ -33,7 +33,7 @@ from _service_persistence_support import (
     timedelta,
     timezone,
 )
-from aegisops_control_plane.assistant_advisory import AssistantAdvisoryCoordinator
+from aegisops_control_plane.assistant.assistant_advisory import AssistantAdvisoryCoordinator
 
 
 class AssistantAdvisoryPersistenceTests(ServicePersistenceTestBase):

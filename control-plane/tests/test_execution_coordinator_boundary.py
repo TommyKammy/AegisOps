@@ -12,14 +12,14 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
     sys.path.insert(0, str(CONTROL_PLANE_ROOT))
 
 from aegisops_control_plane.config import RuntimeConfig
-from aegisops_control_plane.action_lifecycle_write_coordinator import (
+from aegisops_control_plane.actions.action_lifecycle_write_coordinator import (
     ActionLifecycleWriteCoordinator,
 )
-from aegisops_control_plane.action_reconciliation_orchestration import (
+from aegisops_control_plane.actions.action_reconciliation_orchestration import (
     ActionOrchestrationBoundary,
     ReconciliationOrchestrationBoundary,
 )
-from aegisops_control_plane.execution_coordinator import ExecutionCoordinator
+from aegisops_control_plane.actions.execution_coordinator import ExecutionCoordinator
 from aegisops_control_plane.service import AegisOpsControlPlaneService
 from postgres_test_support import make_store
 
