@@ -13,9 +13,9 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 
 from aegisops_control_plane.config import RuntimeConfig
-from aegisops_control_plane import external_evidence_boundary
-from aegisops_control_plane import external_evidence_endpoint
-from aegisops_control_plane import external_evidence_facade
+from aegisops_control_plane.evidence import external_evidence_boundary
+from aegisops_control_plane.evidence import external_evidence_endpoint
+from aegisops_control_plane.evidence import external_evidence_facade
 from aegisops_control_plane.service import AegisOpsControlPlaneService
 from postgres_test_support import make_store
 

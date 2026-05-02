@@ -16,7 +16,7 @@ for candidate in (CONTROL_PLANE_ROOT, TESTS_ROOT):
 
 
 from _cli_inspection_support import ControlPlaneCliInspectionTestBase
-from aegisops_control_plane.assistant_provider import AssistantProviderAdapter
+from aegisops_control_plane.assistant.assistant_provider import AssistantProviderAdapter
 from aegisops_control_plane.models import (
     AITraceRecord,
     ActionExecutionRecord,

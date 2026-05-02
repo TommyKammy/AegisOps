@@ -24,7 +24,7 @@ if str(TESTS_ROOT) not in sys.path:
 import main
 from aegisops_control_plane.config import RuntimeConfig
 from aegisops_control_plane.adapters.wazuh import WazuhAlertAdapter
-from aegisops_control_plane.execution_coordinator import _approved_payload_binding_hash
+from aegisops_control_plane.actions.execution_coordinator import _approved_payload_binding_hash
 from aegisops_control_plane.models import (
     AITraceRecord,
     ActionExecutionRecord,

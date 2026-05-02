@@ -14,7 +14,7 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 from aegisops_control_plane.config import RuntimeConfig
 from aegisops_control_plane.models import CaseRecord, EvidenceRecord
-from aegisops_control_plane.pilot_reporting_export import (
+from aegisops_control_plane.reporting.pilot_reporting_export import (
     export_pilot_executive_summary,
 )
 from aegisops_control_plane.service import AegisOpsControlPlaneService

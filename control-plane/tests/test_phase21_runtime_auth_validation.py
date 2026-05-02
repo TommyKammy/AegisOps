@@ -16,7 +16,7 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 import main
 from aegisops_control_plane.config import RuntimeConfig
-from aegisops_control_plane.http_protected_surface import (
+from aegisops_control_plane.api.http_protected_surface import (
     OPERATOR_ANALYST_PATHS,
     OPERATOR_APPROVER_PATHS,
     PROTECTED_READ_ROLES_BY_PATH,
@@ -24,8 +24,8 @@ from aegisops_control_plane.http_protected_surface import (
     protected_read_roles,
     protected_write_roles,
 )
-from aegisops_control_plane.http_runtime_surface import RUNTIME_READ_PATHS
-from aegisops_control_plane.operations import (
+from aegisops_control_plane.api.http_runtime_surface import RUNTIME_READ_PATHS
+from aegisops_control_plane.runtime.operations import (
     RestoreReadinessService,
     RuntimeBoundaryService,
 )
