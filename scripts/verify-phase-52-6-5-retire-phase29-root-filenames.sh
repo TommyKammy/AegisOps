@@ -4,7 +4,8 @@ set -euo pipefail
 
 repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 control_plane_root="${repo_root}/control-plane"
-package_root="${control_plane_root}/aegisops_control_plane"
+legacy_package_root="${control_plane_root}/aegisops_control_plane"
+package_root="${control_plane_root}/aegisops/control_plane"
 registry_path="${package_root}/core/legacy_import_aliases.py"
 compatibility_test="${repo_root}/control-plane/tests/test_phase52_6_5_phase29_root_filename_retirement.py"
 legacy_scoring_adapter="${package_root}/ml_shadow/legacy_scoring_adapter.py"
@@ -17,12 +18,12 @@ retired_root_files=(
 )
 
 if [[ ! -d "${package_root}" ]]; then
-  echo "Missing control-plane package root: control-plane/aegisops_control_plane" >&2
+  echo "Missing control-plane package root: control-plane/aegisops/control_plane" >&2
   exit 1
 fi
 
 if [[ ! -f "${registry_path}" ]]; then
-  echo "Missing legacy import alias registry: control-plane/aegisops_control_plane/core/legacy_import_aliases.py" >&2
+  echo "Missing legacy import alias registry: control-plane/aegisops/control_plane/core/legacy_import_aliases.py" >&2
   exit 1
 fi
 
@@ -32,12 +33,16 @@ if [[ ! -f "${compatibility_test}" ]]; then
 fi
 
 if [[ ! -f "${legacy_scoring_adapter}" ]]; then
-  echo "Missing legacy scoring adapter owner: control-plane/aegisops_control_plane/ml_shadow/legacy_scoring_adapter.py" >&2
+  echo "Missing legacy scoring adapter owner: control-plane/aegisops/control_plane/ml_shadow/legacy_scoring_adapter.py" >&2
   exit 1
 fi
 
 for retired_root_file in "${retired_root_files[@]}"; do
   if [[ -e "${package_root}/${retired_root_file}" ]]; then
+    echo "Phase 52.6.5 Phase29 root filename must be retired: control-plane/aegisops/control_plane/${retired_root_file}" >&2
+    exit 1
+  fi
+  if [[ -e "${legacy_package_root}/${retired_root_file}" ]]; then
     echo "Phase 52.6.5 Phase29 root filename must be retired: control-plane/aegisops_control_plane/${retired_root_file}" >&2
     exit 1
   fi

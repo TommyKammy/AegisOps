@@ -5,7 +5,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 verifier="${repo_root}/scripts/verify-phase-52-6-3-legacy-import-alias-registry.sh"
 contract_path="docs/adr/0015-phase-52-6-3-legacy-import-alias-registry.md"
-registry_path="control-plane/aegisops_control_plane/core/legacy_import_aliases.py"
+registry_path="control-plane/aegisops/control_plane/core/legacy_import_aliases.py"
 
 workdir="$(mktemp -d)"
 trap 'rm -rf "${workdir}"' EXIT
@@ -20,6 +20,8 @@ create_valid_repo() {
 
   mkdir -p "${target}/docs/adr" "${target}/control-plane"
   cp "${repo_root}/${contract_path}" "${target}/${contract_path}"
+  cp -R "${repo_root}/control-plane/aegisops" \
+    "${target}/control-plane/aegisops"
   cp -R "${repo_root}/control-plane/aegisops_control_plane" \
     "${target}/control-plane/aegisops_control_plane"
 }

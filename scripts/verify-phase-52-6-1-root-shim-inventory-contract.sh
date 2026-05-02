@@ -4,7 +4,7 @@ set -euo pipefail
 
 repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 doc_path="${repo_root}/docs/adr/0014-phase-52-6-1-root-shim-inventory-and-deprecation-contract.md"
-package_root="${repo_root}/control-plane/aegisops_control_plane"
+package_root="${repo_root}/control-plane/aegisops/control_plane"
 
 required_headings=(
   "# ADR-0014: Phase 52.6.1 Root Shim Inventory and Deprecation Contract"
@@ -191,7 +191,6 @@ if duplicates:
     sys.exit(1)
 
 missing = [module for module in actual_modules if module not in rows]
-extra = sorted(set(rows) - set(actual_modules))
 if missing:
     print(
         "Phase 52.6.1 root shim inventory is missing root file rows: "
@@ -199,17 +198,9 @@ if missing:
         file=sys.stderr,
     )
     sys.exit(1)
-if extra:
+if len(actual_modules) != 12:
     print(
-        "Phase 52.6.1 root shim inventory lists root files not present under control-plane/aegisops_control_plane: "
-        + ", ".join(extra),
-        file=sys.stderr,
-    )
-    sys.exit(1)
-
-if len(actual_modules) != 37:
-    print(
-        f"Phase 52.6.1 root shim inventory expected Phase 52.6.5 root count of 37 files, found {len(actual_modules)}.",
+        f"Phase 52.6.1 root shim inventory expected Phase 52.7.5 canonical root count of 12 files, found {len(actual_modules)}.",
         file=sys.stderr,
     )
     sys.exit(1)

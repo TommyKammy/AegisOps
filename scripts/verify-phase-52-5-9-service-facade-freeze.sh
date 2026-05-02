@@ -3,13 +3,13 @@
 set -euo pipefail
 
 repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-package_root="${repo_root}/control-plane/aegisops_control_plane"
+package_root="${repo_root}/control-plane/aegisops/control_plane"
 service_path="${package_root}/service.py"
 baseline_path="${repo_root}/docs/maintainability-hotspot-baseline.txt"
 boundary_doc="${repo_root}/docs/control-plane-service-internal-boundaries.md"
 
 if [[ ! -f "${service_path}" ]]; then
-  echo "Missing service facade file: control-plane/aegisops_control_plane/service.py" >&2
+  echo "Missing service facade file: control-plane/aegisops/control_plane/service.py" >&2
   exit 1
 fi
 
@@ -57,7 +57,7 @@ service_path = pathlib.Path(os.environ["PHASE52_5_9_SERVICE_PATH"])
 baseline_path = pathlib.Path(os.environ["PHASE52_5_9_BASELINE_PATH"])
 
 expected_baseline = {
-    "path": "control-plane/aegisops_control_plane/service.py",
+    "path": "control-plane/aegisops/control_plane/service.py",
     "max_lines": "1393",
     "max_effective_lines": "1241",
     "max_facade_methods": "95",
@@ -121,16 +121,23 @@ legacy_owner_modules = {
     "aegisops_control_plane.phase29_evidently_drift_visibility": "aegisops_control_plane.ml_shadow.drift_visibility",
     "aegisops_control_plane.phase29_mlflow_shadow_model_registry": "aegisops_control_plane.ml_shadow.mlflow_registry",
 }
+canonical_owner_modules = {
+    module.replace("aegisops_control_plane", "aegisops.control_plane", 1): owner.replace(
+        "aegisops_control_plane", "aegisops.control_plane", 1
+    )
+    for module, owner in legacy_owner_modules.items()
+}
+root_shim_owner_modules = legacy_owner_modules | canonical_owner_modules
 
 domain_roots = (
-    "aegisops_control_plane.actions.",
-    "aegisops_control_plane.api.",
-    "aegisops_control_plane.assistant.",
-    "aegisops_control_plane.evidence.",
-    "aegisops_control_plane.ingestion.",
-    "aegisops_control_plane.ml_shadow.",
-    "aegisops_control_plane.reporting.",
-    "aegisops_control_plane.runtime.",
+    "aegisops.control_plane.actions.",
+    "aegisops.control_plane.api.",
+    "aegisops.control_plane.assistant.",
+    "aegisops.control_plane.evidence.",
+    "aegisops.control_plane.ingestion.",
+    "aegisops.control_plane.ml_shadow.",
+    "aegisops.control_plane.reporting.",
+    "aegisops.control_plane.runtime.",
 )
 
 
@@ -139,7 +146,7 @@ def effective_line_count(text: str) -> int:
 
 
 def facade_method_count(text: str, class_name: str) -> int | None:
-    tree = ast.parse(text, filename="control-plane/aegisops_control_plane/service.py")
+    tree = ast.parse(text, filename="control-plane/aegisops/control_plane/service.py")
     for node in tree.body:
         if isinstance(node, ast.ClassDef) and node.name == class_name:
             return sum(
@@ -174,8 +181,8 @@ def module_name_for(path: pathlib.Path) -> str:
     if parts and parts[-1] == "__init__":
         parts = parts[:-1]
     if not parts:
-        return "aegisops_control_plane"
-    return "aegisops_control_plane." + ".".join(parts)
+        return "aegisops.control_plane"
+    return "aegisops.control_plane." + ".".join(parts)
 
 
 def is_domain_module(current_module: str) -> bool:
@@ -213,7 +220,7 @@ def legacy_import_violations(
     candidates = [imported_module]
     if imported_module:
         candidates.extend(f"{imported_module}.{alias.name}" for alias in node.names)
-    return [candidate for candidate in candidates if candidate in legacy_owner_modules]
+    return [candidate for candidate in candidates if candidate in root_shim_owner_modules]
 
 
 metadata = service_baseline_metadata()
@@ -282,15 +289,15 @@ for path in sorted(package_root.rglob("*.py")):
             )
             for imported_module in legacy_import_violations(imported_module, node):
                 relative_path = path.relative_to(repo_root).as_posix()
-                owner = legacy_owner_modules[imported_module]
+                owner = root_shim_owner_modules[imported_module]
                 violations.append(
                     f"{relative_path}:{node.lineno} imports {imported_module}; use {owner}"
                 )
         elif isinstance(node, ast.Import):
             for alias in node.names:
-                if alias.name in legacy_owner_modules:
+                if alias.name in root_shim_owner_modules:
                     relative_path = path.relative_to(repo_root).as_posix()
-                    owner = legacy_owner_modules[alias.name]
+                    owner = root_shim_owner_modules[alias.name]
                     violations.append(
                         f"{relative_path}:{node.lineno} imports {alias.name}; use {owner}"
                     )

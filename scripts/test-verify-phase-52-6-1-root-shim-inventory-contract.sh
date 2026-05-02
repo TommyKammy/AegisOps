@@ -19,6 +19,8 @@ create_valid_repo() {
 
   mkdir -p "${target}/docs/adr" "${target}/control-plane"
   cp "${repo_root}/${contract_path}" "${target}/${contract_path}"
+  cp -R "${repo_root}/control-plane/aegisops" \
+    "${target}/control-plane/aegisops"
   cp -R "${repo_root}/control-plane/aegisops_control_plane" \
     "${target}/control-plane/aegisops_control_plane"
 }
@@ -56,7 +58,7 @@ assert_passes "${valid_repo}"
 unclassified_repo="${workdir}/unclassified-root-file"
 create_valid_repo "${unclassified_repo}"
 printf '%s\n' "\"\"\"Fixture root file intentionally missing from the shim inventory.\"\"\"" \
-  >"${unclassified_repo}/control-plane/aegisops_control_plane/new_root_shim.py"
+  >"${unclassified_repo}/control-plane/aegisops/control_plane/new_root_shim.py"
 assert_fails_with \
   "${unclassified_repo}" \
   "Phase 52.6.1 root shim inventory is missing root file rows: new_root_shim.py"
@@ -72,7 +74,7 @@ assert_fails_with \
 phase29_restored_repo="${workdir}/phase29-restored-root-file"
 create_valid_repo "${phase29_restored_repo}"
 printf '%s\n' "\"\"\"Fixture Phase29 root file intentionally restored.\"\"\"" \
-  >"${phase29_restored_repo}/control-plane/aegisops_control_plane/phase29_shadow_dataset.py"
+  >"${phase29_restored_repo}/control-plane/aegisops/control_plane/phase29_shadow_dataset.py"
 assert_fails_with \
   "${phase29_restored_repo}" \
   "Phase 52.6.1 root shim inventory is missing root file rows: phase29_shadow_dataset.py"
