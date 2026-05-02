@@ -107,11 +107,11 @@ The layout inventory does not change authorization, provenance, reconciliation, 
 | `assistant_advisory.py` | `assistant` | Compatibility shim only for the moved assistant advisory owner. |
 | `assistant_context.py` | `assistant` | Compatibility shim only for the moved assistant context owner. |
 | `assistant_provider.py` | `assistant` | Compatibility shim only for the moved assistant provider owner. |
-| `audit_export.py` | `reporting` | Compatibility shim only for the moved audit export owner. |
 | `case_workflow.py` | `ingestion` | Compatibility shim only for the moved case workflow owner. |
 | `cli.py` | `api` | Compatibility shim only for the moved CLI owner. |
 | `config.py` | `runtime` | Move only with runtime config ownership and no sample secret acceptance. |
 | `core/__init__.py` | `core` | Package scaffold marker only; no authoritative model, persistence, service, or validation module moves are approved by the marker. |
+| `core/legacy_import_aliases.py` | `core` | Owns the bounded legacy import alias registry while preserving explicit owner metadata and no runtime behavior change. |
 | `detection_lifecycle.py` | `ingestion` | Compatibility shim only for the moved detection lifecycle owner. |
 | `detection_lifecycle_helpers.py` | `ingestion` | Compatibility shim only for the moved detection helper owner. |
 | `detection_native_context.py` | `ingestion` | Compatibility shim only for the moved native detection context owner. |
@@ -190,7 +190,9 @@ The public Python package name `aegisops_control_plane` remains unchanged throug
 
 The outer `control-plane/` directory remains unchanged because it is the reviewed repository home for live control-plane application code, service bootstrapping, adapters, tests, and service-local documentation.
 
-Legacy import paths remain available during migration through compatibility shims or direct re-export modules until all documented internal, CLI, HTTP, test, and operator callers have migrated.
+Legacy import paths remain available during migration through compatibility shims, direct re-export modules, or approved entries in the legacy import alias registry until all documented internal, CLI, HTTP, test, and operator callers have migrated.
+
+The Phase 52.6.3 registry is owned by `control-plane/aegisops_control_plane/core/legacy_import_aliases.py`, preserves explicit owner metadata for each approved alias row, and replaces the removed `control-plane/aegisops_control_plane/audit_export.py` root shim for `aegisops_control_plane.audit_export`.
 
 Removing a legacy import path requires a later transition policy that lists the affected import path, replacement import path, caller evidence, deprecation window, focused regression test, and rollback path.
 

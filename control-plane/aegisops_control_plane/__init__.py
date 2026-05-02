@@ -1,5 +1,8 @@
 """AegisOps control-plane runtime scaffold."""
 
+from .core.legacy_import_aliases import register_legacy_import_aliases
+
+register_legacy_import_aliases()
 from .adapters import WazuhAlertAdapter
 from .config import RuntimeConfig
 from .models import (
