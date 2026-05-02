@@ -86,6 +86,7 @@ class WazuhAlertAdapter:
         "data.privilege.role",
     )
     required_wazuh_detection_provenance_fields: tuple[str, ...] = (
+        "product_profile",
         "source_system",
         "source_component",
         "source_id",
@@ -352,9 +353,11 @@ class WazuhAlertAdapter:
         if correlation_id is not None:
             provenance["correlation_id"] = correlation_id
         if source_family == "wazuh_detection":
-            product_profile = _optional_string(data.get("product_profile"))
-            if product_profile is not None:
-                profile["source"]["product_profile"] = product_profile
+            product_profile = _require_non_empty_string(
+                data.get("product_profile"),
+                "data.product_profile",
+            )
+            profile["source"]["product_profile"] = product_profile
             detection = self._build_wazuh_detection_profile(data)
             if detection is not None:
                 profile["detection"] = detection

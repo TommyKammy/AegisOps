@@ -453,6 +453,19 @@ class WazuhAlertAdapterTests(unittest.TestCase):
         ):
             adapter.build_native_detection_record(alert)
 
+    def test_adapter_rejects_phase53_detection_fixture_missing_product_profile(
+        self,
+    ) -> None:
+        adapter = WazuhAlertAdapter()
+        alert = _load_fixture("phase53-smb-single-node-ssh-auth-failure-alert.json")
+        alert["data"].pop("product_profile")
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "data.product_profile must be a non-empty string",
+        ):
+            adapter.build_native_detection_record(alert)
+
     def test_adapter_uses_login_fields_when_reviewed_identity_names_are_absent(
         self,
     ) -> None:
