@@ -1,0 +1,61 @@
+{
+  "id": "1731595600.1112223",
+  "timestamp": "2026-05-03T09:15:00+00:00",
+  "rule": {
+    "id": "5710",
+    "level": 10,
+    "description": "Wazuh sample SSH authentication failure",
+    "groups": [
+      "sshd",
+      "authentication_failures"
+    ],
+    "mitre": {
+      "id": [
+        "T1110"
+      ],
+      "tactic": [
+        "Credential Access"
+      ],
+      "technique": [
+        "Brute Force"
+      ]
+    }
+  },
+  "agent": {
+    "id": "053",
+    "name": "smb-single-node-linux-01",
+    "ip": "10.53.0.10"
+  },
+  "manager": {
+    "name": "wazuh-manager-smb-1"
+  },
+  "decoder": {
+    "name": "sshd"
+  },
+  "location": "/var/log/auth.log",
+  "data": {
+    "source_family": "wazuh_detection",
+    "source_system": "wazuh",
+    "source_component": "wazuh-manager",
+    "source_id": "wazuh-manager-smb-1",
+    "event_id": "wazuh-alert-1731595600.1112223",
+    "event_timestamp": "2026-05-03T09:15:00+00:00",
+    "wazuh_manager_id": "wazuh-manager-smb-1",
+    "wazuh_rule_id": "5710",
+    "wazuh_rule_level": "10",
+    "ingest_channel": "reviewed_proxy",
+    "admission_channel": "live_wazuh_webhook",
+    "secret_custody_reference": "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET_FILE",
+    "proxy_route": "aegisops-proxy:/intake/wazuh -> aegisops-control-plane:/intake/wazuh",
+    "reviewed_by": "phase-53.4-fixture-review",
+    "product_profile": "smb-single-node",
+    "event_summary": "SSH authentication failure",
+    "srcip": "198.51.100.24",
+    "srcuser": "invalid-user",
+    "actor": {
+      "type": "user",
+      "id": "invalid-user",
+      "name": "invalid-user"
+    }
+  }
+}

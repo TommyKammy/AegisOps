@@ -1,0 +1,49 @@
+{
+  "source": {
+    "source_system": "wazuh",
+    "source_family": "wazuh_detection",
+    "accountable_source_identity": "agent:053",
+    "delivery_path": "/var/log/auth.log",
+    "product_profile": "smb-single-node"
+  },
+  "provenance": {
+    "rule_id": "5710",
+    "rule_level": 10,
+    "rule_description": "Wazuh sample SSH authentication failure",
+    "decoder_name": "sshd",
+    "location": "/var/log/auth.log",
+    "source_system": "wazuh",
+    "source_component": "wazuh-manager",
+    "source_id": "wazuh-manager-smb-1",
+    "event_id": "wazuh-alert-1731595600.1112223",
+    "event_timestamp": "2026-05-03T09:15:00+00:00",
+    "wazuh_manager_id": "wazuh-manager-smb-1",
+    "wazuh_rule_id": "5710",
+    "wazuh_rule_level": "10",
+    "ingest_channel": "reviewed_proxy",
+    "admission_channel": "live_wazuh_webhook",
+    "secret_custody_reference": "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET_FILE",
+    "proxy_route": "aegisops-proxy:/intake/wazuh -> aegisops-control-plane:/intake/wazuh",
+    "reviewed_by": "phase-53.4-fixture-review"
+  },
+  "detection": {
+    "event_id": "wazuh-alert-1731595600.1112223",
+    "event_timestamp": "2026-05-03T09:15:00+00:00",
+    "source_component": "wazuh-manager",
+    "source_id": "wazuh-manager-smb-1",
+    "wazuh_manager_id": "wazuh-manager-smb-1",
+    "wazuh_rule_id": "5710",
+    "wazuh_rule_level": "10",
+    "event_summary": "SSH authentication failure"
+  },
+  "network": {
+    "source_ip": "198.51.100.24"
+  },
+  "identity": {
+    "actor": {
+      "identity_type": "user",
+      "identity_id": "invalid-user",
+      "display_name": "invalid-user"
+    }
+  }
+}

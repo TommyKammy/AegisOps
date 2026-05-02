@@ -66,10 +66,39 @@ class WazuhAlertAdapter:
         "data.organization.name",
         "data.repository.id",
         "data.repository.full_name",
+        "data.product_profile",
+        "data.source_system",
+        "data.source_component",
+        "data.source_id",
+        "data.event_id",
+        "data.event_timestamp",
+        "data.wazuh_manager_id",
+        "data.wazuh_rule_id",
+        "data.wazuh_rule_level",
+        "data.ingest_channel",
+        "data.admission_channel",
+        "data.secret_custody_reference",
+        "data.proxy_route",
+        "data.reviewed_by",
         "data.privilege.change_type",
         "data.privilege.scope",
         "data.privilege.permission",
         "data.privilege.role",
+    )
+    required_wazuh_detection_provenance_fields: tuple[str, ...] = (
+        "source_system",
+        "source_component",
+        "source_id",
+        "event_id",
+        "event_timestamp",
+        "wazuh_manager_id",
+        "wazuh_rule_id",
+        "wazuh_rule_level",
+        "ingest_channel",
+        "admission_channel",
+        "secret_custody_reference",
+        "proxy_route",
+        "reviewed_by",
     )
 
     def build_native_detection_record(
@@ -247,11 +276,14 @@ class WazuhAlertAdapter:
 
         source_family = _optional_string(data.get("source_family"))
         if source_family not in {
+            "wazuh_detection",
             "github_audit",
             "microsoft_365_audit",
             "entra_id",
         }:
             return None
+        if source_family == "wazuh_detection":
+            self._require_wazuh_detection_provenance(data)
 
         actor = self._build_identity_entity(_optional_mapping(data.get("actor")))
         target = self._build_identity_entity(_optional_mapping(data.get("target")))
@@ -319,6 +351,34 @@ class WazuhAlertAdapter:
         correlation_id = _optional_string(data.get("correlation_id"))
         if correlation_id is not None:
             provenance["correlation_id"] = correlation_id
+        if source_family == "wazuh_detection":
+            product_profile = _optional_string(data.get("product_profile"))
+            if product_profile is not None:
+                profile["source"]["product_profile"] = product_profile
+            detection = self._build_wazuh_detection_profile(data)
+            if detection is not None:
+                profile["detection"] = detection
+            network = self._build_wazuh_network_profile(data)
+            if network is not None:
+                profile["network"] = network
+            for field_name in (
+                "source_system",
+                "source_component",
+                "source_id",
+                "event_id",
+                "event_timestamp",
+                "wazuh_manager_id",
+                "wazuh_rule_id",
+                "wazuh_rule_level",
+                "ingest_channel",
+                "admission_channel",
+                "secret_custody_reference",
+                "proxy_route",
+                "reviewed_by",
+            ):
+                value = _optional_string(data.get(field_name))
+                if value is not None:
+                    provenance[field_name] = value
         if actor is not None or target is not None:
             identity_profile: dict[str, object] = {}
             if actor is not None:
@@ -344,6 +404,65 @@ class WazuhAlertAdapter:
             profile["authentication"] = authentication
         if privilege is not None:
             profile["privilege"] = privilege
+        return profile
+
+    def _require_wazuh_detection_provenance(
+        self,
+        data: Mapping[str, object],
+    ) -> None:
+        for field_name in self.required_wazuh_detection_provenance_fields:
+            _require_non_empty_string(data.get(field_name), f"data.{field_name}")
+        source_system = _require_non_empty_string(
+            data.get("source_system"),
+            "data.source_system",
+        )
+        if source_system != self.substrate_key:
+            raise ValueError("data.source_system must be wazuh")
+        secret_custody_reference = _require_non_empty_string(
+            data.get("secret_custody_reference"),
+            "data.secret_custody_reference",
+        )
+        if secret_custody_reference not in {
+            "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET_FILE",
+            "AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET_OPENBAO_PATH",
+        }:
+            raise ValueError(
+                "data.secret_custody_reference must name a reviewed Wazuh "
+                "shared-secret custody binding"
+            )
+
+    @staticmethod
+    def _build_wazuh_detection_profile(
+        data: Mapping[str, object],
+    ) -> dict[str, object] | None:
+        profile: dict[str, object] = {}
+        for field_name in (
+            "event_id",
+            "event_timestamp",
+            "source_component",
+            "source_id",
+            "wazuh_manager_id",
+            "wazuh_rule_id",
+            "wazuh_rule_level",
+            "event_summary",
+        ):
+            value = _optional_string(data.get(field_name))
+            if value is not None:
+                profile[field_name] = value
+        if not profile:
+            return None
+        return profile
+
+    @staticmethod
+    def _build_wazuh_network_profile(
+        data: Mapping[str, object],
+    ) -> dict[str, object] | None:
+        profile: dict[str, object] = {}
+        source_ip = _optional_string(data.get("srcip"))
+        if source_ip is not None:
+            profile["source_ip"] = source_ip
+        if not profile:
+            return None
         return profile
 
     @staticmethod
