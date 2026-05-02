@@ -53,8 +53,10 @@ required_artifact_terms=(
   "shared_secret_custody: AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET_FILE or AEGISOPS_CONTROL_PLANE_WAZUH_INGEST_SHARED_SECRET_OPENBAO_PATH"
   "raw_secret_values_allowed: false"
   "forwarded_headers_trusted: false"
+  "source_linkage_inference_allowed: false"
   "admission_posture: candidate-analytic-signal-until-aegisops-admission-and-linkage"
   "pre_admission_authority: false"
+  "direct_wazuh_to_shuffle_shortcut_allowed: false"
   "provenance_fields:"
   "negative_admission_tests:"
 )

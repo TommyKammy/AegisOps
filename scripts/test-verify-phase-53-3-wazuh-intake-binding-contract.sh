@@ -124,6 +124,22 @@ assert_fails_with \
   "${missing_provenance_repo}" \
   "Missing Phase 53.3 Wazuh provenance field: wazuh_rule_id"
 
+missing_source_linkage_guard_repo="${workdir}/missing-source-linkage-guard"
+create_valid_repo "${missing_source_linkage_guard_repo}"
+perl -0pi -e 's/^source_linkage_inference_allowed: false\n//m' \
+  "${missing_source_linkage_guard_repo}/docs/deployment/profiles/smb-single-node/wazuh/intake-binding.yaml"
+assert_fails_with \
+  "${missing_source_linkage_guard_repo}" \
+  "Missing Phase 53.3 Wazuh intake binding artifact term: source_linkage_inference_allowed: false"
+
+missing_direct_shuffle_guard_repo="${workdir}/missing-direct-shuffle-guard"
+create_valid_repo "${missing_direct_shuffle_guard_repo}"
+perl -0pi -e 's/^  direct_wazuh_to_shuffle_shortcut_allowed: false\n//m' \
+  "${missing_direct_shuffle_guard_repo}/docs/deployment/profiles/smb-single-node/wazuh/intake-binding.yaml"
+assert_fails_with \
+  "${missing_direct_shuffle_guard_repo}" \
+  "Missing Phase 53.3 Wazuh intake binding artifact term: direct_wazuh_to_shuffle_shortcut_allowed: false"
+
 missing_admission_statement_repo="${workdir}/missing-admission-statement"
 create_valid_repo "${missing_admission_statement_repo}"
 remove_text_from_contract "${missing_admission_statement_repo}" \
