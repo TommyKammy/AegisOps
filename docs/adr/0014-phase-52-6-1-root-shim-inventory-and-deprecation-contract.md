@@ -104,6 +104,20 @@ Phase 52.6.5 removed these four Phase29-named root files after adding explicit l
 
 The production-owned implementations remain under `ml_shadow/dataset.py`, `ml_shadow/scoring.py`, `ml_shadow/drift_visibility.py`, and `ml_shadow/mlflow_registry.py`. The legacy scoring wrapper behavior that differs from canonical scoring now lives in `ml_shadow/legacy_scoring_adapter.py`.
 
+## 5.3 Phase 52.6.6 Retained Root Owner Policy
+
+After Phase 52.6.6, the only retained root owner files are `__init__.py`, `config.py`, `models.py`, `operator_inspection.py`, `persistence_lifecycle.py`, `publishable_paths.py`, `record_validation.py`, `reviewed_slice_policy.py`, `service_composition.py`, and `structured_events.py`.
+
+`service.py` is not a retained owner; it is the single retained compatibility blocker and the public `service.py` facade stays a retained compatibility blocker under ADR-0003 and ADR-0010 until a later facade transition issue supersedes that policy.
+
+No other direct root Python file may be promoted to retained owner status without a later accepted ADR or issue-specific contract that names the root file, authoritative owner, caller evidence, focused regression coverage, rollback path, and authority-boundary impact.
+
+The root package guardrail baseline is exactly `37` direct `.py` files under `control-plane/aegisops_control_plane/`.
+
+No direct root Python filename may begin with `phaseNN` or `phaseNN_` after Phase 52.6.6.
+
+A new flat root module fails verification unless the root file inventory classifies it and the root-count baseline is intentionally updated by policy.
+
 ## 6. Phase29 Boundary
 
 The retired Phase29 root filenames were legacy compatibility adapters only. They were not production owners.
@@ -119,6 +133,8 @@ Alias preservation is allowed only when the alias remains a narrow reference to 
 Retained blockers stay physically present until the referenced compatibility policy is superseded by a later accepted ADR or issue-specific contract.
 
 If a prerequisite signal is missing, malformed, ambiguous, or only partially trusted, the deletion path fails closed and the root file stays available.
+
+The future public package rename, outer `control-plane/` directory rename, retained-root owner relocation, and `service.py` facade relocation remain blocked until a later accepted ADR names caller evidence, replacement paths, deprecation window, focused regression coverage, rollback path, and authority-boundary impact.
 
 ## 8. Forbidden Claims
 
@@ -144,7 +160,15 @@ Run `bash scripts/verify-phase-52-6-5-retire-phase29-root-filenames.sh`.
 
 Run `bash scripts/test-verify-phase-52-6-5-retire-phase29-root-filenames.sh`.
 
-Run `node <codex-supervisor-root>/dist/index.js issue-lint 1110 --config <supervisor-config-path>`.
+Run `bash scripts/verify-phase-52-6-6-root-package-guardrails.sh`.
+
+Run `bash scripts/test-verify-phase-52-6-6-root-package-guardrails.sh`.
+
+Run `bash scripts/verify-phase-52-5-2-layout-guardrail.sh`.
+
+Run `bash scripts/verify-phase-52-5-9-service-facade-freeze.sh`.
+
+Run `node <codex-supervisor-root>/dist/index.js issue-lint 1111 --config <supervisor-config-path>`.
 
 ## 10. Non-Goals
 
