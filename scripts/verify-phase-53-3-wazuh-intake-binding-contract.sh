@@ -91,6 +91,7 @@ forbidden_claims=(
   "Phase 53.3 implements Wazuh source-health projection"
   "Phase 53.3 implements Wazuh upgrade automation"
   "Phase 53.3 implements Shuffle product profiles"
+  "Phase 53.3 claims Beta, RC, GA, commercial readiness, or Wazuh replacement readiness"
 )
 
 rendered_markdown_without_code_blocks() {
@@ -136,15 +137,36 @@ for phrase in "${required_phrases[@]}"; do
   fi
 done
 
+has_uncommented_substring() {
+  local needle="$1"
+  local file_path="$2"
+
+  awk -v needle="${needle}" '
+    /^[[:space:]]*#/ { next }
+    {
+      line = $0
+      sub(/[[:space:]]+#.*/, "", line)
+      if (index(line, needle)) {
+        found = 1
+      }
+    }
+    END { exit(found ? 0 : 1) }
+  ' "${file_path}"
+}
+
 for term in "${required_artifact_terms[@]}"; do
-  if ! grep -Fq -- "${term}" "${artifact_path}"; then
+  if ! has_uncommented_substring "${term}" "${artifact_path}"; then
     echo "Missing Phase 53.3 Wazuh intake binding artifact term: ${term}" >&2
     exit 1
   fi
 done
 
 for field in "${required_provenance_fields[@]}"; do
-  if ! grep -Fq -- "- ${field}" "${artifact_path}"; then
+  if ! awk -v field="${field}" '
+    /^[[:space:]]*#/ { next }
+    $0 ~ ("^[[:space:]]*-[[:space:]]+" field "([[:space:]]*(#.*)?)?$") { found = 1 }
+    END { exit(found ? 0 : 1) }
+  ' "${artifact_path}"; then
     echo "Missing Phase 53.3 Wazuh provenance field: ${field}" >&2
     exit 1
   fi
@@ -197,7 +219,24 @@ contains_forbidden_outside_forbidden_section() {
   ' "${contract_path}"
 }
 
+contains_forbidden_claim_in_section() {
+  local claim="$1"
+
+  awk -v claim="${claim}" '
+    BEGIN { claim_lower = tolower(claim) }
+    /^## 7\. Forbidden Claims$/ { in_forbidden_claims = 1; next }
+    /^## / && in_forbidden_claims { in_forbidden_claims = 0 }
+    in_forbidden_claims && index(tolower($0), claim_lower) { found = 1 }
+    END { exit(found ? 0 : 1) }
+  ' "${contract_path}"
+}
+
 for claim in "${forbidden_claims[@]}"; do
+  if ! contains_forbidden_claim_in_section "${claim}"; then
+    echo "Missing Phase 53.3 Wazuh forbidden claim: ${claim}" >&2
+    exit 1
+  fi
+
   if contains_forbidden_outside_forbidden_section "${claim}"; then
     echo "Forbidden Phase 53.3 Wazuh intake binding claim: ${claim}" >&2
     exit 1

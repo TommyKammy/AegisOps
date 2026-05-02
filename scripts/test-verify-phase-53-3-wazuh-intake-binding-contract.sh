@@ -84,6 +84,14 @@ assert_fails_with \
   "${missing_intake_url_repo}" \
   "Missing Phase 53.3 Wazuh intake binding artifact term: intake_url: /intake/wazuh"
 
+commented_intake_url_repo="${workdir}/commented-intake-url"
+create_valid_repo "${commented_intake_url_repo}"
+perl -0pi -e 's/^intake_url: /# intake_url: /m' \
+  "${commented_intake_url_repo}/docs/deployment/profiles/smb-single-node/wazuh/intake-binding.yaml"
+assert_fails_with \
+  "${commented_intake_url_repo}" \
+  "Missing Phase 53.3 Wazuh intake binding artifact term: intake_url: /intake/wazuh"
+
 missing_proxy_route_repo="${workdir}/missing-proxy-route"
 create_valid_repo "${missing_proxy_route_repo}"
 perl -0pi -e 's/^proxy_route: .+\n//m' \
@@ -124,6 +132,14 @@ assert_fails_with \
   "${missing_provenance_repo}" \
   "Missing Phase 53.3 Wazuh provenance field: wazuh_rule_id"
 
+commented_provenance_repo="${workdir}/commented-provenance"
+create_valid_repo "${commented_provenance_repo}"
+perl -0pi -e 's/^  - reviewed_by/  # - reviewed_by/m' \
+  "${commented_provenance_repo}/docs/deployment/profiles/smb-single-node/wazuh/intake-binding.yaml"
+assert_fails_with \
+  "${commented_provenance_repo}" \
+  "Missing Phase 53.3 Wazuh provenance field: reviewed_by"
+
 missing_source_linkage_guard_repo="${workdir}/missing-source-linkage-guard"
 create_valid_repo "${missing_source_linkage_guard_repo}"
 perl -0pi -e 's/^source_linkage_inference_allowed: false\n//m' \
@@ -147,6 +163,14 @@ remove_text_from_contract "${missing_admission_statement_repo}" \
 assert_fails_with \
   "${missing_admission_statement_repo}" \
   "Missing Phase 53.3 Wazuh intake binding contract statement"
+
+missing_forbidden_claim_repo="${workdir}/missing-forbidden-claim"
+create_valid_repo "${missing_forbidden_claim_repo}"
+remove_text_from_contract "${missing_forbidden_claim_repo}" \
+  "Phase 53.3 claims Beta, RC, GA, commercial readiness, or Wazuh replacement readiness."
+assert_fails_with \
+  "${missing_forbidden_claim_repo}" \
+  "Missing Phase 53.3 Wazuh forbidden claim: Phase 53.3 claims Beta, RC, GA, commercial readiness, or Wazuh replacement readiness"
 
 pre_admission_truth_repo="${workdir}/pre-admission-truth"
 create_valid_repo "${pre_admission_truth_repo}"
