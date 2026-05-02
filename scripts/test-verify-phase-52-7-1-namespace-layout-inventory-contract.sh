@@ -33,8 +33,19 @@ create_valid_repo() {
     "${target}/scripts/test-verify-phase-52-7-1-namespace-layout-inventory-contract.sh"
   cp "${repo_root}/.github/workflows/ci.yml" "${target}/.github/workflows/ci.yml"
   cp "${repo_root}/control-plane/main.py" "${target}/control-plane/main.py"
+  cp -R "${repo_root}/control-plane/aegisops" \
+    "${target}/control-plane/aegisops"
   cp -R "${repo_root}/control-plane/aegisops_control_plane" \
     "${target}/control-plane/aegisops_control_plane"
+  cp "${repo_root}/scripts/verify-phase-52-7-4-physical-layout-migration.sh" \
+    "${target}/scripts/verify-phase-52-7-4-physical-layout-migration.sh"
+  cp "${repo_root}/scripts/verify-phase-52-7-5-root-shim-reduction.sh" \
+    "${target}/scripts/verify-phase-52-7-5-root-shim-reduction.sh"
+  mkdir -p "${target}/control-plane/tests"
+  cp "${repo_root}/control-plane/tests/test_phase52_7_4_physical_layout_migration.py" \
+    "${target}/control-plane/tests/test_phase52_7_4_physical_layout_migration.py"
+  cp "${repo_root}/control-plane/tests/test_phase52_7_5_root_shim_reduction.py" \
+    "${target}/control-plane/tests/test_phase52_7_5_root_shim_reduction.py"
 }
 
 assert_passes() {
@@ -91,21 +102,19 @@ assert_fails_with \
   "${wrong_proposed_namespace_repo}" \
   "Phase 52.7.1 namespace inventory proposed reference mismatch for proposed canonical namespace: expected aegisops.control_plane, got aegisops.controlplane"
 
-package_moved_repo="${workdir}/package-moved"
-create_valid_repo "${package_moved_repo}"
-mkdir -p "${package_moved_repo}/control-plane/aegisops"
-mv "${package_moved_repo}/control-plane/aegisops_control_plane" \
-  "${package_moved_repo}/control-plane/aegisops/control_plane"
+missing_legacy_package_repo="${workdir}/missing-legacy-package"
+create_valid_repo "${missing_legacy_package_repo}"
+rm -rf "${missing_legacy_package_repo}/control-plane/aegisops_control_plane"
 assert_fails_with \
-  "${package_moved_repo}" \
-  "Phase 52.7.1 file movement rejected: missing current package path control-plane/aegisops_control_plane/"
+  "${missing_legacy_package_repo}" \
+  "Phase 52.7.1 compatibility path rejected: missing legacy package marker control-plane/aegisops_control_plane/__init__.py"
 
-proposed_package_added_repo="${workdir}/proposed-package-added"
-create_valid_repo "${proposed_package_added_repo}"
-mkdir -p "${proposed_package_added_repo}/control-plane/aegisops/control_plane"
+missing_canonical_package_repo="${workdir}/missing-canonical-package"
+create_valid_repo "${missing_canonical_package_repo}"
+rm -rf "${missing_canonical_package_repo}/control-plane/aegisops/control_plane"
 assert_fails_with \
-  "${proposed_package_added_repo}" \
-  "Phase 52.7.1 namespace/layout inventory rejected: proposed package path already exists at control-plane/aegisops/control_plane/"
+  "${missing_canonical_package_repo}" \
+  "Phase 52.7.1 follow-on namespace guard rejected: missing canonical package marker control-plane/aegisops/control_plane/__init__.py"
 
 entrypoint_moved_repo="${workdir}/entrypoint-moved"
 create_valid_repo "${entrypoint_moved_repo}"
@@ -140,10 +149,10 @@ assert_passes "${non_executable_prerequisite_repo}"
 
 missing_prerequisite_repo="${workdir}/missing-prerequisite"
 create_valid_repo "${missing_prerequisite_repo}"
-rm "${missing_prerequisite_repo}/scripts/verify-phase-52-5-1-control-plane-layout-inventory-contract.sh"
+rm "${missing_prerequisite_repo}/scripts/verify-phase-52-7-4-physical-layout-migration.sh"
 assert_fails_with \
   "${missing_prerequisite_repo}" \
-  "Missing prerequisite verifier: verify-phase-52-5-1-control-plane-layout-inventory-contract.sh"
+  "Missing prerequisite verifier: verify-phase-52-7-4-physical-layout-migration.sh"
 
 local_path_repo="${workdir}/local-path"
 create_valid_repo "${local_path_repo}"

@@ -37,8 +37,12 @@ approved_legacy_python_files = {
     "control-plane/tests/test_phase52_6_3_legacy_import_alias_registry.py",
     "control-plane/tests/test_phase52_6_4_root_shim_alias_removal.py",
     "control-plane/tests/test_phase52_6_5_phase29_root_filename_retirement.py",
+    "control-plane/tests/test_phase29_shadow_scoring_validation.py",
+    "control-plane/tests/test_service_persistence_action_reconciliation_review_surfaces.py",
+    "control-plane/tests/test_service_snapshot_extraction.py",
     "control-plane/tests/test_phase52_7_2_canonical_namespace_bridge.py",
     "control-plane/tests/test_phase52_7_4_physical_layout_migration.py",
+    "control-plane/tests/test_phase52_7_5_root_shim_reduction.py",
 }
 
 approved_legacy_text_files = {
@@ -59,6 +63,7 @@ approved_legacy_text_files = {
     "docs/adr/0015-phase-52-6-3-legacy-import-alias-registry.md",
     "docs/adr/0016-phase-52-7-1-namespace-and-layout-inventory-contract.md",
     "docs/adr/0017-phase-52-7-2-canonical-namespace-bridge.md",
+    "docs/adr/0018-phase-52-7-6-namespace-path-packaging-guardrails.md",
     "docs/control-plane-service-internal-boundaries.md",
     "docs/maintainability-decomposition-thresholds.md",
     "docs/maintainability-hotspot-baseline.txt",
@@ -95,6 +100,8 @@ approved_legacy_text_files = {
     "scripts/test-verify-phase-52-7-2-canonical-namespace-bridge.sh",
     "scripts/test-verify-phase-52-7-3-repo-owned-canonical-namespace.sh",
     "scripts/test-verify-phase-52-7-4-physical-layout-migration.sh",
+    "scripts/test-verify-phase-52-7-5-root-shim-reduction.sh",
+    "scripts/test-verify-phase-52-7-6-namespace-path-packaging-guardrails.sh",
     "scripts/test-verify-phase-9-control-plane-runtime-boundary-validation.sh",
     "scripts/verify-control-plane-runtime-skeleton.sh",
     "scripts/verify-maintainability-hotspots.sh",
@@ -122,6 +129,8 @@ approved_legacy_text_files = {
     "scripts/verify-phase-52-7-2-canonical-namespace-bridge.sh",
     "scripts/verify-phase-52-7-3-repo-owned-canonical-namespace.sh",
     "scripts/verify-phase-52-7-4-physical-layout-migration.sh",
+    "scripts/verify-phase-52-7-5-root-shim-reduction.sh",
+    "scripts/verify-phase-52-7-6-namespace-path-packaging-guardrails.sh",
 } | approved_legacy_python_files
 
 legacy_import_pattern = re.compile(r"\baegisops_control_plane(?:\.|\b)")

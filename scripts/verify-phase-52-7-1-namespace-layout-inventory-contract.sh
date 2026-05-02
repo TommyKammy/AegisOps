@@ -84,13 +84,13 @@ if [[ ! -f "${doc_path}" ]]; then
   exit 1
 fi
 
-if [[ ! -d "${package_root}" ]]; then
-  echo "Phase 52.7.1 file movement rejected: missing current package path control-plane/aegisops_control_plane/" >&2
+if [[ ! -f "${package_root}/__init__.py" ]]; then
+  echo "Phase 52.7.1 compatibility path rejected: missing legacy package marker control-plane/aegisops_control_plane/__init__.py" >&2
   exit 1
 fi
 
-if [[ -d "${proposed_package_root}" ]]; then
-  echo "Phase 52.7.1 namespace/layout inventory rejected: proposed package path already exists at control-plane/aegisops/control_plane/" >&2
+if [[ ! -f "${proposed_package_root}/__init__.py" ]]; then
+  echo "Phase 52.7.1 follow-on namespace guard rejected: missing canonical package marker control-plane/aegisops/control_plane/__init__.py" >&2
   exit 1
 fi
 
@@ -240,8 +240,8 @@ print(
 PY
 
 for prerequisite in \
-  "${repo_root}/scripts/verify-phase-52-5-1-control-plane-layout-inventory-contract.sh" \
-  "${repo_root}/scripts/verify-phase-52-6-1-root-shim-inventory-contract.sh"
+  "${repo_root}/scripts/verify-phase-52-7-4-physical-layout-migration.sh" \
+  "${repo_root}/scripts/verify-phase-52-7-5-root-shim-reduction.sh"
 do
   if [[ ! -f "${prerequisite}" ]]; then
     echo "Missing prerequisite verifier: $(basename "${prerequisite}")" >&2
