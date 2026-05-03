@@ -330,16 +330,14 @@ class ActionExecutionReconciliationCoordinator:
                         ),
                         transitioned_at=latest_execution["observed_at"],
                     )
-            if (
-                authoritative_execution is not None
-                and authoritative_execution.approved_payload.get("action_type")
-                == "create_tracking_ticket"
-            ):
-                downstream_binding = authoritative_execution.provenance.get(
+            downstream_binding: Mapping[str, object] | None = None
+            if authoritative_execution is not None:
+                raw_downstream_binding = authoritative_execution.provenance.get(
                     "downstream_binding",
                     {},
                 )
-                if isinstance(downstream_binding, Mapping):
+                if isinstance(raw_downstream_binding, Mapping):
+                    downstream_binding = raw_downstream_binding
                     if isinstance(downstream_binding.get("workflow_id"), str):
                         subject_linkage["workflow_ids"] = (
                             downstream_binding["workflow_id"],
@@ -359,26 +357,33 @@ class ActionExecutionReconciliationCoordinator:
                         subject_linkage["expected_execution_receipt_ids"] = (
                             downstream_binding["expected_execution_receipt_id"],
                         )
-                    if isinstance(downstream_binding.get("coordination_reference_id"), str):
-                        subject_linkage["coordination_reference_ids"] = (
-                            downstream_binding["coordination_reference_id"],
-                        )
-                    if isinstance(downstream_binding.get("coordination_target_type"), str):
-                        subject_linkage["coordination_target_types"] = (
-                            downstream_binding["coordination_target_type"],
-                        )
-                    if isinstance(downstream_binding.get("external_receipt_id"), str):
-                        subject_linkage["external_receipt_ids"] = (
-                            downstream_binding["external_receipt_id"],
-                        )
-                    if isinstance(downstream_binding.get("coordination_target_id"), str):
-                        subject_linkage["coordination_target_ids"] = (
-                            downstream_binding["coordination_target_id"],
-                        )
-                    if isinstance(downstream_binding.get("ticket_reference_url"), str):
-                        subject_linkage["ticket_reference_urls"] = (
-                            downstream_binding["ticket_reference_url"],
-                        )
+
+            if (
+                authoritative_execution is not None
+                and authoritative_execution.approved_payload.get("action_type")
+                == "create_tracking_ticket"
+                and downstream_binding is not None
+            ):
+                if isinstance(downstream_binding.get("coordination_reference_id"), str):
+                    subject_linkage["coordination_reference_ids"] = (
+                        downstream_binding["coordination_reference_id"],
+                    )
+                if isinstance(downstream_binding.get("coordination_target_type"), str):
+                    subject_linkage["coordination_target_types"] = (
+                        downstream_binding["coordination_target_type"],
+                    )
+                if isinstance(downstream_binding.get("external_receipt_id"), str):
+                    subject_linkage["external_receipt_ids"] = (
+                        downstream_binding["external_receipt_id"],
+                    )
+                if isinstance(downstream_binding.get("coordination_target_id"), str):
+                    subject_linkage["coordination_target_ids"] = (
+                        downstream_binding["coordination_target_id"],
+                    )
+                if isinstance(downstream_binding.get("ticket_reference_url"), str):
+                    subject_linkage["ticket_reference_urls"] = (
+                        downstream_binding["ticket_reference_url"],
+                    )
 
             reconciliation = self._service.persist_record(
                 ReconciliationRecord(

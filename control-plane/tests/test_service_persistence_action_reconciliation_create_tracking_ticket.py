@@ -1171,7 +1171,7 @@ class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenc
     def test_service_fail_closes_when_shuffle_reconciliation_correlation_drifts(
         self,
     ) -> None:
-        store, service, approved_payload, delegated_at = (
+        _, service, approved_payload, delegated_at = (
             self._build_phase54_create_tracking_ticket_context(
                 suffix="correlation-drift-001",
                 binding={
