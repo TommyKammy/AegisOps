@@ -468,6 +468,203 @@ class CrossBoundaryNegativeE2EValidationTests(unittest.TestCase):
             baseline_execution_count,
         )
 
+    def test_direct_ad_hoc_shuffle_launch_without_aegisops_approval_fails_closed(
+        self,
+    ) -> None:
+        store, service, promoted_case, reviewed_at = self._build_wazuh_case()
+        baseline_case = store.get(CaseRecord, promoted_case.case_id)
+        baseline_execution_ids = {
+            record.action_execution_id for record in store.list(ActionExecutionRecord)
+        }
+        baseline_reconciliation_ids = {
+            record.reconciliation_id for record in store.list(ReconciliationRecord)
+        }
+        self.assertIsNotNone(baseline_case)
+
+        with self.assertRaisesRegex(
+            LookupError,
+            "Missing action request 'shuffle-ad-hoc-launch-001'",
+        ):
+            service.delegate_approved_action_to_shuffle(
+                action_request_id="shuffle-ad-hoc-launch-001",
+                approved_payload={
+                    "action_type": "notify_identity_owner",
+                    "recipient_identity": "repo-owner-001",
+                    "message_intent": "Direct ad-hoc Shuffle launch.",
+                    "escalation_reason": "Bypass AegisOps approval.",
+                },
+                delegated_at=reviewed_at + timedelta(minutes=10),
+                delegation_issuer="shuffle-ui",
+            )
+
+        current_case = store.get(CaseRecord, promoted_case.case_id)
+        self.assertIsNotNone(current_case)
+        self.assertEqual(current_case.lifecycle_state, baseline_case.lifecycle_state)
+        self.assertEqual(
+            {
+                record.action_execution_id
+                for record in store.list(ActionExecutionRecord)
+            },
+            baseline_execution_ids,
+        )
+        self.assertEqual(
+            {record.reconciliation_id for record in store.list(ReconciliationRecord)},
+            baseline_reconciliation_ids,
+        )
+
+    def test_shuffle_success_without_aegisops_delegation_is_mismatched_not_truth(
+        self,
+    ) -> None:
+        store, service, promoted_case, reviewed_at = self._build_wazuh_case()
+        baseline_case = store.get(CaseRecord, promoted_case.case_id)
+        baseline_execution_count = len(store.list(ActionExecutionRecord))
+        self.assertIsNotNone(baseline_case)
+        service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-shuffle-shortcut-001",
+                approval_decision_id="approval-shuffle-shortcut-001",
+                case_id=promoted_case.case_id,
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                idempotency_key="idempotency-shuffle-shortcut-001",
+                target_scope={"asset_id": "workstation-001"},
+                payload_hash="payload-hash-shuffle-shortcut-001",
+                requested_at=reviewed_at + timedelta(minutes=5),
+                expires_at=None,
+                lifecycle_state="approved",
+                requested_payload={
+                    "action_type": "notify_identity_owner",
+                    "recipient_identity": "repo-owner-001",
+                    "message_intent": "Notify owner about reviewed signal.",
+                    "escalation_reason": "Reviewed evidence requires notification.",
+                },
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "shuffle",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+
+        reconciliation = service.reconcile_action_execution(
+            action_request_id="action-request-shuffle-shortcut-001",
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(
+                {
+                    "execution_run_id": "shuffle-success-shortcut-run-001",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                    "idempotency_key": "idempotency-shuffle-shortcut-001",
+                    "approval_decision_id": "approval-shuffle-shortcut-001",
+                    "delegation_id": "shuffle-ui-shortcut-001",
+                    "payload_hash": "payload-hash-shuffle-shortcut-001",
+                    "observed_at": reviewed_at + timedelta(minutes=10),
+                    "status": "success",
+                    "callback_payload": {"case_status": "resolved"},
+                    "workflow_canvas_state": "green",
+                    "execution_log_summary": "completed successfully",
+                },
+            ),
+            compared_at=reviewed_at + timedelta(minutes=10),
+            stale_after=reviewed_at + timedelta(hours=1),
+        )
+
+        current_case = store.get(CaseRecord, promoted_case.case_id)
+        self.assertIsNotNone(current_case)
+        self.assertEqual(reconciliation.ingest_disposition, "mismatch")
+        self.assertEqual(reconciliation.lifecycle_state, "mismatched")
+        self.assertEqual(
+            reconciliation.mismatch_summary,
+            "observed shuffle execution lacks an authoritative AegisOps delegation record",
+        )
+        self.assertEqual(current_case.lifecycle_state, baseline_case.lifecycle_state)
+        self.assertEqual(
+            len(store.list(ActionExecutionRecord)),
+            baseline_execution_count,
+        )
+
+    def test_ticket_callback_canvas_and_logs_do_not_close_case_after_shuffle_success(
+        self,
+    ) -> None:
+        cli_helper = cli_support.ControlPlaneCliInspectionTestBase()
+        store, service, promoted_case, _evidence_id, reviewed_at = (
+            cli_helper._build_phase19_in_scope_case()
+        )
+        seeded = cli_helper._seed_create_tracking_ticket_request(
+            service=service,
+            promoted_case=promoted_case,
+            reviewed_at=reviewed_at,
+            suffix="shuffle-authority-boundary-001",
+            coordination_reference_id="coord-ref-shuffle-authority-boundary-001",
+        )
+        baseline_case = store.get(CaseRecord, promoted_case.case_id)
+        baseline_alert = store.get(AlertRecord, promoted_case.alert_id)
+        self.assertIsNotNone(baseline_case)
+        self.assertIsNotNone(baseline_alert)
+
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id=seeded["action_request"].action_request_id,
+            approved_payload=seeded["approved_payload"],
+            delegated_at=reviewed_at + timedelta(minutes=15),
+            delegation_issuer="control-plane-service",
+        )
+        downstream_binding = execution.provenance["downstream_binding"]
+        reconciliation = service.reconcile_action_execution(
+            action_request_id=seeded["action_request"].action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(
+                {
+                    "execution_run_id": execution.execution_run_id,
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                    "idempotency_key": seeded["action_request"].idempotency_key,
+                    "approval_decision_id": seeded["approval"].approval_decision_id,
+                    "delegation_id": execution.delegation_id,
+                    "payload_hash": seeded["payload_hash"],
+                    "coordination_reference_id": downstream_binding[
+                        "coordination_reference_id"
+                    ],
+                    "coordination_target_type": downstream_binding[
+                        "coordination_target_type"
+                    ],
+                    "external_receipt_id": downstream_binding["external_receipt_id"],
+                    "coordination_target_id": downstream_binding[
+                        "coordination_target_id"
+                    ],
+                    "ticket_reference_url": downstream_binding["ticket_reference_url"],
+                    "observed_at": reviewed_at + timedelta(minutes=20),
+                    "status": "success",
+                    "ticket_state": "closed",
+                    "callback_payload": {"case_status": "closed_resolved"},
+                    "workflow_canvas_state": "success",
+                    "execution_log_summary": "ticket closed downstream",
+                },
+            ),
+            compared_at=reviewed_at + timedelta(minutes=20),
+            stale_after=reviewed_at + timedelta(hours=1),
+        )
+
+        current_case = store.get(CaseRecord, promoted_case.case_id)
+        current_alert = store.get(AlertRecord, promoted_case.alert_id)
+        current_execution = store.get(
+            ActionExecutionRecord,
+            execution.action_execution_id,
+        )
+        self.assertIsNotNone(current_case)
+        self.assertIsNotNone(current_alert)
+        self.assertIsNotNone(current_execution)
+        self.assertEqual(reconciliation.ingest_disposition, "matched")
+        self.assertEqual(reconciliation.lifecycle_state, "matched")
+        self.assertEqual(current_execution.lifecycle_state, "succeeded")
+        self.assertEqual(current_case.lifecycle_state, baseline_case.lifecycle_state)
+        self.assertEqual(current_alert.lifecycle_state, baseline_alert.lifecycle_state)
+        self.assertIsNone(current_case.coordination_reference_id)
+        self.assertIsNone(current_alert.coordination_reference_id)
+        self.assertNotEqual(current_case.lifecycle_state, "closed")
+
     def test_endpoint_evidence_missing_provenance_is_not_promoted(self) -> None:
         phase28_helper = phase28_tests.Phase28EndpointEvidencePackValidationTests()
         store, service, promoted_case, anchor_evidence_id, reviewed_at = (
