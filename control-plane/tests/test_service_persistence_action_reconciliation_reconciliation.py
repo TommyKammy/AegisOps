@@ -282,6 +282,13 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
             alert_id="alert-001",
             finding_id="finding-001",
         )
+        approved_payload["shuffle_delegation_binding"] = {
+            "workflow_id": "notify_identity_owner",
+            "workflow_version_id": "notify_identity_owner-v1-reviewed-2026-05-03",
+            "correlation_id": "shuffle-correlation-notify-reconcile-001",
+            "expected_execution_receipt_id": "shuffle-receipt-notify-reconcile-001",
+            "requested_scope": approved_target_scope,
+        }
         payload_hash = _approved_binding_hash(
             target_scope=approved_target_scope,
             approved_payload=approved_payload,
@@ -312,6 +319,7 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
                 requested_at=requested_at,
                 expires_at=None,
                 lifecycle_state="approved",
+                requested_payload=approved_payload,
                 policy_evaluation={
                     "approval_requirement": "human_required",
                     "routing_target": "shuffle",
@@ -328,6 +336,7 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
             delegation_issuer="control-plane-service",
             evidence_ids=("evidence-001",),
         )
+        downstream_binding = execution.provenance["downstream_binding"]
 
         reconciliation = service.reconcile_action_execution(
             action_request_id="action-request-routine-reconcile-001",
@@ -342,6 +351,13 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
                     "approval_decision_id": execution.approval_decision_id,
                     "delegation_id": execution.delegation_id,
                     "payload_hash": execution.payload_hash,
+                    "action_request_id": execution.action_request_id,
+                    "workflow_id": downstream_binding["workflow_id"],
+                    "workflow_version_id": downstream_binding["workflow_version_id"],
+                    "correlation_id": downstream_binding["correlation_id"],
+                    "expected_execution_receipt_id": downstream_binding[
+                        "expected_execution_receipt_id"
+                    ],
                     "observed_at": compared_at,
                     "status": "success",
                 },
@@ -368,6 +384,22 @@ class ActionExecutionReconciliationPersistenceTests(ServicePersistenceTestBase):
         self.assertEqual(
             reconciliation.subject_linkage["delegation_ids"],
             (execution.delegation_id,),
+        )
+        self.assertEqual(
+            reconciliation.subject_linkage["workflow_ids"],
+            ("notify_identity_owner",),
+        )
+        self.assertEqual(
+            reconciliation.subject_linkage["workflow_version_ids"],
+            ("notify_identity_owner-v1-reviewed-2026-05-03",),
+        )
+        self.assertEqual(
+            reconciliation.subject_linkage["correlation_ids"],
+            ("shuffle-correlation-notify-reconcile-001",),
+        )
+        self.assertEqual(
+            reconciliation.subject_linkage["expected_execution_receipt_ids"],
+            ("shuffle-receipt-notify-reconcile-001",),
         )
         self.assertEqual(
             reconciliation.correlation_key,

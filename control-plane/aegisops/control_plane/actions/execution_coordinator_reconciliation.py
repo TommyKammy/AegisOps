@@ -139,6 +139,13 @@ class ActionExecutionReconciliationCoordinator:
             observed_approval_decision_id = latest_execution.get("approval_decision_id")
             observed_delegation_id = latest_execution.get("delegation_id")
             observed_payload_hash = latest_execution.get("payload_hash")
+            observed_action_request_id = latest_execution.get("action_request_id")
+            observed_workflow_id = latest_execution.get("workflow_id")
+            observed_workflow_version_id = latest_execution.get("workflow_version_id")
+            observed_correlation_id = latest_execution.get("correlation_id")
+            observed_expected_execution_receipt_id = latest_execution.get(
+                "expected_execution_receipt_id"
+            )
             observed_coordination_reference_id = latest_execution.get(
                 "coordination_reference_id"
             )
@@ -212,6 +219,28 @@ class ActionExecutionReconciliationCoordinator:
                 lifecycle_state = "mismatched"
                 mismatch_summary = (
                     "approved binding mismatch between authoritative action execution "
+                    "and observed downstream execution"
+                )
+            elif (
+                authoritative_execution is not None
+                and authoritative_execution.execution_surface_type
+                == "automation_substrate"
+                and authoritative_execution.execution_surface_id == "shuffle"
+                and self._shuffle_receipt_binding_mismatched(
+                    authoritative_execution=authoritative_execution,
+                    observed_action_request_id=observed_action_request_id,
+                    observed_workflow_id=observed_workflow_id,
+                    observed_workflow_version_id=observed_workflow_version_id,
+                    observed_correlation_id=observed_correlation_id,
+                    observed_expected_execution_receipt_id=(
+                        observed_expected_execution_receipt_id
+                    ),
+                )
+            ):
+                ingest_disposition = "mismatch"
+                lifecycle_state = "mismatched"
+                mismatch_summary = (
+                    "execution receipt binding mismatch between authoritative action execution "
                     "and observed downstream execution"
                 )
             elif (
@@ -301,36 +330,60 @@ class ActionExecutionReconciliationCoordinator:
                         ),
                         transitioned_at=latest_execution["observed_at"],
                     )
+            downstream_binding: Mapping[str, object] | None = None
+            if authoritative_execution is not None:
+                raw_downstream_binding = authoritative_execution.provenance.get(
+                    "downstream_binding",
+                    {},
+                )
+                if isinstance(raw_downstream_binding, Mapping):
+                    downstream_binding = raw_downstream_binding
+                    if isinstance(downstream_binding.get("workflow_id"), str):
+                        subject_linkage["workflow_ids"] = (
+                            downstream_binding["workflow_id"],
+                        )
+                    if isinstance(downstream_binding.get("workflow_version_id"), str):
+                        subject_linkage["workflow_version_ids"] = (
+                            downstream_binding["workflow_version_id"],
+                        )
+                    if isinstance(downstream_binding.get("correlation_id"), str):
+                        subject_linkage["correlation_ids"] = (
+                            downstream_binding["correlation_id"],
+                        )
+                    if isinstance(
+                        downstream_binding.get("expected_execution_receipt_id"),
+                        str,
+                    ):
+                        subject_linkage["expected_execution_receipt_ids"] = (
+                            downstream_binding["expected_execution_receipt_id"],
+                        )
+
             if (
                 authoritative_execution is not None
                 and authoritative_execution.approved_payload.get("action_type")
                 == "create_tracking_ticket"
+                and downstream_binding is not None
             ):
-                downstream_binding = authoritative_execution.provenance.get(
-                    "downstream_binding",
-                    {},
-                )
-                if isinstance(downstream_binding, Mapping):
-                    if isinstance(downstream_binding.get("coordination_reference_id"), str):
-                        subject_linkage["coordination_reference_ids"] = (
-                            downstream_binding["coordination_reference_id"],
-                        )
-                    if isinstance(downstream_binding.get("coordination_target_type"), str):
-                        subject_linkage["coordination_target_types"] = (
-                            downstream_binding["coordination_target_type"],
-                        )
-                    if isinstance(downstream_binding.get("external_receipt_id"), str):
-                        subject_linkage["external_receipt_ids"] = (
-                            downstream_binding["external_receipt_id"],
-                        )
-                    if isinstance(downstream_binding.get("coordination_target_id"), str):
-                        subject_linkage["coordination_target_ids"] = (
-                            downstream_binding["coordination_target_id"],
-                        )
-                    if isinstance(downstream_binding.get("ticket_reference_url"), str):
-                        subject_linkage["ticket_reference_urls"] = (
-                            downstream_binding["ticket_reference_url"],
-                        )
+                if isinstance(downstream_binding.get("coordination_reference_id"), str):
+                    subject_linkage["coordination_reference_ids"] = (
+                        downstream_binding["coordination_reference_id"],
+                    )
+                if isinstance(downstream_binding.get("coordination_target_type"), str):
+                    subject_linkage["coordination_target_types"] = (
+                        downstream_binding["coordination_target_type"],
+                    )
+                if isinstance(downstream_binding.get("external_receipt_id"), str):
+                    subject_linkage["external_receipt_ids"] = (
+                        downstream_binding["external_receipt_id"],
+                    )
+                if isinstance(downstream_binding.get("coordination_target_id"), str):
+                    subject_linkage["coordination_target_ids"] = (
+                        downstream_binding["coordination_target_id"],
+                    )
+                if isinstance(downstream_binding.get("ticket_reference_url"), str):
+                    subject_linkage["ticket_reference_urls"] = (
+                        downstream_binding["ticket_reference_url"],
+                    )
 
             reconciliation = self._service.persist_record(
                 ReconciliationRecord(
@@ -460,6 +513,39 @@ class ActionExecutionReconciliationCoordinator:
                     return execution
         return matches[0] if matches else None
 
+    @staticmethod
+    def _shuffle_receipt_binding_mismatched(
+        *,
+        authoritative_execution: ActionExecutionRecord,
+        observed_action_request_id: object,
+        observed_workflow_id: object,
+        observed_workflow_version_id: object,
+        observed_correlation_id: object,
+        observed_expected_execution_receipt_id: object,
+    ) -> bool:
+        downstream_binding = authoritative_execution.provenance.get(
+            "downstream_binding",
+            {},
+        )
+        if not isinstance(downstream_binding, Mapping):
+            return False
+
+        expected_fields = (
+            ("action_request_id", observed_action_request_id),
+            ("workflow_id", observed_workflow_id),
+            ("workflow_version_id", observed_workflow_version_id),
+            ("correlation_id", observed_correlation_id),
+            (
+                "expected_execution_receipt_id",
+                observed_expected_execution_receipt_id,
+            ),
+        )
+        return any(
+            isinstance(downstream_binding.get(field_name), str)
+            and observed_value != downstream_binding[field_name]
+            for field_name, observed_value in expected_fields
+        )
+
     def _normalize_observed_executions(
         self,
         observed_executions: tuple[Mapping[str, object], ...],
@@ -477,6 +563,13 @@ class ActionExecutionReconciliationCoordinator:
             approval_decision_id = execution.get("approval_decision_id")
             delegation_id = execution.get("delegation_id")
             payload_hash = execution.get("payload_hash")
+            action_request_id = execution.get("action_request_id")
+            workflow_id = execution.get("workflow_id")
+            workflow_version_id = execution.get("workflow_version_id")
+            correlation_id = execution.get("correlation_id")
+            expected_execution_receipt_id = execution.get(
+                "expected_execution_receipt_id"
+            )
             coordination_reference_id = execution.get("coordination_reference_id")
             coordination_target_type = execution.get("coordination_target_type")
             external_receipt_id = execution.get("external_receipt_id")
@@ -542,6 +635,11 @@ class ActionExecutionReconciliationCoordinator:
                     "approval_decision_id": approval_decision_id,
                     "delegation_id": delegation_id,
                     "payload_hash": payload_hash,
+                    "action_request_id": action_request_id,
+                    "workflow_id": workflow_id,
+                    "workflow_version_id": workflow_version_id,
+                    "correlation_id": correlation_id,
+                    "expected_execution_receipt_id": expected_execution_receipt_id,
                     "coordination_reference_id": coordination_reference_id,
                     "coordination_target_type": coordination_target_type,
                     "external_receipt_id": external_receipt_id,
