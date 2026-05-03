@@ -183,6 +183,7 @@ if grep -REq "(${path_token_boundary}${local_path_token}|file:///?${local_path_t
 fi
 
 python3 - "${fixtures_dir}" "${fixture_expectations[@]}" <<'PY'
+from collections import Counter
 import json
 import pathlib
 import sys
@@ -301,8 +302,11 @@ required_linkages = {
     "demo-evidence": ("linked_demo_case_id", "demo-case"),
     "demo-recommendation": ("linked_demo_case_id", "demo-case"),
     "demo-action-review": ("linked_demo_recommendation_id", "demo-recommendation"),
+    "demo-action-request": ("linked_demo_case_id", "demo-case"),
+    "demo-approval": ("linked_demo_action_request_id", "demo-action-request"),
     "demo-execution-receipt": ("linked_demo_action_review_id", "demo-action-review"),
     "demo-reconciliation": ("linked_demo_execution_receipt_id", "demo-execution-receipt"),
+    "demo-reconciliation-note": ("linked_demo_execution_receipt_id", "demo-execution-receipt"),
 }
 
 
@@ -349,9 +353,13 @@ def rejection_reasons(payload):
     if len(records_by_id) != len(records):
         reasons.append("non-repeatable seed load")
 
-    present_record_types = {record.get("type") for record in records}
-    for required_record_type in sorted(required_record_types - present_record_types):
-        reasons.append(f"missing required record family {required_record_type}")
+    record_type_counts = Counter(record.get("type") for record in records)
+    for required_record_type in sorted(required_record_types):
+        required_record_type_count = record_type_counts.get(required_record_type, 0)
+        if required_record_type_count == 0:
+            reasons.append(f"missing required record family {required_record_type}")
+        elif required_record_type_count > 1:
+            reasons.append(f"multiple records in required family {required_record_type}")
 
     for record in records:
         record_type = record.get("type")

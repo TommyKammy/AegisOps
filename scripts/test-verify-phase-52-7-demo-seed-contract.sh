@@ -158,6 +158,46 @@ assert_fails_with \
   "${valid_missing_family_linkage_repo}" \
   "Invalid Phase 52.7 demo seed fixture state for valid-demo-seed.json: expected valid"
 
+valid_missing_action_request_linkage_repo="${workdir}/valid-missing-action-request-linkage"
+create_valid_repo "${valid_missing_action_request_linkage_repo}"
+set_fixture_json_value \
+  "${valid_missing_action_request_linkage_repo}" \
+  "valid-demo-seed.json" \
+  "payload['records'].append({'type': 'demo-action-request', 'id': 'demo-action-request-001', 'linked_demo_case_id': 'missing-demo-case', 'requested_action': 'isolate demo host', 'non_production_scope': True, 'presentation': 'demo-only action rehearsal', 'labels': ['demo-only', 'first-user-rehearsal', 'not-production-truth'], 'production_claim': False, 'truth_surfaces': [], 'authority': 'demo_rehearsal_only'})"
+assert_fails_with \
+  "${valid_missing_action_request_linkage_repo}" \
+  "Invalid Phase 52.7 demo seed fixture state for valid-demo-seed.json: expected valid"
+
+valid_missing_approval_linkage_repo="${workdir}/valid-missing-approval-linkage"
+create_valid_repo "${valid_missing_approval_linkage_repo}"
+set_fixture_json_value \
+  "${valid_missing_approval_linkage_repo}" \
+  "valid-demo-seed.json" \
+  "payload['records'].append({'type': 'demo-action-request', 'id': 'demo-action-request-001', 'linked_demo_case_id': 'demo-case-001', 'requested_action': 'isolate demo host', 'non_production_scope': True, 'presentation': 'demo-only action rehearsal', 'labels': ['demo-only', 'first-user-rehearsal', 'not-production-truth'], 'production_claim': False, 'truth_surfaces': [], 'authority': 'demo_rehearsal_only'}); payload['records'].append({'type': 'demo-approval', 'id': 'demo-approval-001', 'linked_demo_action_request_id': 'missing-demo-action-request', 'reviewer_placeholder': 'Demo reviewer', 'presentation': 'demo-only approval rehearsal', 'labels': ['demo-only', 'first-user-rehearsal', 'not-production-truth'], 'production_claim': False, 'truth_surfaces': [], 'authority': 'demo_rehearsal_only'})"
+assert_fails_with \
+  "${valid_missing_approval_linkage_repo}" \
+  "Invalid Phase 52.7 demo seed fixture state for valid-demo-seed.json: expected valid"
+
+valid_missing_reconciliation_note_linkage_repo="${workdir}/valid-missing-reconciliation-note-linkage"
+create_valid_repo "${valid_missing_reconciliation_note_linkage_repo}"
+set_fixture_json_value \
+  "${valid_missing_reconciliation_note_linkage_repo}" \
+  "valid-demo-seed.json" \
+  "payload['records'].append({'type': 'demo-reconciliation-note', 'id': 'demo-reconciliation-note-001', 'linked_demo_execution_receipt_id': 'missing-demo-execution-receipt', 'outcome_placeholder': 'Demo outcome note', 'presentation': 'demo-only reconciliation rehearsal', 'labels': ['demo-only', 'first-user-rehearsal', 'not-production-truth'], 'production_claim': False, 'truth_surfaces': [], 'authority': 'demo_rehearsal_only'})"
+assert_fails_with \
+  "${valid_missing_reconciliation_note_linkage_repo}" \
+  "Invalid Phase 52.7 demo seed fixture state for valid-demo-seed.json: expected valid"
+
+valid_duplicate_required_family_repo="${workdir}/valid-duplicate-required-family"
+create_valid_repo "${valid_duplicate_required_family_repo}"
+set_fixture_json_value \
+  "${valid_duplicate_required_family_repo}" \
+  "valid-demo-seed.json" \
+  "payload['records'].append(dict(payload['records'][3], id='demo-case-duplicate'))"
+assert_fails_with \
+  "${valid_duplicate_required_family_repo}" \
+  "Invalid Phase 52.7 demo seed fixture state for valid-demo-seed.json: expected valid"
+
 valid_non_repeatable_seed_repo="${workdir}/valid-non-repeatable-seed"
 create_valid_repo "${valid_non_repeatable_seed_repo}"
 set_fixture_json_value \
