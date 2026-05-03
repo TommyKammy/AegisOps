@@ -195,6 +195,46 @@ export function registerOperatorRoutesTodayTests() {
       expect(screen.queryByRole("button", { name: /reconcile/i })).toBeNull();
     });
 
+    it("renders an explicit unavailable health summary when readiness diagnostics return no reviewed record", async () => {
+      const dependencies = createDefaultDependencies({
+        fetchFn: createAuthorizedFetch({
+          "/inspect-today-view": normalTodayProjection,
+        }),
+      });
+      dependencies.dataProvider = {
+        ...dependencies.dataProvider,
+        getList: vi.fn(async (resource, params) => {
+          if (resource === "runtimeReadiness") {
+            return {
+              data: [],
+              total: 0,
+            };
+          }
+
+          return createDefaultDependencies({
+            fetchFn: createAuthorizedFetch({
+              "/inspect-today-view": normalTodayProjection,
+            }),
+          }).dataProvider.getList(resource, params);
+        }),
+      };
+
+      renderOperatorRoute("/operator/today", dependencies);
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("heading", { name: "Workbench health summary" }),
+        ).toBeInTheDocument();
+      });
+
+      expect(
+        screen.getByText(
+          "Workbench health summary is unavailable because readiness diagnostics returned no reviewed record.",
+        ),
+      ).toBeInTheDocument();
+      expect(screen.queryByText("Status: ready")).not.toBeInTheDocument();
+    });
+
     it("renders bounded operator task cards that route to existing reviewed surfaces only", async () => {
       const dependencies = createDefaultDependencies({
         fetchFn: createAuthorizedFetch({

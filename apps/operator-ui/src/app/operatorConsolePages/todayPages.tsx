@@ -326,6 +326,8 @@ function WorkbenchHealthSummary() {
             ]}
           />
         </Stack>
+      ) : !loading && !error ? (
+        <EmptyState message="Workbench health summary is unavailable because readiness diagnostics returned no reviewed record." />
       ) : null}
     </SectionCard>
   );
