@@ -1,0 +1,128 @@
+profile_id: smb-single-node
+product_profile: shuffle
+profile_contract_version: 2026-05-03
+status: accepted-contract
+related_issues:
+  - 1154
+  - 1155
+authority_boundary: Shuffle provides subordinate routine automation substrate context only; Shuffle frontend, backend, orborus, worker, OpenSearch, workflow, callback, API, generated config, logs, payload, retry, and version state cannot close, approve, execute, reconcile, release, gate, or mutate authoritative AegisOps records.
+service_topology:
+  frontend:
+    required: true
+    role: proxy-mediated operator UI for reviewed Shuffle administration only
+  backend:
+    required: true
+    role: internal Shuffle API for reviewed delegated automation
+  orborus:
+    required: true
+    role: worker orchestration for reviewed routine automation only
+  worker:
+    required: true
+    role: pinned worker image for delegated action execution
+  opensearch:
+    required: true
+    role: Shuffle-owned datastore separated from AegisOps PostgreSQL and evidence custody
+api_boundary:
+  api_url: http://shuffle-backend:5001
+  callback_url: <aegisops-shuffle-callback-url>
+  external_access: proxy-mediated only through reviewed AegisOps route binding
+  callback_identity: trusted callback secret reference plus AegisOps action request binding required
+components:
+  frontend:
+    required: true
+    version: 2.2.0
+    image: ghcr.io/shuffle/shuffle-frontend:2.2.0
+    ports:
+      - 80/tcp internal frontend UI
+      - 443/tcp internal frontend UI TLS
+    volumes:
+      - shuffle-frontend-config
+    credentials:
+      - shuffle-frontend-session-secret-ref
+    resource_expectation: 1 vCPU, 1 GB RAM, bounded config/log storage
+    boundary: Frontend UI and browser state remain operator context only and cannot become AegisOps workflow truth.
+  backend:
+    required: true
+    version: 2.2.0
+    image: ghcr.io/shuffle/shuffle-backend:2.2.0
+    ports:
+      - 5001/tcp internal backend API
+    volumes:
+      - shuffle-apps
+      - shuffle-files
+      - shuffle-docker-socket-proxy
+    credentials:
+      - shuffle-api-credential-ref
+      - shuffle-callback-secret-ref
+      - shuffle-encryption-modifier-ref
+    resource_expectation: 2 vCPU, 4 GB RAM, bounded app/file storage
+    boundary: Backend API and callback payloads remain subordinate delegated-execution context until admitted by AegisOps records.
+  orborus:
+    required: true
+    version: 2.2.0
+    image: ghcr.io/shuffle/shuffle-orborus:2.2.0
+    ports:
+      - none direct host ports; outbound worker orchestration only
+    volumes:
+      - shuffle-docker-socket-proxy
+      - shuffle-worker-runtime
+    credentials:
+      - shuffle-orborus-auth-ref
+      - shuffle-worker-registry-ref
+    resource_expectation: 1 vCPU, 2 GB RAM, bounded worker orchestration capacity
+    boundary: Orborus scheduling and retry state cannot become AegisOps execution or reconciliation truth.
+  worker:
+    required: true
+    version: 2.2.0
+    image: ghcr.io/shuffle/shuffle-worker:2.2.0
+    ports:
+      - none direct host ports; callback egress returns through reviewed callback route only
+    volumes:
+      - shuffle-worker-ephemeral
+      - shuffle-app-execution-cache
+    credentials:
+      - shuffle-worker-runtime-secret-ref
+      - shuffle-app-auth-custody-ref
+    resource_expectation: Ephemeral worker capacity bounded by reviewed concurrency
+    boundary: Worker output is downstream execution context only until normalized into an AegisOps execution receipt.
+  opensearch:
+    required: true
+    version: 3.2.0
+    image: opensearchproject/opensearch:3.2.0
+    ports:
+      - 9200/tcp internal Shuffle datastore API
+    volumes:
+      - shuffle-database
+    credentials:
+      - shuffle-opensearch-admin-secret-ref
+    resource_expectation: 2 vCPU, 6 GB RAM, 120 GB durable substrate storage
+    boundary: Shuffle datastore contents are substrate state only and cannot become AegisOps release, gate, or reconciliation truth.
+version_matrix:
+  - component: frontend
+    version: 2.2.0
+    pin_type: exact
+    incompatible_versions: Shuffle 1.x, unreviewed Shuffle 2.3.x, latest, rc, beta
+  - component: backend
+    version: 2.2.0
+    pin_type: exact
+    incompatible_versions: Shuffle 1.x, unreviewed Shuffle 2.3.x, latest, rc, beta
+  - component: orborus
+    version: 2.2.0
+    pin_type: exact
+    incompatible_versions: Shuffle 1.x, unreviewed Shuffle 2.3.x, latest, rc, beta
+  - component: worker
+    version: 2.2.0
+    pin_type: exact
+    incompatible_versions: Shuffle 1.x, unreviewed Shuffle 2.3.x, latest, rc, beta
+  - component: opensearch
+    version: 3.2.0
+    pin_type: exact
+    incompatible_versions: OpenSearch 1.x, unreviewed OpenSearch 4.x, latest, rc, beta
+profile_expectations:
+  service_topology: Frontend, backend, orborus, worker image, and OpenSearch are explicit; optional monitoring, direct Docker socket exposure, and unreviewed workflow packs are not approved by this contract.
+  api_url: Internal API URL is http://shuffle-backend:5001; external access must be proxy-mediated.
+  callback_url: Callback URL placeholder <aegisops-shuffle-callback-url> requires later AegisOps route binding before runtime use.
+  ingress: Shuffle UI, API, worker, and datastore ports are internal or proxy-mediated; direct host exposure is not approved by this contract.
+  volumes: Shuffle app, file, worker, and datastore volumes are separate from PostgreSQL and AegisOps evidence custody.
+  credentials: API credentials, callback secrets, encryption modifiers, worker auth, app auth custody, and OpenSearch admin secrets are trusted custody references only; placeholder, sample, fake, TODO, unsigned, inline, or default secret values are invalid.
+  dependencies: Reviewed Docker/Compose posture, proxy custody, trusted secret references, AegisOps approval/action-request records, and later workflow-catalog custody are required before delegated execution can run.
