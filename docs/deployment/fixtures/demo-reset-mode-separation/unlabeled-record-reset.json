@@ -1,0 +1,31 @@
+{
+  "scenario": "unlabeled-record-reset",
+  "operation": "demo-reset",
+  "reset_contract": {
+    "bundle": "phase-52-7-demo-seed",
+    "mode": "demo",
+    "selector": {
+      "bundle": "phase-52-7-demo-seed",
+      "labels": [
+        "demo-only"
+      ]
+    },
+    "repeatable_by_stable_id": true,
+    "deletes_live_records": false,
+    "mutates_production_truth": false,
+    "reported_as": "demo-reset"
+  },
+  "before_records": [
+    {
+      "id": "unlabeled-note-001",
+      "mode": "unknown",
+      "type": "operator-note",
+      "labels": [],
+      "authority": "operator_context",
+      "production_claim": false,
+      "truth_surfaces": [],
+      "status": "retained"
+    }
+  ],
+  "after_records": []
+}

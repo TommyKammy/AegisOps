@@ -1,0 +1,84 @@
+{
+  "scenario": "mutate-production-truth",
+  "operation": "demo-reset",
+  "reset_contract": {
+    "bundle": "phase-52-7-demo-seed",
+    "mode": "demo",
+    "selector": {
+      "bundle": "phase-52-7-demo-seed",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ]
+    },
+    "repeatable_by_stable_id": true,
+    "deletes_live_records": false,
+    "mutates_production_truth": true,
+    "reported_as": "demo-reset"
+  },
+  "before_records": [
+    {
+      "id": "demo-case-001",
+      "mode": "demo",
+      "type": "demo-case",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "authority": "demo_rehearsal_only",
+      "production_claim": false,
+      "truth_surfaces": [],
+      "status": "demo-rehearsal"
+    },
+    {
+      "id": "live-case-001",
+      "mode": "live",
+      "type": "case",
+      "labels": [
+        "customer-bound",
+        "production-truth"
+      ],
+      "authority": "aegisops_control_plane",
+      "production_claim": true,
+      "truth_surfaces": [
+        "production"
+      ],
+      "status": "open",
+      "audit_marker": "live-case-marker"
+    }
+  ],
+  "after_records": [
+    {
+      "id": "demo-case-001",
+      "mode": "demo",
+      "type": "demo-case",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "authority": "demo_rehearsal_only",
+      "production_claim": false,
+      "truth_surfaces": [],
+      "status": "demo-rehearsal"
+    },
+    {
+      "id": "live-case-001",
+      "mode": "live",
+      "type": "case",
+      "labels": [
+        "customer-bound",
+        "production-truth"
+      ],
+      "authority": "aegisops_control_plane",
+      "production_claim": true,
+      "truth_surfaces": [
+        "production"
+      ],
+      "status": "closed-by-demo-reset",
+      "audit_marker": "live-case-marker"
+    }
+  ]
+}

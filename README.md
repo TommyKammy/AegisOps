@@ -46,6 +46,7 @@ Canonical cross-phase boundary reference:
 - [Phase 54.10 closeout evaluation](docs/phase-54-closeout-evaluation.md) records the Shuffle profile MVP outcomes, subordinate authority posture, verifier evidence, accepted limitations, and bounded Phase 55/58/62/66 handoff.
 - [Phase 55.1 first-user journey](docs/getting-started/first-user-journey.md) defines the workflow-first path from stack health to seeded queue, sample alert, case, evidence, AI summary, action review, receipt, reconciliation, and report export.
 - [Phase 55.1 first 30 minutes](docs/getting-started/first-30-minutes.md) defines the first-session operator path without deep architecture dumping or production-readiness claims.
+- [Phase 55.4 demo reset and mode separation contract](docs/deployment/demo-reset-mode-separation.md) defines repeatable demo reset, demo/live mode separation, live-record preservation, and backup/restore overclaim rejection.
 - [Phase 53.2 Wazuh certificate and credential contract](docs/deployment/wazuh-certificate-credential-contract.md) defines certificate generation-wrapper posture, credential custody, default-credential rejection, rotation guidance, and no-live-secret validation for the Wazuh profile.
 - [Phase 53.3 Wazuh intake binding contract](docs/deployment/wazuh-manager-intake-binding-contract.md) defines the manager-to-AegisOps intake URL, reviewed proxy route, shared-secret custody reference, provenance fields, and analytic-signal admission boundary for Wazuh-origin events.
 - [Phase 53.5 Wazuh agent enrollment helper contract](docs/deployment/wazuh-agent-enrollment-helper-contract.md) defines the one-endpoint enrollment helper posture, prerequisites, rollback notes, safety warnings, and fleet-management exclusion for the Wazuh profile.
@@ -117,6 +118,8 @@ The Phase 53.9 closeout evaluation is defined by the [Phase 53.9 closeout evalua
 The Phase 54.9 Shuffle authority-boundary negative tests are defined by the [Phase 54.9 Shuffle authority-boundary negative tests](docs/deployment/shuffle-authority-boundary-negative-tests.md).
 
 The Phase 54.10 closeout evaluation is defined by the [Phase 54.10 closeout evaluation](docs/phase-54-closeout-evaluation.md).
+
+The Phase 55.4 demo reset and mode separation contract is defined by the [Phase 55.4 demo reset and mode separation contract](docs/deployment/demo-reset-mode-separation.md).
 
 Wazuh detects, AegisOps decides, records, and reconciles, and Shuffle executes reviewed delegated routine work.
 
