@@ -65,16 +65,25 @@ assert_fails_with() {
 local_path_case_index=0
 assert_rejects_contract_local_path() {
   local path_text="$1"
+  local relative_path="$2"
   local target
 
   local_path_case_index=$((local_path_case_index + 1))
   target="${workdir}/local-path-${local_path_case_index}"
   create_valid_repo "${target}"
   printf 'Use %s for setup.\n' "${path_text}" \
-    >>"${target}/docs/deployment/shuffle-manual-fallback-contract.md"
+    >>"${target}/${relative_path}"
   assert_fails_with \
     "${target}" \
     "Forbidden Phase 54.8 manual fallback contract: workstation-local absolute path detected"
+}
+
+assert_rejects_contract_local_path_fixture() {
+  local path_text="$1"
+
+  assert_rejects_contract_local_path \
+    "${path_text}" \
+    "docs/deployment/shuffle-manual-fallback-contract.md"
 }
 
 valid_repo="${workdir}/valid"
@@ -151,6 +160,22 @@ assert_fails_with \
   "${missing_template_coverage_repo}" \
   "Missing Phase 54.8 manual fallback reviewed_template_coverage entry for operator_notification"
 
+incomplete_template_coverage_repo="${workdir}/incomplete-template-coverage"
+create_valid_repo "${incomplete_template_coverage_repo}"
+perl -0pi -e 's/  - template_id: operator_notification\n    action_type: operator_notification\n    scope: operator-notification-only\n    manual_fallback_required: true\n/  - template_id: operator_notification\n/' \
+  "${incomplete_template_coverage_repo}/docs/deployment/profiles/smb-single-node/shuffle/manual-fallback-contract.yaml"
+assert_fails_with \
+  "${incomplete_template_coverage_repo}" \
+  "Missing Phase 54.8 manual fallback reviewed_template_coverage entry for operator_notification"
+
+stale_template_match_repo="${workdir}/stale-template-match"
+create_valid_repo "${stale_template_match_repo}"
+printf '%s\n' "  - template_id: operator_notification" \
+  >>"${stale_template_match_repo}/docs/deployment/profiles/smb-single-node/shuffle/manual-fallback-contract.yaml"
+assert_fails_with \
+  "${stale_template_match_repo}" \
+  "Missing Phase 54.8 manual fallback reviewed_template_coverage entry for operator_notification"
+
 bypass_claim_repo="${workdir}/bypass-claim"
 create_valid_repo "${bypass_claim_repo}"
 printf '%s\n' "Manual fallback bypasses AegisOps approval." \
@@ -179,16 +204,19 @@ assert_fails_with \
   "${hidden_forbidden_listing_repo}" \
   "Missing Phase 54.8 forbidden claim listing: - Manual fallback note is AegisOps reconciliation truth."
 
-assert_rejects_contract_local_path "$(printf '%s%s/example/AegisOps' '/' "Users")"
-assert_rejects_contract_local_path "$(printf '%s%s/example/AegisOps' '/' "home")"
-assert_rejects_contract_local_path "$(printf '%sopt%sproduct%sAegisOps' '/' '/' '/')"
-assert_rejects_contract_local_path "$(printf '%smnt%sworkspace%sAegisOps' '/' '/' '/')"
-assert_rejects_contract_local_path "$(printf '%sVolumes%sworkspace%sAegisOps' '/' '/' '/')"
-assert_rejects_contract_local_path "$(printf '%sprivate%stmp%sAegisOps' '/' '/' '/')"
-assert_rejects_contract_local_path "$(printf '%sroot%sAegisOps' '/' '/')"
-assert_rejects_contract_local_path "$(printf 'D:%bOps%bAegisOps' '\\' '\\')"
-assert_rejects_contract_local_path "$(printf 'E:%sOps%sAegisOps' '/' '/')"
-assert_rejects_contract_local_path "$(printf '%b%bserver%bshare%bAegisOps' '\\' '\\' '\\' '\\')"
+assert_rejects_contract_local_path_fixture "$(printf '%s%s/example/AegisOps' '/' "Users")"
+assert_rejects_contract_local_path \
+  "$(printf '%s%s/example/AegisOps' '/' "Users")" \
+  "docs/deployment/profiles/smb-single-node/shuffle/manual-fallback-contract.yaml"
+assert_rejects_contract_local_path_fixture "$(printf '%s%s/example/AegisOps' '/' "home")"
+assert_rejects_contract_local_path_fixture "$(printf '%sopt%sproduct%sAegisOps' '/' '/' '/')"
+assert_rejects_contract_local_path_fixture "$(printf '%smnt%sworkspace%sAegisOps' '/' '/' '/')"
+assert_rejects_contract_local_path_fixture "$(printf '%sVolumes%sworkspace%sAegisOps' '/' '/' '/')"
+assert_rejects_contract_local_path_fixture "$(printf '%sprivate%stmp%sAegisOps' '/' '/' '/')"
+assert_rejects_contract_local_path_fixture "$(printf '%sroot%sAegisOps' '/' '/')"
+assert_rejects_contract_local_path_fixture "$(printf 'D:%bOps%bAegisOps' '\\' '\\')"
+assert_rejects_contract_local_path_fixture "$(printf 'E:%sOps%sAegisOps' '/' '/')"
+assert_rejects_contract_local_path_fixture "$(printf '%b%bserver%bshare%bAegisOps' '\\' '\\' '\\' '\\')"
 
 missing_readme_link_repo="${workdir}/missing-readme-link"
 create_valid_repo "${missing_readme_link_repo}"

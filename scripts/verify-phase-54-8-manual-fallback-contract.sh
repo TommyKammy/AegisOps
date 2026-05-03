@@ -225,6 +225,9 @@ assert_template_coverage() {
     in_coverage && $0 == "  - template_id: " template {
       in_template = 1
       found_template = 1
+      found_action = 0
+      found_scope = 0
+      found_required = 0
       next
     }
     in_template && $0 ~ /^  - template_id: / {
