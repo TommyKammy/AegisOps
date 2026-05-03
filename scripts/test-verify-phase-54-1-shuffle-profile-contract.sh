@@ -92,7 +92,7 @@ perl -0pi -e 's/\n  orborus:\n    required: true\n    version: 2\.2\.0.*?(?=\n  
   "${missing_orborus_profile_repo}/docs/deployment/profiles/smb-single-node/shuffle/profile.yaml"
 assert_fails_with \
   "${missing_orborus_profile_repo}" \
-  "Missing complete Phase 54.1 Shuffle profile artifact component: orborus"
+  "Missing exact Phase 54.1 Shuffle profile artifact line:     role: worker orchestration for reviewed routine automation only"
 
 missing_worker_version_repo="${workdir}/missing-worker-version"
 create_valid_repo "${missing_worker_version_repo}"
@@ -140,7 +140,23 @@ perl -0pi -e 's/  api_url: http:\/\/shuffle-backend:5001\n//' \
   "${missing_api_callback_repo}/docs/deployment/profiles/smb-single-node/shuffle/profile.yaml"
 assert_fails_with \
   "${missing_api_callback_repo}" \
-  "Missing Phase 54.1 Shuffle profile artifact term: api_url: http://shuffle-backend:5001"
+  "Mismatched Phase 54.1 Shuffle profile artifact field api_boundary.api_url: expected [http://shuffle-backend:5001] actual [<missing>]"
+
+wrong_backend_ports_repo="${workdir}/wrong-backend-ports"
+create_valid_repo "${wrong_backend_ports_repo}"
+perl -0pi -e 's/      - 5001\/tcp internal backend API/      - 22\/tcp unrelated SSH port/' \
+  "${wrong_backend_ports_repo}/docs/deployment/profiles/smb-single-node/shuffle/profile.yaml"
+assert_fails_with \
+  "${wrong_backend_ports_repo}" \
+  "Mismatched Phase 54.1 Shuffle profile artifact component backend field ports: expected [5001/tcp internal backend API] actual [22/tcp unrelated SSH port]"
+
+wrong_profile_dependencies_repo="${workdir}/wrong-profile-dependencies"
+create_valid_repo "${wrong_profile_dependencies_repo}"
+perl -0pi -e 's/  dependencies: Reviewed Docker\/Compose posture, proxy custody, trusted secret references, AegisOps approval\/action-request records, and later workflow-catalog custody are required before delegated execution can run\./  dependencies: Unreviewed local Docker and manual launch notes are enough before delegated execution can run./' \
+  "${wrong_profile_dependencies_repo}/docs/deployment/profiles/smb-single-node/shuffle/profile.yaml"
+assert_fails_with \
+  "${wrong_profile_dependencies_repo}" \
+  "Mismatched Phase 54.1 Shuffle profile artifact field profile_expectations.dependencies: expected [Reviewed Docker/Compose posture, proxy custody, trusted secret references, AegisOps approval/action-request records, and later workflow-catalog custody are required before delegated execution can run.] actual [Unreviewed local Docker and manual launch notes are enough before delegated execution can run.]"
 
 missing_api_contract_repo="${workdir}/missing-api-contract"
 create_valid_repo "${missing_api_contract_repo}"

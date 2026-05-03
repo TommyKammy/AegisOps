@@ -41,19 +41,12 @@ required_phrases=(
 )
 
 components=(frontend backend orborus worker opensearch)
-required_profile_terms=(
-  "profile_id: smb-single-node"
-  "product_profile: shuffle"
-  "profile_contract_version: 2026-05-03"
-  "authority_boundary: Shuffle provides subordinate routine automation substrate context only;"
-  "service_topology:"
-  "api_boundary:"
-  "api_url: http://shuffle-backend:5001"
-  "callback_url: <aegisops-shuffle-callback-url>"
-  "ports:"
-  "volumes:"
-  "credentials:"
-  "dependencies:"
+required_profile_lines=(
+  "    role: proxy-mediated operator UI for reviewed Shuffle administration only"
+  "    role: internal Shuffle API for reviewed delegated automation"
+  "    role: worker orchestration for reviewed routine automation only"
+  "    role: pinned worker image for delegated action execution"
+  "    role: Shuffle-owned datastore separated from AegisOps PostgreSQL and evidence custody"
 )
 
 forbidden_claims=(
@@ -112,6 +105,155 @@ expected_incompatible_for_component() {
   esac
 }
 
+expected_contract_incompatible_for_component() {
+  case "$1" in
+    opensearch) printf '%s\n' "OpenSearch 1.x; unreviewed OpenSearch 4.x; \`latest\`; RC; beta." ;;
+    *) printf '%s\n' "Shuffle 1.x; unreviewed Shuffle 2.3.x; \`latest\`; RC; beta." ;;
+  esac
+}
+
+expected_contract_upgrade_note_for_component() {
+  case "$1" in
+    frontend) printf '%s\n' "UI changes require later guided first-user journey and delegation-surface review." ;;
+    backend) printf '%s\n' "API changes require later callback/API boundary and receipt-normalization evidence." ;;
+    orborus) printf '%s\n' "Orchestration changes require later delegation-binding and fallback evidence." ;;
+    worker) printf '%s\n' "Worker image changes require later workflow-catalog and delegation-binding evidence." ;;
+    opensearch) printf '%s\n' "Datastore changes require later backup, restore, and volume-custody evidence." ;;
+  esac
+}
+
+expected_resource_for_component() {
+  case "$1" in
+    frontend) printf '%s\n' "1 vCPU, 1 GB RAM, bounded config/log storage" ;;
+    backend) printf '%s\n' "2 vCPU, 4 GB RAM, bounded app/file storage" ;;
+    orborus) printf '%s\n' "1 vCPU, 2 GB RAM, bounded worker orchestration capacity" ;;
+    worker) printf '%s\n' "Ephemeral worker capacity bounded by reviewed concurrency" ;;
+    opensearch) printf '%s\n' "2 vCPU, 6 GB RAM, 120 GB durable substrate storage" ;;
+  esac
+}
+
+expected_contract_ports_for_component() {
+  case "$1" in
+    frontend) printf '%s\n' "\`80/tcp\` and \`443/tcp\` internal frontend UI through reviewed proxy only." ;;
+    backend) printf '%s\n' "\`5001/tcp\` internal API only through reviewed proxy route." ;;
+    orborus) printf '%s\n' "No direct host ports; outbound worker orchestration only." ;;
+    worker) printf '%s\n' "No direct host ports; callback egress returns through reviewed callback route only." ;;
+    opensearch) printf '%s\n' "\`9200/tcp\` internal Shuffle datastore API only." ;;
+  esac
+}
+
+expected_ports_for_component() {
+  case "$1" in
+    frontend) printf '%s\n' "80/tcp internal frontend UI|443/tcp internal frontend UI TLS" ;;
+    backend) printf '%s\n' "5001/tcp internal backend API" ;;
+    orborus) printf '%s\n' "none direct host ports; outbound worker orchestration only" ;;
+    worker) printf '%s\n' "none direct host ports; callback egress returns through reviewed callback route only" ;;
+    opensearch) printf '%s\n' "9200/tcp internal Shuffle datastore API" ;;
+  esac
+}
+
+expected_contract_volumes_for_component() {
+  case "$1" in
+    frontend) printf '%s\n' "\`shuffle-frontend-config\`." ;;
+    backend) printf '%s\n' "\`shuffle-apps\`; \`shuffle-files\`; \`shuffle-docker-socket-proxy\`." ;;
+    orborus) printf '%s\n' "\`shuffle-docker-socket-proxy\`; \`shuffle-worker-runtime\`." ;;
+    worker) printf '%s\n' "\`shuffle-worker-ephemeral\`; \`shuffle-app-execution-cache\`." ;;
+    opensearch) printf '%s\n' "\`shuffle-database\`." ;;
+  esac
+}
+
+expected_volumes_for_component() {
+  case "$1" in
+    frontend) printf '%s\n' "shuffle-frontend-config" ;;
+    backend) printf '%s\n' "shuffle-apps|shuffle-files|shuffle-docker-socket-proxy" ;;
+    orborus) printf '%s\n' "shuffle-docker-socket-proxy|shuffle-worker-runtime" ;;
+    worker) printf '%s\n' "shuffle-worker-ephemeral|shuffle-app-execution-cache" ;;
+    opensearch) printf '%s\n' "shuffle-database" ;;
+  esac
+}
+
+expected_contract_credentials_for_component() {
+  case "$1" in
+    frontend) printf '%s\n' "\`shuffle-frontend-session-secret-ref\`." ;;
+    backend) printf '%s\n' "\`shuffle-api-credential-ref\`; \`shuffle-callback-secret-ref\`; \`shuffle-encryption-modifier-ref\`." ;;
+    orborus) printf '%s\n' "\`shuffle-orborus-auth-ref\`; \`shuffle-worker-registry-ref\`." ;;
+    worker) printf '%s\n' "\`shuffle-worker-runtime-secret-ref\`; \`shuffle-app-auth-custody-ref\`." ;;
+    opensearch) printf '%s\n' "\`shuffle-opensearch-admin-secret-ref\`." ;;
+  esac
+}
+
+expected_credentials_for_component() {
+  case "$1" in
+    frontend) printf '%s\n' "shuffle-frontend-session-secret-ref" ;;
+    backend) printf '%s\n' "shuffle-api-credential-ref|shuffle-callback-secret-ref|shuffle-encryption-modifier-ref" ;;
+    orborus) printf '%s\n' "shuffle-orborus-auth-ref|shuffle-worker-registry-ref" ;;
+    worker) printf '%s\n' "shuffle-worker-runtime-secret-ref|shuffle-app-auth-custody-ref" ;;
+    opensearch) printf '%s\n' "shuffle-opensearch-admin-secret-ref" ;;
+  esac
+}
+
+expected_boundary_for_component() {
+  case "$1" in
+    frontend) printf '%s\n' "Frontend UI and browser state remain operator context only and cannot become AegisOps workflow truth." ;;
+    backend) printf '%s\n' "Backend API and callback payloads remain subordinate delegated-execution context until admitted by AegisOps records." ;;
+    orborus) printf '%s\n' "Orborus scheduling and retry state cannot become AegisOps execution or reconciliation truth." ;;
+    worker) printf '%s\n' "Worker output is downstream execution context only until normalized into an AegisOps execution receipt." ;;
+    opensearch) printf '%s\n' "Shuffle datastore contents are substrate state only and cannot become AegisOps release, gate, or reconciliation truth." ;;
+  esac
+}
+
+yaml_field_value() {
+  local section="$1"
+  local field="$2"
+
+  if [[ -z "${section}" ]]; then
+    awk -v field="${field}" '
+      $0 ~ "^" field ":[[:space:]]*" {
+        sub("^" field ":[[:space:]]*", "", $0)
+        print
+        exit
+      }
+    ' "${profile_path}"
+  else
+    awk -v section="${section}" -v field="${field}" '
+      $0 == section ":" {
+        in_section = 1
+        next
+      }
+      in_section && /^[^[:space:]]/ {
+        in_section = 0
+      }
+      in_section && $0 ~ "^  " field ":[[:space:]]*" {
+        sub("^  " field ":[[:space:]]*", "", $0)
+        print
+        exit
+      }
+    ' "${profile_path}"
+  fi
+}
+
+assert_yaml_field_equals() {
+  local section="$1"
+  local field="$2"
+  local expected="$3"
+  local actual
+  local label
+
+  actual="$(yaml_field_value "${section}" "${field}")"
+  label="${field}"
+  if [[ -n "${section}" ]]; then
+    label="${section}.${field}"
+  fi
+
+  if [[ "${actual}" != "${expected}" ]]; then
+    if [[ -z "${actual}" ]]; then
+      actual="<missing>"
+    fi
+    echo "Mismatched Phase 54.1 Shuffle profile artifact field ${label}: expected [${expected}] actual [${actual}]" >&2
+    exit 1
+  fi
+}
+
 if [[ ! -f "${contract_path}" ]]; then
   echo "Missing Phase 54.1 Shuffle profile contract: ${contract_path}" >&2
   exit 1
@@ -140,12 +282,29 @@ for phrase in "${required_phrases[@]}"; do
   fi
 done
 
-for term in "${required_profile_terms[@]}"; do
-  if ! grep -Fq -- "${term}" "${profile_path}"; then
-    echo "Missing Phase 54.1 Shuffle profile artifact term: ${term}" >&2
+for line in "${required_profile_lines[@]}"; do
+  if ! grep -Fxq -- "${line}" "${profile_path}"; then
+    echo "Missing exact Phase 54.1 Shuffle profile artifact line: ${line}" >&2
     exit 1
   fi
 done
+
+assert_yaml_field_equals "" "profile_id" "smb-single-node"
+assert_yaml_field_equals "" "product_profile" "shuffle"
+assert_yaml_field_equals "" "profile_contract_version" "2026-05-03"
+assert_yaml_field_equals "" "status" "accepted-contract"
+assert_yaml_field_equals "" "authority_boundary" "Shuffle provides subordinate routine automation substrate context only; Shuffle frontend, backend, orborus, worker, OpenSearch, workflow, callback, API, generated config, logs, payload, retry, and version state cannot close, approve, execute, reconcile, release, gate, or mutate authoritative AegisOps records."
+assert_yaml_field_equals "api_boundary" "api_url" "http://shuffle-backend:5001"
+assert_yaml_field_equals "api_boundary" "callback_url" "<aegisops-shuffle-callback-url>"
+assert_yaml_field_equals "api_boundary" "external_access" "proxy-mediated only through reviewed AegisOps route binding"
+assert_yaml_field_equals "api_boundary" "callback_identity" "trusted callback secret reference plus AegisOps action request binding required"
+assert_yaml_field_equals "profile_expectations" "service_topology" "Frontend, backend, orborus, worker image, and OpenSearch are explicit; optional monitoring, direct Docker socket exposure, and unreviewed workflow packs are not approved by this contract."
+assert_yaml_field_equals "profile_expectations" "api_url" "Internal API URL is http://shuffle-backend:5001; external access must be proxy-mediated."
+assert_yaml_field_equals "profile_expectations" "callback_url" "Callback URL placeholder <aegisops-shuffle-callback-url> requires later AegisOps route binding before runtime use."
+assert_yaml_field_equals "profile_expectations" "ingress" "Shuffle UI, API, worker, and datastore ports are internal or proxy-mediated; direct host exposure is not approved by this contract."
+assert_yaml_field_equals "profile_expectations" "volumes" "Shuffle app, file, worker, and datastore volumes are separate from PostgreSQL and AegisOps evidence custody."
+assert_yaml_field_equals "profile_expectations" "credentials" "API credentials, callback secrets, encryption modifiers, worker auth, app auth custody, and OpenSearch admin secrets are trusted custody references only; placeholder, sample, fake, TODO, unsigned, inline, or default secret values are invalid."
+assert_yaml_field_equals "profile_expectations" "dependencies" "Reviewed Docker/Compose posture, proxy custody, trusted secret references, AegisOps approval/action-request records, and later workflow-catalog custody are required before delegated execution can run."
 
 if grep -Eq '(^|[^[:alnum:]_.-])(latest|stable|current|main|master|HEAD|rc|beta)([^[:alnum:]_.-]|$)' <(grep -E '^[[:space:]]*(version|image):' "${profile_path}"); then
   echo "Forbidden Phase 54.1 Shuffle profile artifact: unpinned version or image reference detected" >&2
@@ -156,74 +315,115 @@ for component in "${components[@]}"; do
   expected_version="$(expected_version_for_component "${component}")"
   expected_image="$(expected_image_for_component "${component}")"
   expected_incompatible="$(expected_incompatible_for_component "${component}")"
+  expected_contract_incompatible="$(expected_contract_incompatible_for_component "${component}")"
+  expected_contract_upgrade_note="$(expected_contract_upgrade_note_for_component "${component}")"
+  expected_resource="$(expected_resource_for_component "${component}")"
+  expected_contract_ports="$(expected_contract_ports_for_component "${component}")"
+  expected_ports="$(expected_ports_for_component "${component}")"
+  expected_contract_volumes="$(expected_contract_volumes_for_component "${component}")"
+  expected_volumes="$(expected_volumes_for_component "${component}")"
+  expected_contract_credentials="$(expected_contract_credentials_for_component "${component}")"
+  expected_credentials="$(expected_credentials_for_component "${component}")"
+  expected_boundary="$(expected_boundary_for_component "${component}")"
+  expected_contract_row="| ${component} | Yes | \`${expected_version}\` | \`${expected_image}\` | ${expected_resource}. | ${expected_contract_ports} | ${expected_contract_volumes} | ${expected_contract_credentials} | ${expected_boundary} |"
+  expected_version_row="| ${component} | \`${expected_version}\` | exact | ${expected_contract_incompatible} | ${expected_contract_upgrade_note} |"
 
-  if ! grep -Eq "^\| ${component} \| Yes \| \`${expected_version}\` \| \`${expected_image}\` \| [^|[:space:]][^|]* \| [^|[:space:]][^|]* \| [^|[:space:]][^|]* \| [^|[:space:]][^|]* \| [^|[:space:]][^|]* \|$" <<<"${contract_rendered_markdown}"; then
+  if ! grep -Fxq -- "${expected_contract_row}" <<<"${contract_rendered_markdown}"; then
     echo "Missing complete Phase 54.1 Shuffle component row: ${component}" >&2
+    echo "Expected: ${expected_contract_row}" >&2
     exit 1
   fi
 
-  if ! grep -Eq "^\| ${component} \| \`${expected_version}\` \| exact \| [^|[:space:]][^|]* \| [^|[:space:]][^|]* \|$" <<<"${contract_rendered_markdown}"; then
+  if ! grep -Fxq -- "${expected_version_row}" <<<"${contract_rendered_markdown}"; then
     echo "Missing complete Phase 54.1 Shuffle version matrix row: ${component}" >&2
+    echo "Expected: ${expected_version_row}" >&2
     exit 1
   fi
 
-  if ! awk -v component="${component}" -v expected_version="${expected_version}" -v expected_image="${expected_image}" '
+  if ! awk \
+    -v component="${component}" \
+    -v expected_version="${expected_version}" \
+    -v expected_image="${expected_image}" \
+    -v expected_ports="${expected_ports}" \
+    -v expected_volumes="${expected_volumes}" \
+    -v expected_credentials="${expected_credentials}" \
+    -v expected_resource="${expected_resource}" \
+    -v expected_boundary="${expected_boundary}" '
     function trim(value) {
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
       return value
     }
-    function list_has_items() {
-      if (active_list == "ports" && list_items > 0) {
-        ports = 1
-      } else if (active_list == "volumes" && list_items > 0) {
-        volumes = 1
-      } else if (active_list == "credentials" && list_items > 0) {
-        credentials = 1
+    function finish_list() {
+      if (active_list == "ports") {
+        ports = list_items
+      } else if (active_list == "volumes") {
+        volumes = list_items
+      } else if (active_list == "credentials") {
+        credentials = list_items
       }
       active_list = ""
       list_items = 0
+    }
+    function append_list_item(line) {
+      sub(/^      - /, "", line)
+      list_items = list_items == "" ? line : list_items "|" line
     }
     function value_after_key(line, key) {
       sub("^    " key ":[[:space:]]*", "", line)
       return trim(line)
     }
+    function mismatch(field, expected, actual) {
+      if (actual == "") {
+        actual = "<missing>"
+      }
+      printf "Mismatched Phase 54.1 Shuffle profile artifact component %s field %s: expected [%s] actual [%s]\n", component, field, expected, actual > "/dev/stderr"
+      failed = 1
+    }
     $0 == "  " component ":" {
       in_component = 1
-      required = version = image = ports = volumes = credentials = resources = boundary = 0
+      required = version = image = ports = volumes = credentials = resource = boundary = ""
       active_list = ""
       list_items = 0
       next
     }
     in_component && (/^version_matrix:/ || /^  [a-z][a-z0-9_-]*:[[:space:]]*$/) {
-      list_has_items()
+      finish_list()
       in_component = 0
       next
     }
-    in_component && /^    [a-z_]+:/ { list_has_items() }
-    in_component && $0 == "    required: true" { required = 1 }
-    in_component && $0 == "    version: " expected_version { version = 1 }
-    in_component && $0 == "    image: " expected_image { image = 1 }
+    in_component && /^    [a-z_]+:/ { finish_list() }
+    in_component && /^    required:/ { required = value_after_key($0, "required") }
+    in_component && /^    version:/ { version = value_after_key($0, "version") }
+    in_component && /^    image:/ { image = value_after_key($0, "image") }
     in_component && $0 == "    ports:" {
       active_list = "ports"
-      list_items = 0
+      list_items = ""
       next
     }
     in_component && $0 == "    volumes:" {
       active_list = "volumes"
-      list_items = 0
+      list_items = ""
       next
     }
     in_component && $0 == "    credentials:" {
       active_list = "credentials"
-      list_items = 0
+      list_items = ""
       next
     }
-    in_component && active_list != "" && /^      - [^[:space:]]/ { list_items++ }
-    in_component && /^    resource_expectation:/ && value_after_key($0, "resource_expectation") != "" { resources = 1 }
-    in_component && /^    boundary:/ && value_after_key($0, "boundary") != "" { boundary = 1 }
+    in_component && active_list != "" && /^      - [^[:space:]]/ { append_list_item($0) }
+    in_component && /^    resource_expectation:/ { resource = value_after_key($0, "resource_expectation") }
+    in_component && /^    boundary:/ { boundary = value_after_key($0, "boundary") }
     END {
-      list_has_items()
-      exit(required && version && image && ports && volumes && credentials && resources && boundary ? 0 : 1)
+      finish_list()
+      if (required != "true") mismatch("required", "true", required)
+      if (version != expected_version) mismatch("version", expected_version, version)
+      if (image != expected_image) mismatch("image", expected_image, image)
+      if (ports != expected_ports) mismatch("ports", expected_ports, ports)
+      if (volumes != expected_volumes) mismatch("volumes", expected_volumes, volumes)
+      if (credentials != expected_credentials) mismatch("credentials", expected_credentials, credentials)
+      if (resource != expected_resource) mismatch("resource_expectation", expected_resource, resource)
+      if (boundary != expected_boundary) mismatch("boundary", expected_boundary, boundary)
+      exit(failed ? 1 : 0)
     }
   ' "${profile_path}"; then
     echo "Missing complete Phase 54.1 Shuffle profile artifact component: ${component}" >&2
