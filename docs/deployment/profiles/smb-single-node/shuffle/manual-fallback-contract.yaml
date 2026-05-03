@@ -1,0 +1,68 @@
+contract_id: shuffle-manual-fallback-contract
+product_profile: shuffle
+profile_id: smb-single-node
+contract_version: 2026-05-03
+status: accepted-contract
+related_issues:
+  - 1154
+  - 1160
+  - 1162
+manual_fallback_role: subordinate-operator-guidance-only
+approval_bypass: forbidden
+reconciliation_truth: aegisops-control-plane-only
+authority_boundary: Manual fallback owner, operator note, blocked reason, expected evidence, Shuffle workflow status, success, failure, callback payloads, execution logs, generated config, template metadata, tickets, assistant output, browser state, UI cache, optional evidence, and downstream receipt state remain subordinate operator guidance or automation context; AegisOps control-plane records remain authoritative for approval, action request, execution receipt, reconciliation, audit, release, gate, limitation, and closeout truth.
+fallback_states:
+  - shuffle_unavailable
+  - execution_rejected
+  - missing_receipt
+  - stale_receipt
+  - mismatched_receipt
+required_record_fields:
+  - fallback_owner_id
+  - operator_note
+  - affected_template_id
+  - affected_action_type
+  - action_request_id
+  - expected_evidence
+  - blocked_reason
+  - fallback_state
+required_record:
+  fallback_owner_id: explicit fallback owner required
+  operator_note: explicit operator note required
+  affected_template_id: reviewed Phase 54 Shuffle template id required
+  affected_action_type: reviewed Phase 54 action type required
+  action_request_id: explicit AegisOps action request id required
+  expected_evidence: explicit expected evidence required
+  blocked_reason: explicit blocked or unavailable reason required
+  fallback_state: one of shuffle_unavailable, execution_rejected, missing_receipt, stale_receipt, mismatched_receipt
+validation_rules:
+  missing_fallback_owner: reject
+  approval_bypass_note: reject
+  unavailable_reported_success: reject
+  rejected_execution_reported_success: reject
+  missing_receipt_reported_success: reject
+  stale_receipt_reported_success: reject
+  mismatched_receipt_reported_success: reject
+  manual_note_as_reconciliation_truth: reject
+  inferred_owner_or_template_linkage: reject
+reviewed_template_coverage:
+  - template_id: notify_identity_owner
+    action_type: notify_identity_owner
+    scope: identity-owner-low-risk-notification-only
+    manual_fallback_required: true
+  - template_id: create_tracking_ticket
+    action_type: create_tracking_ticket
+    scope: ticket-coordination-context-only
+    manual_fallback_required: true
+  - template_id: enrichment_only_lookup
+    action_type: enrichment_only_lookup
+    scope: read-only-enrichment-lookup
+    manual_fallback_required: true
+  - template_id: operator_notification
+    action_type: operator_notification
+    scope: operator-notification-only
+    manual_fallback_required: true
+  - template_id: manual_escalation_request
+    action_type: manual_escalation_request
+    scope: manual-escalation-request-only
+    manual_fallback_required: true
