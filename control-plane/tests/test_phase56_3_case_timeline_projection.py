@@ -19,7 +19,7 @@ from _service_persistence_support import (
 
 class Phase563CaseTimelineProjectionTests(ServicePersistenceTestBase):
     def test_case_detail_projects_required_segments_with_authority_posture(self) -> None:
-        store, service, promoted_case, evidence_id, reviewed_at = (
+        _store, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
         )
         recommendation = service.persist_record(
