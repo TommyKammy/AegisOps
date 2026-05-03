@@ -171,6 +171,7 @@ export function CaseDetailPageBody({
               {caseTimelineSegments.map((segment, index) => {
                 const binding = asRecord(segment.backend_record_binding);
                 const state = asString(segment.state);
+                const stateTone = statusTone(state);
                 const authorityPosture = asString(segment.authority_posture);
 
                 return (
@@ -194,7 +195,7 @@ export function CaseDetailPageBody({
                     </TableCell>
                     <TableCell>
                       <Chip
-                        color={statusTone(state)}
+                        color={stateTone}
                         label={state ?? "unknown"}
                         size="small"
                         variant={state === "normal" ? "filled" : "outlined"}
