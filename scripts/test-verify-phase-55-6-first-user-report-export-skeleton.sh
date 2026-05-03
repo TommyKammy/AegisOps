@@ -80,6 +80,14 @@ assert_fails_with \
   "${secret_repo}" \
   "Expected valid Phase 55.6 report export fixture valid-demo-report-export.json, got: secret-looking value in export output"
 
+key_secret_repo="${workdir}/key-secret"
+create_valid_repo "${key_secret_repo}"
+cp "${key_secret_repo}/docs/getting-started/fixtures/first-user-demo-report-export/key-secret-looking-value.json" \
+  "${key_secret_repo}/docs/getting-started/fixtures/first-user-demo-report-export/valid-demo-report-export.json"
+assert_fails_with \
+  "${key_secret_repo}" \
+  "Expected valid Phase 55.6 report export fixture valid-demo-report-export.json, got: secret-looking value in export output"
+
 commercial_claim_repo="${workdir}/commercial-claim"
 create_valid_repo "${commercial_claim_repo}"
 cp "${commercial_claim_repo}/docs/getting-started/fixtures/first-user-demo-report-export/commercial-report-claim.json" \
@@ -95,6 +103,28 @@ cp "${production_truth_repo}/docs/getting-started/fixtures/first-user-demo-repor
 assert_fails_with \
   "${production_truth_repo}" \
   "Expected valid Phase 55.6 report export fixture valid-demo-report-export.json, got: demo export claims production truth"
+
+authority_override_repo="${workdir}/authority-override"
+create_valid_repo "${authority_override_repo}"
+cp "${authority_override_repo}/docs/getting-started/fixtures/first-user-demo-report-export/authority-override-claim.json" \
+  "${authority_override_repo}/docs/getting-started/fixtures/first-user-demo-report-export/valid-demo-report-export.json"
+assert_fails_with \
+  "${authority_override_repo}" \
+  "Expected valid Phase 55.6 report export fixture valid-demo-report-export.json, got: demo export claims it can override authoritative records"
+
+unavailable_follow_up_repo="${workdir}/unavailable-follow-up"
+create_valid_repo "${unavailable_follow_up_repo}"
+cp "${unavailable_follow_up_repo}/docs/getting-started/fixtures/first-user-demo-report-export/unavailable-follow-up-reference.json" \
+  "${unavailable_follow_up_repo}/docs/getting-started/fixtures/first-user-demo-report-export/valid-demo-report-export.json"
+assert_passes "${unavailable_follow_up_repo}"
+
+missing_reference_availability_repo="${workdir}/missing-reference-availability"
+create_valid_repo "${missing_reference_availability_repo}"
+cp "${missing_reference_availability_repo}/docs/getting-started/fixtures/first-user-demo-report-export/missing-reference-availability.json" \
+  "${missing_reference_availability_repo}/docs/getting-started/fixtures/first-user-demo-report-export/valid-demo-report-export.json"
+assert_fails_with \
+  "${missing_reference_availability_repo}" \
+  "Expected valid Phase 55.6 report export fixture valid-demo-report-export.json, got: missing demo journey reference"
 
 doc_forbidden_claim_repo="${workdir}/doc-forbidden-claim"
 create_valid_repo "${doc_forbidden_claim_repo}"

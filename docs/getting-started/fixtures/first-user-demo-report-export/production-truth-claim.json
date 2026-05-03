@@ -14,7 +14,8 @@
   "summary": "Demo report export is production truth.",
   "authority_boundary": {
     "authoritative_record_source": "report_metadata",
-    "output_is_production_truth": true
+    "output_is_production_truth": true,
+    "output_overrides_authoritative_records": false
   },
   "references": {
     "demo_alert": {

@@ -11,11 +11,11 @@
   "audit_export_completeness_claim": false,
   "rc_or_ga_readiness_claim": false,
   "production_truth_claim": false,
-  "summary": "Demo-only summary. token=CorrectHorseBatteryStaple42",
+  "summary": "Demo-only summary. This is not production truth.",
   "authority_boundary": {
     "authoritative_record_source": "aegisops_control_plane",
     "output_is_production_truth": false,
-    "output_overrides_authoritative_records": false
+    "output_overrides_authoritative_records": true
   },
   "references": {
     "demo_alert": {

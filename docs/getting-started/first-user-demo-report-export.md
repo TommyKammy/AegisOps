@@ -47,10 +47,14 @@ Exported text may name custody references or redaction posture, but it must not 
 | Fixture | Expected validity | Required rejection |
 | --- | --- | --- |
 | `valid-demo-report-export.json` | valid | |
+| `unavailable-follow-up-reference.json` | valid | |
 | `missing-demo-label.json` | invalid | missing required demo label |
 | `secret-looking-value.json` | invalid | secret-looking value in export output |
+| `key-secret-looking-value.json` | invalid | secret-looking value in export output |
 | `commercial-report-claim.json` | invalid | demo export claims commercial report breadth |
 | `production-truth-claim.json` | invalid | demo export claims production truth |
+| `authority-override-claim.json` | invalid | demo export claims it can override authoritative records |
+| `missing-reference-availability.json` | invalid | missing demo journey reference |
 
 Negative fixtures must fail closed when the demo label is missing, secret-looking values are present, commercial reporting breadth is claimed, or output is presented as production truth.
 

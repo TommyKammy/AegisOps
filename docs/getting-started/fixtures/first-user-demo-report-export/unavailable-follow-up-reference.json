@@ -11,7 +11,7 @@
   "audit_export_completeness_claim": false,
   "rc_or_ga_readiness_claim": false,
   "production_truth_claim": false,
-  "summary": "Demo-only summary. token=CorrectHorseBatteryStaple42",
+  "summary": "Demo-only summary with one directly named unavailable follow-up reference. This is not production truth.",
   "authority_boundary": {
     "authoritative_record_source": "aegisops_control_plane",
     "output_is_production_truth": false,
@@ -69,14 +69,8 @@
       "secret_redaction": "no-secret-values-exported"
     },
     "demo_execution_receipt": {
-      "available": true,
-      "record_id": "demo-execution-receipt-lock-account",
-      "labels": [
-        "demo-only",
-        "first-user-rehearsal",
-        "not-production-truth"
-      ],
-      "secret_redaction": "no-secret-values-exported"
+      "available": false,
+      "follow_up": "Demo execution receipt is unavailable from the bundle and must not be inferred."
     },
     "demo_reconciliation": {
       "available": true,

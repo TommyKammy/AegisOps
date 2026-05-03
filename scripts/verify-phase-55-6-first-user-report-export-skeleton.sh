@@ -50,10 +50,14 @@ reference_rows=(
 
 fixture_expectations=(
   "valid-demo-report-export.json|valid|"
+  "unavailable-follow-up-reference.json|valid|"
   "missing-demo-label.json|invalid|missing required demo label"
   "secret-looking-value.json|invalid|secret-looking value in export output"
+  "key-secret-looking-value.json|invalid|secret-looking value in export output"
   "commercial-report-claim.json|invalid|demo export claims commercial report breadth"
   "production-truth-claim.json|invalid|demo export claims production truth"
+  "authority-override-claim.json|invalid|demo export claims it can override authoritative records"
+  "missing-reference-availability.json|invalid|missing demo journey reference"
 )
 
 forbidden_claims=(
@@ -180,15 +184,18 @@ if not fixtures_dir.is_dir():
     sys.exit(1)
 
 
-def walk_strings(value):
+def walk_strings(value, path=""):
     if isinstance(value, str):
-        yield value
+        yield f"{path}: {value}" if path else value
     elif isinstance(value, dict):
-        for item in value.values():
-            yield from walk_strings(item)
+        for key, item in value.items():
+            next_path = f"{path}.{key}" if path else str(key)
+            yield str(key)
+            yield from walk_strings(item, next_path)
     elif isinstance(value, list):
-        for item in value:
-            yield from walk_strings(item)
+        for index, item in enumerate(value):
+            next_path = f"{path}[{index}]" if path else f"[{index}]"
+            yield from walk_strings(item, next_path)
 
 
 def reasons_for(payload):
@@ -213,6 +220,8 @@ def reasons_for(payload):
         reasons.append("demo export claims production truth")
     if authority.get("authoritative_record_source") != "aegisops_control_plane":
         reasons.append("demo export claims production truth")
+    if authority.get("output_overrides_authoritative_records") is not False:
+        reasons.append("demo export claims it can override authoritative records")
 
     references = payload.get("references")
     if not isinstance(references, dict):
@@ -223,8 +232,10 @@ def reasons_for(payload):
             reasons.append("missing demo journey reference")
         for name in required_references & set(references):
             ref = references.get(name)
-            if not isinstance(ref, dict) or ref.get("available") is not True:
+            if not isinstance(ref, dict) or ref.get("available") not in (True, False):
                 reasons.append("missing demo journey reference")
+                continue
+            if ref.get("available") is False:
                 continue
             ref_labels = set(ref.get("labels") or [])
             if not required_labels.issubset(ref_labels):
