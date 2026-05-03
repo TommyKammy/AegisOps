@@ -14,6 +14,34 @@ const TODAY_VIEW_LANES = [
   "ai_suggested_focus",
 ] as const;
 
+const CASE_TIMELINE_SEGMENTS = [
+  "wazuh_signal",
+  "aegisops_alert",
+  "evidence",
+  "ai_summary",
+  "recommendation",
+  "action_request",
+  "approval",
+  "shuffle_receipt",
+  "reconciliation",
+] as const;
+
+const CASE_TIMELINE_STATES = new Set([
+  "normal",
+  "missing",
+  "degraded",
+  "stale",
+  "mismatch",
+  "unsupported",
+]);
+
+const CASE_TIMELINE_AUTHORITY_POSTURES = new Set([
+  "authoritative_aegisops_record",
+  "subordinate_context",
+]);
+
+const CASE_TIMELINE_CONTRACT_VERSION = "phase-56-3";
+
 export async function getOneForStandardResource(
   fetchFn: typeof fetch,
   resource: StandardOperatorResourceName,
@@ -26,9 +54,135 @@ export async function getOneForStandardResource(
     return resolveReconciliationRecord(payload, params);
   }
 
+  if (resource === "cases") {
+    validateCaseTimelineProjection(payload, String(params.id).trim());
+  }
+
   return {
     data: normalizeRecord(resource, payload, binding.idField),
   };
+}
+
+function validateCaseTimelineProjection(payload: unknown, requestedCaseId: string) {
+  const response = asObject(
+    payload,
+    "Resource cases returned a malformed detail payload.",
+  );
+  const projectionValue = response.case_timeline_projection;
+
+  if (projectionValue === undefined || projectionValue === null) {
+    return;
+  }
+
+  const projection = asObject(
+    projectionValue,
+    "Resource cases case_timeline_projection must be an object.",
+  );
+  const caseId = asString(projection.case_id);
+  const contractVersion = asString(projection.contract_version);
+  const segments = Array.isArray(projection.segments)
+    ? projection.segments
+    : null;
+  const projectionSource = asString(projection.projection_source);
+
+  if (caseId === null || contractVersion === null || segments === null) {
+    throw new OperatorDataProviderContractError(
+      "Resource cases case_timeline_projection is missing case_id, contract_version, or segments.",
+    );
+  }
+  if (contractVersion !== CASE_TIMELINE_CONTRACT_VERSION) {
+    throw new OperatorDataProviderContractError(
+      `Resource cases case_timeline_projection requires contract_version ${CASE_TIMELINE_CONTRACT_VERSION}; received ${contractVersion}.`,
+    );
+  }
+  if (caseId !== requestedCaseId) {
+    throw new OperatorDataProviderContractError(
+      `Resource cases case_timeline_projection requires case_id to match ${requestedCaseId}.`,
+    );
+  }
+  if (
+    (projection.cache_sourced !== undefined && projection.cache_sourced !== false) ||
+    (projection.stale_cache !== undefined && projection.stale_cache !== false) ||
+    ["browser_cache", "ui_cache", "cache"].includes(projectionSource ?? "")
+  ) {
+    throw new OperatorDataProviderContractError(
+      "Resource cases rejects cache-sourced case timeline truth.",
+    );
+  }
+  if (
+    projection.projection_authority_allowed !== false ||
+    projection.inferred_linkage_allowed !== false
+  ) {
+    throw new OperatorDataProviderContractError(
+      "Resource cases case_timeline_projection must reject projection authority and inferred linkage.",
+    );
+  }
+  if (segments.length !== CASE_TIMELINE_SEGMENTS.length) {
+    throw new OperatorDataProviderContractError(
+      "Resource cases case_timeline_projection must include every reviewed segment.",
+    );
+  }
+
+  segments.forEach((segmentValue, index) => {
+    const segment = asObject(
+      segmentValue,
+      "Resource cases case_timeline_projection segment must be an object.",
+    );
+    const segmentName = asString(segment.segment);
+    const state = asString(segment.state);
+    const authorityPosture = asString(segment.authority_posture);
+    const binding = asObject(
+      segment.backend_record_binding,
+      "Resource cases case_timeline_projection segment is missing backend_record_binding.",
+    );
+    const recordFamily = asString(binding.record_family);
+    const recordId = asString(binding.record_id);
+    const incompleteReason = asString(segment.incomplete_reason);
+
+    if (segmentName !== CASE_TIMELINE_SEGMENTS[index]) {
+      throw new OperatorDataProviderContractError(
+        "Resource cases case_timeline_projection segment order or type is unsupported.",
+      );
+    }
+    if (state === null || !CASE_TIMELINE_STATES.has(state)) {
+      throw new OperatorDataProviderContractError(
+        `Resource cases case_timeline_projection segment ${segmentName} has unsupported state.`,
+      );
+    }
+    if (
+      authorityPosture === null ||
+      !CASE_TIMELINE_AUTHORITY_POSTURES.has(authorityPosture)
+    ) {
+      throw new OperatorDataProviderContractError(
+        `Resource cases case_timeline_projection segment ${segmentName} has unsupported authority posture.`,
+      );
+    }
+    if (recordFamily === null) {
+      throw new OperatorDataProviderContractError(
+        `Resource cases case_timeline_projection segment ${segmentName} is missing record_family.`,
+      );
+    }
+    if (binding.direct_binding_required !== true) {
+      throw new OperatorDataProviderContractError(
+        `Resource cases case_timeline_projection segment ${segmentName} must require direct binding.`,
+      );
+    }
+    if (segment.operator_visible !== true) {
+      throw new OperatorDataProviderContractError(
+        `Resource cases case_timeline_projection segment ${segmentName} must stay operator visible.`,
+      );
+    }
+    if (segment.projection_can_complete_segment !== false) {
+      throw new OperatorDataProviderContractError(
+        `Resource cases case_timeline_projection segment ${segmentName} cannot complete workflow truth from display state.`,
+      );
+    }
+    if (recordId === null && incompleteReason === null) {
+      throw new OperatorDataProviderContractError(
+        `Resource cases case_timeline_projection segment ${segmentName} without record_id requires incomplete_reason.`,
+      );
+    }
+  });
 }
 
 export async function getOneForAdvisoryOutput(

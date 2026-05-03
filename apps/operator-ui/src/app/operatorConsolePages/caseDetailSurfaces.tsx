@@ -1,4 +1,13 @@
-import { Stack, Table, TableBody, TableCell, TableHead, TableRow } from "@mui/material";
+import {
+  Chip,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  Typography,
+} from "@mui/material";
 import { useMemo, useState } from "react";
 import { CreateReviewedActionRequestCard } from "../../taskActions/actionRequestActionCards";
 import {
@@ -20,12 +29,14 @@ import {
   EmptyState,
   ErrorState,
   formatValue,
+  formatLabel,
   getPath,
   LoadingState,
   QueryStateNotice,
   RecordWarnings,
   SectionCard,
   StatusStrip,
+  statusTone,
   SubordinateLinks,
   type UnknownRecord,
   useOperatorRecord,
@@ -62,6 +73,8 @@ export function CaseDetailPageBody({
   const alertRecords = asRecordArray(data.linked_alert_records);
   const evidenceRecords = asRecordArray(data.linked_evidence_records);
   const timelineEntries = asRecordArray(data.cross_source_timeline);
+  const caseTimelineProjection = asRecord(data.case_timeline_projection);
+  const caseTimelineSegments = asRecordArray(caseTimelineProjection?.segments);
   const currentActionReview = asRecord(data.current_action_review);
   const linkedEvidenceIds = asStringArray(data.linked_evidence_ids);
   const linkedObservationIds = asStringArray(data.linked_observation_ids);
@@ -136,6 +149,83 @@ export function CaseDetailPageBody({
             ["Linked reconciliation ids", data.linked_reconciliation_ids],
           ]}
         />
+      </SectionCard>
+
+      <SectionCard
+        subtitle="Reviewed order comes from the backend projection. Timeline display, browser state, and cached UI data cannot approve, execute, reconcile, or complete work."
+        title="Reviewed case timeline"
+      >
+        {caseTimelineSegments.length > 0 ? (
+          <Table aria-label="Reviewed case timeline" size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Segment</TableCell>
+                <TableCell>Authority</TableCell>
+                <TableCell>State</TableCell>
+                <TableCell>Backend binding</TableCell>
+                <TableCell>Incomplete reason</TableCell>
+                <TableCell>Display boundary</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {caseTimelineSegments.map((segment, index) => {
+                const binding = asRecord(segment.backend_record_binding);
+                const state = asString(segment.state);
+                const stateTone =
+                  state === "unsupported"
+                    ? "error"
+                    : state === "stale"
+                      ? "warning"
+                      : statusTone(state);
+                const authorityPosture = asString(segment.authority_posture);
+
+                return (
+                  <TableRow key={`${asString(segment.segment) ?? index}-${index}`}>
+                    <TableCell>{formatLabel(asString(segment.segment) ?? "unknown")}</TableCell>
+                    <TableCell>
+                      <Chip
+                        color={
+                          authorityPosture === "authoritative_aegisops_record"
+                            ? "primary"
+                            : "default"
+                        }
+                        label={formatLabel(authorityPosture ?? "unknown")}
+                        size="small"
+                        variant={
+                          authorityPosture === "authoritative_aegisops_record"
+                            ? "filled"
+                            : "outlined"
+                        }
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        color={stateTone}
+                        label={state ?? "unknown"}
+                        size="small"
+                        variant={state === "normal" ? "filled" : "outlined"}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      {formatValue([
+                        binding?.record_family,
+                        binding?.record_id,
+                      ])}
+                    </TableCell>
+                    <TableCell>{formatValue(segment.incomplete_reason)}</TableCell>
+                    <TableCell>
+                      <Typography color="text.secondary" variant="body2">
+                        Display cannot complete workflow truth
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        ) : (
+          <EmptyState message="No reviewed case timeline projection was returned." />
+        )}
       </SectionCard>
 
       <SectionCard
