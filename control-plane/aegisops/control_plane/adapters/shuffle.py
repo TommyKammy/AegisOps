@@ -60,7 +60,9 @@ class ShuffleActionAdapter:
             correlation_id = str(delegation_binding["correlation_id"])
             requested_scope = delegation_binding["requested_scope"]
             if not isinstance(requested_scope, Mapping):
-                requested_scope = None
+                raise ValueError(
+                    "shuffle delegation binding requested_scope is malformed"
+                )
         else:
             external_receipt_id = None
             workflow_id = None

@@ -10,6 +10,7 @@ if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
 import _service_persistence_support as support
+from aegisops.control_plane.adapters.shuffle import ShuffleActionAdapter
 from _service_persistence_support import (
     ServicePersistenceTestBase,
 )
@@ -375,6 +376,40 @@ class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenc
             )
 
         self.assertEqual(store.list(support.ActionExecutionRecord), ())
+
+    def test_shuffle_adapter_fail_closes_malformed_binding_requested_scope(
+        self,
+    ) -> None:
+        adapter = ShuffleActionAdapter(base_url="https://shuffle.example.test")
+        approved_payload = support._phase26_create_tracking_ticket_payload(
+            case_id="case-tracking-malformed-scope-001",
+            alert_id="alert-tracking-malformed-scope-001",
+            finding_id="finding-tracking-malformed-scope-001",
+            coordination_reference_id="coord-ref-malformed-scope-001",
+        )
+        approved_payload["shuffle_delegation_binding"] = {
+            "workflow_id": "create_tracking_ticket",
+            "workflow_version_id": "create_tracking_ticket-v1-reviewed-2026-05-03",
+            "correlation_id": "shuffle-correlation-malformed-scope-001",
+            "expected_execution_receipt_id": "shuffle-receipt-malformed-scope-001",
+            "requested_scope": "case-tracking-malformed-scope-001",
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "shuffle delegation binding requested_scope is malformed",
+        ):
+            adapter.dispatch_approved_action(
+                delegation_id="delegation-malformed-scope-001",
+                action_request_id="action-request-malformed-scope-001",
+                approval_decision_id="approval-malformed-scope-001",
+                payload_hash="payload-hash-malformed-scope-001",
+                idempotency_key="idempotency-malformed-scope-001",
+                approved_payload=approved_payload,
+                delegated_at=support.datetime(
+                    2026, 5, 3, 4, 5, tzinfo=support.timezone.utc
+                ),
+            )
 
     def test_service_reuses_create_tracking_ticket_receipt_on_duplicate_delegation(
         self,
