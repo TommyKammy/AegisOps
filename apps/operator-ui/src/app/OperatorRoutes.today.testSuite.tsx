@@ -1,9 +1,14 @@
-import { screen, waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
-import { createDefaultDependencies } from "./OperatorRoutes";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
+import { describe, expect, it, vi } from "vitest";
+import { createDefaultDependencies, OperatorRoutes } from "./OperatorRoutes";
 import {
   createAuthorizedFetch,
+  createReadinessResponse,
+  jsonResponse,
   renderOperatorRoute,
+  TestRouteNavigator,
 } from "./OperatorRoutes.testSupport";
 
 const normalTodayProjection = {
@@ -232,6 +237,120 @@ export function registerOperatorRoutesTodayTests() {
           "The backend projection was stale or malformed, so the browser refused to present it as current workflow guidance.",
         ),
       ).toBeInTheDocument();
+    });
+
+    it.each([
+      [
+        "missing",
+        () => {
+          const payload: Record<string, unknown> = {
+            ...normalTodayProjection,
+          };
+          delete payload.stale_cache;
+          return payload;
+        },
+      ],
+      [
+        "non-boolean",
+        () => ({
+          ...normalTodayProjection,
+          stale_cache: "false",
+        }),
+      ],
+    ])(
+      "rejects %s stale_cache contract values instead of presenting them as current authority",
+      async (_caseName, buildProjection) => {
+        const dependencies = createDefaultDependencies({
+          fetchFn: createAuthorizedFetch({
+            "/inspect-today-view": buildProjection(),
+          }),
+        });
+
+        renderOperatorRoute("/operator/today", dependencies);
+
+        await waitFor(() => {
+          expect(
+            screen.getByRole("heading", {
+              name: "Today projection unavailable",
+            }),
+          ).toBeInTheDocument();
+        });
+
+        expect(screen.queryByText("Review case-101")).toBeNull();
+        expect(
+          screen.getByText(
+            "The backend projection was stale or malformed, so the browser refused to present it as current workflow guidance.",
+          ),
+        ).toBeInTheDocument();
+      },
+    );
+
+    it("fails closed when a Today projection reread errors after cached data exists", async () => {
+      const user = userEvent.setup();
+      let todayRequests = 0;
+      const fetchFn = vi.fn<typeof fetch>().mockImplementation((input) => {
+        const url = String(input);
+
+        if (url.startsWith("/api/operator/session")) {
+          return Promise.resolve(
+            jsonResponse({
+              identity: "analyst@example.com",
+              provider: "authentik",
+              roles: ["Analyst"],
+              subject: "operator-7",
+            }),
+          );
+        }
+
+        if (url.startsWith("/inspect-today-view")) {
+          todayRequests += 1;
+
+          if (todayRequests === 1) {
+            return Promise.resolve(jsonResponse(normalTodayProjection));
+          }
+
+          return Promise.reject(
+            new Error("Today projection refresh unavailable."),
+          );
+        }
+
+        if (url.startsWith("/diagnostics/readiness")) {
+          return Promise.resolve(jsonResponse(createReadinessResponse()));
+        }
+
+        return Promise.reject(new Error(`Unexpected fetch: ${url}`));
+      });
+      const dependencies = createDefaultDependencies({ fetchFn });
+
+      render(
+        <MemoryRouter initialEntries={["/operator/today"]}>
+          <TestRouteNavigator />
+          <OperatorRoutes dependencies={dependencies} />
+        </MemoryRouter>,
+      );
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("heading", { name: "Today" }),
+        ).toBeInTheDocument();
+      });
+      expect(screen.getByText("Review case-101")).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Go to readiness" }));
+      await waitFor(() => {
+        expect(
+          screen.getByRole("heading", { name: "Readiness" }),
+        ).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole("button", { name: "Go to Today" }));
+
+      expect(
+        await screen.findByRole("heading", {
+          name: "Today projection unavailable",
+        }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText("Review case-101")).not.toBeInTheDocument();
     });
   });
 }

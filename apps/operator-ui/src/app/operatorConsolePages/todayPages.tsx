@@ -180,7 +180,7 @@ export function TodayPage() {
     );
   }
 
-  if (error && !data) {
+  if (error) {
     return <TodayProjectionUnavailable />;
   }
 

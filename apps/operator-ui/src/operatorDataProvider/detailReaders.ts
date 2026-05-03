@@ -144,9 +144,9 @@ export async function getOneForTodayView(
     );
   }
 
-  if (payload.stale_cache === true) {
+  if (payload.stale_cache !== false) {
     throw new OperatorDataProviderContractError(
-      "Resource todayView rejected stale projection cache as current guidance.",
+      "Resource todayView requires stale_cache=false and rejects stale or malformed projection cache guidance.",
     );
   }
 
