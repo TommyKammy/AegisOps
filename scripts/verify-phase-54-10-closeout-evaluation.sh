@@ -154,6 +154,8 @@ if grep -Eq -- "${absolute_path_pattern}" "${absolute_doc_path}" "${readme_path}
   exit 1
 fi
 
+allowed_non_claim_line="This closeout does not claim Phase 55 guided first-user journey work is complete, Phase 58 supportability work is complete, Phase 62 SOAR breadth is complete, Phase 66 RC proof is complete, AegisOps is Beta, RC, GA, self-service commercially ready, or a replacement for every SIEM/SOAR capability."
+
 for forbidden in \
   "Phase 55 guided first-user journey work is complete" \
   "Phase 58 supportability work is complete" \
@@ -175,7 +177,7 @@ for forbidden in \
   "Shuffle logs are AegisOps audit truth" \
   "Shuffle workflow success is AegisOps workflow truth" \
   "Shuffle callback payload is AegisOps execution receipt truth"; do
-  if grep -F -- "${forbidden}" "${absolute_doc_path}" | grep -Fvq -- "does not claim"; then
+  if grep -Fv -- "${allowed_non_claim_line}" "${absolute_doc_path}" | grep -Fq -- "${forbidden}"; then
     echo "Forbidden Phase 54 closeout evaluation claim: ${forbidden}" >&2
     exit 1
   fi

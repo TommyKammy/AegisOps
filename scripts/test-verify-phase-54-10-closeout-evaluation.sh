@@ -124,6 +124,13 @@ assert_fails_with \
   "${phase62_overclaim_repo}" \
   "Forbidden Phase 54 closeout evaluation claim: Phase 62 SOAR breadth is complete"
 
+phase62_contradictory_overclaim_repo="${workdir}/phase62-contradictory-overclaim"
+copy_valid_repo "${phase62_contradictory_overclaim_repo}"
+printf '%s\n' "This closeout does not claim Phase 62 SOAR breadth is complete, but Phase 62 SOAR breadth is complete." >>"${phase62_contradictory_overclaim_repo}/docs/phase-54-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_contradictory_overclaim_repo}" \
+  "Forbidden Phase 54 closeout evaluation claim: Phase 62 SOAR breadth is complete"
+
 rc_overclaim_repo="${workdir}/rc-overclaim"
 copy_valid_repo "${rc_overclaim_repo}"
 printf '%s\n' "Phase 54 proves RC readiness" >>"${rc_overclaim_repo}/docs/phase-54-closeout-evaluation.md"
