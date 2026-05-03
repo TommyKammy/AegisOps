@@ -24,6 +24,11 @@ export const RESOURCE_BINDINGS: Record<
     listSemantics: "client",
     recordFamily: "case",
   },
+  firstLoginChecklist: {
+    idField: "step_key",
+    listPath: "/inspect-first-login-checklist",
+    listSemantics: "client",
+  },
   queue: {
     idField: "alert_id",
     listPath: "/inspect-analyst-queue",

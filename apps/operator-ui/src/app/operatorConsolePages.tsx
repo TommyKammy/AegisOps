@@ -10,6 +10,7 @@ export {
 } from "./operatorConsolePages/drilldownIndexPages";
 export { ActionReviewPage } from "./operatorConsolePages/actionReviewPages";
 export { AssistantAdvisoryPage } from "./operatorConsolePages/assistantPages";
+export { FirstLoginChecklistPage } from "./operatorConsolePages/firstLoginChecklistPages";
 export {
   ProvenancePage,
   ReadinessPage,
