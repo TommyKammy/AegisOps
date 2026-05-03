@@ -192,7 +192,12 @@ function readFailureStateKey(record: UnknownRecord): FailureStateKey | null {
   if (failureStateKey === null) {
     return null;
   }
-  if (!(failureStateKey in FAILURE_STATE_COPY)) {
+  if (
+    !Object.prototype.hasOwnProperty.call(
+      FAILURE_STATE_COPY,
+      failureStateKey,
+    )
+  ) {
     throw new OperatorDataProviderContractError(
       `First-login checklist failure state ${failureStateKey} is not part of the reviewed contract.`,
     );

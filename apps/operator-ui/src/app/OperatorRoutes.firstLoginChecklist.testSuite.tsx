@@ -324,5 +324,36 @@ export function registerOperatorRoutesFirstLoginChecklistTests() {
       });
       expect(screen.queryByText("State: completed")).not.toBeInTheDocument();
     });
+
+    it("fails closed when the failure-state key is inherited from the copy map prototype", async () => {
+      const dependencies = createDefaultDependencies({
+        fetchFn: createAuthorizedFetch({
+          "/inspect-first-login-checklist": {
+            records: [
+              {
+                step_key: "stack_health",
+                state: "blocked",
+                failure_state_key: "__proto__",
+                authority_source: "backend_authoritative_record",
+                authority_record_family: "runtime_readiness",
+                authority_record_id: "ready-blocked",
+              },
+            ],
+            total_records: 1,
+          },
+        }),
+      });
+
+      renderOperatorRoute("/operator/first-login-checklist", dependencies);
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(
+            "First-login checklist failure state __proto__ is not part of the reviewed contract.",
+          ),
+        ).toBeInTheDocument();
+      });
+      expect(screen.queryByText("State: blocked")).not.toBeInTheDocument();
+    });
   });
 }
