@@ -136,6 +136,13 @@ assert_fails_with \
   "${unreviewed_status_repo}" \
   "Mismatched Phase 54.3 notify_identity_owner import artifact field template_metadata.review_status: expected [reviewed] actual [unreviewed]"
 
+weakened_authority_boundary_repo="${workdir}/weakened-authority-boundary"
+create_valid_repo "${weakened_authority_boundary_repo}"
+perl -0pi -e 's/^authority_boundary: .*/authority_boundary: Shuffle workflow status is authoritative for closeout truth./m' "$(artifact_path_for "${weakened_authority_boundary_repo}")"
+assert_fails_with \
+  "${weakened_authority_boundary_repo}" \
+  "Missing exact Phase 54.3 notify_identity_owner import artifact line: authority_boundary: Shuffle workflow status, success, failure, callback payloads, execution logs, generated config, and template metadata remain subordinate automation context; AegisOps control-plane records remain authoritative for approval, action request, execution receipt, reconciliation, release, gate, limitation, and closeout truth."
+
 mutating_template_repo="${workdir}/mutating-template"
 create_valid_repo "${mutating_template_repo}"
 perl -0pi -e 's/  protected_target_state_mutation: forbidden/  protected_target_state_mutation: allowed/' "$(artifact_path_for "${mutating_template_repo}")"
