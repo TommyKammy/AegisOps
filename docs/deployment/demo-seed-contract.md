@@ -30,7 +30,7 @@ This contract cites the Phase 51.6 authority-boundary negative-test policy in `d
 | Demo analytic signal | Stable demo analytic signal identifier, linked demo Wazuh alert, signal name, signal disposition, and demo labels. | Must render as demo-only analytic signal rehearsal. | Must not satisfy production analytic truth, detector admission, customer evidence, or release gate truth. |
 | Demo AegisOps alert | Stable demo AegisOps alert identifier, linked demo analytic signal, control-plane alert identifier, alert state, demo labels, and reviewed timestamp placeholder. | Must render as demo-only AegisOps alert rehearsal. | Must not satisfy production alert admission, customer evidence, release gate, or detector activation truth. |
 | Demo alert | Stable demo alert identifier, fixture provenance, demo source family, demo labels, and reviewed timestamp placeholder. | Must render as demo-only alert rehearsal. | Must not satisfy production alert admission, customer evidence, release gate, or detector activation truth. |
-| Demo case | Stable demo case identifier, linked demo alert, analyst owner placeholder, demo labels, and rehearsal status. | Must render as demo-only case rehearsal. | Must not satisfy production case ownership, customer queue state, release gate, or closeout truth. |
+| Demo case | Stable demo case identifier, linked demo AegisOps alert, analyst owner placeholder, demo labels, and rehearsal status. | Must render as demo-only case rehearsal. | Must not satisfy production case ownership, customer queue state, release gate, or closeout truth. |
 | Demo evidence | Stable demo evidence identifier, linked demo case, fixture path, demo labels, and provenance note. | Must render as demo-only evidence rehearsal. | Must not satisfy customer evidence, audit evidence, production detection proof, or release evidence truth. |
 | Demo recommendation | Stable demo recommendation identifier, linked demo case, recommended action placeholder, recommendation basis, and demo labels. | Must render as demo-only recommendation rehearsal. | Must not satisfy production recommendation truth, approval truth, execution authorization, or customer evidence. |
 | Demo action review | Stable demo action-review identifier, linked demo recommendation, review decision placeholder, review boundary, and demo labels. | Must render as demo-only action review rehearsal. | Must not satisfy real approval truth, production action authorization, release gate truth, or customer evidence. |
@@ -128,7 +128,7 @@ Run `bash scripts/verify-phase-52-7-demo-seed-contract.sh`.
 
 Run `bash scripts/test-verify-phase-52-7-demo-seed-contract.sh`.
 
-Run `node <codex-supervisor-root>/dist/index.js issue-lint 1070 --config <supervisor-config-path>`.
+Run `node <codex-supervisor-root>/dist/index.js issue-lint 1178 --config <supervisor-config-path>`.
 
 The verifier must fail when the demo seed contract is missing, when label, reset, fixture, production exclusion, or authority-boundary coverage is incomplete, when negative fixtures falsely pass, when demo records are treated as production truth, or when publishable guidance uses workstation-local absolute paths.
 

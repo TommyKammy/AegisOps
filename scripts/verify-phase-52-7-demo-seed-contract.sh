@@ -38,7 +38,7 @@ required_phrases=(
   "| Fixture | Expected validity | Required rejection |"
   'Run `bash scripts/verify-phase-52-7-demo-seed-contract.sh`.'
   'Run `bash scripts/test-verify-phase-52-7-demo-seed-contract.sh`.'
-  'Run `node <codex-supervisor-root>/dist/index.js issue-lint 1070 --config <supervisor-config-path>`.'
+  'Run `node <codex-supervisor-root>/dist/index.js issue-lint 1178 --config <supervisor-config-path>`.'
 )
 
 record_types=(
