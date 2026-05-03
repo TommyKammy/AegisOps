@@ -24,6 +24,15 @@ type ChecklistState =
   | "blocked"
   | "unavailable";
 
+type FailureStateKey =
+  | "missing_wazuh"
+  | "missing_shuffle"
+  | "missing_secrets"
+  | "port_conflict"
+  | "missing_idp"
+  | "missing_seed_data"
+  | "protected_surface_denial";
+
 interface ChecklistStepContract {
   key: string;
   title: string;
@@ -34,10 +43,13 @@ interface ChecklistStepContract {
 interface ChecklistStepView extends ChecklistStepContract {
   authorityRecordFamily: string;
   authorityRecordId: string;
+  failureStateKey: FailureStateKey | null;
   state: ChecklistState;
 }
 
 const TRUSTED_AUTHORITY_SOURCE = "backend_authoritative_record";
+const FAILURE_COPY_AUTHORITY_NOTICE =
+  "This copy is operator guidance only and cannot approve, repair, reconcile, close, release, gate, or mutate authoritative AegisOps records.";
 
 const CHECKLIST_STEPS: ChecklistStepContract[] = [
   {
@@ -116,6 +128,23 @@ const ALLOWED_STATES = new Set<ChecklistState>([
   "unavailable",
 ]);
 
+const FAILURE_STATE_COPY: Record<FailureStateKey, string> = {
+  missing_wazuh:
+    "Wazuh signal intake is unavailable. Confirm the reviewed Wazuh profile and intake binding, then rerun the readiness check.",
+  missing_shuffle:
+    "Shuffle delegated execution is unavailable. Confirm the reviewed Shuffle profile and template import contract, then retry after backend records report readiness.",
+  missing_secrets:
+    "Required secret references are missing. Mount the reviewed secret files or OpenBao bindings and restart the affected service; placeholder values stay blocked.",
+  port_conflict:
+    "A required port is already in use. Free the conflicting service or select a reviewed profile override, then rerun startup checks.",
+  missing_idp:
+    "Identity provider configuration is missing. Configure the reviewed IdP issuer, client, and redirect binding before enabling protected workflows.",
+  missing_seed_data:
+    "Demo seed data is empty. Run the reviewed demo seed path and refresh only after AegisOps records are admitted.",
+  protected_surface_denial:
+    "Protected surface access was denied. Sign in with an authorized operator role or ask an administrator to review RBAC; denial remains correct until backend auth changes.",
+};
+
 function checklistStateIcon(state: ChecklistState) {
   switch (state) {
     case "completed":
@@ -158,6 +187,20 @@ function readChecklistState(record: UnknownRecord): ChecklistState {
   return state as ChecklistState;
 }
 
+function readFailureStateKey(record: UnknownRecord): FailureStateKey | null {
+  const failureStateKey = asString(record.failure_state_key);
+  if (failureStateKey === null) {
+    return null;
+  }
+  if (!(failureStateKey in FAILURE_STATE_COPY)) {
+    throw new OperatorDataProviderContractError(
+      `First-login checklist failure state ${failureStateKey} is not part of the reviewed contract.`,
+    );
+  }
+
+  return failureStateKey as FailureStateKey;
+}
+
 function buildChecklistRows(records: UnknownRecord[]): ChecklistStepView[] {
   const contractByKey = new Map(CHECKLIST_STEPS.map((step) => [step.key, step]));
   const recordsByKey = new Map<string, UnknownRecord>();
@@ -186,6 +229,7 @@ function buildChecklistRows(records: UnknownRecord[]): ChecklistStepView[] {
         ...step,
         authorityRecordFamily: step.expectedRecordFamily,
         authorityRecordId: "Not available",
+        failureStateKey: null,
         state: "unavailable",
       };
     }
@@ -210,11 +254,20 @@ function buildChecklistRows(records: UnknownRecord[]): ChecklistStepView[] {
       );
     }
 
+    const state = readChecklistState(record);
+    const failureStateKey = readFailureStateKey(record);
+    if (failureStateKey !== null && state === "completed") {
+      throw new OperatorDataProviderContractError(
+        `Checklist step ${step.key} cannot present failure state ${failureStateKey} as successful completion.`,
+      );
+    }
+
     return {
       ...step,
       authorityRecordFamily,
       authorityRecordId,
-      state: readChecklistState(record),
+      failureStateKey,
+      state,
     };
   });
 }
@@ -325,6 +378,23 @@ export function FirstLoginChecklistPage() {
                     Authority record: {formatLabel(step.authorityRecordFamily)}{" "}
                     {step.authorityRecordId}
                   </Typography>
+                  {step.failureStateKey ? (
+                    <Alert
+                      severity={
+                        step.state === "blocked" ? "warning" : "info"
+                      }
+                      variant="outlined"
+                    >
+                      <Stack spacing={0.5}>
+                        <Typography variant="body2">
+                          {FAILURE_STATE_COPY[step.failureStateKey]}
+                        </Typography>
+                        <Typography color="text.secondary" variant="caption">
+                          {FAILURE_COPY_AUTHORITY_NOTICE}
+                        </Typography>
+                      </Stack>
+                    </Alert>
+                  ) : null}
                 </Stack>
               ))}
             </Stack>
