@@ -175,6 +175,50 @@ export function registerOperatorRoutesTodayTests() {
       expect(screen.queryByRole("button", { name: /reconcile/i })).toBeNull();
     });
 
+    it("renders bounded operator task cards that route to existing reviewed surfaces only", async () => {
+      const dependencies = createDefaultDependencies({
+        fetchFn: createAuthorizedFetch({
+          "/inspect-today-view": normalTodayProjection,
+        }),
+      });
+
+      renderOperatorRoute("/operator/today", dependencies);
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("heading", { name: "Operator task cards" }),
+        ).toBeInTheDocument();
+      });
+
+      expect(
+        screen.getByRole("link", { name: "Review stale work" }),
+      ).toHaveAttribute("href", "/operator/alerts/alert-101");
+      expect(
+        screen.getByRole("link", { name: "Inspect pending approvals" }),
+      ).toHaveAttribute("href", "/operator/action-review/review-101");
+      expect(
+        screen.getByRole("link", { name: "Resolve evidence gaps" }),
+      ).toHaveAttribute("href", "/operator/cases/case-101");
+      expect(
+        screen.getByRole("link", { name: "Check degraded sources" }),
+      ).toHaveAttribute("href", "/operator/readiness");
+      expect(
+        screen.getByRole("link", { name: "Inspect mismatches" }),
+      ).toHaveAttribute("href", "/operator/reconciliation");
+      expect(
+        screen.getByRole("link", { name: "Prepare handoff" }),
+      ).toHaveAttribute("href", "/operator/queue");
+
+      expect(screen.getAllByText("State remains unresolved").length).toBeGreaterThan(0);
+      expect(
+        screen.getByText(
+          "Task cards launch reviewed routes or bounded write surfaces; they cannot approve, execute, reconcile, close, or treat UI state as task completion truth.",
+        ),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /mark resolved/i })).toBeNull();
+      expect(screen.queryByRole("button", { name: /complete task/i })).toBeNull();
+    });
+
     it("renders an explicit empty state without implying workflow completion", async () => {
       const dependencies = createDefaultDependencies({
         fetchFn: createAuthorizedFetch({
