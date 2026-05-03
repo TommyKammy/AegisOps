@@ -134,10 +134,18 @@ for index in "${!commands[@]}"; do
   fi
 done
 
+workflow_section="$(
+  awk '
+    /^## 2\. Workflow-First Journey$/ { in_section = 1; next }
+    /^## [0-9]+\./ && in_section { exit }
+    in_section { print }
+  ' <<<"${journey_rendered_markdown}"
+)"
+
 previous_line=0
 for token in "${workflow_sequence[@]}"; do
   current_line="$(
-    grep -Fn -- "${token}" <<<"${journey_rendered_markdown}" |
+    grep -En "^[[:space:]]*[0-9]+\\.[[:space:]]+\\*\\*${token}\\*\\*[[:space:]]*-" <<<"${workflow_section}" |
       awk -F: -v previous="${previous_line}" '$1 > previous { print $1; exit }' ||
       true
   )"

@@ -99,6 +99,15 @@ assert_fails_with \
   "${missing_sequence_repo}" \
   "Missing or out-of-order Phase 55.1 workflow sequence term: Reconciliation"
 
+missing_scoped_sequence_repo="${workdir}/missing-scoped-sequence"
+create_valid_repo "${missing_scoped_sequence_repo}"
+remove_text_from_doc "${missing_scoped_sequence_repo}" \
+  "docs/getting-started/first-user-journey.md" \
+  "1. **Stack health** - Confirm the reviewed profile is started and the health view shows explicit ready, blocked, skipped, or mocked states."
+assert_fails_with \
+  "${missing_scoped_sequence_repo}" \
+  "Missing or out-of-order Phase 55.1 workflow sequence term: Stack health"
+
 production_truth_repo="${workdir}/production-truth"
 create_valid_repo "${production_truth_repo}"
 printf '%s\n' "Demo records are production truth." \
