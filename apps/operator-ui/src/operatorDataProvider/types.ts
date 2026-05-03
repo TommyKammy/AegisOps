@@ -4,6 +4,7 @@ export type OperatorResourceName =
   | "queue"
   | "alerts"
   | "cases"
+  | "firstLoginChecklist"
   | "runtimeReadiness"
   | "reconciliations"
   | "advisoryOutput"

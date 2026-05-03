@@ -12,6 +12,7 @@ import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
 import InboxOutlinedIcon from "@mui/icons-material/InboxOutlined";
 import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
 import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
+import PlaylistAddCheckOutlinedIcon from "@mui/icons-material/PlaylistAddCheckOutlined";
 import RuleFolderOutlinedIcon from "@mui/icons-material/RuleFolderOutlined";
 import WarningAmberOutlinedIcon from "@mui/icons-material/WarningAmberOutlined";
 import {
@@ -74,6 +75,8 @@ const CaseDetailPage =
   lazyOperatorConsolePage("CaseDetailPage") as unknown as typeof import("./operatorConsolePages").CaseDetailPage;
 const CaseIndexPage =
   lazyOperatorConsolePage("CaseIndexPage") as unknown as typeof import("./operatorConsolePages").CaseIndexPage;
+const FirstLoginChecklistPage =
+  lazyOperatorConsolePage("FirstLoginChecklistPage") as unknown as typeof import("./operatorConsolePages").FirstLoginChecklistPage;
 const ProvenancePage =
   lazyOperatorConsolePage("ProvenancePage") as unknown as typeof import("./operatorConsolePages").ProvenancePage;
 const ProvenanceIndexPage =
@@ -164,6 +167,11 @@ function OperatorMenu({
         leftIcon={<CheckCircleOutlineIcon />}
         primaryText="Readiness"
         to={buildOperatorShellPath(basePath, "readiness")}
+      />
+      <Menu.Item
+        leftIcon={<PlaylistAddCheckOutlinedIcon />}
+        primaryText="First Login"
+        to={buildOperatorShellPath(basePath, "first-login-checklist")}
       />
       <Menu.Item
         leftIcon={<RuleFolderOutlinedIcon />}
@@ -400,6 +408,10 @@ function OperatorShellContent({
           <Route element={<ProvenanceIndexPage />} path="provenance/:family" />
           <Route element={<ProvenancePage />} path="provenance/:family/:recordId" />
           <Route element={<ReadinessPage />} path="readiness" />
+          <Route
+            element={<FirstLoginChecklistPage />}
+            path="first-login-checklist"
+          />
           <Route element={<ReconciliationPage />} path="reconciliation" />
           <Route element={<AssistantAdvisoryPage />} path="assistant" />
           <Route
