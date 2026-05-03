@@ -10,7 +10,7 @@ const normalBusinessHoursHandoff = {
   authority_boundary:
     "Business-hours handoff display is coordination guidance only; AegisOps records remain authoritative for lifecycle, approval, execution, reconciliation, evidence, audit, and closeout truth.",
   business_hours_handoff_contract_version: "phase-56-6",
-  handoff_id: "handoff-2026-05-04",
+  handoff_id: "current",
   handoff_state: "blocked",
   items: [
     {
@@ -76,7 +76,19 @@ export function registerOperatorRoutesBusinessHoursHandoffTests() {
 
       expect(screen.getByText("Continue investigation for case-101")).toBeInTheDocument();
       expect(
+        screen.getByText("Case promoted and evidence review started."),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText("Follow-up: Collect endpoint custody evidence before approval review."),
+      ).toBeInTheDocument();
+      expect(
         screen.getByText("Failed containment needs owner follow-up"),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText("Containment request failed after approved execution path."),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText("Follow-up: Re-review scope before retry or manual fallback."),
       ).toBeInTheDocument();
       expect(screen.getByText("Owner: analyst-001")).toBeInTheDocument();
       expect(screen.getByText("Owner: approver-002")).toBeInTheDocument();
@@ -102,6 +114,70 @@ export function registerOperatorRoutesBusinessHoursHandoffTests() {
           "/inspect-business-hours-handoff": {
             ...normalBusinessHoursHandoff,
             stale_cache: true,
+          },
+        }),
+      });
+
+      renderOperatorRoute("/operator/handoff", dependencies);
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("heading", {
+            name: "Business-hours handoff unavailable",
+          }),
+        ).toBeInTheDocument();
+      });
+
+      expect(screen.queryByText("Continue investigation for case-101")).toBeNull();
+      expect(
+        screen.getByText(
+          "The backend handoff projection was stale or malformed, so the browser refused to present it as current handoff guidance.",
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it("fails closed when the backend handoff projection is not current", async () => {
+      const dependencies = createDefaultDependencies({
+        fetchFn: createAuthorizedFetch({
+          "/inspect-business-hours-handoff": {
+            ...normalBusinessHoursHandoff,
+            handoff_id: "handoff-2026-05-04",
+          },
+        }),
+      });
+
+      renderOperatorRoute("/operator/handoff", dependencies);
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("heading", {
+            name: "Business-hours handoff unavailable",
+          }),
+        ).toBeInTheDocument();
+      });
+
+      expect(screen.queryByText("Continue investigation for case-101")).toBeNull();
+      expect(
+        screen.getByText(
+          "The backend handoff projection was stale or malformed, so the browser refused to present it as current handoff guidance.",
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it("fails closed when AI summary posture is missing", async () => {
+      const dependencies = createDefaultDependencies({
+        fetchFn: createAuthorizedFetch({
+          "/inspect-business-hours-handoff": {
+            ...normalBusinessHoursHandoff,
+            items: [
+              {
+                ...normalBusinessHoursHandoff.items[0],
+                ai_summary_handling: {
+                  ...normalBusinessHoursHandoff.items[0].ai_summary_handling,
+                  posture: "missing",
+                },
+              },
+            ],
           },
         }),
       });

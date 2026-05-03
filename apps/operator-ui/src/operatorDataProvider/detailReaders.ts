@@ -52,7 +52,6 @@ const BUSINESS_HOURS_HANDOFF_STATES = new Set([
 const BUSINESS_HOURS_HANDOFF_AI_POSTURES = new Set([
   "accepted_for_reference",
   "rejected_for_reference",
-  "missing",
 ]);
 
 export async function getOneForStandardResource(
@@ -443,6 +442,11 @@ export async function getOneForBusinessHoursHandoff(
   if (contractVersion !== BUSINESS_HOURS_HANDOFF_CONTRACT_VERSION) {
     throw new OperatorDataProviderContractError(
       `Resource businessHoursHandoff requires contract version ${BUSINESS_HOURS_HANDOFF_CONTRACT_VERSION}; received ${contractVersion}.`,
+    );
+  }
+  if (handoffId !== "current") {
+    throw new OperatorDataProviderContractError(
+      `Resource businessHoursHandoff requires handoff_id current; received ${handoffId}.`,
     );
   }
   if (payload.stale_cache !== false) {
