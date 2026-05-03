@@ -173,8 +173,12 @@ export function registerOperatorRoutesBusinessHoursHandoffTests() {
               {
                 ...normalBusinessHoursHandoff.items[0],
                 ai_summary_handling: {
-                  ...normalBusinessHoursHandoff.items[0].ai_summary_handling,
-                  posture: "missing",
+                  advisory_only:
+                    normalBusinessHoursHandoff.items[0].ai_summary_handling
+                      .advisory_only,
+                  summary_id:
+                    normalBusinessHoursHandoff.items[0].ai_summary_handling
+                      .summary_id,
                 },
               },
             ],
