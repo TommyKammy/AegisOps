@@ -4,6 +4,16 @@ import { RESOURCE_BINDINGS } from "./resourceBindings";
 import { asObject, asString, buildDetailPath, fetchJson, normalizeRecord, resolveReconciliationRecord } from "./shared";
 import type { StandardOperatorResourceName } from "./types";
 
+const TODAY_VIEW_LANES = [
+  "priority",
+  "stale_work",
+  "pending_approvals",
+  "degraded_sources",
+  "reconciliation_mismatches",
+  "evidence_gaps",
+  "ai_suggested_focus",
+] as const;
+
 export async function getOneForStandardResource(
   fetchFn: typeof fetch,
   resource: StandardOperatorResourceName,
@@ -71,6 +81,101 @@ export async function getOneForAdvisoryOutput(
       id: requestedId,
       record_family: recordFamily,
       record_id: recordId,
+    },
+  };
+}
+
+function validateTodayLaneItem(
+  lane: string,
+  item: unknown,
+): Record<string, unknown> {
+  const record = asObject(
+    item,
+    `Resource todayView lane ${lane} returned a non-object item.`,
+  );
+  const id = asString(record.id);
+  const title = asString(record.title);
+  const state = asString(record.state);
+  const anchor = asObject(
+    record.authoritative_record,
+    `Resource todayView lane ${lane} item is missing authoritative_record.`,
+  );
+
+  if (id === null || title === null || state === null) {
+    throw new OperatorDataProviderContractError(
+      `Resource todayView lane ${lane} item is missing id, title, or state.`,
+    );
+  }
+
+  if (asString(anchor.family) === null || asString(anchor.id) === null) {
+    throw new OperatorDataProviderContractError(
+      `Resource todayView lane ${lane} item authoritative_record is missing family or id.`,
+    );
+  }
+
+  if (lane === "ai_suggested_focus" && record.advisory_only !== true) {
+    throw new OperatorDataProviderContractError(
+      "Resource todayView ai_suggested_focus items must be advisory_only.",
+    );
+  }
+
+  return record;
+}
+
+export async function getOneForTodayView(
+  fetchFn: typeof fetch,
+): Promise<GetOneResult> {
+  const payload = asObject(
+    await fetchJson(fetchFn, "/inspect-today-view"),
+    "Resource todayView returned a malformed detail payload.",
+  );
+  const projectionId = asString(payload.projection_id);
+  const contractVersion = asString(
+    payload.today_view_projection_contract_version,
+  );
+  const lanes = asObject(
+    payload.lanes,
+    "Resource todayView detail payload is missing lanes.",
+  );
+
+  if (projectionId === null || contractVersion === null) {
+    throw new OperatorDataProviderContractError(
+      "Resource todayView detail payload is missing projection_id or contract version.",
+    );
+  }
+
+  if (payload.stale_cache === true) {
+    throw new OperatorDataProviderContractError(
+      "Resource todayView rejected stale projection cache as current guidance.",
+    );
+  }
+
+  if (payload.read_only !== true) {
+    throw new OperatorDataProviderContractError(
+      "Resource todayView detail payload must be read_only.",
+    );
+  }
+
+  const normalizedLanes = TODAY_VIEW_LANES.reduce<Record<string, unknown[]>>(
+    (result, lane) => {
+      const rawLane = lanes[lane];
+      if (!Array.isArray(rawLane)) {
+        throw new OperatorDataProviderContractError(
+          `Resource todayView detail payload is missing lane ${lane}.`,
+        );
+      }
+
+      result[lane] = rawLane.map((item) => validateTodayLaneItem(lane, item));
+      return result;
+    },
+    {},
+  );
+
+  return {
+    data: {
+      ...payload,
+      id: "current",
+      lanes: normalizedLanes,
     },
   };
 }

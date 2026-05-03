@@ -1,4 +1,5 @@
 export { QueuePage } from "./operatorConsolePages/queuePages";
+export { TodayPage } from "./operatorConsolePages/todayPages";
 export {
   AlertDetailPage,
   CaseDetailPage,

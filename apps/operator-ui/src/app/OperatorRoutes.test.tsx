@@ -6,6 +6,7 @@ import { registerOperatorRoutesAuthAndShellTests } from "./OperatorRoutes.authAn
 import { registerOperatorRoutesCaseworkTests } from "./OperatorRoutes.casework.testSuite";
 import { registerOperatorRoutesControlPlaneTests } from "./OperatorRoutes.controlPlane.testSuite";
 import { registerOperatorRoutesFirstLoginChecklistTests } from "./OperatorRoutes.firstLoginChecklist.testSuite";
+import { registerOperatorRoutesTodayTests } from "./OperatorRoutes.today.testSuite";
 
 describe("OperatorRoutes", () => {
   beforeEach(() => {
@@ -18,4 +19,5 @@ describe("OperatorRoutes", () => {
   registerOperatorRoutesAssistantTests();
   registerOperatorRoutesControlPlaneTests();
   registerOperatorRoutesFirstLoginChecklistTests();
+  registerOperatorRoutesTodayTests();
 });

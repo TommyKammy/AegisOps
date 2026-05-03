@@ -3,6 +3,7 @@ import {
   getOneForActionReview,
   getOneForAdvisoryOutput,
   getOneForStandardResource,
+  getOneForTodayView,
 } from "./operatorDataProvider/detailReaders";
 import {
   OperatorDataProviderAuthorizationError,
@@ -56,6 +57,10 @@ export function createOperatorDataProvider({
 
       if (resource === "actionReview") {
         return getOneForActionReview(fetchFn, params);
+      }
+
+      if (resource === "todayView") {
+        return getOneForTodayView(fetchFn);
       }
 
       if (!isStandardResource(resource)) {

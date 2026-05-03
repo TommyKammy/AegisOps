@@ -14,6 +14,7 @@ import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
 import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
 import PlaylistAddCheckOutlinedIcon from "@mui/icons-material/PlaylistAddCheckOutlined";
 import RuleFolderOutlinedIcon from "@mui/icons-material/RuleFolderOutlined";
+import TodayOutlinedIcon from "@mui/icons-material/TodayOutlined";
 import WarningAmberOutlinedIcon from "@mui/icons-material/WarningAmberOutlined";
 import {
   Card,
@@ -87,6 +88,8 @@ const ReadinessPage =
   lazyOperatorConsolePage("ReadinessPage") as unknown as typeof import("./operatorConsolePages").ReadinessPage;
 const ReconciliationPage =
   lazyOperatorConsolePage("ReconciliationPage") as unknown as typeof import("./operatorConsolePages").ReconciliationPage;
+const TodayPage =
+  lazyOperatorConsolePage("TodayPage") as unknown as typeof import("./operatorConsolePages").TodayPage;
 
 function hasReviewedOperatorRole(
   operatorRoles: readonly string[],
@@ -143,6 +146,11 @@ function OperatorMenu({
   return (
     <Menu>
       <Menu.DashboardItem primaryText="Overview" />
+      <Menu.Item
+        leftIcon={<TodayOutlinedIcon />}
+        primaryText="Today"
+        to={buildOperatorShellPath(basePath, "today")}
+      />
       <Menu.Item
         leftIcon={<InboxOutlinedIcon />}
         primaryText="Queue"
@@ -393,6 +401,7 @@ function OperatorShellContent({
       <Suspense fallback={<DeferredPageFallback />}>
         <Routes>
           <Route element={<OverviewPage operatorRoles={operatorRoles} />} index />
+          <Route element={<TodayPage />} path="today" />
           <Route element={<QueuePage />} path="queue" />
           <Route element={<AlertIndexPage />} path="alerts" />
           <Route
