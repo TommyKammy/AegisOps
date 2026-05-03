@@ -174,4 +174,20 @@ assert_fails_with \
   "${absolute_path_repo}" \
   "Forbidden Phase 56 closeout evaluation: workstation-local absolute path detected"
 
+absolute_path_windows_backslash_repo="${workdir}/absolute-path-windows-backslash"
+copy_valid_repo "${absolute_path_windows_backslash_repo}"
+windows_drive="C:"
+windows_home_dir="Users"
+printf 'Run %s\\%s\\example\\Dev\\codex-supervisor\\dist\\index.js.\n' "${windows_drive}" "${windows_home_dir}" >>"${absolute_path_windows_backslash_repo}/docs/phase-56-closeout-evaluation.md"
+assert_fails_with \
+  "${absolute_path_windows_backslash_repo}" \
+  "Forbidden Phase 56 closeout evaluation: workstation-local absolute path detected"
+
+absolute_path_windows_slash_repo="${workdir}/absolute-path-windows-slash"
+copy_valid_repo "${absolute_path_windows_slash_repo}"
+printf 'Run %s/%s/example/Dev/codex-supervisor/dist/index.js.\n' "${windows_drive}" "${windows_home_dir}" >>"${absolute_path_windows_slash_repo}/docs/phase-56-closeout-evaluation.md"
+assert_fails_with \
+  "${absolute_path_windows_slash_repo}" \
+  "Forbidden Phase 56 closeout evaluation: workstation-local absolute path detected"
+
 echo "Phase 56 closeout evaluation verifier tests passed."
