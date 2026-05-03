@@ -10,22 +10,23 @@
   "commercial_report_breadth_claim": false,
   "audit_export_completeness_claim": false,
   "rc_or_ga_readiness_claim": false,
-  "production_truth_claim": true,
-  "summary": "Demo report export is production truth.",
+  "production_truth_claim": false,
+  "title": "First-user demo report export",
+  "summary": "Demo-only summary of the directly linked first-user journey records. This is not production truth.",
   "authority_boundary": {
-    "authoritative_record_source": "report_metadata",
-    "output_is_production_truth": true,
+    "authoritative_record_source": "aegisops_control_plane",
+    "output_is_production_truth": false,
     "output_overrides_authoritative_records": false
   },
   "references": {
     "demo_alert": {
       "available": true,
-      "record_id": "demo-alert-ssh-auth-failure",
       "labels": [
         "demo-only",
         "first-user-rehearsal",
         "not-production-truth"
       ],
+      "summary": "SSH authentication failure sample alert.",
       "secret_redaction": "no-secret-values-exported",
       "source_family": "demo-seed-authentication",
       "detection_summary": "SSH authentication failure sample alert.",
@@ -39,6 +40,7 @@
         "first-user-rehearsal",
         "not-production-truth"
       ],
+      "summary": "Demo case admitted from the sample alert.",
       "secret_redaction": "no-secret-values-exported",
       "status": "demo-open",
       "alert_binding": "demo-alert-ssh-auth-failure"
@@ -51,6 +53,7 @@
         "first-user-rehearsal",
         "not-production-truth"
       ],
+      "summary": "Bound demo evidence summary for the sample case.",
       "secret_redaction": "no-secret-values-exported",
       "evidence_summary": "Bound demo evidence summary for the sample case.",
       "record_binding": "demo-case-ssh-auth-failure"
@@ -63,6 +66,7 @@
         "first-user-rehearsal",
         "not-production-truth"
       ],
+      "summary": "Advisory demo recommendation for operator review.",
       "secret_redaction": "no-secret-values-exported",
       "advisory_summary": "Advisory demo recommendation for operator review.",
       "linked_evidence": "demo-evidence-auth-log-summary"
@@ -75,6 +79,7 @@
         "first-user-rehearsal",
         "not-production-truth"
       ],
+      "summary": "Review boundary for the proposed demo action.",
       "secret_redaction": "no-secret-values-exported",
       "decision_boundary": "operator-approval-required",
       "approval_requirement": "demo-operator-approval",
@@ -88,6 +93,7 @@
         "first-user-rehearsal",
         "not-production-truth"
       ],
+      "summary": "Receipt linked to the approved demo action request.",
       "secret_redaction": "no-secret-values-exported",
       "execution_outcome_summary": "Demo action receipt captured for the approved request.",
       "action_binding": "demo-action-review-lock-account"
@@ -100,6 +106,7 @@
         "first-user-rehearsal",
         "not-production-truth"
       ],
+      "summary": "Reconciliation result comparing the receipt and approved request.",
       "secret_redaction": "no-secret-values-exported",
       "outcome_summary": "Demo reconciliation compared the receipt with the approved request.",
       "receipt_binding": "demo-execution-receipt-lock-account"

@@ -57,6 +57,8 @@ Exported text may name custody references or redaction posture, but it must not 
 | `production-truth-claim.json` | invalid | demo export claims production truth |
 | `authority-override-claim.json` | invalid | demo export claims it can override authoritative records |
 | `missing-reference-availability.json` | invalid | missing demo journey reference |
+| `missing-reference-record-id.json` | invalid | missing demo journey reference |
+| `missing-unavailable-follow-up.json` | invalid | missing demo journey reference |
 
 Negative fixtures must fail closed when the payload shape is invalid, the demo label is missing, the authority-boundary object is malformed, secret-looking values are present, commercial reporting breadth is claimed, or output is presented as production truth.
 
@@ -68,6 +70,8 @@ The focused verifier must fail when:
 - required headings, labels, issue links, authority-boundary text, validation commands, or direct-reference rows are missing;
 - a forbidden claim appears outside the forbidden-claims section;
 - fixtures are missing or do not match their expected validity;
+- an available reference is missing its record identifier, required reference-specific fields, demo labels, or secret-redaction marker;
+- an unavailable reference is missing an explicit follow-up or unavailable-reason marker;
 - a fixture with secret-looking output passes validation;
 - a fixture claims commercial report breadth, audit export completeness, RC proof, GA readiness, or production truth; or
 - publishable guidance uses workstation-local absolute paths.

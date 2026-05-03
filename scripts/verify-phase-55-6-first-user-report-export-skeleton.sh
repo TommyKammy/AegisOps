@@ -60,6 +60,8 @@ fixture_expectations=(
   "production-truth-claim.json|invalid|demo export claims production truth"
   "authority-override-claim.json|invalid|demo export claims it can override authoritative records"
   "missing-reference-availability.json|invalid|missing demo journey reference"
+  "missing-reference-record-id.json|invalid|missing demo journey reference"
+  "missing-unavailable-follow-up.json|invalid|missing demo journey reference"
 )
 
 forbidden_claims=(
@@ -166,6 +168,15 @@ required_references = {
     "demo_execution_receipt",
     "demo_reconciliation",
 }
+required_reference_fields = {
+    "demo_alert": ("source_family", "detection_summary", "provenance_pointer"),
+    "demo_case": ("status", "alert_binding"),
+    "demo_evidence": ("evidence_summary", "record_binding"),
+    "demo_recommendation": ("advisory_summary", "linked_evidence"),
+    "demo_action_review": ("decision_boundary", "approval_requirement", "protected_target_summary"),
+    "demo_execution_receipt": ("execution_outcome_summary", "action_binding"),
+    "demo_reconciliation": ("outcome_summary", "receipt_binding"),
+}
 secret_patterns = [
     re.compile(pattern, re.IGNORECASE)
     for pattern in (
@@ -216,6 +227,10 @@ def labels_from(value):
     return {item for item in value if isinstance(item, str)}
 
 
+def has_nonempty_string(value):
+    return isinstance(value, str) and bool(value.strip())
+
+
 def reasons_for(payload):
     if not isinstance(payload, dict):
         return ["invalid report export payload"]
@@ -241,13 +256,14 @@ def reasons_for(payload):
         authority = {}
     elif not isinstance(authority, dict):
         reasons.append("invalid authority boundary")
-        authority = {}
-    if authority.get("output_is_production_truth") is not False:
-        reasons.append("demo export claims production truth")
-    if authority.get("authoritative_record_source") != "aegisops_control_plane":
-        reasons.append("demo export claims production truth")
-    if authority.get("output_overrides_authoritative_records") is not False:
-        reasons.append("demo export claims it can override authoritative records")
+        authority = None
+    if isinstance(authority, dict):
+        if authority.get("output_is_production_truth") is not False:
+            reasons.append("demo export claims production truth")
+        if authority.get("authoritative_record_source") != "aegisops_control_plane":
+            reasons.append("demo export claims production truth")
+        if authority.get("output_overrides_authoritative_records") is not False:
+            reasons.append("demo export claims it can override authoritative records")
 
     references = payload.get("references")
     if not isinstance(references, dict):
@@ -262,12 +278,22 @@ def reasons_for(payload):
                 reasons.append("missing demo journey reference")
                 continue
             if ref.get("available") is False:
+                if not (
+                    has_nonempty_string(ref.get("follow_up"))
+                    or has_nonempty_string(ref.get("unavailable_reason"))
+                ):
+                    reasons.append("missing demo journey reference")
                 continue
+            if not has_nonempty_string(ref.get("record_id")):
+                reasons.append("missing demo journey reference")
             ref_labels = labels_from(ref.get("labels"))
             if not required_labels.issubset(ref_labels):
                 reasons.append("missing required demo label")
             if ref.get("secret_redaction") != "no-secret-values-exported":
                 reasons.append("secret-looking value in export output")
+            for field in required_reference_fields[name]:
+                if not has_nonempty_string(ref.get(field)):
+                    reasons.append("missing demo journey reference")
 
     for text in walk_strings(payload):
         if any(pattern.search(text) for pattern in secret_patterns):

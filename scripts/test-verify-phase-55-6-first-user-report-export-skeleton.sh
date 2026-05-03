@@ -148,6 +148,22 @@ assert_fails_with \
   "${missing_reference_availability_repo}" \
   "Expected valid Phase 55.6 report export fixture valid-demo-report-export.json, got: missing demo journey reference"
 
+missing_reference_record_id_repo="${workdir}/missing-reference-record-id"
+create_valid_repo "${missing_reference_record_id_repo}"
+cp "${missing_reference_record_id_repo}/docs/getting-started/fixtures/first-user-demo-report-export/missing-reference-record-id.json" \
+  "${missing_reference_record_id_repo}/docs/getting-started/fixtures/first-user-demo-report-export/valid-demo-report-export.json"
+assert_fails_with \
+  "${missing_reference_record_id_repo}" \
+  "Expected valid Phase 55.6 report export fixture valid-demo-report-export.json, got: missing demo journey reference"
+
+missing_unavailable_follow_up_repo="${workdir}/missing-unavailable-follow-up"
+create_valid_repo "${missing_unavailable_follow_up_repo}"
+cp "${missing_unavailable_follow_up_repo}/docs/getting-started/fixtures/first-user-demo-report-export/missing-unavailable-follow-up.json" \
+  "${missing_unavailable_follow_up_repo}/docs/getting-started/fixtures/first-user-demo-report-export/valid-demo-report-export.json"
+assert_fails_with \
+  "${missing_unavailable_follow_up_repo}" \
+  "Expected valid Phase 55.6 report export fixture valid-demo-report-export.json, got: missing demo journey reference"
+
 doc_forbidden_claim_repo="${workdir}/doc-forbidden-claim"
 create_valid_repo "${doc_forbidden_claim_repo}"
 printf '%s\n' "Demo report export is production truth." \
