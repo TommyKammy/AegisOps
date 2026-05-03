@@ -473,6 +473,9 @@ class CrossBoundaryNegativeE2EValidationTests(unittest.TestCase):
     ) -> None:
         store, service, promoted_case, reviewed_at = self._build_wazuh_case()
         baseline_case = store.get(CaseRecord, promoted_case.case_id)
+        baseline_request_ids = {
+            record.action_request_id for record in store.list(ActionRequestRecord)
+        }
         baseline_execution_ids = {
             record.action_execution_id for record in store.list(ActionExecutionRecord)
         }
@@ -501,6 +504,10 @@ class CrossBoundaryNegativeE2EValidationTests(unittest.TestCase):
         self.assertIsNotNone(current_case)
         self.assertEqual(current_case.lifecycle_state, baseline_case.lifecycle_state)
         self.assertEqual(
+            {record.action_request_id for record in store.list(ActionRequestRecord)},
+            baseline_request_ids,
+        )
+        self.assertEqual(
             {
                 record.action_execution_id
                 for record in store.list(ActionExecutionRecord)
@@ -519,6 +526,19 @@ class CrossBoundaryNegativeE2EValidationTests(unittest.TestCase):
         baseline_case = store.get(CaseRecord, promoted_case.case_id)
         baseline_execution_count = len(store.list(ActionExecutionRecord))
         self.assertIsNotNone(baseline_case)
+        service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-shuffle-shortcut-001",
+                action_request_id="action-request-shuffle-shortcut-001",
+                approver_identities=("approver-001",),
+                target_snapshot={"asset_id": "workstation-001"},
+                payload_hash="payload-hash-shuffle-shortcut-001",
+                decided_at=reviewed_at + timedelta(minutes=6),
+                lifecycle_state="approved",
+                decision_rationale="Approved action request before Shuffle status import.",
+                approved_expires_at=None,
+            )
+        )
         service.persist_record(
             ActionRequestRecord(
                 action_request_id="action-request-shuffle-shortcut-001",
