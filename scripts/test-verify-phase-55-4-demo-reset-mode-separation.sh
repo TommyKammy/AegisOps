@@ -133,6 +133,26 @@ assert_fails_with \
   "${valid_mutates_live_repo}" \
   "Invalid Phase 55.4 demo reset fixture state for valid-repeatable-demo-reset.json: expected valid"
 
+valid_adds_live_repo="${workdir}/valid-adds-live"
+create_valid_repo "${valid_adds_live_repo}"
+set_fixture_json_value \
+  "${valid_adds_live_repo}" \
+  "valid-repeatable-demo-reset.json" \
+  "payload['after_records'].append(dict(payload['before_records'][2], id='live-case-added'))"
+assert_fails_with \
+  "${valid_adds_live_repo}" \
+  "Invalid Phase 55.4 demo reset fixture state for valid-repeatable-demo-reset.json: expected valid"
+
+valid_adds_unlabeled_repo="${workdir}/valid-adds-unlabeled"
+create_valid_repo "${valid_adds_unlabeled_repo}"
+set_fixture_json_value \
+  "${valid_adds_unlabeled_repo}" \
+  "valid-repeatable-demo-reset.json" \
+  "payload['after_records'].append({'id': 'unlabeled-case-added', 'mode': 'demo', 'authority': 'demo_rehearsal_only', 'labels': [], 'production_claim': False, 'truth_surfaces': []})"
+assert_fails_with \
+  "${valid_adds_unlabeled_repo}" \
+  "Invalid Phase 55.4 demo reset fixture state for valid-repeatable-demo-reset.json: expected valid"
+
 valid_non_repeatable_repo="${workdir}/valid-non-repeatable"
 create_valid_repo "${valid_non_repeatable_repo}"
 set_fixture_json_value \

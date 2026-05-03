@@ -241,7 +241,13 @@ def rejection_reasons(payload):
                 reasons.append("demo reset targets unlabeled records")
 
     for record in after:
-        if not isinstance(record, dict):
+        if not isinstance(record, dict) or not isinstance(record.get("id"), str):
+            continue
+        if record["id"] not in before_by_id:
+            if is_live_record(record):
+                reasons.append("demo reset mutates production truth")
+            elif not is_demo_record(record):
+                reasons.append("demo reset targets unlabeled records")
             continue
         if is_live_record(record) and record.get("production_claim") is not True:
             reasons.append("demo reset mutates production truth")
