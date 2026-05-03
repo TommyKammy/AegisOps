@@ -38,16 +38,22 @@ required_phrases=(
   "| Fixture | Expected validity | Required rejection |"
   'Run `bash scripts/verify-phase-52-7-demo-seed-contract.sh`.'
   'Run `bash scripts/test-verify-phase-52-7-demo-seed-contract.sh`.'
-  'Run `node <codex-supervisor-root>/dist/index.js issue-lint 1070 --config <supervisor-config-path>`.'
+  'Run `node <codex-supervisor-root>/dist/index.js issue-lint 1178 --config <supervisor-config-path>`.'
 )
 
 record_types=(
+  "Demo Wazuh alert"
+  "Demo analytic signal"
+  "Demo AegisOps alert"
   "Demo alert"
   "Demo case"
   "Demo evidence"
+  "Demo recommendation"
+  "Demo action review"
   "Demo action request"
   "Demo approval"
   "Demo execution receipt"
+  "Demo reconciliation"
   "Demo reconciliation note"
 )
 
@@ -177,6 +183,7 @@ if grep -REq "(${path_token_boundary}${local_path_token}|file:///?${local_path_t
 fi
 
 python3 - "${fixtures_dir}" "${fixture_expectations[@]}" <<'PY'
+from collections import Counter
 import json
 import pathlib
 import sys
@@ -209,6 +216,21 @@ def has_field(record, field):
 
 
 type_requirements = {
+    "demo-wazuh-alert": {
+        "presentation": "demo-only Wazuh alert rehearsal",
+        "non_empty": ("id", "fixture_provenance", "demo_source_family", "wazuh_alert_id"),
+        "present": ("reviewed_at",),
+    },
+    "demo-analytic-signal": {
+        "presentation": "demo-only analytic signal rehearsal",
+        "non_empty": ("id", "linked_demo_wazuh_alert_id", "signal_name", "signal_disposition"),
+        "present": (),
+    },
+    "demo-aegisops-alert": {
+        "presentation": "demo-only AegisOps alert rehearsal",
+        "non_empty": ("id", "linked_demo_signal_id", "control_plane_alert_id", "alert_state"),
+        "present": ("reviewed_at",),
+    },
     "demo-alert": {
         "presentation": "demo-only alert rehearsal",
         "non_empty": ("id", "fixture_provenance", "demo_source_family"),
@@ -224,6 +246,16 @@ type_requirements = {
         "non_empty": ("id", "linked_demo_case_id", "fixture_path", "provenance_note"),
         "present": (),
     },
+    "demo-recommendation": {
+        "presentation": "demo-only recommendation rehearsal",
+        "non_empty": ("id", "linked_demo_case_id", "recommended_action", "recommendation_basis"),
+        "present": (),
+    },
+    "demo-action-review": {
+        "presentation": "demo-only action review rehearsal",
+        "non_empty": ("id", "linked_demo_recommendation_id", "review_decision", "review_boundary"),
+        "present": (),
+    },
     "demo-action-request": {
         "presentation": "demo-only action rehearsal",
         "non_empty": ("id", "linked_demo_case_id", "requested_action"),
@@ -236,7 +268,7 @@ type_requirements = {
     },
     "demo-execution-receipt": {
         "presentation": "demo-only execution rehearsal",
-        "non_empty": ("id", "linked_demo_action_request_id", "mocked_executor_note"),
+        "non_empty": ("id", "linked_demo_action_review_id", "mocked_executor_note"),
         "present": (),
     },
     "demo-reconciliation-note": {
@@ -244,6 +276,37 @@ type_requirements = {
         "non_empty": ("id", "linked_demo_execution_receipt_id", "outcome_placeholder"),
         "present": (),
     },
+    "demo-reconciliation": {
+        "presentation": "demo-only reconciliation rehearsal",
+        "non_empty": ("id", "linked_demo_execution_receipt_id", "reconciliation_result", "outcome_placeholder"),
+        "present": (),
+    },
+}
+
+required_record_types = {
+    "demo-wazuh-alert",
+    "demo-analytic-signal",
+    "demo-aegisops-alert",
+    "demo-case",
+    "demo-evidence",
+    "demo-recommendation",
+    "demo-action-review",
+    "demo-execution-receipt",
+    "demo-reconciliation",
+}
+
+required_linkages = {
+    "demo-analytic-signal": ("linked_demo_wazuh_alert_id", "demo-wazuh-alert"),
+    "demo-aegisops-alert": ("linked_demo_signal_id", "demo-analytic-signal"),
+    "demo-case": ("linked_demo_alert_id", "demo-aegisops-alert"),
+    "demo-evidence": ("linked_demo_case_id", "demo-case"),
+    "demo-recommendation": ("linked_demo_case_id", "demo-case"),
+    "demo-action-review": ("linked_demo_recommendation_id", "demo-recommendation"),
+    "demo-action-request": ("linked_demo_case_id", "demo-case"),
+    "demo-approval": ("linked_demo_action_request_id", "demo-action-request"),
+    "demo-execution-receipt": ("linked_demo_action_review_id", "demo-action-review"),
+    "demo-reconciliation": ("linked_demo_execution_receipt_id", "demo-execution-receipt"),
+    "demo-reconciliation-note": ("linked_demo_execution_receipt_id", "demo-execution-receipt"),
 }
 
 
@@ -256,6 +319,9 @@ def rejection_reasons(payload):
 
     for record in records:
         record_type = record.get("type")
+        if not has_non_empty_string(record, "id"):
+            reasons.append("missing stable demo record identifier")
+            continue
         requirements = type_requirements.get(record_type)
         if requirements is None:
             reasons.append("missing demo record type contract")
@@ -278,6 +344,41 @@ def rejection_reasons(payload):
             reasons.append("demo record claims production truth")
         if record.get("authority") != "demo_rehearsal_only":
             reasons.append("demo record claims production truth")
+
+    records_by_id = {
+        record.get("id"): record
+        for record in records
+        if isinstance(record.get("id"), str) and record.get("id").strip()
+    }
+    if len(records_by_id) != len(records):
+        reasons.append("non-repeatable seed load")
+
+    record_type_counts = Counter(record.get("type") for record in records)
+    for required_record_type in sorted(required_record_types):
+        required_record_type_count = record_type_counts.get(required_record_type, 0)
+        if required_record_type_count == 0:
+            reasons.append(f"missing required record family {required_record_type}")
+        elif required_record_type_count > 1:
+            reasons.append(f"multiple records in required family {required_record_type}")
+
+    for record in records:
+        record_type = record.get("type")
+        linkage = required_linkages.get(record_type)
+        if linkage is None:
+            continue
+        linkage_field, expected_parent_type = linkage
+        parent_id = record.get(linkage_field)
+        parent_record = records_by_id.get(parent_id)
+        if parent_record is None or parent_record.get("type") != expected_parent_type:
+            reasons.append("missing expected record family linkage")
+
+    repeatability = payload.get("repeatability") or {}
+    if repeatability.get("load_strategy") != "upsert-demo-records-by-stable-id":
+        reasons.append("non-repeatable seed load")
+    if repeatability.get("duplicate_behavior") != "replace-demo-record-family-only":
+        reasons.append("non-repeatable seed load")
+    if not isinstance(repeatability.get("idempotency_key"), str) or not repeatability.get("idempotency_key").strip():
+        reasons.append("non-repeatable seed load")
 
     reset = payload.get("reset") or {}
     if reset.get("deletes_production_records") is not False:
