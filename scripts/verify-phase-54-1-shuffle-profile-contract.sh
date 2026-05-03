@@ -31,6 +31,9 @@ required_phrases=(
   "This contract cites the Phase 51.6 authority-boundary negative-test policy in \`docs/phase-51-6-authority-boundary-negative-test-policy.md\`."
   "| Component | Required | Version pin | Image pin | Resource expectation | Ports | Volumes | Credential expectations | Authority boundary |"
   "| Component | Accepted version | Pin type | Known incompatible versions | Upgrade note |"
+  "- API URL: the reviewed internal API URL is \`http://shuffle-backend:5001\`; external access must be proxy-mediated and cannot imply direct backend exposure."
+  "- Callback URL: the reviewed AegisOps callback URL placeholder is \`<aegisops-shuffle-callback-url>\` and must bind to an AegisOps-owned callback route before runtime use."
+  "- Dependency expectations: Shuffle depends on reviewed Docker/Compose posture, proxy custody, trusted secret references, AegisOps approval/action-request records, and later workflow-catalog custody before delegated execution can run."
   "Run \`bash scripts/verify-phase-54-1-shuffle-profile-contract.sh\`."
   "Run \`bash scripts/test-verify-phase-54-1-shuffle-profile-contract.sh\`."
   "Run \`bash scripts/verify-publishable-path-hygiene.sh\`."
@@ -67,6 +70,7 @@ forbidden_claims=(
   "Phase 54.1 implements receipt normalization"
   "Phase 54.1 implements Shuffle fallback behavior"
   "Phase 54.1 implements Wazuh product profiles"
+  "Phase 54.1 claims Beta, RC, GA, commercial readiness, broad SOAR replacement readiness, Controlled Write default enablement, or Hard Write default enablement"
 )
 
 rendered_markdown_without_code_blocks() {

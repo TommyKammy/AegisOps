@@ -142,6 +142,30 @@ assert_fails_with \
   "${missing_api_callback_repo}" \
   "Missing Phase 54.1 Shuffle profile artifact term: api_url: http://shuffle-backend:5001"
 
+missing_api_contract_repo="${workdir}/missing-api-contract"
+create_valid_repo "${missing_api_contract_repo}"
+remove_text_from_contract "${missing_api_contract_repo}" \
+  "- API URL: the reviewed internal API URL is \`http://shuffle-backend:5001\`; external access must be proxy-mediated and cannot imply direct backend exposure."
+assert_fails_with \
+  "${missing_api_contract_repo}" \
+  "Missing Phase 54.1 Shuffle profile contract statement: - API URL: the reviewed internal API URL is \`http://shuffle-backend:5001\`; external access must be proxy-mediated and cannot imply direct backend exposure."
+
+missing_callback_contract_repo="${workdir}/missing-callback-contract"
+create_valid_repo "${missing_callback_contract_repo}"
+remove_text_from_contract "${missing_callback_contract_repo}" \
+  "- Callback URL: the reviewed AegisOps callback URL placeholder is \`<aegisops-shuffle-callback-url>\` and must bind to an AegisOps-owned callback route before runtime use."
+assert_fails_with \
+  "${missing_callback_contract_repo}" \
+  "Missing Phase 54.1 Shuffle profile contract statement: - Callback URL: the reviewed AegisOps callback URL placeholder is \`<aegisops-shuffle-callback-url>\` and must bind to an AegisOps-owned callback route before runtime use."
+
+missing_dependencies_contract_repo="${workdir}/missing-dependencies-contract"
+create_valid_repo "${missing_dependencies_contract_repo}"
+remove_text_from_contract "${missing_dependencies_contract_repo}" \
+  "- Dependency expectations: Shuffle depends on reviewed Docker/Compose posture, proxy custody, trusted secret references, AegisOps approval/action-request records, and later workflow-catalog custody before delegated execution can run."
+assert_fails_with \
+  "${missing_dependencies_contract_repo}" \
+  "Missing Phase 54.1 Shuffle profile contract statement: - Dependency expectations: Shuffle depends on reviewed Docker/Compose posture, proxy custody, trusted secret references, AegisOps approval/action-request records, and later workflow-catalog custody before delegated execution can run."
+
 placeholder_secret_repo="${workdir}/placeholder-secret"
 create_valid_repo "${placeholder_secret_repo}"
 printf '%s\n' "Placeholder Shuffle API keys are valid credentials." \
@@ -157,6 +181,14 @@ printf '%s\n' "Shuffle workflow success is AegisOps reconciliation truth." \
 assert_fails_with \
   "${workflow_truth_repo}" \
   "Forbidden Phase 54.1 Shuffle profile contract claim: Shuffle workflow success is AegisOps reconciliation truth"
+
+readiness_overclaim_repo="${workdir}/readiness-overclaim"
+create_valid_repo "${readiness_overclaim_repo}"
+printf '%s\n' "Phase 54.1 claims Beta, RC, GA, commercial readiness, broad SOAR replacement readiness, Controlled Write default enablement, or Hard Write default enablement." \
+  >>"${readiness_overclaim_repo}/docs/deployment/shuffle-smb-single-node-profile-contract.md"
+assert_fails_with \
+  "${readiness_overclaim_repo}" \
+  "Forbidden Phase 54.1 Shuffle profile contract claim: Phase 54.1 claims Beta, RC, GA, commercial readiness, broad SOAR replacement readiness, Controlled Write default enablement, or Hard Write default enablement"
 
 local_path_repo="${workdir}/local-path"
 create_valid_repo "${local_path_repo}"
