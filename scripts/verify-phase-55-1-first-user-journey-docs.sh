@@ -152,11 +152,41 @@ contains_forbidden_claim() {
   local pattern="$1"
 
   awk -v pattern="${pattern}" '
+    BEGIN {
+      pattern_lower = tolower(pattern)
+      bounded_pattern = "(^|[^[:alnum:]_-])(" pattern_lower ")([^[:alnum:]_-]|$)"
+    }
+
     {
       line = tolower($0)
-      negative_context = line ~ /(not|no |never|cannot|must not|does not|do not|fail|fails|forbidden|reject|rejected|outside|out of scope)/
-      if (!negative_context && line ~ tolower(pattern)) {
-        found = 1
+      remainder = line
+      base = 0
+
+      while (match(remainder, bounded_pattern)) {
+        match_start = base + RSTART
+        match_end = match_start + RLENGTH - 1
+
+        prefix_context = substr(line, 1, match_start - 1)
+        suffix_context = substr(line, match_end + 1, 96)
+        gsub(/^.*[.;!?]/, "", prefix_context)
+        gsub(/[.;!?].*$/, "", suffix_context)
+
+        negative_context = \
+          prefix_context ~ /(^|[[:space:][:punct:]])((do|does|must)[[:space:]]+not|never|cannot)[[:space:]]+(claim|state|say|treat|promote|present|describe)([[:space:][:punct:]]+[[:alnum:]_-]+){0,4}[[:space:][:punct:]]*$/ || \
+          prefix_context ~ /(^|[[:space:][:punct:]])(forbidden|reject|rejected|outside|out[[:space:]]+of[[:space:]]+scope)[[:space:][:punct:]]+(claim|statement|wording|overclaim|docs?)[[:space:][:punct:]]*$/ || \
+          prefix_context ~ /(^|[[:space:][:punct:]])(must|should)[[:space:]]+fail[[:space:]]+(when|if)[^.;!?]*$/ || \
+          suffix_context ~ /^[[:space:][:punct:]]+(is[[:space:]]+)?(a[[:space:]]+)?(forbidden|invalid|rejected|out[[:space:]]+of[[:space:]]+scope)[[:space:]]+(claim|statement|overclaim)/
+
+        if (!negative_context) {
+          found = 1
+        }
+
+        next_start = RSTART + RLENGTH
+        if (next_start <= RSTART) {
+          next_start = RSTART + 1
+        }
+        base += next_start - 1
+        remainder = substr(remainder, next_start)
       }
     }
     END { exit(found ? 0 : 1) }

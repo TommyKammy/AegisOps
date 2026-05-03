@@ -123,6 +123,20 @@ assert_fails_with \
   "${commercial_claim_repo}" \
   "Forbidden Phase 55.1 first-user journey docs claim: AegisOps (is )?commercially ready"
 
+nearby_negated_claim_repo="${workdir}/nearby-negated-claim"
+create_valid_repo "${nearby_negated_claim_repo}"
+printf '%s\n' "Do not claim Phase 56 is complete." \
+  >>"${nearby_negated_claim_repo}/docs/getting-started/first-user-journey.md"
+assert_passes "${nearby_negated_claim_repo}"
+
+unrelated_negation_claim_repo="${workdir}/unrelated-negation-claim"
+create_valid_repo "${unrelated_negation_claim_repo}"
+printf '%s\n' "This guide is not an architecture dump. Phase 56 is complete." \
+  >>"${unrelated_negation_claim_repo}/docs/getting-started/first-user-journey.md"
+assert_fails_with \
+  "${unrelated_negation_claim_repo}" \
+  "Forbidden Phase 55.1 first-user journey docs claim: Phase 56 (is )?(complete|completed|done)"
+
 missing_readme_link_repo="${workdir}/missing-readme-link"
 create_valid_repo "${missing_readme_link_repo}"
 printf '%s\n' "# AegisOps" >"${missing_readme_link_repo}/README.md"
