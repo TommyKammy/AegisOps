@@ -142,6 +142,14 @@ assert_fails_with \
   "${missing_api_callback_repo}" \
   "Mismatched Phase 54.1 Shuffle profile artifact field api_boundary.api_url: expected [http://shuffle-backend:5001] actual [<missing>]"
 
+missing_callback_url_repo="${workdir}/missing-callback-url"
+create_valid_repo "${missing_callback_url_repo}"
+perl -0pi -e 's/\n  callback_url: Callback URL placeholder <aegisops-shuffle-callback-url> requires later AegisOps route binding before runtime use\.//' \
+  "${missing_callback_url_repo}/docs/deployment/profiles/smb-single-node/shuffle/profile.yaml"
+assert_fails_with \
+  "${missing_callback_url_repo}" \
+  "Mismatched Phase 54.1 Shuffle profile artifact field profile_expectations.callback_url: expected [Callback URL placeholder <aegisops-shuffle-callback-url> requires later AegisOps route binding before runtime use.] actual [<missing>]"
+
 wrong_backend_ports_repo="${workdir}/wrong-backend-ports"
 create_valid_repo "${wrong_backend_ports_repo}"
 perl -0pi -e 's/      - 5001\/tcp internal backend API/      - 22\/tcp unrelated SSH port/' \
@@ -184,7 +192,7 @@ assert_fails_with \
 
 placeholder_secret_repo="${workdir}/placeholder-secret"
 create_valid_repo "${placeholder_secret_repo}"
-printf '%s\n' "Placeholder Shuffle API keys are valid credentials." \
+printf '%s\n' "Placeholder secrets are valid credentials." \
   >>"${placeholder_secret_repo}/docs/deployment/shuffle-smb-single-node-profile-contract.md"
 assert_fails_with \
   "${placeholder_secret_repo}" \
