@@ -166,5 +166,35 @@ export function registerOperatorRoutesFirstLoginChecklistTests() {
       });
       expect(screen.queryByText("State: completed")).not.toBeInTheDocument();
     });
+
+    it("fails closed when a checklist step is bound to the wrong backend record family", async () => {
+      const dependencies = createDefaultDependencies({
+        fetchFn: createAuthorizedFetch({
+          "/inspect-first-login-checklist": {
+            records: [
+              {
+                step_key: "stack_health",
+                state: "completed",
+                authority_source: "backend_authoritative_record",
+                authority_record_family: "case",
+                authority_record_id: "case-1",
+              },
+            ],
+            total_records: 1,
+          },
+        }),
+      });
+
+      renderOperatorRoute("/operator/first-login-checklist", dependencies);
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(
+            "Checklist step stack_health is bound to case, expected runtime_readiness.",
+          ),
+        ).toBeInTheDocument();
+      });
+      expect(screen.queryByText("State: completed")).not.toBeInTheDocument();
+    });
   });
 }

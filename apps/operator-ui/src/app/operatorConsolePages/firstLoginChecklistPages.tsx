@@ -204,6 +204,11 @@ function buildChecklistRows(records: UnknownRecord[]): ChecklistStepView[] {
         `Checklist step ${step.key} is missing its backend authority record binding.`,
       );
     }
+    if (authorityRecordFamily !== step.expectedRecordFamily) {
+      throw new OperatorDataProviderContractError(
+        `Checklist step ${step.key} is bound to ${authorityRecordFamily}, expected ${step.expectedRecordFamily}.`,
+      );
+    }
 
     return {
       ...step,
