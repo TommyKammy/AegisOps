@@ -42,6 +42,7 @@ Canonical cross-phase boundary reference:
 - [Phase 54.4 create_tracking_ticket template import contract](docs/deployment/shuffle-create-tracking-ticket-template-import-contract.md) defines the reviewed ticket-coordination template import contract, including request, approval, correlation, receipt, ticket pointer, ticket system identity, custody, reviewed-version, and ticket non-authority boundaries.
 - [Phase 54.5 Read/Notify template contracts](docs/deployment/shuffle-read-notify-template-contracts.md) define enrichment-only lookup, operator notification, and manual escalation request template contracts, including protected-target mutation refusal, workflow-state non-authority, and AegisOps approval-bypass refusal.
 - [Phase 54.8 manual fallback contract](docs/deployment/shuffle-manual-fallback-contract.md) defines fallback owner, operator note, affected template/action, expected evidence, and blocked/unavailable reason requirements for unavailable Shuffle, rejected execution, missing receipt, stale receipt, and mismatched receipt paths.
+- [Phase 54.9 Shuffle authority-boundary negative tests](docs/deployment/shuffle-authority-boundary-negative-tests.md) define focused fail-closed checks for direct ad-hoc Shuffle launch, Shuffle-success shortcut reconciliation, and ticket/callback/canvas/log case-truth shortcuts.
 - [Phase 53.2 Wazuh certificate and credential contract](docs/deployment/wazuh-certificate-credential-contract.md) defines certificate generation-wrapper posture, credential custody, default-credential rejection, rotation guidance, and no-live-secret validation for the Wazuh profile.
 - [Phase 53.3 Wazuh intake binding contract](docs/deployment/wazuh-manager-intake-binding-contract.md) defines the manager-to-AegisOps intake URL, reviewed proxy route, shared-secret custody reference, provenance fields, and analytic-signal admission boundary for Wazuh-origin events.
 - [Phase 53.5 Wazuh agent enrollment helper contract](docs/deployment/wazuh-agent-enrollment-helper-contract.md) defines the one-endpoint enrollment helper posture, prerequisites, rollback notes, safety warnings, and fleet-management exclusion for the Wazuh profile.
@@ -109,6 +110,8 @@ The Phase 53.7 Wazuh upgrade rollback evidence contract is defined by the [Phase
 The Phase 53.8 Wazuh authority-boundary negative tests are defined by the [Phase 53.8 Wazuh authority-boundary negative tests](docs/deployment/wazuh-authority-boundary-negative-tests.md).
 
 The Phase 53.9 closeout evaluation is defined by the [Phase 53.9 closeout evaluation](docs/phase-53-closeout-evaluation.md).
+
+The Phase 54.9 Shuffle authority-boundary negative tests are defined by the [Phase 54.9 Shuffle authority-boundary negative tests](docs/deployment/shuffle-authority-boundary-negative-tests.md).
 
 Wazuh detects, AegisOps decides, records, and reconciles, and Shuffle executes reviewed delegated routine work.
 
