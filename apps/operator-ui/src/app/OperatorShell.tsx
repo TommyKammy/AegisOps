@@ -8,13 +8,18 @@ import {
 } from "react";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import AutoAwesomeOutlinedIcon from "@mui/icons-material/AutoAwesomeOutlined";
+import AdminPanelSettingsOutlinedIcon from "@mui/icons-material/AdminPanelSettingsOutlined";
+import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
+import BuildCircleOutlinedIcon from "@mui/icons-material/BuildCircleOutlined";
 import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
+import HealthAndSafetyOutlinedIcon from "@mui/icons-material/HealthAndSafetyOutlined";
 import InboxOutlinedIcon from "@mui/icons-material/InboxOutlined";
 import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
 import HandshakeOutlinedIcon from "@mui/icons-material/HandshakeOutlined";
 import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
 import PlaylistAddCheckOutlinedIcon from "@mui/icons-material/PlaylistAddCheckOutlined";
 import RuleFolderOutlinedIcon from "@mui/icons-material/RuleFolderOutlined";
+import SensorsOutlinedIcon from "@mui/icons-material/SensorsOutlined";
 import TodayOutlinedIcon from "@mui/icons-material/TodayOutlined";
 import WarningAmberOutlinedIcon from "@mui/icons-material/WarningAmberOutlined";
 import {
@@ -117,6 +122,10 @@ function canInspectActionReviewDetail(operatorRoles: readonly string[]) {
   return hasReviewedOperatorRole(operatorRoles);
 }
 
+function canViewAdmin(operatorRoles: readonly string[]) {
+  return operatorRoles.some((role) => role.toLowerCase() === "platform_admin");
+}
+
 function buildOperatorShellPath(basePath: string, path = "") {
   if (!path) {
     return basePath;
@@ -145,6 +154,7 @@ function OperatorMenu({
   operatorRoles: readonly string[];
 }) {
   const showActionReview = canBrowseActionReview(operatorRoles);
+  const showAdmin = canViewAdmin(operatorRoles);
 
   return (
     <Menu>
@@ -160,6 +170,47 @@ function OperatorMenu({
         to={buildOperatorShellPath(basePath, "queue")}
       />
       <Menu.Item
+        leftIcon={<InsightsOutlinedIcon />}
+        primaryText="Cases"
+        to={buildOperatorShellPath(basePath, "cases")}
+      />
+      {showActionReview ? (
+        <Menu.Item
+          leftIcon={<GavelOutlinedIcon />}
+          primaryText="Actions"
+          to={buildOperatorShellPath(basePath, "actions")}
+        />
+      ) : null}
+      <Menu.Item
+        leftIcon={<SensorsOutlinedIcon />}
+        primaryText="Sources"
+        to={buildOperatorShellPath(basePath, "sources")}
+      />
+      {showActionReview ? (
+        <Menu.Item
+          leftIcon={<BuildCircleOutlinedIcon />}
+          primaryText="Automations"
+          to={buildOperatorShellPath(basePath, "automations")}
+        />
+      ) : null}
+      <Menu.Item
+        leftIcon={<AssessmentOutlinedIcon />}
+        primaryText="Reports"
+        to={buildOperatorShellPath(basePath, "reports")}
+      />
+      {showAdmin ? (
+        <Menu.Item
+          leftIcon={<AdminPanelSettingsOutlinedIcon />}
+          primaryText="Admin"
+          to={buildOperatorShellPath(basePath, "admin")}
+        />
+      ) : null}
+      <Menu.Item
+        leftIcon={<HealthAndSafetyOutlinedIcon />}
+        primaryText="Health"
+        to={buildOperatorShellPath(basePath, "health")}
+      />
+      <Menu.Item
         leftIcon={<HandshakeOutlinedIcon />}
         primaryText="Handoff"
         to={buildOperatorShellPath(basePath, "handoff")}
@@ -168,11 +219,6 @@ function OperatorMenu({
         leftIcon={<WarningAmberOutlinedIcon />}
         primaryText="Alerts"
         to={buildOperatorShellPath(basePath, "alerts")}
-      />
-      <Menu.Item
-        leftIcon={<InsightsOutlinedIcon />}
-        primaryText="Cases"
-        to={buildOperatorShellPath(basePath, "cases")}
       />
       <Menu.Item
         leftIcon={<LinkOutlinedIcon />}
@@ -377,12 +423,14 @@ function DeferredPageFallback() {
 function OperatorShellContent({
   basePath,
   canInspectActionReview,
+  canViewAdmin,
   canViewActionReview,
   operatorIdentity,
   operatorRoles,
 }: {
   basePath: string;
   canInspectActionReview: boolean;
+  canViewAdmin: boolean;
   canViewActionReview: boolean;
   operatorIdentity: string;
   operatorRoles: string[];
@@ -426,11 +474,40 @@ function OperatorShellContent({
           <Route element={<ProvenanceIndexPage />} path="provenance/:family" />
           <Route element={<ProvenancePage />} path="provenance/:family/:recordId" />
           <Route element={<ReadinessPage />} path="readiness" />
+          <Route element={<ReadinessPage />} path="health" />
+          <Route element={<ReadinessPage />} path="sources" />
+          <Route
+            element={
+              canViewActionReview ? (
+                <ReadinessPage />
+              ) : (
+                <Navigate
+                  replace
+                  to={buildOperatorShellPath(basePath, "forbidden")}
+                />
+              )
+            }
+            path="automations"
+          />
           <Route
             element={<FirstLoginChecklistPage />}
             path="first-login-checklist"
           />
           <Route element={<ReconciliationPage />} path="reconciliation" />
+          <Route element={<ReconciliationPage />} path="reports" />
+          <Route
+            element={
+              canViewAdmin ? (
+                <OverviewPage operatorRoles={operatorRoles} />
+              ) : (
+                <Navigate
+                  replace
+                  to={buildOperatorShellPath(basePath, "forbidden")}
+                />
+              )
+            }
+            path="admin"
+          />
           <Route element={<AssistantAdvisoryPage />} path="assistant" />
           <Route
             element={<AssistantAdvisoryPage />}
@@ -451,6 +528,22 @@ function OperatorShellContent({
               )
             }
             path="action-review"
+          />
+          <Route
+            element={
+              canViewActionReview ? (
+                <ActionReviewPage
+                  operatorIdentity={operatorIdentity}
+                  operatorRoles={operatorRoles}
+                />
+              ) : (
+                <Navigate
+                  replace
+                  to={buildOperatorShellPath(basePath, "forbidden")}
+                />
+              )
+            }
+            path="actions"
           />
           <Route
             element={
@@ -497,6 +590,7 @@ export function OperatorShell({
 }) {
   const canViewActionReview = canBrowseActionReview(operatorRoles);
   const canInspectActionReview = canInspectActionReviewDetail(operatorRoles);
+  const canViewAdminSurface = canViewAdmin(operatorRoles);
 
   return (
     <AdminContext
@@ -515,6 +609,7 @@ export function OperatorShell({
             <OperatorShellContent
               basePath={basePath}
               canInspectActionReview={canInspectActionReview}
+              canViewAdmin={canViewAdminSurface}
               canViewActionReview={canViewActionReview}
               operatorIdentity={operatorIdentity}
               operatorRoles={operatorRoles}

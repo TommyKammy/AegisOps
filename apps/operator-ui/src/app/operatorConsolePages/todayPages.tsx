@@ -9,11 +9,16 @@ import {
   EmptyState,
   ErrorState,
   formatLabel,
+  getPath,
   LoadingState,
   PageFrame,
+  QueryStateNotice,
   SectionCard,
   statusTone,
+  StatusStrip,
+  useOperatorList,
   useOperatorRecord,
+  ValueList,
 } from "./shared";
 
 const TODAY_LANES = [
@@ -260,6 +265,72 @@ function OperatorTaskCards({
   );
 }
 
+function WorkbenchHealthSummary() {
+  const filter = useMemo(() => ({}), []);
+  const sort = useMemo(
+    () => ({
+      field: "status",
+      order: "ASC" as const,
+    }),
+    [],
+  );
+  const { data, error, loading, refreshing } = useOperatorList(
+    "runtimeReadiness",
+    filter,
+    sort,
+    1,
+  );
+  const record = data?.[0] ?? null;
+  const reviewPathHealth = asRecord(getPath(record, "metrics.review_path_health"));
+  const sourceHealth = asRecord(getPath(record, "metrics.source_health"));
+  const automationHealth = asRecord(
+    getPath(record, "metrics.automation_substrate_health"),
+  );
+  const assistantHealth = asRecord(
+    getPath(record, "metrics.optional_extensions.extensions.assistant"),
+  );
+
+  return (
+    <SectionCard
+      subtitle="Backend readiness diagnostics are summarized for daily operator context only."
+      title="Workbench health summary"
+    >
+      {loading && !record ? <LoadingState label="Loading workbench health summary" /> : null}
+      {error && !record ? <ErrorState error={error} /> : null}
+      {record ? (
+        <Stack spacing={2}>
+          <QueryStateNotice error={error} refreshing={refreshing} />
+          <Alert severity="info" variant="outlined">
+            Health summary is backend-bound operator context only; it cannot
+            satisfy release, readiness, audit, approval, execution,
+            reconciliation, or closeout gates.
+          </Alert>
+          <StatusStrip
+            values={[
+              ["Status", asString(record.status)],
+              ["Review path", asString(reviewPathHealth?.overall_state)],
+              ["Source health", asString(sourceHealth?.overall_state)],
+              [
+                "Automation health",
+                asString(automationHealth?.overall_state),
+              ],
+              ["Assistant readiness", asString(assistantHealth?.readiness)],
+            ]}
+          />
+          <ValueList
+            entries={[
+              ["Tracked sources", sourceHealth?.tracked_sources],
+              ["Tracked automation surfaces", automationHealth?.tracked_surfaces],
+              ["Assistant availability", assistantHealth?.availability],
+              ["Assistant status source", assistantHealth?.reason],
+            ]}
+          />
+        </Stack>
+      ) : null}
+    </SectionCard>
+  );
+}
+
 function TodayLaneItem({
   item,
   lane,
@@ -389,6 +460,8 @@ export function TodayPage() {
           AI focus hints are advisory-only and cannot approve, close, execute,
           reconcile, gate, release, or mutate work.
         </Alert>
+
+        <WorkbenchHealthSummary />
 
         <OperatorTaskCards cards={buildOperatorTaskCards(lanes)} />
 

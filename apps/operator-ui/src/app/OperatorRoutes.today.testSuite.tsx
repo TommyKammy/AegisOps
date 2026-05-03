@@ -138,6 +138,16 @@ export function registerOperatorRoutesTodayTests() {
     it("renders normal work focus, stale and degraded badges, gaps, mismatches, approvals, and advisory AI focus", async () => {
       const dependencies = createDefaultDependencies({
         fetchFn: createAuthorizedFetch({
+          "/diagnostics/readiness": createReadinessResponse({
+            assistant: {
+              authority_mode: "advisory_only",
+              availability: "available",
+              enablement: "enabled",
+              mainline_dependency: "non_blocking",
+              readiness: "degraded",
+              reason: "reviewed_assistant_provider_lagging",
+            },
+          }),
           "/inspect-today-view": normalTodayProjection,
         }),
       });
@@ -163,6 +173,16 @@ export function registerOperatorRoutesTodayTests() {
       ).toBeInTheDocument();
       expect(
         screen.getByText("Review case-101 before lunch handoff"),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: "Workbench health summary" }),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Status: ready")).toBeInTheDocument();
+      expect(screen.getByText("Assistant readiness: degraded")).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "Health summary is backend-bound operator context only; it cannot satisfy release, readiness, audit, approval, execution, reconciliation, or closeout gates.",
+        ),
       ).toBeInTheDocument();
       expect(screen.getAllByText("Stale").length).toBeGreaterThan(0);
       expect(screen.getAllByText("Degraded").length).toBeGreaterThan(0);

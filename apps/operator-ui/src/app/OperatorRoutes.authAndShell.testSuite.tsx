@@ -203,6 +203,27 @@ export function registerOperatorRoutesAuthAndShellTests() {
     });
 
     expect(screen.queryByText(/action review/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Actions" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Automations" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Admin" })).toBeNull();
+    });
+
+    it("fails closed on analyst-only direct access to protected admin routes", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch({}),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/admin"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Access denied" }),
+      ).toBeInTheDocument();
+    });
     });
 
     it("shows action-review navigation for reviewed approver sessions", async () => {
@@ -261,7 +282,7 @@ export function registerOperatorRoutesAuthAndShellTests() {
     expect(screen.getAllByText(/action review/i).length).toBeGreaterThan(0);
     });
 
-    it("uses the configured base path for reviewed operator navigation links", async () => {
+    it("uses the configured base path for reviewed operator navigation links and Phase 56.7 workbench aliases", async () => {
     const dependencies = createDefaultDependencies({
       config: {
         basePath: "/reviewed-operator",
@@ -289,21 +310,55 @@ export function registerOperatorRoutesAuthAndShellTests() {
       ).toBeInTheDocument();
     });
 
-    expect(screen.getByRole("menuitem", { name: "Queue" })).toHaveAttribute(
-      "href",
-      expect.stringContaining("/reviewed-operator/queue"),
+    [
+      ["Today", "/reviewed-operator/today"],
+      ["Queue", "/reviewed-operator/queue"],
+      ["Cases", "/reviewed-operator/cases"],
+      ["Actions", "/reviewed-operator/actions"],
+      ["Sources", "/reviewed-operator/sources"],
+      ["Automations", "/reviewed-operator/automations"],
+      ["Reports", "/reviewed-operator/reports"],
+      ["Health", "/reviewed-operator/health"],
+    ].forEach(([label, href]) => {
+      expect(screen.getByRole("menuitem", { name: label })).toHaveAttribute(
+        "href",
+        expect.stringContaining(href),
+      );
+    });
+    expect(screen.queryByRole("menuitem", { name: "Admin" })).toBeNull();
+    });
+
+    it("shows Admin navigation only for backend canonical platform_admin sessions", async () => {
+    const dependencies = createDefaultDependencies({
+      config: {
+        basePath: "/reviewed-operator",
+      },
+      fetchFn: createAuthorizedFetch(
+        {},
+        {
+          identity: "platform.admin@example.com",
+          provider: "authentik",
+          roles: ["platform_admin"],
+          subject: "operator-44",
+        },
+      ),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/reviewed-operator"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
     );
-    expect(screen.getByRole("menuitem", { name: "Alerts" })).toHaveAttribute(
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Protected operator shell" }),
+      ).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole("menuitem", { name: "Admin" })).toHaveAttribute(
       "href",
-      expect.stringContaining("/reviewed-operator/alerts"),
-    );
-    expect(screen.getByRole("menuitem", { name: "Cases" })).toHaveAttribute(
-      "href",
-      expect.stringContaining("/reviewed-operator/cases"),
-    );
-    expect(screen.getByRole("menuitem", { name: "Action Review" })).toHaveAttribute(
-      "href",
-      expect.stringContaining("/reviewed-operator/action-review"),
+      expect.stringContaining("/reviewed-operator/admin"),
     );
     });
 
