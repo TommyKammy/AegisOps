@@ -4,10 +4,12 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Mapping, Protocol, Type, TypeVar
 
 from .models import (
+    ActionExecutionRecord,
     ActionRequestRecord,
     AlertRecord,
     AnalyticSignalRecord,
     AITraceRecord,
+    ApprovalDecisionRecord,
     CaseRecord,
     ControlPlaneRecord,
     EvidenceRecord,
@@ -822,6 +824,11 @@ class OperatorInspectionReadSurface:
             linked_evidence_records=context_snapshot.linked_evidence_records,
             linked_observation_records=observation_records,
         )
+        case_timeline_projection = self._build_case_timeline_projection(
+            case=case,
+            linked_alert_records=context_snapshot.linked_alert_records,
+            linked_evidence_records=context_snapshot.linked_evidence_records,
+        )
         return self._case_detail_snapshot_factory(
             read_only=True,
             case_id=case_id,
@@ -844,6 +851,7 @@ class OperatorInspectionReadSurface:
             linked_reconciliation_records=context_snapshot.linked_reconciliation_records,
             lifecycle_transitions=context_snapshot.lifecycle_transitions,
             cross_source_timeline=cross_source_timeline,
+            case_timeline_projection=case_timeline_projection,
             provenance_summary=provenance_summary,
             current_action_review=dict(action_reviews[0]) if action_reviews else None,
             action_reviews=action_reviews,
@@ -852,6 +860,455 @@ class OperatorInspectionReadSurface:
                 linked_alert_records=context_snapshot.linked_alert_records,
             ),
         )
+
+    def _build_case_timeline_projection(
+        self,
+        *,
+        case: CaseRecord,
+        linked_alert_records: tuple[dict[str, object], ...],
+        linked_evidence_records: tuple[dict[str, object], ...],
+    ) -> dict[str, object]:
+        alert_id = case.alert_id
+        directly_linked_alert = next(
+            (
+                record
+                for record in linked_alert_records
+                if isinstance(record.get("alert_id"), str)
+                and record.get("alert_id") == alert_id
+            ),
+            None,
+        )
+        evidence_records = tuple(
+            record
+            for record in linked_evidence_records
+            if record.get("case_id") == case.case_id or record.get("alert_id") == alert_id
+        )
+        ai_trace = self._latest_direct_case_ai_trace(
+            case=case,
+            evidence_records=evidence_records,
+        )
+        recommendation = self._latest_direct_case_recommendation(case)
+        action_request = self._latest_direct_case_action_request(case)
+        approval = (
+            self._service._store.get(
+                ApprovalDecisionRecord,
+                action_request.approval_decision_id,
+            )
+            if action_request is not None
+            and action_request.approval_decision_id is not None
+            else None
+        )
+        execution = (
+            self._latest_direct_action_execution(action_request)
+            if action_request is not None
+            else None
+        )
+        reconciliation = self._latest_direct_case_reconciliation(
+            case=case,
+            action_request=action_request,
+            execution=execution,
+        )
+        segments = (
+            self._case_wazuh_signal_timeline_segment(reconciliation),
+            self._case_timeline_segment(
+                segment="aegisops_alert",
+                authority_posture="authoritative_aegisops_record",
+                record_family="alert",
+                record_id=alert_id if directly_linked_alert is not None else None,
+                state="normal" if directly_linked_alert is not None else "missing",
+                incomplete_reason=(
+                    None
+                    if directly_linked_alert is not None
+                    else "missing_authoritative_alert"
+                ),
+                truth_source="aegisops_alert_record",
+            ),
+            self._case_evidence_timeline_segment(evidence_records),
+            self._case_timeline_segment(
+                segment="ai_summary",
+                authority_posture="subordinate_context",
+                record_family="ai_trace",
+                record_id=None if ai_trace is None else ai_trace.ai_trace_id,
+                state="normal" if ai_trace is not None else "missing",
+                incomplete_reason=(
+                    None if ai_trace is not None else "missing_direct_ai_trace_binding"
+                ),
+                truth_source="aegisops_case_record",
+            ),
+            self._case_timeline_segment(
+                segment="recommendation",
+                authority_posture="subordinate_context",
+                record_family="recommendation",
+                record_id=(
+                    None
+                    if recommendation is None
+                    else recommendation.recommendation_id
+                ),
+                state="normal" if recommendation is not None else "missing",
+                incomplete_reason=(
+                    None
+                    if recommendation is not None
+                    else "missing_direct_recommendation_binding"
+                ),
+                truth_source="aegisops_recommendation_record",
+            ),
+            self._case_timeline_segment(
+                segment="action_request",
+                authority_posture="authoritative_aegisops_record",
+                record_family="action_request",
+                record_id=(
+                    None if action_request is None else action_request.action_request_id
+                ),
+                state="normal" if action_request is not None else "missing",
+                incomplete_reason=(
+                    None
+                    if action_request is not None
+                    else "missing_direct_action_request_binding"
+                ),
+                truth_source="aegisops_action_request_record",
+            ),
+            self._case_timeline_segment(
+                segment="approval",
+                authority_posture="authoritative_aegisops_record",
+                record_family="approval_decision",
+                record_id=(
+                    None if approval is None else approval.approval_decision_id
+                ),
+                state="normal" if approval is not None else "missing",
+                incomplete_reason=(
+                    None if approval is not None else "missing_direct_approval_binding"
+                ),
+                truth_source="aegisops_approval_decision_record",
+            ),
+            self._case_shuffle_receipt_timeline_segment(execution),
+            self._case_reconciliation_timeline_segment(reconciliation),
+        )
+        return {
+            "contract_version": "phase-56-3",
+            "case_id": case.case_id,
+            "authority_boundary": (
+                "Case timeline projection is derived display context only; "
+                "AegisOps records remain authoritative for alert, case, evidence, "
+                "approval, action request, receipt, reconciliation, audit, gate, "
+                "release, and closeout truth."
+            ),
+            "projection_authority_allowed": False,
+            "inferred_linkage_allowed": False,
+            "segments": segments,
+        }
+
+    @staticmethod
+    def _case_timeline_segment(
+        *,
+        segment: str,
+        authority_posture: str,
+        record_family: str,
+        record_id: str | None,
+        state: str,
+        incomplete_reason: str | None,
+        truth_source: str,
+    ) -> dict[str, object]:
+        return {
+            "segment": segment,
+            "authority_posture": authority_posture,
+            "state": state,
+            "operator_visible": True,
+            "backend_record_binding": {
+                "record_family": record_family,
+                "record_id": record_id,
+                "direct_binding_required": True,
+            },
+            "truth_source": truth_source,
+            "projection_can_complete_segment": False,
+            "incomplete_reason": incomplete_reason,
+        }
+
+    def _case_wazuh_signal_timeline_segment(
+        self,
+        reconciliation: ReconciliationRecord | None,
+    ) -> dict[str, object]:
+        is_wazuh_origin = (
+            reconciliation is not None
+            and self._service._reconciliation_is_wazuh_origin(reconciliation)
+        )
+        if is_wazuh_origin:
+            state = "normal"
+            reason = None
+        elif reconciliation is None:
+            state = "missing"
+            reason = "missing_wazuh_signal_binding"
+        else:
+            state = "unsupported"
+            reason = "unsupported_wazuh_binding"
+        return self._case_timeline_segment(
+            segment="wazuh_signal",
+            authority_posture="subordinate_context",
+            record_family="reconciliation",
+            record_id=(
+                None if not is_wazuh_origin else reconciliation.reconciliation_id
+            ),
+            state=state,
+            incomplete_reason=reason,
+            truth_source="aegisops_alert_admission_record",
+        )
+
+    def _case_shuffle_receipt_timeline_segment(
+        self,
+        execution: ActionExecutionRecord | None,
+    ) -> dict[str, object]:
+        if execution is None:
+            state = "missing"
+            reason = "missing_direct_shuffle_receipt_binding"
+        elif execution.execution_surface_id == "shuffle":
+            state = "normal"
+            reason = None
+        else:
+            state = "unsupported"
+            reason = f"unsupported_execution_surface:{execution.execution_surface_id}"
+        return self._case_timeline_segment(
+            segment="shuffle_receipt",
+            authority_posture="subordinate_context",
+            record_family="action_execution",
+            record_id=None if execution is None else execution.action_execution_id,
+            state=state,
+            incomplete_reason=reason,
+            truth_source="aegisops_action_execution_record",
+        )
+
+    def _case_evidence_timeline_segment(
+        self,
+        evidence_records: tuple[dict[str, object], ...],
+    ) -> dict[str, object]:
+        first_record = evidence_records[0] if evidence_records else None
+        degraded_reason = next(
+            (
+                reason
+                for record in evidence_records
+                for reason in (self._case_evidence_degraded_reason(record),)
+                if reason is not None
+            ),
+            None,
+        )
+        if not evidence_records:
+            state = "missing"
+            reason = "missing_direct_evidence_binding"
+        elif degraded_reason is not None:
+            state = "degraded"
+            reason = degraded_reason
+        else:
+            state = "normal"
+            reason = None
+        return self._case_timeline_segment(
+            segment="evidence",
+            authority_posture="authoritative_aegisops_record",
+            record_family="evidence",
+            record_id=(
+                None
+                if first_record is None
+                else self._service._normalize_optional_string(
+                    first_record.get("evidence_id"),
+                    "evidence.evidence_id",
+                )
+            ),
+            state=state,
+            incomplete_reason=reason,
+            truth_source="aegisops_evidence_record",
+        )
+
+    @staticmethod
+    def _case_evidence_degraded_reason(record: Mapping[str, object]) -> str | None:
+        blocking_reason = record.get("blocking_reason")
+        if isinstance(blocking_reason, str) and blocking_reason:
+            return blocking_reason
+        provenance = record.get("provenance")
+        if not isinstance(provenance, Mapping) or not provenance:
+            return "missing_provenance"
+        required_fields = ("classification", "source_id", "timestamp", "reviewed_by")
+        if any(
+            not isinstance(provenance.get(field), str) or not provenance.get(field)
+            for field in required_fields
+        ):
+            return "missing_or_invalid_required_provenance_fields"
+        return None
+
+    def _case_reconciliation_timeline_segment(
+        self,
+        reconciliation: ReconciliationRecord | None,
+    ) -> dict[str, object]:
+        if reconciliation is None:
+            state = "missing"
+            reason = "missing_direct_reconciliation_binding"
+        elif reconciliation.lifecycle_state == "matched":
+            state = "normal"
+            reason = None
+        elif reconciliation.lifecycle_state in {"mismatched", "pending"}:
+            state = "mismatch"
+            reason = reconciliation.mismatch_summary or reconciliation.lifecycle_state
+        elif reconciliation.lifecycle_state == "stale":
+            state = "stale"
+            reason = reconciliation.mismatch_summary or "stale_reconciliation"
+        else:
+            state = "unsupported"
+            reason = reconciliation.lifecycle_state
+        return self._case_timeline_segment(
+            segment="reconciliation",
+            authority_posture="authoritative_aegisops_record",
+            record_family="reconciliation",
+            record_id=(
+                None if reconciliation is None else reconciliation.reconciliation_id
+            ),
+            state=state,
+            incomplete_reason=reason,
+            truth_source="aegisops_reconciliation_record",
+        )
+
+    def _latest_direct_case_ai_trace(
+        self,
+        *,
+        case: CaseRecord,
+        evidence_records: tuple[dict[str, object], ...],
+    ) -> AITraceRecord | None:
+        evidence_ids = {
+            evidence_id
+            for record in evidence_records
+            for evidence_id in (record.get("evidence_id"),)
+            if isinstance(evidence_id, str)
+        }
+        candidates = [
+            record
+            for record in self._service._store.list(AITraceRecord)
+            if self._ai_trace_directly_binds_case(
+                record,
+                case=case,
+                evidence_ids=evidence_ids,
+            )
+        ]
+        candidates.sort(
+            key=lambda record: (record.generated_at, record.ai_trace_id),
+            reverse=True,
+        )
+        return candidates[0] if candidates else None
+
+    @staticmethod
+    def _ai_trace_directly_binds_case(
+        record: AITraceRecord,
+        *,
+        case: CaseRecord,
+        evidence_ids: set[str],
+    ) -> bool:
+        linkage = record.subject_linkage
+        case_ids = linkage.get("case_ids")
+        alert_ids = linkage.get("alert_ids")
+        linked_evidence_ids = linkage.get("evidence_ids")
+        if isinstance(case_ids, (list, tuple)) and case.case_id in case_ids:
+            return True
+        if isinstance(alert_ids, (list, tuple)) and case.alert_id in alert_ids:
+            return True
+        if (
+            evidence_ids
+            and isinstance(linked_evidence_ids, (list, tuple))
+            and any(evidence_id in evidence_ids for evidence_id in linked_evidence_ids)
+        ):
+            return True
+        return False
+
+    def _latest_direct_case_recommendation(
+        self,
+        case: CaseRecord,
+    ) -> RecommendationRecord | None:
+        candidates = [
+            record
+            for record in self._service._store.list(RecommendationRecord)
+            if record.case_id == case.case_id or record.alert_id == case.alert_id
+        ]
+        candidates.sort(key=lambda record: record.recommendation_id, reverse=True)
+        return candidates[0] if candidates else None
+
+    def _latest_direct_case_action_request(
+        self,
+        case: CaseRecord,
+    ) -> ActionRequestRecord | None:
+        candidates = [
+            record
+            for record in self._service._store.list(ActionRequestRecord)
+            if record.case_id == case.case_id or record.alert_id == case.alert_id
+        ]
+        candidates.sort(
+            key=lambda record: (record.requested_at, record.action_request_id),
+            reverse=True,
+        )
+        return candidates[0] if candidates else None
+
+    def _latest_direct_action_execution(
+        self,
+        action_request: ActionRequestRecord,
+    ) -> ActionExecutionRecord | None:
+        candidates = [
+            record
+            for record in self._service._store.list(ActionExecutionRecord)
+            if record.action_request_id == action_request.action_request_id
+        ]
+        candidates.sort(
+            key=lambda record: (record.delegated_at, record.action_execution_id),
+            reverse=True,
+        )
+        return candidates[0] if candidates else None
+
+    def _latest_direct_case_reconciliation(
+        self,
+        *,
+        case: CaseRecord,
+        action_request: ActionRequestRecord | None,
+        execution: ActionExecutionRecord | None,
+    ) -> ReconciliationRecord | None:
+        candidates = [
+            record
+            for record in self._service._store.list(ReconciliationRecord)
+            if self._reconciliation_directly_binds_case(
+                record,
+                case=case,
+                action_request=action_request,
+                execution=execution,
+            )
+        ]
+        candidates.sort(
+            key=lambda record: (record.compared_at, record.reconciliation_id),
+            reverse=True,
+        )
+        return candidates[0] if candidates else None
+
+    @staticmethod
+    def _reconciliation_directly_binds_case(
+        record: ReconciliationRecord,
+        *,
+        case: CaseRecord,
+        action_request: ActionRequestRecord | None,
+        execution: ActionExecutionRecord | None,
+    ) -> bool:
+        if record.alert_id == case.alert_id or record.finding_id == case.finding_id:
+            return True
+        linkage = record.subject_linkage
+        case_ids = linkage.get("case_ids")
+        alert_ids = linkage.get("alert_ids")
+        action_request_ids = linkage.get("action_request_ids")
+        action_execution_ids = linkage.get("action_execution_ids")
+        if isinstance(case_ids, (list, tuple)) and case.case_id in case_ids:
+            return True
+        if isinstance(alert_ids, (list, tuple)) and case.alert_id in alert_ids:
+            return True
+        if (
+            action_request is not None
+            and isinstance(action_request_ids, (list, tuple))
+            and action_request.action_request_id in action_request_ids
+        ):
+            return True
+        if (
+            execution is not None
+            and isinstance(action_execution_ids, (list, tuple))
+            and execution.action_execution_id in action_execution_ids
+        ):
+            return True
+        return False
 
     def inspect_action_review_detail(self, action_request_id: str) -> object:
         action_request_id = self._service._require_non_empty_string(
