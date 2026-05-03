@@ -30,7 +30,8 @@ if [[ ! -s "${readme_path}" ]]; then
   exit 1
 fi
 
-require_phrase "${readme_path}" "[Phase 55.7 closeout evaluation](docs/phase-55-closeout-evaluation.md)" "README Phase 55.7 closeout link"
+require_phrase "${readme_path}" "- [Phase 55.7 closeout evaluation](docs/phase-55-closeout-evaluation.md)" "README canonical cross-phase boundary bullet"
+require_phrase "${readme_path}" "The Phase 55.7 closeout evaluation is defined by the [Phase 55.7 closeout evaluation](docs/phase-55-closeout-evaluation.md)." "README Product positioning reference"
 
 required_phrases=()
 while IFS= read -r phrase; do

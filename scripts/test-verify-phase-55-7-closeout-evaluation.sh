@@ -61,13 +61,21 @@ assert_fails_with \
   "${missing_doc_repo}" \
   "Missing Phase 55 closeout evaluation: docs/phase-55-closeout-evaluation.md"
 
-missing_readme_link_repo="${workdir}/missing-readme-link"
-copy_valid_repo "${missing_readme_link_repo}"
-perl -0pi -e 's/\[Phase 55\.7 closeout evaluation\]\(docs\/phase-55-closeout-evaluation\.md\)/Phase 55.7 closeout evaluation/g' \
-  "${missing_readme_link_repo}/README.md"
+missing_readme_canonical_bullet_repo="${workdir}/missing-readme-canonical-bullet"
+copy_valid_repo "${missing_readme_canonical_bullet_repo}"
+perl -0pi -e 's/- \[Phase 55\.7 closeout evaluation\]\(docs\/phase-55-closeout-evaluation\.md\)( records the guided first-user journey outcomes, subordinate authority posture, verifier evidence, accepted limitations, and bounded Phase 56\/57\/58\/60\/66 handoff\.)/- Phase 55.7 closeout evaluation$1/' \
+  "${missing_readme_canonical_bullet_repo}/README.md"
 assert_fails_with \
-  "${missing_readme_link_repo}" \
-  "Missing README Phase 55.7 closeout link: [Phase 55.7 closeout evaluation](docs/phase-55-closeout-evaluation.md)"
+  "${missing_readme_canonical_bullet_repo}" \
+  "Missing README canonical cross-phase boundary bullet: - [Phase 55.7 closeout evaluation](docs/phase-55-closeout-evaluation.md)"
+
+missing_readme_product_positioning_repo="${workdir}/missing-readme-product-positioning"
+copy_valid_repo "${missing_readme_product_positioning_repo}"
+perl -0pi -e 's/The Phase 55\.7 closeout evaluation is defined by the \[Phase 55\.7 closeout evaluation\]\(docs\/phase-55-closeout-evaluation\.md\)\./The Phase 55.7 closeout evaluation is defined by the Phase 55.7 closeout evaluation./' \
+  "${missing_readme_product_positioning_repo}/README.md"
+assert_fails_with \
+  "${missing_readme_product_positioning_repo}" \
+  "Missing README Product positioning reference: The Phase 55.7 closeout evaluation is defined by the [Phase 55.7 closeout evaluation](docs/phase-55-closeout-evaluation.md)."
 
 missing_authority_repo="${workdir}/missing-authority"
 copy_valid_repo "${missing_authority_repo}"
