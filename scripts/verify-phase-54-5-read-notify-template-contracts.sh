@@ -224,8 +224,17 @@ contains_placeholder_secret_valid_claim() {
 assert_no_workstation_local_paths() {
   local path="$1"
   local label="$2"
+  local mac_home_root
+  local unix_home_root
+  local windows_home_root
+  local workstation_path_pattern
 
-  if grep -En '(^|[^[:alnum:]_])(/Users/|/home/[^[:space:]/]+/|C:\\Users\\)' "${path}" >/dev/null; then
+  mac_home_root="/""Users/"
+  unix_home_root="/""home/"
+  windows_home_root="C:""\\\\Users\\\\"
+  workstation_path_pattern="(^|[^[:alnum:]_])(${mac_home_root}|${unix_home_root}[^[:space:]/]+/|${windows_home_root})"
+
+  if grep -En "${workstation_path_pattern}" "${path}" >/dev/null; then
     echo "Forbidden Phase 54.5 Read/Notify template contract: workstation-local absolute path detected in ${label}" >&2
     exit 1
   fi
