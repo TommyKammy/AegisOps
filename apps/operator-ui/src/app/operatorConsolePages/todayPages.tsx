@@ -5,6 +5,7 @@ import {
   asRecord,
   asRecordArray,
   asString,
+  AuditedRouteButton,
   EmptyState,
   ErrorState,
   formatLabel,
@@ -53,6 +54,15 @@ const TODAY_LANES = [
   },
 ] as const;
 
+interface OperatorTaskCardDefinition {
+  anchor: Record<string, unknown> | null;
+  boundary: string;
+  label: string;
+  route: string;
+  state: string | null;
+  title: string;
+}
+
 function TodayProjectionUnavailable() {
   return (
     <PageFrame
@@ -64,6 +74,189 @@ function TodayProjectionUnavailable() {
         to present it as current workflow guidance.
       </Alert>
     </PageFrame>
+  );
+}
+
+function anchorRoute(anchor: Record<string, unknown> | null) {
+  const family = asString(anchor?.family);
+  const id = asString(anchor?.id);
+
+  if (family === "alert" && id) {
+    return `/operator/alerts/${encodeURIComponent(id)}`;
+  }
+  if (family === "case" && id) {
+    return `/operator/cases/${encodeURIComponent(id)}`;
+  }
+  if (family === "action_review" && id) {
+    return `/operator/action-review/${encodeURIComponent(id)}`;
+  }
+  if (family === "reconciliation") {
+    return "/operator/reconciliation";
+  }
+  if (family === "source") {
+    return "/operator/readiness";
+  }
+
+  return "/operator/queue";
+}
+
+function firstLaneItem(
+  lanes: Record<string, unknown> | null,
+  lane: (typeof TODAY_LANES)[number]["key"],
+) {
+  return asRecordArray(lanes?.[lane])[0] ?? null;
+}
+
+function taskCardFromLane({
+  boundary,
+  fallbackRoute,
+  label,
+  lanes,
+  lane,
+  title,
+}: {
+  boundary: string;
+  fallbackRoute?: string;
+  label: string;
+  lanes: Record<string, unknown> | null;
+  lane: (typeof TODAY_LANES)[number]["key"];
+  title: string;
+}): OperatorTaskCardDefinition {
+  const item = firstLaneItem(lanes, lane);
+  const anchor = asRecord(item?.authoritative_record);
+
+  return {
+    anchor,
+    boundary,
+    label,
+    route: item ? anchorRoute(anchor) : (fallbackRoute ?? "/operator/queue"),
+    state: asString(item?.state),
+    title,
+  };
+}
+
+function buildOperatorTaskCards(
+  lanes: Record<string, unknown> | null,
+): OperatorTaskCardDefinition[] {
+  return [
+    taskCardFromLane({
+      boundary: "Open the anchored alert or case and use only reviewed casework surfaces.",
+      label: "Review stale work",
+      lane: "stale_work",
+      lanes,
+      title: "Review stale work",
+    }),
+    taskCardFromLane({
+      boundary: "Open the existing action-review route; approval remains backend-authoritative.",
+      label: "Inspect pending approvals",
+      lane: "pending_approvals",
+      lanes,
+      title: "Inspect pending approvals",
+    }),
+    taskCardFromLane({
+      boundary: "Open the anchored case; any evidence update must use reviewed write paths.",
+      label: "Resolve evidence gaps",
+      lane: "evidence_gaps",
+      lanes,
+      title: "Resolve evidence gaps",
+    }),
+    taskCardFromLane({
+      boundary: "Open readiness; source-health posture stays subordinate context.",
+      fallbackRoute: "/operator/readiness",
+      label: "Check degraded sources",
+      lane: "degraded_sources",
+      lanes,
+      title: "Check degraded sources",
+    }),
+    taskCardFromLane({
+      boundary: "Open reconciliation visibility; mismatch state is not resolved by display.",
+      fallbackRoute: "/operator/reconciliation",
+      label: "Inspect mismatches",
+      lane: "reconciliation_mismatches",
+      lanes,
+      title: "Inspect mismatches",
+    }),
+    {
+      anchor: null,
+      boundary:
+        "Open the reviewed queue for handoff context; handoff notes cannot close cases or override lifecycle state.",
+      label: "Prepare handoff",
+      route: "/operator/queue",
+      state: null,
+      title: "Prepare handoff",
+    },
+  ];
+}
+
+function OperatorTaskCards({
+  cards,
+}: {
+  cards: OperatorTaskCardDefinition[];
+}) {
+  return (
+    <SectionCard
+      subtitle="Repeated daily tasks are route launchers and guidance only; they do not add a write authority surface."
+      title="Operator task cards"
+    >
+      <Stack spacing={2}>
+        <Alert severity="info" variant="outlined">
+          Task cards launch reviewed routes or bounded write surfaces; they
+          cannot approve, execute, reconcile, close, or treat UI state as task
+          completion truth.
+        </Alert>
+        <Grid container spacing={2}>
+          {cards.map((card) => {
+            const anchorFamily = asString(card.anchor?.family);
+            const anchorId = asString(card.anchor?.id);
+
+            return (
+              <Grid key={card.label} size={{ xs: 12, md: 6, xl: 4 }}>
+                <Stack
+                  spacing={1.25}
+                  sx={{
+                    border: "1px solid",
+                    borderColor: "divider",
+                    borderRadius: 1,
+                    height: "100%",
+                    p: 1.5,
+                  }}
+                >
+                  <Stack direction="row" flexWrap="wrap" gap={1}>
+                    {card.state ? (
+                      <Chip
+                        color={statusTone(card.state)}
+                        label={formatLabel(card.state)}
+                        size="small"
+                        variant="filled"
+                      />
+                    ) : null}
+                    <Chip
+                      color="warning"
+                      label="State remains unresolved"
+                      size="small"
+                      variant="outlined"
+                    />
+                  </Stack>
+                  <Typography variant="subtitle2">{card.title}</Typography>
+                  <Typography color="text.secondary" variant="body2">
+                    {card.boundary}
+                  </Typography>
+                  <Typography color="text.secondary" variant="caption">
+                    Anchor: {anchorFamily ?? "daily_queue"}:
+                    {anchorId ?? "reviewed_handoff"}
+                  </Typography>
+                  <Stack direction="row">
+                    <AuditedRouteButton label={card.label} to={card.route}>
+                      {card.label}
+                    </AuditedRouteButton>
+                  </Stack>
+                </Stack>
+              </Grid>
+            );
+          })}
+        </Grid>
+      </Stack>
+    </SectionCard>
   );
 }
 
@@ -196,6 +389,8 @@ export function TodayPage() {
           AI focus hints are advisory-only and cannot approve, close, execute,
           reconcile, gate, release, or mutate work.
         </Alert>
+
+        <OperatorTaskCards cards={buildOperatorTaskCards(lanes)} />
 
         {totalItems === 0 ? (
           <SectionCard
