@@ -1,0 +1,104 @@
+{
+  "report_type": "first-user-demo-report-export",
+  "mode": "demo",
+  "labels": [
+    "demo-only",
+    "first-user-rehearsal",
+    "not-production-truth"
+  ],
+  "demo_evidence_only": true,
+  "commercial_report_breadth_claim": false,
+  "audit_export_completeness_claim": false,
+  "rc_or_ga_readiness_claim": false,
+  "production_truth_claim": false,
+  "summary": "Demo-only summary of the directly linked first-user journey records. This is not production truth.",
+  "authority_boundary": [],
+  "references": {
+    "demo_alert": {
+      "available": true,
+      "record_id": "demo-alert-ssh-auth-failure",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "secret_redaction": "no-secret-values-exported",
+      "source_family": "demo-seed-authentication",
+      "detection_summary": "SSH authentication failure sample alert.",
+      "provenance_pointer": "demo-seed-bundle:alert/demo-alert-ssh-auth-failure"
+    },
+    "demo_case": {
+      "available": true,
+      "record_id": "demo-case-ssh-auth-failure",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "secret_redaction": "no-secret-values-exported",
+      "status": "demo-open",
+      "alert_binding": "demo-alert-ssh-auth-failure"
+    },
+    "demo_evidence": {
+      "available": true,
+      "record_id": "demo-evidence-auth-log-summary",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "secret_redaction": "no-secret-values-exported",
+      "evidence_summary": "Bound demo evidence summary for the sample case.",
+      "record_binding": "demo-case-ssh-auth-failure"
+    },
+    "demo_recommendation": {
+      "available": true,
+      "record_id": "demo-recommendation-lock-account",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "secret_redaction": "no-secret-values-exported",
+      "advisory_summary": "Advisory demo recommendation for operator review.",
+      "linked_evidence": "demo-evidence-auth-log-summary"
+    },
+    "demo_action_review": {
+      "available": true,
+      "record_id": "demo-action-review-lock-account",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "secret_redaction": "no-secret-values-exported",
+      "decision_boundary": "operator-approval-required",
+      "approval_requirement": "demo-operator-approval",
+      "protected_target_summary": "demo account lock target"
+    },
+    "demo_execution_receipt": {
+      "available": true,
+      "record_id": "demo-execution-receipt-lock-account",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "secret_redaction": "no-secret-values-exported",
+      "execution_outcome_summary": "Demo action receipt captured for the approved request.",
+      "action_binding": "demo-action-review-lock-account"
+    },
+    "demo_reconciliation": {
+      "available": true,
+      "record_id": "demo-reconciliation-lock-account",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "secret_redaction": "no-secret-values-exported",
+      "outcome_summary": "Demo reconciliation compared the receipt with the approved request.",
+      "receipt_binding": "demo-execution-receipt-lock-account"
+    }
+  }
+}

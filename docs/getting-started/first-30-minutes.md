@@ -39,7 +39,7 @@ Stop and treat the gap as a follow-up if a required control-plane record, receip
 
 This first session does not prove production setup, daily SOC workbench completeness, supportability operations, SOAR breadth, Beta readiness, RC readiness, GA readiness, or commercial readiness.
 
-It also does not implement first-login checklist UI, demo seed records, reset behavior, report export behavior, runtime setup wizard behavior, supportability commands, or broad daily SOC workflows.
+It also does not implement first-login checklist UI, demo seed records, reset behavior, commercial report breadth, audit export administration, production report templates, runtime setup wizard behavior, supportability commands, or broad daily SOC workflows.
 
 ## 5. Validation
 
