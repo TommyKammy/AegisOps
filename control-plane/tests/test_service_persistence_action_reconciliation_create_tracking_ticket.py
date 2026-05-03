@@ -15,6 +15,74 @@ from _service_persistence_support import (
 )
 
 class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenceTestBase):
+    def _build_phase54_create_tracking_ticket_context(
+        self,
+        *,
+        suffix: str,
+        binding: dict[str, object],
+    ) -> tuple[object, object, dict[str, object], support.datetime]:
+        store, _ = support.make_store()
+        service = support.AegisOpsControlPlaneService(
+            support.RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = support.datetime(2026, 5, 3, 4, 0, tzinfo=support.timezone.utc)
+        delegated_at = support.datetime(2026, 5, 3, 4, 5, tzinfo=support.timezone.utc)
+        approved_target_scope = {
+            "case_id": f"case-tracking-{suffix}",
+            "alert_id": f"alert-tracking-{suffix}",
+            "finding_id": f"finding-tracking-{suffix}",
+            "coordination_reference_id": f"coord-ref-{suffix}",
+            "coordination_target_type": "zammad",
+        }
+        approved_payload = support._phase26_create_tracking_ticket_payload(
+            case_id=f"case-tracking-{suffix}",
+            alert_id=f"alert-tracking-{suffix}",
+            finding_id=f"finding-tracking-{suffix}",
+            coordination_reference_id=f"coord-ref-{suffix}",
+        )
+        approved_payload["shuffle_delegation_binding"] = binding
+        payload_hash = support._approved_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
+        service.persist_record(
+            support.ApprovalDecisionRecord(
+                approval_decision_id=f"approval-create-ticket-{suffix}",
+                action_request_id=f"action-request-create-ticket-{suffix}",
+                approver_identities=("approver-001",),
+                target_snapshot=approved_target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+            )
+        )
+        service.persist_record(
+            support.ActionRequestRecord(
+                action_request_id=f"action-request-create-ticket-{suffix}",
+                approval_decision_id=f"approval-create-ticket-{suffix}",
+                case_id=f"case-tracking-{suffix}",
+                alert_id=f"alert-tracking-{suffix}",
+                finding_id=f"finding-tracking-{suffix}",
+                idempotency_key=f"idempotency-create-ticket-{suffix}",
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=None,
+                lifecycle_state="approved",
+                requested_payload=approved_payload,
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "approval",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+        return store, service, approved_payload, delegated_at
+
     def test_service_delegates_approved_create_tracking_ticket_through_shuffle(
         self,
     ) -> None:
@@ -38,6 +106,13 @@ class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenc
             finding_id="finding-tracking-001",
             coordination_reference_id="coord-ref-create-001",
         )
+        approved_payload["shuffle_delegation_binding"] = {
+            "workflow_id": "create_tracking_ticket",
+            "workflow_version_id": "create_tracking_ticket-v1-reviewed-2026-05-03",
+            "correlation_id": "shuffle-correlation-create-ticket-001",
+            "expected_execution_receipt_id": "shuffle-receipt-create-ticket-001",
+            "requested_scope": approved_target_scope,
+        }
         payload_hash = support._approved_binding_hash(
             target_scope=approved_target_scope,
             approved_payload=approved_payload,
@@ -101,10 +176,29 @@ class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenc
             execution.provenance["downstream_binding"]["coordination_target_type"],
             "zammad",
         )
-        self.assertTrue(
-            execution.provenance["downstream_binding"][
-                "external_receipt_id"
-            ].startswith("shuffle-receipt-delegation-")
+        self.assertEqual(
+            execution.provenance["downstream_binding"]["workflow_id"],
+            "create_tracking_ticket",
+        )
+        self.assertEqual(
+            execution.provenance["downstream_binding"]["workflow_version_id"],
+            "create_tracking_ticket-v1-reviewed-2026-05-03",
+        )
+        self.assertEqual(
+            execution.provenance["downstream_binding"]["correlation_id"],
+            "shuffle-correlation-create-ticket-001",
+        )
+        self.assertEqual(
+            execution.provenance["downstream_binding"]["external_receipt_id"],
+            "shuffle-receipt-create-ticket-001",
+        )
+        self.assertEqual(
+            execution.provenance["downstream_binding"]["expected_execution_receipt_id"],
+            "shuffle-receipt-create-ticket-001",
+        )
+        self.assertEqual(
+            execution.provenance["downstream_binding"]["requested_scope"],
+            approved_target_scope,
         )
         self.assertTrue(
             execution.provenance["downstream_binding"][
@@ -116,6 +210,171 @@ class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenc
                 "ticket_reference_url"
             ].startswith("https://tickets.example.test/#ticket/zammad-ticket-delegation-")
         )
+
+    def test_service_fail_closes_unknown_shuffle_template_version_before_dispatch(
+        self,
+    ) -> None:
+        store, _ = support.make_store()
+        service = support.AegisOpsControlPlaneService(
+            support.RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        requested_at = support.datetime(2026, 5, 3, 4, 0, tzinfo=support.timezone.utc)
+        delegated_at = support.datetime(2026, 5, 3, 4, 5, tzinfo=support.timezone.utc)
+        approved_target_scope = {
+            "case_id": "case-tracking-template-version-001",
+            "alert_id": "alert-tracking-template-version-001",
+            "finding_id": "finding-tracking-template-version-001",
+            "coordination_reference_id": "coord-ref-template-version-001",
+            "coordination_target_type": "zammad",
+        }
+        approved_payload = support._phase26_create_tracking_ticket_payload(
+            case_id="case-tracking-template-version-001",
+            alert_id="alert-tracking-template-version-001",
+            finding_id="finding-tracking-template-version-001",
+            coordination_reference_id="coord-ref-template-version-001",
+        )
+        approved_payload["shuffle_delegation_binding"] = {
+            "workflow_id": "create_tracking_ticket",
+            "workflow_version_id": "create_tracking_ticket-v2-unreviewed-2026-05-03",
+            "correlation_id": "shuffle-correlation-template-version-001",
+            "expected_execution_receipt_id": (
+                "shuffle-receipt-template-version-001"
+            ),
+            "requested_scope": approved_target_scope,
+        }
+        payload_hash = support._approved_binding_hash(
+            target_scope=approved_target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+        )
+        service.persist_record(
+            support.ApprovalDecisionRecord(
+                approval_decision_id="approval-create-ticket-template-version-001",
+                action_request_id="action-request-create-ticket-template-version-001",
+                approver_identities=("approver-001",),
+                target_snapshot=approved_target_scope,
+                payload_hash=payload_hash,
+                decided_at=requested_at,
+                lifecycle_state="approved",
+            )
+        )
+        service.persist_record(
+            support.ActionRequestRecord(
+                action_request_id="action-request-create-ticket-template-version-001",
+                approval_decision_id="approval-create-ticket-template-version-001",
+                case_id="case-tracking-template-version-001",
+                alert_id="alert-tracking-template-version-001",
+                finding_id="finding-tracking-template-version-001",
+                idempotency_key="idempotency-create-ticket-template-version-001",
+                target_scope=approved_target_scope,
+                payload_hash=payload_hash,
+                requested_at=requested_at,
+                expires_at=None,
+                lifecycle_state="approved",
+                requested_payload=approved_payload,
+                policy_evaluation={
+                    "approval_requirement": "human_required",
+                    "routing_target": "approval",
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                },
+            )
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "shuffle delegation binding uses an unknown reviewed workflow template version",
+        ):
+            service.delegate_approved_action_to_shuffle(
+                action_request_id="action-request-create-ticket-template-version-001",
+                approved_payload=approved_payload,
+                delegated_at=delegated_at,
+                delegation_issuer="control-plane-service",
+            )
+
+        self.assertEqual(store.list(support.ActionExecutionRecord), ())
+
+    def test_service_fail_closes_missing_shuffle_correlation_before_dispatch(
+        self,
+    ) -> None:
+        store, service, approved_payload, delegated_at = (
+            self._build_phase54_create_tracking_ticket_context(
+                suffix="missing-correlation-001",
+                binding={
+                    "workflow_id": "create_tracking_ticket",
+                    "workflow_version_id": (
+                        "create_tracking_ticket-v1-reviewed-2026-05-03"
+                    ),
+                    "correlation_id": "",
+                    "expected_execution_receipt_id": (
+                        "shuffle-receipt-missing-correlation-001"
+                    ),
+                    "requested_scope": {
+                        "case_id": "case-tracking-missing-correlation-001",
+                        "alert_id": "alert-tracking-missing-correlation-001",
+                        "finding_id": "finding-tracking-missing-correlation-001",
+                        "coordination_reference_id": (
+                            "coord-ref-missing-correlation-001"
+                        ),
+                        "coordination_target_type": "zammad",
+                    },
+                },
+            )
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "shuffle_delegation_binding.correlation_id",
+        ):
+            service.delegate_approved_action_to_shuffle(
+                action_request_id="action-request-create-ticket-missing-correlation-001",
+                approved_payload=approved_payload,
+                delegated_at=delegated_at,
+                delegation_issuer="control-plane-service",
+            )
+
+        self.assertEqual(store.list(support.ActionExecutionRecord), ())
+
+    def test_service_fail_closes_shuffle_requested_scope_mismatch_before_dispatch(
+        self,
+    ) -> None:
+        store, service, approved_payload, delegated_at = (
+            self._build_phase54_create_tracking_ticket_context(
+                suffix="scope-mismatch-001",
+                binding={
+                    "workflow_id": "create_tracking_ticket",
+                    "workflow_version_id": (
+                        "create_tracking_ticket-v1-reviewed-2026-05-03"
+                    ),
+                    "correlation_id": "shuffle-correlation-scope-mismatch-001",
+                    "expected_execution_receipt_id": (
+                        "shuffle-receipt-scope-mismatch-001"
+                    ),
+                    "requested_scope": {
+                        "case_id": "case-tracking-scope-mismatch-001",
+                        "alert_id": "alert-tracking-scope-mismatch-001",
+                        "finding_id": "finding-tracking-scope-mismatch-001",
+                        "coordination_reference_id": "coord-ref-drifted-001",
+                        "coordination_target_type": "zammad",
+                    },
+                },
+            )
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "shuffle delegation binding does not match approved action request scope",
+        ):
+            service.delegate_approved_action_to_shuffle(
+                action_request_id="action-request-create-ticket-scope-mismatch-001",
+                approved_payload=approved_payload,
+                delegated_at=delegated_at,
+                delegation_issuer="control-plane-service",
+            )
+
+        self.assertEqual(store.list(support.ActionExecutionRecord), ())
 
     def test_service_reuses_create_tracking_ticket_receipt_on_duplicate_delegation(
         self,

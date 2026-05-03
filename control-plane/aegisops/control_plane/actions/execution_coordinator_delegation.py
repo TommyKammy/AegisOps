@@ -21,6 +21,12 @@ from ..models import (
 )
 
 
+_REVIEWED_SHUFFLE_WORKFLOW_VERSIONS = {
+    "create_tracking_ticket": "create_tracking_ticket-v1-reviewed-2026-05-03",
+    "notify_identity_owner": "notify_identity_owner-v1-reviewed-2026-05-03",
+}
+
+
 class ApprovedActionDelegationCoordinator:
     def __init__(self, service: ExecutionCoordinatorServiceDependencies) -> None:
         self._service = service
@@ -144,7 +150,10 @@ class ApprovedActionDelegationCoordinator:
                         )
                     return existing
             if execution_surface_id == "shuffle":
-                self._require_reviewed_shuffle_payload(normalized_payload)
+                self._require_reviewed_shuffle_payload(
+                    action_request=action_request,
+                    approved_payload=normalized_payload,
+                )
 
             delegation_id = self._service._next_identifier("delegation")
             predispatch_execution = self._service.persist_record(
@@ -267,6 +276,8 @@ class ApprovedActionDelegationCoordinator:
 
     def _require_reviewed_shuffle_payload(
         self,
+        *,
+        action_request: ActionRequestRecord,
         approved_payload: Mapping[str, object],
     ) -> None:
         action_type = approved_payload.get("action_type")
@@ -281,8 +292,7 @@ class ApprovedActionDelegationCoordinator:
                     raise ValueError(
                         "approved action is outside the reviewed Phase 20 Shuffle delegation scope"
                     )
-            return
-        if action_type == "create_tracking_ticket":
+        elif action_type == "create_tracking_ticket":
             for field_name in (
                 "case_id",
                 "coordination_reference_id",
@@ -304,10 +314,68 @@ class ApprovedActionDelegationCoordinator:
                 raise ValueError(
                     "approved action is outside the reviewed Phase 26 Shuffle delegation scope"
                 )
-            return
-        raise ValueError(
-            "approved action is outside the reviewed Phase 20 Shuffle delegation scope"
+        else:
+            raise ValueError(
+                "approved action is outside the reviewed Phase 20 Shuffle delegation scope"
+            )
+
+        self._require_shuffle_delegation_binding(
+            action_request=action_request,
+            approved_payload=approved_payload,
         )
+
+    def _require_shuffle_delegation_binding(
+        self,
+        *,
+        action_request: ActionRequestRecord,
+        approved_payload: Mapping[str, object],
+    ) -> Mapping[str, object] | None:
+        binding = approved_payload.get("shuffle_delegation_binding")
+        if binding is None:
+            return None
+        if not isinstance(binding, Mapping):
+            raise ValueError("shuffle delegation binding is malformed")
+
+        action_type = self._service._require_non_empty_string(
+            approved_payload.get("action_type"),
+            "approved_payload.action_type",
+        )
+        workflow_id = self._service._require_non_empty_string(
+            binding.get("workflow_id"),
+            "shuffle_delegation_binding.workflow_id",
+        )
+        workflow_version_id = self._service._require_non_empty_string(
+            binding.get("workflow_version_id"),
+            "shuffle_delegation_binding.workflow_version_id",
+        )
+        self._service._require_non_empty_string(
+            binding.get("correlation_id"),
+            "shuffle_delegation_binding.correlation_id",
+        )
+        self._service._require_non_empty_string(
+            binding.get("expected_execution_receipt_id"),
+            "shuffle_delegation_binding.expected_execution_receipt_id",
+        )
+        requested_scope = binding.get("requested_scope")
+        if not isinstance(requested_scope, Mapping):
+            raise ValueError("shuffle delegation binding requested_scope is malformed")
+
+        if workflow_id != action_type:
+            raise ValueError(
+                "shuffle delegation binding does not match approved action request scope"
+            )
+        if (
+            _REVIEWED_SHUFFLE_WORKFLOW_VERSIONS.get(workflow_id)
+            != workflow_version_id
+        ):
+            raise ValueError(
+                "shuffle delegation binding uses an unknown reviewed workflow template version"
+            )
+        if requested_scope != action_request.target_scope:
+            raise ValueError(
+                "shuffle delegation binding does not match approved action request scope"
+            )
+        return binding
 
     def _require_exact_adapter_receipt_binding(
         self,
@@ -333,6 +401,48 @@ class ApprovedActionDelegationCoordinator:
             raise ValueError(
                 "shuffle receipt does not match approved delegation binding"
             )
+        if execution_surface_id == "shuffle":
+            delegation_binding = self._require_shuffle_delegation_binding(
+                action_request=action_request,
+                approved_payload=action_request.requested_payload,
+            )
+            if delegation_binding is not None:
+                if any(
+                    (
+                        getattr(receipt, "action_request_id", None)
+                        != action_request.action_request_id,
+                        self._require_receipt_string_attribute(
+                            receipt,
+                            "workflow_id",
+                        )
+                        != delegation_binding["workflow_id"],
+                        self._require_receipt_string_attribute(
+                            receipt,
+                            "workflow_version_id",
+                        )
+                        != delegation_binding["workflow_version_id"],
+                        self._require_receipt_string_attribute(
+                            receipt,
+                            "correlation_id",
+                        )
+                        != delegation_binding["correlation_id"],
+                        self._require_receipt_string_attribute(
+                            receipt,
+                            "expected_execution_receipt_id",
+                        )
+                        != delegation_binding["expected_execution_receipt_id"],
+                        self._require_receipt_string_attribute(
+                            receipt,
+                            "external_receipt_id",
+                        )
+                        != delegation_binding["expected_execution_receipt_id"],
+                        getattr(receipt, "requested_scope", None)
+                        != delegation_binding["requested_scope"],
+                    )
+                ):
+                    raise ValueError(
+                        "shuffle receipt does not match approved delegation binding"
+                    )
         if (
             execution_surface_id == "shuffle"
             and action_request.requested_payload.get("action_type")
@@ -397,6 +507,32 @@ class ApprovedActionDelegationCoordinator:
                     "payload_hash",
                 ),
             }
+            delegation_binding = execution.approved_payload.get(
+                "shuffle_delegation_binding"
+            )
+            if isinstance(delegation_binding, Mapping):
+                provenance["downstream_binding"].update(
+                    {
+                        "action_request_id": execution.action_request_id,
+                        "workflow_id": self._require_receipt_string_attribute(
+                            receipt,
+                            "workflow_id",
+                        ),
+                        "workflow_version_id": self._require_receipt_string_attribute(
+                            receipt,
+                            "workflow_version_id",
+                        ),
+                        "correlation_id": self._require_receipt_string_attribute(
+                            receipt,
+                            "correlation_id",
+                        ),
+                        "expected_execution_receipt_id": self._require_receipt_string_attribute(
+                            receipt,
+                            "expected_execution_receipt_id",
+                        ),
+                        "requested_scope": dict(delegation_binding["requested_scope"]),
+                    }
+                )
             if execution.approved_payload.get("action_type") == "create_tracking_ticket":
                 provenance["downstream_binding"].update(
                     {
