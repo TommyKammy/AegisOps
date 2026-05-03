@@ -1,0 +1,117 @@
+profile_id: smb-single-node
+today_view_projection_contract_version: 2026-05-04
+status: accepted-contract
+related_issues:
+  - 1190
+  - 1191
+projection_owner: aegisops-control-plane
+workflow_truth_source: aegisops-record-chain-only
+authority_boundary: Today view projection is subordinate backend summary context only; priority, stale work, pending approvals, degraded sources, reconciliation mismatches, evidence gaps, AI-suggested focus, UI cache, Wazuh, Shuffle, tickets, reports, and health summaries cannot close, approve, execute, reconcile, release, gate, or mutate authoritative AegisOps records.
+authority_mutation_allowed: false
+cached_projection_authority_allowed: false
+ai_focus_authority_allowed: false
+subordinate_surfaces_authority_allowed: false
+lanes:
+  - priority
+  - stale_work
+  - pending_approvals
+  - degraded_sources
+  - reconciliation_mismatches
+  - evidence_gaps
+  - ai_suggested_focus
+states:
+  - empty
+  - normal
+  - degraded
+  - stale
+  - mismatch
+  - evidence_gap
+projection_rules:
+  - all-required-lanes-present
+  - empty-state-visible
+  - normal-state-authoritative-anchors
+  - degraded-subordinate-context-visible
+  - stale-projection-rejected-as-truth
+  - mismatch-preserved
+  - evidence-gap-preserved
+  - ai-focus-advisory-only
+  - no-authority-mutation
+lane_contracts:
+  priority:
+    allowed_states:
+      - empty
+      - normal
+      - stale
+      - mismatch
+      - evidence_gap
+    authoritative_anchor: aegisops-alert-case-approval-action-reconciliation-records
+  stale_work:
+    allowed_states:
+      - empty
+      - normal
+      - stale
+    authoritative_anchor: aegisops-lifecycle-timestamps
+    cached_projection_current_truth_allowed: false
+  pending_approvals:
+    allowed_states:
+      - empty
+      - normal
+      - stale
+    authoritative_anchor: aegisops-approval-and-action-review-records
+    approval_truth_source: aegisops-approval-record-only
+  degraded_sources:
+    allowed_states:
+      - empty
+      - normal
+      - degraded
+      - stale
+      - mismatch
+    authoritative_anchor: directly-linked-aegisops-source-admission-records
+    subordinate_context:
+      - wazuh
+      - shuffle
+      - tickets
+      - reports
+      - health_summaries
+  reconciliation_mismatches:
+    allowed_states:
+      - empty
+      - normal
+      - stale
+      - mismatch
+    authoritative_anchor: aegisops-reconciliation-records
+    shuffle_success_closeout_allowed: false
+    ticket_state_closeout_allowed: false
+  evidence_gaps:
+    allowed_states:
+      - empty
+      - normal
+      - stale
+      - evidence_gap
+    authoritative_anchor: aegisops-evidence-records
+    missing_evidence_hidden_by_summary_allowed: false
+  ai_suggested_focus:
+    allowed_states:
+      - empty
+      - normal
+      - degraded
+      - stale
+      - mismatch
+      - evidence_gap
+    authoritative_anchor: directly-linked-aegisops-records
+    advisory_only: true
+    approval_allowed: false
+    execution_allowed: false
+    reconciliation_allowed: false
+negative_validation_tests:
+  - missing-required-lane
+  - missing-empty-state
+  - missing-normal-state
+  - missing-degraded-state
+  - missing-stale-state
+  - missing-mismatch-state
+  - missing-evidence-gap-state
+  - stale-projection-as-current-truth
+  - ai-focus-as-authority
+  - wazuh-shuffle-ticket-closeout-shortcut
+  - today-summary-as-approval-execution-reconciliation-truth
