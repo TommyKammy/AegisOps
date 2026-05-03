@@ -8,6 +8,7 @@ export type OperatorResourceName =
   | "runtimeReadiness"
   | "reconciliations"
   | "todayView"
+  | "businessHoursHandoff"
   | "advisoryOutput"
   | "actionReview";
 
@@ -38,7 +39,7 @@ export interface StandardListReaderOptions {
 
 export type StandardOperatorResourceName = Exclude<
   OperatorResourceName,
-  "advisoryOutput" | "actionReview" | "todayView"
+  "advisoryOutput" | "actionReview" | "businessHoursHandoff" | "todayView"
 >;
 
 export type OperatorRecord = RaRecord;

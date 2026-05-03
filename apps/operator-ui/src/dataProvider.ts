@@ -2,6 +2,7 @@ import type { DataProvider } from "react-admin";
 import {
   getOneForActionReview,
   getOneForAdvisoryOutput,
+  getOneForBusinessHoursHandoff,
   getOneForStandardResource,
   getOneForTodayView,
 } from "./operatorDataProvider/detailReaders";
@@ -61,6 +62,10 @@ export function createOperatorDataProvider({
 
       if (resource === "todayView") {
         return getOneForTodayView(fetchFn);
+      }
+
+      if (resource === "businessHoursHandoff") {
+        return getOneForBusinessHoursHandoff(fetchFn);
       }
 
       if (!isStandardResource(resource)) {
