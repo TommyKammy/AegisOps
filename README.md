@@ -48,6 +48,7 @@ Canonical cross-phase boundary reference:
 - [Phase 55.1 first 30 minutes](docs/getting-started/first-30-minutes.md) defines the first-session operator path without deep architecture dumping or production-readiness claims.
 - [Phase 55.4 demo reset and mode separation contract](docs/deployment/demo-reset-mode-separation.md) defines repeatable demo reset, demo/live mode separation, live-record preservation, and backup/restore overclaim rejection.
 - [Phase 55.6 first-user demo report export skeleton](docs/getting-started/first-user-demo-report-export.md) defines demo-labeled report export output, direct demo journey references, secret hygiene, and commercial-reporting scope guardrails for the guided first-user journey.
+- [Phase 55.7 closeout evaluation](docs/phase-55-closeout-evaluation.md) records the guided first-user journey outcomes, subordinate authority posture, verifier evidence, accepted limitations, and bounded Phase 56/57/58/60/66 handoff.
 - [Phase 53.2 Wazuh certificate and credential contract](docs/deployment/wazuh-certificate-credential-contract.md) defines certificate generation-wrapper posture, credential custody, default-credential rejection, rotation guidance, and no-live-secret validation for the Wazuh profile.
 - [Phase 53.3 Wazuh intake binding contract](docs/deployment/wazuh-manager-intake-binding-contract.md) defines the manager-to-AegisOps intake URL, reviewed proxy route, shared-secret custody reference, provenance fields, and analytic-signal admission boundary for Wazuh-origin events.
 - [Phase 53.5 Wazuh agent enrollment helper contract](docs/deployment/wazuh-agent-enrollment-helper-contract.md) defines the one-endpoint enrollment helper posture, prerequisites, rollback notes, safety warnings, and fleet-management exclusion for the Wazuh profile.
@@ -123,6 +124,8 @@ The Phase 54.10 closeout evaluation is defined by the [Phase 54.10 closeout eval
 The Phase 55.4 demo reset and mode separation contract is defined by the [Phase 55.4 demo reset and mode separation contract](docs/deployment/demo-reset-mode-separation.md).
 
 The Phase 55.6 first-user demo report export skeleton is defined by the [Phase 55.6 first-user demo report export skeleton](docs/getting-started/first-user-demo-report-export.md).
+
+The Phase 55.7 closeout evaluation is defined by the [Phase 55.7 closeout evaluation](docs/phase-55-closeout-evaluation.md).
 
 Wazuh detects, AegisOps decides, records, and reconciles, and Shuffle executes reviewed delegated routine work.
 
