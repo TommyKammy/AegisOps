@@ -1,0 +1,79 @@
+profile_id: smb-single-node
+case_timeline_projection_contract_version: 2026-05-04
+status: accepted-contract
+related_issues:
+  - 1190
+  - 1191
+  - 1193
+projection_owner: aegisops-control-plane
+workflow_truth_source: aegisops-record-chain-only
+authority_boundary: Case timeline projection is derived display context only; AegisOps records remain authoritative for alert, case, evidence, approval, action request, execution receipt, reconciliation, audit, gate, release, and closeout truth.
+projection_authority_allowed: false
+inferred_linkage_allowed: false
+subordinate_surfaces_authority_allowed: false
+segments:
+  - wazuh_signal
+  - aegisops_alert
+  - evidence
+  - ai_summary
+  - recommendation
+  - action_request
+  - approval
+  - shuffle_receipt
+  - reconciliation
+states:
+  - normal
+  - missing
+  - degraded
+  - stale
+  - mismatch
+  - unsupported
+authority_postures:
+  authoritative_aegisops_record:
+    truth_source: aegisops-record-chain
+    projection_can_complete_segment: false
+  subordinate_context:
+    truth_source: directly-bound-context-only
+    projection_can_complete_segment: false
+segment_contracts:
+  wazuh_signal:
+    authority_posture: subordinate_context
+    backend_record_binding: aegisops-alert-admission-or-reconciliation-record
+    wazuh_state_authority_allowed: false
+  aegisops_alert:
+    authority_posture: authoritative_aegisops_record
+    backend_record_binding: aegisops-alert-record
+  evidence:
+    authority_posture: authoritative_aegisops_record
+    backend_record_binding: aegisops-evidence-record
+    missing_or_degraded_hidden_allowed: false
+  ai_summary:
+    authority_posture: subordinate_context
+    backend_record_binding: directly-linked-ai-trace-or-case-advisory-record
+    approval_execution_reconciliation_allowed: false
+  recommendation:
+    authority_posture: subordinate_context
+    backend_record_binding: directly-linked-recommendation-record
+    sibling_lineage_inference_allowed: false
+  action_request:
+    authority_posture: authoritative_aegisops_record
+    backend_record_binding: aegisops-action-request-record
+  approval:
+    authority_posture: authoritative_aegisops_record
+    backend_record_binding: aegisops-approval-decision-record
+  shuffle_receipt:
+    authority_posture: subordinate_context
+    backend_record_binding: aegisops-action-execution-record
+    shuffle_success_closeout_allowed: false
+  reconciliation:
+    authority_posture: authoritative_aegisops_record
+    backend_record_binding: aegisops-reconciliation-record
+negative_validation_tests:
+  - missing-required-segment
+  - missing-authority-posture
+  - missing-backend-record-binding
+  - inferred-sibling-linkage
+  - timestamp-title-ui-cache-linkage
+  - wazuh-shuffle-ai-ticket-report-truth-overreach
+  - missing-degraded-stale-mismatch-hidden-by-summary
+  - stale-projection-as-current-truth

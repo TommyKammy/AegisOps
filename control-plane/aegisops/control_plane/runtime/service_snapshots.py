@@ -173,6 +173,7 @@ class CaseDetailSnapshot:
     linked_reconciliation_records: tuple[dict[str, object], ...]
     lifecycle_transitions: tuple[dict[str, object], ...]
     cross_source_timeline: tuple[dict[str, object], ...]
+    case_timeline_projection: dict[str, object]
     provenance_summary: dict[str, object]
     current_action_review: dict[str, object] | None
     action_reviews: tuple[dict[str, object], ...]
@@ -200,6 +201,7 @@ class CaseDetailSnapshot:
                 "linked_reconciliation_records": self.linked_reconciliation_records,
                 "lifecycle_transitions": self.lifecycle_transitions,
                 "cross_source_timeline": self.cross_source_timeline,
+                "case_timeline_projection": self.case_timeline_projection,
                 "provenance_summary": self.provenance_summary,
                 "current_action_review": self.current_action_review,
                 "action_reviews": self.action_reviews,
