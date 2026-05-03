@@ -166,6 +166,9 @@ export function TestRouteNavigator() {
       >
         Go to alert detail
       </button>
+      <button onClick={() => navigate("/operator/today")} type="button">
+        Go to Today
+      </button>
     </>
   );
 }

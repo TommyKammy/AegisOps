@@ -7,6 +7,7 @@ export type OperatorResourceName =
   | "firstLoginChecklist"
   | "runtimeReadiness"
   | "reconciliations"
+  | "todayView"
   | "advisoryOutput"
   | "actionReview";
 
@@ -37,7 +38,7 @@ export interface StandardListReaderOptions {
 
 export type StandardOperatorResourceName = Exclude<
   OperatorResourceName,
-  "advisoryOutput" | "actionReview"
+  "advisoryOutput" | "actionReview" | "todayView"
 >;
 
 export type OperatorRecord = RaRecord;
