@@ -171,7 +171,12 @@ export function CaseDetailPageBody({
               {caseTimelineSegments.map((segment, index) => {
                 const binding = asRecord(segment.backend_record_binding);
                 const state = asString(segment.state);
-                const stateTone = statusTone(state);
+                const stateTone =
+                  state === "unsupported"
+                    ? "error"
+                    : state === "stale"
+                      ? "warning"
+                      : statusTone(state);
                 const authorityPosture = asString(segment.authority_posture);
 
                 return (
