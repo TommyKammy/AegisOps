@@ -57,6 +57,21 @@ assert_fails_with() {
   fi
 }
 
+local_path_case_index=0
+assert_rejects_contract_local_path() {
+  local path_text="$1"
+  local target
+
+  local_path_case_index=$((local_path_case_index + 1))
+  target="${workdir}/local-path-${local_path_case_index}"
+  create_valid_repo "${target}"
+  printf 'Use %s for setup.\n' "${path_text}" \
+    >>"${target}/docs/deployment/shuffle-read-notify-template-contracts.md"
+  assert_fails_with \
+    "${target}" \
+    "Forbidden Phase 54.5 Read/Notify template contract: workstation-local absolute path detected"
+}
+
 artifact_path_for() {
   printf '%s\n' "$1/docs/deployment/profiles/smb-single-node/shuffle/templates/$2-import-contract.yaml"
 }
@@ -124,13 +139,46 @@ assert_fails_with \
   "${placeholder_secret_repo}" \
   "Forbidden Phase 54.5 Read/Notify template contract claim: placeholder secrets accepted as valid credentials"
 
-local_path_repo="${workdir}/local-path"
-create_valid_repo "${local_path_repo}"
-printf 'Use /%s/example/AegisOps for setup.\n' "Users" \
-  >>"${local_path_repo}/docs/deployment/shuffle-read-notify-template-contracts.md"
+hidden_heading_repo="${workdir}/hidden-heading"
+create_valid_repo "${hidden_heading_repo}"
+perl -0pi -e 's/# Phase 54\.5 Read\/Notify Shuffle Template Contracts/# Hidden Phase 54.5 Read\/Notify Shuffle Template Contracts/' \
+  "${hidden_heading_repo}/docs/deployment/shuffle-read-notify-template-contracts.md"
+printf '%s\n' "<!-- # Phase 54.5 Read/Notify Shuffle Template Contracts -->" \
+  >>"${hidden_heading_repo}/docs/deployment/shuffle-read-notify-template-contracts.md"
 assert_fails_with \
-  "${local_path_repo}" \
-  "Forbidden Phase 54.5 Read/Notify template contract: workstation-local absolute path detected"
+  "${hidden_heading_repo}" \
+  "Missing Phase 54.5 Read/Notify template contract heading: # Phase 54.5 Read/Notify Shuffle Template Contracts"
+
+hidden_required_phrase_repo="${workdir}/hidden-required-phrase"
+create_valid_repo "${hidden_required_phrase_repo}"
+perl -0pi -e 's/- \*\*Status\*\*: Accepted contract/- **Status**: Draft contract/' \
+  "${hidden_required_phrase_repo}/docs/deployment/shuffle-read-notify-template-contracts.md"
+printf '%s\n' '```' '- **Status**: Accepted contract' '```' \
+  >>"${hidden_required_phrase_repo}/docs/deployment/shuffle-read-notify-template-contracts.md"
+assert_fails_with \
+  "${hidden_required_phrase_repo}" \
+  "Missing Phase 54.5 Read/Notify template contract statement: - **Status**: Accepted contract"
+
+hidden_forbidden_listing_repo="${workdir}/hidden-forbidden-listing"
+create_valid_repo "${hidden_forbidden_listing_repo}"
+perl -0pi -e 's/- Shuffle workflow success is AegisOps reconciliation truth\./- Shuffle workflow success remains subordinate evidence./' \
+  "${hidden_forbidden_listing_repo}/docs/deployment/shuffle-read-notify-template-contracts.md"
+printf '%s\n' '```' '- Shuffle workflow success is AegisOps reconciliation truth.' '```' \
+  >>"${hidden_forbidden_listing_repo}/docs/deployment/shuffle-read-notify-template-contracts.md"
+assert_fails_with \
+  "${hidden_forbidden_listing_repo}" \
+  "Missing Phase 54.5 forbidden claim listing: - Shuffle workflow success is AegisOps reconciliation truth."
+
+assert_rejects_contract_local_path "$(printf '%s%s/example/AegisOps' '/' "Users")"
+assert_rejects_contract_local_path "$(printf '%s%s/example/AegisOps' '/' "home")"
+assert_rejects_contract_local_path "$(printf '%sopt%sproduct%sAegisOps' '/' '/' '/')"
+assert_rejects_contract_local_path "$(printf '%smnt%sworkspace%sAegisOps' '/' '/' '/')"
+assert_rejects_contract_local_path "$(printf '%sVolumes%sworkspace%sAegisOps' '/' '/' '/')"
+assert_rejects_contract_local_path "$(printf '%sprivate%stmp%sAegisOps' '/' '/' '/')"
+assert_rejects_contract_local_path "$(printf '%sroot%sAegisOps' '/' '/')"
+assert_rejects_contract_local_path "$(printf 'D:%bOps%bAegisOps' '\\' '\\')"
+assert_rejects_contract_local_path "$(printf 'E:%sOps%sAegisOps' '/' '/')"
+assert_rejects_contract_local_path "$(printf '%b%bserver%bshare%bAegisOps' '\\' '\\' '\\' '\\')"
 
 missing_readme_link_repo="${workdir}/missing-readme-link"
 create_valid_repo "${missing_readme_link_repo}"

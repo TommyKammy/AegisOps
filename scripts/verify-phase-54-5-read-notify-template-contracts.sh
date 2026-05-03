@@ -91,6 +91,17 @@ assert_file_contains() {
   fi
 }
 
+assert_rendered_contains() {
+  local rendered="$1"
+  local expected="$2"
+  local label="$3"
+
+  if ! grep -Fq -- "${expected}" <<<"${rendered}"; then
+    echo "Missing ${label}: ${expected}" >&2
+    exit 1
+  fi
+}
+
 assert_exact_line() {
   local path="$1"
   local expected="$2"
@@ -224,15 +235,25 @@ contains_placeholder_secret_valid_claim() {
 assert_no_workstation_local_paths() {
   local path="$1"
   local label="$2"
+  local slash
+  local backslash
   local mac_home_root
   local unix_home_root
-  local windows_home_root
+  local common_unix_root
+  local generic_unix_absolute_path
+  local windows_drive_root
+  local windows_unc_root
   local workstation_path_pattern
 
-  mac_home_root="/""Users/"
-  unix_home_root="/""home/"
-  windows_home_root="C:""\\\\Users\\\\"
-  workstation_path_pattern="(^|[^[:alnum:]_])(${mac_home_root}|${unix_home_root}[^[:space:]/]+/|${windows_home_root})"
+  slash="/"
+  backslash="\\\\"
+  mac_home_root="${slash}Users${slash}"
+  unix_home_root="${slash}home${slash}[^[:space:]${slash}]+${slash}"
+  common_unix_root="${slash}(mnt|Volumes|private|root)${slash}"
+  generic_unix_absolute_path="${slash}[^${slash}[:space:]][^[:space:]]*"
+  windows_drive_root="[A-Za-z]:[${backslash}${slash}]+"
+  windows_unc_root="${backslash}${backslash}[^${backslash}${slash}[:space:]]+[${backslash}${slash}]+[^${backslash}${slash}[:space:]]+"
+  workstation_path_pattern="(^|[^[:alnum:]_.${slash}>-])(${mac_home_root}|${unix_home_root}|${common_unix_root}|${generic_unix_absolute_path}|${windows_drive_root}|${windows_unc_root})"
 
   if grep -En "${workstation_path_pattern}" "${path}" >/dev/null; then
     echo "Forbidden Phase 54.5 Read/Notify template contract: workstation-local absolute path detected in ${label}" >&2
@@ -299,15 +320,15 @@ fi
 contract_rendered_markdown="$(rendered_markdown_without_code_blocks "${contract_path}")"
 
 for heading in "${required_headings[@]}"; do
-  assert_file_contains "${contract_path}" "${heading}" "Phase 54.5 Read/Notify template contract heading"
+  assert_rendered_contains "${contract_rendered_markdown}" "${heading}" "Phase 54.5 Read/Notify template contract heading"
 done
 
 for phrase in "${required_phrases[@]}"; do
-  assert_file_contains "${contract_path}" "${phrase}" "Phase 54.5 Read/Notify template contract statement"
+  assert_rendered_contains "${contract_rendered_markdown}" "${phrase}" "Phase 54.5 Read/Notify template contract statement"
 done
 
 for claim in "${forbidden_claims[@]}"; do
-  assert_file_contains "${contract_path}" "- ${claim}." "Phase 54.5 forbidden claim listing"
+  assert_rendered_contains "${contract_rendered_markdown}" "- ${claim}." "Phase 54.5 forbidden claim listing"
   if contains_forbidden_outside_forbidden_section "${claim}"; then
     echo "Forbidden Phase 54.5 Read/Notify template contract claim: ${claim}" >&2
     exit 1
