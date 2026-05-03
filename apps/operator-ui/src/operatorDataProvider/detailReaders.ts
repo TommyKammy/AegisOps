@@ -41,6 +41,19 @@ const CASE_TIMELINE_AUTHORITY_POSTURES = new Set([
 ]);
 
 const CASE_TIMELINE_CONTRACT_VERSION = "phase-56-3";
+const BUSINESS_HOURS_HANDOFF_CONTRACT_VERSION = "phase-56-6";
+
+const BUSINESS_HOURS_HANDOFF_STATES = new Set([
+  "unresolved",
+  "failed",
+  "blocked",
+]);
+
+const BUSINESS_HOURS_HANDOFF_AI_POSTURES = new Set([
+  "accepted_for_reference",
+  "rejected_for_reference",
+  "missing",
+]);
 
 export async function getOneForStandardResource(
   fetchFn: typeof fetch,
@@ -330,6 +343,124 @@ export async function getOneForTodayView(
       ...payload,
       id: "current",
       lanes: normalizedLanes,
+    },
+  };
+}
+
+function validateBusinessHoursHandoffItem(
+  item: unknown,
+): Record<string, unknown> {
+  const record = asObject(
+    item,
+    "Resource businessHoursHandoff returned a non-object item.",
+  );
+  const itemId = asString(record.item_id);
+  const title = asString(record.title);
+  const state = asString(record.state);
+  const changedWork = asString(record.changed_work);
+  const blockedOwner = asString(record.blocked_owner);
+  const followUp = asString(record.follow_up);
+  const binding = asObject(
+    record.backend_record_binding,
+    "Resource businessHoursHandoff item is missing backend_record_binding.",
+  );
+  const recordFamily = asString(binding.record_family);
+  const recordId = asString(binding.record_id);
+  const aiSummaryHandling = asObject(
+    record.ai_summary_handling,
+    "Resource businessHoursHandoff item is missing ai_summary_handling.",
+  );
+  const aiPosture = asString(aiSummaryHandling.posture);
+
+  if (
+    itemId === null ||
+    title === null ||
+    state === null ||
+    changedWork === null ||
+    blockedOwner === null ||
+    followUp === null
+  ) {
+    throw new OperatorDataProviderContractError(
+      "Resource businessHoursHandoff item is missing item_id, title, state, changed_work, blocked_owner, or follow_up.",
+    );
+  }
+  if (!BUSINESS_HOURS_HANDOFF_STATES.has(state)) {
+    throw new OperatorDataProviderContractError(
+      `Resource businessHoursHandoff item ${itemId} has unsupported state.`,
+    );
+  }
+  if (binding.direct_binding_required !== true) {
+    throw new OperatorDataProviderContractError(
+      `Resource businessHoursHandoff item ${itemId} must require direct backend binding.`,
+    );
+  }
+  if (recordFamily === null || recordId === null) {
+    throw new OperatorDataProviderContractError(
+      `Resource businessHoursHandoff item ${itemId} is missing backend record family or id.`,
+    );
+  }
+  if (!Array.isArray(record.evidence_gaps)) {
+    throw new OperatorDataProviderContractError(
+      `Resource businessHoursHandoff item ${itemId} is missing evidence_gaps.`,
+    );
+  }
+  record.evidence_gaps.forEach((gap) => {
+    if (asString(gap) === null) {
+      throw new OperatorDataProviderContractError(
+        `Resource businessHoursHandoff item ${itemId} has a malformed evidence gap.`,
+      );
+    }
+  });
+  if (
+    aiSummaryHandling.advisory_only !== true ||
+    aiPosture === null ||
+    !BUSINESS_HOURS_HANDOFF_AI_POSTURES.has(aiPosture)
+  ) {
+    throw new OperatorDataProviderContractError(
+      `Resource businessHoursHandoff item ${itemId} must keep AI summary handling advisory and accepted/rejected posture explicit.`,
+    );
+  }
+
+  return record;
+}
+
+export async function getOneForBusinessHoursHandoff(
+  fetchFn: typeof fetch,
+): Promise<GetOneResult> {
+  const payload = asObject(
+    await fetchJson(fetchFn, "/inspect-business-hours-handoff"),
+    "Resource businessHoursHandoff returned a malformed detail payload.",
+  );
+  const handoffId = asString(payload.handoff_id);
+  const contractVersion = asString(payload.business_hours_handoff_contract_version);
+  const items = Array.isArray(payload.items) ? payload.items : null;
+
+  if (handoffId === null || contractVersion === null || items === null) {
+    throw new OperatorDataProviderContractError(
+      "Resource businessHoursHandoff detail payload is missing handoff_id, contract version, or items.",
+    );
+  }
+  if (contractVersion !== BUSINESS_HOURS_HANDOFF_CONTRACT_VERSION) {
+    throw new OperatorDataProviderContractError(
+      `Resource businessHoursHandoff requires contract version ${BUSINESS_HOURS_HANDOFF_CONTRACT_VERSION}; received ${contractVersion}.`,
+    );
+  }
+  if (payload.stale_cache !== false) {
+    throw new OperatorDataProviderContractError(
+      "Resource businessHoursHandoff requires stale_cache=false and rejects stale or cache-only handoff guidance.",
+    );
+  }
+  if (payload.read_only !== true || payload.projection_authority_allowed !== false) {
+    throw new OperatorDataProviderContractError(
+      "Resource businessHoursHandoff must be read_only and reject projection authority.",
+    );
+  }
+
+  return {
+    data: {
+      ...payload,
+      id: "current",
+      items: items.map(validateBusinessHoursHandoffItem),
     },
   };
 }

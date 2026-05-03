@@ -181,7 +181,7 @@ function buildOperatorTaskCards(
       boundary:
         "Open the reviewed queue for handoff context; handoff notes cannot close cases or override lifecycle state.",
       label: "Prepare handoff",
-      route: "/operator/queue",
+      route: "/operator/handoff",
       state: null,
       title: "Prepare handoff",
     },

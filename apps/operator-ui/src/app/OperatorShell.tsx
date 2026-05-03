@@ -11,6 +11,7 @@ import AutoAwesomeOutlinedIcon from "@mui/icons-material/AutoAwesomeOutlined";
 import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
 import InboxOutlinedIcon from "@mui/icons-material/InboxOutlined";
 import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
+import HandshakeOutlinedIcon from "@mui/icons-material/HandshakeOutlined";
 import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
 import PlaylistAddCheckOutlinedIcon from "@mui/icons-material/PlaylistAddCheckOutlined";
 import RuleFolderOutlinedIcon from "@mui/icons-material/RuleFolderOutlined";
@@ -90,6 +91,8 @@ const ReconciliationPage =
   lazyOperatorConsolePage("ReconciliationPage") as unknown as typeof import("./operatorConsolePages").ReconciliationPage;
 const TodayPage =
   lazyOperatorConsolePage("TodayPage") as unknown as typeof import("./operatorConsolePages").TodayPage;
+const BusinessHoursHandoffPage =
+  lazyOperatorConsolePage("BusinessHoursHandoffPage") as unknown as typeof import("./operatorConsolePages").BusinessHoursHandoffPage;
 
 function hasReviewedOperatorRole(
   operatorRoles: readonly string[],
@@ -155,6 +158,11 @@ function OperatorMenu({
         leftIcon={<InboxOutlinedIcon />}
         primaryText="Queue"
         to={buildOperatorShellPath(basePath, "queue")}
+      />
+      <Menu.Item
+        leftIcon={<HandshakeOutlinedIcon />}
+        primaryText="Handoff"
+        to={buildOperatorShellPath(basePath, "handoff")}
       />
       <Menu.Item
         leftIcon={<WarningAmberOutlinedIcon />}
@@ -402,6 +410,7 @@ function OperatorShellContent({
         <Routes>
           <Route element={<OverviewPage operatorRoles={operatorRoles} />} index />
           <Route element={<TodayPage />} path="today" />
+          <Route element={<BusinessHoursHandoffPage />} path="handoff" />
           <Route element={<QueuePage />} path="queue" />
           <Route element={<AlertIndexPage />} path="alerts" />
           <Route

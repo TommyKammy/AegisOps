@@ -207,7 +207,7 @@ export function registerOperatorRoutesTodayTests() {
       ).toHaveAttribute("href", "/operator/reconciliation");
       expect(
         screen.getByRole("link", { name: "Prepare handoff" }),
-      ).toHaveAttribute("href", "/operator/queue");
+      ).toHaveAttribute("href", "/operator/handoff");
 
       expect(screen.getAllByText("State remains unresolved").length).toBeGreaterThan(0);
       expect(
