@@ -1,0 +1,82 @@
+contract_id: shuffle-notify-identity-owner-template-import
+product_profile: shuffle
+profile_id: smb-single-node
+workflow_template_id: notify_identity_owner
+contract_version: 2026-05-03
+status: accepted-import-contract
+related_issues:
+  - 1154
+  - 1156
+  - 1157
+authority_boundary: Shuffle workflow status, success, failure, callback payloads, execution logs, generated config, and template metadata remain subordinate automation context; AegisOps control-plane records remain authoritative for approval, action request, execution receipt, reconciliation, release, gate, limitation, and closeout truth.
+template_metadata:
+  template_id: notify_identity_owner
+  reviewed_template_version: notify_identity_owner-v1-reviewed-2026-05-03
+  owner: AegisOps maintainers
+  review_status: reviewed
+  import_eligible: true
+  template_custody: repo-owned reviewed template catalog only
+  action_type: notify_identity_owner
+required_bindings:
+  - action_request_id
+  - approval_decision_id
+  - correlation_id
+  - execution_receipt_id
+  - normalized_receipt_ref
+  - recipient_identity_owner_id
+  - message_scope
+  - reviewed_template_version
+required_inputs:
+  - action_request_id
+  - approval_decision_id
+  - correlation_id
+  - recipient_identity_owner_id
+  - message_scope
+  - reviewed_template_version
+  - requested_by
+  - callback_url
+  - callback_secret_ref
+required_outputs:
+  - action_request_id
+  - approval_decision_id
+  - correlation_id
+  - execution_receipt_id
+  - normalized_receipt_ref
+  - reviewed_template_version
+  - execution_status
+  - execution_started_at
+  - execution_finished_at
+binding_contract:
+  action_request_id: explicit AegisOps action request id required
+  approval_decision_id: explicit AegisOps approval decision id required
+  correlation_id: required in inputs and outputs
+  execution_receipt_id: required in outputs
+  normalized_receipt_ref: required in outputs
+  recipient_identity_owner_id: explicit recipient identity owner required
+  message_scope: identity-owner-low-risk-notification-only
+  reviewed_template_version: notify_identity_owner-v1-reviewed-2026-05-03
+validation_rules:
+  review_status: reviewed
+  action_type: notify_identity_owner
+  import_eligible: true
+  missing_request_id: reject
+  missing_approval_id: reject
+  missing_correlation_id: reject
+  missing_receipt_id: reject
+  missing_recipient_identity_owner: reject
+  missing_message_scope: reject
+  missing_reviewed_template_version: reject
+  inferred_linkage: reject
+  placeholder_secret_values: reject
+mutation_boundary:
+  notification_only: required
+  allowed_target_effect: outbound notification to recipient identity owner only
+  protected_target_state_mutation: forbidden
+  account_disablement: forbidden
+  credential_rotation: forbidden
+  group_membership_change: forbidden
+  ticket_or_case_closure: forbidden
+callback_boundary:
+  callback_url: <aegisops-shuffle-callback-url>
+  callback_secret_ref: trusted secret reference required
+  callback_payload_authority: subordinate evidence only until normalized into an AegisOps execution receipt
