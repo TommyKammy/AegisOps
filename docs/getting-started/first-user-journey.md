@@ -8,7 +8,7 @@
 
 This guide is workflow-first operator guidance for a new AegisOps user. It starts from the Phase 52 few-command stack path and shows the first guided SecOps flow without requiring the full architecture corpus.
 
-It does not implement UI behavior, demo seed records, reset behavior, report export behavior, supportability commands, Phase 56 daily workbench breadth, Phase 58 supportability scope, Phase 62 SOAR breadth, Beta readiness, RC readiness, GA readiness, or commercial readiness.
+It does not implement UI behavior, demo seed records, reset behavior, commercial report breadth, audit export administration, supportability commands, Phase 56 daily workbench breadth, Phase 58 supportability scope, Phase 62 SOAR breadth, Beta readiness, RC readiness, GA readiness, or commercial readiness.
 
 ## 1. Few-Command Entry Path
 
@@ -52,7 +52,7 @@ Out of scope here:
 
 - first-login checklist UI implementation;
 - demo seed implementation or reset behavior;
-- report export implementation;
+- commercial report breadth, audit export administration, or production report templates;
 - supportability commands or break-glass operating procedures;
 - daily SOC workbench breadth, SIEM breadth, SOAR breadth, packaging, RC, GA, or commercial launch scope.
 

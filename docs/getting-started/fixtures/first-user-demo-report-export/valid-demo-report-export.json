@@ -1,0 +1,100 @@
+{
+  "report_type": "first-user-demo-report-export",
+  "mode": "demo",
+  "labels": [
+    "demo-only",
+    "first-user-rehearsal",
+    "not-production-truth"
+  ],
+  "demo_evidence_only": true,
+  "commercial_report_breadth_claim": false,
+  "audit_export_completeness_claim": false,
+  "rc_or_ga_readiness_claim": false,
+  "production_truth_claim": false,
+  "title": "First-user demo report export",
+  "summary": "Demo-only summary of the directly linked first-user journey records. This is not production truth.",
+  "authority_boundary": {
+    "authoritative_record_source": "aegisops_control_plane",
+    "output_is_production_truth": false,
+    "output_overrides_authoritative_records": false
+  },
+  "references": {
+    "demo_alert": {
+      "available": true,
+      "record_id": "demo-alert-ssh-auth-failure",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "summary": "SSH authentication failure sample alert.",
+      "secret_redaction": "no-secret-values-exported"
+    },
+    "demo_case": {
+      "available": true,
+      "record_id": "demo-case-ssh-auth-failure",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "summary": "Demo case admitted from the sample alert.",
+      "secret_redaction": "no-secret-values-exported"
+    },
+    "demo_evidence": {
+      "available": true,
+      "record_id": "demo-evidence-auth-log-summary",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "summary": "Bound demo evidence summary for the sample case.",
+      "secret_redaction": "no-secret-values-exported"
+    },
+    "demo_recommendation": {
+      "available": true,
+      "record_id": "demo-recommendation-lock-account",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "summary": "Advisory demo recommendation for operator review.",
+      "secret_redaction": "no-secret-values-exported"
+    },
+    "demo_action_review": {
+      "available": true,
+      "record_id": "demo-action-review-lock-account",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "summary": "Review boundary for the proposed demo action.",
+      "secret_redaction": "no-secret-values-exported"
+    },
+    "demo_execution_receipt": {
+      "available": true,
+      "record_id": "demo-execution-receipt-lock-account",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "summary": "Receipt linked to the approved demo action request.",
+      "secret_redaction": "no-secret-values-exported"
+    },
+    "demo_reconciliation": {
+      "available": true,
+      "record_id": "demo-reconciliation-lock-account",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "summary": "Reconciliation result comparing the receipt and approved request.",
+      "secret_redaction": "no-secret-values-exported"
+    }
+  }
+}
