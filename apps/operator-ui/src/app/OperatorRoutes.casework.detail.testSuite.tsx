@@ -152,10 +152,20 @@ export function registerOperatorRoutesCaseworkDetailTests() {
         expect(within(timeline).getAllByText(state).length).toBeGreaterThan(0);
         expect(within(timeline).getAllByText(`phase564_${state}`).length).toBeGreaterThan(0);
       }
+      for (const staleState of within(timeline).getAllByText("stale")) {
+        expect(staleState.closest(".MuiChip-root")).toHaveClass("MuiChip-colorWarning");
+      }
+      for (const unsupportedState of within(timeline).getAllByText("unsupported")) {
+        expect(unsupportedState.closest(".MuiChip-root")).toHaveClass("MuiChip-colorError");
+      }
       expect(screen.queryByText("Completed by timeline display")).not.toBeInTheDocument();
     });
 
     it.each([
+      [
+        "unsupported timeline contract version",
+        createCaseTimelineProjection({ contract_version: "phase-56-4" }),
+      ],
       [
         "cache-sourced timeline truth",
         createCaseTimelineProjection({ cache_sourced: true }),

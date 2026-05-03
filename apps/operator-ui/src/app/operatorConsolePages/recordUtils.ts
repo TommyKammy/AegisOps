@@ -88,7 +88,8 @@ export function statusTone(
     normalized.includes("forbidden") ||
     normalized.includes("mismatch") ||
     normalized.includes("missing") ||
-    normalized.includes("rejected")
+    normalized.includes("rejected") ||
+    normalized.includes("unsupported")
   ) {
     return "error";
   }
@@ -96,7 +97,8 @@ export function statusTone(
     normalized.includes("degraded") ||
     normalized.includes("pending") ||
     normalized.includes("delayed") ||
-    normalized.includes("expired")
+    normalized.includes("expired") ||
+    normalized.includes("stale")
   ) {
     return "warning";
   }

@@ -40,6 +40,8 @@ const CASE_TIMELINE_AUTHORITY_POSTURES = new Set([
   "subordinate_context",
 ]);
 
+const CASE_TIMELINE_CONTRACT_VERSION = "phase-56-3";
+
 export async function getOneForStandardResource(
   fetchFn: typeof fetch,
   resource: StandardOperatorResourceName,
@@ -86,6 +88,11 @@ function validateCaseTimelineProjection(payload: unknown, requestedCaseId: strin
   if (caseId === null || contractVersion === null || segments === null) {
     throw new OperatorDataProviderContractError(
       "Resource cases case_timeline_projection is missing case_id, contract_version, or segments.",
+    );
+  }
+  if (contractVersion !== CASE_TIMELINE_CONTRACT_VERSION) {
+    throw new OperatorDataProviderContractError(
+      `Resource cases case_timeline_projection requires contract_version ${CASE_TIMELINE_CONTRACT_VERSION}; received ${contractVersion}.`,
     );
   }
   if (caseId !== requestedCaseId) {
