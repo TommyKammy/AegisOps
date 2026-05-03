@@ -1,0 +1,57 @@
+contract_id: shuffle-reviewed-workflow-template
+product_profile: shuffle
+profile_id: smb-single-node
+contract_version: 2026-05-03
+status: accepted-contract
+related_issues:
+  - 1154
+  - 1155
+  - 1156
+authority_boundary: Shuffle workflow status, success, failure, callback payloads, execution logs, generated config, and template metadata remain subordinate automation context; AegisOps control-plane records remain authoritative for approval, action request, execution receipt, reconciliation, release, gate, and closeout truth.
+template_metadata:
+  template_id: reviewed-shuffle-template-contract
+  template_version_id: reviewed-shuffle-template-v1
+  owner: AegisOps maintainers
+  review_status: reviewed
+  product_mainline_eligible: true
+  template_custody: repo-owned reviewed template catalog only
+required_inputs:
+  - correlation_id
+  - action_request_id
+  - approval_decision_id
+  - template_version_id
+  - delegation_subject_id
+  - requested_by
+  - callback_url
+  - callback_secret_ref
+required_outputs:
+  - correlation_id
+  - action_request_id
+  - approval_decision_id
+  - execution_receipt_id
+  - template_version_id
+  - execution_status
+  - execution_started_at
+  - execution_finished_at
+  - normalized_receipt_ref
+correlation_contract:
+  correlation_id: required in inputs and outputs
+  action_request_id: required in inputs and outputs
+  approval_decision_id: required in inputs and outputs
+  execution_receipt_id: required in outputs
+  normalized_receipt_ref: required in outputs
+  template_version_id: required in metadata, inputs, and outputs
+validation_rules:
+  review_status: reviewed
+  unreviewed_product_mainline: reject
+  missing_correlation: reject
+  missing_action_request: reject
+  missing_approval_decision: reject
+  missing_execution_receipt: reject
+  missing_owner: reject
+  inferred_linkage: reject
+  placeholder_secret_values: reject
+callback_boundary:
+  callback_url: <aegisops-shuffle-callback-url>
+  callback_secret_ref: trusted secret reference required
+  callback_payload_authority: subordinate evidence only until normalized into an AegisOps execution receipt
