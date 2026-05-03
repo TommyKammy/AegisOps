@@ -264,6 +264,137 @@ class Phase563CaseTimelineProjectionTests(ServicePersistenceTestBase):
             "missing_provenance",
         )
 
+    def test_case_timeline_marks_bound_out_of_contract_subordinate_segments_unsupported(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        target_scope = {"asset_id": "asset-phase563-unsupported-001"}
+        approved_payload = _phase20_notify_identity_owner_payload(
+            recipient_identity="identity-owner-phase563-unsupported-001",
+            case_id=promoted_case.case_id,
+            alert_id=promoted_case.alert_id,
+            finding_id=promoted_case.finding_id,
+            source_record_id="recommendation-phase563-unsupported-001",
+            recommendation_id="recommendation-phase563-unsupported-001",
+            linked_evidence_ids=(evidence_id,),
+        )
+        payload_hash = _approved_binding_hash(
+            target_scope=target_scope,
+            approved_payload=approved_payload,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="n8n",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase563-unsupported-001",
+                action_request_id="action-request-phase563-unsupported-001",
+                approver_identities=("approver-001",),
+                target_snapshot=target_scope,
+                payload_hash=payload_hash,
+                decided_at=reviewed_at,
+                lifecycle_state="approved",
+            )
+        )
+        action_request = service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-phase563-unsupported-001",
+                approval_decision_id=approval.approval_decision_id,
+                case_id=promoted_case.case_id,
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                idempotency_key="idempotency-phase563-unsupported-001",
+                target_scope=target_scope,
+                payload_hash=payload_hash,
+                requested_at=reviewed_at + timedelta(minutes=1),
+                expires_at=None,
+                lifecycle_state="approved",
+                requester_identity="analyst-001",
+                requested_payload=approved_payload,
+                policy_evaluation={
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "n8n",
+                },
+            )
+        )
+        execution = service.persist_record(
+            ActionExecutionRecord(
+                action_execution_id="action-execution-phase563-unsupported-001",
+                action_request_id=action_request.action_request_id,
+                approval_decision_id=approval.approval_decision_id,
+                delegation_id="delegation-phase563-unsupported-001",
+                execution_surface_type="automation_substrate",
+                execution_surface_id="n8n",
+                execution_run_id="n8n-run-phase563-unsupported-001",
+                idempotency_key="execution-idempotency-phase563-unsupported-001",
+                target_scope=target_scope,
+                approved_payload=approved_payload,
+                payload_hash=payload_hash,
+                delegated_at=reviewed_at + timedelta(minutes=2),
+                expires_at=None,
+                provenance={
+                    "adapter": "n8n",
+                    "downstream_binding": {
+                        "system": "n8n",
+                        "execution_run_id": "n8n-run-phase563-unsupported-001",
+                    },
+                },
+                lifecycle_state="succeeded",
+            )
+        )
+        service.persist_record(
+            ReconciliationRecord(
+                reconciliation_id="reconciliation-phase563-unsupported-001",
+                subject_linkage={
+                    "case_ids": (promoted_case.case_id,),
+                    "alert_ids": (promoted_case.alert_id,),
+                    "action_request_ids": (action_request.action_request_id,),
+                    "approval_decision_ids": (approval.approval_decision_id,),
+                    "action_execution_ids": (execution.action_execution_id,),
+                    "source_systems": ("ticketing",),
+                    "substrate_detection_record_ids": (
+                        "ticket:phase563-unsupported-001",
+                    ),
+                },
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                analytic_signal_id=None,
+                execution_run_id=execution.execution_run_id,
+                linked_execution_run_ids=(execution.execution_run_id,),
+                correlation_key="phase563-unsupported-reconciliation",
+                first_seen_at=reviewed_at + timedelta(minutes=3),
+                last_seen_at=reviewed_at + timedelta(minutes=3),
+                ingest_disposition="matched",
+                mismatch_summary="",
+                compared_at=reviewed_at + timedelta(minutes=4),
+                lifecycle_state="matched",
+            )
+        )
+
+        projection = service.inspect_case_detail(
+            promoted_case.case_id
+        ).case_timeline_projection
+        segments = {segment["segment"]: segment for segment in projection["segments"]}
+
+        self.assertEqual(segments["wazuh_signal"]["state"], "unsupported")
+        self.assertIsNone(
+            segments["wazuh_signal"]["backend_record_binding"]["record_id"]
+        )
+        self.assertEqual(
+            segments["wazuh_signal"]["incomplete_reason"],
+            "unsupported_wazuh_binding",
+        )
+        self.assertEqual(segments["shuffle_receipt"]["state"], "unsupported")
+        self.assertEqual(
+            segments["shuffle_receipt"]["backend_record_binding"]["record_id"],
+            execution.action_execution_id,
+        )
+        self.assertEqual(
+            segments["shuffle_receipt"]["incomplete_reason"],
+            "unsupported_execution_surface:n8n",
+        )
+
     def test_case_timeline_rejects_sibling_timestamp_and_ai_output_inference(self) -> None:
         store, service, promoted_case, _evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()

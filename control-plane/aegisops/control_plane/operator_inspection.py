@@ -909,27 +909,7 @@ class OperatorInspectionReadSurface:
             execution=execution,
         )
         segments = (
-            self._case_timeline_segment(
-                segment="wazuh_signal",
-                authority_posture="subordinate_context",
-                record_family="reconciliation",
-                record_id=(
-                    reconciliation.reconciliation_id
-                    if reconciliation is not None
-                    and self._service._reconciliation_is_wazuh_origin(reconciliation)
-                    else None
-                ),
-                state=(
-                    "normal"
-                    if reconciliation is not None
-                    and self._service._reconciliation_is_wazuh_origin(reconciliation)
-                    else "missing"
-                ),
-                incomplete_reason=(
-                    None if reconciliation is not None else "missing_wazuh_signal_binding"
-                ),
-                truth_source="aegisops_alert_admission_record",
-            ),
+            self._case_wazuh_signal_timeline_segment(reconciliation),
             self._case_timeline_segment(
                 segment="aegisops_alert",
                 authority_posture="authoritative_aegisops_record",
@@ -1000,26 +980,7 @@ class OperatorInspectionReadSurface:
                 ),
                 truth_source="aegisops_approval_decision_record",
             ),
-            self._case_timeline_segment(
-                segment="shuffle_receipt",
-                authority_posture="subordinate_context",
-                record_family="action_execution",
-                record_id=(
-                    None if execution is None else execution.action_execution_id
-                ),
-                state=(
-                    "normal"
-                    if execution is not None
-                    and execution.execution_surface_id == "shuffle"
-                    else "missing"
-                ),
-                incomplete_reason=(
-                    None
-                    if execution is not None
-                    else "missing_direct_shuffle_receipt_binding"
-                ),
-                truth_source="aegisops_action_execution_record",
-            ),
+            self._case_shuffle_receipt_timeline_segment(execution),
             self._case_reconciliation_timeline_segment(reconciliation),
         )
         return {
@@ -1061,6 +1022,58 @@ class OperatorInspectionReadSurface:
             "projection_can_complete_segment": False,
             "incomplete_reason": incomplete_reason,
         }
+
+    def _case_wazuh_signal_timeline_segment(
+        self,
+        reconciliation: ReconciliationRecord | None,
+    ) -> dict[str, object]:
+        is_wazuh_origin = (
+            reconciliation is not None
+            and self._service._reconciliation_is_wazuh_origin(reconciliation)
+        )
+        if is_wazuh_origin:
+            state = "normal"
+            reason = None
+        elif reconciliation is None:
+            state = "missing"
+            reason = "missing_wazuh_signal_binding"
+        else:
+            state = "unsupported"
+            reason = "unsupported_wazuh_binding"
+        return self._case_timeline_segment(
+            segment="wazuh_signal",
+            authority_posture="subordinate_context",
+            record_family="reconciliation",
+            record_id=(
+                None if not is_wazuh_origin else reconciliation.reconciliation_id
+            ),
+            state=state,
+            incomplete_reason=reason,
+            truth_source="aegisops_alert_admission_record",
+        )
+
+    def _case_shuffle_receipt_timeline_segment(
+        self,
+        execution: ActionExecutionRecord | None,
+    ) -> dict[str, object]:
+        if execution is None:
+            state = "missing"
+            reason = "missing_direct_shuffle_receipt_binding"
+        elif execution.execution_surface_id == "shuffle":
+            state = "normal"
+            reason = None
+        else:
+            state = "unsupported"
+            reason = f"unsupported_execution_surface:{execution.execution_surface_id}"
+        return self._case_timeline_segment(
+            segment="shuffle_receipt",
+            authority_posture="subordinate_context",
+            record_family="action_execution",
+            record_id=None if execution is None else execution.action_execution_id,
+            state=state,
+            incomplete_reason=reason,
+            truth_source="aegisops_action_execution_record",
+        )
 
     def _case_evidence_timeline_segment(
         self,
