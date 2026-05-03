@@ -10,7 +10,7 @@ This contract defines demo seed records and demo/prod separation expectations fo
 
 ## 1. Purpose
 
-The demo seed contract gives later setup and `seed-demo` work one reviewed bundle shape for first-user workflow rehearsal. The bundle may create demo alerts, cases, evidence, action requests, approvals, execution receipts, and reconciliation notes, but every seeded record remains demo-only rehearsal state.
+The demo seed contract gives later setup and `seed-demo` work one reviewed bundle shape for first-user workflow rehearsal. The bundle may create demo Wazuh alerts, analytic signals, AegisOps alerts, cases, evidence, recommendations, action reviews, execution receipts, and reconciliation records, but every seeded record remains demo-only rehearsal state.
 
 Demo seed output is workflow rehearsal evidence only.
 
@@ -26,15 +26,23 @@ This contract cites the Phase 51.6 authority-boundary negative-test policy in `d
 
 | Record type | Required demo fields | Presentation rule | Production exclusion |
 | --- | --- | --- | --- |
+| Demo Wazuh alert | Stable demo Wazuh alert identifier, fixture provenance, demo source family, Wazuh alert identifier, demo labels, and reviewed timestamp placeholder. | Must render as demo-only Wazuh alert rehearsal. | Must not satisfy production Wazuh source truth, customer evidence, detector activation truth, or release gate truth. |
+| Demo analytic signal | Stable demo analytic signal identifier, linked demo Wazuh alert, signal name, signal disposition, and demo labels. | Must render as demo-only analytic signal rehearsal. | Must not satisfy production analytic truth, detector admission, customer evidence, or release gate truth. |
+| Demo AegisOps alert | Stable demo AegisOps alert identifier, linked demo analytic signal, control-plane alert identifier, alert state, demo labels, and reviewed timestamp placeholder. | Must render as demo-only AegisOps alert rehearsal. | Must not satisfy production alert admission, customer evidence, release gate, or detector activation truth. |
 | Demo alert | Stable demo alert identifier, fixture provenance, demo source family, demo labels, and reviewed timestamp placeholder. | Must render as demo-only alert rehearsal. | Must not satisfy production alert admission, customer evidence, release gate, or detector activation truth. |
 | Demo case | Stable demo case identifier, linked demo alert, analyst owner placeholder, demo labels, and rehearsal status. | Must render as demo-only case rehearsal. | Must not satisfy production case ownership, customer queue state, release gate, or closeout truth. |
 | Demo evidence | Stable demo evidence identifier, linked demo case, fixture path, demo labels, and provenance note. | Must render as demo-only evidence rehearsal. | Must not satisfy customer evidence, audit evidence, production detection proof, or release evidence truth. |
+| Demo recommendation | Stable demo recommendation identifier, linked demo case, recommended action placeholder, recommendation basis, and demo labels. | Must render as demo-only recommendation rehearsal. | Must not satisfy production recommendation truth, approval truth, execution authorization, or customer evidence. |
+| Demo action review | Stable demo action-review identifier, linked demo recommendation, review decision placeholder, review boundary, and demo labels. | Must render as demo-only action review rehearsal. | Must not satisfy real approval truth, production action authorization, release gate truth, or customer evidence. |
 | Demo action request | Stable demo action-request identifier, linked demo case, requested action placeholder, demo labels, and non-production scope. | Must render as demo-only action rehearsal. | Must not authorize production action, substrate mutation, approval gate, or execution truth. |
 | Demo approval | Explicit demo approval identifier, demo labels, linked demo action request, and reviewer placeholder. | Must render as demo-only approval rehearsal. | Must not satisfy real approval truth, release gate truth, execution authorization, or customer evidence. |
-| Demo execution receipt | Stable demo execution receipt identifier, linked demo action request, mocked executor note, and demo labels. | Must render as demo-only execution rehearsal. | Must not satisfy real execution truth, Shuffle truth, substrate mutation proof, or customer evidence. |
+| Demo execution receipt | Stable demo execution receipt identifier, linked demo action review, mocked executor note, and demo labels. | Must render as demo-only execution rehearsal. | Must not satisfy real execution truth, Shuffle truth, substrate mutation proof, or customer evidence. |
+| Demo reconciliation | Stable demo reconciliation identifier, linked demo execution receipt, reconciliation result, outcome placeholder, and demo labels. | Must render as demo-only reconciliation rehearsal. | Must not satisfy production reconciliation truth, closeout truth, customer evidence, or release gate truth. |
 | Demo reconciliation note | Stable demo reconciliation identifier, linked demo execution receipt, outcome placeholder, and demo labels. | Must render as demo-only reconciliation rehearsal. | Must not satisfy production reconciliation truth, closeout truth, customer evidence, or release gate truth. |
 
 Every seeded record must include `production_claim=false`, `authority=demo_rehearsal_only`, and an empty `truth_surfaces` list.
+
+The Phase 55.3 family bundle must include one directly linked record in each required family: demo Wazuh alert, demo analytic signal, demo AegisOps alert, demo case, demo evidence, demo recommendation, demo action review, demo execution receipt, and demo reconciliation. The link chain must be explicit through stable demo identifiers, and repeat loads must upsert the same demo family by stable ID without creating duplicate authoritative records.
 
 ## 4. Demo Labels
 
@@ -92,7 +100,7 @@ Validation must fail closed when:
 - reset selector, production guard, or failure cleanup coverage is missing;
 - fixture expectations are missing;
 - a negative fixture becomes valid;
-- a valid fixture lacks required labels, demo mode, production exclusion, or reset safety;
+- a valid fixture lacks required labels, demo mode, production exclusion, family linkage, repeatable stable identifiers, or reset safety;
 - demo records are described as production truth, gate truth, customer evidence, approval truth, execution truth, reconciliation truth, or closeout truth;
 - placeholder credentials, sample secrets, fake credentials, raw forwarded headers, or inferred scope bindings are treated as valid; or
 - publishable guidance uses workstation-local absolute paths instead of repo-relative commands, documented env vars, or placeholders such as `<demo-fixture-bundle>`, `<profile-name>`, `<supervisor-config-path>`, and `<codex-supervisor-root>`.

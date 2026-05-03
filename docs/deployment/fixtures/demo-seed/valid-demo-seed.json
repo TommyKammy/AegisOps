@@ -2,10 +2,15 @@
   "bundle": "phase-52-7-demo-seed",
   "mode": "demo",
   "profile": "smb-single-node",
+  "repeatability": {
+    "load_strategy": "upsert-demo-records-by-stable-id",
+    "duplicate_behavior": "replace-demo-record-family-only",
+    "idempotency_key": "phase-55-3-demo-seed-family-v1"
+  },
   "records": [
     {
-      "id": "demo-alert-001",
-      "type": "demo-alert",
+      "id": "demo-wazuh-alert-001",
+      "type": "demo-wazuh-alert",
       "labels": [
         "demo-only",
         "first-user-rehearsal",
@@ -15,9 +20,43 @@
       "production_claim": false,
       "truth_surfaces": [],
       "fixture_provenance": "docs/deployment/fixtures/demo-seed/valid-demo-seed.json",
-      "demo_source_family": "demo-fixture",
+      "demo_source_family": "wazuh-demo-fixture",
+      "wazuh_alert_id": "wazuh-demo-alert-001",
       "reviewed_at": null,
-      "presentation": "demo-only alert rehearsal"
+      "presentation": "demo-only Wazuh alert rehearsal"
+    },
+    {
+      "id": "demo-analytic-signal-001",
+      "type": "demo-analytic-signal",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "authority": "demo_rehearsal_only",
+      "production_claim": false,
+      "truth_surfaces": [],
+      "linked_demo_wazuh_alert_id": "demo-wazuh-alert-001",
+      "signal_name": "demo suspicious admin login signal",
+      "signal_disposition": "rehearsal-only",
+      "presentation": "demo-only analytic signal rehearsal"
+    },
+    {
+      "id": "demo-aegisops-alert-001",
+      "type": "demo-aegisops-alert",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "authority": "demo_rehearsal_only",
+      "production_claim": false,
+      "truth_surfaces": [],
+      "linked_demo_signal_id": "demo-analytic-signal-001",
+      "control_plane_alert_id": "aegisops-demo-alert-001",
+      "alert_state": "reviewed-demo",
+      "reviewed_at": null,
+      "presentation": "demo-only AegisOps alert rehearsal"
     },
     {
       "id": "demo-case-001",
@@ -30,10 +69,89 @@
       "authority": "demo_rehearsal_only",
       "production_claim": false,
       "truth_surfaces": [],
-      "linked_demo_alert_id": "demo-alert-001",
+      "linked_demo_alert_id": "demo-aegisops-alert-001",
       "analyst_owner": null,
       "rehearsal_status": "rehearsal",
       "presentation": "demo-only case rehearsal"
+    },
+    {
+      "id": "demo-evidence-001",
+      "type": "demo-evidence",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "authority": "demo_rehearsal_only",
+      "production_claim": false,
+      "truth_surfaces": [],
+      "linked_demo_case_id": "demo-case-001",
+      "fixture_path": "docs/deployment/fixtures/demo-seed/valid-demo-seed.json",
+      "provenance_note": "demo fixture evidence only",
+      "presentation": "demo-only evidence rehearsal"
+    },
+    {
+      "id": "demo-recommendation-001",
+      "type": "demo-recommendation",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "authority": "demo_rehearsal_only",
+      "production_claim": false,
+      "truth_surfaces": [],
+      "linked_demo_case_id": "demo-case-001",
+      "recommended_action": "review demo account activity",
+      "recommendation_basis": "demo-only analytic signal and fixture evidence",
+      "presentation": "demo-only recommendation rehearsal"
+    },
+    {
+      "id": "demo-action-review-001",
+      "type": "demo-action-review",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "authority": "demo_rehearsal_only",
+      "production_claim": false,
+      "truth_surfaces": [],
+      "linked_demo_recommendation_id": "demo-recommendation-001",
+      "review_decision": "demo-approved-for-rehearsal",
+      "review_boundary": "no production authorization",
+      "presentation": "demo-only action review rehearsal"
+    },
+    {
+      "id": "demo-execution-receipt-001",
+      "type": "demo-execution-receipt",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "authority": "demo_rehearsal_only",
+      "production_claim": false,
+      "truth_surfaces": [],
+      "linked_demo_action_review_id": "demo-action-review-001",
+      "mocked_executor_note": "demo executor receipt; no substrate mutation",
+      "presentation": "demo-only execution rehearsal"
+    },
+    {
+      "id": "demo-reconciliation-001",
+      "type": "demo-reconciliation",
+      "labels": [
+        "demo-only",
+        "first-user-rehearsal",
+        "not-production-truth"
+      ],
+      "authority": "demo_rehearsal_only",
+      "production_claim": false,
+      "truth_surfaces": [],
+      "linked_demo_execution_receipt_id": "demo-execution-receipt-001",
+      "reconciliation_result": "demo-matched",
+      "outcome_placeholder": "demo reconciliation only",
+      "presentation": "demo-only reconciliation rehearsal"
     }
   ],
   "reset": {
