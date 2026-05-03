@@ -131,6 +131,13 @@ assert_fails_with \
   "${phase62_contradictory_overclaim_repo}" \
   "Forbidden Phase 54 closeout evaluation claim: Phase 62 SOAR breadth is complete"
 
+phase62_allowlisted_sentence_append_repo="${workdir}/phase62-allowlisted-sentence-append"
+copy_valid_repo "${phase62_allowlisted_sentence_append_repo}"
+printf '%s\n' "This closeout does not claim Phase 55 guided first-user journey work is complete, Phase 58 supportability work is complete, Phase 62 SOAR breadth is complete, Phase 66 RC proof is complete, AegisOps is Beta, RC, GA, self-service commercially ready, or a replacement for every SIEM/SOAR capability. Phase 62 SOAR breadth is complete." >>"${phase62_allowlisted_sentence_append_repo}/docs/phase-54-closeout-evaluation.md"
+assert_fails_with \
+  "${phase62_allowlisted_sentence_append_repo}" \
+  "Forbidden Phase 54 closeout evaluation claim: Phase 55 guided first-user journey work is complete"
+
 rc_overclaim_repo="${workdir}/rc-overclaim"
 copy_valid_repo "${rc_overclaim_repo}"
 printf '%s\n' "Phase 54 proves RC readiness" >>"${rc_overclaim_repo}/docs/phase-54-closeout-evaluation.md"

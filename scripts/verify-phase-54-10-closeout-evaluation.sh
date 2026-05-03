@@ -177,7 +177,7 @@ for forbidden in \
   "Shuffle logs are AegisOps audit truth" \
   "Shuffle workflow success is AegisOps workflow truth" \
   "Shuffle callback payload is AegisOps execution receipt truth"; do
-  if grep -Fv -- "${allowed_non_claim_line}" "${absolute_doc_path}" | grep -Fq -- "${forbidden}"; then
+  if grep -Fxv -- "${allowed_non_claim_line}" "${absolute_doc_path}" | grep -Fq -- "${forbidden}"; then
     echo "Forbidden Phase 54 closeout evaluation claim: ${forbidden}" >&2
     exit 1
   fi
