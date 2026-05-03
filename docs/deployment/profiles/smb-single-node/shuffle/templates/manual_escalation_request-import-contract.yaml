@@ -1,0 +1,87 @@
+contract_id: shuffle-manual-escalation-request-template-import
+product_profile: shuffle
+profile_id: smb-single-node
+workflow_template_id: manual_escalation_request
+contract_version: 2026-05-03
+status: accepted-import-contract
+related_issues:
+  - 1154
+  - 1156
+  - 1159
+authority_boundary: Manual escalation request delivery state, Shuffle workflow status, success, failure, callback payloads, execution logs, generated config, and template metadata remain subordinate request or automation context; AegisOps control-plane records remain authoritative for approval, action request, execution receipt, reconciliation, workflow state, release, gate, limitation, and closeout truth.
+template_metadata:
+  template_id: manual_escalation_request
+  reviewed_template_version: manual_escalation_request-v1-reviewed-2026-05-03
+  owner: AegisOps maintainers
+  review_status: reviewed
+  import_eligible: true
+  template_custody: repo-owned reviewed template catalog only
+  action_type: manual_escalation_request
+required_bindings:
+  - action_request_id
+  - approval_decision_id
+  - correlation_id
+  - execution_receipt_id
+  - normalized_receipt_ref
+  - escalation_subject_id
+  - escalation_owner_id
+  - escalation_scope
+  - reviewed_template_version
+required_inputs:
+  - action_request_id
+  - approval_decision_id
+  - correlation_id
+  - escalation_subject_id
+  - escalation_owner_id
+  - escalation_scope
+  - reviewed_template_version
+  - requested_by
+  - callback_url
+  - callback_secret_ref
+required_outputs:
+  - action_request_id
+  - approval_decision_id
+  - correlation_id
+  - execution_receipt_id
+  - normalized_receipt_ref
+  - reviewed_template_version
+  - manual_escalation_request_ref
+  - execution_status
+  - execution_started_at
+  - execution_finished_at
+binding_contract:
+  action_request_id: explicit AegisOps action request id required
+  approval_decision_id: explicit AegisOps approval decision id required
+  correlation_id: required in inputs and outputs
+  execution_receipt_id: required in outputs
+  normalized_receipt_ref: required in outputs
+  escalation_subject_id: explicit escalation subject required
+  escalation_owner_id: explicit human escalation owner required
+  escalation_scope: manual-escalation-request-only
+  reviewed_template_version: manual_escalation_request-v1-reviewed-2026-05-03
+validation_rules:
+  review_status: reviewed
+  action_type: manual_escalation_request
+  import_eligible: true
+  missing_request_id: reject
+  missing_approval_id: reject
+  missing_correlation_id: reject
+  missing_receipt_id: reject
+  missing_escalation_subject: reject
+  missing_escalation_owner: reject
+  missing_escalation_scope: reject
+  missing_reviewed_template_version: reject
+  inferred_linkage: reject
+  placeholder_secret_values: reject
+mutation_boundary:
+  manual_request_only: required
+  allowed_target_effect: request human escalation through AegisOps-approved path only
+  aegisops_approval_bypass: forbidden
+  automatic_escalation_approval: forbidden
+  authoritative_workflow_state_change: forbidden
+  protected_target_state_mutation: forbidden
+  ticket_or_case_closure: forbidden
+callback_boundary:
+  callback_url: <aegisops-shuffle-callback-url>
+  callback_secret_ref: trusted secret reference required
+  callback_payload_authority: subordinate evidence only until normalized into an AegisOps execution receipt
