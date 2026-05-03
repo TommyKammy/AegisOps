@@ -48,7 +48,9 @@ Exported text may name custody references or redaction posture, but it must not 
 | --- | --- | --- |
 | `valid-demo-report-export.json` | valid | |
 | `unavailable-follow-up-reference.json` | valid | |
+| `non-object-payload.json` | invalid | invalid report export payload |
 | `missing-demo-label.json` | invalid | missing required demo label |
+| `invalid-authority-boundary.json` | invalid | invalid authority boundary |
 | `secret-looking-value.json` | invalid | secret-looking value in export output |
 | `key-secret-looking-value.json` | invalid | secret-looking value in export output |
 | `commercial-report-claim.json` | invalid | demo export claims commercial report breadth |
@@ -56,7 +58,7 @@ Exported text may name custody references or redaction posture, but it must not 
 | `authority-override-claim.json` | invalid | demo export claims it can override authoritative records |
 | `missing-reference-availability.json` | invalid | missing demo journey reference |
 
-Negative fixtures must fail closed when the demo label is missing, secret-looking values are present, commercial reporting breadth is claimed, or output is presented as production truth.
+Negative fixtures must fail closed when the payload shape is invalid, the demo label is missing, the authority-boundary object is malformed, secret-looking values are present, commercial reporting breadth is claimed, or output is presented as production truth.
 
 ## 6. Validation Rules
 

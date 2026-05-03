@@ -72,6 +72,22 @@ assert_fails_with \
   "${missing_label_repo}" \
   "Expected valid Phase 55.6 report export fixture valid-demo-report-export.json, got: missing required demo label"
 
+non_object_payload_repo="${workdir}/non-object-payload"
+create_valid_repo "${non_object_payload_repo}"
+cp "${non_object_payload_repo}/docs/getting-started/fixtures/first-user-demo-report-export/non-object-payload.json" \
+  "${non_object_payload_repo}/docs/getting-started/fixtures/first-user-demo-report-export/valid-demo-report-export.json"
+assert_fails_with \
+  "${non_object_payload_repo}" \
+  "Expected valid Phase 55.6 report export fixture valid-demo-report-export.json, got: invalid report export payload"
+
+invalid_authority_repo="${workdir}/invalid-authority"
+create_valid_repo "${invalid_authority_repo}"
+cp "${invalid_authority_repo}/docs/getting-started/fixtures/first-user-demo-report-export/invalid-authority-boundary.json" \
+  "${invalid_authority_repo}/docs/getting-started/fixtures/first-user-demo-report-export/valid-demo-report-export.json"
+assert_fails_with \
+  "${invalid_authority_repo}" \
+  "invalid authority boundary"
+
 secret_repo="${workdir}/secret"
 create_valid_repo "${secret_repo}"
 cp "${secret_repo}/docs/getting-started/fixtures/first-user-demo-report-export/secret-looking-value.json" \
@@ -117,6 +133,12 @@ create_valid_repo "${unavailable_follow_up_repo}"
 cp "${unavailable_follow_up_repo}/docs/getting-started/fixtures/first-user-demo-report-export/unavailable-follow-up-reference.json" \
   "${unavailable_follow_up_repo}/docs/getting-started/fixtures/first-user-demo-report-export/valid-demo-report-export.json"
 assert_passes "${unavailable_follow_up_repo}"
+
+disclaimer_repo="${workdir}/disclaimer"
+create_valid_repo "${disclaimer_repo}"
+perl -0pi -e 's/This is not production truth/This is not a commercial report and not intended as production truth/' \
+  "${disclaimer_repo}/docs/getting-started/fixtures/first-user-demo-report-export/valid-demo-report-export.json"
+assert_passes "${disclaimer_repo}"
 
 missing_reference_availability_repo="${workdir}/missing-reference-availability"
 create_valid_repo "${missing_reference_availability_repo}"

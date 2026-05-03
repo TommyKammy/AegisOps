@@ -51,7 +51,9 @@ reference_rows=(
 fixture_expectations=(
   "valid-demo-report-export.json|valid|"
   "unavailable-follow-up-reference.json|valid|"
+  "non-object-payload.json|invalid|invalid report export payload"
   "missing-demo-label.json|invalid|missing required demo label"
+  "invalid-authority-boundary.json|invalid|invalid authority boundary"
   "secret-looking-value.json|invalid|secret-looking value in export output"
   "key-secret-looking-value.json|invalid|secret-looking value in export output"
   "commercial-report-claim.json|invalid|demo export claims commercial report breadth"
@@ -178,6 +180,16 @@ secret_patterns = [
         r"-----BEGIN [A-Z ]*PRIVATE KEY-----",
     )
 ]
+production_truth_claim_pattern = re.compile(r"\bproduction\s+truth\b", re.IGNORECASE)
+production_truth_negation_pattern = re.compile(
+    r"\b(not|non|no)\b.{0,30}\bproduction\s+truth\b|\bnot-production-truth\b",
+    re.IGNORECASE,
+)
+commercial_report_claim_pattern = re.compile(r"\bcommercial report(?:ing)?\b", re.IGNORECASE)
+commercial_report_negation_pattern = re.compile(
+    r"\b(not|non|no)\b.{0,30}\bcommercial report(?:ing)?\b|\boutside\b.{0,30}\bcommercial report(?:ing)?\b",
+    re.IGNORECASE,
+)
 
 if not fixtures_dir.is_dir():
     print(f"Missing Phase 55.6 report export fixtures directory: {fixtures_dir}", file=sys.stderr)
@@ -198,9 +210,18 @@ def walk_strings(value, path=""):
             yield from walk_strings(item, next_path)
 
 
+def labels_from(value):
+    if not isinstance(value, (list, tuple, set)):
+        return set()
+    return {item for item in value if isinstance(item, str)}
+
+
 def reasons_for(payload):
+    if not isinstance(payload, dict):
+        return ["invalid report export payload"]
+
     reasons = []
-    labels = set(payload.get("labels") or [])
+    labels = labels_from(payload.get("labels"))
     if payload.get("report_type") != "first-user-demo-report-export":
         reasons.append("missing required demo label")
     if payload.get("mode") != "demo" or not required_labels.issubset(labels):
@@ -215,7 +236,12 @@ def reasons_for(payload):
         reasons.append("demo export claims commercial report breadth")
     if payload.get("production_truth_claim") is not False:
         reasons.append("demo export claims production truth")
-    authority = payload.get("authority_boundary") or {}
+    authority = payload.get("authority_boundary")
+    if authority is None:
+        authority = {}
+    elif not isinstance(authority, dict):
+        reasons.append("invalid authority boundary")
+        authority = {}
     if authority.get("output_is_production_truth") is not False:
         reasons.append("demo export claims production truth")
     if authority.get("authoritative_record_source") != "aegisops_control_plane":
@@ -237,7 +263,7 @@ def reasons_for(payload):
                 continue
             if ref.get("available") is False:
                 continue
-            ref_labels = set(ref.get("labels") or [])
+            ref_labels = labels_from(ref.get("labels"))
             if not required_labels.issubset(ref_labels):
                 reasons.append("missing required demo label")
             if ref.get("secret_redaction") != "no-secret-values-exported":
@@ -248,11 +274,9 @@ def reasons_for(payload):
             reasons.append("secret-looking value in export output")
             break
         lowered = text.lower()
-        if "production truth" in lowered and "not production truth" not in lowered:
+        if production_truth_claim_pattern.search(lowered) and not production_truth_negation_pattern.search(lowered):
             reasons.append("demo export claims production truth")
-        if "commercial report" in lowered and not any(
-            marker in lowered for marker in ("not commercial", "no commercial", "outside commercial")
-        ):
+        if commercial_report_claim_pattern.search(lowered) and not commercial_report_negation_pattern.search(lowered):
             reasons.append("demo export claims commercial report breadth")
 
     return sorted(set(reasons))
