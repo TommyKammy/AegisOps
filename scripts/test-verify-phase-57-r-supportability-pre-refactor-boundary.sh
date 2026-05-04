@@ -150,6 +150,15 @@ assert_fails_with \
   "${restore_weakening_repo}" \
   "Forbidden Phase 57.R ADR claim: This refactor weakens restore validation"
 
+split_forbidden_claim_repo="${workdir}/split-forbidden-claim"
+create_valid_repo "${split_forbidden_claim_repo}"
+printf '%s\n' \
+  "This refactor weakens restore" \
+  "validation" >>"${split_forbidden_claim_repo}/${contract_path}"
+assert_fails_with \
+  "${split_forbidden_claim_repo}" \
+  "Forbidden Phase 57.R ADR claim: This refactor weakens restore validation"
+
 admin_crud_repo="${workdir}/admin-crud"
 create_valid_repo "${admin_crud_repo}"
 printf '%s\n' "This refactor approves admin CRUD expansion" >>"${admin_crud_repo}/${contract_path}"

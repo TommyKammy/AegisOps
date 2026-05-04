@@ -144,11 +144,22 @@ contains_forbidden_outside_forbidden_section() {
   local claim="$1"
 
   awk -v claim="${claim}" '
-    BEGIN { claim_lower = tolower(claim) }
+    BEGIN {
+      claim_lower = tolower(claim)
+      gsub(/[[:space:]]+/, " ", claim_lower)
+      text = ""
+    }
     /^## 7\. Forbidden Claims$/ { in_forbidden = 1; next }
     /^## / && in_forbidden { in_forbidden = 0 }
-    !in_forbidden && index(tolower($0), claim_lower) { found = 1 }
-    END { exit(found ? 0 : 1) }
+    !in_forbidden {
+      line = tolower($0)
+      gsub(/[[:space:]]+/, " ", line)
+      text = text " " line
+    }
+    END {
+      gsub(/[[:space:]]+/, " ", text)
+      exit(index(text, claim_lower) ? 0 : 1)
+    }
   ' "${absolute_doc_path}"
 }
 
