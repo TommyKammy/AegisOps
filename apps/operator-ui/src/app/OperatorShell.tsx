@@ -55,6 +55,7 @@ import {
 } from "./operatorUiEvents";
 import { TaskActionClientProvider } from "../taskActions/taskActionPrimitives";
 import type { OperatorTaskActionClient } from "../taskActions/taskActionClient";
+import { anyRoleHasSurfaceAccess } from "../auth/roleMatrix";
 
 const loadOperatorConsolePages = () => import("./operatorConsolePages");
 
@@ -113,8 +114,17 @@ function hasReviewedOperatorRole(
 }
 
 function canBrowseActionReview(operatorRoles: readonly string[]) {
-  return operatorRoles.some((role) =>
-    ["approver", "platform_admin"].includes(role),
+  return (
+    anyRoleHasSurfaceAccess(
+      operatorRoles,
+      "actionApprovalDecision",
+      "allowed",
+    ) ||
+    anyRoleHasSurfaceAccess(
+      operatorRoles,
+      "platformAdministration",
+      "admin_only",
+    )
   );
 }
 
@@ -123,7 +133,11 @@ function canInspectActionReviewDetail(operatorRoles: readonly string[]) {
 }
 
 function canViewAdmin(operatorRoles: readonly string[]) {
-  return operatorRoles.some((role) => role.toLowerCase() === "platform_admin");
+  return anyRoleHasSurfaceAccess(
+    operatorRoles,
+    "platformAdministration",
+    "admin_only",
+  );
 }
 
 function buildOperatorShellPath(basePath: string, path = "") {

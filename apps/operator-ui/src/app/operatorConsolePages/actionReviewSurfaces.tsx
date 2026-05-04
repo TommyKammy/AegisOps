@@ -9,9 +9,14 @@ import {
   type UnknownRecord,
 } from "./recordUtils";
 import { SectionCard, StatusStrip, ValueList } from "./pageChrome";
+import { anyRoleHasSurfaceAccess } from "../../auth/roleMatrix";
 
 export function canRecordActionApprovalDecision(operatorRoles: readonly string[]) {
-  return operatorRoles.some((role) => role.toLowerCase() === "approver");
+  return anyRoleHasSurfaceAccess(
+    operatorRoles,
+    "actionApprovalDecision",
+    "allowed",
+  );
 }
 
 export function approvalLifecycleExplanation(approvalState: string | null) {

@@ -1,3 +1,5 @@
+import { RBAC_ROLE_IDS } from "./roleMatrix";
+
 export interface OperatorUiConfig {
   allowedRoles: string[];
   basePath: string;
@@ -6,11 +8,7 @@ export interface OperatorUiConfig {
   sessionPath: string;
 }
 
-const DEFAULT_ALLOWED_ROLES = [
-  "analyst",
-  "approver",
-  "platform_admin",
-];
+const DEFAULT_ALLOWED_ROLES = [...RBAC_ROLE_IDS];
 
 export function createOperatorUiConfig(
   overrides: Partial<OperatorUiConfig> = {},
