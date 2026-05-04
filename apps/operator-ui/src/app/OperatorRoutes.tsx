@@ -285,6 +285,7 @@ function ProtectedOperatorRoute({
       onEventLogEntriesChange={onEventLogEntriesChange}
       operatorIdentity={session?.identity ?? ""}
       operatorRoles={session?.roles ?? []}
+      sessionStore={sessionStore}
       taskActionClient={taskActionClient}
     />
   );

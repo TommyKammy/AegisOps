@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { createDefaultDependencies, OperatorRoutes } from "./OperatorRoutes";
 import {
@@ -10,6 +11,7 @@ import {
   createAuthorizedFetch,
   createOptionalExtensionPayload,
   createReadinessResponse,
+  TestRouteNavigator,
   jsonResponse,
 } from "./OperatorRoutes.testSupport";
 
@@ -360,6 +362,105 @@ export function registerOperatorRoutesAuthAndShellTests() {
       "href",
       expect.stringContaining("/reviewed-operator/admin"),
     );
+    });
+
+    it("renders the user and role admin surface only for platform admins", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch(
+        {},
+        {
+          identity: "platform.admin@example.com",
+          provider: "authentik",
+          roles: ["platform_admin"],
+          subject: "operator-44",
+        },
+      ),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/admin"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "User and role administration" }),
+      ).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Users")).toBeInTheDocument();
+    expect(screen.getByText("Roles")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "User and role changes are reviewed policy/config state only; they cannot rewrite historical workflow truth.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Stale browser role cache is never authority. Backend reread and denial remain decisive.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/tenant/i)).not.toBeInTheDocument();
+    });
+
+    it("fails closed when stale platform-admin browser state reaches the admin route", async () => {
+    const user = userEvent.setup();
+    let sessionRequests = 0;
+    const fetchFn = vi.fn<typeof fetch>().mockImplementation((input) => {
+      const url = String(input);
+
+      if (url.startsWith("/api/operator/session")) {
+        sessionRequests += 1;
+
+        return Promise.resolve(
+          jsonResponse(
+            sessionRequests === 1
+              ? {
+                  identity: "platform.admin@example.com",
+                  provider: "authentik",
+                  roles: ["platform_admin"],
+                  subject: "operator-44",
+                }
+              : {
+                  identity: "analyst@example.com",
+                  provider: "authentik",
+                  roles: ["analyst"],
+                  subject: "operator-7",
+                },
+          ),
+        );
+      }
+
+      if (url.startsWith("/diagnostics/readiness")) {
+        return Promise.resolve(jsonResponse(createReadinessResponse()));
+      }
+
+      return Promise.reject(new Error(`Unexpected fetch: ${url}`));
+    });
+    const dependencies = createDefaultDependencies({ fetchFn });
+
+    render(
+      <MemoryRouter initialEntries={["/operator"]}>
+        <TestRouteNavigator />
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Protected operator shell" }),
+      ).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Go to admin" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Access denied" }),
+      ).toBeInTheDocument();
+    });
+    expect(sessionRequests).toBeGreaterThanOrEqual(2);
     });
 
     it("renders an explicit unsupported-route outcome for unknown operator shell paths", async () => {

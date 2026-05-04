@@ -56,6 +56,7 @@ import {
 import { TaskActionClientProvider } from "../taskActions/taskActionPrimitives";
 import type { OperatorTaskActionClient } from "../taskActions/taskActionClient";
 import { anyRoleHasSurfaceAccess } from "../auth/roleMatrix";
+import type { SessionStore } from "../auth/session";
 
 const loadOperatorConsolePages = () => import("./operatorConsolePages");
 
@@ -99,6 +100,8 @@ const TodayPage =
   lazyOperatorConsolePage("TodayPage") as unknown as typeof import("./operatorConsolePages").TodayPage;
 const BusinessHoursHandoffPage =
   lazyOperatorConsolePage("BusinessHoursHandoffPage") as unknown as typeof import("./operatorConsolePages").BusinessHoursHandoffPage;
+const UserRoleAdminPage =
+  lazyOperatorConsolePage("UserRoleAdminPage") as unknown as typeof import("./operatorConsolePages").UserRoleAdminPage;
 
 function hasReviewedOperatorRole(
   operatorRoles: readonly string[],
@@ -434,6 +437,51 @@ function DeferredPageFallback() {
   );
 }
 
+function AdminPolicyRoute({
+  basePath,
+  sessionStore,
+}: {
+  basePath: string;
+  sessionStore: SessionStore;
+}) {
+  const [status, setStatus] = useState<"loading" | "authorized" | "forbidden">(
+    "loading",
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    void sessionStore
+      .getSession({ force: true })
+      .then((session) => {
+        if (!active) {
+          return;
+        }
+
+        setStatus(canViewAdmin(session.roles) ? "authorized" : "forbidden");
+      })
+      .catch(() => {
+        if (active) {
+          setStatus("forbidden");
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [sessionStore]);
+
+  if (status === "loading") {
+    return <DeferredPageFallback />;
+  }
+
+  if (status === "forbidden") {
+    return <Navigate replace to={buildOperatorShellPath(basePath, "forbidden")} />;
+  }
+
+  return <UserRoleAdminPage />;
+}
+
 function OperatorShellContent({
   basePath,
   canInspectActionReview,
@@ -441,6 +489,7 @@ function OperatorShellContent({
   canViewActionReview,
   operatorIdentity,
   operatorRoles,
+  sessionStore,
 }: {
   basePath: string;
   canInspectActionReview: boolean;
@@ -448,6 +497,7 @@ function OperatorShellContent({
   canViewActionReview: boolean;
   operatorIdentity: string;
   operatorRoles: string[];
+  sessionStore: SessionStore;
 }) {
   const location = useLocation();
   const { recordRouteView } = useOperatorUiEventLog();
@@ -512,7 +562,10 @@ function OperatorShellContent({
           <Route
             element={
               canViewAdmin ? (
-                <OverviewPage operatorRoles={operatorRoles} />
+                <AdminPolicyRoute
+                  basePath={basePath}
+                  sessionStore={sessionStore}
+                />
               ) : (
                 <Navigate
                   replace
@@ -592,6 +645,7 @@ export function OperatorShell({
   operatorIdentity,
   operatorRoles,
   onEventLogEntriesChange,
+  sessionStore,
   taskActionClient,
 }: {
   authProvider: AuthProvider;
@@ -600,6 +654,7 @@ export function OperatorShell({
   onEventLogEntriesChange?: OperatorUiEventLogObserver;
   operatorIdentity: string;
   operatorRoles: string[];
+  sessionStore: SessionStore;
   taskActionClient: OperatorTaskActionClient;
 }) {
   const canViewActionReview = canBrowseActionReview(operatorRoles);
@@ -627,6 +682,7 @@ export function OperatorShell({
               canViewActionReview={canViewActionReview}
               operatorIdentity={operatorIdentity}
               operatorRoles={operatorRoles}
+              sessionStore={sessionStore}
             />
           </Layout>
         </TaskActionClientProvider>

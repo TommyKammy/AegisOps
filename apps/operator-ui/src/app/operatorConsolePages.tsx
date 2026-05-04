@@ -13,6 +13,7 @@ export {
 export { ActionReviewPage } from "./operatorConsolePages/actionReviewPages";
 export { AssistantAdvisoryPage } from "./operatorConsolePages/assistantPages";
 export { FirstLoginChecklistPage } from "./operatorConsolePages/firstLoginChecklistPages";
+export { UserRoleAdminPage } from "./operatorConsolePages/adminPages";
 export {
   ProvenancePage,
   ReadinessPage,
