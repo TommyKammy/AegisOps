@@ -496,6 +496,59 @@ export function registerOperatorRoutesAuthAndShellTests() {
     expect(screen.queryByText(/broad SOAR catalog/i)).not.toBeInTheDocument();
     });
 
+    it("renders bounded retention policy administration without deletion or historical rewrite authority", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch(
+        {},
+        {
+          identity: "platform.admin@example.com",
+          provider: "authentik",
+          roles: ["platform_admin"],
+          subject: "operator-44",
+        },
+      ),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/admin"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Retention policy administration" }),
+      ).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText("Alerts").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Cases").length).toBeGreaterThan(0);
+    expect(screen.getByText("Evidence")).toBeInTheDocument();
+    expect(screen.getByText("AI traces")).toBeInTheDocument();
+    expect(screen.getByText("Audit exports")).toBeInTheDocument();
+    expect(screen.getByText("Execution receipts")).toBeInTheDocument();
+    expect(screen.getAllByText("Reconciliations").length).toBeGreaterThan(0);
+    expect(screen.getByText("Locked")).toBeInTheDocument();
+    expect(screen.getByText("Export pending")).toBeInTheDocument();
+    expect(screen.getByText("Expired")).toBeInTheDocument();
+    expect(screen.getByText("Active")).toBeInTheDocument();
+    expect(screen.getAllByText("Denied").length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(
+        "Retention policy admin config can define posture and review windows only; it cannot delete locked or export-pending records, close active workflow records, erase audit truth, or rewrite historical record chains.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Stale retention admin cache is never authority. Backend authoritative lifecycle state and record-chain reread remain decisive before any future purge candidate can be considered.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Unsafe deletion rejected")).toBeInTheDocument();
+    expect(screen.getByText("Historical rewrite rejected")).toBeInTheDocument();
+    expect(screen.getByText("Policy-as-closeout rejected")).toBeInTheDocument();
+    expect(screen.queryByText(/production purge automation/i)).not.toBeInTheDocument();
+    });
+
     it("fails closed when stale platform-admin browser state reaches the admin route", async () => {
     const user = userEvent.setup();
     let sessionRequests = 0;
