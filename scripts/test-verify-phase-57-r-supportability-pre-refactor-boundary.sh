@@ -120,6 +120,14 @@ assert_fails_with \
   "${missing_inventory_repo}" \
   'Missing Phase 57.R ADR statement: `control-plane/aegisops/control_plane/runtime/restore_readiness.py`'
 
+missing_inventory_path_repo="${workdir}/missing-inventory-path"
+create_valid_repo "${missing_inventory_path_repo}"
+perl -0pi -e 's/`apps\/operator-ui\/src\/app\/OperatorRoutes\.tsx`, //g' \
+  "${missing_inventory_path_repo}/${contract_path}"
+assert_fails_with \
+  "${missing_inventory_path_repo}" \
+  'Missing Phase 57.R ADR inventory path: `apps/operator-ui/src/app/OperatorRoutes.tsx`'
+
 missing_order_repo="${workdir}/missing-order"
 create_valid_repo "${missing_order_repo}"
 perl -0pi -e 's/^\| 57\.R\.3 \|.*\n//m' \

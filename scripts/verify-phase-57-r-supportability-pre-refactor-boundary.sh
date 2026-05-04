@@ -123,6 +123,8 @@ required_files=(
 )
 
 for required_file in "${required_files[@]}"; do
+  require_phrase "\`${required_file}\`" "Phase 57.R ADR inventory path"
+
   if [[ ! -e "${repo_root}/${required_file}" ]]; then
     echo "Phase 57.R ADR inventory references missing file: ${required_file}" >&2
     exit 1
