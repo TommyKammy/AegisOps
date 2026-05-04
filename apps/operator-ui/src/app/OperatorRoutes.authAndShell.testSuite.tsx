@@ -404,6 +404,51 @@ export function registerOperatorRoutesAuthAndShellTests() {
     expect(screen.queryByText(/tenant/i)).not.toBeInTheDocument();
     });
 
+    it("renders bounded source profile administration for platform admins", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch(
+        {},
+        {
+          identity: "platform.admin@example.com",
+          provider: "authentik",
+          roles: ["platform_admin"],
+          subject: "operator-44",
+        },
+      ),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/admin"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Source profile administration" }),
+      ).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Wazuh SMB single-node")).toBeInTheDocument();
+    expect(screen.getByText("Create: reviewed source profile draft")).toBeInTheDocument();
+    expect(screen.getByText("Update: reviewed posture change")).toBeInTheDocument();
+    expect(screen.getByText("Disable: source admission blocked")).toBeInTheDocument();
+    expect(screen.getByText("Degraded: visible subordinate context")).toBeInTheDocument();
+    expect(screen.getByText("Audit trail")).toBeInTheDocument();
+    expect(screen.getByText("Future reviewed sources")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Source profile state configures source admission posture only; it cannot become signal, alert, case, evidence, workflow, release, gate, or closeout truth.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Stale source admin UI or browser cache is never authority. Backend record-chain reread remains decisive before source admission or workflow use.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/marketplace/i)).not.toBeInTheDocument();
+    });
+
     it("fails closed when stale platform-admin browser state reaches the admin route", async () => {
     const user = userEvent.setup();
     let sessionRequests = 0;
