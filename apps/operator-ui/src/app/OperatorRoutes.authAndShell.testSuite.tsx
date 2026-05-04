@@ -449,6 +449,53 @@ export function registerOperatorRoutesAuthAndShellTests() {
     expect(screen.queryByText(/marketplace/i)).not.toBeInTheDocument();
     });
 
+    it("renders bounded action policy administration for default low-risk postures", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch(
+        {},
+        {
+          identity: "platform.admin@example.com",
+          provider: "authentik",
+          roles: ["platform_admin"],
+          subject: "operator-44",
+        },
+      ),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/admin"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Action policy administration" }),
+      ).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Read")).toBeInTheDocument();
+    expect(screen.getByText("Notify")).toBeInTheDocument();
+    expect(screen.getByText("Soft Write")).toBeInTheDocument();
+    expect(screen.getAllByText("Allowed by default")).toHaveLength(2);
+    expect(screen.getAllByText("Disabled by default")).toHaveLength(2);
+    expect(screen.getByText("Controlled")).toBeInTheDocument();
+    expect(screen.getByText("Hard Write")).toBeInTheDocument();
+    expect(screen.getByText("Degraded until reviewed")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Controlled and Hard Write default enablement is rejected; those action families remain approval-bound and backend-enforced.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Action policy admin config is eligible posture only; stale UI or cache state cannot approve, execute, reconcile, mutate substrates, or rewrite historical receipts.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Policy audit trail")).toBeInTheDocument();
+    expect(screen.queryByText(/broad SOAR catalog/i)).not.toBeInTheDocument();
+    });
+
     it("fails closed when stale platform-admin browser state reaches the admin route", async () => {
     const user = userEvent.setup();
     let sessionRequests = 0;
