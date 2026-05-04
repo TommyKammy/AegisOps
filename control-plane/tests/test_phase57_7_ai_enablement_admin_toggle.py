@@ -94,7 +94,7 @@ class Phase57_7AIEnablementAdminToggleTests(ServicePersistenceTestBase):
             PermissionError,
             "AI advisory path is disabled by platform-admin posture",
         ):
-            service.inspect_assistant_context("case", promoted_case.case_id)
+            service.inspect_advisory_output("case", promoted_case.case_id)
 
     def test_ai_enablement_env_rejects_feature_expansion_values(self) -> None:
         self.assertEqual(

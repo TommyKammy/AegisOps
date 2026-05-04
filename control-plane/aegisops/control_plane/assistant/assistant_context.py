@@ -123,6 +123,18 @@ def _normalized_optional_string(value: object) -> str | None:
     return normalized or None
 
 
+def require_ai_advisory_enabled(service: Any) -> None:
+    posture = getattr(service._config, "ai_enablement_posture", "enabled")
+    if posture == "enabled":
+        return
+    reason = (
+        "AI advisory path is disabled by platform-admin posture"
+        if posture == "disabled"
+        else "AI advisory path is degraded by platform-admin posture"
+    )
+    raise PermissionError(reason)
+
+
 def _normalized_string_tuple(value: object) -> tuple[str, ...]:
     if not isinstance(value, (list, tuple)):
         return ()
@@ -1206,11 +1218,13 @@ class AssistantContextAssembler:
         )
 
     def inspect_advisory_output(self, record_family: str, record_id: str) -> Any:
+        require_ai_advisory_enabled(self._service)
         context_snapshot = self.inspect_assistant_context(record_family, record_id)
         self._service._require_reviewed_case_scoped_advisory_read(context_snapshot)
         return self._advisory_snapshot_from_context(context_snapshot)
 
     def render_recommendation_draft(self, record_family: str, record_id: str) -> Any:
+        require_ai_advisory_enabled(self._service)
         context_snapshot = self.inspect_assistant_context(record_family, record_id)
         self._service._require_reviewed_case_scoped_advisory_read(context_snapshot)
         return self._recommendation_draft_snapshot_from_context(context_snapshot)
