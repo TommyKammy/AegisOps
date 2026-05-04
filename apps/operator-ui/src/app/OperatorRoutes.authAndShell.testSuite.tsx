@@ -529,7 +529,9 @@ export function registerOperatorRoutesAuthAndShellTests() {
     expect(screen.getByText("Execution receipts")).toBeInTheDocument();
     expect(screen.getAllByText("Reconciliations").length).toBeGreaterThan(0);
     expect(screen.getByText("Locked")).toBeInTheDocument();
-    expect(screen.getAllByText("Export pending").length).toBeGreaterThan(0);
+    expect(
+      screen.getByText("Deletion rejected until export custody is resolved."),
+    ).toBeInTheDocument();
     expect(screen.getByText("Expired")).toBeInTheDocument();
     expect(screen.getByText("Active")).toBeInTheDocument();
     expect(screen.getAllByText("Denied").length).toBeGreaterThan(0);
@@ -577,8 +579,16 @@ export function registerOperatorRoutesAuthAndShellTests() {
     expect(screen.getByText("Normal")).toBeInTheDocument();
     expect(screen.getByText("Empty")).toBeInTheDocument();
     expect(screen.getByText("Degraded")).toBeInTheDocument();
-    expect(screen.getAllByText("Denied").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Export pending").length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(
+        "Denied role access cannot request export configuration or view protected output.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Pending generated output cannot be treated as audit, workflow, release, gate, or closeout truth.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText("platform_admin: Admin Only")).toBeInTheDocument();
     expect(screen.getByText("read_only_auditor: Read Only")).toBeInTheDocument();
     expect(screen.getByText("analyst: Denied")).toBeInTheDocument();
