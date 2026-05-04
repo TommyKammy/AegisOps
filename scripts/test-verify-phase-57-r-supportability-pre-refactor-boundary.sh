@@ -40,9 +40,14 @@ create_valid_repo() {
     "apps/operator-ui/src/app/OperatorRoutes.tsx" \
     "apps/operator-ui/src/app/OperatorShell.tsx" \
     "apps/operator-ui/src/app/operatorConsolePages/adminPages.tsx" \
+    "apps/operator-ui/src/app/OperatorRoutes.authAndShell.testSuite.tsx" \
+    "apps/operator-ui/src/app/OperatorRoutes.test.tsx" \
+    "apps/operator-ui/src/app/optionalExtensionVisibility.test.tsx" \
     "apps/operator-ui/src/auth/roleMatrix.ts" \
     "apps/operator-ui/src/auth/session.ts" \
     "apps/operator-ui/src/auth/navigation.ts" \
+    "apps/operator-ui/src/auth/roleMatrix.test.ts" \
+    "apps/operator-ui/src/auth/session.test.ts" \
     "control-plane/aegisops/control_plane/runtime/restore_readiness.py" \
     "control-plane/aegisops/control_plane/runtime/restore_readiness_backup_restore.py" \
     "control-plane/aegisops/control_plane/runtime/restore_readiness_projection.py" \
@@ -168,9 +173,9 @@ assert_fails_with \
 
 missing_referenced_file_repo="${workdir}/missing-referenced-file"
 create_valid_repo "${missing_referenced_file_repo}"
-rm "${missing_referenced_file_repo}/control-plane/aegisops/control_plane/runtime/restore_readiness.py"
+rm "${missing_referenced_file_repo}/apps/operator-ui/src/app/OperatorRoutes.tsx"
 assert_fails_with \
   "${missing_referenced_file_repo}" \
-  "Phase 57.R ADR inventory references missing file: control-plane/aegisops/control_plane/runtime/restore_readiness.py"
+  "Phase 57.R ADR inventory references missing file: apps/operator-ui/src/app/OperatorRoutes.tsx"
 
 echo "Phase 57.R supportability pre-refactor boundary verifier negative and valid fixtures passed."
