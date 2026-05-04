@@ -820,6 +820,9 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
         backup_restore_source = self._read(
             "control-plane/aegisops_control_plane/runtime/restore_readiness_backup_restore.py"
         )
+        backup_codec_source = self._read(
+            "control-plane/aegisops_control_plane/runtime/restore_backup_codec.py"
+        )
         projection_source = self._read(
             "control-plane/aegisops_control_plane/runtime/restore_readiness_projection.py"
         )
@@ -830,6 +833,16 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
         backup_restore_functions = {
             node.name
             for node in ast.parse(backup_restore_source).body
+            if isinstance(node, ast.FunctionDef)
+        }
+        backup_codec_class = next(
+            node
+            for node in ast.parse(backup_codec_source).body
+            if isinstance(node, ast.ClassDef) and node.name == "BackupPayloadCodec"
+        )
+        backup_codec_methods = {
+            node.name
+            for node in backup_codec_class.body
             if isinstance(node, ast.FunctionDef)
         }
         projection_class = next(
@@ -876,12 +889,15 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
             }
             & service_module_functions
         )
-        self.assertTrue(
+        self.assertFalse(
             {
                 "_parse_backup_datetime",
                 "_record_from_backup_payload",
-            }.issubset(backup_restore_functions)
+            }
+            & backup_restore_functions
         )
+        self.assertIn("record_from_backup_payload", backup_codec_methods)
+        self.assertIn("_parse_backup_datetime", backup_codec_methods)
         self.assertIn("persist_record", persistence_methods)
 
         persist_record = service_methods["persist_record"]
