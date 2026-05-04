@@ -22,8 +22,15 @@ class ControlPlaneServiceHelperLayoutTests(unittest.TestCase):
     def test_persistence_regressions_are_split_into_domain_focused_modules(self) -> None:
         tests_root = pathlib.Path(__file__).resolve().parent
         regression_modules = sorted(
-            path.name
-            for path in tests_root.glob("test_service_persistence_*.py")
+            {
+                path.name
+                for pattern in (
+                    "test_service_persistence_*.py",
+                    "test_service_readiness_*.py",
+                    "test_service_restore_*.py",
+                )
+                for path in tests_root.glob(pattern)
+            }
         )
 
         self.assertEqual(
@@ -38,6 +45,12 @@ class ControlPlaneServiceHelperLayoutTests(unittest.TestCase):
                 "test_service_persistence_assistant_advisory.py",
                 "test_service_persistence_ingest_case_lifecycle.py",
                 "test_service_persistence_restore_readiness.py",
+                "test_service_readiness_projection.py",
+                "test_service_restore_backup_codec.py",
+                "test_service_restore_drill_transactions.py",
+                "test_service_restore_readiness_boundaries.py",
+                "test_service_restore_runtime_visibility.py",
+                "test_service_restore_validation.py",
             ],
         )
 

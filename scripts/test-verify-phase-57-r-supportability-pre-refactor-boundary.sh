@@ -59,7 +59,11 @@ create_valid_repo() {
     "control-plane/aegisops/control_plane/api/entrypoint_support.py" \
     "control-plane/aegisops/control_plane/service.py" \
     "control-plane/aegisops/control_plane/service_composition.py" \
-    "control-plane/tests/test_service_persistence_restore_readiness.py" \
+    "control-plane/tests/test_service_restore_backup_codec.py" \
+    "control-plane/tests/test_service_restore_drill_transactions.py" \
+    "control-plane/tests/test_service_readiness_projection.py" \
+    "control-plane/tests/test_service_restore_validation.py" \
+    "control-plane/tests/test_cli_inspection_restore_readiness.py" \
     "control-plane/tests/test_phase37_reviewed_record_chain_rehearsal.py" \
     "control-plane/tests/test_phase57_7_ai_enablement_admin_toggle.py" \
     "control-plane/tests/test_service_boundary_refactor_regression_validation.py" \

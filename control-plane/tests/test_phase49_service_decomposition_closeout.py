@@ -118,7 +118,7 @@ class Phase49ServiceDecompositionCloseoutTests(unittest.TestCase):
             "control-plane/tests/test_service_persistence_assistant_advisory.py",
             "control-plane/tests/test_execution_coordinator_boundary.py",
             "control-plane/tests/test_phase21_runtime_auth_validation.py",
-            "control-plane/tests/test_service_persistence_restore_readiness.py",
+            "control-plane/tests/test_service_restore_readiness_boundaries.py",
         )
 
         for test_name in (
