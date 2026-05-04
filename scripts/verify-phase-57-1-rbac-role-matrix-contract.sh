@@ -61,6 +61,43 @@ required_access_values=(
   "no_authority"
 )
 
+role_has_workflow_authority_false() {
+  local role="$1"
+
+  awk -v role="${role}" '
+    BEGIN {
+      depth = 0
+      finished = 0
+      found = 0
+      in_role = 0
+      saw_role = 0
+    }
+    $0 ~ "^[[:space:]]*" role ":[[:space:]]*\\{" {
+      in_role = 1
+      saw_role = 1
+    }
+    in_role {
+      if ($0 ~ /^[[:space:]]*workflowAuthority:[[:space:]]*false,?[[:space:]]*$/) {
+        found = 1
+      }
+
+      line = $0
+      opens = gsub(/\{/, "{", line)
+      line = $0
+      closes = gsub(/\}/, "}", line)
+      depth += opens - closes
+
+      if (depth == 0) {
+        finished = 1
+        in_role = 0
+      }
+    }
+    END {
+      exit(saw_role && finished && found ? 0 : 1)
+    }
+  ' "${matrix_path}"
+}
+
 if [[ ! -f "${doc_path}" ]]; then
   echo "Missing Phase 57.1 RBAC role matrix contract: ${doc_path}" >&2
   exit 1
@@ -96,7 +133,7 @@ for phrase in "${required_doc_phrases[@]}"; do
 done
 
 for role in "${required_roles[@]}"; do
-  if ! grep -Fq -- "\"${role}\"" "${matrix_path}"; then
+  if ! grep -Eq -- "^[[:space:]]*${role}:[[:space:]]*\\{" "${matrix_path}"; then
     echo "Missing Phase 57.1 RBAC role in executable matrix: ${role}" >&2
     exit 1
   fi
@@ -108,19 +145,22 @@ for role in "${required_roles[@]}"; do
     echo "Missing Phase 57.1 RBAC role in focused tests: ${role}" >&2
     exit 1
   fi
-done
-
-for access in "${required_access_values[@]}"; do
-  if ! grep -Fq -- "\"${access}\"" "${matrix_path}" "${matrix_test_path}"; then
-    echo "Missing Phase 57.1 RBAC access behavior in executable matrix/tests: ${access}" >&2
+  if ! role_has_workflow_authority_false "${role}"; then
+    echo "Missing fail-closed workflowAuthority=false posture for RBAC role: ${role}" >&2
     exit 1
   fi
 done
 
-if ! grep -Fq -- "workflowAuthority: false" "${matrix_path}"; then
-  echo "Missing fail-closed workflowAuthority=false posture in executable role matrix" >&2
-  exit 1
-fi
+for access in "${required_access_values[@]}"; do
+  if ! grep -Fq -- "\"${access}\"" "${matrix_path}"; then
+    echo "Missing Phase 57.1 RBAC access behavior in executable matrix: ${access}" >&2
+    exit 1
+  fi
+  if ! grep -Fq -- "\"${access}\"" "${matrix_test_path}"; then
+    echo "Missing Phase 57.1 RBAC access behavior in role matrix tests: ${access}" >&2
+    exit 1
+  fi
+done
 
 mac_home_root="/""Users/"
 linux_home_root="/""home/"

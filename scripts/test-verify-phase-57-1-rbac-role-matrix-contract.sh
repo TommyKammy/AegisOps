@@ -76,6 +76,22 @@ assert_fails_with \
   "${missing_role_repo}" \
   'Missing Phase 57.1 RBAC role matrix contract statement: | `support_operator` | read-only | read-only | denied | denied | denied | support-only | denied | denied | denied | denied |'
 
+missing_role_object_repo="${workdir}/missing-support-role-object"
+copy_artifacts "${missing_role_object_repo}"
+perl -0pi -e 's/\n  support_operator: \{\n.*?\n  \},\n  external_collaborator:/\n  external_collaborator:/s' \
+  "${missing_role_object_repo}/apps/operator-ui/src/auth/roleMatrix.ts"
+assert_fails_with \
+  "${missing_role_object_repo}" \
+  "Missing Phase 57.1 RBAC role in executable matrix: support_operator"
+
+workflow_authority_repo="${workdir}/support-workflow-authority"
+copy_artifacts "${workflow_authority_repo}"
+perl -0pi -e 's/(support_operator: \{\n.*?workflowAuthority: )false/$1true/s' \
+  "${workflow_authority_repo}/apps/operator-ui/src/auth/roleMatrix.ts"
+assert_fails_with \
+  "${workflow_authority_repo}" \
+  "Missing fail-closed workflowAuthority=false posture for RBAC role: support_operator"
+
 missing_negative_repo="${workdir}/missing-negative"
 copy_artifacts "${missing_negative_repo}"
 perl -0pi -e 's/Negative tests must reject support operator workflow authority, external collaborator workflow authority, UI role cache as authority, self-approval through role confusion, and admin configuration rewriting historical truth\.//g' \
@@ -97,6 +113,10 @@ assert_fails_with \
 local_path_repo="${workdir}/local-path"
 copy_artifacts "${local_path_repo}"
 printf '\nLocal debug path: %s\n' "/""Users/example/AegisOps" >> \
+  "${local_path_repo}/docs/phase-57-1-rbac-role-matrix-contract.md"
+printf '\nLocal debug path: %s\n' "/""home/example/AegisOps" >> \
+  "${local_path_repo}/docs/phase-57-1-rbac-role-matrix-contract.md"
+printf '\nLocal debug path: %s\n' "C:""\\Users\\example\\AegisOps" >> \
   "${local_path_repo}/docs/phase-57-1-rbac-role-matrix-contract.md"
 assert_fails_with \
   "${local_path_repo}" \
