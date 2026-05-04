@@ -53,6 +53,39 @@ describe("createSessionStore", () => {
     });
   });
 
+  it("accepts every Phase 57.1 commercial RBAC matrix role by default", async () => {
+    const config = createOperatorUiConfig();
+    const sessionStore = createSessionStore({
+      config,
+      fetchFn: vi.fn<typeof fetch>().mockResolvedValue(
+        jsonResponse({
+          identity: "auditor@example.com",
+          provider: "authentik",
+          roles: [
+            "platform_admin",
+            "analyst",
+            "approver",
+            "read_only_auditor",
+            "support_operator",
+            "external_collaborator",
+          ],
+          subject: "operator-57-1",
+        }),
+      ),
+    });
+
+    await expect(sessionStore.getSession()).resolves.toMatchObject({
+      roles: [
+        "platform_admin",
+        "analyst",
+        "approver",
+        "read_only_auditor",
+        "support_operator",
+        "external_collaborator",
+      ],
+    });
+  });
+
   it("clears a cached session when a forced refresh returns unauthenticated", async () => {
     const config = createOperatorUiConfig({
       allowedRoles: ["analyst"],
