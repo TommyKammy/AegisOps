@@ -588,18 +588,35 @@ class ReadinessOperabilityHelper:
         }
 
     def _build_assistant_provider_operability(self) -> dict[str, object]:
-        latest_trace_reader = getattr(self._store, "latest_ai_trace_record", None)
-        latest_trace = (
-            latest_trace_reader() if callable(latest_trace_reader) else None
+        ai_enablement_posture = str(
+            getattr(self._config, "ai_enablement_posture", "enabled") or "enabled"
         )
         base = {
-            "enablement": "enabled",
+            "enablement": ai_enablement_posture,
             "availability": "available",
             "readiness": "ready",
             "authority_mode": "advisory_only",
             "mainline_dependency": "non_blocking",
             "reason": "bounded_reviewed_summary_provider_available",
         }
+        if ai_enablement_posture == "disabled":
+            return {
+                **base,
+                "availability": "unavailable",
+                "readiness": "not_applicable",
+                "reason": "ai_advisory_disabled_by_admin",
+            }
+        if ai_enablement_posture == "degraded":
+            return {
+                **base,
+                "availability": "unavailable",
+                "readiness": "degraded",
+                "reason": "ai_advisory_degraded_by_admin",
+            }
+        latest_trace_reader = getattr(self._store, "latest_ai_trace_record", None)
+        latest_trace = (
+            latest_trace_reader() if callable(latest_trace_reader) else None
+        )
         if latest_trace is None:
             return base
 

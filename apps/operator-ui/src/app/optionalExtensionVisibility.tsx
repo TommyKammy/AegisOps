@@ -2,6 +2,7 @@ import { Alert, Card, CardContent, Chip, Grid, Stack, Typography } from "@mui/ma
 
 export type OptionalExtensionStatus =
   | "enabled"
+  | "disabled"
   | "disabled_by_default"
   | "unavailable"
   | "degraded";
@@ -79,6 +80,10 @@ function deriveOptionalExtensionStatus(extension: OptionalExtensionSignal | null
     return "disabled_by_default";
   }
 
+  if (enablement === "disabled") {
+    return "disabled";
+  }
+
   if (enablement === "enabled") {
     return availability === "available" ? "enabled" : "unavailable";
   }
@@ -96,6 +101,8 @@ function optionalExtensionStatusExplanation(status: OptionalExtensionStatus): st
       return "The reviewed optional path is active for its bounded role and remains subordinate to authoritative workflow truth.";
     case "disabled_by_default":
       return "The reviewed runtime is operating on the mainline path without this optional extension, which is expected behavior.";
+    case "disabled":
+      return "A platform-admin AI posture disables this advisory path while mainline workflow truth remains usable.";
     case "unavailable":
       return "A reviewed prerequisite or binding is missing, but mainline queue, case, approval, execution, and reconciliation truth stay separate.";
     case "degraded":
@@ -148,6 +155,11 @@ function optionalExtensionStatusMetadata(status: OptionalExtensionStatus): {
       return {
         color: "default",
         label: "Disabled By Default",
+      };
+    case "disabled":
+      return {
+        color: "default",
+        label: "Disabled",
       };
     case "unavailable":
       return {

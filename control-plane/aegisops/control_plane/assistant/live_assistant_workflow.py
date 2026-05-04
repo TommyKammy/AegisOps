@@ -8,6 +8,7 @@ import re
 from typing import Any, Callable, Iterable, Protocol
 
 from .ai_trace_lifecycle import AITraceLifecycleService
+from .assistant_context import require_ai_advisory_enabled
 from .assistant_provider import (
     AssistantProviderAdapter,
     AssistantProviderAttemptFailure,
@@ -278,6 +279,7 @@ class LiveAssistantWorkflowCoordinator:
         record_family: str,
         record_id: str,
     ) -> object:
+        require_ai_advisory_enabled(self._service)
         workflow_task = self._service._require_non_empty_string(
             workflow_task, "workflow_task"
         )

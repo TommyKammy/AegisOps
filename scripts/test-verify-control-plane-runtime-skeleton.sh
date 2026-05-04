@@ -70,6 +70,7 @@ AEGISOPS_CONTROL_PLANE_ADMIN_BOOTSTRAP_TOKEN_OPENBAO_PATH=
 AEGISOPS_CONTROL_PLANE_BREAK_GLASS_TOKEN=
 AEGISOPS_CONTROL_PLANE_BREAK_GLASS_TOKEN_FILE=
 AEGISOPS_CONTROL_PLANE_BREAK_GLASS_TOKEN_OPENBAO_PATH=
+AEGISOPS_CONTROL_PLANE_AI_ENABLEMENT_POSTURE=enabled
 AEGISOPS_OPENBAO_ADDRESS=
 AEGISOPS_OPENBAO_TOKEN=
 AEGISOPS_OPENBAO_TOKEN_FILE=
@@ -125,6 +126,6 @@ create_runtime_repo "${duplicate_env_repo}"
 cat <<'EOF' >> "${duplicate_env_repo}/control-plane/config/local.env.sample"
 AEGISOPS_CONTROL_PLANE_PORT=8080
 EOF
-assert_fails_with "${duplicate_env_repo}" "Control-plane local env sample must define exactly 29 non-comment settings."
+assert_fails_with "${duplicate_env_repo}" "Control-plane local env sample must define exactly 30 non-comment settings."
 
 echo "verify-control-plane-runtime-skeleton tests passed"
