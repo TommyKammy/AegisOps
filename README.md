@@ -52,6 +52,7 @@ Canonical cross-phase boundary reference:
 - [Phase 56.1 Today view backend projection contract](docs/deployment/today-view-backend-projection-contract.md) defines priority, stale work, pending approvals, degraded sources, reconciliation mismatches, evidence gaps, and advisory-only AI focus lanes for the Daily SOC Workbench backend projection.
 - [Phase 56.3 case timeline authority projection contract](docs/deployment/case-timeline-authority-projection-contract.md) defines Wazuh signal, alert, evidence, AI summary, recommendation, action request, approval, Shuffle receipt, and reconciliation timeline segments with explicit authority posture and direct backend record binding.
 - [Phase 56.8 closeout evaluation](docs/phase-56-closeout-evaluation.md) records the Daily SOC Workbench outcomes, subordinate authority posture, verifier evidence, accepted limitations, and bounded Phase 57/58/59/60/66 handoff.
+- [Phase 57.8 closeout evaluation](docs/phase-57-closeout-evaluation.md) records the commercial administration MVP outcomes, subordinate authority posture, verifier evidence, accepted limitations, and bounded Phase 58/59/60/66 handoff.
 - [Phase 53.2 Wazuh certificate and credential contract](docs/deployment/wazuh-certificate-credential-contract.md) defines certificate generation-wrapper posture, credential custody, default-credential rejection, rotation guidance, and no-live-secret validation for the Wazuh profile.
 - [Phase 53.3 Wazuh intake binding contract](docs/deployment/wazuh-manager-intake-binding-contract.md) defines the manager-to-AegisOps intake URL, reviewed proxy route, shared-secret custody reference, provenance fields, and analytic-signal admission boundary for Wazuh-origin events.
 - [Phase 53.5 Wazuh agent enrollment helper contract](docs/deployment/wazuh-agent-enrollment-helper-contract.md) defines the one-endpoint enrollment helper posture, prerequisites, rollback notes, safety warnings, and fleet-management exclusion for the Wazuh profile.
@@ -135,6 +136,8 @@ The Phase 56.1 Today view backend projection contract is defined by the [Phase 5
 The Phase 56.3 case timeline authority projection contract is defined by the [Phase 56.3 case timeline authority projection contract](docs/deployment/case-timeline-authority-projection-contract.md).
 
 The Phase 56.8 closeout evaluation is defined by the [Phase 56.8 closeout evaluation](docs/phase-56-closeout-evaluation.md).
+
+The Phase 57.8 closeout evaluation is defined by the [Phase 57.8 closeout evaluation](docs/phase-57-closeout-evaluation.md).
 
 Wazuh detects, AegisOps decides, records, and reconciles, and Shuffle executes reviewed delegated routine work.
 
