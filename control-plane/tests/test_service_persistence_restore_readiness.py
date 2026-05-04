@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import copy
 from datetime import datetime, timedelta, timezone
+import importlib
 import pathlib
 import sys
 
@@ -149,7 +150,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
                 self.assertFalse(hasattr(service, helper_name))
                 self.assertTrue(hasattr(readiness_operability_helper, helper_name))
 
-    def test_service_decomposes_restore_validation_into_internal_helpers(
+    def test_service_decomposes_backup_restore_codec_and_validation_boundaries(
         self,
     ) -> None:
         store, _ = support.make_store()
@@ -161,16 +162,34 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             service._restore_readiness_service._backup_restore_flow
         )
 
-        for helper_name in (
+        codec_module = importlib.import_module(
+            "aegisops.control_plane.runtime.restore_backup_codec"
+        )
+        validation_module = importlib.import_module(
+            "aegisops.control_plane.runtime.restore_backup_validation"
+        )
+
+        self.assertEqual(
+            backup_restore_flow._backup_payload_codec.__class__.__module__,
+            codec_module.__name__,
+        )
+        self.assertEqual(
+            backup_restore_flow._restore_validation_boundary.__class__.__module__,
+            validation_module.__name__,
+        )
+        for embedded_helper_name in (
+            "_record_from_backup_payload",
             "_collect_restore_record_families",
             "_reject_duplicate_restore_identifiers",
             "_validate_restore_record_links",
             "_validate_restore_lifecycle_transitions",
-            "_collect_restore_drill_verified_ids",
-            "_derive_restore_drill_readiness_status",
         ):
-            with self.subTest(helper_name=helper_name):
-                self.assertTrue(hasattr(backup_restore_flow, helper_name))
+            with self.subTest(helper_name=embedded_helper_name):
+                self.assertFalse(
+                    hasattr(backup_restore_flow, embedded_helper_name),
+                    "backup/restore codec and validation helpers should live behind "
+                    "focused runtime boundaries",
+                )
 
     def test_service_routes_runtime_restore_and_readiness_through_diagnostics_boundary(
         self,
@@ -1159,9 +1178,10 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
             store=restored_store,
         )
-        original_parser = (
-            restored_service._restore_readiness_service._backup_restore_flow._record_from_backup_payload
+        backup_payload_codec = (
+            restored_service._restore_readiness_service._backup_restore_flow._backup_payload_codec
         )
+        original_parser = backup_payload_codec.record_from_backup_payload
 
         def wrong_family_parser(
             record_type: type[ControlPlaneRecord],
@@ -1178,9 +1198,7 @@ class RestoreReadinessPersistenceTests(ServicePersistenceTestBase):
                 )
             return parsed
 
-        restored_service._restore_readiness_service._backup_restore_flow._record_from_backup_payload = (
-            wrong_family_parser
-        )
+        backup_payload_codec.record_from_backup_payload = wrong_family_parser
 
         with self.assertRaisesRegex(
             ValueError,
