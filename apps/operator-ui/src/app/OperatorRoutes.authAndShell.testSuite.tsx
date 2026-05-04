@@ -479,6 +479,8 @@ export function registerOperatorRoutesAuthAndShellTests() {
     expect(screen.getByText("Soft Write")).toBeInTheDocument();
     expect(screen.getAllByText("Allowed by default")).toHaveLength(2);
     expect(screen.getAllByText("Disabled by default")).toHaveLength(2);
+    expect(screen.getByText("Controlled")).toBeInTheDocument();
+    expect(screen.getByText("Hard Write")).toBeInTheDocument();
     expect(screen.getByText("Degraded until reviewed")).toBeInTheDocument();
     expect(
       screen.getByText(
