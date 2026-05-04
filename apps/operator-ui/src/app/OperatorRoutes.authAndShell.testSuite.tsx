@@ -529,7 +529,9 @@ export function registerOperatorRoutesAuthAndShellTests() {
     expect(screen.getByText("Execution receipts")).toBeInTheDocument();
     expect(screen.getAllByText("Reconciliations").length).toBeGreaterThan(0);
     expect(screen.getByText("Locked")).toBeInTheDocument();
-    expect(screen.getByText("Export pending")).toBeInTheDocument();
+    expect(
+      screen.getByText("Deletion rejected until export custody is resolved."),
+    ).toBeInTheDocument();
     expect(screen.getByText("Expired")).toBeInTheDocument();
     expect(screen.getByText("Active")).toBeInTheDocument();
     expect(screen.getAllByText("Denied").length).toBeGreaterThan(0);
@@ -547,6 +549,63 @@ export function registerOperatorRoutesAuthAndShellTests() {
     expect(screen.getByText("Historical rewrite rejected")).toBeInTheDocument();
     expect(screen.getByText("Policy-as-closeout rejected")).toBeInTheDocument();
     expect(screen.queryByText(/production purge automation/i)).not.toBeInTheDocument();
+    });
+
+    it("renders bounded audit export administration with role-gated derived export states", async () => {
+    const dependencies = createDefaultDependencies({
+      fetchFn: createAuthorizedFetch(
+        {},
+        {
+          identity: "platform.admin@example.com",
+          provider: "authentik",
+          roles: ["platform_admin"],
+          subject: "operator-44",
+        },
+      ),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/operator/admin"]}>
+        <OperatorRoutes dependencies={dependencies} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "Audit export administration" }),
+      ).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Normal")).toBeInTheDocument();
+    expect(screen.getByText("Empty")).toBeInTheDocument();
+    expect(screen.getByText("Degraded")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Denied role access cannot request export configuration or view protected output.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Pending generated output cannot be treated as audit, workflow, release, gate, or closeout truth.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("platform_admin: Admin Only")).toBeInTheDocument();
+    expect(screen.getByText("read_only_auditor: Read Only")).toBeInTheDocument();
+    expect(screen.getByText("analyst: Denied")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Audit export admin config can request export windows and custody posture only; it cannot rewrite historical audit records, workflow records, release gates, or closeout truth.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Generated exports remain derived evidence from authoritative AegisOps records and must be reread from one committed backend snapshot.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Export config as audit truth rejected")).toBeInTheDocument();
+    expect(screen.getByText("Export output as workflow truth rejected")).toBeInTheDocument();
+    expect(screen.getByText("Stale export cache as authority rejected")).toBeInTheDocument();
+    expect(screen.queryByText(/compliance report template/i)).not.toBeInTheDocument();
     });
 
     it("fails closed when stale platform-admin browser state reaches the admin route", async () => {
