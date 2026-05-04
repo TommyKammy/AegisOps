@@ -591,10 +591,6 @@ class ReadinessOperabilityHelper:
         ai_enablement_posture = str(
             getattr(self._config, "ai_enablement_posture", "enabled") or "enabled"
         )
-        latest_trace_reader = getattr(self._store, "latest_ai_trace_record", None)
-        latest_trace = (
-            latest_trace_reader() if callable(latest_trace_reader) else None
-        )
         base = {
             "enablement": ai_enablement_posture,
             "availability": "available",
@@ -617,6 +613,10 @@ class ReadinessOperabilityHelper:
                 "readiness": "degraded",
                 "reason": "ai_advisory_degraded_by_admin",
             }
+        latest_trace_reader = getattr(self._store, "latest_ai_trace_record", None)
+        latest_trace = (
+            latest_trace_reader() if callable(latest_trace_reader) else None
+        )
         if latest_trace is None:
             return base
 

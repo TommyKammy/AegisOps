@@ -20,6 +20,20 @@ from postgres_test_support import make_store
 from support.service_persistence import ServicePersistenceTestBase
 
 
+class TraceReadRejectingStore:
+    def __init__(self, inner: object) -> None:
+        self._inner = inner
+
+    def __getattribute__(self, name: str) -> object:
+        if name == "latest_ai_trace_record":
+            raise AssertionError(
+                "disabled/degraded AI posture must not read latest AI trace"
+            )
+        if name == "_inner":
+            return object.__getattribute__(self, name)
+        return getattr(object.__getattribute__(self, "_inner"), name)
+
+
 class Phase57_7AIEnablementAdminToggleTests(ServicePersistenceTestBase):
     def _service_with_ai_posture(
         self,
@@ -63,6 +77,31 @@ class Phase57_7AIEnablementAdminToggleTests(ServicePersistenceTestBase):
                 self.assertEqual(assistant["reason"], reason)
                 self.assertEqual(assistant["authority_mode"], "advisory_only")
                 self.assertEqual(assistant["mainline_dependency"], "non_blocking")
+
+    def test_ai_disabled_and_degraded_readiness_short_circuits_trace_reads(
+        self,
+    ) -> None:
+        for posture, readiness in (
+            ("disabled", "not_applicable"),
+            ("degraded", "degraded"),
+        ):
+            with self.subTest(posture=posture):
+                store, _ = make_store()
+                service = AegisOpsControlPlaneService(
+                    RuntimeConfig(
+                        postgres_dsn="postgresql://control-plane.local/aegisops",
+                        ai_enablement_posture=posture,
+                    ),
+                    store=TraceReadRejectingStore(store),
+                )
+
+                diagnostics = service.inspect_readiness_diagnostics()
+                assistant = diagnostics.metrics["optional_extensions"]["extensions"][
+                    "assistant"
+                ]
+
+                self.assertEqual(assistant["enablement"], posture)
+                self.assertEqual(assistant["readiness"], readiness)
 
     def test_ai_disabled_mode_preserves_non_ai_workflow_surfaces(self) -> None:
         store, base_service, promoted_case, _, _ = self._build_phase19_in_scope_case()
