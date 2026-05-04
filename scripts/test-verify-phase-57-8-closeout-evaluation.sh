@@ -54,6 +54,15 @@ valid_repo="${workdir}/valid"
 copy_valid_repo "${valid_repo}"
 assert_passes "${valid_repo}"
 
+url_path_repo="${workdir}/url-path"
+copy_valid_repo "${url_path_repo}"
+printf '%s\n' \
+  "Reference URL: https://example.com/home/docs/phase-57-closeout" \
+  "Reference URL: https://example.com/Users/docs/phase-57-closeout" \
+  "Reference URL: https://example.com/C:/Users/docs/phase-57-closeout" \
+  >>"${url_path_repo}/docs/phase-57-closeout-evaluation.md"
+assert_passes "${url_path_repo}"
+
 missing_doc_repo="${workdir}/missing-doc"
 mkdir -p "${missing_doc_repo}/docs"
 cp "${repo_root}/README.md" "${missing_doc_repo}/README.md"

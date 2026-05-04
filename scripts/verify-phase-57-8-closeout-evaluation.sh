@@ -134,7 +134,8 @@ mac_home_prefix="$(printf '/%s/' 'Users')"
 unix_home_prefix="$(printf '/%s/' 'home')"
 windows_backslash_prefix="$(printf '[A-Za-z]:\\\\%s\\\\' 'Users')"
 windows_slash_prefix="$(printf '[A-Za-z]:/%s/' 'Users')"
-absolute_path_pattern="(${mac_home_prefix}|${unix_home_prefix}|${windows_backslash_prefix}|${windows_slash_prefix})[^ <\`]+"
+absolute_path_boundary='(^|[[:space:]`"'\''(<[{=])'
+absolute_path_pattern="${absolute_path_boundary}(${mac_home_prefix}|${unix_home_prefix}|${windows_backslash_prefix}|${windows_slash_prefix})[^ <\`]+"
 if grep -Eq -- "${absolute_path_pattern}" "${absolute_doc_path}" "${readme_path}"; then
   echo "Forbidden Phase 57 closeout evaluation: workstation-local absolute path detected" >&2
   exit 1
