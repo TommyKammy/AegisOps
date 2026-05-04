@@ -113,4 +113,27 @@ describe("optionalExtensionVisibility", () => {
       }),
     );
   });
+
+  it("keeps admin-disabled assistant posture distinct from unavailable", () => {
+    const definitions = buildOptionalExtensionDefinitionsFromPayload(
+      createOptionalExtensionPayload({
+        assistant: {
+          authority_mode: "advisory_only",
+          availability: "unavailable",
+          enablement: "disabled",
+          mainline_dependency: "non_blocking",
+          readiness: "not_applicable",
+          reason: "ai_advisory_disabled_by_admin",
+        },
+      }),
+    );
+
+    expect(definitions).toContainEqual(
+      expect.objectContaining({
+        description: expect.stringContaining("platform-admin AI posture disables"),
+        status: "disabled",
+        title: "Assistant",
+      }),
+    );
+  });
 });

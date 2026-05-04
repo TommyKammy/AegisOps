@@ -217,6 +217,21 @@ def _load_bool(source: Mapping[str, str], env_name: str, default: bool) -> bool:
     )
 
 
+def _load_choice(
+    source: Mapping[str, str],
+    env_name: str,
+    default: str,
+    *,
+    allowed_values: frozenset[str],
+) -> str:
+    raw_value = source.get(env_name, "").strip().lower()
+    value = raw_value or default
+    if value in allowed_values:
+        return value
+    allowed = ", ".join(sorted(allowed_values))
+    raise ValueError(f"{env_name} must be one of: {allowed}; got: {raw_value!r}")
+
+
 @dataclass(frozen=True)
 class RuntimeConfig:
     host: str = "127.0.0.1"
@@ -236,6 +251,7 @@ class RuntimeConfig:
     admin_bootstrap_token: str = field(default="", repr=False)
     break_glass_token: str = field(default="", repr=False)
     misp_enrichment_enabled: bool = False
+    ai_enablement_posture: str = "enabled"
     control_plane_change_state: str = "verified_current"
     control_plane_change_evidence_id: str = ""
 
@@ -343,6 +359,12 @@ class RuntimeConfig:
                 source,
                 "AEGISOPS_CONTROL_PLANE_MISP_ENRICHMENT_ENABLED",
                 cls.misp_enrichment_enabled,
+            ),
+            ai_enablement_posture=_load_choice(
+                source,
+                "AEGISOPS_CONTROL_PLANE_AI_ENABLEMENT_POSTURE",
+                cls.ai_enablement_posture,
+                allowed_values=frozenset({"enabled", "disabled", "degraded"}),
             ),
             control_plane_change_state=source.get(
                 "AEGISOPS_CONTROL_PLANE_CHANGE_STATE",

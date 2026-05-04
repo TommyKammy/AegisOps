@@ -905,6 +905,7 @@ class AegisOpsControlPlaneService(CaseWorkflowFacade, ExternalEvidenceFacade):
         record_family: str,
         record_id: str,
     ) -> AnalystAssistantContextSnapshot:
+        self._require_ai_advisory_enabled()
         return self._assistant_context_assembler.inspect_assistant_context(
             record_family,
             record_id,
@@ -966,6 +967,7 @@ class AegisOpsControlPlaneService(CaseWorkflowFacade, ExternalEvidenceFacade):
         record_family: str,
         record_id: str,
     ) -> AdvisoryInspectionSnapshot:
+        self._require_ai_advisory_enabled()
         return self._assistant_advisory_coordinator.inspect_advisory_output(
             record_family,
             record_id,
@@ -976,6 +978,7 @@ class AegisOpsControlPlaneService(CaseWorkflowFacade, ExternalEvidenceFacade):
         record_family: str,
         record_id: str,
     ) -> RecommendationDraftSnapshot:
+        self._require_ai_advisory_enabled()
         return self._assistant_advisory_coordinator.render_recommendation_draft(
             record_family,
             record_id,
@@ -988,11 +991,23 @@ class AegisOpsControlPlaneService(CaseWorkflowFacade, ExternalEvidenceFacade):
         record_family: str,
         record_id: str,
     ) -> LiveAssistantWorkflowSnapshot:
+        self._require_ai_advisory_enabled()
         return self._live_assistant_workflow_coordinator.run_live_assistant_workflow(
             workflow_task=workflow_task,
             record_family=record_family,
             record_id=record_id,
         )
+
+    def _require_ai_advisory_enabled(self) -> None:
+        posture = getattr(self._config, "ai_enablement_posture", "enabled")
+        if posture == "enabled":
+            return
+        reason = (
+            "AI advisory path is disabled by platform-admin posture"
+            if posture == "disabled"
+            else "AI advisory path is degraded by platform-admin posture"
+        )
+        raise PermissionError(reason)
 
     def create_reviewed_action_request_from_advisory(
         self,
