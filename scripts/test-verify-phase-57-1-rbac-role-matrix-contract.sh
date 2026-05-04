@@ -96,7 +96,7 @@ assert_fails_with \
 
 local_path_repo="${workdir}/local-path"
 copy_artifacts "${local_path_repo}"
-printf '\nLocal debug path: /Users/example/AegisOps\n' >> \
+printf '\nLocal debug path: %s\n' "/""Users/example/AegisOps" >> \
   "${local_path_repo}/docs/phase-57-1-rbac-role-matrix-contract.md"
 assert_fails_with \
   "${local_path_repo}" \

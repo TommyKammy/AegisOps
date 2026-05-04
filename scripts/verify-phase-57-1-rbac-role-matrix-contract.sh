@@ -122,7 +122,11 @@ if ! grep -Fq -- "workflowAuthority: false" "${matrix_path}"; then
   exit 1
 fi
 
-if grep -R -nE '/Users/[^[:space:]]+|/home/[^[:space:]]+|C:\\\\Users\\\\' \
+mac_home_root="/""Users/"
+linux_home_root="/""home/"
+windows_user_root="C:""\\\\Users\\\\"
+
+if grep -R -nE "${mac_home_root}[^[:space:]]+|${linux_home_root}[^[:space:]]+|${windows_user_root}" \
   "${doc_path}" "${matrix_path}" "${matrix_test_path}" "${session_test_path}" >&2; then
   echo "Phase 57.1 RBAC artifacts contain workstation-local absolute paths" >&2
   exit 1
