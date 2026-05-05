@@ -327,7 +327,7 @@ class RestoreDrillTransactionTests(ServicePersistenceTestBase):
         self,
     ) -> None:
         base_store, _ = make_store()
-        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+        _store, _service, promoted_case, _evidence_id, _reviewed_at = (
             self._build_phase19_in_scope_case(store=base_store)
         )
         fallback_store = IsolationLevelFallbackProbeStore(

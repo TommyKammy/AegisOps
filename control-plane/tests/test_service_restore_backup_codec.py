@@ -636,7 +636,7 @@ class RestoreBackupCodecTests(ServicePersistenceTestBase):
     def test_service_phase21_restore_rejects_v2_backup_without_recommendation_family(
         self,
     ) -> None:
-        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
             self._build_phase19_in_scope_case()
         )
         backup = service.export_authoritative_record_chain_backup()

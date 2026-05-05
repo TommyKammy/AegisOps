@@ -502,7 +502,7 @@ class RestoreValidationTests(ServicePersistenceTestBase):
     def test_service_phase21_restore_rejects_unsupported_transition_subject_family(
         self,
     ) -> None:
-        _store, service, promoted_case, evidence_id, reviewed_at = (
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
             self._build_phase19_in_scope_case()
         )
         backup = service.export_authoritative_record_chain_backup()
