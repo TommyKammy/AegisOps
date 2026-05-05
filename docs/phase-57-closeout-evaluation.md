@@ -131,6 +131,109 @@ Phase 60 can consume the Phase 57 retention and audit export administration post
 
 Phase 66 can consume the Phase 57 commercial administration MVP as one prerequisite evidence packet for RC proof. Phase 66 must still prove RC gate criteria, production-readiness evidence, upgrade/rollback posture, supportability, security review, packaging, first-user behavior, daily-operator behavior, and admin behavior under the approved RC gate. Phase 57 does not complete Phase 66 RC proof.
 
+## Phase 57.R Supportability Pre-Refactor Closeout Addendum
+
+- **Status**: Accepted as behavior-preserving supportability pre-refactor closeout evidence for Phase 58 handoff; Phase 58 supportability is not complete.
+- **Date**: 2026-05-05
+- **Owner**: AegisOps maintainers
+- **Related Issues**: #1224, #1225, #1226, #1227, #1228, #1229
+
+Phase 57.R is accepted only as a supportability pre-refactor baseline that preserves Phase 57 admin behavior, restore/readiness semantics, public facade compatibility, CLI/API behavior, persistence, approval, execution, reconciliation, and AI boundaries.
+
+This addendum does not claim Phase 58 supportability, doctor completeness, support bundles, backup/restore support operations, break-glass support operations, Beta, RC, GA, or commercial replacement readiness.
+
+### Phase 57.R Child Issue Outcomes
+
+| Issue | Scope | Outcome |
+| --- | --- | --- |
+| #1224 | Epic: Phase 57.R Supportability pre-refactor before Phase 58 | Closed by the ordered #1225 through #1229 evidence packet. |
+| #1225 | Phase 57.R.1 Add supportability refactor boundary ADR and inventory | Closed. Added ADR-0019 and its focused verifier without runtime behavior changes. |
+| #1226 | Phase 57.R.2 Split Phase 57 admin UI pages and posture data | Closed. Split the monolithic admin page into page modules and shared posture/display data while preserving rendered admin behavior and route gates. |
+| #1227 | Phase 57.R.3 Extract backup / restore payload codec and validation boundaries | Closed. Extracted backup codec and restore validation helpers while preserving restore validation, fail-closed behavior, public facade compatibility, and durable-state cleanliness expectations. |
+| #1228 | Phase 57.R.4 Shard restore and readiness tests into focused suites | Closed. Split restore/readiness coverage into focused test modules without deleting negative coverage or weakening assertions. |
+| #1229 | Phase 57.R.5 Phase 57.R closeout evaluation and maintainability guard refresh | Closed when this addendum, focused closeout verifier, hotspot verifier, path hygiene, focused tests, and issue-lint evidence pass. |
+
+### Phase 57.R Changed Files
+
+Phase 57.R materially added or tightened these repo-owned surfaces:
+
+- `docs/adr/0019-phase-57-r-supportability-pre-refactor-boundary.md`
+- `scripts/verify-phase-57-r-supportability-pre-refactor-boundary.sh`
+- `scripts/test-verify-phase-57-r-supportability-pre-refactor-boundary.sh`
+- `apps/operator-ui/src/app/operatorConsolePages/adminPages.tsx`
+- `apps/operator-ui/src/app/operatorConsolePages/adminPages/UserRoleAdminPage.tsx`
+- `apps/operator-ui/src/app/operatorConsolePages/adminPages/SourceProfileAdministrationPage.tsx`
+- `apps/operator-ui/src/app/operatorConsolePages/adminPages/ActionPolicyAdministrationPage.tsx`
+- `apps/operator-ui/src/app/operatorConsolePages/adminPages/RetentionPolicyAdministrationPage.tsx`
+- `apps/operator-ui/src/app/operatorConsolePages/adminPages/AuditExportAdministrationPage.tsx`
+- `apps/operator-ui/src/app/operatorConsolePages/adminPages/adminDisplay.ts`
+- `apps/operator-ui/src/app/operatorConsolePages/adminPages/adminPostureData.ts`
+- `apps/operator-ui/src/app/operatorConsolePages/adminPages/adminPagesStructure.test.ts`
+- `control-plane/aegisops/control_plane/runtime/restore_backup_codec.py`
+- `control-plane/aegisops/control_plane/runtime/restore_backup_validation.py`
+- `control-plane/aegisops/control_plane/runtime/restore_readiness_backup_restore.py`
+- `control-plane/tests/_restore_readiness_test_support.py`
+- `control-plane/tests/test_service_restore_backup_codec.py`
+- `control-plane/tests/test_service_restore_drill_transactions.py`
+- `control-plane/tests/test_service_restore_readiness_boundaries.py`
+- `control-plane/tests/test_service_restore_runtime_visibility.py`
+- `control-plane/tests/test_service_restore_validation.py`
+- `control-plane/tests/test_service_readiness_projection.py`
+- `control-plane/tests/test_cli_inspection_restore_readiness.py`
+- `scripts/verify-phase-57-r-closeout-evaluation.sh`
+- `scripts/test-verify-phase-57-r-closeout-evaluation.sh`
+
+### Phase 57.R Measurements
+
+| Surface | Before | Measurement before | Measurement after |
+| --- | --- | --- | --- |
+| Admin UI page split | `adminPages.tsx` | 802 lines | 877 lines across the extracted admin page, posture data, display helper, and structure test files; `adminPages.tsx` is now a 1-line compatibility re-export. |
+| Restore backup / validation runtime split | `restore_readiness_backup_restore.py` | 1,494 lines | 1,562 lines across `restore_readiness_backup_restore.py`, `restore_backup_codec.py`, and `restore_backup_validation.py`; the original module is down to 495 lines. |
+| Restore/readiness persistence tests | `test_service_persistence_restore_readiness.py` | 6,272 lines | 6,472 lines across the sharded restore/readiness persistence, projection, backup codec, drill transaction, boundary, runtime visibility, and validation suites, plus shared support; the original module is now a 5-line compatibility re-export. |
+| CLI restore/readiness tests | `test_cli_inspection_runtime_surface.py` | 1,436 lines | 1,450 lines across runtime-surface and restore/readiness CLI suites; restore/readiness CLI coverage now lives in `test_cli_inspection_restore_readiness.py`. |
+
+### Phase 57.R Verification Evidence
+
+Focused operator UI evidence:
+
+- `npm test --workspace apps/operator-ui -- --run src/app/operatorConsolePages/adminPages/adminPagesStructure.test.ts src/app/OperatorRoutes.test.tsx src/app/OperatorRoutes.authAndShell.testSuite.tsx src/auth/roleMatrix.test.ts src/auth/session.test.ts src/app/optionalExtensionVisibility.test.tsx`
+
+Focused restore/readiness evidence:
+
+- `python3 -m unittest control-plane/tests/test_service_restore_backup_codec.py control-plane/tests/test_service_restore_drill_transactions.py control-plane/tests/test_service_restore_readiness_boundaries.py control-plane/tests/test_service_restore_runtime_visibility.py control-plane/tests/test_service_restore_validation.py control-plane/tests/test_service_readiness_projection.py control-plane/tests/test_cli_inspection_restore_readiness.py control-plane/tests/test_service_persistence_restore_readiness.py`
+
+Maintainability and publishable evidence:
+
+- `bash scripts/verify-maintainability-hotspots.sh`
+- Known maintainability hotspot baseline remains present: `control-plane/aegisops/control_plane/service.py` lines=1393, effective_lines=1241, AegisOpsControlPlaneService methods=95, signals=7.
+- `bash scripts/verify-publishable-path-hygiene.sh`
+- `bash scripts/verify-phase-57-r-closeout-evaluation.sh`
+
+Issue-lint evidence for #1224 through #1229:
+
+- `node <codex-supervisor-root>/dist/index.js issue-lint 1224 --config <supervisor-config-path>`: `execution_ready=yes`, `missing_required=none`, `missing_recommended=none`, `metadata_errors=none`, `high_risk_blocking_ambiguity=none`.
+- `node <codex-supervisor-root>/dist/index.js issue-lint 1225 --config <supervisor-config-path>`: `execution_ready=yes`, `missing_required=none`, `missing_recommended=none`, `metadata_errors=none`, `high_risk_blocking_ambiguity=none`.
+- `node <codex-supervisor-root>/dist/index.js issue-lint 1226 --config <supervisor-config-path>`: `execution_ready=yes`, `missing_required=none`, `missing_recommended=none`, `metadata_errors=none`, `high_risk_blocking_ambiguity=none`.
+- `node <codex-supervisor-root>/dist/index.js issue-lint 1227 --config <supervisor-config-path>`: `execution_ready=yes`, `missing_required=none`, `missing_recommended=none`, `metadata_errors=none`, `high_risk_blocking_ambiguity=none`.
+- `node <codex-supervisor-root>/dist/index.js issue-lint 1228 --config <supervisor-config-path>`: `execution_ready=yes`, `missing_required=none`, `missing_recommended=none`, `metadata_errors=none`, `high_risk_blocking_ambiguity=none`.
+- `node <codex-supervisor-root>/dist/index.js issue-lint 1229 --config <supervisor-config-path>`: `execution_ready=yes`, `missing_required=none`, `missing_recommended=none`, `metadata_errors=none`, `high_risk_blocking_ambiguity=none`.
+
+The maintainability hotspot baseline is unchanged because measured evidence shows no new hotspot and no accepted ceiling regression.
+
+### Phase 57.R Accepted Limitations
+
+- Phase 57.R does not implement Phase 58 doctor output, support bundle behavior, support diagnostics, backup/restore support operations, break-glass support workflows, customer support operations, or escalation workflows.
+- Phase 57.R does not change runtime behavior, public service facade behavior, CLI/API behavior, restore validation semantics, admin behavior, RBAC behavior, persistence, schema, approval, execution, reconciliation, or AI behavior.
+- Phase 57.R does not make ADRs, extracted helpers, UI posture data, supportability projections, verifier output, issue-lint output, browser state, local cache, admin configuration, role matrix documents, operator-facing summaries, or closeout text authoritative workflow truth.
+- Phase 57.R does not weaken the maintainability verifier or update `docs/maintainability-hotspot-baseline.txt` to hide new hotspot growth.
+- Phase 57.R does not claim Beta, RC, GA, self-service commercial readiness, or commercial replacement readiness.
+
+### Phase 58 Supportability Handoff
+
+Phase 58 can consume the extracted admin modules, restore backup codec, restore validation helper, restore/readiness test shards, ADR-0019 inventory, and unchanged maintainability guard as a reviewed pre-refactor baseline.
+
+Phase 58 must still implement doctor output, support bundle behavior, customer-safe diagnostics, backup/restore support operations, break-glass support workflows, escalation evidence, and supportability acceptance tests.
+
 ## Closeout Boundary
 
 This closeout is release and planning evidence only. It does not choose a new runtime configuration, create new admin/support/reporting/SOAR implementation work, expand AI features, approve commercial reporting breadth, approve RC or GA readiness, change authority custody, or claim Beta, RC, GA, or commercial replacement readiness.
