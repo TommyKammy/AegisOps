@@ -92,6 +92,20 @@ if grep -Eq -- "${absolute_path_pattern}" "${absolute_doc_path}"; then
   exit 1
 fi
 
+is_allowed_negated_forbidden_claim() {
+  local forbidden="$1"
+  local claim_line="$2"
+
+  case "${forbidden}" in
+    "Phase 58 supportability is complete")
+      [[ "${claim_line}" == "This closeout does not claim Phase 58 supportability is complete,"* ]]
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 for forbidden in \
   "Phase 57.R implements Phase 58 supportability" \
   "Phase 58 supportability is complete" \
@@ -106,13 +120,12 @@ for forbidden in \
   "Phase 57.R changes persistence or schema" \
   "Phase 57.R changes approval, execution, reconciliation, or AI behavior" \
   "Maintainability baseline was raised to hide a new hotspot"; do
-  if grep -F -- "${forbidden}" "${absolute_doc_path}" \
-    | grep -Fv -- "does not claim" \
-    | grep -Fv -- "is not complete" \
-    | grep -Fqv -- "does not"; then
-    echo "Forbidden Phase 57.R closeout evaluation claim: ${forbidden}" >&2
-    exit 1
-  fi
+  while IFS= read -r claim_line; do
+    if ! is_allowed_negated_forbidden_claim "${forbidden}" "${claim_line}"; then
+      echo "Forbidden Phase 57.R closeout evaluation claim: ${forbidden}" >&2
+      exit 1
+    fi
+  done < <(grep -F -- "${forbidden}" "${absolute_doc_path}" || true)
 done
 
 echo "Phase 57.R closeout evaluation records refactor child outcomes, measurements, verifier evidence, accepted limits, and Phase 58 handoff."

@@ -84,6 +84,13 @@ assert_fails_with \
   "${baseline_hide_repo}" \
   "Forbidden Phase 57.R closeout evaluation claim: Maintainability baseline was raised to hide a new hotspot"
 
+mixed_negation_repo="${workdir}/mixed-negation"
+copy_valid_repo "${mixed_negation_repo}"
+printf '%s\n' "Phase 57.R proves GA readiness, and unrelated evidence does not change the Phase 58 handoff." >>"${mixed_negation_repo}/docs/phase-57-closeout-evaluation.md"
+assert_fails_with \
+  "${mixed_negation_repo}" \
+  "Forbidden Phase 57.R closeout evaluation claim: Phase 57.R proves GA readiness"
+
 absolute_path_repo="${workdir}/absolute-path"
 copy_valid_repo "${absolute_path_repo}"
 mac_home_prefix="/""Users/example"
