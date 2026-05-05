@@ -95,10 +95,11 @@ fi
 is_allowed_negated_forbidden_claim() {
   local forbidden="$1"
   local claim_line="$2"
+  local phase58_incomplete_claim_line="This closeout does not claim Phase 58 supportability is complete, Phase 59 AI daily operations is complete, Phase 60 audit or reporting breadth is complete, Phase 66 RC proof is complete, AegisOps is Beta, RC, GA, self-service commercially ready, or a commercial replacement for every SIEM/SOAR capability."
 
   case "${forbidden}" in
     "Phase 58 supportability is complete")
-      [[ "${claim_line}" == "This closeout does not claim Phase 58 supportability is complete,"* ]]
+      [[ "${claim_line}" == "${phase58_incomplete_claim_line}" ]]
       ;;
     *)
       return 1

@@ -91,6 +91,13 @@ assert_fails_with \
   "${mixed_negation_repo}" \
   "Forbidden Phase 57.R closeout evaluation claim: Phase 57.R proves GA readiness"
 
+repeated_forbidden_repo="${workdir}/repeated-forbidden"
+copy_valid_repo "${repeated_forbidden_repo}"
+printf '%s\n' "This closeout does not claim Phase 58 supportability is complete, but Phase 58 supportability is complete for customer support operations." >>"${repeated_forbidden_repo}/docs/phase-57-closeout-evaluation.md"
+assert_fails_with \
+  "${repeated_forbidden_repo}" \
+  "Forbidden Phase 57.R closeout evaluation claim: Phase 58 supportability is complete"
+
 absolute_path_repo="${workdir}/absolute-path"
 copy_valid_repo "${absolute_path_repo}"
 mac_home_prefix="/""Users/example"
