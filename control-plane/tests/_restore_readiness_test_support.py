@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+# ruff: noqa: E402,F401
+
 import ast
+from collections.abc import Mapping
 import copy
 from datetime import datetime, timedelta, timezone
 import importlib
@@ -19,6 +22,7 @@ from _service_persistence_support import (
     RuntimeConfig,
     ServicePersistenceTestBase,
 )
+from aegisops.control_plane.models import ControlPlaneRecord
 
 for name, value in vars(support).items():
     if not (name.startswith("__") and name.endswith("__")):
@@ -110,3 +114,11 @@ class MalformedReadinessFieldStore:
 
     def __getattr__(self, name: str) -> object:
         return getattr(self.inner, name)
+
+
+__all__ = tuple(
+    name
+    for name in globals()
+    if not (name.startswith("__") and name.endswith("__"))
+    and name not in {"pathlib", "sys", "support"}
+)

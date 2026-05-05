@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# ruff: noqa: E402
+
 import pathlib
 import sys
 
@@ -7,18 +9,28 @@ TESTS_ROOT = pathlib.Path(__file__).resolve().parent
 if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
-import _restore_readiness_test_support as support
-
-for name, value in vars(support).items():
-    if not (name.startswith("__") and name.endswith("__")):
-        globals()[name] = value
+from _restore_readiness_test_support import (
+    ActionRequestRecord,
+    AegisOpsControlPlaneService,
+    AlertRecord,
+    LifecycleTransitionRecord,
+    ReconciliationRecord,
+    RuntimeConfig,
+    ServicePersistenceTestBase,
+    ast,
+    datetime,
+    importlib,
+    make_store,
+    mock,
+    timezone,
+)
 
 
 class RestoreReadinessBoundaryTests(ServicePersistenceTestBase):
     def test_service_decomposes_backup_restore_codec_and_validation_boundaries(
         self,
     ) -> None:
-        store, _ = support.make_store()
+        store, _ = make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
             store=store,

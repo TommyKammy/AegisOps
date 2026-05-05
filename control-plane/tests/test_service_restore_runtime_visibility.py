@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# ruff: noqa: E402
+
 import pathlib
 import sys
 
@@ -7,11 +9,19 @@ TESTS_ROOT = pathlib.Path(__file__).resolve().parent
 if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
-import _restore_readiness_test_support as support
-
-for name, value in vars(support).items():
-    if not (name.startswith("__") and name.endswith("__")):
-        globals()[name] = value
+from _restore_readiness_test_support import (
+    AegisOpsControlPlaneService,
+    ApprovalDecisionRecord,
+    CaseRecord,
+    EvidenceRecord,
+    RuntimeConfig,
+    ServicePersistenceTestBase,
+    datetime,
+    make_store,
+    replace,
+    timedelta,
+    timezone,
+)
 
 
 class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):

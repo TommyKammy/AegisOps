@@ -30,6 +30,7 @@ class ControlPlaneServiceHelperLayoutTests(unittest.TestCase):
                     "test_service_restore_*.py",
                 )
                 for path in tests_root.glob(pattern)
+                if path.name != "test_service_persistence_restore_readiness.py"
             }
         )
 
@@ -44,7 +45,6 @@ class ControlPlaneServiceHelperLayoutTests(unittest.TestCase):
                 "test_service_persistence_action_reconciliation_reviewed_requests.py",
                 "test_service_persistence_assistant_advisory.py",
                 "test_service_persistence_ingest_case_lifecycle.py",
-                "test_service_persistence_restore_readiness.py",
                 "test_service_readiness_projection.py",
                 "test_service_restore_backup_codec.py",
                 "test_service_restore_drill_transactions.py",

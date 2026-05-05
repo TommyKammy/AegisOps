@@ -12,6 +12,7 @@ phase_runtime_contract_test="${repo_root}/control-plane/tests/test_phase27_day2_
 restore_backup_codec_test="${repo_root}/control-plane/tests/test_service_restore_backup_codec.py"
 restore_drill_test="${repo_root}/control-plane/tests/test_service_restore_drill_transactions.py"
 readiness_projection_test="${repo_root}/control-plane/tests/test_service_readiness_projection.py"
+restore_validation_test="${repo_root}/control-plane/tests/test_service_restore_validation.py"
 runtime_auth_test="${repo_root}/control-plane/tests/test_phase21_runtime_auth_validation.py"
 runtime_secret_test="${repo_root}/control-plane/tests/test_runtime_secret_boundary.py"
 validation_doc_test="${repo_root}/control-plane/tests/test_phase27_day2_hardening_validation.py"
@@ -43,6 +44,7 @@ require_file "${phase_runtime_contract_test}" "Missing Phase 27 runtime contract
 require_file "${restore_backup_codec_test}" "Missing restore backup codec unittest"
 require_file "${restore_drill_test}" "Missing restore drill unittest"
 require_file "${readiness_projection_test}" "Missing readiness projection unittest"
+require_file "${restore_validation_test}" "Missing restore validation unittest"
 require_file "${runtime_auth_test}" "Missing runtime auth unittest"
 require_file "${runtime_secret_test}" "Missing runtime secret unittest"
 require_file "${validation_doc_test}" "Missing Phase 27 validation doc unittest"
@@ -86,6 +88,8 @@ require_fixed_line "${restore_drill_test}" "class RestoreDrillTransactionTests(S
 require_fixed_line "${restore_drill_test}" "    def test_service_phase21_restore_drill_fails_closed_when_runtime_bindings_missing_after_restore("
 require_fixed_line "${readiness_projection_test}" "class ReadinessProjectionTests(ServicePersistenceTestBase):"
 require_fixed_line "${readiness_projection_test}" "    def test_service_phase21_readiness_surfaces_source_and_automation_health("
+require_fixed_line "${restore_validation_test}" "class RestoreValidationTests(ServicePersistenceTestBase):"
+require_fixed_line "${restore_validation_test}" "    def test_service_phase21_restore_fails_closed_on_duplicate_alert_identifiers("
 require_fixed_line "${runtime_auth_test}" "class Phase21RuntimeAuthValidationTests(unittest.TestCase):"
 require_fixed_line "${runtime_auth_test}" "    def test_startup_status_reports_missing_reviewed_identity_provider_binding(self) -> None:"
 require_fixed_line "${runtime_auth_test}" "    def test_protected_surface_request_rejects_unreviewed_identity_provider_boundary("
@@ -111,7 +115,7 @@ fi
 for command in \
   "bash scripts/verify-phase-27-day-2-hardening-validation.sh" \
   "python3 -m unittest control-plane.tests.test_phase27_day2_hardening_validation control-plane.tests.test_phase27_day2_runtime_contract" \
-  "python3 -m unittest control-plane.tests.test_service_restore_backup_codec.RestoreBackupCodecTests.test_service_phase21_backup_restore_and_restore_drill_preserve_record_chain control-plane.tests.test_service_restore_drill_transactions.RestoreDrillTransactionTests.test_service_phase21_restore_drill_fails_closed_when_runtime_bindings_missing_after_restore control-plane.tests.test_service_readiness_projection.ReadinessProjectionTests.test_service_phase21_readiness_surfaces_source_and_automation_health control-plane.tests.test_phase21_runtime_auth_validation.Phase21RuntimeAuthValidationTests.test_startup_status_reports_missing_reviewed_identity_provider_binding control-plane.tests.test_phase21_runtime_auth_validation.Phase21RuntimeAuthValidationTests.test_protected_surface_request_rejects_unreviewed_identity_provider_boundary control-plane.tests.test_runtime_secret_boundary.RuntimeSecretBoundaryTests.test_runtime_config_fails_closed_when_openbao_backend_is_unavailable control-plane.tests.test_runtime_secret_boundary.RuntimeSecretBoundaryTests.test_runtime_config_reloads_rotated_openbao_secret_on_fresh_load"
+  "python3 -m unittest control-plane.tests.test_service_restore_backup_codec.RestoreBackupCodecTests.test_service_phase21_backup_restore_and_restore_drill_preserve_record_chain control-plane.tests.test_service_restore_drill_transactions.RestoreDrillTransactionTests.test_service_phase21_restore_drill_fails_closed_when_runtime_bindings_missing_after_restore control-plane.tests.test_service_readiness_projection.ReadinessProjectionTests.test_service_phase21_readiness_surfaces_source_and_automation_health control-plane.tests.test_service_restore_validation.RestoreValidationTests.test_service_phase21_restore_fails_closed_on_duplicate_alert_identifiers control-plane.tests.test_phase21_runtime_auth_validation.Phase21RuntimeAuthValidationTests.test_startup_status_reports_missing_reviewed_identity_provider_binding control-plane.tests.test_phase21_runtime_auth_validation.Phase21RuntimeAuthValidationTests.test_protected_surface_request_rejects_unreviewed_identity_provider_boundary control-plane.tests.test_runtime_secret_boundary.RuntimeSecretBoundaryTests.test_runtime_config_fails_closed_when_openbao_backend_is_unavailable control-plane.tests.test_runtime_secret_boundary.RuntimeSecretBoundaryTests.test_runtime_config_reloads_rotated_openbao_secret_on_fresh_load"
 do
   if ! grep -Fqx -- "${command}" <<<"${phase_validation_commands}" >/dev/null; then
     echo "Missing required Phase 27 validation command in ${phase_validation_step_name}: ${command}" >&2

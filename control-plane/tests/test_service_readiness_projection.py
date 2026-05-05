@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# ruff: noqa: E402
+
 import pathlib
 import sys
 
@@ -7,11 +9,28 @@ TESTS_ROOT = pathlib.Path(__file__).resolve().parent
 if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
-import _restore_readiness_test_support as support
-
-for name, value in vars(support).items():
-    if not (name.startswith("__") and name.endswith("__")):
-        globals()[name] = value
+from _restore_readiness_test_support import (
+    ActionExecutionRecord,
+    ActionRequestRecord,
+    AegisOpsControlPlaneService,
+    AITraceRecord,
+    ApprovalDecisionRecord,
+    MalformedReadinessFieldStore,
+    ReconciliationRecord,
+    RuntimeConfig,
+    ServicePersistenceTestBase,
+    WazuhAlertAdapter,
+    _ListCountingStore,
+    _approved_binding_hash,
+    _load_wazuh_fixture,
+    _phase20_notify_identity_owner_payload,
+    datetime,
+    make_store,
+    mock,
+    replace,
+    timedelta,
+    timezone,
+)
 
 
 class ReadinessProjectionTests(ServicePersistenceTestBase):
@@ -1820,7 +1839,7 @@ class ReadinessProjectionTests(ServicePersistenceTestBase):
     def test_service_phase21_readiness_surfaces_optional_extension_operability_defaults(
         self,
     ) -> None:
-        store, _ = support.make_store()
+        store, _ = make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
             store=store,
@@ -1877,7 +1896,7 @@ class ReadinessProjectionTests(ServicePersistenceTestBase):
         )
 
     def test_service_readiness_handles_malformed_review_payload_fields(self) -> None:
-        inner_store, _ = support.make_store()
+        inner_store, _ = make_store()
         store = MalformedReadinessFieldStore(inner_store)
         _store, service, promoted_case, _evidence_id, _reviewed_at = (
             self._build_phase19_in_scope_case(store=store)
@@ -1924,7 +1943,7 @@ class ReadinessProjectionTests(ServicePersistenceTestBase):
     def test_service_readiness_reason_helpers_fail_closed_on_mismatched_states(
         self,
     ) -> None:
-        store, _ = support.make_store()
+        store, _ = make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
             store=store,
@@ -1974,7 +1993,7 @@ class ReadinessProjectionTests(ServicePersistenceTestBase):
     def test_service_readiness_degrades_malformed_assistant_subject_linkage(
         self,
     ) -> None:
-        inner_store, _ = support.make_store()
+        inner_store, _ = make_store()
         store = MalformedReadinessFieldStore(inner_store)
         service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
@@ -2017,7 +2036,7 @@ class ReadinessProjectionTests(ServicePersistenceTestBase):
     def test_service_phase493_operator_health_labels_optional_degradation_subordinate(
         self,
     ) -> None:
-        store, _ = support.make_store()
+        store, _ = make_store()
         service = AegisOpsControlPlaneService(
             RuntimeConfig(
                 postgres_dsn="postgresql://control-plane.local/aegisops",

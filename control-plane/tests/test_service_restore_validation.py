@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# ruff: noqa: E402
+
 import pathlib
 import sys
 
@@ -7,11 +9,21 @@ TESTS_ROOT = pathlib.Path(__file__).resolve().parent
 if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
-import _restore_readiness_test_support as support
-
-for name, value in vars(support).items():
-    if not (name.startswith("__") and name.endswith("__")):
-        globals()[name] = value
+from _restore_readiness_test_support import (
+    ActionExecutionRecord,
+    AegisOpsControlPlaneService,
+    ApprovalDecisionRecord,
+    CaseRecord,
+    RecommendationRecord,
+    RuntimeConfig,
+    ServicePersistenceTestBase,
+    copy,
+    datetime,
+    make_store,
+    replace,
+    timedelta,
+    timezone,
+)
 
 
 class RestoreValidationTests(ServicePersistenceTestBase):
@@ -859,7 +871,7 @@ class RestoreValidationTests(ServicePersistenceTestBase):
         backup = service.export_authoritative_record_chain_backup()
         backup["record_families"]["reconciliation"][0]["subject_linkage"] = None
 
-        restored_store, _ = support.make_store()
+        restored_store, _ = make_store()
         restored_service = AegisOpsControlPlaneService(
             RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
             store=restored_store,

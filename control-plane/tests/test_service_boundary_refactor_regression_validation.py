@@ -123,6 +123,7 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
         restore_tests = self._defined_test_names(
             "control-plane/tests/test_service_restore_backup_codec.py",
             "control-plane/tests/test_service_restore_drill_transactions.py",
+            "control-plane/tests/test_service_readiness_projection.py",
             "control-plane/tests/test_service_restore_validation.py",
         )
         auth_end_to_end_and_cli_tests = self._defined_test_names(
@@ -141,6 +142,7 @@ class ServiceBoundaryRefactorRegressionValidationTests(unittest.TestCase):
             "test_service_phase21_restore_rejects_action_execution_expiry_binding_mismatch",
             "test_service_phase21_restore_rejects_action_execution_delegation_after_approval_expiry",
             "test_service_phase21_restore_rejects_reconciliation_run_binding_mismatch",
+            "test_service_phase21_readiness_surfaces_source_and_automation_health",
         ):
             self.assertIn(term, restore_tests)
 
