@@ -57,7 +57,7 @@ required_phrases=(
   '`control-plane/aegisops/control_plane/runtime/runtime_restore_readiness_diagnostics.py`'
   '`control-plane/aegisops/control_plane/runtime/readiness_operability.py`'
   '`control-plane/aegisops/control_plane/service.py`'
-  '`control-plane/tests/test_service_persistence_restore_readiness.py`'
+  '`control-plane/tests/test_service_restore_backup_codec.py`, `control-plane/tests/test_service_restore_drill_transactions.py`, `control-plane/tests/test_service_readiness_projection.py`, `control-plane/tests/test_service_restore_validation.py`, `control-plane/tests/test_cli_inspection_restore_readiness.py`'
   '`docs/maintainability-hotspot-baseline.txt`'
   "| 57.R.1 | #1225 Add supportability refactor boundary ADR and inventory | Decision record and inventory only. | #1215 |"
   "| 57.R.2 | #1226 Split Phase 57 admin UI pages and posture data | UI and static posture extraction only. | #1225 |"
@@ -113,7 +113,11 @@ required_files=(
   "control-plane/aegisops/control_plane/service_composition.py"
   "control-plane/aegisops/control_plane/api/http_runtime_surface.py"
   "control-plane/aegisops/control_plane/api/entrypoint_support.py"
-  "control-plane/tests/test_service_persistence_restore_readiness.py"
+  "control-plane/tests/test_service_restore_backup_codec.py"
+  "control-plane/tests/test_service_restore_drill_transactions.py"
+  "control-plane/tests/test_service_readiness_projection.py"
+  "control-plane/tests/test_service_restore_validation.py"
+  "control-plane/tests/test_cli_inspection_restore_readiness.py"
   "control-plane/tests/test_phase37_reviewed_record_chain_rehearsal.py"
   "control-plane/tests/test_phase57_7_ai_enablement_admin_toggle.py"
   "control-plane/tests/test_service_boundary_refactor_regression_validation.py"

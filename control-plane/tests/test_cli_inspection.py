@@ -19,6 +19,7 @@ from _cli_inspection_support import (
     replace,
 )
 from test_cli_inspection_action_reviews import CliInspectionActionReviewTests
+from test_cli_inspection_restore_readiness import CliInspectionRestoreReadinessTests
 from test_cli_inspection_runtime_surface import CliInspectionRuntimeSurfaceTests
 from test_cli_inspection_usage_errors import CliInspectionUsageErrorTests
 from test_cli_inspection_workflow_family import CliInspectionWorkflowFamilyTests
@@ -37,12 +38,12 @@ class ControlPlaneCliInspectionTests(ControlPlaneCliInspectionTestBase):
     def test_long_running_runtime_surface_exposes_operator_readiness_diagnostics_http_view(
         self,
     ) -> None:
-        CliInspectionRuntimeSurfaceTests.test_long_running_runtime_surface_exposes_operator_readiness_diagnostics_http_view(
+        CliInspectionRestoreReadinessTests.test_long_running_runtime_surface_exposes_operator_readiness_diagnostics_http_view(
             self
         )
 
     def test_backup_and_restore_drill_commands_render_recovery_payloads(self) -> None:
-        CliInspectionRuntimeSurfaceTests.test_backup_and_restore_drill_commands_render_recovery_payloads(
+        CliInspectionRestoreReadinessTests.test_backup_and_restore_drill_commands_render_recovery_payloads(
             self
         )
 
@@ -176,6 +177,7 @@ def load_tests(
     suite = unittest.TestSuite()
     for case in (
         CliInspectionRuntimeSurfaceTests,
+        CliInspectionRestoreReadinessTests,
         CliInspectionWorkflowFamilyTests,
         CliInspectionActionReviewTests,
         CliInspectionUsageErrorTests,
@@ -195,6 +197,7 @@ __all__ = [
     "CliInspectionWorkflowFamilyTests",
     "ControlPlaneCliInspectionTests",
     "CaseRecord",
+    "CliInspectionRestoreReadinessTests",
     "datetime",
     "replace",
 ]
