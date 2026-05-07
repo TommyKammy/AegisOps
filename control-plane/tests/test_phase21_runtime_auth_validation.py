@@ -112,6 +112,7 @@ class Phase21RuntimeAuthValidationTests(unittest.TestCase):
                 {
                     "/runtime",
                     "/diagnostics/readiness",
+                    "/diagnostics/doctor",
                     "/admin/bootstrap-status",
                 }
             ),

@@ -11,6 +11,7 @@ from .entrypoint_support import (
     parse_datetime_arg,
     read_json_file,
 )
+from ..runtime.doctor_contract import build_doctor_snapshot
 from ..service import AegisOpsControlPlaneService
 
 
@@ -67,6 +68,10 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser(
         "run-authoritative-restore-drill",
         help="Reread the restored authoritative record chain through reviewed service inspections.",
+    )
+    subparsers.add_parser(
+        "doctor",
+        help="Render the read-only Phase 58.1 supportability doctor contract.",
     )
     subparsers.add_parser(
         "inspect-analyst-queue",
@@ -512,6 +517,11 @@ def run_command(
             return service.run_authoritative_restore_drill().to_dict()
         except (LookupError, ValueError) as exc:
             _usage_error(parser, str(exc))
+    if command == "doctor":
+        return build_doctor_snapshot(
+            config=service._config,
+            readiness_payload=service.inspect_readiness_diagnostics().to_dict(),
+        ).to_dict()
     if command == "inspect-analyst-queue":
         return service.inspect_analyst_queue().to_dict()
     if command == "inspect-alert-detail":
