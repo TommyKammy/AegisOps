@@ -43,6 +43,24 @@ The contract always names these state families:
 - `workflow_template`
 - `execution_receipt`
 
+## Explanation Outputs
+
+Each state family includes human-readable advisory guidance:
+
+- `explanation`: a short operator-facing description of the observed state.
+- `safe_next_steps`: bounded support steps that preserve the current posture,
+  fail closed on missing prerequisites, and avoid automatic repair claims.
+- `support_link`: a repo-relative documentation pointer for the relevant
+  support boundary.
+
+Recommended next-step entries repeat the same safe next steps and support link
+for every `degraded` or `unavailable` family so CLI and HTTP clients can render
+the support guidance without treating it as workflow truth.
+
+The guidance must not expose secrets, workstation-local paths, customer-private
+payloads, raw forwarded identity hints, or support text that claims doctor can
+repair, approve, execute, reconcile, restore, release, gate, or close work.
+
 ## Negative Authority
 
 Doctor output must not be treated as:
