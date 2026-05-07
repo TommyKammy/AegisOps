@@ -455,6 +455,22 @@ class ReadinessDiagnosticsSnapshot:
         )
 
 
+@dataclass(frozen=True)
+class DoctorSnapshot:
+    read_only: bool
+    contract: str
+    authority_boundary: str
+    mutates_authoritative_records: bool
+    posture_semantics: tuple[str, ...]
+    summary: dict[str, object]
+    states: dict[str, dict[str, object]]
+    negative_authority: tuple[str, ...]
+    recommended_next_steps: tuple[dict[str, object], ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return _json_ready(asdict(self))
+
+
 __all__ = [
     "ActionReviewDetailSnapshot",
     "AdvisoryInspectionSnapshot",
@@ -463,6 +479,7 @@ __all__ = [
     "AnalystQueueSnapshot",
     "AuthenticatedRuntimePrincipal",
     "CaseDetailSnapshot",
+    "DoctorSnapshot",
     "LiveAssistantWorkflowSnapshot",
     "ReadinessDiagnosticsSnapshot",
     "RecommendationDraftSnapshot",
