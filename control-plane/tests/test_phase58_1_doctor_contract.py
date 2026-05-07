@@ -6,6 +6,7 @@ import pathlib
 import sys
 from types import SimpleNamespace
 import unittest
+from unittest import mock
 
 TESTS_ROOT = pathlib.Path(__file__).resolve().parent
 CONTROL_PLANE_ROOT = TESTS_ROOT.parent
@@ -15,6 +16,7 @@ if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
 from aegisops.control_plane.api.http_runtime_surface import runtime_read_response
+from aegisops.control_plane.runtime import doctor_contract
 from aegisops.control_plane.runtime.doctor_contract import build_doctor_snapshot
 
 from _cli_inspection_support import *  # noqa: F403
@@ -154,6 +156,36 @@ class Phase581DoctorContractTests(ControlPlaneCliInspectionTestBase):
         )
         self.assertIn("execution_receipt", self._recommended_families(payload))
 
+    def test_doctor_contract_degrades_pending_terminal_receipt_reconciliation(
+        self,
+    ) -> None:
+        payload = self._build_doctor_payload(
+            metrics_overrides={
+                "action_executions": {
+                    "total": 1,
+                    "dispatching": 0,
+                    "queued": 0,
+                    "running": 0,
+                    "terminal": 1,
+                },
+                "reconciliations": {
+                    "total": 1,
+                    "pending": 1,
+                    "mismatched": 0,
+                    "stale": 0,
+                    "by_ingest_disposition": {},
+                },
+            },
+        )
+
+        self.assertEqual(payload["summary"]["overall_posture"], "degraded")
+        self.assertEqual(payload["states"]["execution_receipt"]["posture"], "degraded")
+        self.assertEqual(
+            payload["states"]["execution_receipt"]["reason"],
+            "receipt_reconciliation_degraded",
+        )
+        self.assertIn("execution_receipt", self._recommended_families(payload))
+
     def test_doctor_contract_rejects_missing_wazuh_prerequisite_as_unavailable(self) -> None:
         payload = self._build_doctor_payload(
             config_overrides={"wazuh_ingest_shared_secret": ""}
@@ -164,6 +196,44 @@ class Phase581DoctorContractTests(ControlPlaneCliInspectionTestBase):
         self.assertEqual(
             payload["states"]["wazuh"]["reason"],
             "missing_wazuh_ingest_secret_or_proxy_secret",
+        )
+
+    def test_doctor_contract_wazuh_explanation_reflects_tracked_sources(self) -> None:
+        tracked_payload = self._build_doctor_payload()
+        untracked_payload = self._build_doctor_payload(
+            metrics_overrides={
+                "source_health": {
+                    "tracked_sources": 0,
+                    "overall_state": "",
+                    "sources": {},
+                },
+            },
+        )
+
+        self.assertEqual(
+            tracked_payload["states"]["wazuh"]["explanation"],
+            (
+                "Wazuh ingest prerequisites are configured; "
+                "no stale Wazuh source is currently reported."
+            ),
+        )
+        self.assertEqual(
+            untracked_payload["states"]["wazuh"]["explanation"],
+            "Wazuh ingest prerequisites are configured",
+        )
+
+    def test_doctor_summary_treats_not_applicable_as_safe_operator_path(self) -> None:
+        with mock.patch.object(
+            doctor_contract,
+            "_worst_posture",
+            return_value="not_applicable",
+        ):
+            payload = self._build_doctor_payload()
+
+        self.assertEqual(payload["summary"]["overall_posture"], "not_applicable")
+        self.assertEqual(
+            payload["summary"]["operator_action"],
+            "continue_observing_without_mutation",
         )
 
     @staticmethod

@@ -76,7 +76,7 @@ def build_doctor_snapshot(
             "source": "current_readiness_diagnostics_snapshot",
             "operator_action": (
                 "review_degraded_or_unavailable_state_recommendations"
-                if overall_posture != "available"
+                if overall_posture in {"degraded", "unavailable"}
                 else "continue_observing_without_mutation"
             ),
         },
@@ -146,9 +146,9 @@ def _wazuh_state(config: Any, metrics: Mapping[str, object]) -> dict[str, object
         "available",
         "wazuh_ingest_contract_configured",
         (
-            "Wazuh ingest prerequisites are configured"
+            "Wazuh ingest prerequisites are configured; no stale Wazuh source is currently reported."
             if tracked_sources
-            else "Wazuh ingest prerequisites are configured; no stale Wazuh source is currently reported."
+            else "Wazuh ingest prerequisites are configured"
         ),
         "continue_observing_without_mutation",
     )
@@ -335,13 +335,15 @@ def _execution_receipt_state(metrics: Mapping[str, object]) -> dict[str, object]
     unresolved_reconciliation_count = sum(
         _int_value(reconciliations.get(name)) for name in ("pending", "mismatched", "stale")
     )
-    if _int_value(reconciliations.get("stale")) or _int_value(
-        reconciliations.get("mismatched")
+    if (
+        _int_value(reconciliations.get("pending"))
+        or _int_value(reconciliations.get("stale"))
+        or _int_value(reconciliations.get("mismatched"))
     ):
         return _state(
             "degraded",
             "receipt_reconciliation_degraded",
-            "Execution receipt reconciliation is stale or mismatched.",
+            "Execution receipt reconciliation is pending, stale, or mismatched.",
             "obtain_authoritative_receipt_before_closeout",
         )
     if active_execution_count and not terminal_execution_count:
