@@ -63,7 +63,11 @@ for forbidden in \
   fi
 done
 
-if grep -Eq '/Users/[^[:space:]]+|/home/[^[:space:]]+|C:\\Users\\' <<<"${doc_text}"; then
+macos_home_pattern="/""Users/[^[:space:]]+"
+linux_home_pattern="/""home/[^[:space:]]+"
+windows_home_pattern="C:""\\\\Users\\\\"
+
+if grep -Eq "${macos_home_pattern}|${linux_home_pattern}|${windows_home_pattern}" <<<"${doc_text}"; then
   echo "Forbidden Phase 58.3 backup command contract claim: workstation-local path" >&2
   exit 1
 fi

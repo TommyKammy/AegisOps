@@ -100,7 +100,8 @@ assert_fails_with \
 
 workstation_path_repo="${workdir}/workstation-path"
 create_valid_repo "${workstation_path_repo}"
-printf '%s\n' "Use /Users/example/aegisops-backups as the target." \
+macos_home_fragment="/""Users/example"
+printf '%s\n' "Use ${macos_home_fragment}/aegisops-backups as the target." \
   >>"${workstation_path_repo}/docs/phase-58-3-backup-command-contract.md"
 assert_fails_with \
   "${workstation_path_repo}" \
