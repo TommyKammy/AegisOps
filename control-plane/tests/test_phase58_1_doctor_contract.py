@@ -222,6 +222,84 @@ class Phase581DoctorContractTests(ControlPlaneCliInspectionTestBase):
             "Wazuh ingest prerequisites are configured",
         )
 
+    def test_doctor_contract_explains_required_broken_families_with_safe_next_steps(
+        self,
+    ) -> None:
+        payload = self._build_doctor_payload(
+            config_overrides={
+                "host": "10.0.0.1",
+                "protected_surface_reverse_proxy_secret": "",
+                "wazuh_ingest_shared_secret": "",
+                "shuffle_base_url": "",
+                "n8n_base_url": "",
+                "ai_enablement_posture": "degraded",
+            },
+            metrics_overrides={
+                "alerts": {"total": 0},
+                "cases": {"total": 0},
+                "action_requests": {
+                    "total": 1,
+                    "pending_approval": 1,
+                    "approved": 0,
+                    "executing": 0,
+                    "unresolved": 0,
+                },
+                "action_executions": {
+                    "total": 1,
+                    "dispatching": 0,
+                    "queued": 0,
+                    "running": 1,
+                    "terminal": 0,
+                },
+                "reconciliations": {
+                    "total": 0,
+                    "pending": 0,
+                    "mismatched": 0,
+                    "stale": 0,
+                    "by_ingest_disposition": {},
+                },
+                "source_health": {
+                    "tracked_sources": 1,
+                    "overall_state": "unknown",
+                    "sources": {
+                        "wazuh": {
+                            "state": "degraded",
+                            "reason": "source_health_signal_stale",
+                        }
+                    },
+                },
+            },
+        )
+
+        expected_broken_families = {
+            "wazuh",
+            "shuffle",
+            "proxy",
+            "stale_source",
+            "ai_enablement",
+            "workflow_template",
+            "execution_receipt",
+        }
+        for family in expected_broken_families:
+            state = payload["states"][family]
+            self.assertIn(state["posture"], {"degraded", "unavailable"})
+            self.assertIsInstance(state["safe_next_steps"], list)
+            self.assertGreaterEqual(len(state["safe_next_steps"]), 2)
+            self.assertTrue(state["support_link"].startswith("docs/"))
+            self.assertIn(family, self._recommended_families(payload))
+
+        rendered_payload = json.dumps(payload, sort_keys=True)
+        rejected_fragments = (
+            "automatically repair",
+            "workflow truth",
+            "/".join(("", "Users", "")),
+            "C:" + "\\" + "Users" + "\\",
+            "reviewed-shared-secret",
+            "reviewed-proxy-secret",
+        )
+        for fragment in rejected_fragments:
+            self.assertNotIn(fragment, rendered_payload)
+
     def test_doctor_summary_treats_not_applicable_as_safe_operator_path(self) -> None:
         with mock.patch.object(
             doctor_contract,
