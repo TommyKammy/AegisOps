@@ -76,27 +76,31 @@ class ControlPlaneCliInspectionTestBase(unittest.TestCase):
         store: object | None = None,
         host: str | None = None,
         port: int | None = None,
+        config: RuntimeConfig | None = None,
     ) -> tuple[object, AegisOpsControlPlaneService, CaseRecord, str, datetime]:
         if store is None:
             store, _ = make_store()
+        runtime_config = config or RuntimeConfig(
+            host="127.0.0.1" if host is None else host,
+            port=0 if port is None else port,
+            postgres_dsn="postgresql://control-plane.local/aegisops",
+            wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+            wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+            admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
+            break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
+        )
         service = AegisOpsControlPlaneService(
-            RuntimeConfig(
-                host="127.0.0.1" if host is None else host,
-                port=0 if port is None else port,
-                postgres_dsn="postgresql://control-plane.local/aegisops",
-                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
-                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
-                admin_bootstrap_token="reviewed-admin-bootstrap-token",  # noqa: S106 - test fixture secret
-                break_glass_token="reviewed-break-glass-token",  # noqa: S106 - test fixture secret
-            ),
+            runtime_config,
             store=store,
         )
         reviewed_at = datetime(2026, 4, 7, 9, 30, tzinfo=timezone.utc)
         admitted = service.ingest_wazuh_alert(
             raw_alert=_load_wazuh_fixture("github-audit-alert.json"),
-            authorization_header="Bearer reviewed-shared-secret",  # noqa: S106 - test fixture secret
+            authorization_header=f"Bearer {runtime_config.wazuh_ingest_shared_secret}",
             forwarded_proto="https",
-            reverse_proxy_secret_header="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+            reverse_proxy_secret_header=(
+                runtime_config.wazuh_ingest_reverse_proxy_secret
+            ),
             peer_addr="127.0.0.1",
         )
         promoted_case = service.promote_alert_to_case(admitted.alert.alert_id)

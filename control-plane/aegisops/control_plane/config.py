@@ -254,6 +254,8 @@ class RuntimeConfig:
     ai_enablement_posture: str = "enabled"
     control_plane_change_state: str = "verified_current"
     control_plane_change_evidence_id: str = ""
+    control_plane_source_revision: str = "unknown"
+    deployment_profile: str = "unreviewed"
 
     @classmethod
     def from_env(
@@ -375,4 +377,14 @@ class RuntimeConfig:
                 "AEGISOPS_CONTROL_PLANE_CHANGE_EVIDENCE_ID",
                 cls.control_plane_change_evidence_id,
             ).strip(),
+            control_plane_source_revision=source.get(
+                "AEGISOPS_CONTROL_PLANE_SOURCE_REVISION",
+                cls.control_plane_source_revision,
+            ).strip()
+            or cls.control_plane_source_revision,
+            deployment_profile=source.get(
+                "AEGISOPS_CONTROL_PLANE_DEPLOYMENT_PROFILE",
+                cls.deployment_profile,
+            ).strip()
+            or cls.deployment_profile,
         )

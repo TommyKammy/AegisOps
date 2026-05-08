@@ -122,6 +122,8 @@ class RestoreReadinessService:
                 )
             ),
             derive_readiness_status=derive_readiness_status,
+            backup_source_revision=config.control_plane_source_revision,
+            backup_profile=config.deployment_profile,
             authoritative_record_chain_record_types=(
                 authoritative_record_chain_record_types
             ),

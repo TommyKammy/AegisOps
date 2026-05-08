@@ -115,6 +115,17 @@ class RuntimeSkeletonTests(unittest.TestCase):
             "reviewed-proxy-secret",
         )
 
+    def test_runtime_config_parses_backup_manifest_metadata_from_env(self) -> None:
+        config = RuntimeConfig.from_env(
+            {
+                "AEGISOPS_CONTROL_PLANE_SOURCE_REVISION": "phase58-source-001",
+                "AEGISOPS_CONTROL_PLANE_DEPLOYMENT_PROFILE": "single-customer",
+            }
+        )
+
+        self.assertEqual(config.control_plane_source_revision, "phase58-source-001")
+        self.assertEqual(config.deployment_profile, "single-customer")
+
     def test_runtime_config_parses_trusted_proxy_cidrs_from_env(self) -> None:
         config = RuntimeConfig.from_env(
             {
