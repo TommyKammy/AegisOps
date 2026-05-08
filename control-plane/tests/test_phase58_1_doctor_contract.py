@@ -227,7 +227,7 @@ class Phase581DoctorContractTests(ControlPlaneCliInspectionTestBase):
     ) -> None:
         payload = self._build_doctor_payload(
             config_overrides={
-                "host": "0.0.0.0",
+                "host": "10.0.0.1",
                 "protected_surface_reverse_proxy_secret": "",
                 "wazuh_ingest_shared_secret": "",
                 "shuffle_base_url": "",
