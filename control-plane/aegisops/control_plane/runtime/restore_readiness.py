@@ -168,6 +168,21 @@ class RestoreReadinessService:
             backup_payload
         )
 
+    def dry_run_authoritative_record_chain_restore(
+        self,
+        backup_payload: Mapping[str, object],
+        *,
+        expected_source_revision: str | None = None,
+        expected_profile: str | None = None,
+        max_age_hours: int | None = None,
+    ) -> dict[str, object]:
+        return self._backup_restore_flow.dry_run_authoritative_record_chain_restore(
+            backup_payload,
+            expected_source_revision=expected_source_revision,
+            expected_profile=expected_profile,
+            max_age_hours=max_age_hours,
+        )
+
     def restore_drill_snapshot_transaction(self) -> Iterator[None]:
         return self._backup_restore_flow.restore_drill_snapshot_transaction()
 
