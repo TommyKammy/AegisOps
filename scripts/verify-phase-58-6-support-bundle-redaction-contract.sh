@@ -116,8 +116,9 @@ done
 local_path_prefix="(^|[[:space:]\`\"'(<])"
 unix_home_pattern="${local_path_prefix}/(Users|home)/"
 windows_home_pattern="${local_path_prefix}[A-Za-z]:[\\\\/][Uu][Ss][Ee][Rr][Ss][\\\\/]"
+file_uri_home_pattern="file://([^[:space:]\`\"'()<>]*/)?(Users|home)/"
 
-if grep -Eq "${unix_home_pattern}|${windows_home_pattern}" <<<"${doc_text}"; then
+if grep -Eiq "${unix_home_pattern}|${windows_home_pattern}|${file_uri_home_pattern}" <<<"${doc_text}"; then
   echo "Forbidden Phase 58.6 support bundle redaction contract claim: workstation-local path" >&2
   exit 1
 fi
@@ -137,7 +138,7 @@ patterns = (
             api[_ -]?key|token|private[_ -]?key|client[_ -]?secret
         )
         \s*[:=]\s*
-        ["']?[A-Za-z0-9_+./=-]{12,}
+        ["']?[A-Za-z0-9_+./=-]{4,}
         """
     ),
     re.compile(r"[a-zA-Z][a-zA-Z0-9+.-]*://[^\s/:@]+:[^\s@]+@"),

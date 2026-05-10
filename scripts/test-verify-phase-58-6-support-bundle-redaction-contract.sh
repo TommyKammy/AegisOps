@@ -120,6 +120,13 @@ assert_fails_with \
   "${secret_value_repo}" \
   "Forbidden Phase 58.6 support bundle redaction contract claim: secret-looking value"
 
+short_password_repo="${workdir}/short-password"
+create_valid_repo "${short_password_repo}"
+append_to_contract "${short_password_repo}" "password=abc123"
+assert_fails_with \
+  "${short_password_repo}" \
+  "Forbidden Phase 58.6 support bundle redaction contract claim: secret-looking value"
+
 authorization_header_repo="${workdir}/authorization-header"
 create_valid_repo "${authorization_header_repo}"
 append_to_contract "${authorization_header_repo}" "Authorization: Bearer abcdefghijklmnopqrstuvwxyz123456"
@@ -169,6 +176,21 @@ linux_home_fragment="/""home/example"
 append_to_contract "${linux_workstation_path_repo}" "Retain ${linux_home_fragment}/support-bundle/raw.log as evidence."
 assert_fails_with \
   "${linux_workstation_path_repo}" \
+  "Forbidden Phase 58.6 support bundle redaction contract claim: workstation-local path"
+
+file_uri_linux_workstation_path_repo="${workdir}/file-uri-linux-workstation-path"
+create_valid_repo "${file_uri_linux_workstation_path_repo}"
+file_scheme="file://"
+append_to_contract "${file_uri_linux_workstation_path_repo}" "Retain ${file_scheme}${linux_home_fragment}/support-bundle/raw.log as evidence."
+assert_fails_with \
+  "${file_uri_linux_workstation_path_repo}" \
+  "Forbidden Phase 58.6 support bundle redaction contract claim: workstation-local path"
+
+file_uri_macos_workstation_path_repo="${workdir}/file-uri-macos-workstation-path"
+create_valid_repo "${file_uri_macos_workstation_path_repo}"
+append_to_contract "${file_uri_macos_workstation_path_repo}" "Retain ${file_scheme}${macos_home_fragment}/support-bundle/raw.log as evidence."
+assert_fails_with \
+  "${file_uri_macos_workstation_path_repo}" \
   "Forbidden Phase 58.6 support bundle redaction contract claim: workstation-local path"
 
 windows_workstation_path_repo="${workdir}/windows-workstation-path"
