@@ -65,6 +65,28 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         help="Path to the reviewed authoritative backup JSON payload.",
     )
+    restore_dry_run = subparsers.add_parser(
+        "dry-run-authoritative-record-chain-restore",
+        help="Validate restore preflight evidence without mutating the control-plane store.",
+    )
+    restore_dry_run.add_argument(
+        "--input",
+        required=True,
+        help="Path to the reviewed authoritative backup JSON payload.",
+    )
+    restore_dry_run.add_argument(
+        "--expected-source-revision",
+        help="Optional source revision that must match backup custody metadata.",
+    )
+    restore_dry_run.add_argument(
+        "--expected-profile",
+        help="Optional deployment profile that must match backup custody metadata.",
+    )
+    restore_dry_run.add_argument(
+        "--max-age-hours",
+        type=int,
+        help="Optional maximum backup age in hours for stale snapshot rejection.",
+    )
     subparsers.add_parser(
         "run-authoritative-restore-drill",
         help="Reread the restored authoritative record chain through reviewed service inspections.",
@@ -510,6 +532,17 @@ def run_command(
             return service.restore_authoritative_record_chain_backup(
                 read_json_file_fn(parsed.input)
             ).to_dict()
+        except (LookupError, ValueError) as exc:
+            _usage_error(parser, str(exc))
+    if command == "dry-run-authoritative-record-chain-restore":
+        try:
+            diagnostics_service = service._runtime_restore_readiness_diagnostics_service
+            return diagnostics_service.dry_run_authoritative_record_chain_restore(
+                read_json_file_fn(parsed.input),
+                expected_source_revision=parsed.expected_source_revision,
+                expected_profile=parsed.expected_profile,
+                max_age_hours=parsed.max_age_hours,
+            )
         except (LookupError, ValueError) as exc:
             _usage_error(parser, str(exc))
     if command == "run-authoritative-restore-drill":

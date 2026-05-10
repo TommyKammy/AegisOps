@@ -39,6 +39,7 @@ from aegisops.control_plane.models import (
 )
 from aegisops.control_plane.service import (
     AegisOpsControlPlaneService,
+    AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES,
     AuthenticatedRuntimePrincipal,
 )
 from postgres_test_support import make_store

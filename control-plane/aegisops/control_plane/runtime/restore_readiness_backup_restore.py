@@ -65,6 +65,13 @@ class _RestoreDrillVerifiedIds:
     reconciliation_ids: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class _ParsedRestorePayload:
+    parsed_records: dict[str, tuple[ControlPlaneRecord, ...]]
+    restored_record_counts: dict[str, int]
+    backup_created_at: datetime | None
+
+
 class _BackupRestoreFlow:
     def __init__(
         self,
@@ -214,6 +221,59 @@ class _BackupRestoreFlow:
         self,
         backup_payload: Mapping[str, object],
     ) -> Any:
+        parsed_payload = self._parse_and_validate_restore_payload(backup_payload)
+        with self._store.transaction(isolation_level="SERIALIZABLE"):
+            self.require_empty_authoritative_restore_target()
+            for record_type in self._authoritative_record_chain_record_types:
+                for record in parsed_payload.parsed_records[record_type.record_family]:
+                    self._store.save(record)
+            restore_drill = self.run_authoritative_restore_drill(
+                require_lifecycle_transition_history=True
+            )
+        return self._restore_summary_snapshot_factory(
+            read_only=True,
+            restored_record_counts=parsed_payload.restored_record_counts,
+            restore_drill=restore_drill,
+        )
+
+    def dry_run_authoritative_record_chain_restore(
+        self,
+        backup_payload: Mapping[str, object],
+        *,
+        expected_source_revision: str | None = None,
+        expected_profile: str | None = None,
+        max_age_hours: int | None = None,
+    ) -> dict[str, object]:
+        parsed_payload = self._parse_and_validate_restore_payload(backup_payload)
+        self._validate_restore_dry_run_manifest(
+            backup_payload,
+            backup_created_at=parsed_payload.backup_created_at,
+            expected_source_revision=expected_source_revision,
+            expected_profile=expected_profile,
+            max_age_hours=max_age_hours,
+        )
+        self.require_empty_authoritative_restore_target()
+        return {
+            "read_only": True,
+            "dry_run_state": "clean",
+            "record_counts": dict(parsed_payload.restored_record_counts),
+            "sample_record_ids": self._sample_restore_record_ids(
+                parsed_payload.parsed_records
+            ),
+            "backup_created_at": (
+                parsed_payload.backup_created_at.isoformat()
+                if parsed_payload.backup_created_at is not None
+                else None
+            ),
+            "authority_boundary": "restore_dry_run_is_preflight_evidence_only",
+            "can_prove_live_restore_completion": False,
+            "mutates_authoritative_records": False,
+        }
+
+    def _parse_and_validate_restore_payload(
+        self,
+        backup_payload: Mapping[str, object],
+    ) -> _ParsedRestorePayload:
         if not isinstance(backup_payload, Mapping):
             raise ValueError("restore payload must be a JSON object")
         backup_schema_version = backup_payload.get("backup_schema_version")
@@ -300,19 +360,64 @@ class _BackupRestoreFlow:
             require_lifecycle_transition_history=True,
             restored_record_counts=restored_record_counts,
         )
-        with self._store.transaction(isolation_level="SERIALIZABLE"):
-            self.require_empty_authoritative_restore_target()
-            for record_type in self._authoritative_record_chain_record_types:
-                for record in parsed_records[record_type.record_family]:
-                    self._store.save(record)
-            restore_drill = self.run_authoritative_restore_drill(
-                require_lifecycle_transition_history=True
-            )
-        return self._restore_summary_snapshot_factory(
-            read_only=True,
+        return _ParsedRestorePayload(
+            parsed_records=parsed_records,
             restored_record_counts=restored_record_counts,
-            restore_drill=restore_drill,
+            backup_created_at=backup_created_at,
         )
+
+    def _validate_restore_dry_run_manifest(
+        self,
+        backup_payload: Mapping[str, object],
+        *,
+        backup_created_at: datetime | None,
+        expected_source_revision: str | None,
+        expected_profile: str | None,
+        max_age_hours: int | None,
+    ) -> None:
+        manifest = backup_payload.get("backup_manifest")
+        if not isinstance(manifest, Mapping):
+            raise ValueError("restore dry-run requires backup_manifest provenance")
+        if (
+            manifest.get("authority_boundary")
+            != "backup_manifest_is_custody_and_recovery_evidence_only"
+        ):
+            raise ValueError(
+                "restore dry-run requires backup manifest subordinate authority boundary"
+            )
+        custody_metadata = manifest.get("custody_metadata")
+        if not isinstance(custody_metadata, Mapping):
+            raise ValueError("restore dry-run requires backup custody metadata")
+        if expected_source_revision is not None and (
+            custody_metadata.get("source_revision") != expected_source_revision
+        ):
+            raise ValueError("restore dry-run source revision mismatch")
+        if expected_profile is not None and (
+            custody_metadata.get("profile") != expected_profile
+        ):
+            raise ValueError("restore dry-run deployment profile mismatch")
+        if max_age_hours is not None:
+            if max_age_hours <= 0:
+                raise ValueError("restore dry-run max_age_hours must be positive")
+            if backup_created_at is None:
+                raise ValueError("restore dry-run requires created_at for stale check")
+            stale_before = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+            if backup_created_at < stale_before:
+                raise ValueError("restore dry-run snapshot is stale")
+
+    def _sample_restore_record_ids(
+        self,
+        parsed_records: Mapping[str, tuple[ControlPlaneRecord, ...]],
+    ) -> dict[str, tuple[str, ...]]:
+        sample_record_ids: dict[str, tuple[str, ...]] = {}
+        for family, records in parsed_records.items():
+            id_field = self._authoritative_primary_id_field_by_family.get(family)
+            if id_field is None:
+                continue
+            sample_record_ids[family] = tuple(
+                str(getattr(record, id_field)) for record in records[:3]
+            )
+        return sample_record_ids
 
     @contextmanager
     def restore_drill_snapshot_transaction(self) -> Iterator[None]:

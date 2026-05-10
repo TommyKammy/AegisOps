@@ -38,6 +38,164 @@ from _restore_readiness_test_support import (
 
 
 class RestoreBackupCodecTests(ServicePersistenceTestBase):
+    def _dry_run_restore(
+        self,
+        service: AegisOpsControlPlaneService,
+        backup: Mapping[str, object],
+        **kwargs: object,
+    ) -> dict[str, object]:
+        diagnostics_service = service._runtime_restore_readiness_diagnostics_service
+        return diagnostics_service.dry_run_authoritative_record_chain_restore(
+            backup,
+            **kwargs,
+        )
+
+    def test_restore_dry_run_accepts_clean_backup_without_mutating_target(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        dry_run = self._dry_run_restore(restored_service, backup)
+
+        self.assertTrue(dry_run["read_only"])
+        self.assertEqual(dry_run["dry_run_state"], "clean")
+        self.assertEqual(
+            dry_run["record_counts"]["case"],
+            backup["record_counts"]["case"],
+        )
+        self.assertIn(promoted_case.case_id, dry_run["sample_record_ids"]["case"])
+        self._assert_authoritative_store_empty(restored_store)
+
+    def test_restore_dry_run_rejects_missing_manifest_provenance(
+        self,
+    ) -> None:
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        del backup["backup_manifest"]
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "restore dry-run requires backup_manifest provenance",
+        ):
+            self._dry_run_restore(restored_service, backup)
+        self._assert_authoritative_store_empty(restored_store)
+
+    def test_restore_dry_run_rejects_mismatched_custody_metadata(
+        self,
+    ) -> None:
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        backup["backup_manifest"]["custody_metadata"][
+            "source_revision"
+        ] = "phase58-source-a"
+        backup["backup_manifest"]["custody_metadata"]["profile"] = "single-customer"
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "restore dry-run source revision mismatch",
+        ):
+            self._dry_run_restore(
+                restored_service,
+                backup,
+                expected_source_revision="phase58-source-b",
+                expected_profile="single-customer",
+            )
+        self._assert_authoritative_store_empty(restored_store)
+
+    def test_restore_dry_run_rejects_duplicate_snapshot_identifiers(
+        self,
+    ) -> None:
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        backup["record_families"]["alert"].append(
+            dict(backup["record_families"]["alert"][0])
+        )
+        backup["record_counts"]["alert"] = len(backup["record_families"]["alert"])
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"duplicate alert identifiers .*restored_record_counts\['alert'\]=2",
+        ):
+            self._dry_run_restore(restored_service, backup)
+        self._assert_authoritative_store_empty(restored_store)
+
+    def test_restore_dry_run_rejects_stale_snapshot(
+        self,
+    ) -> None:
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        backup["created_at"] = datetime(2000, 1, 1, tzinfo=timezone.utc).isoformat()
+        backup["backup_manifest"]["generated_at"] = backup["created_at"]
+        backup["backup_manifest"]["custody_metadata"]["timestamp"] = backup[
+            "created_at"
+        ]
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "restore dry-run snapshot is stale",
+        ):
+            self._dry_run_restore(
+                restored_service,
+                backup,
+                max_age_hours=24,
+            )
+        self._assert_authoritative_store_empty(restored_store)
+
+    def test_restore_dry_run_rejects_unsafe_non_empty_target_without_mutation(
+        self,
+    ) -> None:
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "authoritative restore target must be empty before restore",
+        ):
+            self._dry_run_restore(service, backup)
+
     def test_service_phase21_genuine_legacy_restore_round_trips_into_v2_transition_history(
         self,
     ) -> None:

@@ -194,6 +194,72 @@ class CliInspectionRestoreReadinessTests(ControlPlaneCliInspectionTestBase):
         self.assertEqual(exc.exception.code, 2)
         self.assertIn("backup invariants failed closed", stderr.getvalue())
 
+    def test_restore_dry_run_command_renders_preflight_evidence_without_mutation(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+        stdout = io.StringIO()
+
+        with mock.patch.object(main, "_read_json_file", return_value=backup):
+            main.main(
+                [
+                    "dry-run-authoritative-record-chain-restore",
+                    "--input",
+                    "authoritative-backup.json",
+                    "--expected-source-revision",
+                    backup["backup_manifest"]["custody_metadata"]["source_revision"],
+                    "--expected-profile",
+                    backup["backup_manifest"]["custody_metadata"]["profile"],
+                    "--max-age-hours",
+                    "24",
+                ],
+                stdout=stdout,
+                service=restored_service,
+            )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertTrue(payload["read_only"])
+        self.assertEqual(payload["dry_run_state"], "clean")
+        self.assertFalse(payload["mutates_authoritative_records"])
+        self.assertFalse(payload["can_prove_live_restore_completion"])
+        self.assertIn(promoted_case.case_id, payload["sample_record_ids"]["case"])
+        for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES:
+            self.assertEqual(restored_store.list(record_type), ())
+
+    def test_restore_dry_run_command_reports_usage_error_on_failed_preflight(
+        self,
+    ) -> None:
+        service = mock.Mock()
+        diagnostics_service = mock.Mock()
+        diagnostics_service.dry_run_authoritative_record_chain_restore.side_effect = (
+            ValueError("restore dry-run snapshot is stale")
+        )
+        service._runtime_restore_readiness_diagnostics_service = diagnostics_service
+        stderr = io.StringIO()
+
+        with mock.patch.object(main, "_read_json_file", return_value={}):
+            with mock.patch.object(sys, "stderr", stderr):
+                with self.assertRaises(SystemExit) as exc:
+                    main.main(
+                        [
+                            "dry-run-authoritative-record-chain-restore",
+                            "--input",
+                            "authoritative-backup.json",
+                        ],
+                        service=service,
+                    )
+
+        self.assertEqual(exc.exception.code, 2)
+        self.assertIn("restore dry-run snapshot is stale", stderr.getvalue())
+
     def test_restore_authoritative_record_chain_reports_usage_error_on_lookup_failure(
         self,
     ) -> None:
