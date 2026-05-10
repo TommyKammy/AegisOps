@@ -129,7 +129,7 @@ import sys
 
 text = os.environ["DOC_TEXT"]
 patterns = (
-    re.compile(r"(?i)\bauthorization\s*:\s*bearer\s+[A-Za-z0-9_+./=-]{12,}"),
+    re.compile(r"(?i)\bauthorization\s*:\s*(?:bearer|basic)\s+[A-Za-z0-9_+./=-]{12,}"),
     re.compile(
         r"""(?ix)
         (

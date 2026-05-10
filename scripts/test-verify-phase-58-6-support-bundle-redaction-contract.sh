@@ -127,6 +127,13 @@ assert_fails_with \
   "${authorization_header_repo}" \
   "Forbidden Phase 58.6 support bundle redaction contract claim: secret-looking value"
 
+basic_authorization_header_repo="${workdir}/basic-authorization-header"
+create_valid_repo "${basic_authorization_header_repo}"
+append_to_contract "${basic_authorization_header_repo}" "Authorization: Basic dXNlcjpwYXNzMTIzNDU2"
+assert_fails_with \
+  "${basic_authorization_header_repo}" \
+  "Forbidden Phase 58.6 support bundle redaction contract claim: secret-looking value"
+
 credential_url_repo="${workdir}/credential-url"
 create_valid_repo "${credential_url_repo}"
 append_to_contract "${credential_url_repo}" "postgres://support:credentialvalue12345@db.internal/aegisops"
