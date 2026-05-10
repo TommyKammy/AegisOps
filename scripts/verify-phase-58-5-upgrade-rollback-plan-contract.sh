@@ -73,6 +73,10 @@ done
 for forbidden in \
   "silent upgrade is allowed" \
   "silent upgrade can proceed" \
+  "unsafe rollback is allowed" \
+  "unsafe rollback can proceed" \
+  "unsafe rollback proceeds" \
+  "rollback can proceed without approval" \
   "upgrade plan is release truth" \
   "rollback plan is release truth" \
   "upgrade plan is gate truth" \
@@ -91,7 +95,7 @@ done
 
 local_path_prefix="(^|[[:space:]\`\"'(<])"
 unix_home_pattern="${local_path_prefix}/(Users|home)/"
-windows_home_pattern="${local_path_prefix}[A-Za-z]:[\\\\/]Users[\\\\/]"
+windows_home_pattern="${local_path_prefix}[A-Za-z]:[\\\\/][Uu][Ss][Ee][Rr][Ss][\\\\/]"
 
 if grep -Eq "${unix_home_pattern}|${windows_home_pattern}" <<<"${doc_text}"; then
   echo "Forbidden Phase 58.5 upgrade rollback plan contract claim: workstation-local path" >&2

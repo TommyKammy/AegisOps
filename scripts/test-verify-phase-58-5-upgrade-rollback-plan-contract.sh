@@ -129,6 +129,14 @@ assert_fails_with \
   "${substrate_mutation_repo}" \
   "Forbidden Phase 58.5 upgrade rollback plan contract claim: plan validation mutates substrate state"
 
+unsafe_rollback_repo="${workdir}/unsafe-rollback"
+create_valid_repo "${unsafe_rollback_repo}"
+printf '%s\n' "Unsafe rollback can proceed without approval." \
+  >>"${unsafe_rollback_repo}/docs/phase-58-5-upgrade-rollback-plan-contract.md"
+assert_fails_with \
+  "${unsafe_rollback_repo}" \
+  "Forbidden Phase 58.5 upgrade rollback plan contract claim: unsafe rollback can proceed"
+
 workstation_path_repo="${workdir}/workstation-path"
 create_valid_repo "${workstation_path_repo}"
 macos_home_fragment="/""Users/example"
@@ -164,6 +172,24 @@ printf '%s\n' "Use ${windows_slash_home_fragment}/upgrade-plan.md as the retaine
   >>"${windows_slash_workstation_path_repo}/docs/phase-58-5-upgrade-rollback-plan-contract.md"
 assert_fails_with \
   "${windows_slash_workstation_path_repo}" \
+  "Forbidden Phase 58.5 upgrade rollback plan contract claim: workstation-local path"
+
+windows_lowercase_workstation_path_repo="${workdir}/windows-lowercase-workstation-path"
+create_valid_repo "${windows_lowercase_workstation_path_repo}"
+windows_lowercase_home_fragment="c:${slash}users${slash}example"
+printf '%s\n' "Use ${windows_lowercase_home_fragment}/upgrade-plan.md as the retained evidence path." \
+  >>"${windows_lowercase_workstation_path_repo}/docs/phase-58-5-upgrade-rollback-plan-contract.md"
+assert_fails_with \
+  "${windows_lowercase_workstation_path_repo}" \
+  "Forbidden Phase 58.5 upgrade rollback plan contract claim: workstation-local path"
+
+windows_uppercase_workstation_path_repo="${workdir}/windows-uppercase-workstation-path"
+create_valid_repo "${windows_uppercase_workstation_path_repo}"
+windows_uppercase_home_fragment="D:""\\USERS\\example"
+printf '%s\n' "Use ${windows_uppercase_home_fragment}\\upgrade-plan.md as the retained evidence path." \
+  >>"${windows_uppercase_workstation_path_repo}/docs/phase-58-5-upgrade-rollback-plan-contract.md"
+assert_fails_with \
+  "${windows_uppercase_workstation_path_repo}" \
   "Forbidden Phase 58.5 upgrade rollback plan contract claim: workstation-local path"
 
 echo "Phase 58.5 upgrade rollback plan contract verifier rejects missing contract, missing fields, unsafe claims, and workstation paths."
