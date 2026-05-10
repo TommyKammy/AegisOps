@@ -89,11 +89,11 @@ for forbidden in \
   fi
 done
 
-macos_home_pattern="/""Users/[^[:space:]]+"
-linux_home_pattern="/""home/[^[:space:]]+"
-windows_home_pattern="C:""\\\\Users\\\\"
+local_path_prefix="(^|[[:space:]\`\"'(<])"
+unix_home_pattern="${local_path_prefix}/(Users|home)/"
+windows_home_pattern="${local_path_prefix}[A-Za-z]:\\\\Users\\\\"
 
-if grep -Eq "${macos_home_pattern}|${linux_home_pattern}|${windows_home_pattern}" <<<"${doc_text}"; then
+if grep -Eq "${unix_home_pattern}|${windows_home_pattern}" <<<"${doc_text}"; then
   echo "Forbidden Phase 58.5 upgrade rollback plan contract claim: workstation-local path" >&2
   exit 1
 fi

@@ -59,6 +59,13 @@ valid_repo="${workdir}/valid"
 create_valid_repo "${valid_repo}"
 assert_passes "${valid_repo}"
 
+external_url_repo="${workdir}/external-url"
+create_valid_repo "${external_url_repo}"
+printf '%s\n' \
+  "Use https://example.com/home/docs/upgrade-plan.md as reviewed external reference context." \
+  >>"${external_url_repo}/docs/phase-58-5-upgrade-rollback-plan-contract.md"
+assert_passes "${external_url_repo}"
+
 missing_contract_repo="${workdir}/missing-contract"
 create_valid_repo "${missing_contract_repo}"
 rm "${missing_contract_repo}/docs/phase-58-5-upgrade-rollback-plan-contract.md"
@@ -129,6 +136,24 @@ printf '%s\n' "Use ${macos_home_fragment}/upgrade-plan.md as the retained eviden
   >>"${workstation_path_repo}/docs/phase-58-5-upgrade-rollback-plan-contract.md"
 assert_fails_with \
   "${workstation_path_repo}" \
+  "Forbidden Phase 58.5 upgrade rollback plan contract claim: workstation-local path"
+
+linux_workstation_path_repo="${workdir}/linux-workstation-path"
+create_valid_repo "${linux_workstation_path_repo}"
+linux_home_fragment="/""home/example"
+printf '%s\n' "Use ${linux_home_fragment}/upgrade-plan.md as the retained evidence path." \
+  >>"${linux_workstation_path_repo}/docs/phase-58-5-upgrade-rollback-plan-contract.md"
+assert_fails_with \
+  "${linux_workstation_path_repo}" \
+  "Forbidden Phase 58.5 upgrade rollback plan contract claim: workstation-local path"
+
+windows_workstation_path_repo="${workdir}/windows-workstation-path"
+create_valid_repo "${windows_workstation_path_repo}"
+windows_home_fragment="D:""\\Users\\example"
+printf '%s\n' "Use ${windows_home_fragment}\\upgrade-plan.md as the retained evidence path." \
+  >>"${windows_workstation_path_repo}/docs/phase-58-5-upgrade-rollback-plan-contract.md"
+assert_fails_with \
+  "${windows_workstation_path_repo}" \
   "Forbidden Phase 58.5 upgrade rollback plan contract claim: workstation-local path"
 
 echo "Phase 58.5 upgrade rollback plan contract verifier rejects missing contract, missing fields, unsafe claims, and workstation paths."
