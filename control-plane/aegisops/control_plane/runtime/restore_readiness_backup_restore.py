@@ -79,6 +79,8 @@ class _BackupRestoreFlow:
             [Any, list[dict[str, object]]], dict[str, object]
         ],
         derive_readiness_status: Callable[..., str],
+        backup_source_revision: str,
+        backup_profile: str,
         authoritative_record_chain_record_types: tuple[Type[ControlPlaneRecord], ...],
         authoritative_record_chain_backup_schema_version: str,
         authoritative_primary_id_field_by_family: Mapping[str, str],
@@ -106,6 +108,8 @@ class _BackupRestoreFlow:
             build_readiness_review_path_health
         )
         self._derive_readiness_status = derive_readiness_status
+        self._backup_source_revision = backup_source_revision
+        self._backup_profile = backup_profile
         self._backup_payload_codec = BackupPayloadCodec()
         self._authoritative_record_chain_record_types = (
             authoritative_record_chain_record_types
@@ -154,12 +158,56 @@ class _BackupRestoreFlow:
                     for record in persisted_records
                 ]
                 record_families[family] = records
-        return {
+        created_at = datetime.now(timezone.utc).isoformat()
+        backup_payload = {
             "backup_schema_version": self._authoritative_record_chain_backup_schema_version,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": created_at,
             "persistence_mode": self._store.persistence_mode,
             "record_families": record_families,
             "record_counts": record_counts,
+        }
+        backup_payload["backup_manifest"] = self._build_backup_manifest(
+            created_at=created_at,
+            record_counts=record_counts,
+        )
+        return backup_payload
+
+    def _build_backup_manifest(
+        self,
+        *,
+        created_at: str,
+        record_counts: Mapping[str, int],
+    ) -> dict[str, object]:
+        return {
+            "manifest_schema_version": "phase58.backup-command-manifest.v1",
+            "generated_at": created_at,
+            "backup_schema_version": (
+                self._authoritative_record_chain_backup_schema_version
+            ),
+            "custody_metadata": {
+                "purpose": "custody_and_recovery_evidence",
+                "source_revision": self._backup_source_revision,
+                "profile": self._backup_profile,
+                "timestamp": created_at,
+                "persistence_mode": self._store.persistence_mode,
+            },
+            "record_family_counts": dict(record_counts),
+            "total_record_count": sum(record_counts.values()),
+            "redaction_expectations": {
+                "plaintext_secrets_allowed": False,
+                "secrets_excluded": True,
+                "customer_private_raw_payloads_excluded": True,
+                "workstation_local_paths_excluded": True,
+            },
+            "authority_boundary": (
+                "backup_manifest_is_custody_and_recovery_evidence_only"
+            ),
+            "non_authority_uses": (
+                "close_workflows",
+                "approve_releases",
+                "prove_restore_success",
+                "replace_authoritative_aegisops_records",
+            ),
         }
 
     def restore_authoritative_record_chain_backup(

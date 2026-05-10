@@ -100,6 +100,84 @@ class CliInspectionRestoreReadinessTests(ControlPlaneCliInspectionTestBase):
             drill_payload["verified_recommendation_ids"],
         )
 
+    def test_backup_command_renders_manifest_custody_metadata_without_secrets(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case(
+                config=RuntimeConfig(
+                    postgres_dsn="postgresql://backup-contract.local/aegisops",
+                    wazuh_ingest_shared_secret=(
+                        "phase58-wazuh-shared-secret"  # noqa: S106 - leak sentinel
+                    ),
+                    wazuh_ingest_reverse_proxy_secret=(
+                        "phase58-wazuh-proxy-secret"  # noqa: S106 - leak sentinel
+                    ),
+                    protected_surface_reverse_proxy_secret=(
+                        "phase58-protected-proxy-secret"  # noqa: S106 - leak sentinel
+                    ),
+                    admin_bootstrap_token=(
+                        "phase58-admin-bootstrap-token"  # noqa: S106 - leak sentinel
+                    ),
+                    break_glass_token=(
+                        "phase58-break-glass-token"  # noqa: S106 - leak sentinel
+                    ),
+                    control_plane_source_revision="phase58-source-revision-001",
+                    deployment_profile="single-customer",
+                )
+            )
+        )
+        stdout = io.StringIO()
+
+        main.main(["backup-authoritative-record-chain"], stdout=stdout, service=service)
+
+        backup_payload = json.loads(stdout.getvalue())
+        manifest = backup_payload["backup_manifest"]
+        self.assertEqual(
+            manifest["manifest_schema_version"],
+            "phase58.backup-command-manifest.v1",
+        )
+        self.assertEqual(
+            manifest["custody_metadata"]["source_revision"],
+            "phase58-source-revision-001",
+        )
+        self.assertEqual(manifest["custody_metadata"]["profile"], "single-customer")
+        self.assertEqual(
+            manifest["record_family_counts"],
+            backup_payload["record_counts"],
+        )
+        self.assertEqual(manifest["record_family_counts"]["case"], 1)
+        self.assertEqual(
+            manifest["authority_boundary"],
+            "backup_manifest_is_custody_and_recovery_evidence_only",
+        )
+        self.assertFalse(
+            manifest["redaction_expectations"]["plaintext_secrets_allowed"]
+        )
+        self.assertTrue(manifest["redaction_expectations"]["secrets_excluded"])
+        self.assertTrue(
+            manifest["redaction_expectations"][
+                "customer_private_raw_payloads_excluded"
+            ]
+        )
+        self.assertIn(
+            promoted_case.case_id,
+            [
+                record["case_id"]
+                for record in backup_payload["record_families"]["case"]
+            ],
+        )
+        manifest_text = json.dumps(manifest, sort_keys=True)
+        for forbidden in (
+            "phase58-wazuh-shared-secret",
+            "phase58-wazuh-proxy-secret",
+            "phase58-protected-proxy-secret",
+            "phase58-admin-bootstrap-token",
+            "phase58-break-glass-token",
+            "postgresql://backup-contract.local/aegisops",
+        ):
+            self.assertNotIn(forbidden, manifest_text)
+
     def test_backup_authoritative_record_chain_reports_usage_error_on_invalid_backup(
         self,
     ) -> None:
