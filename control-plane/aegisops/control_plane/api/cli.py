@@ -583,17 +583,20 @@ def run_command(
             readiness_payload=service.inspect_readiness_diagnostics().to_dict(),
         ).to_dict()
     if command == "supportability-summary":
-        restore_backup_payload = None
-        if parsed.restore_dry_run_input:
-            restore_backup_payload = read_json_file_fn(parsed.restore_dry_run_input)
-        return build_supportability_summary(
-            service=service,
-            role=parsed.role,
-            restore_backup_payload=restore_backup_payload,
-            restore_expected_source_revision=parsed.restore_expected_source_revision,
-            restore_expected_profile=parsed.restore_expected_profile,
-            restore_max_age_hours=parsed.restore_max_age_hours,
-        )
+        try:
+            restore_backup_payload = None
+            if parsed.restore_dry_run_input:
+                restore_backup_payload = read_json_file_fn(parsed.restore_dry_run_input)
+            return build_supportability_summary(
+                service=service,
+                role=parsed.role,
+                restore_backup_payload=restore_backup_payload,
+                restore_expected_source_revision=parsed.restore_expected_source_revision,
+                restore_expected_profile=parsed.restore_expected_profile,
+                restore_max_age_hours=parsed.restore_max_age_hours,
+            )
+        except (LookupError, ValueError) as exc:
+            _usage_error(parser, str(exc))
     if command == "inspect-analyst-queue":
         return service.inspect_analyst_queue().to_dict()
     if command == "inspect-alert-detail":

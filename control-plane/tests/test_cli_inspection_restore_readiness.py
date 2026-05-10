@@ -317,6 +317,35 @@ class CliInspectionRestoreReadinessTests(ControlPlaneCliInspectionTestBase):
             before_counts,
         )
 
+    def test_supportability_summary_reports_usage_error_on_invalid_restore_input(
+        self,
+    ) -> None:
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        stderr = io.StringIO()
+
+        with mock.patch.object(
+            main,
+            "_read_json_file",
+            side_effect=ValueError("input path must contain valid JSON"),
+        ):
+            with mock.patch.object(sys, "stderr", stderr):
+                with self.assertRaises(SystemExit) as exc:
+                    main.main(
+                        [
+                            "supportability-summary",
+                            "--role",
+                            "support_operator",
+                            "--restore-dry-run-input",
+                            "authoritative-backup.json",
+                        ],
+                        service=service,
+                    )
+
+        self.assertEqual(exc.exception.code, 2)
+        self.assertIn("input path must contain valid JSON", stderr.getvalue())
+
     def test_supportability_summary_cli_denies_unsupported_role(self) -> None:
         _store, service, _promoted_case, _evidence_id, _reviewed_at = (
             self._build_phase19_in_scope_case()
