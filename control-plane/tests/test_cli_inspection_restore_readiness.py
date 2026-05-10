@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pathlib
 import sys
+from types import SimpleNamespace
 import unittest
 
 TESTS_ROOT = pathlib.Path(__file__).resolve().parent
@@ -259,6 +260,142 @@ class CliInspectionRestoreReadinessTests(ControlPlaneCliInspectionTestBase):
 
         self.assertEqual(exc.exception.code, 2)
         self.assertIn("restore dry-run snapshot is stale", stderr.getvalue())
+
+    def test_supportability_summary_cli_renders_bounded_state_without_mutation(
+        self,
+    ) -> None:
+        store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        backup["created_at"] = "2000-01-01T00:00:00+00:00"
+        before_counts = {
+            record_type: len(store.list(record_type))
+            for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES
+        }
+        stdout = io.StringIO()
+
+        with mock.patch.object(main, "_read_json_file", return_value=backup):
+            main.main(
+                [
+                    "supportability-summary",
+                    "--role",
+                    "support_operator",
+                    "--restore-dry-run-input",
+                    "authoritative-backup.json",
+                    "--restore-max-age-hours",
+                    "24",
+                ],
+                stdout=stdout,
+                service=service,
+            )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["contract"], "phase58_7_supportability_summary")
+        self.assertTrue(payload["read_only"])
+        self.assertFalse(payload["mutates_authoritative_records"])
+        self.assertEqual(payload["access"]["decision"], "allowed")
+        self.assertEqual(payload["states"]["doctor"]["posture"], "healthy")
+        self.assertEqual(payload["states"]["backup"]["posture"], "healthy")
+        self.assertEqual(payload["states"]["restore_dry_run"]["posture"], "stale")
+        self.assertEqual(
+            payload["states"]["upgrade_rollback_plan"]["posture"],
+            "unavailable",
+        )
+        self.assertEqual(
+            payload["states"]["support_bundle_redaction"]["posture"],
+            "unavailable",
+        )
+        self.assertIn("restore_dry_run", payload["safe_next_actions"][0]["state"])
+        self.assertFalse(payload["summary_claims"]["workflow_truth"])
+        self.assertFalse(payload["summary_claims"]["phase59_or_later_completion"])
+        self.assertEqual(
+            {
+                record_type: len(store.list(record_type))
+                for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES
+            },
+            before_counts,
+        )
+
+    def test_supportability_summary_reports_usage_error_on_invalid_restore_input(
+        self,
+    ) -> None:
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        stderr = io.StringIO()
+
+        with mock.patch.object(
+            main,
+            "_read_json_file",
+            side_effect=ValueError("input path must contain valid JSON"),
+        ):
+            with mock.patch.object(sys, "stderr", stderr):
+                with self.assertRaises(SystemExit) as exc:
+                    main.main(
+                        [
+                            "supportability-summary",
+                            "--role",
+                            "support_operator",
+                            "--restore-dry-run-input",
+                            "authoritative-backup.json",
+                        ],
+                        service=service,
+                    )
+
+        self.assertEqual(exc.exception.code, 2)
+        self.assertIn("input path must contain valid JSON", stderr.getvalue())
+
+    def test_supportability_summary_cli_denies_unsupported_role(self) -> None:
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        stdout = io.StringIO()
+
+        main.main(
+            ["supportability-summary", "--role", "analyst"],
+            stdout=stdout,
+            service=service,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["access"]["decision"], "denied")
+        self.assertEqual(payload["summary"]["overall_posture"], "denied")
+        self.assertEqual(payload["states"]["doctor"]["posture"], "denied")
+        self.assertFalse(payload["mutates_authoritative_records"])
+
+    def test_supportability_summary_cli_surfaces_degraded_doctor_without_restore_input(
+        self,
+    ) -> None:
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        degraded_readiness = service.inspect_readiness_diagnostics().to_dict()
+        degraded_readiness["status"] = "degraded"
+        stdout = io.StringIO()
+
+        with mock.patch.object(
+            service,
+            "inspect_readiness_diagnostics",
+            return_value=SimpleNamespace(to_dict=lambda: degraded_readiness),
+        ):
+            main.main(
+                ["supportability-summary", "--role", "support_operator"],
+                stdout=stdout,
+                service=service,
+            )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["states"]["doctor"]["posture"], "degraded")
+        self.assertEqual(
+            payload["states"]["restore_dry_run"]["posture"],
+            "unavailable",
+        )
+        self.assertEqual(payload["summary"]["overall_posture"], "unavailable")
+        self.assertIn(
+            "doctor",
+            {action["state"] for action in payload["safe_next_actions"]},
+        )
 
     def test_restore_authoritative_record_chain_reports_usage_error_on_lookup_failure(
         self,

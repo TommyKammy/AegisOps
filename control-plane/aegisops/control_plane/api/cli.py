@@ -12,6 +12,7 @@ from .entrypoint_support import (
     read_json_file,
 )
 from ..runtime.doctor_contract import build_doctor_snapshot
+from ..runtime.supportability_summary import build_supportability_summary
 from ..service import AegisOpsControlPlaneService
 
 
@@ -94,6 +95,32 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser(
         "doctor",
         help="Render the read-only Phase 58.1 supportability doctor contract.",
+    )
+    supportability_summary = subparsers.add_parser(
+        "supportability-summary",
+        help="Render the read-only Phase 58.7 supportability summary.",
+    )
+    supportability_summary.add_argument(
+        "--role",
+        default="support_operator",
+        help="Reviewed operator role requesting support diagnostics.",
+    )
+    supportability_summary.add_argument(
+        "--restore-dry-run-input",
+        help="Optional reviewed backup payload to summarize through restore dry-run.",
+    )
+    supportability_summary.add_argument(
+        "--restore-expected-source-revision",
+        help="Optional source revision binding for restore dry-run posture.",
+    )
+    supportability_summary.add_argument(
+        "--restore-expected-profile",
+        help="Optional deployment profile binding for restore dry-run posture.",
+    )
+    supportability_summary.add_argument(
+        "--restore-max-age-hours",
+        type=int,
+        help="Optional maximum backup age for restore dry-run posture.",
     )
     subparsers.add_parser(
         "inspect-analyst-queue",
@@ -555,6 +582,21 @@ def run_command(
             config=service._config,
             readiness_payload=service.inspect_readiness_diagnostics().to_dict(),
         ).to_dict()
+    if command == "supportability-summary":
+        try:
+            restore_backup_payload = None
+            if parsed.restore_dry_run_input:
+                restore_backup_payload = read_json_file_fn(parsed.restore_dry_run_input)
+            return build_supportability_summary(
+                service=service,
+                role=parsed.role,
+                restore_backup_payload=restore_backup_payload,
+                restore_expected_source_revision=parsed.restore_expected_source_revision,
+                restore_expected_profile=parsed.restore_expected_profile,
+                restore_max_age_hours=parsed.restore_max_age_hours,
+            )
+        except (LookupError, ValueError) as exc:
+            _usage_error(parser, str(exc))
     if command == "inspect-analyst-queue":
         return service.inspect_analyst_queue().to_dict()
     if command == "inspect-alert-detail":
