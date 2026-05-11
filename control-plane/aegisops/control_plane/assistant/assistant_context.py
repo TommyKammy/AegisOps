@@ -260,7 +260,8 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
         "activate the detector",
         "detector activation",
         "create source truth",
-        "source truth",
+        "declare source truth",
+        "treat as source truth",
         "override scope",
     )
     if any(contains_term(term) for term in authority_terms):
@@ -286,13 +287,25 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
         "omit citations",
         "without citations",
     )
-    if any(contains_term(term) for term in citation_suppression_terms):
+    citation_suppression_patterns = (
+        r"(?<!\w)omit (?:the )?citations(?!\w)",
+        r"(?<!\w)suppress (?:any remaining |all )?uncertainty(?!\w)",
+        r"(?<!\w)suppress (?:the )?citations(?!\w)",
+    )
+    if any(contains_term(term) for term in citation_suppression_terms) or any(
+        re.search(pattern, normalized) is not None
+        for pattern in citation_suppression_patterns
+    ):
         flags.append("citation_suppression_attempt")
 
     tool_scope_terms = (
         "disallowed tool",
+        "disallowed tools",
+        "unregistered tool",
         "unregistered tools",
+        "access unregistered tool",
         "access unregistered tools",
+        "bypass policy guard",
         "bypass the policy guard",
         "delegate the action to the automation tool",
     )
@@ -304,7 +317,9 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
         "sibling alert",
         "neighboring evidence",
         "neighbor record",
-        "record family",
+        "expand record family",
+        "apply to the record family",
+        "apply across the record family",
         "all related records",
     )
     if any(contains_term(term) for term in record_family_terms):
