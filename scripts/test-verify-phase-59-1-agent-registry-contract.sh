@@ -81,6 +81,8 @@ elif mutation == "allowed_execution_tool":
     registry["agents"][0]["allowed_tools"].append("execute_action")
 elif mutation == "allowed_policy_bypass_tool":
     registry["agents"][0]["allowed_tools"].append("policy-bypass")
+elif mutation == "allowed_policy_bypass_underscore_tool":
+    registry["agents"][0]["allowed_tools"].append("policy_bypass")
 elif mutation == "allowed_policy_bypass_phrase_tool":
     registry["agents"][0]["allowed_tools"].append("policy bypass")
 elif mutation == "missing_disallowed_execution":
@@ -198,6 +200,13 @@ mutate_registry "${allowed_policy_bypass_repo}" "allowed_policy_bypass_tool"
 assert_fails_with \
   "${allowed_policy_bypass_repo}" \
   "has forbidden allowed tool: policy-bypass"
+
+allowed_policy_bypass_underscore_repo="${workdir}/allowed-policy-bypass-underscore"
+create_valid_repo "${allowed_policy_bypass_underscore_repo}"
+mutate_registry "${allowed_policy_bypass_underscore_repo}" "allowed_policy_bypass_underscore_tool"
+assert_fails_with \
+  "${allowed_policy_bypass_underscore_repo}" \
+  "has forbidden allowed tool: policy_bypass"
 
 allowed_policy_bypass_phrase_repo="${workdir}/allowed-policy-bypass-phrase"
 create_valid_repo "${allowed_policy_bypass_phrase_repo}"
