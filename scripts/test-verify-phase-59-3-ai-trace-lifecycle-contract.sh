@@ -191,6 +191,14 @@ elif mutation == "missing_rejected_transition_metadata":
     transition["required_metadata"] = [
         value for value in transition["required_metadata"] if value != "rejected_at"
     ]
+elif mutation == "duplicate_transition_metadata":
+    transition = next(
+        transition
+        for transition in lifecycle["allowed_transitions"]
+        if transition["from_state"] == "reviewed"
+        and transition["to_state"] == "accepted"
+    )
+    transition["required_metadata"].append("accepted_at")
 elif mutation == "allowed_from_drift":
     accepted["allowed_from"] = ["created"]
 elif mutation == "invalid_allowed_from_state":
@@ -235,6 +243,8 @@ elif mutation == "queue_extra_required_field":
     )
 elif mutation == "queue_non_string_required_field":
     lifecycle["trace_review_queue_skeleton"]["required_fields"].append(42)
+elif mutation == "queue_duplicate_required_field":
+    lifecycle["trace_review_queue_skeleton"]["required_fields"].append("trace_id")
 elif mutation == "queue_missing_non_authoritative_surface":
     lifecycle["trace_review_queue_skeleton"]["non_authoritative_surfaces"] = [
         surface
@@ -246,6 +256,10 @@ elif mutation == "queue_missing_non_authoritative_surface":
 elif mutation == "queue_extra_non_authoritative_surface":
     lifecycle["trace_review_queue_skeleton"]["non_authoritative_surfaces"].append(
         "workflow_truth"
+    )
+elif mutation == "queue_duplicate_non_authoritative_surface":
+    lifecycle["trace_review_queue_skeleton"]["non_authoritative_surfaces"].append(
+        "trace_state"
     )
 elif mutation == "expiry_can_accept":
     lifecycle["allowed_transitions"].append(
@@ -359,6 +373,9 @@ assert_mutation_fails_with \
   missing_rejected_transition_metadata \
   "Phase 59.3 AI trace lifecycle transition reviewed->rejected is missing transition-specific metadata: rejected_at"
 assert_mutation_fails_with \
+  duplicate_transition_metadata \
+  "Phase 59.3 AI trace lifecycle transition reviewed->accepted required_metadata must not contain duplicate value(s): accepted_at"
+assert_mutation_fails_with \
   invalid_allowed_from_state \
   "Phase 59.3 AI trace lifecycle state accepted references invalid allowed_from state: unknown_review_state"
 assert_mutation_fails_with \
@@ -383,11 +400,17 @@ assert_mutation_fails_with \
   queue_non_string_required_field \
   "Phase 59.3 trace review queue skeleton required_fields must be a string list."
 assert_mutation_fails_with \
+  queue_duplicate_required_field \
+  "Phase 59.3 trace review queue skeleton required_fields must not contain duplicate value(s): trace_id"
+assert_mutation_fails_with \
   queue_missing_non_authoritative_surface \
   "Phase 59.3 trace review queue skeleton is missing non-authoritative surface(s): trace_state"
 assert_mutation_fails_with \
   queue_extra_non_authoritative_surface \
   "Phase 59.3 trace review queue skeleton contains extra non-authoritative surface(s): workflow_truth"
+assert_mutation_fails_with \
+  queue_duplicate_non_authoritative_surface \
+  "Phase 59.3 trace review queue skeleton non_authoritative_surfaces must not contain duplicate value(s): trace_state"
 
 local_path_repo="${workdir}/local-path"
 create_valid_repo "${local_path_repo}"

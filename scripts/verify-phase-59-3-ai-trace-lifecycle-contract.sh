@@ -63,10 +63,36 @@ python3 - "${lifecycle_path}" "${agent_registry_path}" "${tool_registry_path}" <
 import json
 import sys
 from pathlib import Path
+from collections import Counter
 
 lifecycle_path = Path(sys.argv[1])
 agent_registry_path = Path(sys.argv[2])
 tool_registry_path = Path(sys.argv[3])
+expected_schema_version = "2026-05-11.phase-59.3"
+
+
+def require_non_empty_string(value, description: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise SystemExit(f"{description} must be a non-empty string.")
+    return value
+
+
+def require_non_empty_string_list(value, description: str) -> list[str]:
+    if (
+        not isinstance(value, list)
+        or not value
+        or any(not isinstance(item, str) or not item.strip() for item in value)
+    ):
+        raise SystemExit(f"{description} must be a non-empty string list.")
+    return value
+
+
+def require_no_duplicate_strings(values: list[str], description: str) -> None:
+    duplicates = sorted(item for item, count in Counter(values).items() if count > 1)
+    if duplicates:
+        raise SystemExit(
+            f"{description} must not contain duplicate value(s): " + ", ".join(duplicates)
+        )
 
 try:
     lifecycle = json.loads(lifecycle_path.read_text(encoding="utf-8"))
@@ -102,9 +128,9 @@ if missing_root:
 if lifecycle["phase"] != "59.3":
     raise SystemExit("Phase 59.3 AI trace lifecycle phase must be 59.3.")
 
-if lifecycle["schema_version"] != "2026-05-11.phase-59.3":
+if lifecycle["schema_version"] != expected_schema_version:
     raise SystemExit(
-        "Phase 59.3 AI trace lifecycle schema_version must be 2026-05-11.phase-59.3."
+        f"Phase 59.3 AI trace lifecycle schema_version must be {expected_schema_version}."
     )
 
 if lifecycle["contract_status"] != "accepted_contract_slice":
@@ -112,11 +138,10 @@ if lifecycle["contract_status"] != "accepted_contract_slice":
         "Phase 59.3 AI trace lifecycle status must be accepted_contract_slice."
     )
 
-authority_boundary = lifecycle["authority_boundary"]
-if not isinstance(authority_boundary, str) or not authority_boundary.strip():
-    raise SystemExit(
-        "Phase 59.3 AI trace lifecycle authority_boundary must be a non-empty string."
-    )
+authority_boundary = require_non_empty_string(
+    lifecycle["authority_boundary"],
+    "Phase 59.3 AI trace lifecycle authority_boundary",
+)
 authority_boundary_lower = authority_boundary.casefold()
 if (
     "subordinate" not in authority_boundary_lower
@@ -252,9 +277,10 @@ for index, state in enumerate(states, start=1):
     states_by_name[name] = state
 
     for field in ("purpose", "expiration_handling", "authority_effect"):
-        value = state[field]
-        if not isinstance(value, str) or not value.strip():
-            raise SystemExit(f"Phase 59.3 AI trace lifecycle state {name} has invalid {field}.")
+        value = require_non_empty_string(
+            state[field],
+            f"Phase 59.3 AI trace lifecycle state {name} {field}",
+        )
         lowered = value.casefold().replace("-", "_").replace(" ", "_")
         if any(fragment in lowered for fragment in forbidden_claim_fragments):
             if value != "advisory_only_no_workflow_mutation":
@@ -290,15 +316,14 @@ for index, state in enumerate(states, start=1):
         )
 
     for field in ("registered_agents", "registered_tools", "required_linkage", "disallowed_authority"):
-        values = state[field]
-        if (
-            not isinstance(values, list)
-            or not values
-            or any(not isinstance(value, str) or not value.strip() for value in values)
-        ):
-            raise SystemExit(
-                f"Phase 59.3 AI trace lifecycle state {name} must include non-empty string list {field}."
-            )
+        values = require_non_empty_string_list(
+            state[field],
+            f"Phase 59.3 AI trace lifecycle state {name} {field}",
+        )
+        require_no_duplicate_strings(
+            values,
+            f"Phase 59.3 AI trace lifecycle state {name} {field}",
+        )
 
     unknown_agents = sorted(set(state["registered_agents"]) - registered_agents)
     if unknown_agents:
@@ -372,7 +397,7 @@ required_transitions = {
     ("accepted", "expired"),
     ("corrected", "expired"),
 }
-seen_transitions: set[tuple[str, str]] = set()
+transition_rows_by_pair: dict[tuple[str, str], int] = {}
 required_transition_fields = {
     "from_state",
     "to_state",
@@ -428,7 +453,7 @@ for index, transition in enumerate(transitions, start=1):
         raise SystemExit(
             f"Phase 59.3 AI trace lifecycle contains unexpected transition for this slice: {from_state}->{to_state}"
         )
-    if transition_pair in seen_transitions:
+    if transition_pair in transition_rows_by_pair:
         raise SystemExit(
             f"Duplicate Phase 59.3 AI trace lifecycle transition: {from_state}->{to_state}"
         )
@@ -449,15 +474,14 @@ for index, transition in enumerate(transitions, start=1):
             f"Phase 59.3 AI trace lifecycle transition {from_state}->{to_state} must keep advisory-only authority."
         )
 
-    metadata = transition["required_metadata"]
-    if (
-        not isinstance(metadata, list)
-        or not metadata
-        or any(not isinstance(value, str) or not value.strip() for value in metadata)
-    ):
-        raise SystemExit(
-            f"Phase 59.3 AI trace lifecycle transition {from_state}->{to_state} must include required metadata."
-        )
+    metadata = require_non_empty_string_list(
+        transition["required_metadata"],
+        f"Phase 59.3 AI trace lifecycle transition {from_state}->{to_state} required_metadata",
+    )
+    require_no_duplicate_strings(
+        metadata,
+        f"Phase 59.3 AI trace lifecycle transition {from_state}->{to_state} required_metadata",
+    )
 
     if to_state in {"accepted", "corrected", "rejected"}:
         missing_reviewer = sorted(required_reviewer_terms - set(metadata))
@@ -481,8 +505,9 @@ for index, transition in enumerate(transitions, start=1):
             + ", ".join(missing_transition_metadata)
         )
 
-    seen_transitions.add((from_state, to_state))
+    transition_rows_by_pair[transition_pair] = index
 
+seen_transitions = set(transition_rows_by_pair)
 missing_transitions = sorted(required_transitions - seen_transitions)
 unexpected_transitions = sorted(seen_transitions - required_transitions)
 if missing_transitions:
@@ -542,13 +567,16 @@ required_queue_fields = {
     "review_required",
 }
 queue_fields = queue.get("required_fields")
-if (
-    not isinstance(queue_fields, list)
-    or any(not isinstance(value, str) or not value.strip() for value in queue_fields)
+if not isinstance(queue_fields, list) or any(
+    not isinstance(value, str) or not value.strip() for value in queue_fields
 ):
     raise SystemExit(
         "Phase 59.3 trace review queue skeleton required_fields must be a string list."
     )
+require_no_duplicate_strings(
+    queue_fields,
+    "Phase 59.3 trace review queue skeleton required_fields",
+)
 actual_queue_fields = set(queue_fields)
 missing_queue = sorted(required_queue_fields - actual_queue_fields)
 if missing_queue:
@@ -571,16 +599,17 @@ required_non_authoritative_surfaces = {
     "trace_state",
 }
 non_authoritative_surfaces = queue.get("non_authoritative_surfaces")
-if (
-    not isinstance(non_authoritative_surfaces, list)
-    or any(
-        not isinstance(value, str) or not value.strip()
-        for value in non_authoritative_surfaces
-    )
+if not isinstance(non_authoritative_surfaces, list) or any(
+    not isinstance(value, str) or not value.strip()
+    for value in non_authoritative_surfaces
 ):
     raise SystemExit(
         "Phase 59.3 trace review queue skeleton non_authoritative_surfaces must be a string list."
     )
+require_no_duplicate_strings(
+    non_authoritative_surfaces,
+    "Phase 59.3 trace review queue skeleton non_authoritative_surfaces",
+)
 actual_non_authoritative_surfaces = set(non_authoritative_surfaces)
 missing_non_authoritative = sorted(
     required_non_authoritative_surfaces - actual_non_authoritative_surfaces
