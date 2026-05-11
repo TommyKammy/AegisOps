@@ -125,6 +125,34 @@ required_disallowed = {
     "policy_bypass",
     "workflow_truth",
 }
+required_forbidden_fragments = {
+    "AI approved",
+    "AI executed",
+    "AI reconciled",
+    "AI closed",
+    "AI activated",
+    "AI repaired",
+    "AI is workflow truth",
+    "automatic repair complete",
+}
+contradictory_authority_claims = {
+    "ai may approve",
+    "ai may execute",
+    "ai may reconcile",
+    "ai may close",
+    "ai may activate",
+    "ai may create source truth",
+    "ai may repair",
+    "ai may bypass policy",
+    "ai approved",
+    "ai executed",
+    "ai reconciled",
+    "ai closed",
+    "ai activated",
+    "ai repaired",
+    "ai is workflow truth",
+    "automatic repair complete",
+}
 
 def require_non_empty_string(value, description: str) -> str:
     if not isinstance(value, str) or not value.strip():
@@ -139,6 +167,97 @@ def require_non_empty_string_list(value, description: str) -> list[str]:
     ):
         raise SystemExit(f"{description} must be a non-empty string list.")
     return value
+
+def require_no_forbidden_fragments(text: str, description: str, fragments: list[str]) -> None:
+    text_lower = text.casefold()
+    for fragment in fragments:
+        if fragment.casefold() in text_lower:
+            raise SystemExit(
+                f"{description} must not include forbidden authority claim: {fragment}"
+            )
+
+def require_ai_advisory_posture(text: str, description: str) -> None:
+    text_lower = text.casefold()
+    allowed_posture_terms = (
+        "ai advisory unavailable",
+        "ai advisory is unavailable",
+        "ai advisory disabled",
+        "ai advisory is disabled",
+        "ai advisory degraded",
+        "ai advisory is degraded",
+        "ai advisory unavailable or degraded",
+    )
+    if not any(term in text_lower for term in allowed_posture_terms):
+        raise SystemExit(
+            f"{description} must explain AI advisory unavailable or degraded posture."
+        )
+
+def require_authoritative_records(text: str, description: str) -> None:
+    if "authoritative aegisops records" not in text.casefold():
+        raise SystemExit(
+            f"{description} must direct operators to authoritative AegisOps records."
+        )
+
+def require_mode_specific_semantics(mode_name: str, mode: dict) -> None:
+    semantic_text = " ".join(
+        [
+            mode["trigger"],
+            mode["readiness_posture"],
+            mode["reason"],
+            mode["operator_state"],
+            mode["explanation"],
+        ]
+    ).casefold()
+    if mode_name == "disabled":
+        for field in ("trigger", "reason", "operator_state", "explanation"):
+            if "disabled" not in mode[field].casefold():
+                raise SystemExit(
+                    f"Phase 59.4 AI mode disabled {field} must state disabled semantics."
+                )
+        if mode["readiness_posture"] not in {"not_applicable", "disabled"}:
+            raise SystemExit(
+                "Phase 59.4 AI mode disabled readiness_posture must not claim healthy or available posture."
+            )
+    elif mode_name == "degraded":
+        for field in ("trigger", "readiness_posture", "reason", "operator_state", "explanation"):
+            if "degraded" not in mode[field].casefold():
+                raise SystemExit(
+                    f"Phase 59.4 AI mode degraded {field} must state degraded semantics."
+                )
+    else:
+        return
+    for forbidden in ("healthy", "available"):
+        if forbidden in semantic_text and "unavailable" not in semantic_text:
+            raise SystemExit(
+                f"Phase 59.4 AI mode {mode_name} must not claim healthy or available AI posture."
+            )
+
+copy_rules = contract["operator_copy_rules"]
+if not isinstance(copy_rules, dict):
+    raise SystemExit("Phase 59.4 operator_copy_rules must be an object.")
+required_terms = require_non_empty_string_list(
+    copy_rules.get("required_terms"),
+    "Phase 59.4 operator_copy_rules required_terms",
+)
+for term in ("AI advisory unavailable or degraded", "authoritative AegisOps records"):
+    if term not in required_terms:
+        raise SystemExit(
+            f"Phase 59.4 operator_copy_rules must require copy term: {term}"
+        )
+forbidden_fragments = require_non_empty_string_list(
+    copy_rules.get("forbidden_fragments"),
+    "Phase 59.4 operator_copy_rules forbidden_fragments",
+)
+for fragment in sorted(required_forbidden_fragments):
+    if fragment not in forbidden_fragments:
+        raise SystemExit(
+            f"Phase 59.4 operator_copy_rules must forbid copy fragment: {fragment}"
+        )
+require_no_forbidden_fragments(
+    boundary,
+    "Phase 59.4 AI disabled/degraded mode authority_boundary",
+    sorted(contradictory_authority_claims | {fragment.casefold() for fragment in forbidden_fragments}),
+)
 
 modes = contract["modes"]
 if not isinstance(modes, list):
@@ -161,6 +280,7 @@ for index, mode in enumerate(modes, start=1):
     for field in ("trigger", "operator_state", "readiness_posture", "reason", "explanation", "authority_effect"):
         require_non_empty_string(mode[field], f"Phase 59.4 AI mode {mode_name} {field}")
     require_non_empty_string_list(mode["safe_next_steps"], f"Phase 59.4 AI mode {mode_name} safe_next_steps")
+    require_mode_specific_semantics(mode_name, mode)
     for field in (
         "ai_generation_allowed",
         "trace_creation_allowed",
@@ -191,11 +311,20 @@ for index, mode in enumerate(modes, start=1):
             mode["explanation"],
             " ".join(mode["safe_next_steps"]),
         ]
-    ).casefold()
-    if "authoritative aegisops records" not in text and "aegisops records" not in text:
-        raise SystemExit(
-            f"Phase 59.4 AI mode {mode_name} must tell operators to use AegisOps records."
-        )
+    )
+    require_ai_advisory_posture(
+        text,
+        f"Phase 59.4 AI mode {mode_name} operator-facing copy",
+    )
+    require_authoritative_records(
+        text,
+        f"Phase 59.4 AI mode {mode_name} operator-facing copy",
+    )
+    require_no_forbidden_fragments(
+        text,
+        f"Phase 59.4 AI mode {mode_name} operator-facing copy",
+        forbidden_fragments,
+    )
 
 missing_modes = sorted(required_modes - seen_modes)
 unexpected_modes = sorted(seen_modes - required_modes)
@@ -262,11 +391,26 @@ for index, surface in enumerate(surfaces, start=1):
             surface[field],
             f"Phase 59.4 non-AI workflow surface {surface_name} {field}",
         )
-    explanation = surface["required_operator_explanation"].casefold()
-    if "ai advisory unavailable" not in explanation:
-        raise SystemExit(
-            f"Phase 59.4 non-AI workflow surface {surface_name} must explain AI advisory unavailability."
-        )
+    operator_text = " ".join(
+        [
+            surface["disabled_mode_behavior"],
+            surface["degraded_mode_behavior"],
+            surface["required_operator_explanation"],
+        ]
+    )
+    require_ai_advisory_posture(
+        surface["required_operator_explanation"],
+        f"Phase 59.4 non-AI workflow surface {surface_name} operator explanation",
+    )
+    require_authoritative_records(
+        surface["required_operator_explanation"],
+        f"Phase 59.4 non-AI workflow surface {surface_name} operator explanation",
+    )
+    require_no_forbidden_fragments(
+        operator_text,
+        f"Phase 59.4 non-AI workflow surface {surface_name} operator-facing copy",
+        forbidden_fragments,
+    )
 
 missing_surfaces = sorted(required_surfaces - seen_surfaces)
 unexpected_surfaces = sorted(seen_surfaces - required_surfaces)
@@ -301,27 +445,6 @@ for required_block in (
             f"Phase 59.4 blocked_ai_outputs must include {required_block}."
         )
 
-copy_rules = contract["operator_copy_rules"]
-if not isinstance(copy_rules, dict):
-    raise SystemExit("Phase 59.4 operator_copy_rules must be an object.")
-required_terms = require_non_empty_string_list(
-    copy_rules.get("required_terms"),
-    "Phase 59.4 operator_copy_rules required_terms",
-)
-for term in ("AI advisory unavailable", "authoritative AegisOps records"):
-    if term not in required_terms:
-        raise SystemExit(
-            f"Phase 59.4 operator_copy_rules must require copy term: {term}"
-        )
-forbidden_fragments = require_non_empty_string_list(
-    copy_rules.get("forbidden_fragments"),
-    "Phase 59.4 operator_copy_rules forbidden_fragments",
-)
-for fragment in ("AI approved", "AI executed", "AI reconciled", "AI is workflow truth"):
-    if fragment not in forbidden_fragments:
-        raise SystemExit(
-            f"Phase 59.4 operator_copy_rules must forbid copy fragment: {fragment}"
-        )
 PY
 
 path_hygiene_stderr="$(mktemp)"

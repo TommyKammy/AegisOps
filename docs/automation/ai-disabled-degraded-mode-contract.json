@@ -7,10 +7,10 @@
     {
       "mode": "disabled",
       "trigger": "platform_admin_policy_disabled",
-      "operator_state": "AI advisory is disabled by platform-admin posture.",
+      "operator_state": "AI advisory unavailable because platform-admin posture disabled it.",
       "readiness_posture": "not_applicable",
       "reason": "ai_advisory_disabled_by_admin",
-      "explanation": "AI advisory generation is intentionally disabled. Continue queue, case, evidence review, action review, reconciliation, supportability, and admin work from authoritative AegisOps records.",
+      "explanation": "AI advisory unavailable because generation is intentionally disabled. Continue queue, case, evidence review, action review, reconciliation, supportability, and admin work from authoritative AegisOps records.",
       "safe_next_steps": [
         "Use queue and case records as the workflow source of truth.",
         "Review evidence, action requests, approvals, execution receipts, and reconciliation records directly.",
@@ -37,10 +37,10 @@
     {
       "mode": "degraded",
       "trigger": "ai_advisory_degraded_by_admin_or_runtime_health",
-      "operator_state": "AI advisory is degraded and unavailable for workflow reliance.",
+      "operator_state": "AI advisory degraded and unavailable for workflow reliance.",
       "readiness_posture": "degraded",
       "reason": "ai_advisory_degraded_by_admin",
-      "explanation": "AI advisory generation is degraded. Continue queue, case, evidence review, action review, reconciliation, supportability, and admin work from authoritative AegisOps records while AI advisory remains unavailable.",
+      "explanation": "AI advisory degraded. Continue queue, case, evidence review, action review, reconciliation, supportability, and admin work from authoritative AegisOps records.",
       "safe_next_steps": [
         "Treat AI advisory context as unavailable until a reviewed healthy posture returns.",
         "Use direct record inspection for queue, case, evidence, action, receipt, and reconciliation decisions.",
@@ -72,7 +72,7 @@
       "ai_dependency": "non_blocking",
       "disabled_mode_behavior": "queue remains available from authoritative records with AI advisory marked disabled",
       "degraded_mode_behavior": "queue remains available from authoritative records with AI advisory marked degraded",
-      "required_operator_explanation": "AI advisory unavailable; queue ordering and case state come from AegisOps records."
+      "required_operator_explanation": "AI advisory unavailable or degraded; queue ordering and case state come from authoritative AegisOps records."
     },
     {
       "surface": "case",
@@ -80,7 +80,7 @@
       "ai_dependency": "non_blocking",
       "disabled_mode_behavior": "case detail remains available from authoritative records with AI advisory marked disabled",
       "degraded_mode_behavior": "case detail remains available from authoritative records with AI advisory marked degraded",
-      "required_operator_explanation": "AI advisory unavailable; case lifecycle and linked evidence come from AegisOps records."
+      "required_operator_explanation": "AI advisory unavailable or degraded; case lifecycle and linked evidence come from authoritative AegisOps records."
     },
     {
       "surface": "evidence_review",
@@ -88,7 +88,7 @@
       "ai_dependency": "non_blocking",
       "disabled_mode_behavior": "evidence review remains available from authoritative evidence records with AI advisory marked disabled",
       "degraded_mode_behavior": "evidence review remains available from authoritative evidence records with AI advisory marked degraded",
-      "required_operator_explanation": "AI advisory unavailable; evidence custody and review state come from AegisOps records."
+      "required_operator_explanation": "AI advisory unavailable or degraded; evidence custody and review state come from authoritative AegisOps records."
     },
     {
       "surface": "action_review",
@@ -96,7 +96,7 @@
       "ai_dependency": "non_blocking",
       "disabled_mode_behavior": "action review remains available from action request and approval records with AI advisory marked disabled",
       "degraded_mode_behavior": "action review remains available from action request and approval records with AI advisory marked degraded",
-      "required_operator_explanation": "AI advisory unavailable; action review, approval, and dispatch posture come from AegisOps records."
+      "required_operator_explanation": "AI advisory unavailable or degraded; action review, approval, and dispatch posture come from authoritative AegisOps records."
     },
     {
       "surface": "reconciliation",
@@ -104,7 +104,7 @@
       "ai_dependency": "non_blocking",
       "disabled_mode_behavior": "reconciliation inspection remains available from execution receipt and reconciliation records with AI advisory marked disabled",
       "degraded_mode_behavior": "reconciliation inspection remains available from execution receipt and reconciliation records with AI advisory marked degraded",
-      "required_operator_explanation": "AI advisory unavailable; reconciliation outcome comes from AegisOps records."
+      "required_operator_explanation": "AI advisory unavailable or degraded; reconciliation outcome comes from authoritative AegisOps records."
     },
     {
       "surface": "doctor_supportability",
@@ -112,7 +112,7 @@
       "ai_dependency": "non_blocking",
       "disabled_mode_behavior": "doctor and supportability explanation fallback remains available with AI advisory marked disabled",
       "degraded_mode_behavior": "doctor and supportability explanation fallback remains available with AI advisory marked degraded",
-      "required_operator_explanation": "AI advisory unavailable; doctor output is bounded supportability context and not workflow truth."
+      "required_operator_explanation": "AI advisory unavailable or degraded; doctor output is bounded supportability context from authoritative AegisOps records and not workflow truth."
     },
     {
       "surface": "admin_enablement",
@@ -120,7 +120,7 @@
       "ai_dependency": "non_blocking",
       "disabled_mode_behavior": "admin enablement posture shows disabled state without unlocking AI generation",
       "degraded_mode_behavior": "admin enablement posture shows degraded state without unlocking AI generation",
-      "required_operator_explanation": "AI advisory unavailable state is controlled by reviewed admin enablement and does not grant workflow authority."
+      "required_operator_explanation": "AI advisory unavailable or degraded state is controlled by reviewed admin enablement and does not override authoritative AegisOps records or grant workflow authority."
     }
   ],
   "blocked_ai_outputs": [
@@ -140,7 +140,7 @@
   ],
   "operator_copy_rules": {
     "required_terms": [
-      "AI advisory unavailable",
+      "AI advisory unavailable or degraded",
       "authoritative AegisOps records"
     ],
     "forbidden_fragments": [

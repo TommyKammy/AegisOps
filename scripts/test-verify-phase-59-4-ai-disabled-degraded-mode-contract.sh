@@ -105,6 +105,21 @@ elif mutation == "missing_blocked_output":
     contract["blocked_ai_outputs"].remove("trace_creation")
 elif mutation == "missing_copy_rule":
     contract["operator_copy_rules"]["forbidden_fragments"].remove("AI is workflow truth")
+elif mutation == "missing_extended_copy_rule":
+    contract["operator_copy_rules"]["forbidden_fragments"].remove("AI closed")
+elif mutation == "authority_boundary_forbidden_claim":
+    contract["authority_boundary"] += " AI may execute actions."
+elif mutation == "mode_generic_posture":
+    disabled["operator_state"] = "Normal operations continue."
+    disabled["explanation"] = "Continue normal operations from authoritative AegisOps records."
+elif mutation == "mode_wrong_readiness":
+    disabled["readiness_posture"] = "healthy_available"
+elif mutation == "operator_forbidden_fragment":
+    disabled["explanation"] += " AI approved the workflow."
+elif mutation == "missing_operator_required_records":
+    queue["required_operator_explanation"] = "AI advisory unavailable; queue ordering and case state continue."
+elif mutation == "surface_degraded_operator_explanation":
+    queue["required_operator_explanation"] = "AI advisory degraded; queue ordering and case state come from authoritative AegisOps records."
 elif mutation == "json_escaped_unix_path":
     disabled["explanation"] += " See /" + "Users/example/private.txt."
 elif mutation == "json_escaped_windows_path":
@@ -128,6 +143,11 @@ remove_text_from_doc() {
 valid_repo="${workdir}/valid"
 create_valid_repo "${valid_repo}"
 assert_passes "${valid_repo}"
+
+degraded_copy_repo="${workdir}/surface-degraded-operator-explanation"
+create_valid_repo "${degraded_copy_repo}"
+mutate_contract "${degraded_copy_repo}" "surface_degraded_operator_explanation"
+assert_passes "${degraded_copy_repo}"
 
 missing_doc_repo="${workdir}/missing-doc"
 create_valid_repo "${missing_doc_repo}"
@@ -161,6 +181,12 @@ for mutation in \
   missing_disallowed_authority \
   missing_blocked_output \
   missing_copy_rule \
+  missing_extended_copy_rule \
+  authority_boundary_forbidden_claim \
+  mode_generic_posture \
+  mode_wrong_readiness \
+  operator_forbidden_fragment \
+  missing_operator_required_records \
   json_escaped_unix_path \
   json_escaped_windows_path
 do
@@ -194,6 +220,24 @@ do
       ;;
     missing_copy_rule)
       assert_fails_with "${mutated_repo}" "must forbid copy fragment: AI is workflow truth"
+      ;;
+    missing_extended_copy_rule)
+      assert_fails_with "${mutated_repo}" "must forbid copy fragment: AI closed"
+      ;;
+    authority_boundary_forbidden_claim)
+      assert_fails_with "${mutated_repo}" "authority_boundary must not include forbidden authority claim: ai may execute"
+      ;;
+    mode_generic_posture)
+      assert_fails_with "${mutated_repo}" "AI mode disabled operator_state must state disabled semantics"
+      ;;
+    mode_wrong_readiness)
+      assert_fails_with "${mutated_repo}" "AI mode disabled readiness_posture must not claim healthy or available posture"
+      ;;
+    operator_forbidden_fragment)
+      assert_fails_with "${mutated_repo}" "operator-facing copy must not include forbidden authority claim: AI approved"
+      ;;
+    missing_operator_required_records)
+      assert_fails_with "${mutated_repo}" "operator explanation must direct operators to authoritative AegisOps records"
       ;;
     json_escaped_unix_path|json_escaped_windows_path)
       assert_fails_with "${mutated_repo}" "workstation-local absolute path detected"
