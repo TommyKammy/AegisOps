@@ -1,0 +1,160 @@
+{
+  "schema_version": "2026-05-11.phase-59.4",
+  "phase": "59.4",
+  "contract_status": "accepted_contract_slice",
+  "authority_boundary": "AI disabled and degraded mode rows are subordinate policy context only. AegisOps records remain authoritative for alert, case, evidence, recommendation, approval, action request, execution receipt, reconciliation, audit, release, gate, limitation, and closeout truth.",
+  "modes": [
+    {
+      "mode": "disabled",
+      "trigger": "platform_admin_policy_disabled",
+      "operator_state": "AI advisory unavailable because platform-admin posture disabled it.",
+      "readiness_posture": "not_applicable",
+      "reason": "ai_advisory_disabled_by_admin",
+      "explanation": "AI advisory unavailable because generation is intentionally disabled. Continue queue, case, evidence review, action review, reconciliation, supportability, and admin work from authoritative AegisOps records.",
+      "safe_next_steps": [
+        "Use queue and case records as the workflow source of truth.",
+        "Review evidence, action requests, approvals, execution receipts, and reconciliation records directly.",
+        "Ask a platform admin to change the reviewed enablement posture before using AI advisory output."
+      ],
+      "ai_generation_allowed": false,
+      "trace_creation_allowed": false,
+      "recommendation_generation_allowed": false,
+      "action_draft_generation_allowed": false,
+      "authority_effect": "advisory_unavailable_no_workflow_mutation",
+      "disallowed_authority": [
+        "approval",
+        "execution",
+        "reconciliation",
+        "case_closure",
+        "detector_activation",
+        "source_truth_creation",
+        "automatic_repair",
+        "production_write",
+        "policy_bypass",
+        "workflow_truth"
+      ]
+    },
+    {
+      "mode": "degraded",
+      "trigger": "ai_advisory_degraded_by_admin_or_runtime_health",
+      "operator_state": "AI advisory degraded and unavailable for workflow reliance.",
+      "readiness_posture": "degraded",
+      "reason": [
+        "ai_advisory_degraded_by_admin",
+        "ai_advisory_degraded_by_runtime_health"
+      ],
+      "explanation": "AI advisory degraded. Continue queue, case, evidence review, action review, reconciliation, supportability, and admin work from authoritative AegisOps records.",
+      "safe_next_steps": [
+        "Treat AI advisory context as unavailable until a reviewed healthy posture returns.",
+        "Use direct record inspection for queue, case, evidence, action, receipt, and reconciliation decisions.",
+        "Record any AI health follow-up as supportability context only."
+      ],
+      "ai_generation_allowed": false,
+      "trace_creation_allowed": false,
+      "recommendation_generation_allowed": false,
+      "action_draft_generation_allowed": false,
+      "authority_effect": "advisory_unavailable_no_workflow_mutation",
+      "disallowed_authority": [
+        "approval",
+        "execution",
+        "reconciliation",
+        "case_closure",
+        "detector_activation",
+        "source_truth_creation",
+        "automatic_repair",
+        "production_write",
+        "policy_bypass",
+        "workflow_truth"
+      ]
+    }
+  ],
+  "non_ai_workflow_surfaces": [
+    {
+      "surface": "queue",
+      "authoritative_source": "aegisops_case_and_alert_records",
+      "ai_dependency": "non_blocking",
+      "disabled_mode_behavior": "queue remains available from authoritative records with AI advisory marked disabled",
+      "degraded_mode_behavior": "queue remains available from authoritative records with AI advisory marked degraded",
+      "required_operator_explanation": "AI advisory unavailable or degraded; queue ordering and case state come from authoritative AegisOps records."
+    },
+    {
+      "surface": "case",
+      "authoritative_source": "aegisops_case_record",
+      "ai_dependency": "non_blocking",
+      "disabled_mode_behavior": "case detail remains available from authoritative records with AI advisory marked disabled",
+      "degraded_mode_behavior": "case detail remains available from authoritative records with AI advisory marked degraded",
+      "required_operator_explanation": "AI advisory unavailable or degraded; case lifecycle and linked evidence come from authoritative AegisOps records."
+    },
+    {
+      "surface": "evidence_review",
+      "authoritative_source": "aegisops_evidence_records",
+      "ai_dependency": "non_blocking",
+      "disabled_mode_behavior": "evidence review remains available from authoritative evidence records with AI advisory marked disabled",
+      "degraded_mode_behavior": "evidence review remains available from authoritative evidence records with AI advisory marked degraded",
+      "required_operator_explanation": "AI advisory unavailable or degraded; evidence custody and review state come from authoritative AegisOps records."
+    },
+    {
+      "surface": "action_review",
+      "authoritative_source": "aegisops_action_request_and_approval_records",
+      "ai_dependency": "non_blocking",
+      "disabled_mode_behavior": "action review remains available from action request and approval records with AI advisory marked disabled",
+      "degraded_mode_behavior": "action review remains available from action request and approval records with AI advisory marked degraded",
+      "required_operator_explanation": "AI advisory unavailable or degraded; action review, approval, and dispatch posture come from authoritative AegisOps records."
+    },
+    {
+      "surface": "reconciliation",
+      "authoritative_source": "aegisops_execution_receipt_and_reconciliation_records",
+      "ai_dependency": "non_blocking",
+      "disabled_mode_behavior": "reconciliation inspection remains available from execution receipt and reconciliation records with AI advisory marked disabled",
+      "degraded_mode_behavior": "reconciliation inspection remains available from execution receipt and reconciliation records with AI advisory marked degraded",
+      "required_operator_explanation": "AI advisory unavailable or degraded; reconciliation outcome comes from authoritative AegisOps records."
+    },
+    {
+      "surface": "doctor_supportability",
+      "authoritative_source": "aegisops_readiness_and_supportability_records",
+      "ai_dependency": "non_blocking",
+      "disabled_mode_behavior": "doctor and supportability explanation fallback remains available with AI advisory marked disabled",
+      "degraded_mode_behavior": "doctor and supportability explanation fallback remains available with AI advisory marked degraded",
+      "required_operator_explanation": "AI advisory unavailable or degraded; doctor output is bounded supportability context from authoritative AegisOps records and not workflow truth."
+    },
+    {
+      "surface": "admin_enablement",
+      "authoritative_source": "reviewed_admin_enablement_posture",
+      "ai_dependency": "non_blocking",
+      "disabled_mode_behavior": "admin enablement posture shows disabled state without unlocking AI generation",
+      "degraded_mode_behavior": "admin enablement posture shows degraded state without unlocking AI generation",
+      "required_operator_explanation": "AI advisory unavailable or degraded state is controlled by reviewed admin enablement and does not override authoritative AegisOps records or grant workflow authority."
+    }
+  ],
+  "blocked_ai_outputs": [
+    "recommendation_generation",
+    "action_request_draft_generation",
+    "trace_creation",
+    "approval",
+    "execution",
+    "reconciliation",
+    "case_closure",
+    "detector_activation",
+    "source_truth_creation",
+    "automatic_repair",
+    "production_write",
+    "policy_bypass",
+    "workflow_truth"
+  ],
+  "operator_copy_rules": {
+    "required_terms": [
+      "AI advisory unavailable or degraded",
+      "authoritative AegisOps records"
+    ],
+    "forbidden_fragments": [
+      "AI approved",
+      "AI executed",
+      "AI reconciled",
+      "AI closed",
+      "AI activated",
+      "AI repaired",
+      "AI is workflow truth",
+      "automatic repair complete"
+    ]
+  }
+}
