@@ -163,6 +163,26 @@ required_linkage_terms = {
 }
 review_outcome_states = {"reviewed", "accepted", "corrected", "rejected"}
 required_reviewer_terms = {"reviewer_id", "review_action_id"}
+required_state_linkage_terms = {
+    "created": {"created_by", "created_at", "expires_at"},
+    "reviewed": {"reviewer_id", "review_action_id", "reviewed_at", "expires_at"},
+    "accepted": {"reviewer_id", "review_action_id", "accepted_at", "expires_at"},
+    "corrected": {
+        "reviewer_id",
+        "review_action_id",
+        "correction_summary",
+        "corrected_at",
+        "expires_at",
+    },
+    "rejected": {
+        "reviewer_id",
+        "review_action_id",
+        "rejection_reason",
+        "rejected_at",
+        "expires_at",
+    },
+    "expired": {"expires_at", "expired_at", "expiration_reason"},
+}
 required_forbidden_authority = {
     "approval",
     "execution",
@@ -188,6 +208,7 @@ forbidden_claim_fragments = (
 )
 
 seen_states: set[str] = set()
+states_by_name: dict[str, dict] = {}
 for index, state in enumerate(states, start=1):
     if not isinstance(state, dict):
         raise SystemExit(f"Phase 59.3 AI trace lifecycle row {index} must be an object.")
@@ -204,7 +225,12 @@ for index, state in enumerate(states, start=1):
         raise SystemExit(f"Phase 59.3 AI trace lifecycle row {index} has invalid state.")
     if name in seen_states:
         raise SystemExit(f"Duplicate Phase 59.3 AI trace lifecycle state: {name}")
+    if name not in required_states:
+        raise SystemExit(
+            f"Phase 59.3 AI trace lifecycle contains unexpected state for this slice: {name}"
+        )
     seen_states.add(name)
+    states_by_name[name] = state
 
     for field in ("purpose", "expiration_handling", "authority_effect"):
         value = state[field]
@@ -226,6 +252,15 @@ for index, state in enumerate(states, start=1):
         raise SystemExit(
             f"Phase 59.3 AI trace lifecycle state {name} must include list allowed_from."
         )
+    for predecessor in state["allowed_from"]:
+        if not isinstance(predecessor, str) or not predecessor.strip():
+            raise SystemExit(
+                f"Phase 59.3 AI trace lifecycle state {name} allowed_from must contain state names."
+            )
+        if predecessor not in required_states:
+            raise SystemExit(
+                f"Phase 59.3 AI trace lifecycle state {name} references invalid allowed_from state: {predecessor}"
+            )
     if not isinstance(state["terminal"], bool):
         raise SystemExit(
             f"Phase 59.3 AI trace lifecycle state {name} terminal must be boolean."
@@ -266,6 +301,12 @@ for index, state in enumerate(states, start=1):
         raise SystemExit(
             f"Phase 59.3 AI trace lifecycle state {name} is missing linkage field(s): "
             + ", ".join(missing_linkage)
+        )
+    missing_state_linkage = sorted(required_state_linkage_terms[name] - linkage_terms)
+    if missing_state_linkage:
+        raise SystemExit(
+            f"Phase 59.3 AI trace lifecycle state {name} is missing state-specific linkage field(s): "
+            + ", ".join(missing_state_linkage)
         )
 
     if name in review_outcome_states:
@@ -320,6 +361,26 @@ required_transition_fields = {
     "required_metadata",
     "authority_effect",
 }
+required_transition_metadata_terms = {
+    ("created", "reviewed"): {"reviewer_id", "review_action_id", "reviewed_at"},
+    ("created", "expired"): {"expires_at", "expired_at", "expiration_reason"},
+    ("reviewed", "accepted"): {"reviewer_id", "review_action_id", "accepted_at"},
+    ("reviewed", "corrected"): {
+        "reviewer_id",
+        "review_action_id",
+        "correction_summary",
+        "corrected_at",
+    },
+    ("reviewed", "rejected"): {
+        "reviewer_id",
+        "review_action_id",
+        "rejection_reason",
+        "rejected_at",
+    },
+    ("reviewed", "expired"): {"expires_at", "expired_at", "expiration_reason"},
+    ("accepted", "expired"): {"expires_at", "expired_at", "expiration_reason"},
+    ("corrected", "expired"): {"expires_at", "expired_at", "expiration_reason"},
+}
 
 for index, transition in enumerate(transitions, start=1):
     if not isinstance(transition, dict):
@@ -373,6 +434,13 @@ for index, transition in enumerate(transitions, start=1):
                 f"Phase 59.3 AI trace lifecycle transition {from_state}->{to_state} is missing expiration metadata: "
                 + ", ".join(missing_expiry)
             )
+    required_metadata_terms = required_transition_metadata_terms[(from_state, to_state)]
+    missing_transition_metadata = sorted(required_metadata_terms - set(metadata))
+    if missing_transition_metadata:
+        raise SystemExit(
+            f"Phase 59.3 AI trace lifecycle transition {from_state}->{to_state} is missing transition-specific metadata: "
+            + ", ".join(missing_transition_metadata)
+        )
 
     seen_transitions.add((from_state, to_state))
 
@@ -388,6 +456,31 @@ if unexpected_transitions:
         "Phase 59.3 AI trace lifecycle contains unexpected transition(s) for this slice: "
         + ", ".join(f"{src}->{dst}" for src, dst in unexpected_transitions)
     )
+for state_name in sorted(required_states):
+    expected_allowed_from = sorted(
+        from_state for from_state, to_state in seen_transitions if to_state == state_name
+    )
+    actual_allowed_from = sorted(states_by_name[state_name]["allowed_from"])
+    if actual_allowed_from != expected_allowed_from:
+        raise SystemExit(
+            f"Phase 59.3 AI trace lifecycle state {state_name} allowed_from must match transition graph: "
+            + "expected "
+            + ", ".join(expected_allowed_from or ["<none>"])
+            + "; got "
+            + ", ".join(actual_allowed_from or ["<none>"])
+        )
+
+    has_outgoing_transition = any(
+        from_state == state_name for from_state, _to_state in seen_transitions
+    )
+    if has_outgoing_transition and states_by_name[state_name]["terminal"]:
+        raise SystemExit(
+            f"Phase 59.3 AI trace lifecycle state {state_name} terminal flag must be false while outgoing transitions exist."
+        )
+    if not has_outgoing_transition and not states_by_name[state_name]["terminal"]:
+        raise SystemExit(
+            f"Phase 59.3 AI trace lifecycle state {state_name} terminal flag must be true when no outgoing transitions exist."
+        )
 
 queue = lifecycle["trace_review_queue_skeleton"]
 if not isinstance(queue, dict):

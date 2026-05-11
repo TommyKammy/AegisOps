@@ -107,7 +107,7 @@
       "allowed_from": [
         "reviewed"
       ],
-      "terminal": true,
+      "terminal": false,
       "registered_agents": [
         "analyst_assistant_context_agent",
         "live_assistant_summary_agent",
@@ -157,7 +157,7 @@
       "allowed_from": [
         "reviewed"
       ],
-      "terminal": true,
+      "terminal": false,
       "registered_agents": [
         "analyst_assistant_context_agent",
         "live_assistant_summary_agent",

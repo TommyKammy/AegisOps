@@ -84,6 +84,7 @@ lifecycle = json.loads(path.read_text(encoding="utf-8"))
 states = lifecycle["lifecycle_states"]
 created = next(state for state in states if state["state"] == "created")
 accepted = next(state for state in states if state["state"] == "accepted")
+corrected = next(state for state in states if state["state"] == "corrected")
 reviewed = next(state for state in states if state["state"] == "reviewed")
 
 if mutation == "missing_created_state":
@@ -115,6 +116,24 @@ elif mutation == "missing_transition":
             and transition["to_state"] == "corrected"
         )
     ]
+elif mutation == "terminal_state_with_outgoing_transition":
+    accepted["terminal"] = True
+elif mutation == "missing_state_specific_linkage":
+    corrected["required_linkage"] = [
+        value for value in corrected["required_linkage"] if value != "corrected_at"
+    ]
+elif mutation == "missing_transition_specific_metadata":
+    transition = next(
+        transition
+        for transition in lifecycle["allowed_transitions"]
+        if transition["from_state"] == "reviewed"
+        and transition["to_state"] == "accepted"
+    )
+    transition["required_metadata"] = [
+        value for value in transition["required_metadata"] if value != "accepted_at"
+    ]
+elif mutation == "allowed_from_drift":
+    accepted["allowed_from"] = ["created"]
 elif mutation == "expiry_can_accept":
     lifecycle["allowed_transitions"].append(
         {
@@ -181,6 +200,10 @@ for mutation in \
   missing_expiration \
   authority_expansion \
   missing_transition \
+  terminal_state_with_outgoing_transition \
+  missing_state_specific_linkage \
+  missing_transition_specific_metadata \
+  allowed_from_drift \
   expiry_can_accept \
   reviewed_truth_claim
 do
