@@ -81,6 +81,21 @@ elif mutation == "missing_record_id_citation":
         value for value in registry["agents"][0]["citation_requirements"]
         if "record_id" not in value
     ]
+elif mutation == "missing_required_agent":
+    registry["agents"] = [
+        agent
+        for agent in registry["agents"]
+        if agent["agent_name"] != "today_focus_advisory_agent"
+    ]
+elif mutation == "unexpected_agent":
+    extra_agent = dict(registry["agents"][0])
+    extra_agent["agent_name"] = "phase_60_daily_operations_agent"
+    registry["agents"].append(extra_agent)
+elif mutation == "json_escaped_windows_path":
+    slash = chr(92)
+    registry["agents"][0]["purpose"] += (
+        " See C:" + slash + "Users" + slash + "example" + slash + "private.txt."
+    )
 else:
     raise SystemExit(f"unknown mutation: {mutation}")
 
@@ -164,12 +179,49 @@ assert_fails_with \
   "${missing_record_id_repo}" \
   "citation requirements must include record_id"
 
+missing_required_agent_repo="${workdir}/missing-required-agent"
+create_valid_repo "${missing_required_agent_repo}"
+mutate_registry "${missing_required_agent_repo}" "missing_required_agent"
+assert_fails_with \
+  "${missing_required_agent_repo}" \
+  "is missing required agent(s): today_focus_advisory_agent"
+
+unexpected_agent_repo="${workdir}/unexpected-agent"
+create_valid_repo "${unexpected_agent_repo}"
+mutate_registry "${unexpected_agent_repo}" "unexpected_agent"
+assert_fails_with \
+  "${unexpected_agent_repo}" \
+  "contains unexpected agent(s) for this slice: phase_60_daily_operations_agent"
+
 local_path_repo="${workdir}/local-path"
 create_valid_repo "${local_path_repo}"
 printf '/%s/%s/%s\n' "Users" "example" "private.txt" \
   >>"${local_path_repo}/docs/phase-59-1-agent-registry-contract.md"
 assert_fails_with \
   "${local_path_repo}" \
+  "workstation-local absolute path detected"
+
+root_local_path_repo="${workdir}/root-local-path"
+create_valid_repo "${root_local_path_repo}"
+printf '/%s/%s\n' "root" "private.txt" \
+  >>"${root_local_path_repo}/docs/phase-59-1-agent-registry-contract.md"
+assert_fails_with \
+  "${root_local_path_repo}" \
+  "workstation-local absolute path detected"
+
+readme_local_path_repo="${workdir}/readme-local-path"
+create_valid_repo "${readme_local_path_repo}"
+printf '/%s/%s/%s\n' "Users" "example" "private.txt" \
+  >>"${readme_local_path_repo}/README.md"
+assert_fails_with \
+  "${readme_local_path_repo}" \
+  "workstation-local absolute path detected"
+
+json_escaped_windows_path_repo="${workdir}/json-escaped-windows-path"
+create_valid_repo "${json_escaped_windows_path_repo}"
+mutate_registry "${json_escaped_windows_path_repo}" "json_escaped_windows_path"
+assert_fails_with \
+  "${json_escaped_windows_path_repo}" \
   "workstation-local absolute path detected"
 
 echo "Phase 59.1 agent registry verifier rejects missing fields, authority expansion, missing citations, unsafe tools, and local paths."

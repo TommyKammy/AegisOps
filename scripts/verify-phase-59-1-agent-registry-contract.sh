@@ -83,9 +83,19 @@ if registry["registry_status"] != "accepted_contract_slice":
     )
 
 agents = registry["agents"]
-if not isinstance(agents, list) or not agents:
-    raise SystemExit("Phase 59.1 AI agent registry must contain at least one agent.")
+if not isinstance(agents, list):
+    raise SystemExit("Phase 59.1 AI agent registry agents field must be a list.")
+if not agents:
+    raise SystemExit(
+        "Phase 59.1 AI agent registry must contain the required initial agent set."
+    )
 
+required_agent_names = {
+    "analyst_assistant_context_agent",
+    "live_assistant_summary_agent",
+    "advisory_action_request_drafting_agent",
+    "today_focus_advisory_agent",
+}
 required_agent_fields = {
     "agent_name",
     "purpose",
@@ -190,17 +200,32 @@ for index, agent in enumerate(agents, start=1):
             raise SystemExit(
                 f"Phase 59.1 AI agent {name} citation requirements must include {required_term}."
             )
+
+missing_required_agents = sorted(required_agent_names - seen_names)
+unexpected_agents = sorted(seen_names - required_agent_names)
+if missing_required_agents:
+    raise SystemExit(
+        "Phase 59.1 AI agent registry is missing required agent(s): "
+        + ", ".join(missing_required_agents)
+    )
+if unexpected_agents:
+    raise SystemExit(
+        "Phase 59.1 AI agent registry contains unexpected agent(s) for this slice: "
+        + ", ".join(unexpected_agents)
+    )
 PY
 
 mac_user_home="$(printf '/%s/' 'Users')"
 unix_user_home="$(printf '/%s/' 'home')"
+root_user_home="$(printf '/%s/' 'root')"
 windows_user_profile_backslash="$(printf '[A-Za-z]:\\\\%s\\\\' 'Users')"
+windows_user_profile_backslash_json="$(printf '[A-Za-z]:\\\\\\\\%s\\\\\\\\' 'Users')"
 windows_user_profile_slash="$(printf '[A-Za-z]:/%s/' 'Users')"
 path_token_boundary="(^|[[:space:]\`'\"(<{=])"
-local_path_token="(${mac_user_home}|${unix_user_home}|${windows_user_profile_backslash}|${windows_user_profile_slash})[^[:space:]\`'\" )>}]*"
+local_path_token="(${mac_user_home}|${unix_user_home}|${root_user_home}|${windows_user_profile_backslash_json}|${windows_user_profile_backslash}|${windows_user_profile_slash})[^[:space:]\`'\" )>}]*"
 
 if grep -Eq "(${path_token_boundary}${local_path_token}|file:///?${local_path_token})" \
-  "${doc_path}" "${registry_path}"; then
+  "${doc_path}" "${registry_path}" "${readme_path}"; then
   echo "Forbidden Phase 59.1 agent registry artifact: workstation-local absolute path detected" >&2
   exit 1
 fi
