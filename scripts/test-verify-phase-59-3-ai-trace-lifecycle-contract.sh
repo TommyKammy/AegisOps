@@ -229,6 +229,14 @@ elif mutation == "empty_required_trigger":
         and transition["to_state"] == "accepted"
     )
     transition["required_trigger"] = ""
+elif mutation == "non_string_required_trigger":
+    transition = next(
+        transition
+        for transition in lifecycle["allowed_transitions"]
+        if transition["from_state"] == "reviewed"
+        and transition["to_state"] == "accepted"
+    )
+    transition["required_trigger"] = 42
 elif mutation == "authority_trigger_claim":
     transition = next(
         transition
@@ -241,6 +249,12 @@ elif mutation == "queue_extra_required_field":
     lifecycle["trace_review_queue_skeleton"]["required_fields"].append(
         "case_closure_state"
     )
+elif mutation == "queue_missing_required_field":
+    lifecycle["trace_review_queue_skeleton"]["required_fields"] = [
+        value
+        for value in lifecycle["trace_review_queue_skeleton"]["required_fields"]
+        if value != "review_required"
+    ]
 elif mutation == "queue_non_string_required_field":
     lifecycle["trace_review_queue_skeleton"]["required_fields"].append(42)
 elif mutation == "queue_duplicate_required_field":
@@ -391,11 +405,17 @@ assert_mutation_fails_with \
   empty_required_trigger \
   "Phase 59.3 AI trace lifecycle transition reviewed->accepted must include non-empty required_trigger."
 assert_mutation_fails_with \
+  non_string_required_trigger \
+  "Phase 59.3 AI trace lifecycle transition reviewed->accepted must include non-empty required_trigger."
+assert_mutation_fails_with \
   authority_trigger_claim \
   "Phase 59.3 AI trace lifecycle transition reviewed->accepted contains forbidden authority claim in required_trigger."
 assert_mutation_fails_with \
   queue_extra_required_field \
   "Phase 59.3 trace review queue skeleton contains extra field(s): case_closure_state"
+assert_mutation_fails_with \
+  queue_missing_required_field \
+  "Phase 59.3 trace review queue skeleton is missing field(s): review_required"
 assert_mutation_fails_with \
   queue_non_string_required_field \
   "Phase 59.3 trace review queue skeleton required_fields must be a string list."
