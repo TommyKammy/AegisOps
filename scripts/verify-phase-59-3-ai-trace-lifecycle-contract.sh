@@ -61,6 +61,7 @@ done
 
 python3 - "${lifecycle_path}" "${agent_registry_path}" "${tool_registry_path}" <<'PY'
 import json
+import re
 import sys
 from pathlib import Path
 from collections import Counter
@@ -332,15 +333,34 @@ required_forbidden_authority = {
 }
 forbidden_claim_fragments = (
     "may_approve",
+    "can_approve",
+    "approve_action",
+    "approve_actions",
+    "approve_case",
+    "approve_case_closure",
     "may_execute",
+    "can_execute",
+    "execute_action",
+    "execute_actions",
     "may_reconcile",
+    "can_reconcile",
+    "reconcile_receipt",
+    "reconcile_outcome",
     "may_close",
+    "can_close",
+    "close_case",
+    "close_cases",
     "may_activate",
+    "can_activate",
+    "activate_detector",
+    "activate_detectors",
+    "create_source_truth",
     "source_truth",
     "workflow_truth",
     "authority_widen",
     "production_write",
     "policy_bypass",
+    "bypass_policy",
 )
 
 
@@ -349,10 +369,16 @@ def require_no_forbidden_authority_claim(
     description: str,
     allowed_value=None,
 ) -> None:
-    lowered = value.casefold().replace("-", "_").replace(" ", "_")
+    lowered = re.sub(r"[^a-z0-9]+", "_", value.casefold()).strip("_")
     if any(fragment in lowered for fragment in forbidden_claim_fragments):
         if allowed_value is None or value != allowed_value:
             raise SystemExit(f"{description} contains forbidden authority claim.")
+
+
+require_no_forbidden_authority_claim(
+    authority_boundary,
+    "Phase 59.3 AI trace lifecycle authority_boundary",
+)
 
 
 seen_states: set[str] = set()
@@ -645,14 +671,11 @@ require_exact_string_set(
     "Phase 59.3 trace review queue skeleton non_authoritative_surfaces",
 )
 
-missing_forbidden = sorted(
-    required_forbidden_authority - set(lifecycle["forbidden_authority_states"])
+require_exact_string_set(
+    lifecycle["forbidden_authority_states"],
+    required_forbidden_authority,
+    "Phase 59.3 AI trace lifecycle forbidden_authority_states",
 )
-if missing_forbidden:
-    raise SystemExit(
-        "Phase 59.3 AI trace lifecycle forbidden authority list is missing: "
-        + ", ".join(missing_forbidden)
-    )
 PY
 
 path_hygiene_stderr="$(mktemp)"

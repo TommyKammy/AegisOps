@@ -108,6 +108,8 @@ elif mutation == "null_authority_boundary":
     lifecycle["authority_boundary"] = None
 elif mutation == "weak_authority_boundary":
     lifecycle["authority_boundary"] = "AI trace lifecycle contract."
+elif mutation == "authority_boundary_expansion":
+    lifecycle["authority_boundary"] += " AI may approve actions."
 elif mutation == "missing_registered_agent":
     created["registered_agents"] = []
 elif mutation == "unregistered_tool":
@@ -245,6 +247,22 @@ elif mutation == "authority_trigger_claim":
         and transition["to_state"] == "accepted"
     )
     transition["required_trigger"] = "AI may approve case closure"
+elif mutation == "authority_trigger_whitespace_claim":
+    transition = next(
+        transition
+        for transition in lifecycle["allowed_transitions"]
+        if transition["from_state"] == "reviewed"
+        and transition["to_state"] == "accepted"
+    )
+    transition["required_trigger"] = "AI may\t\tapprove case closure"
+elif mutation == "broader_authority_trigger_claim":
+    transition = next(
+        transition
+        for transition in lifecycle["allowed_transitions"]
+        if transition["from_state"] == "reviewed"
+        and transition["to_state"] == "accepted"
+    )
+    transition["required_trigger"] = "operator can approve case closure"
 elif mutation == "queue_extra_required_field":
     lifecycle["trace_review_queue_skeleton"]["required_fields"].append(
         "case_closure_state"
@@ -275,6 +293,18 @@ elif mutation == "queue_duplicate_non_authoritative_surface":
     lifecycle["trace_review_queue_skeleton"]["non_authoritative_surfaces"].append(
         "trace_state"
     )
+elif mutation == "forbidden_authority_missing":
+    lifecycle["forbidden_authority_states"] = [
+        value
+        for value in lifecycle["forbidden_authority_states"]
+        if value != "workflow_truth"
+    ]
+elif mutation == "forbidden_authority_extra":
+    lifecycle["forbidden_authority_states"].append("autonomous_case_closure")
+elif mutation == "forbidden_authority_non_string":
+    lifecycle["forbidden_authority_states"].append(42)
+elif mutation == "forbidden_authority_duplicate":
+    lifecycle["forbidden_authority_states"].append("approval")
 elif mutation == "expiry_can_accept":
     lifecycle["allowed_transitions"].append(
         {
@@ -363,6 +393,9 @@ assert_mutation_fails_with \
   weak_authority_boundary \
   "Phase 59.3 AI trace lifecycle authority_boundary must preserve subordinate AegisOps authority semantics."
 assert_mutation_fails_with \
+  authority_boundary_expansion \
+  "Phase 59.3 AI trace lifecycle authority_boundary contains forbidden authority claim."
+assert_mutation_fails_with \
   missing_reviewed_state_linkage \
   "Phase 59.3 AI trace lifecycle state reviewed is missing state-specific linkage field(s): reviewed_at"
 assert_mutation_fails_with \
@@ -411,6 +444,12 @@ assert_mutation_fails_with \
   authority_trigger_claim \
   "Phase 59.3 AI trace lifecycle transition reviewed->accepted required_trigger contains forbidden authority claim."
 assert_mutation_fails_with \
+  authority_trigger_whitespace_claim \
+  "Phase 59.3 AI trace lifecycle transition reviewed->accepted required_trigger contains forbidden authority claim."
+assert_mutation_fails_with \
+  broader_authority_trigger_claim \
+  "Phase 59.3 AI trace lifecycle transition reviewed->accepted required_trigger contains forbidden authority claim."
+assert_mutation_fails_with \
   queue_extra_required_field \
   "Phase 59.3 trace review queue skeleton required_fields contains extra field(s): case_closure_state"
 assert_mutation_fails_with \
@@ -431,6 +470,18 @@ assert_mutation_fails_with \
 assert_mutation_fails_with \
   queue_duplicate_non_authoritative_surface \
   "Phase 59.3 trace review queue skeleton non_authoritative_surfaces must not contain duplicate value(s): trace_state"
+assert_mutation_fails_with \
+  forbidden_authority_missing \
+  "Phase 59.3 AI trace lifecycle forbidden_authority_states is missing field(s): workflow_truth"
+assert_mutation_fails_with \
+  forbidden_authority_extra \
+  "Phase 59.3 AI trace lifecycle forbidden_authority_states contains extra field(s): autonomous_case_closure"
+assert_mutation_fails_with \
+  forbidden_authority_non_string \
+  "Phase 59.3 AI trace lifecycle forbidden_authority_states must be a non-empty string list."
+assert_mutation_fails_with \
+  forbidden_authority_duplicate \
+  "Phase 59.3 AI trace lifecycle forbidden_authority_states must not contain duplicate value(s): approval"
 
 local_path_repo="${workdir}/local-path"
 create_valid_repo "${local_path_repo}"
