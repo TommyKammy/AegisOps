@@ -102,9 +102,28 @@ if missing_root:
 if lifecycle["phase"] != "59.3":
     raise SystemExit("Phase 59.3 AI trace lifecycle phase must be 59.3.")
 
+if lifecycle["schema_version"] != "2026-05-11.phase-59.3":
+    raise SystemExit(
+        "Phase 59.3 AI trace lifecycle schema_version must be 2026-05-11.phase-59.3."
+    )
+
 if lifecycle["contract_status"] != "accepted_contract_slice":
     raise SystemExit(
         "Phase 59.3 AI trace lifecycle status must be accepted_contract_slice."
+    )
+
+authority_boundary = lifecycle["authority_boundary"]
+if not isinstance(authority_boundary, str) or not authority_boundary.strip():
+    raise SystemExit(
+        "Phase 59.3 AI trace lifecycle authority_boundary must be a non-empty string."
+    )
+authority_boundary_lower = authority_boundary.casefold()
+if (
+    "subordinate" not in authority_boundary_lower
+    or "aegisops records remain authoritative" not in authority_boundary_lower
+):
+    raise SystemExit(
+        "Phase 59.3 AI trace lifecycle authority_boundary must preserve subordinate AegisOps authority semantics."
     )
 
 states = lifecycle["lifecycle_states"]
@@ -409,6 +428,21 @@ for index, transition in enumerate(transitions, start=1):
         raise SystemExit(
             f"Phase 59.3 AI trace lifecycle contains unexpected transition for this slice: {from_state}->{to_state}"
         )
+    if transition_pair in seen_transitions:
+        raise SystemExit(
+            f"Duplicate Phase 59.3 AI trace lifecycle transition: {from_state}->{to_state}"
+        )
+
+    trigger = transition["required_trigger"]
+    if not isinstance(trigger, str) or not trigger.strip():
+        raise SystemExit(
+            f"Phase 59.3 AI trace lifecycle transition {from_state}->{to_state} must include non-empty required_trigger."
+        )
+    trigger_lowered = trigger.casefold().replace("-", "_").replace(" ", "_")
+    if any(fragment in trigger_lowered for fragment in forbidden_claim_fragments):
+        raise SystemExit(
+            f"Phase 59.3 AI trace lifecycle transition {from_state}->{to_state} contains forbidden authority claim in required_trigger."
+        )
 
     if transition["authority_effect"] != "advisory_only_no_workflow_mutation":
         raise SystemExit(
@@ -508,13 +542,61 @@ required_queue_fields = {
     "review_required",
 }
 queue_fields = queue.get("required_fields")
-if not isinstance(queue_fields, list):
-    raise SystemExit("Phase 59.3 trace review queue skeleton required_fields must be a list.")
-missing_queue = sorted(required_queue_fields - set(queue_fields))
+if (
+    not isinstance(queue_fields, list)
+    or any(not isinstance(value, str) or not value.strip() for value in queue_fields)
+):
+    raise SystemExit(
+        "Phase 59.3 trace review queue skeleton required_fields must be a string list."
+    )
+actual_queue_fields = set(queue_fields)
+missing_queue = sorted(required_queue_fields - actual_queue_fields)
 if missing_queue:
     raise SystemExit(
         "Phase 59.3 trace review queue skeleton is missing field(s): "
         + ", ".join(missing_queue)
+    )
+extra_queue = sorted(actual_queue_fields - required_queue_fields)
+if extra_queue:
+    raise SystemExit(
+        "Phase 59.3 trace review queue skeleton contains extra field(s): "
+        + ", ".join(extra_queue)
+    )
+
+required_non_authoritative_surfaces = {
+    "queue_order",
+    "badge_text",
+    "cache_state",
+    "browser_state",
+    "trace_state",
+}
+non_authoritative_surfaces = queue.get("non_authoritative_surfaces")
+if (
+    not isinstance(non_authoritative_surfaces, list)
+    or any(
+        not isinstance(value, str) or not value.strip()
+        for value in non_authoritative_surfaces
+    )
+):
+    raise SystemExit(
+        "Phase 59.3 trace review queue skeleton non_authoritative_surfaces must be a string list."
+    )
+actual_non_authoritative_surfaces = set(non_authoritative_surfaces)
+missing_non_authoritative = sorted(
+    required_non_authoritative_surfaces - actual_non_authoritative_surfaces
+)
+if missing_non_authoritative:
+    raise SystemExit(
+        "Phase 59.3 trace review queue skeleton is missing non-authoritative surface(s): "
+        + ", ".join(missing_non_authoritative)
+    )
+extra_non_authoritative = sorted(
+    actual_non_authoritative_surfaces - required_non_authoritative_surfaces
+)
+if extra_non_authoritative:
+    raise SystemExit(
+        "Phase 59.3 trace review queue skeleton contains extra non-authoritative surface(s): "
+        + ", ".join(extra_non_authoritative)
     )
 
 missing_forbidden = sorted(

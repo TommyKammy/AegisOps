@@ -102,6 +102,12 @@ if mutation == "missing_created_state":
     lifecycle["lifecycle_states"] = [
         state for state in states if state["state"] != "created"
     ]
+elif mutation == "schema_version_drift":
+    lifecycle["schema_version"] = "bogus"
+elif mutation == "null_authority_boundary":
+    lifecycle["authority_boundary"] = None
+elif mutation == "weak_authority_boundary":
+    lifecycle["authority_boundary"] = "AI trace lifecycle contract."
 elif mutation == "missing_registered_agent":
     created["registered_agents"] = []
 elif mutation == "unregistered_tool":
@@ -199,6 +205,48 @@ elif mutation == "unexpected_transition_pair":
             "authority_effect": "advisory_only_no_workflow_mutation",
         }
     )
+elif mutation == "duplicate_transition_pair":
+    reviewed_to_accepted = next(
+        transition
+        for transition in lifecycle["allowed_transitions"]
+        if transition["from_state"] == "reviewed"
+        and transition["to_state"] == "accepted"
+    )
+    lifecycle["allowed_transitions"].append(dict(reviewed_to_accepted))
+elif mutation == "empty_required_trigger":
+    transition = next(
+        transition
+        for transition in lifecycle["allowed_transitions"]
+        if transition["from_state"] == "reviewed"
+        and transition["to_state"] == "accepted"
+    )
+    transition["required_trigger"] = ""
+elif mutation == "authority_trigger_claim":
+    transition = next(
+        transition
+        for transition in lifecycle["allowed_transitions"]
+        if transition["from_state"] == "reviewed"
+        and transition["to_state"] == "accepted"
+    )
+    transition["required_trigger"] = "AI may approve case closure"
+elif mutation == "queue_extra_required_field":
+    lifecycle["trace_review_queue_skeleton"]["required_fields"].append(
+        "case_closure_state"
+    )
+elif mutation == "queue_non_string_required_field":
+    lifecycle["trace_review_queue_skeleton"]["required_fields"].append(42)
+elif mutation == "queue_missing_non_authoritative_surface":
+    lifecycle["trace_review_queue_skeleton"]["non_authoritative_surfaces"] = [
+        surface
+        for surface in lifecycle["trace_review_queue_skeleton"][
+            "non_authoritative_surfaces"
+        ]
+        if surface != "trace_state"
+    ]
+elif mutation == "queue_extra_non_authoritative_surface":
+    lifecycle["trace_review_queue_skeleton"]["non_authoritative_surfaces"].append(
+        "workflow_truth"
+    )
 elif mutation == "expiry_can_accept":
     lifecycle["allowed_transitions"].append(
         {
@@ -278,6 +326,15 @@ assert_mutation_fails_with \
   terminal_state_with_outgoing_transition \
   "Phase 59.3 AI trace lifecycle state accepted terminal flag must be false while outgoing transitions exist."
 assert_mutation_fails_with \
+  schema_version_drift \
+  "Phase 59.3 AI trace lifecycle schema_version must be 2026-05-11.phase-59.3."
+assert_mutation_fails_with \
+  null_authority_boundary \
+  "Phase 59.3 AI trace lifecycle authority_boundary must be a non-empty string."
+assert_mutation_fails_with \
+  weak_authority_boundary \
+  "Phase 59.3 AI trace lifecycle authority_boundary must preserve subordinate AegisOps authority semantics."
+assert_mutation_fails_with \
   missing_reviewed_state_linkage \
   "Phase 59.3 AI trace lifecycle state reviewed is missing state-specific linkage field(s): reviewed_at"
 assert_mutation_fails_with \
@@ -310,6 +367,27 @@ assert_mutation_fails_with \
 assert_mutation_fails_with \
   unexpected_transition_pair \
   "Phase 59.3 AI trace lifecycle contains unexpected transition for this slice: accepted->reviewed"
+assert_mutation_fails_with \
+  duplicate_transition_pair \
+  "Duplicate Phase 59.3 AI trace lifecycle transition: reviewed->accepted"
+assert_mutation_fails_with \
+  empty_required_trigger \
+  "Phase 59.3 AI trace lifecycle transition reviewed->accepted must include non-empty required_trigger."
+assert_mutation_fails_with \
+  authority_trigger_claim \
+  "Phase 59.3 AI trace lifecycle transition reviewed->accepted contains forbidden authority claim in required_trigger."
+assert_mutation_fails_with \
+  queue_extra_required_field \
+  "Phase 59.3 trace review queue skeleton contains extra field(s): case_closure_state"
+assert_mutation_fails_with \
+  queue_non_string_required_field \
+  "Phase 59.3 trace review queue skeleton required_fields must be a string list."
+assert_mutation_fails_with \
+  queue_missing_non_authoritative_surface \
+  "Phase 59.3 trace review queue skeleton is missing non-authoritative surface(s): trace_state"
+assert_mutation_fails_with \
+  queue_extra_non_authoritative_surface \
+  "Phase 59.3 trace review queue skeleton contains extra non-authoritative surface(s): workflow_truth"
 
 local_path_repo="${workdir}/local-path"
 create_valid_repo "${local_path_repo}"
