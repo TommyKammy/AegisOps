@@ -107,6 +107,8 @@ elif mutation == "missing_copy_rule":
     contract["operator_copy_rules"]["forbidden_fragments"].remove("AI is workflow truth")
 elif mutation == "missing_extended_copy_rule":
     contract["operator_copy_rules"]["forbidden_fragments"].remove("AI closed")
+elif mutation == "custom_required_term_missing_from_operator_copy":
+    contract["operator_copy_rules"]["required_terms"].append("reviewed fallback banner")
 elif mutation == "authority_boundary_forbidden_claim":
     contract["authority_boundary"] += " AI may execute actions."
 elif mutation == "authority_boundary_can_execute_claim":
@@ -187,21 +189,25 @@ assert_fails_with \
   "${missing_contract_field_repo}" \
   "Missing Phase 59.4 AI disabled/degraded mode contract statement: Every disabled or degraded mode row"
 
-missing_doctor_validation_repo="${workdir}/missing-doctor-validation"
-create_valid_repo "${missing_doctor_validation_repo}"
-remove_text_from_doc "${missing_doctor_validation_repo}" \
+validation_commands=(
+  'Run `bash scripts/verify-phase-59-4-ai-disabled-degraded-mode-contract.sh`.'
+  'Run `bash scripts/test-verify-phase-59-4-ai-disabled-degraded-mode-contract.sh`.'
+  'Run `python3 -m unittest control-plane.tests.test_phase57_7_ai_enablement_admin_toggle`.'
   'Run `python3 -m unittest control-plane.tests.test_phase58_1_doctor_contract.Phase581DoctorContractTests.test_doctor_contract_reports_degraded_source_and_ai_without_authority`.'
-assert_fails_with \
-  "${missing_doctor_validation_repo}" \
-  "Missing Phase 59.4 AI disabled/degraded mode contract statement: Run \`python3 -m unittest control-plane.tests.test_phase58_1_doctor_contract.Phase581DoctorContractTests.test_doctor_contract_reports_degraded_source_and_ai_without_authority\`."
-
-missing_epic_issue_lint_repo="${workdir}/missing-epic-issue-lint"
-create_valid_repo "${missing_epic_issue_lint_repo}"
-remove_text_from_doc "${missing_epic_issue_lint_repo}" \
+  'Run `bash scripts/verify-phase-51-6-authority-boundary-negative-test-policy.sh`.'
+  'Run `bash scripts/verify-publishable-path-hygiene.sh`.'
+  'Run `node <codex-supervisor-root>/dist/index.js issue-lint 1256 --config <supervisor-config-path>`.'
   'Run `node <codex-supervisor-root>/dist/index.js issue-lint 1252 --config <supervisor-config-path>`.'
-assert_fails_with \
-  "${missing_epic_issue_lint_repo}" \
-  "Missing Phase 59.4 AI disabled/degraded mode contract statement: Run \`node <codex-supervisor-root>/dist/index.js issue-lint 1252 --config <supervisor-config-path>\`."
+)
+
+for index in "${!validation_commands[@]}"; do
+  missing_validation_command_repo="${workdir}/missing-validation-command-${index}"
+  create_valid_repo "${missing_validation_command_repo}"
+  remove_text_from_doc "${missing_validation_command_repo}" "${validation_commands[${index}]}"
+  assert_fails_with \
+    "${missing_validation_command_repo}" \
+    "Missing Phase 59.4 AI disabled/degraded mode contract statement: ${validation_commands[${index}]}"
+done
 
 runtime_health_reason_repo="${workdir}/runtime-health-reason"
 create_valid_repo "${runtime_health_reason_repo}"
@@ -219,6 +225,7 @@ for mutation in \
   missing_blocked_output \
   missing_copy_rule \
   missing_extended_copy_rule \
+  custom_required_term_missing_from_operator_copy \
   authority_boundary_forbidden_claim \
   authority_boundary_can_execute_claim \
   authority_boundary_allowed_execute_claim \
@@ -267,6 +274,9 @@ do
       ;;
     missing_extended_copy_rule)
       assert_fails_with "${mutated_repo}" "must forbid copy fragment: AI closed"
+      ;;
+    custom_required_term_missing_from_operator_copy)
+      assert_fails_with "${mutated_repo}" "operator-facing copy must include required copy term: reviewed fallback banner"
       ;;
     authority_boundary_forbidden_claim)
       assert_fails_with "${mutated_repo}" "authority_boundary must not include forbidden authority claim: ai may execute"
