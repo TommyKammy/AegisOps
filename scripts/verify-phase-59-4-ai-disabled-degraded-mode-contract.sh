@@ -332,13 +332,14 @@ def require_mode_specific_semantics(mode_name: str, mode: dict) -> None:
 def require_mode_operator_copy_contract(
     mode_name: str,
     mode: dict,
+    safe_next_steps: list[str],
     forbidden_fragments: list[str],
 ) -> None:
     text = " ".join(
         [
             mode["operator_state"],
             mode["explanation"],
-            " ".join(mode["safe_next_steps"]),
+            " ".join(safe_next_steps),
         ]
     )
     for field in ("operator_state", "explanation"):
@@ -417,8 +418,17 @@ for index, mode in enumerate(modes, start=1):
     seen_modes.add(mode_name)
     for field in ("trigger", "operator_state", "readiness_posture", "reason", "explanation", "authority_effect"):
         require_non_empty_string(mode[field], f"Phase 59.4 AI mode {mode_name} {field}")
-    require_non_empty_string_list(mode["safe_next_steps"], f"Phase 59.4 AI mode {mode_name} safe_next_steps")
+    safe_next_steps = require_non_empty_string_list(
+        mode["safe_next_steps"],
+        f"Phase 59.4 AI mode {mode_name} safe_next_steps",
+    )
     require_mode_specific_semantics(mode_name, mode)
+    require_mode_operator_copy_contract(
+        mode_name,
+        mode,
+        safe_next_steps,
+        forbidden_fragments,
+    )
     for field in (
         "ai_generation_allowed",
         "trace_creation_allowed",
@@ -443,7 +453,6 @@ for index, mode in enumerate(modes, start=1):
             f"Phase 59.4 AI mode {mode_name} is missing disallowed authority: "
             + ", ".join(missing_disallowed)
         )
-    require_mode_operator_copy_contract(mode_name, mode, forbidden_fragments)
 
 missing_modes = sorted(required_modes - seen_modes)
 unexpected_modes = sorted(seen_modes - required_modes)
