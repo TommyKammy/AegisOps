@@ -81,6 +81,8 @@ Run `bash scripts/verify-publishable-path-hygiene.sh`.
 
 Run `node <codex-supervisor-root>/dist/index.js issue-lint 1256 --config <supervisor-config-path>`.
 
+Run `node <codex-supervisor-root>/dist/index.js issue-lint 1252 --config <supervisor-config-path>`.
+
 ## 7. Non-Goals
 
 - No new production write authority is introduced.

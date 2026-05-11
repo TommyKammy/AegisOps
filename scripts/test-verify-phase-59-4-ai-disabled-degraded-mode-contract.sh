@@ -195,6 +195,14 @@ assert_fails_with \
   "${missing_doctor_validation_repo}" \
   "Missing Phase 59.4 AI disabled/degraded mode contract statement: Run \`python3 -m unittest control-plane.tests.test_phase58_1_doctor_contract.Phase581DoctorContractTests.test_doctor_contract_reports_degraded_source_and_ai_without_authority\`."
 
+missing_epic_issue_lint_repo="${workdir}/missing-epic-issue-lint"
+create_valid_repo "${missing_epic_issue_lint_repo}"
+remove_text_from_doc "${missing_epic_issue_lint_repo}" \
+  'Run `node <codex-supervisor-root>/dist/index.js issue-lint 1252 --config <supervisor-config-path>`.'
+assert_fails_with \
+  "${missing_epic_issue_lint_repo}" \
+  "Missing Phase 59.4 AI disabled/degraded mode contract statement: Run \`node <codex-supervisor-root>/dist/index.js issue-lint 1252 --config <supervisor-config-path>\`."
+
 runtime_health_reason_repo="${workdir}/runtime-health-reason"
 create_valid_repo "${runtime_health_reason_repo}"
 mutate_contract "${runtime_health_reason_repo}" "degraded_reason_runtime_health"

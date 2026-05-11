@@ -25,6 +25,7 @@ required_doc_phrases=(
   'Run `bash scripts/verify-phase-51-6-authority-boundary-negative-test-policy.sh`.'
   'Run `bash scripts/verify-publishable-path-hygiene.sh`.'
   'Run `node <codex-supervisor-root>/dist/index.js issue-lint 1256 --config <supervisor-config-path>`.'
+  'Run `node <codex-supervisor-root>/dist/index.js issue-lint 1252 --config <supervisor-config-path>`.'
 )
 
 if [[ ! -f "${doc_path}" ]]; then
@@ -584,8 +585,8 @@ for index, surface in enumerate(surfaces, start=1):
         f"Phase 59.4 non-AI workflow surface {surface_name} operator explanation",
     )
     require_operator_required_terms(
-        surface["required_operator_explanation"],
-        f"Phase 59.4 non-AI workflow surface {surface_name} operator explanation",
+        operator_text,
+        f"Phase 59.4 non-AI workflow surface {surface_name} operator-facing copy",
         required_terms,
     )
     require_no_forbidden_fragments(
