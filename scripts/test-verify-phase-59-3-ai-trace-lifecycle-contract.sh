@@ -412,22 +412,22 @@ assert_mutation_fails_with \
   "Phase 59.3 AI trace lifecycle transition reviewed->accepted contains forbidden authority claim in required_trigger."
 assert_mutation_fails_with \
   queue_extra_required_field \
-  "Phase 59.3 trace review queue skeleton contains extra field(s): case_closure_state"
+  "Phase 59.3 trace review queue skeleton required_fields contains extra field(s): case_closure_state"
 assert_mutation_fails_with \
   queue_missing_required_field \
-  "Phase 59.3 trace review queue skeleton is missing field(s): review_required"
+  "Phase 59.3 trace review queue skeleton required_fields is missing field(s): review_required"
 assert_mutation_fails_with \
   queue_non_string_required_field \
-  "Phase 59.3 trace review queue skeleton required_fields must be a string list."
+  "Phase 59.3 trace review queue skeleton required_fields must be a non-empty string list."
 assert_mutation_fails_with \
   queue_duplicate_required_field \
   "Phase 59.3 trace review queue skeleton required_fields must not contain duplicate value(s): trace_id"
 assert_mutation_fails_with \
   queue_missing_non_authoritative_surface \
-  "Phase 59.3 trace review queue skeleton is missing non-authoritative surface(s): trace_state"
+  "Phase 59.3 trace review queue skeleton non_authoritative_surfaces is missing field(s): trace_state"
 assert_mutation_fails_with \
   queue_extra_non_authoritative_surface \
-  "Phase 59.3 trace review queue skeleton contains extra non-authoritative surface(s): workflow_truth"
+  "Phase 59.3 trace review queue skeleton non_authoritative_surfaces contains extra field(s): workflow_truth"
 assert_mutation_fails_with \
   queue_duplicate_non_authoritative_surface \
   "Phase 59.3 trace review queue skeleton non_authoritative_surfaces must not contain duplicate value(s): trace_state"

@@ -94,6 +94,19 @@ def require_no_duplicate_strings(values: list[str], description: str) -> None:
             f"{description} must not contain duplicate value(s): " + ", ".join(duplicates)
         )
 
+
+def require_exact_string_set(value, expected: set[str], description: str) -> list[str]:
+    values = require_non_empty_string_list(value, description)
+    require_no_duplicate_strings(values, description)
+    actual = set(values)
+    missing = sorted(expected - actual)
+    if missing:
+        raise SystemExit(f"{description} is missing field(s): " + ", ".join(missing))
+    extra = sorted(actual - expected)
+    if extra:
+        raise SystemExit(f"{description} contains extra field(s): " + ", ".join(extra))
+    return values
+
 try:
     lifecycle = json.loads(lifecycle_path.read_text(encoding="utf-8"))
 except json.JSONDecodeError as exc:
@@ -181,6 +194,22 @@ required_states = {
     "corrected",
     "rejected",
     "expired",
+}
+required_transitions = {
+    ("created", "reviewed"),
+    ("created", "expired"),
+    ("reviewed", "accepted"),
+    ("reviewed", "corrected"),
+    ("reviewed", "rejected"),
+    ("reviewed", "expired"),
+    ("accepted", "expired"),
+    ("corrected", "expired"),
+}
+required_allowed_from_by_state = {
+    state_name: sorted(
+        from_state for from_state, to_state in required_transitions if to_state == state_name
+    )
+    for state_name in required_states
 }
 required_state_fields = {
     "state",
@@ -306,6 +335,16 @@ for index, state in enumerate(states, start=1):
             raise SystemExit(
                 f"Phase 59.3 AI trace lifecycle state {name} references invalid allowed_from state: {predecessor}"
             )
+    actual_allowed_from = sorted(state["allowed_from"])
+    expected_allowed_from = required_allowed_from_by_state[name]
+    if actual_allowed_from != expected_allowed_from:
+        raise SystemExit(
+            f"Phase 59.3 AI trace lifecycle state {name} allowed_from must match transition graph: "
+            + "expected "
+            + ", ".join(expected_allowed_from or ["<none>"])
+            + "; got "
+            + ", ".join(actual_allowed_from or ["<none>"])
+        )
     if not isinstance(state["terminal"], bool):
         raise SystemExit(
             f"Phase 59.3 AI trace lifecycle state {name} terminal must be boolean."
@@ -387,16 +426,6 @@ if unexpected_states:
         + ", ".join(unexpected_states)
     )
 
-required_transitions = {
-    ("created", "reviewed"),
-    ("created", "expired"),
-    ("reviewed", "accepted"),
-    ("reviewed", "corrected"),
-    ("reviewed", "rejected"),
-    ("reviewed", "expired"),
-    ("accepted", "expired"),
-    ("corrected", "expired"),
-}
 transition_rows_by_pair: dict[tuple[str, str], int] = {}
 required_transition_fields = {
     "from_state",
@@ -566,30 +595,11 @@ required_queue_fields = {
     "expires_at",
     "review_required",
 }
-queue_fields = queue.get("required_fields")
-if not isinstance(queue_fields, list) or any(
-    not isinstance(value, str) or not value.strip() for value in queue_fields
-):
-    raise SystemExit(
-        "Phase 59.3 trace review queue skeleton required_fields must be a string list."
-    )
-require_no_duplicate_strings(
-    queue_fields,
+require_exact_string_set(
+    queue.get("required_fields"),
+    required_queue_fields,
     "Phase 59.3 trace review queue skeleton required_fields",
 )
-actual_queue_fields = set(queue_fields)
-missing_queue = sorted(required_queue_fields - actual_queue_fields)
-if missing_queue:
-    raise SystemExit(
-        "Phase 59.3 trace review queue skeleton is missing field(s): "
-        + ", ".join(missing_queue)
-    )
-extra_queue = sorted(actual_queue_fields - required_queue_fields)
-if extra_queue:
-    raise SystemExit(
-        "Phase 59.3 trace review queue skeleton contains extra field(s): "
-        + ", ".join(extra_queue)
-    )
 
 required_non_authoritative_surfaces = {
     "queue_order",
@@ -598,35 +608,11 @@ required_non_authoritative_surfaces = {
     "browser_state",
     "trace_state",
 }
-non_authoritative_surfaces = queue.get("non_authoritative_surfaces")
-if not isinstance(non_authoritative_surfaces, list) or any(
-    not isinstance(value, str) or not value.strip()
-    for value in non_authoritative_surfaces
-):
-    raise SystemExit(
-        "Phase 59.3 trace review queue skeleton non_authoritative_surfaces must be a string list."
-    )
-require_no_duplicate_strings(
-    non_authoritative_surfaces,
+require_exact_string_set(
+    queue.get("non_authoritative_surfaces"),
+    required_non_authoritative_surfaces,
     "Phase 59.3 trace review queue skeleton non_authoritative_surfaces",
 )
-actual_non_authoritative_surfaces = set(non_authoritative_surfaces)
-missing_non_authoritative = sorted(
-    required_non_authoritative_surfaces - actual_non_authoritative_surfaces
-)
-if missing_non_authoritative:
-    raise SystemExit(
-        "Phase 59.3 trace review queue skeleton is missing non-authoritative surface(s): "
-        + ", ".join(missing_non_authoritative)
-    )
-extra_non_authoritative = sorted(
-    actual_non_authoritative_surfaces - required_non_authoritative_surfaces
-)
-if extra_non_authoritative:
-    raise SystemExit(
-        "Phase 59.3 trace review queue skeleton contains extra non-authoritative surface(s): "
-        + ", ".join(extra_non_authoritative)
-    )
 
 missing_forbidden = sorted(
     required_forbidden_authority - set(lifecycle["forbidden_authority_states"])
