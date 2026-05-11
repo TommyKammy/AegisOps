@@ -68,6 +68,16 @@ assert_fails_with() {
   fi
 }
 
+assert_mutation_fails_with() {
+  local mutation="$1"
+  local expected="$2"
+  local mutated_repo="${workdir}/${mutation}"
+
+  create_valid_repo "${mutated_repo}"
+  mutate_lifecycle "${mutated_repo}" "${mutation}"
+  assert_fails_with "${mutated_repo}" "${expected}"
+}
+
 mutate_lifecycle() {
   local target="$1"
   local mutation="$2"
@@ -85,6 +95,7 @@ states = lifecycle["lifecycle_states"]
 created = next(state for state in states if state["state"] == "created")
 accepted = next(state for state in states if state["state"] == "accepted")
 corrected = next(state for state in states if state["state"] == "corrected")
+rejected = next(state for state in states if state["state"] == "rejected")
 reviewed = next(state for state in states if state["state"] == "reviewed")
 
 if mutation == "missing_created_state":
@@ -118,11 +129,33 @@ elif mutation == "missing_transition":
     ]
 elif mutation == "terminal_state_with_outgoing_transition":
     accepted["terminal"] = True
-elif mutation == "missing_state_specific_linkage":
+elif mutation == "missing_reviewed_state_linkage":
+    reviewed["required_linkage"] = [
+        value for value in reviewed["required_linkage"] if value != "reviewed_at"
+    ]
+elif mutation == "missing_accepted_state_linkage":
+    accepted["required_linkage"] = [
+        value for value in accepted["required_linkage"] if value != "accepted_at"
+    ]
+elif mutation == "missing_corrected_state_linkage":
     corrected["required_linkage"] = [
         value for value in corrected["required_linkage"] if value != "corrected_at"
     ]
-elif mutation == "missing_transition_specific_metadata":
+elif mutation == "missing_rejected_state_linkage":
+    rejected["required_linkage"] = [
+        value for value in rejected["required_linkage"] if value != "rejected_at"
+    ]
+elif mutation == "missing_reviewed_transition_metadata":
+    transition = next(
+        transition
+        for transition in lifecycle["allowed_transitions"]
+        if transition["from_state"] == "created"
+        and transition["to_state"] == "reviewed"
+    )
+    transition["required_metadata"] = [
+        value for value in transition["required_metadata"] if value != "reviewed_at"
+    ]
+elif mutation == "missing_accepted_transition_metadata":
     transition = next(
         transition
         for transition in lifecycle["allowed_transitions"]
@@ -132,8 +165,40 @@ elif mutation == "missing_transition_specific_metadata":
     transition["required_metadata"] = [
         value for value in transition["required_metadata"] if value != "accepted_at"
     ]
+elif mutation == "missing_corrected_transition_metadata":
+    transition = next(
+        transition
+        for transition in lifecycle["allowed_transitions"]
+        if transition["from_state"] == "reviewed"
+        and transition["to_state"] == "corrected"
+    )
+    transition["required_metadata"] = [
+        value for value in transition["required_metadata"] if value != "corrected_at"
+    ]
+elif mutation == "missing_rejected_transition_metadata":
+    transition = next(
+        transition
+        for transition in lifecycle["allowed_transitions"]
+        if transition["from_state"] == "reviewed"
+        and transition["to_state"] == "rejected"
+    )
+    transition["required_metadata"] = [
+        value for value in transition["required_metadata"] if value != "rejected_at"
+    ]
 elif mutation == "allowed_from_drift":
     accepted["allowed_from"] = ["created"]
+elif mutation == "invalid_allowed_from_state":
+    accepted["allowed_from"] = ["unknown_review_state"]
+elif mutation == "unexpected_transition_pair":
+    lifecycle["allowed_transitions"].append(
+        {
+            "from_state": "accepted",
+            "to_state": "reviewed",
+            "required_trigger": "invalid review rewind",
+            "required_metadata": ["reviewer_id", "review_action_id", "reviewed_at"],
+            "authority_effect": "advisory_only_no_workflow_mutation",
+        }
+    )
 elif mutation == "expiry_can_accept":
     lifecycle["allowed_transitions"].append(
         {
@@ -200,10 +265,6 @@ for mutation in \
   missing_expiration \
   authority_expansion \
   missing_transition \
-  terminal_state_with_outgoing_transition \
-  missing_state_specific_linkage \
-  missing_transition_specific_metadata \
-  allowed_from_drift \
   expiry_can_accept \
   reviewed_truth_claim
 do
@@ -212,6 +273,43 @@ do
   mutate_lifecycle "${mutated_repo}" "${mutation}"
   assert_fails_with "${mutated_repo}" "Phase 59.3"
 done
+
+assert_mutation_fails_with \
+  terminal_state_with_outgoing_transition \
+  "Phase 59.3 AI trace lifecycle state accepted terminal flag must be false while outgoing transitions exist."
+assert_mutation_fails_with \
+  missing_reviewed_state_linkage \
+  "Phase 59.3 AI trace lifecycle state reviewed is missing state-specific linkage field(s): reviewed_at"
+assert_mutation_fails_with \
+  missing_accepted_state_linkage \
+  "Phase 59.3 AI trace lifecycle state accepted is missing state-specific linkage field(s): accepted_at"
+assert_mutation_fails_with \
+  missing_corrected_state_linkage \
+  "Phase 59.3 AI trace lifecycle state corrected is missing state-specific linkage field(s): corrected_at"
+assert_mutation_fails_with \
+  missing_rejected_state_linkage \
+  "Phase 59.3 AI trace lifecycle state rejected is missing state-specific linkage field(s): rejected_at"
+assert_mutation_fails_with \
+  missing_reviewed_transition_metadata \
+  "Phase 59.3 AI trace lifecycle transition created->reviewed is missing transition-specific metadata: reviewed_at"
+assert_mutation_fails_with \
+  missing_accepted_transition_metadata \
+  "Phase 59.3 AI trace lifecycle transition reviewed->accepted is missing transition-specific metadata: accepted_at"
+assert_mutation_fails_with \
+  missing_corrected_transition_metadata \
+  "Phase 59.3 AI trace lifecycle transition reviewed->corrected is missing transition-specific metadata: corrected_at"
+assert_mutation_fails_with \
+  missing_rejected_transition_metadata \
+  "Phase 59.3 AI trace lifecycle transition reviewed->rejected is missing transition-specific metadata: rejected_at"
+assert_mutation_fails_with \
+  invalid_allowed_from_state \
+  "Phase 59.3 AI trace lifecycle state accepted references invalid allowed_from state: unknown_review_state"
+assert_mutation_fails_with \
+  allowed_from_drift \
+  "Phase 59.3 AI trace lifecycle state accepted allowed_from must match transition graph: expected reviewed; got created"
+assert_mutation_fails_with \
+  unexpected_transition_pair \
+  "Phase 59.3 AI trace lifecycle contains unexpected transition for this slice: accepted->reviewed"
 
 local_path_repo="${workdir}/local-path"
 create_valid_repo "${local_path_repo}"

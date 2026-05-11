@@ -394,6 +394,7 @@ for index, transition in enumerate(transitions, start=1):
 
     from_state = transition["from_state"]
     to_state = transition["to_state"]
+    transition_pair = (from_state, to_state)
     if from_state not in required_states or to_state not in required_states:
         raise SystemExit(
             f"Phase 59.3 AI trace lifecycle transition {index} references invalid state."
@@ -403,6 +404,10 @@ for index, transition in enumerate(transitions, start=1):
     if to_state in {"accepted", "corrected", "rejected"} and from_state != "reviewed":
         raise SystemExit(
             f"Phase 59.3 AI trace lifecycle transition {from_state}->{to_state} must go through reviewed."
+        )
+    if transition_pair not in required_transitions:
+        raise SystemExit(
+            f"Phase 59.3 AI trace lifecycle contains unexpected transition for this slice: {from_state}->{to_state}"
         )
 
     if transition["authority_effect"] != "advisory_only_no_workflow_mutation":
@@ -434,7 +439,7 @@ for index, transition in enumerate(transitions, start=1):
                 f"Phase 59.3 AI trace lifecycle transition {from_state}->{to_state} is missing expiration metadata: "
                 + ", ".join(missing_expiry)
             )
-    required_metadata_terms = required_transition_metadata_terms[(from_state, to_state)]
+    required_metadata_terms = required_transition_metadata_terms[transition_pair]
     missing_transition_metadata = sorted(required_metadata_terms - set(metadata))
     if missing_transition_metadata:
         raise SystemExit(
