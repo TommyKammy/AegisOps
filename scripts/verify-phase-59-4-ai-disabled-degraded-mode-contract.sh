@@ -21,6 +21,7 @@ required_doc_phrases=(
   'Run `bash scripts/verify-phase-59-4-ai-disabled-degraded-mode-contract.sh`.'
   'Run `bash scripts/test-verify-phase-59-4-ai-disabled-degraded-mode-contract.sh`.'
   'Run `python3 -m unittest control-plane.tests.test_phase57_7_ai_enablement_admin_toggle`.'
+  'Run `python3 -m unittest control-plane.tests.test_phase58_1_doctor_contract.Phase581DoctorContractTests.test_doctor_contract_reports_degraded_source_and_ai_without_authority`.'
   'Run `bash scripts/verify-phase-51-6-authority-boundary-negative-test-policy.sh`.'
   'Run `bash scripts/verify-publishable-path-hygiene.sh`.'
   'Run `node <codex-supervisor-root>/dist/index.js issue-lint 1256 --config <supervisor-config-path>`.'
@@ -208,7 +209,7 @@ expected_mode_values = {
     "disabled": {
         "trigger": "platform_admin_policy_disabled",
         "readiness_posture": "not_applicable",
-        "reason": "ai_advisory_disabled_by_admin",
+        "reasons": ("ai_advisory_disabled_by_admin",),
         "operator_posture_terms": (
             "ai advisory unavailable",
             "ai advisory is unavailable",
@@ -219,7 +220,10 @@ expected_mode_values = {
     "degraded": {
         "trigger": "ai_advisory_degraded_by_admin_or_runtime_health",
         "readiness_posture": "degraded",
-        "reason": "ai_advisory_degraded_by_admin",
+        "reasons": (
+            "ai_advisory_degraded_by_admin",
+            "ai_advisory_degraded_by_runtime_health",
+        ),
         "operator_posture_terms": (
             "ai advisory degraded",
             "ai advisory is degraded",
@@ -299,6 +303,19 @@ def require_authoritative_records(text: str, description: str) -> None:
             f"{description} must direct operators to authoritative AegisOps records."
         )
 
+def require_operator_required_terms(
+    text: str, description: str, required_terms: list[str]
+) -> None:
+    text_lower = text.casefold()
+    for term in required_terms:
+        term_lower = term.casefold()
+        if term == "AI advisory unavailable or degraded":
+            require_ai_advisory_posture(text, description)
+        elif term == "authoritative AegisOps records":
+            require_authoritative_records(text, description)
+        elif term_lower not in text_lower:
+            raise SystemExit(f"{description} must include required copy term: {term}")
+
 def require_no_healthy_or_available_posture(text: str, description: str) -> None:
     normalized = re.sub(r"[^a-z0-9]+", " ", text.casefold())
     terms = set(normalized.split())
@@ -308,25 +325,52 @@ def require_no_healthy_or_available_posture(text: str, description: str) -> None
                 f"{description} must not claim healthy or available AI posture."
             )
 
+def require_mode_reason_semantics(mode_name: str, value: object) -> list[str]:
+    expected = expected_mode_values.get(mode_name)
+    description = f"Phase 59.4 AI mode {mode_name} reason"
+    if expected is None:
+        return [require_non_empty_string(value, description)]
+    if isinstance(value, str):
+        reasons = [require_non_empty_string(value, description)]
+    elif isinstance(value, list):
+        reasons = require_non_empty_string_list(value, description)
+    else:
+        raise SystemExit(f"{description} must be a non-empty string or string list.")
+    allowed_reasons = set(expected["reasons"])
+    unexpected_reasons = sorted(set(reasons) - allowed_reasons)
+    if unexpected_reasons:
+        raise SystemExit(
+            f"{description} must be one of: {', '.join(expected['reasons'])}."
+        )
+    return reasons
+
 def require_mode_specific_semantics(mode_name: str, mode: dict) -> None:
     expected = expected_mode_values.get(mode_name)
     if expected is None:
         return
-    for field in ("trigger", "readiness_posture", "reason"):
+    for field in ("trigger", "readiness_posture"):
         if mode[field] != expected[field]:
             raise SystemExit(
                 f"Phase 59.4 AI mode {mode_name} {field} must be {expected[field]}."
             )
+    reasons = require_mode_reason_semantics(mode_name, mode["reason"])
     for field in ("operator_state", "explanation"):
         require_mode_operator_posture(
             mode_name,
             mode[field],
             f"Phase 59.4 AI mode {mode_name} {field}",
         )
-    for field in ("trigger", "readiness_posture", "reason", "operator_state", "explanation"):
+    posture_values = [
+        mode["trigger"],
+        mode["readiness_posture"],
+        *reasons,
+        mode["operator_state"],
+        mode["explanation"],
+    ]
+    for value in posture_values:
         require_no_healthy_or_available_posture(
-            mode[field],
-            f"Phase 59.4 AI mode {mode_name} {field}",
+            value,
+            f"Phase 59.4 AI mode {mode_name} posture field",
         )
 
 def require_mode_operator_copy_contract(
@@ -356,6 +400,11 @@ def require_mode_operator_copy_contract(
     require_authoritative_records(
         text,
         f"Phase 59.4 AI mode {mode_name} operator-facing copy",
+    )
+    require_operator_required_terms(
+        text,
+        f"Phase 59.4 AI mode {mode_name} operator-facing copy",
+        required_terms,
     )
     require_no_forbidden_fragments(
         text,
@@ -416,7 +465,7 @@ for index, mode in enumerate(modes, start=1):
     if mode_name in seen_modes:
         raise SystemExit(f"Duplicate Phase 59.4 AI mode: {mode_name}")
     seen_modes.add(mode_name)
-    for field in ("trigger", "operator_state", "readiness_posture", "reason", "explanation", "authority_effect"):
+    for field in ("trigger", "operator_state", "readiness_posture", "explanation", "authority_effect"):
         require_non_empty_string(mode[field], f"Phase 59.4 AI mode {mode_name} {field}")
     safe_next_steps = require_non_empty_string_list(
         mode["safe_next_steps"],
@@ -533,6 +582,11 @@ for index, surface in enumerate(surfaces, start=1):
     require_authoritative_records(
         surface["required_operator_explanation"],
         f"Phase 59.4 non-AI workflow surface {surface_name} operator explanation",
+    )
+    require_operator_required_terms(
+        surface["required_operator_explanation"],
+        f"Phase 59.4 non-AI workflow surface {surface_name} operator explanation",
+        required_terms,
     )
     require_no_forbidden_fragments(
         operator_text,

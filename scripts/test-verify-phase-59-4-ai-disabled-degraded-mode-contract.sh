@@ -124,6 +124,8 @@ elif mutation == "disabled_trigger_degraded":
     disabled["trigger"] = "ai_advisory_degraded_by_admin_or_runtime_health"
 elif mutation == "degraded_reason_disabled":
     degraded["reason"] = "ai_advisory_disabled_by_admin"
+elif mutation == "degraded_reason_runtime_health":
+    degraded["reason"] = "ai_advisory_degraded_by_runtime_health"
 elif mutation == "mode_wrong_readiness":
     disabled["readiness_posture"] = "healthy_available"
 elif mutation == "degraded_claims_available_readiness":
@@ -184,6 +186,19 @@ remove_text_from_doc "${missing_contract_field_repo}" \
 assert_fails_with \
   "${missing_contract_field_repo}" \
   "Missing Phase 59.4 AI disabled/degraded mode contract statement: Every disabled or degraded mode row"
+
+missing_doctor_validation_repo="${workdir}/missing-doctor-validation"
+create_valid_repo "${missing_doctor_validation_repo}"
+remove_text_from_doc "${missing_doctor_validation_repo}" \
+  'Run `python3 -m unittest control-plane.tests.test_phase58_1_doctor_contract.Phase581DoctorContractTests.test_doctor_contract_reports_degraded_source_and_ai_without_authority`.'
+assert_fails_with \
+  "${missing_doctor_validation_repo}" \
+  "Missing Phase 59.4 AI disabled/degraded mode contract statement: Run \`python3 -m unittest control-plane.tests.test_phase58_1_doctor_contract.Phase581DoctorContractTests.test_doctor_contract_reports_degraded_source_and_ai_without_authority\`."
+
+runtime_health_reason_repo="${workdir}/runtime-health-reason"
+create_valid_repo "${runtime_health_reason_repo}"
+mutate_contract "${runtime_health_reason_repo}" "degraded_reason_runtime_health"
+assert_passes "${runtime_health_reason_repo}"
 
 for mutation in \
   missing_disabled_mode \
@@ -267,7 +282,7 @@ do
       assert_fails_with "${mutated_repo}" "AI mode disabled trigger must be platform_admin_policy_disabled"
       ;;
     degraded_reason_disabled)
-      assert_fails_with "${mutated_repo}" "AI mode degraded reason must be ai_advisory_degraded_by_admin"
+      assert_fails_with "${mutated_repo}" "AI mode degraded reason must be one of: ai_advisory_degraded_by_admin, ai_advisory_degraded_by_runtime_health"
       ;;
     mode_wrong_readiness)
       assert_fails_with "${mutated_repo}" "AI mode disabled readiness_posture must be not_applicable"

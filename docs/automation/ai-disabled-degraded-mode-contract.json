@@ -39,7 +39,10 @@
       "trigger": "ai_advisory_degraded_by_admin_or_runtime_health",
       "operator_state": "AI advisory degraded and unavailable for workflow reliance.",
       "readiness_posture": "degraded",
-      "reason": "ai_advisory_degraded_by_admin",
+      "reason": [
+        "ai_advisory_degraded_by_admin",
+        "ai_advisory_degraded_by_runtime_health"
+      ],
       "explanation": "AI advisory degraded. Continue queue, case, evidence review, action review, reconciliation, supportability, and admin work from authoritative AegisOps records.",
       "safe_next_steps": [
         "Treat AI advisory context as unavailable until a reviewed healthy posture returns.",
