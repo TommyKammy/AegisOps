@@ -1,0 +1,144 @@
+{
+  "schema_version": "2026-05-11.phase-59.1",
+  "phase": "59.1",
+  "registry_status": "accepted_contract_slice",
+  "authority_boundary": "AI registry rows are subordinate policy context only. AegisOps records remain authoritative for alert, case, evidence, recommendation, approval, action request, execution receipt, reconciliation, audit, release, gate, limitation, and closeout truth.",
+  "agents": [
+    {
+      "agent_name": "analyst_assistant_context_agent",
+      "purpose": "Assemble cited read-only context for one reviewed AegisOps control-plane record so an operator can inspect linked alert, case, evidence, recommendation, action, receipt, and reconciliation context.",
+      "allowed_tools": [
+        "inspect_assistant_context",
+        "read_reviewed_control_plane_records",
+        "assemble_cited_context",
+        "identify_evidence_gaps"
+      ],
+      "disallowed_tools": [
+        "approve_action",
+        "execute_action",
+        "reconcile_execution",
+        "close_case",
+        "activate_detector",
+        "create_source_truth",
+        "bypass_policy"
+      ],
+      "record_families": [
+        "alert",
+        "case",
+        "evidence",
+        "recommendation",
+        "action_request",
+        "approval_decision",
+        "action_execution",
+        "reconciliation",
+        "ai_trace"
+      ],
+      "citation_requirements": [
+        "record_family must identify the directly linked AegisOps record family",
+        "record_id must identify the directly linked AegisOps record",
+        "evidence_reference must identify the reviewed evidence or explicit evidence gap"
+      ],
+      "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
+    },
+    {
+      "agent_name": "live_assistant_summary_agent",
+      "purpose": "Draft a bounded cited summary from reviewed control-plane context while preserving unresolved questions when evidence is missing, stale, conflicting, or untrusted.",
+      "allowed_tools": [
+        "run_live_assistant_workflow",
+        "draft_cited_summary",
+        "surface_unresolved_questions",
+        "record_ai_trace_context"
+      ],
+      "disallowed_tools": [
+        "approve_action",
+        "execute_action",
+        "reconcile_execution",
+        "close_case",
+        "activate_detector",
+        "create_source_truth",
+        "bypass_policy"
+      ],
+      "record_families": [
+        "alert",
+        "case",
+        "evidence",
+        "recommendation",
+        "ai_trace"
+      ],
+      "citation_requirements": [
+        "record_family must identify the reviewed AegisOps record family behind each summary claim",
+        "record_id must identify the reviewed AegisOps record behind each summary claim",
+        "evidence_reference must identify reviewed linked evidence, refused evidence, or an explicit gap"
+      ],
+      "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
+    },
+    {
+      "agent_name": "advisory_action_request_drafting_agent",
+      "purpose": "Prepare reviewable action-request draft text from cited advisory context without approving, dispatching, or treating the draft as action truth.",
+      "allowed_tools": [
+        "render_recommendation_draft",
+        "prepare_reviewable_action_request_draft",
+        "cite_advisory_context",
+        "surface_required_human_review"
+      ],
+      "disallowed_tools": [
+        "approve_action",
+        "execute_action",
+        "reconcile_execution",
+        "close_case",
+        "activate_detector",
+        "create_source_truth",
+        "bypass_policy"
+      ],
+      "record_families": [
+        "case",
+        "evidence",
+        "recommendation",
+        "action_request",
+        "approval_decision",
+        "ai_trace"
+      ],
+      "citation_requirements": [
+        "record_family must identify the case, recommendation, evidence, or action-request family being drafted from",
+        "record_id must identify the directly linked reviewed record used by the draft",
+        "evidence_reference must identify the reviewed evidence, limitation, or missing-evidence prerequisite"
+      ],
+      "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
+    },
+    {
+      "agent_name": "today_focus_advisory_agent",
+      "purpose": "Suggest advisory focus lanes for daily workbench projection from directly linked backend records without making the projection current, terminal, approval, execution, or reconciliation truth.",
+      "allowed_tools": [
+        "inspect_today_projection",
+        "draft_focus_lane_summary",
+        "identify_stale_or_degraded_sources",
+        "cite_direct_backend_record"
+      ],
+      "disallowed_tools": [
+        "approve_action",
+        "execute_action",
+        "reconcile_execution",
+        "close_case",
+        "activate_detector",
+        "create_source_truth",
+        "bypass_policy"
+      ],
+      "record_families": [
+        "alert",
+        "case",
+        "evidence",
+        "recommendation",
+        "approval_decision",
+        "action_execution",
+        "reconciliation",
+        "source_health"
+      ],
+      "citation_requirements": [
+        "record_family must identify the directly linked backend record family behind a focus lane",
+        "record_id must identify the directly linked backend record behind a focus lane",
+        "evidence_reference must identify linked evidence, degraded-source evidence, or explicit missing evidence"
+      ],
+      "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
+    }
+  ]
+}
