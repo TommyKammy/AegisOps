@@ -292,14 +292,19 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
         "omit citations",
         "omit the citation",
         "omit the citations",
+        "without any citation",
+        "without any citations",
         "without citations",
     )
     citation_suppression_patterns = (
         r"(?<!\w)(?:drop|hide|ignore|omit|remove|skip|suppress) "
         r"(?:all |any |any remaining |remaining |required |supporting |the )?"
         r"citations?(?!\w)",
+        r"(?<!\w)(?:do not|don t|never) (?:cite|include citations?)(?!\w)",
         r"(?<!\w)leave out "
         r"(?:all |any |required |supporting |the )?citations?(?!\w)",
+        r"(?<!\w)(?:no|without) "
+        r"(?:any |required |supporting |the )?citations?(?!\w)",
         r"(?<!\w)(?:conceal|hide|suppress) "
         r"(?:all |any |any remaining |remaining |the )?uncertainty(?!\w)",
     )
@@ -327,14 +332,21 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
         "use unregistered tools",
         "bypass policy guard",
         "bypass the policy guard",
+        "prohibited tool",
+        "prohibited tools",
+        "restricted tool",
+        "restricted tools",
+        "unauthorized tool",
+        "unauthorized tools",
         "delegate the action to the automation tool",
     )
     tool_scope_patterns = (
         r"(?<!\w)(?:access|call|invoke|run|use) "
-        r"(?:any |the )?disallowed tools?(?!\w)",
+        r"(?:any |the )?(?:disallowed|prohibited|restricted|unauthorized) tools?(?!\w)",
         r"(?<!\w)(?:access|call|invoke|run|use) "
         r"(?:any |the )?unregistered tools?(?!\w)",
-        r"(?<!\w)(?:bypass|disable|ignore|override) (?:the )?policy guards?(?!\w)",
+        r"(?<!\w)(?:bypass|disable|ignore|override) "
+        r"(?:the )?policy (?:guards?|guardrails?)(?!\w)",
     )
     if any(contains_term(term) for term in tool_scope_terms) or any(
         matches_normalized_pattern(pattern) for pattern in tool_scope_patterns
