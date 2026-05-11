@@ -1,0 +1,434 @@
+{
+  "schema_version": "2026-05-11.phase-59.3",
+  "phase": "59.3",
+  "contract_status": "accepted_contract_slice",
+  "authority_boundary": "AI trace lifecycle rows are subordinate policy context only. AegisOps records remain authoritative for alert, case, evidence, recommendation, approval, action request, execution receipt, reconciliation, audit, release, gate, limitation, and closeout truth.",
+  "lifecycle_states": [
+    {
+      "state": "created",
+      "purpose": "Record that a registered AI agent used registered AI tools to produce cited advisory output for one directly linked reviewed AegisOps record.",
+      "allowed_from": [],
+      "terminal": false,
+      "registered_agents": [
+        "analyst_assistant_context_agent",
+        "live_assistant_summary_agent",
+        "advisory_action_request_drafting_agent",
+        "today_focus_advisory_agent"
+      ],
+      "registered_tools": [
+        "safe_query",
+        "evidence_lookup",
+        "source_health_lookup",
+        "runbook_lookup",
+        "recommendation_draft",
+        "action_request_draft",
+        "doctor_explanation"
+      ],
+      "required_linkage": [
+        "registered_agent_name",
+        "registered_tool_names",
+        "trace_id",
+        "reviewed_record_family",
+        "reviewed_record_id",
+        "citation_ids",
+        "evidence_reference",
+        "created_by",
+        "created_at",
+        "expires_at"
+      ],
+      "reviewer_action_metadata_required": false,
+      "expiration_handling": "expires_at is required at creation and the trace must move to expired when freshness is exceeded before acceptance.",
+      "authority_effect": "advisory_only_no_workflow_mutation",
+      "disallowed_authority": [
+        "approval",
+        "execution",
+        "reconciliation",
+        "case_closure",
+        "detector_activation",
+        "source_truth_creation",
+        "production_write",
+        "policy_bypass",
+        "workflow_truth"
+      ]
+    },
+    {
+      "state": "reviewed",
+      "purpose": "Record that an operator inspected the trace linkage, citations, freshness, unresolved questions, and authority boundary before choosing a review outcome.",
+      "allowed_from": [
+        "created"
+      ],
+      "terminal": false,
+      "registered_agents": [
+        "analyst_assistant_context_agent",
+        "live_assistant_summary_agent",
+        "advisory_action_request_drafting_agent",
+        "today_focus_advisory_agent"
+      ],
+      "registered_tools": [
+        "safe_query",
+        "evidence_lookup",
+        "source_health_lookup",
+        "runbook_lookup",
+        "recommendation_draft",
+        "action_request_draft",
+        "doctor_explanation"
+      ],
+      "required_linkage": [
+        "registered_agent_name",
+        "registered_tool_names",
+        "trace_id",
+        "reviewed_record_family",
+        "reviewed_record_id",
+        "citation_ids",
+        "evidence_reference",
+        "reviewer_id",
+        "review_action_id",
+        "reviewed_at",
+        "expires_at"
+      ],
+      "reviewer_action_metadata_required": true,
+      "expiration_handling": "reviewed traces remain subject to expires_at and must become expired if not accepted, corrected, or rejected before freshness is exceeded.",
+      "authority_effect": "advisory_only_no_workflow_mutation",
+      "disallowed_authority": [
+        "approval",
+        "execution",
+        "reconciliation",
+        "case_closure",
+        "detector_activation",
+        "source_truth_creation",
+        "production_write",
+        "policy_bypass",
+        "workflow_truth"
+      ]
+    },
+    {
+      "state": "accepted",
+      "purpose": "Record that an operator accepted the trace as advisory context for the linked reviewed record while leaving AegisOps workflow records authoritative.",
+      "allowed_from": [
+        "reviewed"
+      ],
+      "terminal": true,
+      "registered_agents": [
+        "analyst_assistant_context_agent",
+        "live_assistant_summary_agent",
+        "advisory_action_request_drafting_agent",
+        "today_focus_advisory_agent"
+      ],
+      "registered_tools": [
+        "safe_query",
+        "evidence_lookup",
+        "source_health_lookup",
+        "runbook_lookup",
+        "recommendation_draft",
+        "action_request_draft",
+        "doctor_explanation"
+      ],
+      "required_linkage": [
+        "registered_agent_name",
+        "registered_tool_names",
+        "trace_id",
+        "reviewed_record_family",
+        "reviewed_record_id",
+        "citation_ids",
+        "evidence_reference",
+        "reviewer_id",
+        "review_action_id",
+        "accepted_at",
+        "expires_at"
+      ],
+      "reviewer_action_metadata_required": true,
+      "expiration_handling": "accepted advisory context remains non-authoritative and becomes expired advisory context when expires_at is exceeded.",
+      "authority_effect": "advisory_only_no_workflow_mutation",
+      "disallowed_authority": [
+        "approval",
+        "execution",
+        "reconciliation",
+        "case_closure",
+        "detector_activation",
+        "source_truth_creation",
+        "production_write",
+        "policy_bypass",
+        "workflow_truth"
+      ]
+    },
+    {
+      "state": "corrected",
+      "purpose": "Record that an operator corrected the advisory trace output with explicit reviewer/action metadata, citations, and reviewed record linkage.",
+      "allowed_from": [
+        "reviewed"
+      ],
+      "terminal": true,
+      "registered_agents": [
+        "analyst_assistant_context_agent",
+        "live_assistant_summary_agent",
+        "advisory_action_request_drafting_agent",
+        "today_focus_advisory_agent"
+      ],
+      "registered_tools": [
+        "safe_query",
+        "evidence_lookup",
+        "source_health_lookup",
+        "runbook_lookup",
+        "recommendation_draft",
+        "action_request_draft",
+        "doctor_explanation"
+      ],
+      "required_linkage": [
+        "registered_agent_name",
+        "registered_tool_names",
+        "trace_id",
+        "reviewed_record_family",
+        "reviewed_record_id",
+        "citation_ids",
+        "evidence_reference",
+        "reviewer_id",
+        "review_action_id",
+        "correction_summary",
+        "corrected_at",
+        "expires_at"
+      ],
+      "reviewer_action_metadata_required": true,
+      "expiration_handling": "corrected advisory context remains non-authoritative and becomes expired advisory context when expires_at is exceeded.",
+      "authority_effect": "advisory_only_no_workflow_mutation",
+      "disallowed_authority": [
+        "approval",
+        "execution",
+        "reconciliation",
+        "case_closure",
+        "detector_activation",
+        "source_truth_creation",
+        "production_write",
+        "policy_bypass",
+        "workflow_truth"
+      ]
+    },
+    {
+      "state": "rejected",
+      "purpose": "Record that an operator rejected the trace as unusable advisory context while retaining audit evidence of why it was rejected.",
+      "allowed_from": [
+        "reviewed"
+      ],
+      "terminal": true,
+      "registered_agents": [
+        "analyst_assistant_context_agent",
+        "live_assistant_summary_agent",
+        "advisory_action_request_drafting_agent",
+        "today_focus_advisory_agent"
+      ],
+      "registered_tools": [
+        "safe_query",
+        "evidence_lookup",
+        "source_health_lookup",
+        "runbook_lookup",
+        "recommendation_draft",
+        "action_request_draft",
+        "doctor_explanation"
+      ],
+      "required_linkage": [
+        "registered_agent_name",
+        "registered_tool_names",
+        "trace_id",
+        "reviewed_record_family",
+        "reviewed_record_id",
+        "citation_ids",
+        "evidence_reference",
+        "reviewer_id",
+        "review_action_id",
+        "rejection_reason",
+        "rejected_at",
+        "expires_at"
+      ],
+      "reviewer_action_metadata_required": true,
+      "expiration_handling": "rejected traces stay auditable and cannot become accepted without a new cited trace lifecycle.",
+      "authority_effect": "advisory_only_no_workflow_mutation",
+      "disallowed_authority": [
+        "approval",
+        "execution",
+        "reconciliation",
+        "case_closure",
+        "detector_activation",
+        "source_truth_creation",
+        "production_write",
+        "policy_bypass",
+        "workflow_truth"
+      ]
+    },
+    {
+      "state": "expired",
+      "purpose": "Record that the trace passed its freshness boundary and cannot be accepted, corrected, or used as current advisory context without a new cited trace.",
+      "allowed_from": [
+        "created",
+        "reviewed",
+        "accepted",
+        "corrected"
+      ],
+      "terminal": true,
+      "registered_agents": [
+        "analyst_assistant_context_agent",
+        "live_assistant_summary_agent",
+        "advisory_action_request_drafting_agent",
+        "today_focus_advisory_agent"
+      ],
+      "registered_tools": [
+        "safe_query",
+        "evidence_lookup",
+        "source_health_lookup",
+        "runbook_lookup",
+        "recommendation_draft",
+        "action_request_draft",
+        "doctor_explanation"
+      ],
+      "required_linkage": [
+        "registered_agent_name",
+        "registered_tool_names",
+        "trace_id",
+        "reviewed_record_family",
+        "reviewed_record_id",
+        "citation_ids",
+        "evidence_reference",
+        "expires_at",
+        "expired_at",
+        "expiration_reason"
+      ],
+      "reviewer_action_metadata_required": false,
+      "expiration_handling": "expired traces are terminal for the current lifecycle and require a new created trace with current citations for further review.",
+      "authority_effect": "advisory_only_no_workflow_mutation",
+      "disallowed_authority": [
+        "approval",
+        "execution",
+        "reconciliation",
+        "case_closure",
+        "detector_activation",
+        "source_truth_creation",
+        "production_write",
+        "policy_bypass",
+        "workflow_truth"
+      ]
+    }
+  ],
+  "allowed_transitions": [
+    {
+      "from_state": "created",
+      "to_state": "reviewed",
+      "required_trigger": "operator review starts from a cited trace linked to a reviewed AegisOps record",
+      "required_metadata": [
+        "reviewer_id",
+        "review_action_id",
+        "reviewed_at"
+      ],
+      "authority_effect": "advisory_only_no_workflow_mutation"
+    },
+    {
+      "from_state": "created",
+      "to_state": "expired",
+      "required_trigger": "expires_at was reached before operator review outcome",
+      "required_metadata": [
+        "expires_at",
+        "expired_at",
+        "expiration_reason"
+      ],
+      "authority_effect": "advisory_only_no_workflow_mutation"
+    },
+    {
+      "from_state": "reviewed",
+      "to_state": "accepted",
+      "required_trigger": "operator accepts trace as advisory context only",
+      "required_metadata": [
+        "reviewer_id",
+        "review_action_id",
+        "accepted_at"
+      ],
+      "authority_effect": "advisory_only_no_workflow_mutation"
+    },
+    {
+      "from_state": "reviewed",
+      "to_state": "corrected",
+      "required_trigger": "operator records corrected advisory output",
+      "required_metadata": [
+        "reviewer_id",
+        "review_action_id",
+        "correction_summary",
+        "corrected_at"
+      ],
+      "authority_effect": "advisory_only_no_workflow_mutation"
+    },
+    {
+      "from_state": "reviewed",
+      "to_state": "rejected",
+      "required_trigger": "operator rejects trace as unusable advisory context",
+      "required_metadata": [
+        "reviewer_id",
+        "review_action_id",
+        "rejection_reason",
+        "rejected_at"
+      ],
+      "authority_effect": "advisory_only_no_workflow_mutation"
+    },
+    {
+      "from_state": "reviewed",
+      "to_state": "expired",
+      "required_trigger": "expires_at was reached before accepted, corrected, or rejected outcome",
+      "required_metadata": [
+        "expires_at",
+        "expired_at",
+        "expiration_reason"
+      ],
+      "authority_effect": "advisory_only_no_workflow_mutation"
+    },
+    {
+      "from_state": "accepted",
+      "to_state": "expired",
+      "required_trigger": "accepted advisory context exceeded freshness boundary",
+      "required_metadata": [
+        "expires_at",
+        "expired_at",
+        "expiration_reason"
+      ],
+      "authority_effect": "advisory_only_no_workflow_mutation"
+    },
+    {
+      "from_state": "corrected",
+      "to_state": "expired",
+      "required_trigger": "corrected advisory context exceeded freshness boundary",
+      "required_metadata": [
+        "expires_at",
+        "expired_at",
+        "expiration_reason"
+      ],
+      "authority_effect": "advisory_only_no_workflow_mutation"
+    }
+  ],
+  "trace_review_queue_skeleton": {
+    "phase": "59.7",
+    "implementation_status": "deferred_skeleton_only",
+    "required_fields": [
+      "trace_id",
+      "state",
+      "reviewed_record_family",
+      "reviewed_record_id",
+      "registered_agent_name",
+      "registered_tool_names",
+      "citation_ids",
+      "expires_at",
+      "review_required"
+    ],
+    "non_authoritative_surfaces": [
+      "queue_order",
+      "badge_text",
+      "cache_state",
+      "browser_state",
+      "trace_state"
+    ]
+  },
+  "forbidden_authority_states": [
+    "approval",
+    "execution",
+    "reconciliation",
+    "case_closure",
+    "detector_activation",
+    "source_truth_creation",
+    "production_write",
+    "policy_bypass",
+    "workflow_truth"
+  ]
+}
