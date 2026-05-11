@@ -10,7 +10,9 @@ ALLOWLIST_MARKER = "publishable-path-hygiene: allowlist"
 _MAC_HOME_PREFIX = "/" + "Users" + "/"
 
 _WINDOWS_USER_PATH_RE = re.compile(r"^[A-Za-z]:[\\/]+Users[\\/]+[^\\/]+(?:[\\/](?P<rest>.*))?$")
-_UNIX_USER_PATH_IN_TEXT_RE = re.compile(r"/(?:Users|home)/[^/\s]+(?:/[^\s]*)?")
+_UNIX_USER_PATH_IN_TEXT_RE = re.compile(
+    r"(?:/(?:Users|home)/[^/\s]+(?:/[^\s]*)?|/root/[^\s]*)"
+)
 _WINDOWS_USER_PATH_IN_TEXT_RE = re.compile(
     r"(?i)[A-Z]:[\\/]+Users[\\/]+[^\\/\s]+(?:[\\/][^\s]*)?"
 )
@@ -37,18 +39,24 @@ def _has_windows_drive_prefix(text: str, start: int) -> bool:
 
 
 def is_workstation_local_path(text: str) -> bool:
-    for match in _WINDOWS_USER_PATH_IN_TEXT_RE.finditer(text):
-        if _has_text_path_boundary(text, match.start()):
-            return True
+    candidates = [text]
+    json_unescaped_slashes = text.replace(r"\/", "/")
+    if json_unescaped_slashes != text:
+        candidates.append(json_unescaped_slashes)
 
-    for match in _UNIX_USER_PATH_IN_TEXT_RE.finditer(text):
-        if not _has_text_path_boundary(text, match.start()):
-            continue
-        if match.group(0).startswith(_MAC_HOME_PREFIX) and _has_windows_drive_prefix(
-            text, match.start()
-        ):
-            continue
-        return True
+    for candidate in candidates:
+        for match in _WINDOWS_USER_PATH_IN_TEXT_RE.finditer(candidate):
+            if _has_text_path_boundary(candidate, match.start()):
+                return True
+
+        for match in _UNIX_USER_PATH_IN_TEXT_RE.finditer(candidate):
+            if not _has_text_path_boundary(candidate, match.start()):
+                continue
+            if match.group(0).startswith(
+                _MAC_HOME_PREFIX
+            ) and _has_windows_drive_prefix(candidate, match.start()):
+                continue
+            return True
 
     return False
 

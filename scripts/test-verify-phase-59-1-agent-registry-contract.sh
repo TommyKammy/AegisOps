@@ -17,6 +17,9 @@ create_valid_repo() {
   local target="$1"
 
   mkdir -p "${target}/docs/automation"
+  git -C "${target}" init -q
+  git -C "${target}" config user.name "Codex Test"
+  git -C "${target}" config user.email "codex@example.com"
   printf '%s\n' \
     "# AegisOps" \
     "See [Phase 59.1 agent registry contract](docs/phase-59-1-agent-registry-contract.md)." \
@@ -25,6 +28,8 @@ create_valid_repo() {
     "${target}/docs/phase-59-1-agent-registry-contract.md"
   cp "${repo_root}/docs/automation/ai-agent-registry.json" \
     "${target}/docs/automation/ai-agent-registry.json"
+  git -C "${target}" add README.md docs/phase-59-1-agent-registry-contract.md \
+    docs/automation/ai-agent-registry.json
 }
 
 assert_passes() {
@@ -74,6 +79,8 @@ elif mutation == "authority_expansion":
     registry["agents"][0]["authority_ceiling"] = "may_approve_actions"
 elif mutation == "allowed_execution_tool":
     registry["agents"][0]["allowed_tools"].append("execute_action")
+elif mutation == "allowed_policy_bypass_tool":
+    registry["agents"][0]["allowed_tools"].append("policy-bypass")
 elif mutation == "missing_disallowed_execution":
     registry["agents"][0]["disallowed_tools"].remove("execute_action")
 elif mutation == "missing_record_id_citation":
@@ -96,10 +103,28 @@ elif mutation == "json_escaped_windows_path":
     registry["agents"][0]["purpose"] += (
         " See C:" + slash + "Users" + slash + "example" + slash + "private.txt."
     )
+elif mutation == "json_escaped_unix_path":
+    registry["agents"][0]["purpose"] += " See /" + "Users/example/private.txt."
+elif mutation == "json_escaped_windows_slash_path":
+    registry["agents"][0]["purpose"] += " See C:/" + "Users/example/private.txt."
 else:
     raise SystemExit(f"unknown mutation: {mutation}")
 
-path.write_text(json.dumps(registry, indent=2, sort_keys=False) + "\n", encoding="utf-8")
+output = json.dumps(registry, indent=2, sort_keys=False) + "\n"
+if mutation == "json_escaped_unix_path":
+    escaped_slash = "\\/"
+    output = output.replace(
+        "/" + "Users/example/private.txt",
+        escaped_slash + "Users" + escaped_slash + "example" + escaped_slash + "private.txt",
+    )
+elif mutation == "json_escaped_windows_slash_path":
+    escaped_slash = "\\/"
+    output = output.replace(
+        "C:/" + "Users/example/private.txt",
+        "C:" + escaped_slash + "Users" + escaped_slash + "example" + escaped_slash + "private.txt",
+    )
+
+path.write_text(output, encoding="utf-8")
 PY
 }
 
@@ -165,6 +190,13 @@ assert_fails_with \
   "${allowed_execution_repo}" \
   "has forbidden allowed tool: execute_action"
 
+allowed_policy_bypass_repo="${workdir}/allowed-policy-bypass"
+create_valid_repo "${allowed_policy_bypass_repo}"
+mutate_registry "${allowed_policy_bypass_repo}" "allowed_policy_bypass_tool"
+assert_fails_with \
+  "${allowed_policy_bypass_repo}" \
+  "has forbidden allowed tool: policy-bypass"
+
 missing_disallowed_repo="${workdir}/missing-disallowed-execution"
 create_valid_repo "${missing_disallowed_repo}"
 mutate_registry "${missing_disallowed_repo}" "missing_disallowed_execution"
@@ -222,6 +254,38 @@ create_valid_repo "${json_escaped_windows_path_repo}"
 mutate_registry "${json_escaped_windows_path_repo}" "json_escaped_windows_path"
 assert_fails_with \
   "${json_escaped_windows_path_repo}" \
+  "workstation-local absolute path detected"
+
+json_escaped_unix_path_repo="${workdir}/json-escaped-unix-path"
+create_valid_repo "${json_escaped_unix_path_repo}"
+mutate_registry "${json_escaped_unix_path_repo}" "json_escaped_unix_path"
+assert_fails_with \
+  "${json_escaped_unix_path_repo}" \
+  "workstation-local absolute path detected"
+
+json_escaped_windows_slash_path_repo="${workdir}/json-escaped-windows-slash-path"
+create_valid_repo "${json_escaped_windows_slash_path_repo}"
+mutate_registry "${json_escaped_windows_slash_path_repo}" "json_escaped_windows_slash_path"
+assert_fails_with \
+  "${json_escaped_windows_slash_path_repo}" \
+  "workstation-local absolute path detected"
+
+colon_boundary_path_repo="${workdir}/colon-boundary-path"
+create_valid_repo "${colon_boundary_path_repo}"
+printf 'path:/%s/%s/%s\n' "Users" "example" "private.txt" \
+  >>"${colon_boundary_path_repo}/docs/phase-59-1-agent-registry-contract.md"
+assert_fails_with \
+  "${colon_boundary_path_repo}" \
+  "workstation-local absolute path detected"
+
+publishable_surface_path_repo="${workdir}/publishable-surface-path"
+create_valid_repo "${publishable_surface_path_repo}"
+mkdir -p "${publishable_surface_path_repo}/scripts"
+printf 'echo /%s/%s/%s\n' "Users" "example" "private.txt" \
+  >"${publishable_surface_path_repo}/scripts/phase-59-1-leaky.sh"
+git -C "${publishable_surface_path_repo}" add scripts/phase-59-1-leaky.sh
+assert_fails_with \
+  "${publishable_surface_path_repo}" \
   "workstation-local absolute path detected"
 
 echo "Phase 59.1 agent registry verifier rejects missing fields, authority expansion, missing citations, unsafe tools, and local paths."

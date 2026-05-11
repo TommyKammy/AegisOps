@@ -2,7 +2,8 @@
 
 set -euo pipefail
 
-repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+tool_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="${1:-${tool_root}}"
 doc_path="${repo_root}/docs/phase-59-1-agent-registry-contract.md"
 registry_path="${repo_root}/docs/automation/ai-agent-registry.json"
 readme_path="${repo_root}/README.md"
@@ -128,6 +129,7 @@ forbidden_fragments = (
     "source_truth",
     "production_write",
     "bypass_policy",
+    "policy_bypass",
     "authority_widening",
 )
 
@@ -215,17 +217,11 @@ if unexpected_agents:
     )
 PY
 
-mac_user_home="$(printf '/%s/' 'Users')"
-unix_user_home="$(printf '/%s/' 'home')"
-root_user_home="$(printf '/%s/' 'root')"
-windows_user_profile_backslash="$(printf '[A-Za-z]:\\\\%s\\\\' 'Users')"
-windows_user_profile_backslash_json="$(printf '[A-Za-z]:\\\\\\\\%s\\\\\\\\' 'Users')"
-windows_user_profile_slash="$(printf '[A-Za-z]:/%s/' 'Users')"
-path_token_boundary="(^|[[:space:]\`'\"(<{=])"
-local_path_token="(${mac_user_home}|${unix_user_home}|${root_user_home}|${windows_user_profile_backslash_json}|${windows_user_profile_backslash}|${windows_user_profile_slash})[^[:space:]\`'\" )>}]*"
-
-if grep -Eq "(${path_token_boundary}${local_path_token}|file:///?${local_path_token})" \
-  "${doc_path}" "${registry_path}" "${readme_path}"; then
+path_hygiene_stderr="$(mktemp)"
+trap 'rm -f "${path_hygiene_stderr}"' EXIT
+if ! bash "${tool_root}/scripts/verify-publishable-path-hygiene.sh" "${repo_root}" \
+  >/dev/null 2>"${path_hygiene_stderr}"; then
+  cat "${path_hygiene_stderr}" >&2
   echo "Forbidden Phase 59.1 agent registry artifact: workstation-local absolute path detected" >&2
   exit 1
 fi
