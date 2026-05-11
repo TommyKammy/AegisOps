@@ -90,13 +90,6 @@ if contract["contract_status"] != "accepted_contract_slice":
     )
 
 boundary = contract["authority_boundary"]
-if not isinstance(boundary, str) or not boundary.strip():
-    raise SystemExit("Phase 59.4 AI disabled/degraded mode authority_boundary is invalid.")
-boundary_lower = boundary.casefold()
-if "subordinate" not in boundary_lower or "aegisops records remain authoritative" not in boundary_lower:
-    raise SystemExit(
-        "Phase 59.4 AI disabled/degraded mode authority boundary must preserve subordinate AegisOps authority semantics."
-    )
 
 required_modes = {"disabled", "degraded"}
 required_mode_fields = {
@@ -261,6 +254,23 @@ def require_no_forbidden_authority_claim(text: str, description: str) -> None:
     if any(fragment in normalized for fragment in forbidden_authority_fragments):
         raise SystemExit(f"{description} contains forbidden authority claim.")
 
+if not isinstance(boundary, str) or not boundary.strip():
+    raise SystemExit("Phase 59.4 AI disabled/degraded mode authority_boundary is invalid.")
+boundary_lower = boundary.casefold()
+if "subordinate" not in boundary_lower or "aegisops records remain authoritative" not in boundary_lower:
+    raise SystemExit(
+        "Phase 59.4 AI disabled/degraded mode authority boundary must preserve subordinate AegisOps authority semantics."
+    )
+require_no_forbidden_fragments(
+    boundary,
+    "Phase 59.4 AI disabled/degraded mode authority_boundary",
+    sorted(contradictory_authority_claims),
+)
+require_no_forbidden_authority_claim(
+    boundary,
+    "Phase 59.4 AI disabled/degraded mode authority_boundary",
+)
+
 def require_ai_advisory_posture(text: str, description: str) -> None:
     text_lower = text.casefold()
     allowed_posture_terms = (
@@ -318,6 +328,43 @@ def require_mode_specific_semantics(mode_name: str, mode: dict) -> None:
             mode[field],
             f"Phase 59.4 AI mode {mode_name} {field}",
         )
+
+def require_mode_operator_copy_contract(
+    mode_name: str,
+    mode: dict,
+    forbidden_fragments: list[str],
+) -> None:
+    text = " ".join(
+        [
+            mode["operator_state"],
+            mode["explanation"],
+            " ".join(mode["safe_next_steps"]),
+        ]
+    )
+    for field in ("operator_state", "explanation"):
+        require_ai_advisory_posture(
+            mode[field],
+            f"Phase 59.4 AI mode {mode_name} {field}",
+        )
+        if mode_name in expected_mode_values:
+            require_mode_operator_posture(
+                mode_name,
+                mode[field],
+                f"Phase 59.4 AI mode {mode_name} {field}",
+            )
+    require_authoritative_records(
+        text,
+        f"Phase 59.4 AI mode {mode_name} operator-facing copy",
+    )
+    require_no_forbidden_fragments(
+        text,
+        f"Phase 59.4 AI mode {mode_name} operator-facing copy",
+        forbidden_fragments,
+    )
+    require_no_forbidden_authority_claim(
+        text,
+        f"Phase 59.4 AI mode {mode_name} operator-facing copy",
+    )
 
 copy_rules = contract["operator_copy_rules"]
 if not isinstance(copy_rules, dict):
@@ -396,31 +443,7 @@ for index, mode in enumerate(modes, start=1):
             f"Phase 59.4 AI mode {mode_name} is missing disallowed authority: "
             + ", ".join(missing_disallowed)
         )
-    text = " ".join(
-        [
-            mode["operator_state"],
-            mode["explanation"],
-            " ".join(mode["safe_next_steps"]),
-        ]
-    )
-    for field in ("operator_state", "explanation"):
-        require_ai_advisory_posture(
-            mode[field],
-            f"Phase 59.4 AI mode {mode_name} {field}",
-        )
-    require_authoritative_records(
-        text,
-        f"Phase 59.4 AI mode {mode_name} operator-facing copy",
-    )
-    require_no_forbidden_fragments(
-        text,
-        f"Phase 59.4 AI mode {mode_name} operator-facing copy",
-        forbidden_fragments,
-    )
-    require_no_forbidden_authority_claim(
-        text,
-        f"Phase 59.4 AI mode {mode_name} operator-facing copy",
-    )
+    require_mode_operator_copy_contract(mode_name, mode, forbidden_fragments)
 
 missing_modes = sorted(required_modes - seen_modes)
 unexpected_modes = sorted(seen_modes - required_modes)
