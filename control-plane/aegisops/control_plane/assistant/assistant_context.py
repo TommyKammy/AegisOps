@@ -242,6 +242,9 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
         pattern = rf"(?<!\w){re.escape(normalized_term)}(?!\w)"
         return re.search(pattern, normalized) is not None
 
+    def matches_normalized_pattern(pattern: str) -> bool:
+        return re.search(pattern, normalized) is not None
+
     authority_terms = (
         "approval granted",
         "approve the action",
@@ -288,13 +291,11 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
         "without citations",
     )
     citation_suppression_patterns = (
-        r"(?<!\w)omit (?:the )?citations(?!\w)",
-        r"(?<!\w)suppress (?:any remaining |all )?uncertainty(?!\w)",
-        r"(?<!\w)suppress (?:the )?citations(?!\w)",
+        r"(?<!\w)(?:hide|omit|remove|suppress) (?:all |the )?citations(?!\w)",
+        r"(?<!\w)(?:hide|suppress) (?:all |any remaining |the )?uncertainty(?!\w)",
     )
     if any(contains_term(term) for term in citation_suppression_terms) or any(
-        re.search(pattern, normalized) is not None
-        for pattern in citation_suppression_patterns
+        matches_normalized_pattern(pattern) for pattern in citation_suppression_patterns
     ):
         flags.append("citation_suppression_attempt")
 
@@ -309,7 +310,14 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
         "bypass the policy guard",
         "delegate the action to the automation tool",
     )
-    if any(contains_term(term) for term in tool_scope_terms):
+    tool_scope_patterns = (
+        r"(?<!\w)(?:access|use) disallowed tools?(?!\w)",
+        r"(?<!\w)(?:access|use) unregistered tools?(?!\w)",
+        r"(?<!\w)bypass (?:the )?policy guard(?!\w)",
+    )
+    if any(contains_term(term) for term in tool_scope_terms) or any(
+        matches_normalized_pattern(pattern) for pattern in tool_scope_patterns
+    ):
         flags.append("tool_scope_expansion_attempt")
 
     record_family_terms = (
