@@ -49,6 +49,7 @@ done
 
 python3 - "${registry_path}" <<'PY'
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -115,7 +116,7 @@ required_disallowed = {
     "create_source_truth",
     "bypass_policy",
 }
-forbidden_fragments = (
+forbidden_authority_terms = (
     "approve",
     "approval",
     "execute",
@@ -132,6 +133,11 @@ forbidden_fragments = (
     "policy_bypass",
     "authority_widening",
 )
+forbidden_allowed_tool_fragments = frozenset(forbidden_authority_terms)
+
+
+def normalize_tool_name(tool_name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", tool_name.lower()).strip("_")
 
 seen_names: set[str] = set()
 for index, agent in enumerate(agents, start=1):
@@ -189,8 +195,8 @@ for index, agent in enumerate(agents, start=1):
         )
 
     for allowed_tool in agent["allowed_tools"]:
-        normalized = allowed_tool.lower().replace("-", "_").replace(" ", "_")
-        for fragment in forbidden_fragments:
+        normalized = normalize_tool_name(allowed_tool)
+        for fragment in forbidden_allowed_tool_fragments:
             if fragment in normalized:
                 raise SystemExit(
                     f"Phase 59.1 AI agent {name} has forbidden allowed tool: {allowed_tool}"

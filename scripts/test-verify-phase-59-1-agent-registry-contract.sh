@@ -81,6 +81,8 @@ elif mutation == "allowed_execution_tool":
     registry["agents"][0]["allowed_tools"].append("execute_action")
 elif mutation == "allowed_policy_bypass_tool":
     registry["agents"][0]["allowed_tools"].append("policy-bypass")
+elif mutation == "allowed_policy_bypass_phrase_tool":
+    registry["agents"][0]["allowed_tools"].append("policy bypass")
 elif mutation == "missing_disallowed_execution":
     registry["agents"][0]["disallowed_tools"].remove("execute_action")
 elif mutation == "missing_record_id_citation":
@@ -196,6 +198,13 @@ mutate_registry "${allowed_policy_bypass_repo}" "allowed_policy_bypass_tool"
 assert_fails_with \
   "${allowed_policy_bypass_repo}" \
   "has forbidden allowed tool: policy-bypass"
+
+allowed_policy_bypass_phrase_repo="${workdir}/allowed-policy-bypass-phrase"
+create_valid_repo "${allowed_policy_bypass_phrase_repo}"
+mutate_registry "${allowed_policy_bypass_phrase_repo}" "allowed_policy_bypass_phrase_tool"
+assert_fails_with \
+  "${allowed_policy_bypass_phrase_repo}" \
+  "has forbidden allowed tool: policy bypass"
 
 missing_disallowed_repo="${workdir}/missing-disallowed-execution"
 create_valid_repo "${missing_disallowed_repo}"
