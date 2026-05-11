@@ -109,11 +109,19 @@ elif mutation == "missing_extended_copy_rule":
     contract["operator_copy_rules"]["forbidden_fragments"].remove("AI closed")
 elif mutation == "authority_boundary_forbidden_claim":
     contract["authority_boundary"] += " AI may execute actions."
+elif mutation == "authority_boundary_can_execute_claim":
+    contract["authority_boundary"] += " AI can execute actions."
 elif mutation == "mode_generic_posture":
     disabled["operator_state"] = "Normal operations continue."
     disabled["explanation"] = "Continue normal operations from authoritative AegisOps records."
+elif mutation == "mode_operator_state_missing_advisory_posture":
+    disabled["operator_state"] = "Disabled policy posture is shown."
+elif mutation == "mode_explanation_missing_advisory_posture":
+    disabled["explanation"] = "Disabled policy posture is shown from authoritative AegisOps records."
 elif mutation == "mode_wrong_readiness":
     disabled["readiness_posture"] = "healthy_available"
+elif mutation == "degraded_claims_available_readiness":
+    degraded["readiness_posture"] = "degraded_healthy_available"
 elif mutation == "operator_forbidden_fragment":
     disabled["explanation"] += " AI approved the workflow."
 elif mutation == "missing_operator_required_records":
@@ -183,8 +191,12 @@ for mutation in \
   missing_copy_rule \
   missing_extended_copy_rule \
   authority_boundary_forbidden_claim \
+  authority_boundary_can_execute_claim \
   mode_generic_posture \
+  mode_operator_state_missing_advisory_posture \
+  mode_explanation_missing_advisory_posture \
   mode_wrong_readiness \
+  degraded_claims_available_readiness \
   operator_forbidden_fragment \
   missing_operator_required_records \
   json_escaped_unix_path \
@@ -227,11 +239,23 @@ do
     authority_boundary_forbidden_claim)
       assert_fails_with "${mutated_repo}" "authority_boundary must not include forbidden authority claim: ai may execute"
       ;;
+    authority_boundary_can_execute_claim)
+      assert_fails_with "${mutated_repo}" "authority_boundary must not include forbidden authority claim: ai can execute"
+      ;;
     mode_generic_posture)
       assert_fails_with "${mutated_repo}" "AI mode disabled operator_state must state disabled semantics"
       ;;
+    mode_operator_state_missing_advisory_posture)
+      assert_fails_with "${mutated_repo}" "AI mode disabled operator_state must explain AI advisory unavailable or degraded posture"
+      ;;
+    mode_explanation_missing_advisory_posture)
+      assert_fails_with "${mutated_repo}" "AI mode disabled explanation must explain AI advisory unavailable or degraded posture"
+      ;;
     mode_wrong_readiness)
       assert_fails_with "${mutated_repo}" "AI mode disabled readiness_posture must not claim healthy or available posture"
+      ;;
+    degraded_claims_available_readiness)
+      assert_fails_with "${mutated_repo}" "AI mode degraded readiness_posture must not claim healthy or available AI posture"
       ;;
     operator_forbidden_fragment)
       assert_fails_with "${mutated_repo}" "operator-facing copy must not include forbidden authority claim: AI approved"

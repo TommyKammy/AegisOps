@@ -50,6 +50,7 @@ done
 
 python3 - "${contract_path}" <<'PY'
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -136,6 +137,14 @@ required_forbidden_fragments = {
     "automatic repair complete",
 }
 contradictory_authority_claims = {
+    "ai can approve",
+    "ai can execute",
+    "ai can reconcile",
+    "ai can close",
+    "ai can activate",
+    "ai can create source truth",
+    "ai can repair",
+    "ai can bypass policy",
     "ai may approve",
     "ai may execute",
     "ai may reconcile",
@@ -144,6 +153,14 @@ contradictory_authority_claims = {
     "ai may create source truth",
     "ai may repair",
     "ai may bypass policy",
+    "ai approves",
+    "ai executes",
+    "ai reconciles",
+    "ai closes",
+    "ai activates",
+    "ai creates source truth",
+    "ai repairs",
+    "ai bypasses policy",
     "ai approved",
     "ai executed",
     "ai reconciled",
@@ -198,16 +215,16 @@ def require_authoritative_records(text: str, description: str) -> None:
             f"{description} must direct operators to authoritative AegisOps records."
         )
 
+def require_no_healthy_or_available_posture(text: str, description: str) -> None:
+    normalized = re.sub(r"[^a-z0-9]+", " ", text.casefold())
+    terms = set(normalized.split())
+    for forbidden in ("healthy", "available"):
+        if forbidden in terms:
+            raise SystemExit(
+                f"{description} must not claim healthy or available AI posture."
+            )
+
 def require_mode_specific_semantics(mode_name: str, mode: dict) -> None:
-    semantic_text = " ".join(
-        [
-            mode["trigger"],
-            mode["readiness_posture"],
-            mode["reason"],
-            mode["operator_state"],
-            mode["explanation"],
-        ]
-    ).casefold()
     if mode_name == "disabled":
         for field in ("trigger", "reason", "operator_state", "explanation"):
             if "disabled" not in mode[field].casefold():
@@ -226,11 +243,11 @@ def require_mode_specific_semantics(mode_name: str, mode: dict) -> None:
                 )
     else:
         return
-    for forbidden in ("healthy", "available"):
-        if forbidden in semantic_text and "unavailable" not in semantic_text:
-            raise SystemExit(
-                f"Phase 59.4 AI mode {mode_name} must not claim healthy or available AI posture."
-            )
+    for field in ("trigger", "readiness_posture", "reason", "operator_state", "explanation"):
+        require_no_healthy_or_available_posture(
+            mode[field],
+            f"Phase 59.4 AI mode {mode_name} {field}",
+        )
 
 copy_rules = contract["operator_copy_rules"]
 if not isinstance(copy_rules, dict):
@@ -312,10 +329,11 @@ for index, mode in enumerate(modes, start=1):
             " ".join(mode["safe_next_steps"]),
         ]
     )
-    require_ai_advisory_posture(
-        text,
-        f"Phase 59.4 AI mode {mode_name} operator-facing copy",
-    )
+    for field in ("operator_state", "explanation"):
+        require_ai_advisory_posture(
+            mode[field],
+            f"Phase 59.4 AI mode {mode_name} {field}",
+        )
     require_authoritative_records(
         text,
         f"Phase 59.4 AI mode {mode_name} operator-facing copy",
