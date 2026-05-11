@@ -100,6 +100,12 @@ def require_no_duplicate_strings(values: list[str], description: str) -> None:
         )
 
 
+def require_required_fields(row: dict, required: set[str], description: str) -> None:
+    missing = sorted(required - row.keys())
+    if missing:
+        raise SystemExit(f"{description}: " + ", ".join(missing))
+
+
 def require_exact_string_set(value, expected: set[str], description: str) -> list[str]:
     values = require_non_empty_string_list(value, description)
     require_no_duplicate_strings(values, description)
@@ -143,6 +149,25 @@ def require_allowed_from_for_state(
             + ", ".join(actual_allowed_from or ["<none>"])
         )
 
+
+def require_transition_boundary(
+    index: int,
+    from_state: str,
+    to_state: str,
+    known_states: set[str],
+) -> None:
+    if not {from_state, to_state}.issubset(known_states):
+        raise SystemExit(
+            f"Phase 59.3 AI trace lifecycle transition {index} references invalid state."
+        )
+    if from_state == "expired":
+        raise SystemExit("Phase 59.3 AI trace lifecycle must not transition from expired traces.")
+    to_state_is_review_outcome = to_state in {"accepted", "corrected", "rejected"}
+    if to_state_is_review_outcome and from_state != "reviewed":
+        raise SystemExit(
+            f"Phase 59.3 AI trace lifecycle transition {from_state}->{to_state} must go through reviewed."
+        )
+
 try:
     lifecycle = json.loads(lifecycle_path.read_text(encoding="utf-8"))
 except json.JSONDecodeError as exc:
@@ -167,12 +192,11 @@ required_root = frozenset((
     "trace_review_queue_skeleton",
     "forbidden_authority_states",
 ))
-missing_root = sorted(required_root - lifecycle.keys())
-if missing_root:
-    raise SystemExit(
-        "Phase 59.3 AI trace lifecycle is missing root field(s): "
-        + ", ".join(missing_root)
-    )
+require_required_fields(
+    lifecycle,
+    required_root,
+    "Phase 59.3 AI trace lifecycle is missing root field(s)",
+)
 
 require_exact_value(
     lifecycle["phase"],
@@ -491,27 +515,16 @@ required_transition_metadata_terms = {
 for index, transition in enumerate(transitions, start=1):
     if not isinstance(transition, dict):
         raise SystemExit(f"Phase 59.3 AI trace lifecycle transition {index} must be an object.")
-    missing = sorted(required_transition_fields - transition.keys())
-    if missing:
-        raise SystemExit(
-            f"Phase 59.3 AI trace lifecycle transition {index} is missing field(s): "
-            + ", ".join(missing)
-        )
+    require_required_fields(
+        transition,
+        required_transition_fields,
+        f"Phase 59.3 AI trace lifecycle transition {index} is missing field(s)",
+    )
 
     from_state = transition["from_state"]
     to_state = transition["to_state"]
     transition_pair = (from_state, to_state)
-    if not {from_state, to_state}.issubset(required_states):
-        raise SystemExit(
-            f"Phase 59.3 AI trace lifecycle transition {index} references invalid state."
-        )
-    if from_state == "expired":
-        raise SystemExit("Phase 59.3 AI trace lifecycle must not transition from expired traces.")
-    to_state_is_review_outcome = to_state in {"accepted", "corrected", "rejected"}
-    if to_state_is_review_outcome and from_state != "reviewed":
-        raise SystemExit(
-            f"Phase 59.3 AI trace lifecycle transition {from_state}->{to_state} must go through reviewed."
-        )
+    require_transition_boundary(index, from_state, to_state, required_states)
     if transition_pair not in required_transitions:
         raise SystemExit(
             f"Phase 59.3 AI trace lifecycle contains unexpected transition for this slice: {from_state}->{to_state}"
