@@ -54,6 +54,15 @@ def phase24_live_assistant_unresolved_reasons(
         "scope_expansion_attempt": (
             "the requested summary would widen beyond the reviewed record chain"
         ),
+        "citation_suppression_attempt": (
+            "the requested summary would hide missing citations or suppress uncertainty"
+        ),
+        "tool_scope_expansion_attempt": (
+            "the requested summary would access disallowed tools or bypass tool policy"
+        ),
+        "record_family_expansion_attempt": (
+            "the requested summary would widen beyond the anchored record family"
+        ),
         "prompt_injection_attempt": (
             "the requested summary would follow prompt-injection or instruction-override text instead of reviewed records"
         ),

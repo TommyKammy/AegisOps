@@ -233,21 +233,35 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
         return ()
 
     lowered = text.lower()
+    normalized = re.sub(r"[\W_]+", " ", lowered)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
     flags: list[str] = []
 
     def contains_term(term: str) -> bool:
-        pattern = rf"(?<!\w){re.escape(term)}(?!\w)"
-        return re.search(pattern, lowered) is not None
+        normalized_term = re.sub(r"[\W_]+", " ", term.lower()).strip()
+        pattern = rf"(?<!\w){re.escape(normalized_term)}(?!\w)"
+        return re.search(pattern, normalized) is not None
 
     authority_terms = (
         "approval granted",
+        "approve the action",
+        "approve actions",
+        "approval as granted",
+        "mark the approval",
         "approved",
         "execute",
         "execution",
+        "delegate the action",
         "reconcile",
         "reconciliation",
         "resolved",
+        "close the case",
         "closed",
+        "activate the detector",
+        "detector activation",
+        "create source truth",
+        "source truth",
+        "override scope",
     )
     if any(contains_term(term) for term in authority_terms):
         flags.append("authority_overreach")
@@ -262,6 +276,39 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
     )
     if any(contains_term(term) for term in scope_terms):
         flags.append("scope_expansion_attempt")
+
+    citation_suppression_terms = (
+        "ignore missing citations",
+        "hide uncertainty",
+        "suppress any remaining uncertainty",
+        "suppress uncertainty",
+        "suppress citations",
+        "omit citations",
+        "without citations",
+    )
+    if any(contains_term(term) for term in citation_suppression_terms):
+        flags.append("citation_suppression_attempt")
+
+    tool_scope_terms = (
+        "disallowed tool",
+        "unregistered tools",
+        "access unregistered tools",
+        "bypass the policy guard",
+        "delegate the action to the automation tool",
+    )
+    if any(contains_term(term) for term in tool_scope_terms):
+        flags.append("tool_scope_expansion_attempt")
+
+    record_family_terms = (
+        "every related case",
+        "sibling alert",
+        "neighboring evidence",
+        "neighbor record",
+        "record family",
+        "all related records",
+    )
+    if any(contains_term(term) for term in record_family_terms):
+        flags.append("record_family_expansion_attempt")
 
     return _dedupe_strings(tuple(flags))
 
