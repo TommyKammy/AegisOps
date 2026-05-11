@@ -120,6 +120,50 @@ def require_exact_string_set(value, expected: set[str], description: str) -> lis
     return values
 
 
+forbidden_claim_fragments = (
+    "may_approve",
+    "can_approve",
+    "approve_action",
+    "approve_actions",
+    "approve_case",
+    "approve_case_closure",
+    "may_execute",
+    "can_execute",
+    "execute_action",
+    "execute_actions",
+    "may_reconcile",
+    "can_reconcile",
+    "reconcile_receipt",
+    "reconcile_outcome",
+    "may_close",
+    "can_close",
+    "close_case",
+    "close_cases",
+    "may_activate",
+    "can_activate",
+    "activate_detector",
+    "activate_detectors",
+    "create_source_truth",
+    "source_truth",
+    "workflow_truth",
+    "authority_widen",
+    "production_write",
+    "policy_bypass",
+    "bypass_policy",
+)
+
+
+def require_no_forbidden_authority_claim(
+    value: str,
+    description: str,
+    allowed_value=None,
+) -> None:
+    lowered = re.sub(r"[^a-z0-9]+", "_", value.casefold()).strip("_")
+    if any(fragment in lowered for fragment in forbidden_claim_fragments):
+        if allowed_value is None or value != allowed_value:
+            raise SystemExit(f"{description} contains forbidden authority claim.")
+
+
 def require_allowed_from_for_state(
     state_name: str,
     value,
@@ -217,6 +261,10 @@ require_exact_value(
 
 authority_boundary = require_non_empty_string(
     lifecycle["authority_boundary"],
+    "Phase 59.3 AI trace lifecycle authority_boundary",
+)
+require_no_forbidden_authority_claim(
+    authority_boundary,
     "Phase 59.3 AI trace lifecycle authority_boundary",
 )
 authority_boundary_lower = authority_boundary.casefold()
@@ -331,54 +379,6 @@ required_forbidden_authority = {
     "policy_bypass",
     "workflow_truth",
 }
-forbidden_claim_fragments = (
-    "may_approve",
-    "can_approve",
-    "approve_action",
-    "approve_actions",
-    "approve_case",
-    "approve_case_closure",
-    "may_execute",
-    "can_execute",
-    "execute_action",
-    "execute_actions",
-    "may_reconcile",
-    "can_reconcile",
-    "reconcile_receipt",
-    "reconcile_outcome",
-    "may_close",
-    "can_close",
-    "close_case",
-    "close_cases",
-    "may_activate",
-    "can_activate",
-    "activate_detector",
-    "activate_detectors",
-    "create_source_truth",
-    "source_truth",
-    "workflow_truth",
-    "authority_widen",
-    "production_write",
-    "policy_bypass",
-    "bypass_policy",
-)
-
-
-def require_no_forbidden_authority_claim(
-    value: str,
-    description: str,
-    allowed_value=None,
-) -> None:
-    lowered = re.sub(r"[^a-z0-9]+", "_", value.casefold()).strip("_")
-    if any(fragment in lowered for fragment in forbidden_claim_fragments):
-        if allowed_value is None or value != allowed_value:
-            raise SystemExit(f"{description} contains forbidden authority claim.")
-
-
-require_no_forbidden_authority_claim(
-    authority_boundary,
-    "Phase 59.3 AI trace lifecycle authority_boundary",
-)
 
 
 seen_states: set[str] = set()

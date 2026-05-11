@@ -110,6 +110,8 @@ elif mutation == "weak_authority_boundary":
     lifecycle["authority_boundary"] = "AI trace lifecycle contract."
 elif mutation == "authority_boundary_expansion":
     lifecycle["authority_boundary"] += " AI may approve actions."
+elif mutation == "authority_boundary_broader_expansion":
+    lifecycle["authority_boundary"] += " operator can approve case closure."
 elif mutation == "missing_registered_agent":
     created["registered_agents"] = []
 elif mutation == "unregistered_tool":
@@ -394,6 +396,9 @@ assert_mutation_fails_with \
   "Phase 59.3 AI trace lifecycle authority_boundary must preserve subordinate AegisOps authority semantics."
 assert_mutation_fails_with \
   authority_boundary_expansion \
+  "Phase 59.3 AI trace lifecycle authority_boundary contains forbidden authority claim."
+assert_mutation_fails_with \
+  authority_boundary_broader_expansion \
   "Phase 59.3 AI trace lifecycle authority_boundary contains forbidden authority claim."
 assert_mutation_fails_with \
   missing_reviewed_state_linkage \
