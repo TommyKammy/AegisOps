@@ -116,6 +116,12 @@ required_disallowed = {
     "create_source_truth",
     "bypass_policy",
 }
+
+
+def normalize_tool_name(tool_name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", tool_name.lower()).strip("_")
+
+
 forbidden_authority_terms = (
     "approve",
     "approval",
@@ -130,14 +136,14 @@ forbidden_authority_terms = (
     "source_truth",
     "production_write",
     "bypass_policy",
+    "policy-bypass",
     "policy_bypass",
+    "policy bypass",
     "authority_widening",
 )
-forbidden_allowed_tool_fragments = frozenset(forbidden_authority_terms)
-
-
-def normalize_tool_name(tool_name: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", tool_name.lower()).strip("_")
+forbidden_allowed_tool_fragments = frozenset(
+    normalize_tool_name(term) for term in forbidden_authority_terms
+)
 
 seen_names: set[str] = set()
 for index, agent in enumerate(agents, start=1):
