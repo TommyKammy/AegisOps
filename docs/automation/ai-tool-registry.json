@@ -1,0 +1,284 @@
+{
+  "schema_version": "2026-05-11.phase-59.2",
+  "phase": "59.2",
+  "registry_status": "accepted_contract_slice",
+  "authority_boundary": "AI tool registry rows are subordinate policy context only. AegisOps records remain authoritative for alert, case, evidence, recommendation, approval, action request, execution receipt, reconciliation, audit, release, gate, limitation, and closeout truth.",
+  "tools": [
+    {
+      "tool_name": "safe_query",
+      "purpose": "Prepare read-only scoped query plans and retrieve reviewed control-plane records without widening scope beyond explicit record bindings.",
+      "allowed_record_families": [
+        "alert",
+        "case",
+        "evidence",
+        "recommendation",
+        "action_request",
+        "approval_decision",
+        "action_execution",
+        "reconciliation",
+        "source_health",
+        "ai_trace"
+      ],
+      "required_citations": [
+        "record_family must identify the directly linked AegisOps record family used by the query",
+        "record_id must identify the directly linked AegisOps record used by the query",
+        "evidence_reference must identify reviewed evidence, refused evidence, or an explicit evidence gap"
+      ],
+      "audit_fields": [
+        "tool_name",
+        "agent_name",
+        "trace_id",
+        "requested_by",
+        "record_family",
+        "record_id",
+        "citation_ids",
+        "decision",
+        "timestamp"
+      ],
+      "disallowed_authority": [
+        "approval",
+        "execution",
+        "reconciliation",
+        "case_closure",
+        "detector_activation",
+        "source_truth_creation",
+        "production_write",
+        "policy_bypass"
+      ],
+      "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
+    },
+    {
+      "tool_name": "evidence_lookup",
+      "purpose": "Retrieve directly linked reviewed evidence, evidence custody notes, or explicit evidence gaps for one reviewed record.",
+      "allowed_record_families": [
+        "alert",
+        "case",
+        "evidence",
+        "recommendation",
+        "action_request",
+        "ai_trace"
+      ],
+      "required_citations": [
+        "record_family must identify the directly linked record family behind the evidence lookup",
+        "record_id must identify the directly linked reviewed record behind the evidence lookup",
+        "evidence_reference must identify the reviewed evidence record, custody note, or explicit missing-evidence prerequisite"
+      ],
+      "audit_fields": [
+        "tool_name",
+        "agent_name",
+        "trace_id",
+        "requested_by",
+        "record_family",
+        "record_id",
+        "citation_ids",
+        "decision",
+        "timestamp"
+      ],
+      "disallowed_authority": [
+        "approval",
+        "execution",
+        "reconciliation",
+        "case_closure",
+        "detector_activation",
+        "source_truth_creation",
+        "production_write",
+        "policy_bypass"
+      ],
+      "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
+    },
+    {
+      "tool_name": "source_health_lookup",
+      "purpose": "Retrieve source-health context from directly linked backend source-health records without treating source status as workflow truth.",
+      "allowed_record_families": [
+        "source_health",
+        "alert",
+        "case",
+        "evidence",
+        "ai_trace"
+      ],
+      "required_citations": [
+        "record_family must identify the source-health or reviewed control-plane record family",
+        "record_id must identify the directly linked backend record",
+        "evidence_reference must identify source-health evidence, degraded-source evidence, or an explicit missing-health prerequisite"
+      ],
+      "audit_fields": [
+        "tool_name",
+        "agent_name",
+        "trace_id",
+        "requested_by",
+        "record_family",
+        "record_id",
+        "citation_ids",
+        "decision",
+        "timestamp"
+      ],
+      "disallowed_authority": [
+        "approval",
+        "execution",
+        "reconciliation",
+        "case_closure",
+        "detector_activation",
+        "source_truth_creation",
+        "production_write",
+        "policy_bypass"
+      ],
+      "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
+    },
+    {
+      "tool_name": "runbook_lookup",
+      "purpose": "Retrieve reviewed runbook and operating guidance references for operator review without changing record state.",
+      "allowed_record_families": [
+        "runbook",
+        "case",
+        "evidence",
+        "recommendation",
+        "source_health",
+        "ai_trace"
+      ],
+      "required_citations": [
+        "record_family must identify the reviewed runbook or directly linked control-plane record family",
+        "record_id must identify the reviewed runbook section or directly linked AegisOps record",
+        "evidence_reference must identify the runbook reference, linked evidence, or explicit missing-guidance prerequisite"
+      ],
+      "audit_fields": [
+        "tool_name",
+        "agent_name",
+        "trace_id",
+        "requested_by",
+        "record_family",
+        "record_id",
+        "citation_ids",
+        "decision",
+        "timestamp"
+      ],
+      "disallowed_authority": [
+        "approval",
+        "execution",
+        "reconciliation",
+        "case_closure",
+        "detector_activation",
+        "source_truth_creation",
+        "production_write",
+        "policy_bypass"
+      ],
+      "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
+    },
+    {
+      "tool_name": "recommendation_draft",
+      "purpose": "Draft reviewable recommendation text from cited records while preserving unresolved evidence gaps and human review requirements.",
+      "allowed_record_families": [
+        "case",
+        "evidence",
+        "recommendation",
+        "source_health",
+        "ai_trace"
+      ],
+      "required_citations": [
+        "record_family must identify the directly linked record family behind each recommendation claim",
+        "record_id must identify the reviewed record behind each recommendation claim",
+        "evidence_reference must identify reviewed evidence, a limitation, or a missing-evidence prerequisite"
+      ],
+      "audit_fields": [
+        "tool_name",
+        "agent_name",
+        "trace_id",
+        "requested_by",
+        "record_family",
+        "record_id",
+        "citation_ids",
+        "decision",
+        "timestamp"
+      ],
+      "disallowed_authority": [
+        "approval",
+        "execution",
+        "reconciliation",
+        "case_closure",
+        "detector_activation",
+        "source_truth_creation",
+        "production_write",
+        "policy_bypass"
+      ],
+      "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
+    },
+    {
+      "tool_name": "action_request_draft",
+      "purpose": "Draft reviewable action-request text from cited advisory context while requiring a separate AegisOps review path before dispatch.",
+      "allowed_record_families": [
+        "case",
+        "evidence",
+        "recommendation",
+        "action_request",
+        "approval_decision",
+        "ai_trace"
+      ],
+      "required_citations": [
+        "record_family must identify the case, recommendation, evidence, or action-request family being drafted from",
+        "record_id must identify the directly linked reviewed record used by the draft",
+        "evidence_reference must identify reviewed evidence, limitation, or missing-evidence prerequisite"
+      ],
+      "audit_fields": [
+        "tool_name",
+        "agent_name",
+        "trace_id",
+        "requested_by",
+        "record_family",
+        "record_id",
+        "citation_ids",
+        "decision",
+        "timestamp"
+      ],
+      "disallowed_authority": [
+        "approval",
+        "execution",
+        "reconciliation",
+        "case_closure",
+        "detector_activation",
+        "source_truth_creation",
+        "production_write",
+        "policy_bypass"
+      ],
+      "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
+    },
+    {
+      "tool_name": "doctor_explanation",
+      "purpose": "Explain supportability and doctor findings from cited checks, records, and limitations without making readiness or gate truth.",
+      "allowed_record_families": [
+        "source_health",
+        "limitation",
+        "gate",
+        "release",
+        "case",
+        "evidence",
+        "ai_trace"
+      ],
+      "required_citations": [
+        "record_family must identify the doctor check, limitation, gate, source-health, or reviewed record family",
+        "record_id must identify the directly linked check, limitation, gate, source-health, or reviewed record",
+        "evidence_reference must identify cited check output, reviewed evidence, limitation, or explicit missing prerequisite"
+      ],
+      "audit_fields": [
+        "tool_name",
+        "agent_name",
+        "trace_id",
+        "requested_by",
+        "record_family",
+        "record_id",
+        "citation_ids",
+        "decision",
+        "timestamp"
+      ],
+      "disallowed_authority": [
+        "approval",
+        "execution",
+        "reconciliation",
+        "case_closure",
+        "detector_activation",
+        "source_truth_creation",
+        "production_write",
+        "policy_bypass"
+      ],
+      "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
+    }
+  ]
+}
