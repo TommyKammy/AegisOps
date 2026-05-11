@@ -403,13 +403,13 @@ assert_mutation_fails_with \
   "Duplicate Phase 59.3 AI trace lifecycle transition: reviewed->accepted"
 assert_mutation_fails_with \
   empty_required_trigger \
-  "Phase 59.3 AI trace lifecycle transition reviewed->accepted must include non-empty required_trigger."
+  "Phase 59.3 AI trace lifecycle transition reviewed->accepted required_trigger must be a non-empty string."
 assert_mutation_fails_with \
   non_string_required_trigger \
-  "Phase 59.3 AI trace lifecycle transition reviewed->accepted must include non-empty required_trigger."
+  "Phase 59.3 AI trace lifecycle transition reviewed->accepted required_trigger must be a non-empty string."
 assert_mutation_fails_with \
   authority_trigger_claim \
-  "Phase 59.3 AI trace lifecycle transition reviewed->accepted contains forbidden authority claim in required_trigger."
+  "Phase 59.3 AI trace lifecycle transition reviewed->accepted required_trigger contains forbidden authority claim."
 assert_mutation_fails_with \
   queue_extra_required_field \
   "Phase 59.3 trace review queue skeleton required_fields contains extra field(s): case_closure_state"

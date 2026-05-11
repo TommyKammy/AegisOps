@@ -77,6 +77,11 @@ def require_non_empty_string(value, description: str) -> str:
     return value
 
 
+def require_exact_value(value, expected, description: str) -> None:
+    if value != expected:
+        raise SystemExit(f"{description} must be {expected}.")
+
+
 def require_non_empty_string_list(value, description: str) -> list[str]:
     if (
         not isinstance(value, list)
@@ -107,6 +112,37 @@ def require_exact_string_set(value, expected: set[str], description: str) -> lis
         raise SystemExit(f"{description} contains extra field(s): " + ", ".join(extra))
     return values
 
+
+def require_allowed_from_for_state(
+    state_name: str,
+    value,
+    known_states: set[str],
+    expected_by_state: dict[str, list[str]],
+) -> None:
+    if not isinstance(value, list):
+        raise SystemExit(
+            f"Phase 59.3 AI trace lifecycle state {state_name} must include list allowed_from."
+        )
+    for predecessor in value:
+        if not isinstance(predecessor, str) or not predecessor.strip():
+            raise SystemExit(
+                f"Phase 59.3 AI trace lifecycle state {state_name} allowed_from must contain state names."
+            )
+        if predecessor not in known_states:
+            raise SystemExit(
+                f"Phase 59.3 AI trace lifecycle state {state_name} references invalid allowed_from state: {predecessor}"
+            )
+    actual_allowed_from = sorted(value)
+    expected_allowed_from = expected_by_state[state_name]
+    if actual_allowed_from != expected_allowed_from:
+        raise SystemExit(
+            f"Phase 59.3 AI trace lifecycle state {state_name} allowed_from must match transition graph: "
+            + "expected "
+            + ", ".join(expected_allowed_from or ["<none>"])
+            + "; got "
+            + ", ".join(actual_allowed_from or ["<none>"])
+        )
+
 try:
     lifecycle = json.loads(lifecycle_path.read_text(encoding="utf-8"))
 except json.JSONDecodeError as exc:
@@ -121,7 +157,7 @@ except json.JSONDecodeError as exc:
 if not isinstance(lifecycle, dict):
     raise SystemExit("Phase 59.3 AI trace lifecycle artifact must be a JSON object.")
 
-required_root = {
+required_root = frozenset((
     "schema_version",
     "phase",
     "contract_status",
@@ -130,7 +166,7 @@ required_root = {
     "allowed_transitions",
     "trace_review_queue_skeleton",
     "forbidden_authority_states",
-}
+))
 missing_root = sorted(required_root - lifecycle.keys())
 if missing_root:
     raise SystemExit(
@@ -138,18 +174,21 @@ if missing_root:
         + ", ".join(missing_root)
     )
 
-if lifecycle["phase"] != "59.3":
-    raise SystemExit("Phase 59.3 AI trace lifecycle phase must be 59.3.")
-
-if lifecycle["schema_version"] != expected_schema_version:
-    raise SystemExit(
-        f"Phase 59.3 AI trace lifecycle schema_version must be {expected_schema_version}."
-    )
-
-if lifecycle["contract_status"] != "accepted_contract_slice":
-    raise SystemExit(
-        "Phase 59.3 AI trace lifecycle status must be accepted_contract_slice."
-    )
+require_exact_value(
+    lifecycle["phase"],
+    "59.3",
+    "Phase 59.3 AI trace lifecycle phase",
+)
+require_exact_value(
+    lifecycle["schema_version"],
+    expected_schema_version,
+    "Phase 59.3 AI trace lifecycle schema_version",
+)
+require_exact_value(
+    lifecycle["contract_status"],
+    "accepted_contract_slice",
+    "Phase 59.3 AI trace lifecycle status",
+)
 
 authority_boundary = require_non_empty_string(
     lifecycle["authority_boundary"],
@@ -224,7 +263,7 @@ required_state_fields = {
     "authority_effect",
     "disallowed_authority",
 }
-required_linkage_terms = {
+required_linkage_terms = frozenset((
     "registered_agent_name",
     "registered_tool_names",
     "trace_id",
@@ -233,7 +272,7 @@ required_linkage_terms = {
     "citation_ids",
     "evidence_reference",
     "expires_at",
-}
+))
 review_outcome_states = {"reviewed", "accepted", "corrected", "rejected"}
 required_reviewer_terms = {"reviewer_id", "review_action_id"}
 required_state_linkage_terms = {
@@ -280,6 +319,18 @@ forbidden_claim_fragments = (
     "policy_bypass",
 )
 
+
+def require_no_forbidden_authority_claim(
+    value: str,
+    description: str,
+    allowed_value=None,
+) -> None:
+    lowered = value.casefold().replace("-", "_").replace(" ", "_")
+    if any(fragment in lowered for fragment in forbidden_claim_fragments):
+        if allowed_value is None or value != allowed_value:
+            raise SystemExit(f"{description} contains forbidden authority claim.")
+
+
 seen_states: set[str] = set()
 states_by_name: dict[str, dict] = {}
 for index, state in enumerate(states, start=1):
@@ -310,41 +361,23 @@ for index, state in enumerate(states, start=1):
             state[field],
             f"Phase 59.3 AI trace lifecycle state {name} {field}",
         )
-        lowered = value.casefold().replace("-", "_").replace(" ", "_")
-        if any(fragment in lowered for fragment in forbidden_claim_fragments):
-            if value != "advisory_only_no_workflow_mutation":
-                raise SystemExit(
-                    f"Phase 59.3 AI trace lifecycle state {name} contains forbidden authority claim in {field}."
-                )
+        require_no_forbidden_authority_claim(
+            value,
+            f"Phase 59.3 AI trace lifecycle state {name} {field}",
+            allowed_value="advisory_only_no_workflow_mutation",
+        )
 
     if state["authority_effect"] != "advisory_only_no_workflow_mutation":
         raise SystemExit(
             f"Phase 59.3 AI trace lifecycle state {name} must keep advisory-only authority."
         )
 
-    if not isinstance(state["allowed_from"], list):
-        raise SystemExit(
-            f"Phase 59.3 AI trace lifecycle state {name} must include list allowed_from."
-        )
-    for predecessor in state["allowed_from"]:
-        if not isinstance(predecessor, str) or not predecessor.strip():
-            raise SystemExit(
-                f"Phase 59.3 AI trace lifecycle state {name} allowed_from must contain state names."
-            )
-        if predecessor not in required_states:
-            raise SystemExit(
-                f"Phase 59.3 AI trace lifecycle state {name} references invalid allowed_from state: {predecessor}"
-            )
-    actual_allowed_from = sorted(state["allowed_from"])
-    expected_allowed_from = required_allowed_from_by_state[name]
-    if actual_allowed_from != expected_allowed_from:
-        raise SystemExit(
-            f"Phase 59.3 AI trace lifecycle state {name} allowed_from must match transition graph: "
-            + "expected "
-            + ", ".join(expected_allowed_from or ["<none>"])
-            + "; got "
-            + ", ".join(actual_allowed_from or ["<none>"])
-        )
+    require_allowed_from_for_state(
+        name,
+        state["allowed_from"],
+        required_states,
+        required_allowed_from_by_state,
+    )
     if not isinstance(state["terminal"], bool):
         raise SystemExit(
             f"Phase 59.3 AI trace lifecycle state {name} terminal must be boolean."
@@ -468,13 +501,14 @@ for index, transition in enumerate(transitions, start=1):
     from_state = transition["from_state"]
     to_state = transition["to_state"]
     transition_pair = (from_state, to_state)
-    if from_state not in required_states or to_state not in required_states:
+    if not {from_state, to_state}.issubset(required_states):
         raise SystemExit(
             f"Phase 59.3 AI trace lifecycle transition {index} references invalid state."
         )
     if from_state == "expired":
         raise SystemExit("Phase 59.3 AI trace lifecycle must not transition from expired traces.")
-    if to_state in {"accepted", "corrected", "rejected"} and from_state != "reviewed":
+    to_state_is_review_outcome = to_state in {"accepted", "corrected", "rejected"}
+    if to_state_is_review_outcome and from_state != "reviewed":
         raise SystemExit(
             f"Phase 59.3 AI trace lifecycle transition {from_state}->{to_state} must go through reviewed."
         )
@@ -487,16 +521,14 @@ for index, transition in enumerate(transitions, start=1):
             f"Duplicate Phase 59.3 AI trace lifecycle transition: {from_state}->{to_state}"
         )
 
-    trigger = transition["required_trigger"]
-    if not isinstance(trigger, str) or not trigger.strip():
-        raise SystemExit(
-            f"Phase 59.3 AI trace lifecycle transition {from_state}->{to_state} must include non-empty required_trigger."
-        )
-    trigger_lowered = trigger.casefold().replace("-", "_").replace(" ", "_")
-    if any(fragment in trigger_lowered for fragment in forbidden_claim_fragments):
-        raise SystemExit(
-            f"Phase 59.3 AI trace lifecycle transition {from_state}->{to_state} contains forbidden authority claim in required_trigger."
-        )
+    trigger = require_non_empty_string(
+        transition["required_trigger"],
+        f"Phase 59.3 AI trace lifecycle transition {from_state}->{to_state} required_trigger",
+    )
+    require_no_forbidden_authority_claim(
+        trigger,
+        f"Phase 59.3 AI trace lifecycle transition {from_state}->{to_state} required_trigger",
+    )
 
     if transition["authority_effect"] != "advisory_only_no_workflow_mutation":
         raise SystemExit(
@@ -512,20 +544,6 @@ for index, transition in enumerate(transitions, start=1):
         f"Phase 59.3 AI trace lifecycle transition {from_state}->{to_state} required_metadata",
     )
 
-    if to_state in {"accepted", "corrected", "rejected"}:
-        missing_reviewer = sorted(required_reviewer_terms - set(metadata))
-        if missing_reviewer:
-            raise SystemExit(
-                f"Phase 59.3 AI trace lifecycle transition {from_state}->{to_state} is missing reviewer metadata: "
-                + ", ".join(missing_reviewer)
-            )
-    if to_state == "expired":
-        missing_expiry = sorted({"expires_at", "expired_at", "expiration_reason"} - set(metadata))
-        if missing_expiry:
-            raise SystemExit(
-                f"Phase 59.3 AI trace lifecycle transition {from_state}->{to_state} is missing expiration metadata: "
-                + ", ".join(missing_expiry)
-            )
     required_metadata_terms = required_transition_metadata_terms[transition_pair]
     missing_transition_metadata = sorted(required_metadata_terms - set(metadata))
     if missing_transition_metadata:
