@@ -164,6 +164,19 @@ def require_no_forbidden_authority_claim(
             raise SystemExit(f"{description} contains forbidden authority claim.")
 
 
+def require_authority_boundary_contract(value, description: str) -> None:
+    authority_boundary = require_non_empty_string(value, description)
+    require_no_forbidden_authority_claim(authority_boundary, description)
+    authority_boundary_lower = authority_boundary.casefold()
+    if (
+        "subordinate" not in authority_boundary_lower
+        or "aegisops records remain authoritative" not in authority_boundary_lower
+    ):
+        raise SystemExit(
+            f"{description} must preserve subordinate AegisOps authority semantics."
+        )
+
+
 def require_allowed_from_for_state(
     state_name: str,
     value,
@@ -258,23 +271,10 @@ require_exact_value(
     "accepted_contract_slice",
     "Phase 59.3 AI trace lifecycle status",
 )
-
-authority_boundary = require_non_empty_string(
+require_authority_boundary_contract(
     lifecycle["authority_boundary"],
     "Phase 59.3 AI trace lifecycle authority_boundary",
 )
-require_no_forbidden_authority_claim(
-    authority_boundary,
-    "Phase 59.3 AI trace lifecycle authority_boundary",
-)
-authority_boundary_lower = authority_boundary.casefold()
-if (
-    "subordinate" not in authority_boundary_lower
-    or "aegisops records remain authoritative" not in authority_boundary_lower
-):
-    raise SystemExit(
-        "Phase 59.3 AI trace lifecycle authority_boundary must preserve subordinate AegisOps authority semantics."
-    )
 
 states = lifecycle["lifecycle_states"]
 if not isinstance(states, list) or not states:
