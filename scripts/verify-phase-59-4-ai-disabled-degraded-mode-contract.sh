@@ -170,6 +170,69 @@ contradictory_authority_claims = {
     "ai is workflow truth",
     "automatic repair complete",
 }
+forbidden_authority_fragments = {
+    "ai_may_approve",
+    "ai_can_approve",
+    "ai_is_allowed_to_approve",
+    "ai_is_authorized_to_approve",
+    "ai_has_approval_authority",
+    "ai_may_execute",
+    "ai_can_execute",
+    "ai_is_allowed_to_execute",
+    "ai_is_authorized_to_execute",
+    "ai_has_execution_authority",
+    "ai_may_reconcile",
+    "ai_can_reconcile",
+    "ai_is_allowed_to_reconcile",
+    "ai_is_authorized_to_reconcile",
+    "ai_has_reconciliation_authority",
+    "ai_may_close",
+    "ai_can_close",
+    "ai_is_allowed_to_close",
+    "ai_is_authorized_to_close",
+    "ai_has_case_closure_authority",
+    "ai_may_activate",
+    "ai_can_activate",
+    "ai_is_allowed_to_activate",
+    "ai_is_authorized_to_activate",
+    "ai_has_detector_activation_authority",
+    "ai_may_create_source_truth",
+    "ai_can_create_source_truth",
+    "ai_is_allowed_to_create_source_truth",
+    "ai_is_authorized_to_create_source_truth",
+    "ai_may_repair",
+    "ai_can_repair",
+    "ai_is_allowed_to_repair",
+    "ai_is_authorized_to_repair",
+    "ai_may_bypass_policy",
+    "ai_can_bypass_policy",
+    "ai_is_allowed_to_bypass_policy",
+    "ai_is_authorized_to_bypass_policy",
+    "ai_is_workflow_truth",
+    "automatic_repair_complete",
+}
+expected_mode_values = {
+    "disabled": {
+        "trigger": "platform_admin_policy_disabled",
+        "readiness_posture": "not_applicable",
+        "reason": "ai_advisory_disabled_by_admin",
+        "operator_posture_terms": (
+            "ai advisory unavailable",
+            "ai advisory is unavailable",
+            "ai advisory disabled",
+            "ai advisory is disabled",
+        ),
+    },
+    "degraded": {
+        "trigger": "ai_advisory_degraded_by_admin_or_runtime_health",
+        "readiness_posture": "degraded",
+        "reason": "ai_advisory_degraded_by_admin",
+        "operator_posture_terms": (
+            "ai advisory degraded",
+            "ai advisory is degraded",
+        ),
+    },
+}
 
 def require_non_empty_string(value, description: str) -> str:
     if not isinstance(value, str) or not value.strip():
@@ -193,6 +256,11 @@ def require_no_forbidden_fragments(text: str, description: str, fragments: list[
                 f"{description} must not include forbidden authority claim: {fragment}"
             )
 
+def require_no_forbidden_authority_claim(text: str, description: str) -> None:
+    normalized = re.sub(r"[^a-z0-9]+", "_", text.casefold()).strip("_")
+    if any(fragment in normalized for fragment in forbidden_authority_fragments):
+        raise SystemExit(f"{description} contains forbidden authority claim.")
+
 def require_ai_advisory_posture(text: str, description: str) -> None:
     text_lower = text.casefold()
     allowed_posture_terms = (
@@ -208,6 +276,12 @@ def require_ai_advisory_posture(text: str, description: str) -> None:
         raise SystemExit(
             f"{description} must explain AI advisory unavailable or degraded posture."
         )
+
+def require_mode_operator_posture(mode_name: str, text: str, description: str) -> None:
+    text_lower = text.casefold()
+    posture_terms = expected_mode_values[mode_name]["operator_posture_terms"]
+    if not any(term in text_lower for term in posture_terms):
+        raise SystemExit(f"{description} must explain AI advisory {mode_name} posture.")
 
 def require_authoritative_records(text: str, description: str) -> None:
     if "authoritative aegisops records" not in text.casefold():
@@ -225,24 +299,20 @@ def require_no_healthy_or_available_posture(text: str, description: str) -> None
             )
 
 def require_mode_specific_semantics(mode_name: str, mode: dict) -> None:
-    if mode_name == "disabled":
-        for field in ("trigger", "reason", "operator_state", "explanation"):
-            if "disabled" not in mode[field].casefold():
-                raise SystemExit(
-                    f"Phase 59.4 AI mode disabled {field} must state disabled semantics."
-                )
-        if mode["readiness_posture"] not in {"not_applicable", "disabled"}:
-            raise SystemExit(
-                "Phase 59.4 AI mode disabled readiness_posture must not claim healthy or available posture."
-            )
-    elif mode_name == "degraded":
-        for field in ("trigger", "readiness_posture", "reason", "operator_state", "explanation"):
-            if "degraded" not in mode[field].casefold():
-                raise SystemExit(
-                    f"Phase 59.4 AI mode degraded {field} must state degraded semantics."
-                )
-    else:
+    expected = expected_mode_values.get(mode_name)
+    if expected is None:
         return
+    for field in ("trigger", "readiness_posture", "reason"):
+        if mode[field] != expected[field]:
+            raise SystemExit(
+                f"Phase 59.4 AI mode {mode_name} {field} must be {expected[field]}."
+            )
+    for field in ("operator_state", "explanation"):
+        require_mode_operator_posture(
+            mode_name,
+            mode[field],
+            f"Phase 59.4 AI mode {mode_name} {field}",
+        )
     for field in ("trigger", "readiness_posture", "reason", "operator_state", "explanation"):
         require_no_healthy_or_available_posture(
             mode[field],
@@ -274,6 +344,10 @@ require_no_forbidden_fragments(
     boundary,
     "Phase 59.4 AI disabled/degraded mode authority_boundary",
     sorted(contradictory_authority_claims | {fragment.casefold() for fragment in forbidden_fragments}),
+)
+require_no_forbidden_authority_claim(
+    boundary,
+    "Phase 59.4 AI disabled/degraded mode authority_boundary",
 )
 
 modes = contract["modes"]
@@ -342,6 +416,10 @@ for index, mode in enumerate(modes, start=1):
         text,
         f"Phase 59.4 AI mode {mode_name} operator-facing copy",
         forbidden_fragments,
+    )
+    require_no_forbidden_authority_claim(
+        text,
+        f"Phase 59.4 AI mode {mode_name} operator-facing copy",
     )
 
 missing_modes = sorted(required_modes - seen_modes)
@@ -428,6 +506,10 @@ for index, surface in enumerate(surfaces, start=1):
         operator_text,
         f"Phase 59.4 non-AI workflow surface {surface_name} operator-facing copy",
         forbidden_fragments,
+    )
+    require_no_forbidden_authority_claim(
+        operator_text,
+        f"Phase 59.4 non-AI workflow surface {surface_name} operator-facing copy",
     )
 
 missing_surfaces = sorted(required_surfaces - seen_surfaces)
