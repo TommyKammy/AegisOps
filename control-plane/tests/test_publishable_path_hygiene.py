@@ -22,17 +22,43 @@ UNIX_HOME_PATH = "/home/alice/project/docs"  # publishable-path-hygiene: allowli
 WINDOWS_USERS_PATH = r"C:\Users\alice\project\docs"  # publishable-path-hygiene: allowlist
 WINDOWS_USERS_PATH_POSIX = "C:/Users/alice/project/docs"  # publishable-path-hygiene: allowlist
 OFFENDER_PATH = "/Users/alice/private/project"  # publishable-path-hygiene: allowlist
+ROOT_PATH = "/root/private/project"  # publishable-path-hygiene: allowlist
 
 
 class PublishablePathHygieneTests(unittest.TestCase):
     def test_detects_unix_and_windows_workstation_paths_in_text(self) -> None:
+        escaped_slash = r"\/"
         self.assertTrue(is_workstation_local_path(UNIX_USERS_PATH))
         self.assertTrue(is_workstation_local_path(f"see {UNIX_HOME_PATH} for details"))
         self.assertTrue(is_workstation_local_path(f"path:{UNIX_HOME_PATH}"))
         self.assertTrue(is_workstation_local_path(f"path:{UNIX_USERS_PATH}"))
+        self.assertTrue(is_workstation_local_path(f"path:{ROOT_PATH}"))
         self.assertTrue(is_workstation_local_path(WINDOWS_USERS_PATH))
         self.assertTrue(is_workstation_local_path(f"path={WINDOWS_USERS_PATH_POSIX}"))
         self.assertTrue(is_workstation_local_path(f"path:{WINDOWS_USERS_PATH_POSIX}"))
+        self.assertTrue(
+            is_workstation_local_path(
+                f"path:{escaped_slash}Users{escaped_slash}alice"
+                f"{escaped_slash}project{escaped_slash}docs"
+            )
+        )
+        self.assertTrue(
+            is_workstation_local_path(
+                f"path:{escaped_slash}home{escaped_slash}alice"
+                f"{escaped_slash}project{escaped_slash}docs"
+            )
+        )
+        self.assertTrue(
+            is_workstation_local_path(
+                f"path:{escaped_slash}root{escaped_slash}private{escaped_slash}docs"
+            )
+        )
+        self.assertTrue(
+            is_workstation_local_path(
+                f"path=C:{escaped_slash}Users{escaped_slash}alice"
+                f"{escaped_slash}project{escaped_slash}docs"
+            )
+        )
 
     def test_ignores_urls_and_non_user_windows_paths(self) -> None:
         self.assertFalse(

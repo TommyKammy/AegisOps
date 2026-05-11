@@ -54,6 +54,7 @@ Canonical cross-phase boundary reference:
 - [Phase 56.8 closeout evaluation](docs/phase-56-closeout-evaluation.md) records the Daily SOC Workbench outcomes, subordinate authority posture, verifier evidence, accepted limitations, and bounded Phase 57/58/59/60/66 handoff.
 - [Phase 57.8 closeout evaluation](docs/phase-57-closeout-evaluation.md) records the commercial administration MVP outcomes, subordinate authority posture, verifier evidence, accepted limitations, and bounded Phase 58/59/60/66 handoff.
 - [Phase 58.8 closeout evaluation](docs/phase-58-closeout-evaluation.md) records the supportability MVP outcomes, subordinate authority posture, verifier evidence, accepted limitations, and bounded Phase 59/60/66 handoff.
+- [Phase 59.1 agent registry contract](docs/phase-59-1-agent-registry-contract.md) defines the required AI agent registry fields, citation requirements, disallowed authority, and advisory-only authority ceiling.
 - [Phase 58.5 upgrade and rollback plan contract](docs/phase-58-5-upgrade-rollback-plan-contract.md) defines reviewed upgrade-plan and rollback-plan evidence fields, failure states, and authority boundaries without implementing live upgrade or rollback execution.
 - [Phase 53.2 Wazuh certificate and credential contract](docs/deployment/wazuh-certificate-credential-contract.md) defines certificate generation-wrapper posture, credential custody, default-credential rejection, rotation guidance, and no-live-secret validation for the Wazuh profile.
 - [Phase 53.3 Wazuh intake binding contract](docs/deployment/wazuh-manager-intake-binding-contract.md) defines the manager-to-AegisOps intake URL, reviewed proxy route, shared-secret custody reference, provenance fields, and analytic-signal admission boundary for Wazuh-origin events.
@@ -142,6 +143,8 @@ The Phase 56.8 closeout evaluation is defined by the [Phase 56.8 closeout evalua
 The Phase 57.8 closeout evaluation is defined by the [Phase 57.8 closeout evaluation](docs/phase-57-closeout-evaluation.md).
 
 The Phase 58.8 closeout evaluation is defined by the [Phase 58.8 closeout evaluation](docs/phase-58-closeout-evaluation.md).
+
+The Phase 59.1 agent registry contract is defined by the [Phase 59.1 agent registry contract](docs/phase-59-1-agent-registry-contract.md).
 
 Wazuh detects, AegisOps decides, records, and reconciles, and Shuffle executes reviewed delegated routine work.
 
