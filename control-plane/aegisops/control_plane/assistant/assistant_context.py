@@ -318,12 +318,16 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
         r"(?<!\w)(?:do not|don t|never) "
         r"(?:cite|include (?:(?:all|any|each|every|missing|required|supporting|the) )*"
         r"(?:citations?|citation requirements?))(?!\w)",
+        r"(?<!\w)(?:cite|include) no "
+        r"(?:(?:supporting|reviewed|the) )*(?:citations?|evidence|records?)(?!\w)",
         r"(?<!\w)leave out "
         r"(?:(?:all|any|each|every|missing|required|supporting|the) )*citations?(?!\w)",
         r"(?<!\w)(?:no|without) "
         r"(?:(?:all|any|each|every|missing|required|supporting|the) )*"
         r"(?:citations?|citation requirements?)(?!\w)",
         r"(?<!\w)(?:conceal|hide|suppress) "
+        r"(?:all |any |any remaining |remaining |the )?uncertainty(?!\w)",
+        r"(?<!\w)(?:do not|don t|never) (?:mention|surface) "
         r"(?:all |any |any remaining |remaining |the )?uncertainty(?!\w)",
     )
     if any(contains_term(term) for term in citation_suppression_terms) or any(
