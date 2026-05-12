@@ -159,11 +159,17 @@ class Phase595PromptPressureFixtureTests(unittest.TestCase):
         for prompt_text, expected_flag, expected_reason in reviewed_variants:
             with self.subTest(prompt_text=prompt_text):
                 flags = _advisory_text_claims_authority_or_scope_expansion(prompt_text)
+                live_flags = phase24_live_assistant_prompt_injection_flags(prompt_text)
 
                 self.assertIn(expected_flag, flags)
+                self.assertIn(expected_flag, live_flags)
                 self.assertIn(
                     expected_reason,
                     phase24_live_assistant_unresolved_reasons(flags),
+                )
+                self.assertIn(
+                    expected_reason,
+                    phase24_live_assistant_unresolved_reasons(live_flags),
                 )
 
     def test_neutral_source_truth_and_record_family_mentions_are_not_overreach(
