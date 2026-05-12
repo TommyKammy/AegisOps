@@ -2,6 +2,7 @@ import type { GetListParams, RaRecord } from "react-admin";
 
 export type OperatorResourceName =
   | "queue"
+  | "aiTraceReviewQueue"
   | "alerts"
   | "cases"
   | "firstLoginChecklist"

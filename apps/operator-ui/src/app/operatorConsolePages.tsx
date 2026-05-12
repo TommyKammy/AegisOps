@@ -11,7 +11,10 @@ export {
   ProvenanceIndexPage,
 } from "./operatorConsolePages/drilldownIndexPages";
 export { ActionReviewPage } from "./operatorConsolePages/actionReviewPages";
-export { AssistantAdvisoryPage } from "./operatorConsolePages/assistantPages";
+export {
+  AITraceReviewQueuePage,
+  AssistantAdvisoryPage,
+} from "./operatorConsolePages/assistantPages";
 export { FirstLoginChecklistPage } from "./operatorConsolePages/firstLoginChecklistPages";
 export { UserRoleAdminPage } from "./operatorConsolePages/adminPages";
 export {

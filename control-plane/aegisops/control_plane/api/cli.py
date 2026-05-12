@@ -126,6 +126,10 @@ def build_parser() -> argparse.ArgumentParser:
         "inspect-analyst-queue",
         help="Render the business-hours analyst review queue view.",
     )
+    subparsers.add_parser(
+        "inspect-ai-trace-review-queue",
+        help="Render the read-only AI trace review queue skeleton.",
+    )
     inspect_alert_detail = subparsers.add_parser(
         "inspect-alert-detail",
         help="Render the reviewed Wazuh-backed alert detail view for one alert.",
@@ -599,6 +603,13 @@ def run_command(
             _usage_error(parser, str(exc))
     if command == "inspect-analyst-queue":
         return service.inspect_analyst_queue().to_dict()
+    if command == "inspect-ai-trace-review-queue":
+        try:
+            return (
+                service._operator_inspection_read_surface.inspect_ai_trace_review_queue().to_dict()
+            )
+        except (LookupError, ValueError) as exc:
+            _usage_error(parser, str(exc))
     if command == "inspect-alert-detail":
         alert_id = normalize_alert_id(parsed.alert_id)
         if not alert_id:
