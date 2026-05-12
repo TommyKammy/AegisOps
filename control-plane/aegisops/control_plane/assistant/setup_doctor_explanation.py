@@ -37,6 +37,31 @@ _REQUIRED_METRIC_MAPPINGS = (
     "reconciliations",
     "source_health",
 )
+_POLICY_PRESSURE_TERMS = (
+    "bypass policy",
+    "bypass policies",
+    "bypass the policy",
+    "bypass tool policy",
+    "disable policy",
+    "disable the policy",
+    "ignore policy",
+    "ignore the policy",
+    "override policy",
+    "override the policy",
+    "policy bypass",
+)
+_SETUP_REPAIR_PRESSURE_TERMS = (
+    "repair",
+    "repaired",
+    "restart",
+    "restarted",
+    "rotate secret",
+    "rotate secrets",
+    "rotated secret",
+    "rotated secrets",
+    "mark the source posture healthy",
+    "changed source posture",
+)
 
 
 def build_setup_doctor_explanation(
@@ -237,34 +262,9 @@ def _prompt_pressure_flags(prompt_text: object) -> tuple[str, ...]:
         )
     )
     lowered = prompt_text.lower()
-    policy_pressure_terms = (
-        "bypass policy",
-        "bypass policies",
-        "bypass the policy",
-        "bypass tool policy",
-        "disable policy",
-        "disable the policy",
-        "ignore policy",
-        "ignore the policy",
-        "override policy",
-        "override the policy",
-        "policy bypass",
-    )
-    if any(term in lowered for term in policy_pressure_terms):
+    if any(term in lowered for term in _POLICY_PRESSURE_TERMS):
         flags = _dedupe_strings((*flags, "tool_scope_expansion_attempt"))
-    setup_repair_terms = (
-        "repair",
-        "repaired",
-        "restart",
-        "restarted",
-        "rotate secret",
-        "rotate secrets",
-        "rotated secret",
-        "rotated secrets",
-        "mark the source posture healthy",
-        "changed source posture",
-    )
-    if any(term in lowered for term in setup_repair_terms):
+    if any(term in lowered for term in _SETUP_REPAIR_PRESSURE_TERMS):
         flags = _dedupe_strings((*flags, "authority_overreach"))
     return flags
 
