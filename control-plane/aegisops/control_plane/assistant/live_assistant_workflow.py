@@ -45,6 +45,15 @@ def phase24_live_assistant_unresolved_reasons(
         "conflicting_reviewed_context": (
             "reviewed records conflict on lifecycle state, ownership, scope, or evidence-backed facts"
         ),
+        "stale_evidence": (
+            "stale evidence cannot be treated as current authoritative truth"
+        ),
+        "outdated_source_health": (
+            "reviewed source health is outdated and requires operator review"
+        ),
+        "mismatched_record_family": (
+            "the cited record family does not match the anchored advisory subject"
+        ),
         "ambiguous_identity_alias_only": (
             "the requested summary would require the assistant to collapse identity ambiguity"
         ),
