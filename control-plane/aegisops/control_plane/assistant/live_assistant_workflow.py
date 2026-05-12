@@ -8,7 +8,10 @@ import re
 from typing import Any, Callable, Iterable, Protocol
 
 from .ai_trace_lifecycle import AITraceLifecycleService
-from .assistant_context import require_ai_advisory_enabled
+from .assistant_context import (
+    _advisory_text_claims_authority_or_scope_expansion,
+    require_ai_advisory_enabled,
+)
 from .assistant_provider import (
     AssistantProviderAdapter,
     AssistantProviderAttemptFailure,
@@ -54,6 +57,15 @@ def phase24_live_assistant_unresolved_reasons(
         "scope_expansion_attempt": (
             "the requested summary would widen beyond the reviewed record chain"
         ),
+        "citation_suppression_attempt": (
+            "the requested summary would hide missing citations or suppress uncertainty"
+        ),
+        "tool_scope_expansion_attempt": (
+            "the requested summary would access disallowed tools or bypass tool policy"
+        ),
+        "record_family_expansion_attempt": (
+            "the requested summary would widen beyond the anchored record family"
+        ),
         "prompt_injection_attempt": (
             "the requested summary would follow prompt-injection or instruction-override text instead of reviewed records"
         ),
@@ -88,6 +100,7 @@ def phase24_live_assistant_prompt_injection_flags(text: object) -> tuple[str, ..
     )
     if any(re.search(term, normalized) for term in prompt_injection_terms):
         flags.append("prompt_injection_attempt")
+    flags.extend(_advisory_text_claims_authority_or_scope_expansion(text))
     return _dedupe_strings(tuple(flags))
 
 

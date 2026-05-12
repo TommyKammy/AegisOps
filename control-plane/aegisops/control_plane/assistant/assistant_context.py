@@ -233,21 +233,39 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
         return ()
 
     lowered = text.lower()
+    normalized = re.sub(r"[\W_]+", " ", lowered)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
     flags: list[str] = []
 
     def contains_term(term: str) -> bool:
-        pattern = rf"(?<!\w){re.escape(term)}(?!\w)"
-        return re.search(pattern, lowered) is not None
+        normalized_term = re.sub(r"[\W_]+", " ", term.lower()).strip()
+        pattern = rf"(?<!\w){re.escape(normalized_term)}(?!\w)"
+        return re.search(pattern, normalized) is not None
+
+    def matches_normalized_pattern(pattern: str) -> bool:
+        return re.search(pattern, normalized) is not None
 
     authority_terms = (
         "approval granted",
+        "approve the action",
+        "approve actions",
+        "approval as granted",
+        "mark the approval",
         "approved",
         "execute",
         "execution",
+        "delegate the action",
         "reconcile",
         "reconciliation",
         "resolved",
+        "close the case",
         "closed",
+        "activate the detector",
+        "detector activation",
+        "create source truth",
+        "declare source truth",
+        "treat as source truth",
+        "override scope",
     )
     if any(contains_term(term) for term in authority_terms):
         flags.append("authority_overreach")
@@ -262,6 +280,153 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
     )
     if any(contains_term(term) for term in scope_terms):
         flags.append("scope_expansion_attempt")
+
+    citation_suppression_terms = (
+        "conceal citations",
+        "conceal the citations",
+        "avoid citations",
+        "avoid citing",
+        "do not cite",
+        "do not include citations",
+        "drop citations",
+        "exclude citations",
+        "exclude the citations",
+        "ignore missing citations",
+        "hide uncertainty",
+        "hide the uncertainty",
+        "hide citation requirements",
+        "hide citations",
+        "hide the citations",
+        "never cite",
+        "suppress any remaining uncertainty",
+        "suppress all uncertainty",
+        "suppress uncertainty",
+        "suppress citations",
+        "omit citations",
+        "omit the citation",
+        "omit the citations",
+        "remove citations",
+        "skip citations",
+        "strip citations",
+        "withhold citations",
+        "without any citation",
+        "without any citations",
+        "without citations",
+    )
+    citation_suppression_patterns = (
+        r"(?<!\w)(?:conceal|drop|exclude|hide|ignore|omit|remove|skip|strip|suppress|withhold) "
+        r"(?:(?:all|any|each|every|missing|remaining|required|supporting|the) )*"
+        r"(?:citations?|citation requirements?)(?!\w)",
+        r"(?<!\w)avoid "
+        r"(?:(?:all|any|each|every|missing|required|supporting|the) )*"
+        r"(?:citing|citations?|citation requirements?)(?!\w)",
+        r"(?<!\w)(?:do not|don t|never) "
+        r"(?:cite|include (?:(?:all|any|each|every|missing|required|supporting|the) )*"
+        r"(?:citations?|citation requirements?))(?!\w)",
+        r"(?<!\w)(?:cite|include) no "
+        r"(?:(?:supporting|reviewed|the) )*(?:citations?|evidence|records?)(?!\w)",
+        r"(?<!\w)leave out "
+        r"(?:(?:all|any|each|every|missing|required|supporting|the) )*citations?(?!\w)",
+        r"(?<!\w)(?:keep|leave) "
+        r"(?:(?:all|any|each|every|missing|required|supporting|the) )*citations? out(?!\w)",
+        r"(?<!\w)(?:no|without) "
+        r"(?:(?:all|any|each|every|missing|required|supporting|the) )*"
+        r"(?:citations?|citation requirements?)(?!\w)",
+        r"(?<!\w)(?:conceal|hide|suppress) "
+        r"(?:(?:all|any|each|every|remaining|the) )*(?:uncertainty|uncertainties)(?!\w)",
+        r"(?<!\w)(?:do not|don t|never) (?:mention|surface) "
+        r"(?:(?:all|any|each|every|remaining|the) )*(?:uncertainty|uncertainties)(?!\w)",
+    )
+    if any(contains_term(term) for term in citation_suppression_terms) or any(
+        matches_normalized_pattern(pattern) for pattern in citation_suppression_patterns
+    ):
+        flags.append("citation_suppression_attempt")
+
+    tool_scope_terms = (
+        "disallowed tool",
+        "disallowed tools",
+        "access disallowed tool",
+        "access disallowed tools",
+        "use disallowed tool",
+        "use disallowed tools",
+        "use the disallowed tool",
+        "use the disallowed tools",
+        "unregistered tool",
+        "unregistered tools",
+        "access unregistered tool",
+        "access unregistered tools",
+        "access the unregistered tool",
+        "access the unregistered tools",
+        "call unregistered tool",
+        "call unregistered tools",
+        "invoke disallowed tool",
+        "invoke disallowed tools",
+        "invoke unregistered tool",
+        "invoke unregistered tools",
+        "run disallowed tool",
+        "run disallowed tools",
+        "run unregistered tool",
+        "run unregistered tools",
+        "use unregistered tool",
+        "use unregistered tools",
+        "bypass policy guard",
+        "bypass the policy guard",
+        "bypass policy guardrail",
+        "bypass policy guardrails",
+        "bypass the policy guardrail",
+        "bypass the policy guardrails",
+        "ignore policy guard",
+        "ignore policy guardrails",
+        "override policy guard",
+        "override policy guards",
+        "prohibited tool",
+        "prohibited tools",
+        "restricted tool",
+        "restricted tools",
+        "unauthorized tool",
+        "unauthorized tools",
+        "unapproved tool",
+        "unapproved tools",
+        "delegate the action to the automation tool",
+    )
+    tool_scope_patterns = (
+        r"(?<!\w)(?:access|call|invoke|run|use) "
+        r"(?:(?:all|any|each|every)(?: of the)? |the )?"
+        r"(?:disallowed|prohibited|restricted|unauthorized|unapproved) tools?(?!\w)",
+        r"(?<!\w)(?:get|gain) access to "
+        r"(?:(?:all|any|each|every)(?: of the)? |the )?"
+        r"(?:disallowed|prohibited|restricted|unauthorized|unapproved) tools?(?!\w)",
+        r"(?<!\w)(?:access|call|invoke|run|use) "
+        r"(?:(?:all|any|each|every)(?: of the)? |the )?unregistered tools?(?!\w)",
+        r"(?<!\w)(?:get|gain) access to "
+        r"(?:(?:all|any|each|every)(?: of the)? |the )?unregistered tools?(?!\w)",
+        r"(?<!\w)(?:disallowed|prohibited|restricted|unauthorized|unapproved|unregistered) "
+        r"tools? access(?!\w)",
+        r"(?<!\w)(?:bypass|disable|ignore|override) "
+        r"(?:(?:all|any|each|every)(?: of the)? |the )?(?:tool )?policy "
+        r"(?:controls?|enforcement|guards?|guardrails?)(?!\w)",
+        r"(?<!\w)(?:tool )?policy "
+        r"(?:controls?|enforcement|guards?|guardrails?) bypass(?!\w)",
+        r"(?<!\w)(?:bypass|disable|ignore|override) "
+        r"(?:the )?(?:registered )?tool (?:policy|policies)(?!\w)",
+    )
+    if any(contains_term(term) for term in tool_scope_terms) or any(
+        matches_normalized_pattern(pattern) for pattern in tool_scope_patterns
+    ):
+        flags.append("tool_scope_expansion_attempt")
+
+    record_family_terms = (
+        "every related case",
+        "sibling alert",
+        "neighboring evidence",
+        "neighbor record",
+        "expand record family",
+        "apply to the record family",
+        "apply across the record family",
+        "all related records",
+    )
+    if any(contains_term(term) for term in record_family_terms):
+        flags.append("record_family_expansion_attempt")
 
     return _dedupe_strings(tuple(flags))
 
