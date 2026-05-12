@@ -97,6 +97,7 @@ required_agent_names = {
     "live_assistant_summary_agent",
     "advisory_action_request_drafting_agent",
     "today_focus_advisory_agent",
+    "setup_doctor_explanation_agent",
 }
 required_agent_fields = {
     "agent_name",

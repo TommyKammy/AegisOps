@@ -139,6 +139,40 @@
         "evidence_reference must identify linked evidence, degraded-source evidence, or explicit missing evidence"
       ],
       "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
+    },
+    {
+      "agent_name": "setup_doctor_explanation_agent",
+      "purpose": "Explain setup, dependency, degraded-source, AI-disabled, and doctor posture findings from cited doctor and supportability records without making readiness, repair, release, gate, or workflow truth.",
+      "allowed_tools": [
+        "doctor_explanation",
+        "read_doctor_supportability_records",
+        "cite_setup_prerequisite_gaps",
+        "return_non_ai_fallback"
+      ],
+      "disallowed_tools": [
+        "approve_action",
+        "execute_action",
+        "reconcile_execution",
+        "close_case",
+        "activate_detector",
+        "create_source_truth",
+        "bypass_policy"
+      ],
+      "record_families": [
+        "doctor",
+        "source_health",
+        "runbook",
+        "limitation",
+        "gate",
+        "release",
+        "ai_trace"
+      ],
+      "citation_requirements": [
+        "record_family must identify the doctor, source-health, runbook, limitation, gate, release, or reviewed record family behind each setup explanation",
+        "record_id must identify the directly linked doctor check, source-health record, runbook section, limitation, gate, release, or reviewed record",
+        "evidence_reference must identify cited doctor output, supportability evidence, runbook reference, limitation, or explicit missing prerequisite"
+      ],
+      "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
     }
   ]
 }

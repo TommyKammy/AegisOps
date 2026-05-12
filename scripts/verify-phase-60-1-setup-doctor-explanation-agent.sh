@@ -7,8 +7,9 @@ repo_root="${1:-${tool_root}}"
 doc_path="${repo_root}/docs/phase-60-1-setup-doctor-explanation-agent.md"
 module_path="${repo_root}/control-plane/aegisops/control_plane/assistant/setup_doctor_explanation.py"
 test_path="${repo_root}/control-plane/tests/test_phase60_1_setup_doctor_explanation_agent.py"
+agent_registry_path="${repo_root}/docs/automation/ai-agent-registry.json"
 
-for path in "${doc_path}" "${module_path}" "${test_path}"; do
+for path in "${doc_path}" "${module_path}" "${test_path}" "${agent_registry_path}"; do
   if [[ ! -f "${path}" ]]; then
     echo "Missing Phase 60.1 setup doctor explanation artifact: ${path}" >&2
     exit 1
@@ -65,6 +66,8 @@ required_test_phrases=(
   "test_disabled_ai_returns_bounded_non_ai_fallback_without_trace_creation"
   "test_prompt_pressure_fails_closed_and_preserves_citations"
   "test_missing_doctor_evidence_fails_closed"
+  "test_non_mapping_readiness_payload_fails_closed_before_doctor_snapshot"
+  "test_change_source_posture_prompt_fails_closed"
   "repaired the stack"
   "rotated secrets"
   "restarted services"
@@ -77,6 +80,40 @@ for phrase in "${required_test_phrases[@]}"; do
     exit 1
   fi
 done
+
+python3 - "${agent_registry_path}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+registry = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+agents = {
+    agent.get("agent_name"): agent
+    for agent in registry.get("agents", ())
+    if isinstance(agent, dict)
+}
+agent = agents.get("setup_doctor_explanation_agent")
+if not isinstance(agent, dict):
+    raise SystemExit("Missing setup_doctor_explanation_agent registry row.")
+if agent.get("authority_ceiling") != "advisory_only_subordinate_to_aegisops_records":
+    raise SystemExit("setup_doctor_explanation_agent must keep advisory-only authority ceiling.")
+if "doctor_explanation" not in agent.get("allowed_tools", ()):
+    raise SystemExit("setup_doctor_explanation_agent must use the registered doctor_explanation tool.")
+for disallowed in (
+    "approve_action",
+    "execute_action",
+    "reconcile_execution",
+    "close_case",
+    "activate_detector",
+    "create_source_truth",
+    "bypass_policy",
+):
+    if disallowed not in agent.get("disallowed_tools", ()):
+        raise SystemExit(
+            "setup_doctor_explanation_agent is missing disallowed tool: "
+            + disallowed
+        )
+PY
 
 path_hygiene_stderr="$(mktemp)"
 trap 'rm -f "${path_hygiene_stderr}"' EXIT

@@ -68,6 +68,7 @@ class Phase601SetupDoctorExplanationAgentTests(unittest.TestCase):
             "changed source posture",
             "/".join(("", "Users", "")),
             "C:" + "\\" + "Users" + "\\",
+            "C:" + ("\\" * 2) + "Users" + ("\\" * 2),
         ):
             self.assertNotIn(forbidden, rendered_payload)
 
@@ -117,6 +118,20 @@ class Phase601SetupDoctorExplanationAgentTests(unittest.TestCase):
         self.assertFalse(payload["trace_creation_allowed"])
         self.assertEqual(payload["explanations"], ())
 
+    def test_change_source_posture_prompt_fails_closed(self) -> None:
+        payload = build_setup_doctor_explanation(
+            config=_doctor_config(),
+            readiness_payload=_readiness_payload(),
+            prompt_text="change source posture",
+        )
+
+        self.assertEqual(payload["decision"], "blocked")
+        self.assertEqual(payload["mode"], "prompt_pressure_blocked")
+        self.assertIn("authority_overreach", payload["unresolved_reasons"])
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertFalse(payload["trace_creation_allowed"])
+        self.assertEqual(payload["explanations"], ())
+
     def test_non_string_prompt_payload_fails_closed(self) -> None:
         payload = build_setup_doctor_explanation(
             config=_doctor_config(),
@@ -129,6 +144,22 @@ class Phase601SetupDoctorExplanationAgentTests(unittest.TestCase):
         self.assertIn("malformed_prompt_payload", payload["unresolved_reasons"])
         self.assertFalse(payload["ai_generation_allowed"])
         self.assertFalse(payload["trace_creation_allowed"])
+
+    def test_non_mapping_readiness_payload_fails_closed_before_doctor_snapshot(
+        self,
+    ) -> None:
+        payload = build_setup_doctor_explanation(
+            config=_doctor_config(),
+            readiness_payload=("not", "a", "mapping"),
+        )
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertEqual(payload["mode"], "doctor_evidence_missing")
+        self.assertIn("malformed_readiness_payload", payload["unresolved_reasons"])
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertFalse(payload["trace_creation_allowed"])
+        self.assertTrue(payload["non_ai_workflow_available"])
+        self.assertEqual(payload["explanations"], ())
 
     def test_missing_doctor_evidence_fails_closed(self) -> None:
         payload = build_setup_doctor_explanation(

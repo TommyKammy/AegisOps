@@ -59,6 +59,7 @@ _SETUP_REPAIR_PRESSURE_TERMS = (
     "rotate secrets",
     "rotated secret",
     "rotated secrets",
+    "change source posture",
     "mark the source posture healthy",
     "changed source posture",
 )
@@ -67,9 +68,25 @@ _SETUP_REPAIR_PRESSURE_TERMS = (
 def build_setup_doctor_explanation(
     *,
     config: Any,
-    readiness_payload: Mapping[str, object],
+    readiness_payload: object,
     prompt_text: object = "",
 ) -> dict[str, object]:
+    if not isinstance(readiness_payload, Mapping):
+        base = _base_payload({})
+        prompt_flags = _prompt_pressure_flags(prompt_text)
+        if prompt_flags:
+            return _blocked_payload(base, prompt_flags)
+        return {
+            **base,
+            "decision": "fallback",
+            "mode": "doctor_evidence_missing",
+            "unresolved_reasons": ("malformed_readiness_payload",),
+            "ai_generation_allowed": False,
+            "trace_creation_allowed": False,
+            "non_ai_workflow_available": True,
+            "explanations": (),
+        }
+
     doctor = build_doctor_snapshot(
         config=config,
         readiness_payload=readiness_payload,
@@ -77,17 +94,7 @@ def build_setup_doctor_explanation(
     base = _base_payload(doctor)
     prompt_flags = _prompt_pressure_flags(prompt_text)
     if prompt_flags:
-        return {
-            **base,
-            "decision": "blocked",
-            "mode": "prompt_pressure_blocked",
-            "unresolved_reasons": prompt_flags,
-            "ai_generation_allowed": False,
-            "trace_creation_allowed": False,
-            "automatic_repair_allowed": False,
-            "support_output_is_workflow_truth": False,
-            "explanations": (),
-        }
+        return _blocked_payload(base, prompt_flags)
 
     ai_state = _doctor_state(doctor, "ai_enablement")
     ai_reason = ai_state.get("reason")
@@ -190,6 +197,23 @@ def _base_payload(doctor: Mapping[str, object]) -> dict[str, object]:
         "negative_authority": _NEGATIVE_AUTHORITY,
         "citations": citations,
         "doctor_summary": doctor.get("summary", {}),
+    }
+
+
+def _blocked_payload(
+    base: Mapping[str, object],
+    prompt_flags: tuple[str, ...],
+) -> dict[str, object]:
+    return {
+        **base,
+        "decision": "blocked",
+        "mode": "prompt_pressure_blocked",
+        "unresolved_reasons": prompt_flags,
+        "ai_generation_allowed": False,
+        "trace_creation_allowed": False,
+        "automatic_repair_allowed": False,
+        "support_output_is_workflow_truth": False,
+        "explanations": (),
     }
 
 
