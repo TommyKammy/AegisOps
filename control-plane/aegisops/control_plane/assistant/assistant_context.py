@@ -284,6 +284,8 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
     citation_suppression_terms = (
         "conceal citations",
         "conceal the citations",
+        "avoid citations",
+        "avoid citing",
         "do not cite",
         "do not include citations",
         "drop citations",
@@ -315,6 +317,9 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
         r"(?<!\w)(?:conceal|drop|exclude|hide|ignore|omit|remove|skip|strip|suppress|withhold) "
         r"(?:(?:all|any|each|every|missing|remaining|required|supporting|the) )*"
         r"(?:citations?|citation requirements?)(?!\w)",
+        r"(?<!\w)avoid "
+        r"(?:(?:all|any|each|every|missing|required|supporting|the) )*"
+        r"(?:citing|citations?|citation requirements?)(?!\w)",
         r"(?<!\w)(?:do not|don t|never) "
         r"(?:cite|include (?:(?:all|any|each|every|missing|required|supporting|the) )*"
         r"(?:citations?|citation requirements?))(?!\w)",
@@ -322,13 +327,15 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
         r"(?:(?:supporting|reviewed|the) )*(?:citations?|evidence|records?)(?!\w)",
         r"(?<!\w)leave out "
         r"(?:(?:all|any|each|every|missing|required|supporting|the) )*citations?(?!\w)",
+        r"(?<!\w)(?:keep|leave) "
+        r"(?:(?:all|any|each|every|missing|required|supporting|the) )*citations? out(?!\w)",
         r"(?<!\w)(?:no|without) "
         r"(?:(?:all|any|each|every|missing|required|supporting|the) )*"
         r"(?:citations?|citation requirements?)(?!\w)",
         r"(?<!\w)(?:conceal|hide|suppress) "
-        r"(?:(?:all|any|each|every|remaining|the) )*uncertainty(?!\w)",
+        r"(?:(?:all|any|each|every|remaining|the) )*(?:uncertainty|uncertainties)(?!\w)",
         r"(?<!\w)(?:do not|don t|never) (?:mention|surface) "
-        r"(?:(?:all|any|each|every|remaining|the) )*uncertainty(?!\w)",
+        r"(?:(?:all|any|each|every|remaining|the) )*(?:uncertainty|uncertainties)(?!\w)",
     )
     if any(contains_term(term) for term in citation_suppression_terms) or any(
         matches_normalized_pattern(pattern) for pattern in citation_suppression_patterns
@@ -386,13 +393,22 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
         r"(?<!\w)(?:access|call|invoke|run|use) "
         r"(?:(?:all|any|each|every)(?: of the)? |the )?"
         r"(?:disallowed|prohibited|restricted|unauthorized|unapproved) tools?(?!\w)",
+        r"(?<!\w)(?:get|gain) access to "
+        r"(?:(?:all|any|each|every)(?: of the)? |the )?"
+        r"(?:disallowed|prohibited|restricted|unauthorized|unapproved) tools?(?!\w)",
         r"(?<!\w)(?:access|call|invoke|run|use) "
         r"(?:(?:all|any|each|every)(?: of the)? |the )?unregistered tools?(?!\w)",
+        r"(?<!\w)(?:get|gain) access to "
+        r"(?:(?:all|any|each|every)(?: of the)? |the )?unregistered tools?(?!\w)",
+        r"(?<!\w)(?:disallowed|prohibited|restricted|unauthorized|unapproved|unregistered) "
+        r"tools? access(?!\w)",
         r"(?<!\w)(?:bypass|disable|ignore|override) "
         r"(?:(?:all|any|each|every)(?: of the)? |the )?(?:tool )?policy "
         r"(?:controls?|enforcement|guards?|guardrails?)(?!\w)",
+        r"(?<!\w)(?:tool )?policy "
+        r"(?:controls?|enforcement|guards?|guardrails?) bypass(?!\w)",
         r"(?<!\w)(?:bypass|disable|ignore|override) "
-        r"(?:the )?(?:registered )?tool policy(?!\w)",
+        r"(?:the )?(?:registered )?tool (?:policy|policies)(?!\w)",
     )
     if any(contains_term(term) for term in tool_scope_terms) or any(
         matches_normalized_pattern(pattern) for pattern in tool_scope_patterns
