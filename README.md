@@ -58,6 +58,7 @@ Canonical cross-phase boundary reference:
 - [Phase 59.2 tool registry contract](docs/phase-59-2-tool-registry-contract.md) defines the required AI tool registry fields, allowed record families, citation requirements, audit fields, disallowed authority, and advisory-only authority ceiling.
 - [Phase 59.3 AI trace lifecycle contract](docs/phase-59-3-ai-trace-lifecycle-contract.md) defines created, reviewed, accepted, corrected, rejected, and expired trace states with registered linkage, citations, review metadata, expiration handling, and advisory-only authority.
 - [Phase 59.4 AI disabled and degraded mode contract](docs/phase-59-4-ai-disabled-degraded-mode-contract.md) defines disabled and degraded AI posture, blocked AI generation, non-blocking workflow surfaces, operator explanations, and advisory-only authority.
+- [Phase 59.8 closeout evaluation](docs/phase-59-closeout-evaluation.md) records the AI governance foundation outcomes, subordinate authority posture, verifier evidence, accepted limitations, and bounded Phase 60/66 handoff.
 - [Phase 58.5 upgrade and rollback plan contract](docs/phase-58-5-upgrade-rollback-plan-contract.md) defines reviewed upgrade-plan and rollback-plan evidence fields, failure states, and authority boundaries without implementing live upgrade or rollback execution.
 - [Phase 53.2 Wazuh certificate and credential contract](docs/deployment/wazuh-certificate-credential-contract.md) defines certificate generation-wrapper posture, credential custody, default-credential rejection, rotation guidance, and no-live-secret validation for the Wazuh profile.
 - [Phase 53.3 Wazuh intake binding contract](docs/deployment/wazuh-manager-intake-binding-contract.md) defines the manager-to-AegisOps intake URL, reviewed proxy route, shared-secret custody reference, provenance fields, and analytic-signal admission boundary for Wazuh-origin events.
@@ -152,6 +153,8 @@ The Phase 59.1 agent registry contract is defined by the [Phase 59.1 agent regis
 The Phase 59.2 tool registry contract is defined by the [Phase 59.2 tool registry contract](docs/phase-59-2-tool-registry-contract.md).
 
 The Phase 59.3 AI trace lifecycle contract is defined by the [Phase 59.3 AI trace lifecycle contract](docs/phase-59-3-ai-trace-lifecycle-contract.md).
+
+The Phase 59.8 closeout evaluation is defined by the [Phase 59.8 closeout evaluation](docs/phase-59-closeout-evaluation.md).
 
 The Phase 59.4 AI disabled and degraded mode contract is defined by the [Phase 59.4 AI disabled and degraded mode contract](docs/phase-59-4-ai-disabled-degraded-mode-contract.md).
 
