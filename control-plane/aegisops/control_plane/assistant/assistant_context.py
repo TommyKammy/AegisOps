@@ -313,15 +313,15 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
     )
     citation_suppression_patterns = (
         r"(?<!\w)(?:conceal|drop|exclude|hide|ignore|omit|remove|skip|strip|suppress|withhold) "
-        r"(?:(?:all|any|each|every|remaining|required|supporting|the) )*"
+        r"(?:(?:all|any|each|every|missing|remaining|required|supporting|the) )*"
         r"(?:citations?|citation requirements?)(?!\w)",
         r"(?<!\w)(?:do not|don t|never) "
-        r"(?:cite|include (?:(?:all|any|each|every|required|supporting|the) )*"
+        r"(?:cite|include (?:(?:all|any|each|every|missing|required|supporting|the) )*"
         r"(?:citations?|citation requirements?))(?!\w)",
         r"(?<!\w)leave out "
-        r"(?:(?:all|any|each|every|required|supporting|the) )*citations?(?!\w)",
+        r"(?:(?:all|any|each|every|missing|required|supporting|the) )*citations?(?!\w)",
         r"(?<!\w)(?:no|without) "
-        r"(?:(?:all|any|each|every|required|supporting|the) )*"
+        r"(?:(?:all|any|each|every|missing|required|supporting|the) )*"
         r"(?:citations?|citation requirements?)(?!\w)",
         r"(?<!\w)(?:conceal|hide|suppress) "
         r"(?:all |any |any remaining |remaining |the )?uncertainty(?!\w)",
