@@ -229,7 +229,7 @@ class OperatorInspectionReadSurface:
             (
                 *self._string_tuple_from_object(subject_linkage.get("citations")),
                 *self._string_tuple_from_object(advisory_draft.get("citations")),
-                *ai_trace.material_input_refs,
+                *self._string_tuple_from_object(ai_trace.material_input_refs),
             )
         )
         registered_agent_id = self._optional_string_from_mapping(

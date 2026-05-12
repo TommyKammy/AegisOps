@@ -198,12 +198,17 @@ def _handle_inspect_ai_trace_review_queue(
     context: HttpSurfaceContext,
     principal: object,
 ) -> None:
+    try:
+        payload = (
+            context.service._operator_inspection_read_surface.inspect_ai_trace_review_queue().to_dict()
+        )
+    except (LookupError, ValueError) as exc:
+        _write_lookup_or_bad_request(handler, exc)
+        return
     _write_json(
         handler,
         HTTPStatus.OK,
-        (
-            context.service._operator_inspection_read_surface.inspect_ai_trace_review_queue().to_dict()
-        ),
+        payload,
     )
 
 

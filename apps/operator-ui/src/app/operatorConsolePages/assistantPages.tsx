@@ -24,6 +24,7 @@ import {
   asString,
   asStringArray,
   AuditedRouteButton,
+  AuditedRouteLink,
   EmptyState,
   ErrorState,
   formatLabel,
@@ -40,6 +41,8 @@ import {
   useOperatorRecord,
   ValueList,
 } from "./shared";
+
+const AI_TRACE_REVIEW_QUEUE_PER_PAGE = 500;
 
 function AdvisoryDetailTable({ record }: { record: UnknownRecord }) {
   const rows = advisoryDetailRows(record);
@@ -397,6 +400,7 @@ export function AITraceReviewQueuePage() {
     "aiTraceReviewQueue",
     filter,
     sort,
+    AI_TRACE_REVIEW_QUEUE_PER_PAGE,
   );
 
   return (
@@ -433,6 +437,10 @@ export function AITraceReviewQueuePage() {
                     const reviewState = asString(record.review_state);
                     const reviewedFamily = asString(record.reviewed_record_family);
                     const reviewedId = asString(record.reviewed_record_id);
+                    const reviewedAnchorRoute = supportedAnchorRoute(
+                      reviewedFamily,
+                      reviewedId,
+                    );
                     const traceLink = asString(record.trace_link);
                     return (
                       <TableRow hover key={traceId}>
@@ -461,7 +469,16 @@ export function AITraceReviewQueuePage() {
                               {reviewedFamily ?? "Unknown family"}
                             </Typography>
                             <Typography color="text.secondary" variant="caption">
-                              {reviewedId ?? "Missing reviewed record id"}
+                              {reviewedAnchorRoute ? (
+                                <AuditedRouteLink
+                                  label={reviewedAnchorRoute.label}
+                                  to={reviewedAnchorRoute.to}
+                                >
+                                  {reviewedId ?? "Missing reviewed record id"}
+                                </AuditedRouteLink>
+                              ) : (
+                                (reviewedId ?? "Missing reviewed record id")
+                              )}
                             </Typography>
                           </Stack>
                         </TableCell>

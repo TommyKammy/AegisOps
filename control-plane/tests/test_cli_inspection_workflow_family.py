@@ -367,7 +367,7 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
                 model_identity="gpt-5.4",
                 prompt_version="phase-59-trace-review-v1",
                 generated_at=datetime(2026, 5, 12, 10, 0, tzinfo=timezone.utc),
-                material_input_refs=(),
+                material_input_refs=("   ",),
                 reviewer_identity="analyst-001",
                 lifecycle_state="accepted_for_reference",
                 assistant_advisory_draft={
@@ -384,6 +384,119 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             "missing registered_tool_id, citations",
         ):
             service._operator_inspection_read_surface.inspect_ai_trace_review_queue()
+
+    def test_cli_reports_ai_trace_review_queue_validation_error_as_usage_error(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-review-missing-registration-001",
+                subject_linkage={
+                    "source_case_id": "case-trace-review-001",
+                    "registered_agent_id": "agent-governed-summary-001",
+                    "reviewed_record_family": "case",
+                    "reviewed_record_id": "case-trace-review-001",
+                },
+                model_identity="gpt-5.4",
+                prompt_version="phase-59-trace-review-v1",
+                generated_at=datetime(2026, 5, 12, 10, 0, tzinfo=timezone.utc),
+                material_input_refs=(),
+                reviewer_identity="analyst-001",
+                lifecycle_state="accepted_for_reference",
+                assistant_advisory_draft={
+                    "status": "ready",
+                    "review_state": "accepted",
+                    "reviewer_note": "Missing tool and citations must not render.",
+                    "authority_mode": "advisory_only",
+                },
+            )
+        )
+
+        stderr = io.StringIO()
+        with mock.patch("sys.stderr", stderr), self.assertRaises(SystemExit) as raised:
+            main.main(["inspect-ai-trace-review-queue"], stdout=io.StringIO(), service=service)
+
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("AI trace review queue requires", stderr.getvalue())
+        self.assertIn("missing registered_tool_id, citations", stderr.getvalue())
+
+    def test_http_ai_trace_review_queue_reports_validation_error_as_bad_request(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+            ),
+            store=store,
+        )
+        service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-review-missing-registration-001",
+                subject_linkage={
+                    "source_case_id": "case-trace-review-001",
+                    "registered_agent_id": "agent-governed-summary-001",
+                    "reviewed_record_family": "case",
+                    "reviewed_record_id": "case-trace-review-001",
+                },
+                model_identity="gpt-5.4",
+                prompt_version="phase-59-trace-review-v1",
+                generated_at=datetime(2026, 5, 12, 10, 0, tzinfo=timezone.utc),
+                material_input_refs=(),
+                reviewer_identity="analyst-001",
+                lifecycle_state="accepted_for_reference",
+                assistant_advisory_draft={
+                    "status": "ready",
+                    "review_state": "accepted",
+                    "reviewer_note": "Missing tool and citations must not render.",
+                    "authority_mode": "advisory_only",
+                },
+            )
+        )
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_ANALYST_PRINCIPAL,
+        ):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+
+                base_url = f"http://127.0.0.1:{servers[0].server_port}"
+                with self.assertRaises(error.HTTPError) as raised:
+                    request.urlopen(  # noqa: S310 - local in-process test HTTP server
+                        f"{base_url}/inspect-ai-trace-review-queue",
+                        timeout=2,
+                    )
+
+                self.assertEqual(raised.exception.code, 400)
+                payload = json.loads(raised.exception.read().decode("utf-8"))
+                self.assertEqual(payload["error"], "invalid_request")
+                self.assertIn("AI trace review queue requires", payload["message"])
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(1)
 
     def test_cli_renders_reviewed_wazuh_alert_detail_view(self) -> None:
         store, _ = make_store()
