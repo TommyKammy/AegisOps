@@ -326,9 +326,9 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
         r"(?:(?:all|any|each|every|missing|required|supporting|the) )*"
         r"(?:citations?|citation requirements?)(?!\w)",
         r"(?<!\w)(?:conceal|hide|suppress) "
-        r"(?:all |any |any remaining |remaining |the )?uncertainty(?!\w)",
+        r"(?:(?:all|any|each|every|remaining|the) )*uncertainty(?!\w)",
         r"(?<!\w)(?:do not|don t|never) (?:mention|surface) "
-        r"(?:all |any |any remaining |remaining |the )?uncertainty(?!\w)",
+        r"(?:(?:all|any|each|every|remaining|the) )*uncertainty(?!\w)",
     )
     if any(contains_term(term) for term in citation_suppression_terms) or any(
         matches_normalized_pattern(pattern) for pattern in citation_suppression_patterns
@@ -384,11 +384,12 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
     )
     tool_scope_patterns = (
         r"(?<!\w)(?:access|call|invoke|run|use) "
-        r"(?:any |the )?(?:disallowed|prohibited|restricted|unauthorized|unapproved) tools?(?!\w)",
+        r"(?:(?:all|any|each|every)(?: of the)? |the )?"
+        r"(?:disallowed|prohibited|restricted|unauthorized|unapproved) tools?(?!\w)",
         r"(?<!\w)(?:access|call|invoke|run|use) "
-        r"(?:any |the )?unregistered tools?(?!\w)",
+        r"(?:(?:all|any|each|every)(?: of the)? |the )?unregistered tools?(?!\w)",
         r"(?<!\w)(?:bypass|disable|ignore|override) "
-        r"(?:all |any |each |every |the )?(?:tool )?policy "
+        r"(?:(?:all|any|each|every)(?: of the)? |the )?(?:tool )?policy "
         r"(?:controls?|enforcement|guards?|guardrails?)(?!\w)",
         r"(?<!\w)(?:bypass|disable|ignore|override) "
         r"(?:the )?(?:registered )?tool policy(?!\w)",
