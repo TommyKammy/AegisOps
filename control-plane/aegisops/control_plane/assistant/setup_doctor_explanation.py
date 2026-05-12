@@ -29,6 +29,14 @@ _REGISTRY_CITATIONS = (
     "docs/automation/ai-tool-registry.json",
     "docs/automation/ai-disabled-degraded-mode-contract.json",
 )
+_REQUIRED_METRIC_MAPPINGS = (
+    "alerts",
+    "cases",
+    "action_requests",
+    "action_executions",
+    "reconciliations",
+    "source_health",
+)
 
 
 def build_setup_doctor_explanation(
@@ -57,7 +65,8 @@ def build_setup_doctor_explanation(
         }
 
     ai_state = _doctor_state(doctor, "ai_enablement")
-    if ai_state.get("reason") == "ai_disabled":
+    ai_reason = ai_state.get("reason")
+    if ai_reason == "ai_disabled":
         return {
             **base,
             "decision": "fallback",
@@ -68,7 +77,7 @@ def build_setup_doctor_explanation(
             "non_ai_workflow_available": True,
             "explanations": _fallback_explanations(doctor, families=("ai_enablement",)),
         }
-    if ai_state.get("reason") == "ai_degraded":
+    if ai_reason == "ai_degraded":
         return {
             **base,
             "decision": "fallback",
@@ -79,19 +88,36 @@ def build_setup_doctor_explanation(
             "non_ai_workflow_available": True,
             "explanations": _fallback_explanations(doctor, families=("ai_enablement",)),
         }
+    if ai_reason != "ai_enabled":
+        unresolved_reason = (
+            ai_reason
+            if isinstance(ai_reason, str) and ai_reason
+            else "untrusted_ai_enablement_posture"
+        )
+        return {
+            **base,
+            "decision": "fallback",
+            "mode": "ai_enablement_untrusted",
+            "unresolved_reasons": (unresolved_reason,),
+            "ai_generation_allowed": False,
+            "trace_creation_allowed": False,
+            "non_ai_workflow_available": True,
+            "explanations": _fallback_explanations(doctor, families=("ai_enablement",)),
+        }
 
-    if not isinstance(readiness_payload.get("metrics"), Mapping):
+    evidence_reasons = _doctor_evidence_unresolved_reasons(readiness_payload)
+    if evidence_reasons:
         return {
             **base,
             "decision": "fallback",
             "mode": "doctor_evidence_missing",
-            "unresolved_reasons": ("missing_doctor_evidence",),
+            "unresolved_reasons": evidence_reasons,
             "ai_generation_allowed": False,
             "trace_creation_allowed": False,
             "non_ai_workflow_available": True,
             "explanations": _fallback_explanations(
                 doctor,
-                families=("control_plane", "database"),
+                families=("control_plane", "database", "evidence_availability"),
             ),
         }
 
@@ -180,16 +206,52 @@ def _fallback_explanations(
     return tuple(explanations)
 
 
+def _doctor_evidence_unresolved_reasons(
+    readiness_payload: Mapping[str, object],
+) -> tuple[str, ...]:
+    metrics = readiness_payload.get("metrics")
+    if not isinstance(metrics, Mapping):
+        return ("missing_doctor_evidence",)
+    if any(
+        not isinstance(metrics.get(field), Mapping)
+        for field in _REQUIRED_METRIC_MAPPINGS
+    ):
+        return ("malformed_doctor_metrics",)
+    source_health = metrics.get("source_health")
+    if (
+        isinstance(source_health, Mapping)
+        and "sources" in source_health
+        and not isinstance(source_health.get("sources"), Mapping)
+    ):
+        return ("malformed_doctor_metrics",)
+    return ()
+
+
 def _prompt_pressure_flags(prompt_text: object) -> tuple[str, ...]:
+    if not isinstance(prompt_text, str):
+        return ("malformed_prompt_payload",)
     flags = _dedupe_strings(
         (
             *phase24_live_assistant_prompt_injection_flags(prompt_text),
             *_advisory_text_claims_authority_or_scope_expansion(prompt_text),
         )
     )
-    if not isinstance(prompt_text, str):
-        return flags
     lowered = prompt_text.lower()
+    policy_pressure_terms = (
+        "bypass policy",
+        "bypass policies",
+        "bypass the policy",
+        "bypass tool policy",
+        "disable policy",
+        "disable the policy",
+        "ignore policy",
+        "ignore the policy",
+        "override policy",
+        "override the policy",
+        "policy bypass",
+    )
+    if any(term in lowered for term in policy_pressure_terms):
+        flags = _dedupe_strings((*flags, "tool_scope_expansion_attempt"))
     setup_repair_terms = (
         "repair",
         "repaired",
