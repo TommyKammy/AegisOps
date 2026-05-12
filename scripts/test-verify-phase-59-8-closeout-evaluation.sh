@@ -211,7 +211,8 @@ assert_fails_with \
 
 absolute_path_windows_slash_repo="${workdir}/absolute-path-windows-slash"
 copy_valid_repo "${absolute_path_windows_slash_repo}"
-printf 'Run C:/Users/example/Dev/codex-supervisor/dist/index.js.\n' >>"${absolute_path_windows_slash_repo}/docs/phase-59-closeout-evaluation.md"
+windows_home_slash="${windows_drive}/${windows_home_dir}/example"
+printf 'Run %s/Dev/codex-supervisor/dist/index.js.\n' "${windows_home_slash}" >>"${absolute_path_windows_slash_repo}/docs/phase-59-closeout-evaluation.md"
 assert_fails_with \
   "${absolute_path_windows_slash_repo}" \
   "Forbidden Phase 59 closeout evaluation: workstation-local absolute path detected"
