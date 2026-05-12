@@ -16,6 +16,11 @@ export const RESOURCE_BINDINGS: Record<
     listSemantics: "client",
     recordFamily: "alert",
   },
+  aiTraceReviewQueue: {
+    idField: "ai_trace_id",
+    listPath: "/inspect-ai-trace-review-queue",
+    listSemantics: "client",
+  },
   cases: {
     detailPath: "/inspect-case-detail",
     detailQueryKey: "case_id",

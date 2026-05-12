@@ -36,6 +36,7 @@ import {
   supportedAnchorRoute,
   SUPPORTED_ADVISORY_RECORD_FAMILIES,
   type UnknownRecord,
+  useOperatorList,
   useOperatorRecord,
   ValueList,
 } from "./shared";
@@ -366,6 +367,144 @@ export function AssistantAdvisoryPage() {
           )}
         </>
       )}
+    </PageFrame>
+  );
+}
+
+function reviewStateTone(state: string | null): "success" | "error" | "warning" | "default" {
+  if (state === "accepted") {
+    return "success";
+  }
+  if (state === "rejected") {
+    return "error";
+  }
+  if (state === "corrected") {
+    return "warning";
+  }
+  return "default";
+}
+
+export function AITraceReviewQueuePage() {
+  const filter = useMemo(() => ({}), []);
+  const sort = useMemo(
+    () => ({
+      field: "review_state",
+      order: "ASC" as const,
+    }),
+    [],
+  );
+  const { data, error, loading, refreshing } = useOperatorList(
+    "aiTraceReviewQueue",
+    filter,
+    sort,
+  );
+
+  return (
+    <PageFrame
+      subtitle="AI trace review remains cited, registered, and subordinate to reviewed AegisOps records."
+      title="AI Trace Review Queue"
+    >
+      {loading && !data ? <LoadingState label="Loading AI trace review queue" /> : null}
+      {error && !data ? <ErrorState error={error} /> : null}
+      {data ? <QueryStateNotice error={error} refreshing={refreshing} /> : null}
+      {data ? (
+        data.length > 0 ? (
+          <Stack spacing={3}>
+            <SectionCard
+              subtitle="Accepted, rejected, and corrected states are review context only; workflow truth stays on the anchored AegisOps records."
+              title="Trace review records"
+            >
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Trace</TableCell>
+                    <TableCell>State</TableCell>
+                    <TableCell>Registered agent</TableCell>
+                    <TableCell>Registered tool</TableCell>
+                    <TableCell>Reviewed record</TableCell>
+                    <TableCell>Citations</TableCell>
+                    <TableCell>Reviewer note</TableCell>
+                    <TableCell>Expiration</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {data.map((record) => {
+                    const traceId = asString(record.ai_trace_id) ?? "Unknown trace";
+                    const reviewState = asString(record.review_state);
+                    const reviewedFamily = asString(record.reviewed_record_family);
+                    const reviewedId = asString(record.reviewed_record_id);
+                    const traceLink = asString(record.trace_link);
+                    return (
+                      <TableRow hover key={traceId}>
+                        <TableCell>
+                          {traceLink ? (
+                            <AuditedRouteButton label="Open AI trace" to={traceLink}>
+                              {traceId}
+                            </AuditedRouteButton>
+                          ) : (
+                            traceId
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            color={reviewStateTone(reviewState)}
+                            label={formatLabel(reviewState ?? "pending_review")}
+                            size="small"
+                            variant={reviewState === "accepted" ? "filled" : "outlined"}
+                          />
+                        </TableCell>
+                        <TableCell>{asString(record.registered_agent_id) ?? "Missing"}</TableCell>
+                        <TableCell>{asString(record.registered_tool_id) ?? "Missing"}</TableCell>
+                        <TableCell>
+                          <Stack spacing={0.5}>
+                            <Typography variant="body2">
+                              {reviewedFamily ?? "Unknown family"}
+                            </Typography>
+                            <Typography color="text.secondary" variant="caption">
+                              {reviewedId ?? "Missing reviewed record id"}
+                            </Typography>
+                          </Stack>
+                        </TableCell>
+                        <TableCell>
+                          <Stack direction="row" flexWrap="wrap" gap={1}>
+                            {asStringArray(record.citations).map((citation) => (
+                              <Chip
+                                key={`${traceId}-${citation}`}
+                                label={citation}
+                                size="small"
+                                variant="outlined"
+                              />
+                            ))}
+                          </Stack>
+                        </TableCell>
+                        <TableCell>{asString(record.reviewer_note) ?? "No reviewer note"}</TableCell>
+                        <TableCell>{formatValue(record.expiration_posture)}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </SectionCard>
+            <SectionCard
+              subtitle="The browser renders trace review state as subordinate context and exposes no approval, execution, reconciliation, or close-case controls."
+              title="Authority boundary"
+            >
+              <StatusStrip
+                values={[
+                  ["Read only", "true"],
+                  ["Authority mode", "advisory_only"],
+                  ["Workflow truth", "AegisOps authoritative records"],
+                ]}
+              />
+              <Alert severity="warning" variant="outlined">
+                Trace review state cannot approve actions, execute actions, reconcile outcomes, close cases, or create source truth.
+              </Alert>
+            </SectionCard>
+          </Stack>
+        ) : (
+          <EmptyState message="No AI trace review records were returned." />
+        )
+      ) : null}
     </PageFrame>
   );
 }

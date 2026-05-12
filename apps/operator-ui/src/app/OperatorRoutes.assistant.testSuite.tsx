@@ -328,6 +328,89 @@ export function registerOperatorRoutesAssistantTests() {
       expect(screen.queryByRole("button", { name: /execute/i })).not.toBeInTheDocument();
     });
 
+    it("renders the AI trace review queue skeleton with accepted rejected and corrected states", async () => {
+      const dependencies = createDefaultDependencies({
+        fetchFn: createAuthorizedFetch({
+          "/inspect-ai-trace-review-queue": {
+            read_only: true,
+            queue_name: "ai_trace_review",
+            total_records: 3,
+            state_counts: {
+              accepted: 1,
+              corrected: 1,
+              rejected: 1,
+            },
+            records: [
+              {
+                ai_trace_id: "ai-trace-review-accepted-001",
+                review_state: "accepted",
+                registered_agent_id: "agent-governed-summary-001",
+                registered_tool_id: "tool-case-summary-001",
+                reviewed_record_family: "case",
+                reviewed_record_id: "case-trace-review-001",
+                citations: ["case-trace-review-001", "evidence-trace-review-001"],
+                reviewer_note: "Accepted as cited context only; case truth stays authoritative.",
+                expiration_posture: "expires_with_reviewed_case",
+                authority_mode: "advisory_only",
+                authoritative_workflow_truth: false,
+                trace_link: "/operator/assistant/ai_trace/ai-trace-review-accepted-001",
+              },
+              {
+                ai_trace_id: "ai-trace-review-rejected-001",
+                review_state: "rejected",
+                registered_agent_id: "agent-governed-summary-001",
+                registered_tool_id: "tool-case-summary-001",
+                reviewed_record_family: "case",
+                reviewed_record_id: "case-trace-review-001",
+                citations: ["case-trace-review-001"],
+                reviewer_note: "Rejected because supporting citations were incomplete.",
+                expiration_posture: "expires_with_reviewed_case",
+                authority_mode: "advisory_only",
+                authoritative_workflow_truth: false,
+              },
+              {
+                ai_trace_id: "ai-trace-review-corrected-001",
+                review_state: "corrected",
+                registered_agent_id: "agent-governed-summary-001",
+                registered_tool_id: "tool-case-summary-001",
+                reviewed_record_family: "case",
+                reviewed_record_id: "case-trace-review-001",
+                citations: ["case-trace-review-001", "evidence-trace-review-001"],
+                reviewer_note: "Corrected by reviewer note before any downstream use.",
+                expiration_posture: "expires_with_reviewed_case",
+                authority_mode: "advisory_only",
+                authoritative_workflow_truth: false,
+              },
+            ],
+          },
+        }),
+      });
+
+      render(
+        <MemoryRouter initialEntries={["/operator/assistant/trace-review"]}>
+          <OperatorRoutes dependencies={dependencies} />
+        </MemoryRouter>,
+      );
+
+      expect(await screen.findByRole("heading", { name: "AI Trace Review Queue" })).toBeInTheDocument();
+      expect(screen.getByText("Accepted")).toBeInTheDocument();
+      expect(screen.getByText("Rejected")).toBeInTheDocument();
+      expect(screen.getByText("Corrected")).toBeInTheDocument();
+      expect(screen.getAllByText("agent-governed-summary-001").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("tool-case-summary-001").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("case-trace-review-001").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("evidence-trace-review-001").length).toBeGreaterThan(0);
+      expect(
+        screen.getByText("Corrected by reviewer note before any downstream use."),
+      ).toBeInTheDocument();
+      expect(screen.getAllByText("expires_with_reviewed_case").length).toBeGreaterThan(0);
+      expect(
+        screen.getByText(/Trace review state cannot approve actions/i),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /approve/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /execute/i })).not.toBeInTheDocument();
+    });
+
     it("fails closed on unsupported assistant advisory route families", async () => {
       const fetchFn = createAuthorizedFetch({});
       const dependencies = createDefaultDependencies({

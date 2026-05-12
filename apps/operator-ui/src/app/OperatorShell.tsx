@@ -74,6 +74,8 @@ function lazyOperatorConsolePage<T extends keyof Awaited<ReturnType<typeof loadO
 
 const ActionReviewPage =
   lazyOperatorConsolePage("ActionReviewPage") as unknown as typeof import("./operatorConsolePages").ActionReviewPage;
+const AITraceReviewQueuePage =
+  lazyOperatorConsolePage("AITraceReviewQueuePage") as unknown as typeof import("./operatorConsolePages").AITraceReviewQueuePage;
 const AssistantAdvisoryPage =
   lazyOperatorConsolePage("AssistantAdvisoryPage") as unknown as typeof import("./operatorConsolePages").AssistantAdvisoryPage;
 const AlertDetailPage =
@@ -261,6 +263,11 @@ function OperatorMenu({
         leftIcon={<AutoAwesomeOutlinedIcon />}
         primaryText="Assistant"
         to={buildOperatorShellPath(basePath, "assistant")}
+      />
+      <Menu.Item
+        leftIcon={<AutoAwesomeOutlinedIcon />}
+        primaryText="AI Trace Review"
+        to={buildOperatorShellPath(basePath, "assistant/trace-review")}
       />
       {showActionReview ? (
         <Menu.Item
@@ -576,6 +583,7 @@ function OperatorShellContent({
             path="admin"
           />
           <Route element={<AssistantAdvisoryPage />} path="assistant" />
+          <Route element={<AITraceReviewQueuePage />} path="assistant/trace-review" />
           <Route
             element={<AssistantAdvisoryPage />}
             path="assistant/:recordFamily/:recordId"

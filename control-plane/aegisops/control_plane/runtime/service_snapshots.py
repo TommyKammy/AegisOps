@@ -107,6 +107,26 @@ class AnalystQueueSnapshot:
 
 
 @dataclass(frozen=True)
+class AITraceReviewQueueSnapshot:
+    read_only: bool
+    queue_name: str
+    total_records: int
+    state_counts: dict[str, int]
+    records: tuple[dict[str, object], ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return _json_ready(
+            {
+                "read_only": self.read_only,
+                "queue_name": self.queue_name,
+                "total_records": self.total_records,
+                "state_counts": self.state_counts,
+                "records": self.records,
+            }
+        )
+
+
+@dataclass(frozen=True)
 class AlertDetailSnapshot:
     read_only: bool
     alert_id: str
@@ -473,6 +493,7 @@ class DoctorSnapshot:
 
 __all__ = [
     "ActionReviewDetailSnapshot",
+    "AITraceReviewQueueSnapshot",
     "AdvisoryInspectionSnapshot",
     "AlertDetailSnapshot",
     "AnalystAssistantContextSnapshot",

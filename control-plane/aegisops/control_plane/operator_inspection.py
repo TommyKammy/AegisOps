@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Callable, Mapping, Protocol, Type, TypeVar
 
@@ -19,6 +20,7 @@ from .models import (
     RecommendationRecord,
     ReconciliationRecord,
 )
+from .runtime.service_snapshots import AITraceReviewQueueSnapshot
 
 
 RecordT = TypeVar("RecordT", bound=ControlPlaneRecord)
@@ -184,6 +186,129 @@ class OperatorInspectionReadSurface:
         if alert.lifecycle_state == "investigating":
             return "investigating"
         return "triaged"
+
+    def inspect_ai_trace_review_queue(self) -> object:
+        records = tuple(
+            self._ai_trace_review_queue_record(record)
+            for record in self._service._store.list(AITraceRecord)
+        )
+        records = tuple(
+            sorted(
+                records,
+                key=lambda record: (
+                    str(record["review_state"]),
+                    str(record["ai_trace_id"]),
+                ),
+            )
+        )
+        state_counts = dict(
+            sorted(Counter(str(record["review_state"]) for record in records).items())
+        )
+        return AITraceReviewQueueSnapshot(
+            read_only=True,
+            queue_name="ai_trace_review",
+            total_records=len(records),
+            state_counts=state_counts,
+            records=records,
+        )
+
+    def _ai_trace_review_queue_record(
+        self,
+        ai_trace: AITraceRecord,
+    ) -> dict[str, object]:
+        subject_linkage = ai_trace.subject_linkage
+        advisory_draft = ai_trace.assistant_advisory_draft
+        review_state = self._ai_trace_queue_review_state(
+            lifecycle_state=ai_trace.lifecycle_state,
+            draft_review_state=self._optional_string_from_mapping(
+                advisory_draft,
+                "review_state",
+            ),
+        )
+        citations = self._dedupe_strings(
+            (
+                *self._string_tuple_from_object(subject_linkage.get("citations")),
+                *self._string_tuple_from_object(advisory_draft.get("citations")),
+                *ai_trace.material_input_refs,
+            )
+        )
+        registered_agent_id = self._optional_string_from_mapping(
+            subject_linkage,
+            "registered_agent_id",
+        )
+        registered_tool_id = self._optional_string_from_mapping(
+            subject_linkage,
+            "registered_tool_id",
+        )
+        reviewed_record_family = (
+            self._optional_string_from_mapping(subject_linkage, "reviewed_record_family")
+            or self._optional_string_from_mapping(subject_linkage, "source_record_family")
+        )
+        reviewed_record_id = (
+            self._optional_string_from_mapping(subject_linkage, "reviewed_record_id")
+            or self._optional_string_from_mapping(subject_linkage, "source_record_id")
+            or self._optional_string_from_mapping(subject_linkage, "source_case_id")
+            or self._optional_string_from_mapping(subject_linkage, "source_alert_id")
+        )
+        missing_required_fields = tuple(
+            field_name
+            for field_name, value in (
+                ("registered_agent_id", registered_agent_id),
+                ("registered_tool_id", registered_tool_id),
+                ("reviewed_record_family", reviewed_record_family),
+                ("reviewed_record_id", reviewed_record_id),
+                ("citations", citations),
+            )
+            if not value
+        )
+        if missing_required_fields:
+            raise ValueError(
+                "AI trace review queue requires registered agent, registered tool, "
+                "reviewed record, and citation anchors; missing "
+                + ", ".join(missing_required_fields)
+                + f" for ai_trace_id {ai_trace.ai_trace_id!r}"
+            )
+        return {
+            "read_only": True,
+            "ai_trace_id": ai_trace.ai_trace_id,
+            "review_state": review_state,
+            "lifecycle_state": ai_trace.lifecycle_state,
+            "registered_agent_id": registered_agent_id,
+            "registered_tool_id": registered_tool_id,
+            "model_identity": ai_trace.model_identity,
+            "prompt_version": ai_trace.prompt_version,
+            "generated_at": ai_trace.generated_at,
+            "reviewed_record_family": reviewed_record_family,
+            "reviewed_record_id": reviewed_record_id,
+            "citations": citations,
+            "reviewer_identity": ai_trace.reviewer_identity,
+            "reviewer_note": self._optional_string_from_mapping(
+                advisory_draft,
+                "reviewer_note",
+            ),
+            "expiration_posture": self._optional_string_from_mapping(
+                subject_linkage,
+                "expiration_posture",
+            )
+            or "inherits_reviewed_record_retention",
+            "authority_mode": "advisory_only",
+            "authoritative_workflow_truth": False,
+            "trace_link": f"/operator/assistant/ai_trace/{ai_trace.ai_trace_id}",
+        }
+
+    @staticmethod
+    def _ai_trace_queue_review_state(
+        *,
+        lifecycle_state: str,
+        draft_review_state: str | None,
+    ) -> str:
+        if draft_review_state in {"accepted", "rejected", "corrected"}:
+            return draft_review_state
+        if lifecycle_state == "accepted_for_reference":
+            return "accepted"
+        if lifecycle_state == "rejected_for_reference":
+            return "rejected"
+        return "pending_review"
 
     def _ai_trace_review_states(
         self,

@@ -254,6 +254,137 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             ],
         )
 
+    def test_cli_renders_ai_trace_review_queue_skeleton(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        generated_at = datetime(2026, 5, 12, 10, 0, tzinfo=timezone.utc)
+        common_linkage = {
+            "source_case_id": "case-trace-review-001",
+            "registered_agent_id": "agent-governed-summary-001",
+            "registered_tool_id": "tool-case-summary-001",
+            "reviewed_record_family": "case",
+            "reviewed_record_id": "case-trace-review-001",
+            "expiration_posture": "expires_with_reviewed_case",
+        }
+        for trace_id, lifecycle_state, review_state, reviewer_note in (
+            (
+                "ai-trace-review-accepted-001",
+                "accepted_for_reference",
+                "accepted",
+                "Accepted as cited context only; case truth stays authoritative.",
+            ),
+            (
+                "ai-trace-review-rejected-001",
+                "rejected_for_reference",
+                "rejected",
+                "Rejected because supporting citations were incomplete.",
+            ),
+            (
+                "ai-trace-review-corrected-001",
+                "under_review",
+                "corrected",
+                "Corrected by reviewer note before any downstream use.",
+            ),
+        ):
+            service.persist_record(
+                AITraceRecord(
+                    ai_trace_id=trace_id,
+                    subject_linkage={
+                        **common_linkage,
+                        "citations": ("case-trace-review-001", "evidence-trace-review-001"),
+                    },
+                    model_identity="gpt-5.4",
+                    prompt_version="phase-59-trace-review-v1",
+                    generated_at=generated_at,
+                    material_input_refs=("evidence-trace-review-001",),
+                    reviewer_identity="analyst-001",
+                    lifecycle_state=lifecycle_state,
+                    assistant_advisory_draft={
+                        "status": "ready",
+                        "review_state": review_state,
+                        "reviewer_note": reviewer_note,
+                        "authority_mode": "advisory_only",
+                    },
+                )
+            )
+
+        stdout = io.StringIO()
+        main.main(["inspect-ai-trace-review-queue"], stdout=stdout, service=service)
+
+        payload = json.loads(stdout.getvalue())
+        self.assertTrue(payload["read_only"])
+        self.assertEqual(payload["queue_name"], "ai_trace_review")
+        self.assertEqual(payload["total_records"], 3)
+        self.assertEqual(
+            payload["state_counts"],
+            {"accepted": 1, "corrected": 1, "rejected": 1},
+        )
+        records_by_state = {record["review_state"]: record for record in payload["records"]}
+        self.assertEqual(
+            records_by_state["accepted"]["registered_agent_id"],
+            "agent-governed-summary-001",
+        )
+        self.assertEqual(
+            records_by_state["rejected"]["registered_tool_id"],
+            "tool-case-summary-001",
+        )
+        self.assertEqual(records_by_state["corrected"]["reviewed_record_family"], "case")
+        self.assertEqual(
+            records_by_state["corrected"]["reviewer_note"],
+            "Corrected by reviewer note before any downstream use.",
+        )
+        self.assertEqual(
+            records_by_state["accepted"]["citations"],
+            ["case-trace-review-001", "evidence-trace-review-001"],
+        )
+        self.assertEqual(
+            records_by_state["accepted"]["expiration_posture"],
+            "expires_with_reviewed_case",
+        )
+        for record in payload["records"]:
+            self.assertTrue(record["read_only"])
+            self.assertEqual(record["authority_mode"], "advisory_only")
+            self.assertFalse(record["authoritative_workflow_truth"])
+
+    def test_ai_trace_review_queue_rejects_missing_registered_tool_or_citations(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-review-missing-registration-001",
+                subject_linkage={
+                    "source_case_id": "case-trace-review-001",
+                    "registered_agent_id": "agent-governed-summary-001",
+                    "reviewed_record_family": "case",
+                    "reviewed_record_id": "case-trace-review-001",
+                },
+                model_identity="gpt-5.4",
+                prompt_version="phase-59-trace-review-v1",
+                generated_at=datetime(2026, 5, 12, 10, 0, tzinfo=timezone.utc),
+                material_input_refs=(),
+                reviewer_identity="analyst-001",
+                lifecycle_state="accepted_for_reference",
+                assistant_advisory_draft={
+                    "status": "ready",
+                    "review_state": "accepted",
+                    "reviewer_note": "Missing tool and citations must not render.",
+                    "authority_mode": "advisory_only",
+                },
+            )
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "missing registered_tool_id, citations",
+        ):
+            service._operator_inspection_read_surface.inspect_ai_trace_review_queue()
+
     def test_cli_renders_reviewed_wazuh_alert_detail_view(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
