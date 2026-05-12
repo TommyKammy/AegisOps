@@ -282,9 +282,20 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
         flags.append("scope_expansion_attempt")
 
     citation_suppression_terms = (
+        "conceal citations",
+        "conceal the citations",
+        "do not cite",
+        "do not include citations",
+        "drop citations",
+        "exclude citations",
+        "exclude the citations",
         "ignore missing citations",
         "hide uncertainty",
         "hide the uncertainty",
+        "hide citation requirements",
+        "hide citations",
+        "hide the citations",
+        "never cite",
         "suppress any remaining uncertainty",
         "suppress all uncertainty",
         "suppress uncertainty",
@@ -292,12 +303,16 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
         "omit citations",
         "omit the citation",
         "omit the citations",
+        "remove citations",
+        "skip citations",
+        "strip citations",
+        "withhold citations",
         "without any citation",
         "without any citations",
         "without citations",
     )
     citation_suppression_patterns = (
-        r"(?<!\w)(?:drop|hide|ignore|omit|remove|skip|suppress) "
+        r"(?<!\w)(?:conceal|drop|exclude|hide|ignore|omit|remove|skip|strip|suppress|withhold) "
         r"(?:all |any |any remaining |remaining |required |supporting |the )?"
         r"citations?(?!\w)",
         r"(?<!\w)(?:do not|don t|never) (?:cite|include citations?)(?!\w)",
@@ -328,21 +343,41 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
         "access unregistered tools",
         "access the unregistered tool",
         "access the unregistered tools",
+        "call unregistered tool",
+        "call unregistered tools",
+        "invoke disallowed tool",
+        "invoke disallowed tools",
+        "invoke unregistered tool",
+        "invoke unregistered tools",
+        "run disallowed tool",
+        "run disallowed tools",
+        "run unregistered tool",
+        "run unregistered tools",
         "use unregistered tool",
         "use unregistered tools",
         "bypass policy guard",
         "bypass the policy guard",
+        "bypass policy guardrail",
+        "bypass policy guardrails",
+        "bypass the policy guardrail",
+        "bypass the policy guardrails",
+        "ignore policy guard",
+        "ignore policy guardrails",
+        "override policy guard",
+        "override policy guards",
         "prohibited tool",
         "prohibited tools",
         "restricted tool",
         "restricted tools",
         "unauthorized tool",
         "unauthorized tools",
+        "unapproved tool",
+        "unapproved tools",
         "delegate the action to the automation tool",
     )
     tool_scope_patterns = (
         r"(?<!\w)(?:access|call|invoke|run|use) "
-        r"(?:any |the )?(?:disallowed|prohibited|restricted|unauthorized) tools?(?!\w)",
+        r"(?:any |the )?(?:disallowed|prohibited|restricted|unauthorized|unapproved) tools?(?!\w)",
         r"(?<!\w)(?:access|call|invoke|run|use) "
         r"(?:any |the )?unregistered tools?(?!\w)",
         r"(?<!\w)(?:bypass|disable|ignore|override) "
