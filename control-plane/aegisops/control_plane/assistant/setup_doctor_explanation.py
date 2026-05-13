@@ -8,7 +8,8 @@ from .live_assistant_workflow import phase24_live_assistant_prompt_injection_fla
 from ..runtime.doctor_contract import build_doctor_snapshot
 
 _AGENT_REGISTRY_REFERENCE = "docs/automation/ai-agent-registry.json"
-_AGENT_NAME = "setup_doctor_explanation_agent"
+_REGISTERED_AGENT_NAME = "setup_doctor_explanation_agent"
+_AGENT_NAME = _REGISTERED_AGENT_NAME
 _TOOL_NAME = "doctor_explanation"
 _AUTHORITY_CEILING = "advisory_only"
 _NEGATIVE_AUTHORITY = (
@@ -51,6 +52,12 @@ _POLICY_PRESSURE_TERMS = (
     "override the policy",
     "policy bypass",
 )
+_SOURCE_POSTURE_PRESSURE_TERMS = (
+    "change source posture",
+    "change the source posture",
+    "mark the source posture healthy",
+    "changed source posture",
+)
 _SETUP_REPAIR_PRESSURE_TERMS = (
     "repair",
     "repaired",
@@ -60,10 +67,7 @@ _SETUP_REPAIR_PRESSURE_TERMS = (
     "rotate secrets",
     "rotated secret",
     "rotated secrets",
-    "change source posture",
-    "change the source posture",
-    "mark the source posture healthy",
-    "changed source posture",
+    *_SOURCE_POSTURE_PRESSURE_TERMS,
 )
 
 
@@ -84,10 +88,10 @@ def build_setup_doctor_explanation(
             explanations=(),
         )
 
-    doctor = build_doctor_snapshot(
+    doctor = _trusted_doctor_snapshot_payload(
         config=config,
-        readiness_payload=readiness_payload,
-    ).to_dict()
+        trusted_readiness_payload=readiness_payload,
+    )
     base = _base_payload(doctor)
     prompt_flags = _prompt_pressure_flags(prompt_text)
     if prompt_flags:
@@ -207,6 +211,17 @@ def _blocked_payload(
         "support_output_is_workflow_truth": False,
         "explanations": (),
     }
+
+
+def _trusted_doctor_snapshot_payload(
+    *,
+    config: Any,
+    trusted_readiness_payload: Mapping[str, object],
+) -> Mapping[str, object]:
+    return build_doctor_snapshot(
+        config=config,
+        readiness_payload=trusted_readiness_payload,
+    ).to_dict()
 
 
 def _doctor_evidence_missing_payload(

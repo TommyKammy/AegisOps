@@ -39,7 +39,8 @@ for phrase in "${required_doc_phrases[@]}"; do
 done
 
 required_module_phrases=(
-  "_AGENT_NAME = \"setup_doctor_explanation_agent\""
+  "_REGISTERED_AGENT_NAME = \"setup_doctor_explanation_agent\""
+  "_AGENT_NAME = _REGISTERED_AGENT_NAME"
   "_TOOL_NAME = \"doctor_explanation\""
   "\"authoritative_workflow_truth\": False"
   "\"mutates_authoritative_records\": False"
