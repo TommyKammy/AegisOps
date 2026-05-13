@@ -279,6 +279,49 @@
         "policy_bypass"
       ],
       "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
+    },
+    {
+      "tool_name": "today_queue_digest",
+      "purpose": "Build a cited advisory digest from reviewed Today analyst queue records while preserving stale, degraded, missing-evidence, and unresolved work as subordinate context.",
+      "allowed_record_families": [
+        "alert",
+        "case",
+        "evidence",
+        "action_review",
+        "reconciliation",
+        "source_health",
+        "handoff",
+        "ai_trace"
+      ],
+      "required_citations": [
+        "record_family must identify the reviewed Today queue record family behind each digest claim",
+        "record_id must identify the directly linked AegisOps record behind each digest claim",
+        "evidence_reference must identify linked evidence, degraded-source evidence, handoff context, or an explicit missing-evidence gap"
+      ],
+      "audit_fields": [
+        "tool_name",
+        "agent_name",
+        "trace_id",
+        "requested_by",
+        "record_family",
+        "record_id",
+        "citation_ids",
+        "decision",
+        "timestamp"
+      ],
+      "disallowed_authority": [
+        "approval",
+        "execution",
+        "reconciliation",
+        "case_closure",
+        "detector_activation",
+        "source_truth_creation",
+        "queue_priority_mutation",
+        "task_completion",
+        "production_write",
+        "policy_bypass"
+      ],
+      "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
     }
   ]
 }

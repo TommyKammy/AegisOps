@@ -99,6 +99,7 @@ required_tool_names = {
     "recommendation_draft",
     "action_request_draft",
     "doctor_explanation",
+    "today_queue_digest",
 }
 required_tool_fields = {
     "tool_name",
