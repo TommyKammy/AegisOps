@@ -19,6 +19,7 @@ const ADVISORY_DETAIL_EXCLUDED_FIELDS = [
   "read_only",
   "cited_summary",
   "candidate_recommendations",
+  "guidance_steps",
   "uncertainty_flags",
   "citations",
   ...ADVISORY_SUMMARY_FIELDS,
@@ -52,6 +53,20 @@ export function advisoryRecommendations(record: UnknownRecord) {
   return asRecordArray(record.candidate_recommendations).map((entry) => ({
     citations: asStringArray(entry.citations),
     text: asString(entry.text),
+  }));
+}
+
+export function advisoryRunbookGuidanceSteps(record: UnknownRecord) {
+  return asRecordArray(record.guidance_steps).map((entry) => ({
+    canExecute: entry.can_execute === true,
+    canMarkComplete: entry.can_mark_complete === true,
+    citations: asStringArray(entry.citation_ids),
+    completionOwner: asString(entry.completion_owner),
+    countsAsWorkflowProgress: entry.counts_as_workflow_progress === true,
+    operatorPosture: asString(entry.operator_posture),
+    stepId: asString(entry.step_id),
+    title: asString(entry.title),
+    unresolvedReasons: asStringArray(entry.unresolved_reasons),
   }));
 }
 

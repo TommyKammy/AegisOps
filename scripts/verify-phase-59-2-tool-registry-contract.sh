@@ -100,6 +100,9 @@ required_tool_names = {
     "action_request_draft",
     "doctor_explanation",
     "today_queue_digest",
+    "case_timeline_summary",
+    "evidence_gap_detector",
+    "runbook_guidance",
 }
 required_tool_fields = {
     "tool_name",

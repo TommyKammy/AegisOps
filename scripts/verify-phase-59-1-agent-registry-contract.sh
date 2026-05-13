@@ -99,6 +99,9 @@ required_agent_names = {
     "today_focus_advisory_agent",
     "setup_doctor_explanation_agent",
     "today_queue_digest_agent",
+    "case_timeline_summary_agent",
+    "evidence_gap_detector_agent",
+    "runbook_guidance_agent",
 }
 required_agent_fields = {
     "agent_name",
