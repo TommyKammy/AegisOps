@@ -720,6 +720,22 @@ class AssistantAdvisoryPersistenceTests(ServicePersistenceTestBase):
             evidence_id,
             recommendation_draft.recommendation_draft["citations"],
         )
+        cited_draft = recommendation_draft.recommendation_draft[
+            "cited_recommendation_draft"
+        ]
+        self.assertEqual(
+            cited_draft["agent_name"],
+            "cited_recommendation_draft_agent",
+        )
+        self.assertEqual(cited_draft["decision"], "draft")
+        self.assertEqual(cited_draft["mode"], "cited_recommendation_draft")
+        self.assertFalse(cited_draft["mutates_authoritative_records"])
+        self.assertIn(f"case:{promoted_case.case_id}", cited_draft["citations"])
+        self.assertIn(f"evidence:{evidence_id}", cited_draft["citations"])
+        self.assertEqual(
+            cited_draft["recommendation_drafts"][0]["operator_feedback_posture"],
+            "unresolved",
+        )
         self.assertIn(
             "advisory_only",
             recommendation_draft.recommendation_draft["uncertainty_flags"],

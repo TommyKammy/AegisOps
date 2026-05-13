@@ -149,6 +149,76 @@ export function registerOperatorRoutesAssistantTests() {
       ).not.toBeInTheDocument();
     });
 
+    it("renders recommendation draft feedback as review context only", async () => {
+      const dependencies = createDefaultDependencies({
+        fetchFn: createAuthorizedFetch({
+          "/inspect-advisory-output": {
+            read_only: true,
+            record_family: "recommendation",
+            record_id: "recommendation-606",
+            output_kind: "recommendation_draft",
+            status: "ready",
+            cited_summary: {
+              text: "Recommendation drafts are cited and remain subordinate to reviewed records.",
+              citations: ["recommendation:recommendation-606", "case:case-606"],
+            },
+            recommendation_drafts: [
+              {
+                draft_text: "Review identity owner and attach cited evidence before action.",
+                operator_feedback_posture: "accepted",
+                requested_feedback_posture: "accepted",
+                citation_ids: ["case:case-606", "evidence:evidence-606"],
+                unresolved_reasons: [],
+              },
+              {
+                draft_text: "Do not proceed until the runbook gap is corrected.",
+                operator_feedback_posture: "corrected",
+                requested_feedback_posture: "corrected",
+                operator_correction: "Escalate to identity owner first.",
+                citation_ids: ["case:case-606", "runbook:docs/runbook.md#2.4"],
+                unresolved_reasons: [],
+              },
+              {
+                draft_text: "Resolve stale evidence before using this recommendation.",
+                operator_feedback_posture: "unresolved",
+                requested_feedback_posture: "accepted",
+                citation_ids: ["case:case-606", "evidence:evidence-606-stale"],
+                unresolved_reasons: ["stale_evidence"],
+              },
+            ],
+            uncertainty_flags: ["advisory_only"],
+            citations: [
+              "recommendation:recommendation-606",
+              "case:case-606",
+              "evidence:evidence-606",
+            ],
+          },
+        }),
+      });
+
+      render(
+        <MemoryRouter initialEntries={["/operator/assistant/recommendation/recommendation-606"]}>
+          <OperatorRoutes dependencies={dependencies} />
+        </MemoryRouter>,
+      );
+
+      const draftSection = await screen.findByRole("heading", { name: "Recommendation draft" });
+      const draftCard = draftSection.closest(".MuiCard-root");
+      expect(draftCard).not.toBeNull();
+      expect(within(draftCard as HTMLElement).getByText("Feedback: Accepted")).toBeInTheDocument();
+      expect(within(draftCard as HTMLElement).getByText("Feedback: Corrected")).toBeInTheDocument();
+      expect(within(draftCard as HTMLElement).getByText("Feedback: Unresolved")).toBeInTheDocument();
+      expect(within(draftCard as HTMLElement).getByText("Requested: Accepted")).toBeInTheDocument();
+      expect(within(draftCard as HTMLElement).getAllByText("Review context only")).toHaveLength(3);
+      expect(
+        within(draftCard as HTMLElement).getByText("Correction: Escalate to identity owner first."),
+      ).toBeInTheDocument();
+      expect(within(draftCard as HTMLElement).getByText("Stale Evidence")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /approve/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /execute/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /reconcile/i })).not.toBeInTheDocument();
+    });
+
     it("renders runbook guidance as operator-owned blocked and needs-review posture", async () => {
       const dependencies = createDefaultDependencies({
         fetchFn: createAuthorizedFetch({
