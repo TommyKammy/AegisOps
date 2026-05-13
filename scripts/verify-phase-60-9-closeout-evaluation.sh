@@ -67,7 +67,11 @@ for phrase in "${required_phrases[@]}"; do
 done
 
 absolute_path_boundary='(^|[[:space:]([{\=])'
-absolute_path_pattern="${absolute_path_boundary}(/Users/|/home/|[A-Za-z]:\\\\Users\\\\|[A-Za-z]:/Users/)[^ ]+"
+macos_home_pattern="/""Users/"
+linux_home_pattern="/""home/"
+windows_backslash_home_pattern='[A-Za-z]:\\\\'"Users"'\\\\'
+windows_slash_home_pattern='[A-Za-z]:/'"Users"'/'
+absolute_path_pattern="${absolute_path_boundary}(${macos_home_pattern}|${linux_home_pattern}|${windows_backslash_home_pattern}|${windows_slash_home_pattern})[^ ]+"
 if grep -Eq -- "${absolute_path_pattern}" "${absolute_doc_path}" "${readme_path}"; then
   echo "Forbidden Phase 60 closeout evaluation: workstation-local absolute path detected" >&2
   exit 1

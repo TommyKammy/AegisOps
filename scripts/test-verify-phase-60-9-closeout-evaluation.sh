@@ -164,14 +164,14 @@ assert_fails_with \
 
 absolute_path_repo="${workdir}/absolute-path"
 copy_valid_repo "${absolute_path_repo}"
-printf 'Run /Users/example/Dev/codex-supervisor/dist/index.js.\n' >>"${absolute_path_repo}/docs/phase-60-closeout-evaluation.md"
+printf 'Run /%s/example/Dev/codex-supervisor/dist/index.js.\n' "Users" >>"${absolute_path_repo}/docs/phase-60-closeout-evaluation.md"
 assert_fails_with \
   "${absolute_path_repo}" \
   "Forbidden Phase 60 closeout evaluation: workstation-local absolute path detected"
 
 absolute_path_windows_backslash_repo="${workdir}/absolute-path-windows-backslash"
 copy_valid_repo "${absolute_path_windows_backslash_repo}"
-printf 'Run C:/Users/example/Dev/codex-supervisor/dist/index.js.\n' >>"${absolute_path_windows_backslash_repo}/docs/phase-60-closeout-evaluation.md"
+printf 'Run C:/%s/example/Dev/codex-supervisor/dist/index.js.\n' "Users" >>"${absolute_path_windows_backslash_repo}/docs/phase-60-closeout-evaluation.md"
 assert_fails_with \
   "${absolute_path_windows_backslash_repo}" \
   "Forbidden Phase 60 closeout evaluation: workstation-local absolute path detected"
