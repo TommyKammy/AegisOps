@@ -322,6 +322,50 @@
         "policy_bypass"
       ],
       "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
+    },
+    {
+      "tool_name": "case_timeline_summary",
+      "purpose": "Build a cited advisory summary from reviewed case timeline projections while preserving missing, stale, degraded, conflicting, unsupported, and uncited segments as review-needed context.",
+      "allowed_record_families": [
+        "case",
+        "alert",
+        "evidence",
+        "recommendation",
+        "action_request",
+        "approval_decision",
+        "action_execution",
+        "reconciliation",
+        "source_health",
+        "ai_trace"
+      ],
+      "required_citations": [
+        "record_family must identify the directly linked reviewed case timeline record family behind each summary claim",
+        "record_id must identify the directly linked AegisOps record behind each summary claim",
+        "evidence_reference must identify linked reviewed evidence, subordinate context, stale or conflicting segment evidence, or an explicit timeline gap"
+      ],
+      "audit_fields": [
+        "tool_name",
+        "agent_name",
+        "trace_id",
+        "requested_by",
+        "record_family",
+        "record_id",
+        "citation_ids",
+        "decision",
+        "timestamp"
+      ],
+      "disallowed_authority": [
+        "approval",
+        "execution",
+        "reconciliation",
+        "case_closure",
+        "detector_activation",
+        "source_truth_creation",
+        "timeline_completion",
+        "production_write",
+        "policy_bypass"
+      ],
+      "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
     }
   ]
 }

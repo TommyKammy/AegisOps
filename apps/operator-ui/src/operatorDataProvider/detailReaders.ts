@@ -41,6 +41,13 @@ const CASE_TIMELINE_AUTHORITY_POSTURES = new Set([
 ]);
 
 const CASE_TIMELINE_CONTRACT_VERSION = "phase-56-3";
+const CASE_TIMELINE_SUMMARY_AGENT_NAME = "case_timeline_summary_agent";
+const CASE_TIMELINE_SUMMARY_TOOL_NAME = "case_timeline_summary";
+const CASE_TIMELINE_SUMMARY_DECISIONS = new Set([
+  "summarize",
+  "fallback",
+  "blocked",
+]);
 const BUSINESS_HOURS_HANDOFF_CONTRACT_VERSION = "phase-56-6";
 
 const BUSINESS_HOURS_HANDOFF_STATES = new Set([
@@ -68,6 +75,7 @@ export async function getOneForStandardResource(
 
   if (resource === "cases") {
     validateCaseTimelineProjection(payload, String(params.id).trim());
+    validateCaseTimelineSummary(payload);
   }
 
   return {
@@ -192,6 +200,128 @@ function validateCaseTimelineProjection(payload: unknown, requestedCaseId: strin
     if (recordId === null && incompleteReason === null) {
       throw new OperatorDataProviderContractError(
         `Resource cases case_timeline_projection segment ${segmentName} without record_id requires incomplete_reason.`,
+      );
+    }
+  });
+}
+
+function validateCaseTimelineSummary(payload: unknown) {
+  const response = asObject(
+    payload,
+    "Resource cases returned a malformed detail payload.",
+  );
+  const summaryValue = response.case_timeline_summary;
+
+  if (summaryValue === undefined || summaryValue === null) {
+    return;
+  }
+
+  const summary = asObject(
+    summaryValue,
+    "Resource cases case_timeline_summary must be an object.",
+  );
+  const agentName = asString(summary.agent_name);
+  const registeredToolName = asString(summary.registered_tool_name);
+  const decision = asString(summary.decision);
+  const caseId = asString(response.case_id);
+  const citations = Array.isArray(summary.citations)
+    ? summary.citations
+    : null;
+
+  if (
+    summary.read_only !== true ||
+    summary.mutates_authoritative_records !== false ||
+    summary.authoritative_workflow_truth !== false ||
+    summary.authority_ceiling !== "advisory_only"
+  ) {
+    throw new OperatorDataProviderContractError(
+      "Resource cases case_timeline_summary must remain read-only advisory context.",
+    );
+  }
+  if (
+    agentName !== CASE_TIMELINE_SUMMARY_AGENT_NAME ||
+    registeredToolName !== CASE_TIMELINE_SUMMARY_TOOL_NAME
+  ) {
+    throw new OperatorDataProviderContractError(
+      "Resource cases case_timeline_summary must come from the registered summary agent and tool.",
+    );
+  }
+  if (decision === null || !CASE_TIMELINE_SUMMARY_DECISIONS.has(decision)) {
+    throw new OperatorDataProviderContractError(
+      "Resource cases case_timeline_summary has unsupported decision.",
+    );
+  }
+  if (summary.trace_creation_allowed !== false) {
+    throw new OperatorDataProviderContractError(
+      "Resource cases case_timeline_summary cannot create trace truth from display context.",
+    );
+  }
+  if (
+    caseId === null ||
+    citations === null ||
+    citations.length === 0 ||
+    citations.some((citation) => asString(citation) === null) ||
+    !citations.includes(`case:${caseId}`)
+  ) {
+    throw new OperatorDataProviderContractError(
+      "Resource cases case_timeline_summary must include top-level citations for the reviewed case.",
+    );
+  }
+
+  const topLevelCitationSet = new Set(citations.map((citation) => asString(citation)));
+  const summarySegments = Array.isArray(summary.summary_segments)
+    ? summary.summary_segments
+    : null;
+  if (summarySegments === null) {
+    throw new OperatorDataProviderContractError(
+      "Resource cases case_timeline_summary must include summary_segments.",
+    );
+  }
+  if (decision === "summarize" && summarySegments.length !== CASE_TIMELINE_SEGMENTS.length) {
+    throw new OperatorDataProviderContractError(
+      "Resource cases case_timeline_summary must include every reviewed timeline segment when summarizing.",
+    );
+  }
+  if (decision !== "summarize" && summarySegments.length !== 0) {
+    throw new OperatorDataProviderContractError(
+      "Resource cases case_timeline_summary fallback or blocked decisions cannot render summary rows.",
+    );
+  }
+
+  summarySegments.forEach((segmentValue, index) => {
+    const segment = asObject(
+      segmentValue,
+      "Resource cases case_timeline_summary segment must be an object.",
+    );
+    const segmentName = asString(segment.segment);
+    const authorityLabel = asString(segment.authority_label);
+    const citationIds = Array.isArray(segment.citation_ids)
+      ? segment.citation_ids
+      : null;
+
+    if (segmentName !== CASE_TIMELINE_SEGMENTS[index]) {
+      throw new OperatorDataProviderContractError(
+        "Resource cases case_timeline_summary segment order or type is unsupported.",
+      );
+    }
+    if (
+      authorityLabel === null ||
+      !CASE_TIMELINE_AUTHORITY_POSTURES.has(authorityLabel)
+    ) {
+      throw new OperatorDataProviderContractError(
+        `Resource cases case_timeline_summary segment ${segmentName} has unsupported authority label.`,
+      );
+    }
+    if (
+      citationIds === null ||
+      citationIds.length === 0 ||
+      citationIds.some((citationId) => asString(citationId) === null) ||
+      citationIds.some((citationId) => !topLevelCitationSet.has(asString(citationId))) ||
+      segment.advisory_only !== true ||
+      segment.can_complete_workflow !== false
+    ) {
+      throw new OperatorDataProviderContractError(
+        `Resource cases case_timeline_summary segment ${segmentName} must stay cited by top-level advisory-only context.`,
       );
     }
   });

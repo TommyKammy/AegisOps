@@ -50,6 +50,55 @@ function createCaseTimelineProjection(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function createCaseTimelineSummary(overrides: Record<string, unknown> = {}) {
+  const summarySegments = createCaseTimelineProjection().segments.map(
+    (segment: unknown) => {
+      const record = segment as Record<string, unknown>;
+      const binding = record.backend_record_binding as Record<string, unknown>;
+      const recordId =
+        typeof binding.record_id === "string" && binding.record_id
+          ? binding.record_id
+          : null;
+      const segmentName = String(record.segment);
+      return {
+        advisory_only: true,
+        authority_label: record.authority_posture,
+        can_complete_workflow: false,
+        citation_ids: recordId
+          ? [`${String(binding.record_family)}:${recordId}`]
+          : [`timeline_gap:${segmentName}`],
+        segment: segmentName,
+        state: record.state,
+        summary: `${segmentName} remains review context only.`,
+        uncertainty_flags:
+          record.state === "normal" ? [] : [`${String(record.state)}_timeline_segment`],
+      };
+    },
+  );
+  const summaryCitations = Array.from(
+    new Set([
+      "case:case-456",
+      ...summarySegments.flatMap((segment) => segment.citation_ids),
+    ]),
+  );
+
+  return {
+    agent_name: "case_timeline_summary_agent",
+    authoritative_workflow_truth: false,
+    authority_ceiling: "advisory_only",
+    citations: summaryCitations,
+    decision: "summarize",
+    mode: "case_timeline_summary",
+    mutates_authoritative_records: false,
+    read_only: true,
+    registered_tool_name: "case_timeline_summary",
+    summary_segments: summarySegments,
+    trace_creation_allowed: false,
+    uncertainty_flags: ["missing_timeline_segment", "stale_timeline_segment"],
+    ...overrides,
+  };
+}
+
 function createCaseDetailPayload(overrides: Record<string, unknown> = {}) {
   return {
     case_id: "case-456",
@@ -57,6 +106,7 @@ function createCaseDetailPayload(overrides: Record<string, unknown> = {}) {
       case_id: "case-456",
       lifecycle_state: "pending_action",
     },
+    case_timeline_summary: createCaseTimelineSummary(),
     case_timeline_projection: createCaseTimelineProjection(),
     cross_source_timeline: [],
     linked_alert_ids: ["alert-123"],
@@ -161,14 +211,36 @@ export function registerOperatorRoutesCaseworkDetailTests() {
       expect(screen.queryByText("Completed by timeline display")).not.toBeInTheDocument();
     });
 
+    it("renders cited case timeline summary as advisory review context only", async () => {
+      const dependencies = createDefaultDependencies({
+        fetchFn: createAuthorizedFetch({
+          "/inspect-case-detail": createCaseDetailPayload(),
+        }),
+      });
+
+      renderOperatorRoute("/operator/cases/case-456", dependencies);
+
+      const summary = await screen.findByRole("table", {
+        name: "Case timeline summary",
+      });
+
+      expect(within(summary).getByText("wazuh_signal remains review context only.")).toBeInTheDocument();
+      expect(within(summary).getAllByText("Advisory review context only").length).toBeGreaterThan(0);
+      expect(within(summary).getByText("alert:alert-123")).toBeInTheDocument();
+      expect(screen.getByText("Trace creation: false")).toBeInTheDocument();
+      expect(screen.queryByText("Closed by summary")).not.toBeInTheDocument();
+    });
+
     it.each([
       [
         "unsupported timeline contract version",
         createCaseTimelineProjection({ contract_version: "phase-56-4" }),
+        undefined,
       ],
       [
         "cache-sourced timeline truth",
         createCaseTimelineProjection({ cache_sourced: true }),
+        undefined,
       ],
       [
         "unsupported segment type",
@@ -183,6 +255,7 @@ export function registerOperatorRoutesCaseworkDetailTests() {
                 : segment,
           ),
         }),
+        undefined,
       ],
       [
         "wrong authority label",
@@ -197,6 +270,7 @@ export function registerOperatorRoutesCaseworkDetailTests() {
                 : segment,
           ),
         }),
+        undefined,
       ],
       [
         "display state as completion truth",
@@ -211,12 +285,99 @@ export function registerOperatorRoutesCaseworkDetailTests() {
                 : segment,
           ),
         }),
+        undefined,
       ],
-    ])("fails closed on %s", async (_label, caseTimelineProjection) => {
+      [
+        "summary segment completing workflow",
+        createCaseTimelineProjection(),
+        createCaseTimelineSummary({
+          summary_segments: createCaseTimelineSummary().summary_segments.map(
+            (segment: unknown, index) =>
+              index === 0
+                ? {
+                    ...(segment as Record<string, unknown>),
+                    can_complete_workflow: true,
+                  }
+                : segment,
+          ),
+        }),
+      ],
+      [
+        "blocked summary with rendered rows",
+        createCaseTimelineProjection(),
+        createCaseTimelineSummary({
+          decision: "blocked",
+          mode: "prompt_pressure_blocked",
+        }),
+      ],
+      [
+        "fallback summary with rendered rows",
+        createCaseTimelineProjection(),
+        createCaseTimelineSummary({
+          decision: "fallback",
+          mode: "ai_disabled",
+        }),
+      ],
+      [
+        "summary without top-level citations",
+        createCaseTimelineProjection(),
+        createCaseTimelineSummary({
+          citations: [],
+        }),
+      ],
+      [
+        "summary without reviewed case citation",
+        createCaseTimelineProjection(),
+        createCaseTimelineSummary({
+          citations: createCaseTimelineSummary().citations.filter(
+            (citation) => citation !== "case:case-456",
+          ),
+        }),
+      ],
+      [
+        "summary missing segment citation in top-level citations",
+        createCaseTimelineProjection(),
+        createCaseTimelineSummary({
+          citations: createCaseTimelineSummary().citations.filter(
+            (citation) => citation !== "reconciliation:recon-123",
+          ),
+        }),
+      ],
+      [
+        "summary from unregistered agent",
+        createCaseTimelineProjection(),
+        createCaseTimelineSummary({
+          agent_name: "browser_case_timeline_summary_agent",
+        }),
+      ],
+      [
+        "summary from unregistered tool",
+        createCaseTimelineProjection(),
+        createCaseTimelineSummary({
+          registered_tool_name: "browser_case_timeline_summary",
+        }),
+      ],
+      [
+        "summary segment with malformed citation id",
+        createCaseTimelineProjection(),
+        createCaseTimelineSummary({
+          summary_segments: createCaseTimelineSummary().summary_segments.map(
+            (segment: unknown, index) =>
+              index === 0
+                ? {
+                    ...(segment as Record<string, unknown>),
+                    citation_ids: ["reconciliation:recon-123", null],
+                  }
+                : segment,
+          ),
+        }),
+      ],
+    ])("fails closed on %s", async (_label, caseTimelineProjection, caseTimelineSummary) => {
       const dependencies = createDefaultDependencies({
         fetchFn: createAuthorizedFetch({
           "/inspect-case-detail": createCaseDetailPayload({
             case_timeline_projection: caseTimelineProjection,
+            ...(caseTimelineSummary ? { case_timeline_summary: caseTimelineSummary } : {}),
           }),
         }),
       });
