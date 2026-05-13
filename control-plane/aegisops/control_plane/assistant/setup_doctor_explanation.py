@@ -97,6 +97,17 @@ def build_setup_doctor_explanation(
     if prompt_flags:
         return _blocked_payload(base, prompt_flags)
 
+    evidence_reasons = _doctor_evidence_unresolved_reasons(readiness_payload)
+    if evidence_reasons:
+        return _doctor_evidence_missing_payload(
+            base,
+            unresolved_reasons=evidence_reasons,
+            explanations=_fallback_explanations(
+                doctor,
+                families=("control_plane", "database", "evidence_availability"),
+            ),
+        )
+
     ai_state = _doctor_state(doctor, "ai_enablement")
     ai_reason = ai_state.get("reason")
     if ai_reason == "ai_disabled":
@@ -137,17 +148,6 @@ def build_setup_doctor_explanation(
             "non_ai_workflow_available": True,
             "explanations": _fallback_explanations(doctor, families=("ai_enablement",)),
         }
-
-    evidence_reasons = _doctor_evidence_unresolved_reasons(readiness_payload)
-    if evidence_reasons:
-        return _doctor_evidence_missing_payload(
-            base,
-            unresolved_reasons=evidence_reasons,
-            explanations=_fallback_explanations(
-                doctor,
-                families=("control_plane", "database", "evidence_availability"),
-            ),
-        )
 
     explained_families = tuple(
         entry["state_family"]

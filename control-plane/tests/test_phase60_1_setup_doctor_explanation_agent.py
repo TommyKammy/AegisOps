@@ -76,6 +76,31 @@ class Phase601SetupDoctorExplanationAgentTests(unittest.TestCase):
         self.assertIn("doctor:ai_enablement", payload["citations"])
         self.assertIn("docs/automation/ai-disabled-degraded-mode-contract.json", payload["citations"])
 
+    def test_ai_disabled_or_degraded_with_missing_evidence_fails_closed_first(
+        self,
+    ) -> None:
+        for posture in ("disabled", "degraded"):
+            with self.subTest(posture=posture):
+                payload = build_setup_doctor_explanation(
+                    config=_doctor_config(ai_enablement_posture=posture),
+                    readiness_payload={"read_only": True, "status": "ready"},
+                )
+
+                self.assertEqual(payload["decision"], "fallback")
+                self.assertEqual(payload["mode"], "doctor_evidence_missing")
+                self.assertIn("missing_doctor_evidence", payload["unresolved_reasons"])
+                self.assertNotIn(
+                    "ai_advisory_disabled",
+                    payload["unresolved_reasons"],
+                )
+                self.assertNotIn(
+                    "ai_advisory_degraded",
+                    payload["unresolved_reasons"],
+                )
+                self.assertFalse(payload["ai_generation_allowed"])
+                self.assertFalse(payload["trace_creation_allowed"])
+                self.assertTrue(payload["non_ai_workflow_available"])
+
     def test_prompt_pressure_fails_closed_and_preserves_citations(self) -> None:
         payload = build_setup_doctor_explanation(
             config=_doctor_config(),
