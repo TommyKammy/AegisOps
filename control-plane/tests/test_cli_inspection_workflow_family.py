@@ -576,11 +576,16 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
             "prompt_pressure_records": 1,
             "prompt_pressure_ratio": 0.2,
         })
-        malformed_trace_ids = {
-            malformed["ai_trace_id"] for malformed in payload["malformed_trace_records"]
+        malformed_trace_records = {
+            malformed["ai_trace_id"]: malformed for malformed in payload["malformed_trace_records"]
         }
-        self.assertIn("ai-trace-quality-malformed-001", malformed_trace_ids)
-        self.assertIn("ai-trace-quality-unresolved-001", malformed_trace_ids)
+        self.assertIn("ai-trace-quality-malformed-001", malformed_trace_records)
+        self.assertIn("ai-trace-quality-unresolved-001", malformed_trace_records)
+        malformed = malformed_trace_records["ai-trace-quality-malformed-001"]
+        self.assertEqual(
+            set(malformed["missing_required_fields"]),
+            {"registered_tool_id", "citations"},
+        )
 
     def test_cli_ai_quality_metrics_missing_citation_is_explicit(self) -> None:
         _, service, promoted_case, evidence_id, _ = (

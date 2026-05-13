@@ -324,7 +324,8 @@ class OperatorInspectionReadSurface:
                     ("citations", citations),
                 )
                 if (
-                    (isinstance(value, str) and not value.strip())
+                    value is None
+                    or (isinstance(value, str) and not value.strip())
                     or (isinstance(value, tuple) and not value)
                     or (isinstance(value, list) and not value)
                 )
