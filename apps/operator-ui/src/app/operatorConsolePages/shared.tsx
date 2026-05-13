@@ -12,6 +12,7 @@ export {
   advisoryContextEntries,
   advisoryDetailRows,
   advisoryRecommendations,
+  advisoryRunbookGuidanceSteps,
   advisorySummary,
   advisoryUncertaintyLabel,
   advisoryUncertaintyMessage,

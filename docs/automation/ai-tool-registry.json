@@ -411,6 +411,52 @@
         "policy_bypass"
       ],
       "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
+    },
+    {
+      "tool_name": "runbook_guidance",
+      "purpose": "Build cited advisory runbook guidance from reviewed runbook and control-plane records while preserving operator-owned suggested, skipped, completed, blocked, and needs-review posture.",
+      "allowed_record_families": [
+        "runbook",
+        "case",
+        "alert",
+        "evidence",
+        "recommendation",
+        "action_request",
+        "approval_decision",
+        "action_execution",
+        "reconciliation",
+        "source_health",
+        "ai_trace"
+      ],
+      "required_citations": [
+        "record_family must identify the reviewed runbook or directly linked record family behind each guidance claim",
+        "record_id must identify the reviewed runbook section or directly linked AegisOps record behind each guidance claim",
+        "evidence_reference must identify the runbook reference, linked reviewed record, degraded-source blocker, or explicit stale or missing-guidance prerequisite"
+      ],
+      "audit_fields": [
+        "tool_name",
+        "agent_name",
+        "trace_id",
+        "requested_by",
+        "record_family",
+        "record_id",
+        "citation_ids",
+        "decision",
+        "timestamp"
+      ],
+      "disallowed_authority": [
+        "approval",
+        "execution",
+        "reconciliation",
+        "case_closure",
+        "detector_activation",
+        "source_truth_creation",
+        "runbook_completion",
+        "workflow_progress",
+        "production_write",
+        "policy_bypass"
+      ],
+      "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
     }
   ]
 }

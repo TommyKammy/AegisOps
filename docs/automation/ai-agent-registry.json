@@ -270,6 +270,41 @@
         "evidence_reference must identify linked reviewed evidence, stale source-health evidence, receipt or reconciliation prerequisites, conflict evidence, or an explicit missing-citation gap"
       ],
       "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
+    },
+    {
+      "agent_name": "runbook_guidance_agent",
+      "purpose": "Suggest cited runbook steps from reviewed runbook and control-plane context while keeping suggested, skipped, completed, blocked, and needs-review posture operator-owned.",
+      "allowed_tools": [
+        "runbook_guidance"
+      ],
+      "disallowed_tools": [
+        "approve_action",
+        "execute_action",
+        "reconcile_execution",
+        "close_case",
+        "activate_detector",
+        "create_source_truth",
+        "bypass_policy"
+      ],
+      "record_families": [
+        "runbook",
+        "case",
+        "alert",
+        "evidence",
+        "recommendation",
+        "action_request",
+        "approval_decision",
+        "action_execution",
+        "reconciliation",
+        "source_health",
+        "ai_trace"
+      ],
+      "citation_requirements": [
+        "record_family must identify the reviewed runbook or directly linked AegisOps record family behind each guidance claim",
+        "record_id must identify the reviewed runbook section or directly linked AegisOps record behind each guidance claim",
+        "evidence_reference must identify the runbook reference, linked reviewed record, degraded-source blocker, or explicit stale or missing-guidance prerequisite"
+      ],
+      "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
     }
   ]
 }

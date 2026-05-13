@@ -18,6 +18,7 @@ import {
   advisoryContextEntries,
   advisoryDetailRows,
   advisoryRecommendations,
+  advisoryRunbookGuidanceSteps,
   advisorySummary,
   advisoryUncertaintyLabel,
   advisoryUncertaintyMessage,
@@ -106,6 +107,12 @@ function AssistantAdvisoryPageBody({
   const summary = advisorySummary(data);
   const recommendationDrafts = advisoryRecommendations(data).filter(
     (entry): entry is { citations: string[]; text: string } => entry.text !== null,
+  );
+  const runbookGuidanceSteps = advisoryRunbookGuidanceSteps(data).filter(
+    (entry): entry is ReturnType<typeof advisoryRunbookGuidanceSteps>[number] & {
+      stepId: string;
+      title: string;
+    } => entry.stepId !== null && entry.title !== null,
   );
   const keyObservations = advisoryContextEntries(data, "key_observations");
   const unresolvedQuestions = advisoryContextEntries(data, "unresolved_questions");
@@ -307,6 +314,88 @@ function AssistantAdvisoryPageBody({
             ) : (
               <EmptyState message="No recommendation draft proposals were returned for this advisory output." />
             )}
+          </Stack>
+        </SectionCard>
+      ) : null}
+
+      {runbookGuidanceSteps.length > 0 ? (
+        <SectionCard
+          subtitle="Runbook guidance keeps completion operator-owned and does not execute actions or advance workflow state."
+          title="Runbook guidance"
+        >
+          <Stack spacing={2}>
+            <Alert severity="warning" variant="outlined">
+              Runbook suggestions are advisory only; operators own completion and workflow progress.
+            </Alert>
+            {runbookGuidanceSteps.map((step) => (
+              <Card
+                elevation={0}
+                key={step.stepId}
+                sx={{ border: "1px solid", borderColor: "divider" }}
+              >
+                <CardContent>
+                  <Stack spacing={2}>
+                    <Stack direction="row" flexWrap="wrap" gap={1}>
+                      <Chip
+                        label={formatLabel(step.operatorPosture ?? "needs_review")}
+                        size="small"
+                      />
+                      <Chip
+                        color="warning"
+                        label={`Completion owner: ${step.completionOwner ?? "operator"}`}
+                        size="small"
+                        variant="outlined"
+                      />
+                      <Chip
+                        color={step.countsAsWorkflowProgress ? "error" : "success"}
+                        label={
+                          step.countsAsWorkflowProgress
+                            ? "Counts as workflow progress"
+                            : "No workflow progress"
+                        }
+                        size="small"
+                        variant="outlined"
+                      />
+                    </Stack>
+                    <Typography variant="subtitle2">{step.title}</Typography>
+                    <ValueList
+                      entries={[
+                        ["Step id", step.stepId],
+                        ["Can mark complete", formatValue(step.canMarkComplete)],
+                        ["Can execute", formatValue(step.canExecute)],
+                      ]}
+                    />
+                    {step.unresolvedReasons.length > 0 ? (
+                      <Stack direction="row" flexWrap="wrap" gap={1}>
+                        {step.unresolvedReasons.map((reason) => (
+                          <Chip
+                            color="warning"
+                            key={`${step.stepId}-${reason}`}
+                            label={formatLabel(reason)}
+                            size="small"
+                            variant="outlined"
+                          />
+                        ))}
+                      </Stack>
+                    ) : null}
+                    {step.citations.length > 0 ? (
+                      <Stack direction="row" flexWrap="wrap" gap={1}>
+                        {step.citations.map((citation) => (
+                          <Chip
+                            key={`${step.stepId}-${citation}`}
+                            label={citation}
+                            size="small"
+                            variant="outlined"
+                          />
+                        ))}
+                      </Stack>
+                    ) : (
+                      <EmptyState message="This runbook guidance step did not include supporting citations." />
+                    )}
+                  </Stack>
+                </CardContent>
+              </Card>
+            ))}
           </Stack>
         </SectionCard>
       ) : null}

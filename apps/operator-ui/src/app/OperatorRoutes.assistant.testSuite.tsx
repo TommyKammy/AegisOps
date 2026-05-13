@@ -149,6 +149,81 @@ export function registerOperatorRoutesAssistantTests() {
       ).not.toBeInTheDocument();
     });
 
+    it("renders runbook guidance as operator-owned blocked and needs-review posture", async () => {
+      const dependencies = createDefaultDependencies({
+        fetchFn: createAuthorizedFetch({
+          "/inspect-advisory-output": {
+            read_only: true,
+            record_family: "case",
+            record_id: "case-605",
+            output_kind: "runbook_guidance",
+            status: "ready",
+            cited_summary: {
+              text: "Runbook guidance is cited and remains subordinate to operator-owned workflow state.",
+              citations: ["case:case-605", "docs/runbook.md#2.2"],
+            },
+            guidance_steps: [
+              {
+                step_id: "runbook-evidence-capture",
+                title: "Capture startup evidence",
+                operator_posture: "blocked",
+                completion_owner: "operator",
+                counts_as_workflow_progress: false,
+                can_mark_complete: false,
+                can_execute: false,
+                unresolved_reasons: ["blocked_by_degraded_source"],
+                citation_ids: ["docs/runbook.md#2.3", "source_health:wazuh"],
+              },
+              {
+                step_id: "runbook-ready-checks",
+                title: "Review ready-to-operate checks",
+                operator_posture: "needs_review",
+                completion_owner: "operator",
+                counts_as_workflow_progress: false,
+                can_mark_complete: false,
+                can_execute: false,
+                unresolved_reasons: ["stale_runbook_step"],
+                citation_ids: ["docs/runbook.md#2.4", "evidence:evidence-605"],
+              },
+            ],
+            uncertainty_flags: ["advisory_only"],
+            citations: [
+              "case:case-605",
+              "docs/runbook.md#2.2",
+              "docs/runbook.md#2.3",
+              "docs/runbook.md#2.4",
+            ],
+          },
+        }),
+      });
+
+      render(
+        <MemoryRouter initialEntries={["/operator/assistant/case/case-605"]}>
+          <OperatorRoutes dependencies={dependencies} />
+        </MemoryRouter>,
+      );
+
+      const guidanceSection = await screen.findByRole("heading", { name: "Runbook guidance" });
+      const guidanceCard = guidanceSection.closest(".MuiCard-root");
+      expect(guidanceCard).not.toBeNull();
+      expect(
+        within(guidanceCard as HTMLElement).getByText(
+          "Runbook suggestions are advisory only; operators own completion and workflow progress.",
+        ),
+      ).toBeInTheDocument();
+      expect(within(guidanceCard as HTMLElement).getByText("Capture startup evidence")).toBeInTheDocument();
+      expect(within(guidanceCard as HTMLElement).getByText("Review ready-to-operate checks")).toBeInTheDocument();
+      expect(within(guidanceCard as HTMLElement).getAllByText("Completion owner: operator")).toHaveLength(2);
+      expect(within(guidanceCard as HTMLElement).getAllByText("No workflow progress")).toHaveLength(2);
+      expect(within(guidanceCard as HTMLElement).getAllByText("false").length).toBeGreaterThanOrEqual(4);
+      expect(within(guidanceCard as HTMLElement).getByText("Blocked")).toBeInTheDocument();
+      expect(within(guidanceCard as HTMLElement).getByText("Needs Review")).toBeInTheDocument();
+      expect(within(guidanceCard as HTMLElement).getByText("Blocked By Degraded Source")).toBeInTheDocument();
+      expect(within(guidanceCard as HTMLElement).getByText("Stale Runbook Step")).toBeInTheDocument();
+      expect(within(guidanceCard as HTMLElement).getByText("docs/runbook.md#2.3")).toBeInTheDocument();
+      expect(within(guidanceCard as HTMLElement).getByText("source_health:wazuh")).toBeInTheDocument();
+    });
+
     it("keeps fallback advisory summary fields out of the detail table", async () => {
       const dependencies = createDefaultDependencies({
         fetchFn: createAuthorizedFetch({
