@@ -44,6 +44,8 @@ Phase 60 is accepted as the AI Daily Operations MVP for advisory-only operationa
 AegisOps control-plane records remain authoritative for alert, case, evidence, recommendation, action request, approval, action review, execution receipt, reconciliation, audit event, limitation, source health, and closeout truth.
 AI output, setup doctor explanation, queue digest output, case timeline summary output, evidence-gap detector output, runbook guidance output, recommendation draft output, action-request draft guardrail output, quality metrics report output, operator UI surfaces, browser state, Wazuh state, Shuffle state, ticket state, optional evidence, verifier output, issue-lint output, and model output remain subordinate advisory evidence.
 AI daily operations must reject missing authority ceilings, missing citations, disallowed authority, authority-expansion prompt pressure, stale evidence overclaims, conflicting evidence auto-resolution, treatment of advisory output as workflow truth, disabled/degraded AI workflow blocking, workspace-local path leakage, and Phase 61/62/66/Beta/RC/GA/commercial replacement overclaims.
+AI can be disabled or degraded without blocking non-AI workflow progression.
+Conflicting evidence requires explicit operator resolution and is not auto-resolved.
 This closeout does not claim Phase 61 SIEM breadth is complete, Phase 62 SOAR breadth is complete, Phase 66 RC proof is complete, AegisOps is Beta, RC, GA, self-service commercially ready, or a commercial replacement for every SIEM/SOAR capability.
 | #1278 | Phase 60.9 Phase 60 closeout evaluation | Open until this document and focused closeout verifier land. |
 Phase 60 does not implement autonomous approval, autonomous execution, autonomous reconciliation, case closure, detector activation, source-truth creation, policy bypass, or production write authority.
@@ -66,10 +68,10 @@ for phrase in "${required_phrases[@]}"; do
   require_phrase "${absolute_doc_path}" "${phrase}" "required Phase 60 closeout term in ${doc_path}"
 done
 
-absolute_path_boundary='(^|[[:space:]([{\=])'
+absolute_path_boundary="(^|[[:space:]([{\"'\\\`<={])"
 macos_home_pattern="/""Users/"
 linux_home_pattern="/""home/"
-windows_backslash_home_pattern='[A-Za-z]:\\\\'"Users"'\\\\'
+windows_backslash_home_pattern='[A-Za-z]:\\'"Users"'\\'
 windows_slash_home_pattern='[A-Za-z]:/'"Users"'/'
 absolute_path_pattern="${absolute_path_boundary}(${macos_home_pattern}|${linux_home_pattern}|${windows_backslash_home_pattern}|${windows_slash_home_pattern})[^ ]+"
 if grep -Eq -- "${absolute_path_pattern}" "${absolute_doc_path}" "${readme_path}"; then
@@ -95,9 +97,25 @@ for forbidden in \
   "AI output may approve actions" \
   "AI output may execute actions" \
   "AI output can block case review" \
+  "AI can be disabled or degraded to block case review" \
+  "AI may be disabled or degraded to block case review" \
+  "Disabled AI may block case review" \
+  "Disabled AI can block case review" \
+  "degraded AI workflow may block case review" \
+  "degraded AI can block case review" \
+  "conflicting evidence may be automatically resolved" \
+  "conflicting evidence can be automatically resolved" \
+  "conflicting evidence may be auto-resolved" \
+  "conflicting evidence can be auto-resolved" \
+  "conflicting evidence is automatically resolved" \
+  "Conflicting evidence may be automatically resolved" \
+  "Conflicting evidence can be automatically resolved" \
+  "Conflicting evidence may be auto-resolved" \
+  "Conflicting evidence can be auto-resolved" \
+  "Conflicting evidence is automatically resolved" \
   "Stale evidence is current truth" \
   "Missing citations may be hidden" \
-  "Disabled AI may block case review"; do
+  ; do
   if grep -Fxv -- "${allowed_non_claim_line}" "${absolute_doc_path}" | grep -Fq -- "${forbidden}"; then
     echo "Forbidden Phase 60 closeout evaluation claim: ${forbidden}" >&2
     exit 1

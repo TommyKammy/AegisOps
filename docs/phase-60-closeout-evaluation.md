@@ -16,6 +16,8 @@ AegisOps control-plane records remain authoritative for alert, case, evidence, r
 AI output, setup doctor explanation, queue digest output, case timeline summary output, evidence-gap detector output, runbook guidance output, recommendation draft output, action-request draft guardrail output, quality metrics report output, operator UI surfaces, browser state, Wazuh state, Shuffle state, ticket state, optional evidence, verifier output, issue-lint output, and model output remain subordinate advisory evidence.
 
 AI daily operations must reject missing authority ceilings, missing citations, disallowed authority, authority-expansion prompt pressure, stale evidence overclaims, conflicting evidence auto-resolution, treatment of advisory output as workflow truth, disabled/degraded AI workflow blocking, workspace-local path leakage, and Phase 61/62/66/Beta/RC/GA/commercial replacement overclaims.
+AI can be disabled or degraded without blocking non-AI workflow progression.
+Conflicting evidence requires explicit operator resolution and is not auto-resolved.
 
 This closeout does not claim Phase 61 SIEM breadth is complete, Phase 62 SOAR breadth is complete, Phase 66 RC proof is complete, AegisOps is Beta, RC, GA, self-service commercially ready, or a commercial replacement for every SIEM/SOAR capability.
 

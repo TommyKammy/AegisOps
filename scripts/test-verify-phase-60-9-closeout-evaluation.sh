@@ -171,9 +171,25 @@ assert_fails_with \
 
 absolute_path_windows_backslash_repo="${workdir}/absolute-path-windows-backslash"
 copy_valid_repo "${absolute_path_windows_backslash_repo}"
-printf 'Run C:/%s/example/Dev/codex-supervisor/dist/index.js.\n' "Users" >>"${absolute_path_windows_backslash_repo}/docs/phase-60-closeout-evaluation.md"
+printf 'Run C:\\%s\\example\\Dev\\codex-supervisor\\dist\\index.js.\n' "Users" >>"${absolute_path_windows_backslash_repo}/docs/phase-60-closeout-evaluation.md"
+printf 'Run "C:\\%s\\example\\Dev\\codex-supervisor\\dist\\index.js".\n' "Users" >>"${absolute_path_windows_backslash_repo}/docs/phase-60-closeout-evaluation.md"
+printf 'Run `C:\\%s\\example\\Dev\\codex-supervisor\\dist\\index.js`.\n' "Users" >>"${absolute_path_windows_backslash_repo}/docs/phase-60-closeout-evaluation.md"
 assert_fails_with \
   "${absolute_path_windows_backslash_repo}" \
   "Forbidden Phase 60 closeout evaluation: workstation-local absolute path detected"
+
+overclaim_disabled_repo="${workdir}/overclaim-disabled-degraded"
+copy_valid_repo "${overclaim_disabled_repo}"
+printf '%s\n' "AI can be disabled or degraded to block case review." >>"${overclaim_disabled_repo}/docs/phase-60-closeout-evaluation.md"
+assert_fails_with \
+  "${overclaim_disabled_repo}" \
+  "Forbidden Phase 60 closeout evaluation claim: AI can be disabled or degraded to block case review"
+
+overclaim_conflict_repo="${workdir}/overclaim-conflict-autoresolve"
+copy_valid_repo "${overclaim_conflict_repo}"
+printf '%s\n' "Conflicting evidence may be automatically resolved." >>"${overclaim_conflict_repo}/docs/phase-60-closeout-evaluation.md"
+assert_fails_with \
+  "${overclaim_conflict_repo}" \
+  "Forbidden Phase 60 closeout evaluation claim: Conflicting evidence may be automatically resolved"
 
 echo "Phase 60 closeout verification tests passed."
