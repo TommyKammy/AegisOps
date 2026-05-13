@@ -223,6 +223,7 @@ function validateCaseTimelineSummary(payload: unknown) {
   const agentName = asString(summary.agent_name);
   const registeredToolName = asString(summary.registered_tool_name);
   const decision = asString(summary.decision);
+  const caseId = asString(response.case_id);
   const citations = Array.isArray(summary.citations)
     ? summary.citations
     : null;
@@ -256,12 +257,14 @@ function validateCaseTimelineSummary(payload: unknown) {
     );
   }
   if (
+    caseId === null ||
     citations === null ||
     citations.length === 0 ||
-    citations.some((citation) => asString(citation) === null)
+    citations.some((citation) => asString(citation) === null) ||
+    !citations.includes(`case:${caseId}`)
   ) {
     throw new OperatorDataProviderContractError(
-      "Resource cases case_timeline_summary must include top-level citations.",
+      "Resource cases case_timeline_summary must include top-level citations for the reviewed case.",
     );
   }
 
@@ -311,6 +314,7 @@ function validateCaseTimelineSummary(payload: unknown) {
     if (
       citationIds === null ||
       citationIds.length === 0 ||
+      citationIds.some((citationId) => asString(citationId) === null) ||
       segment.advisory_only !== true ||
       segment.can_complete_workflow !== false
     ) {

@@ -320,6 +320,13 @@ export function registerOperatorRoutesCaseworkDetailTests() {
         }),
       ],
       [
+        "summary without reviewed case citation",
+        createCaseTimelineProjection(),
+        createCaseTimelineSummary({
+          citations: ["alert:alert-123"],
+        }),
+      ],
+      [
         "summary from unregistered agent",
         createCaseTimelineProjection(),
         createCaseTimelineSummary({
@@ -331,6 +338,21 @@ export function registerOperatorRoutesCaseworkDetailTests() {
         createCaseTimelineProjection(),
         createCaseTimelineSummary({
           registered_tool_name: "browser_case_timeline_summary",
+        }),
+      ],
+      [
+        "summary segment with malformed citation id",
+        createCaseTimelineProjection(),
+        createCaseTimelineSummary({
+          summary_segments: createCaseTimelineSummary().summary_segments.map(
+            (segment: unknown, index) =>
+              index === 0
+                ? {
+                    ...(segment as Record<string, unknown>),
+                    citation_ids: ["reconciliation:recon-123", null],
+                  }
+                : segment,
+          ),
         }),
       ],
     ])("fails closed on %s", async (_label, caseTimelineProjection, caseTimelineSummary) => {
