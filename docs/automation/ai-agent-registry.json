@@ -144,10 +144,7 @@
       "agent_name": "setup_doctor_explanation_agent",
       "purpose": "Explain setup, dependency, degraded-source, AI-disabled, and doctor posture findings from cited doctor and supportability records without making readiness, repair, release, gate, or workflow truth.",
       "allowed_tools": [
-        "doctor_explanation",
-        "read_doctor_supportability_records",
-        "cite_setup_prerequisite_gaps",
-        "return_non_ai_fallback"
+        "doctor_explanation"
       ],
       "disallowed_tools": [
         "approve_action",
@@ -159,17 +156,17 @@
         "bypass_policy"
       ],
       "record_families": [
-        "doctor",
         "source_health",
-        "runbook",
         "limitation",
         "gate",
         "release",
+        "case",
+        "evidence",
         "ai_trace"
       ],
       "citation_requirements": [
-        "record_family must identify the doctor, source-health, runbook, limitation, gate, release, or reviewed record family behind each setup explanation",
-        "record_id must identify the directly linked doctor check, source-health record, runbook section, limitation, gate, release, or reviewed record",
+        "record_family must identify the source-health, limitation, gate, release, case, evidence, or AI trace family behind each setup explanation",
+        "record_id must identify the directly linked source-health record, limitation, gate, release, case, evidence, or AI trace record",
         "evidence_reference must identify cited doctor output, supportability evidence, runbook reference, limitation, or explicit missing prerequisite"
       ],
       "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"

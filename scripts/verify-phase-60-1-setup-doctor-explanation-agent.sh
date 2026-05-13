@@ -8,8 +8,9 @@ doc_path="${repo_root}/docs/phase-60-1-setup-doctor-explanation-agent.md"
 module_path="${repo_root}/control-plane/aegisops/control_plane/assistant/setup_doctor_explanation.py"
 test_path="${repo_root}/control-plane/tests/test_phase60_1_setup_doctor_explanation_agent.py"
 agent_registry_path="${repo_root}/docs/automation/ai-agent-registry.json"
+tool_registry_path="${repo_root}/docs/automation/ai-tool-registry.json"
 
-for path in "${doc_path}" "${module_path}" "${test_path}" "${agent_registry_path}"; do
+for path in "${doc_path}" "${module_path}" "${test_path}" "${agent_registry_path}" "${tool_registry_path}"; do
   if [[ ! -f "${path}" ]]; then
     echo "Missing Phase 60.1 setup doctor explanation artifact: ${path}" >&2
     exit 1
@@ -82,24 +83,50 @@ for phrase in "${required_test_phrases[@]}"; do
   fi
 done
 
-python3 - "${agent_registry_path}" <<'PY'
+python3 - "${agent_registry_path}" "${tool_registry_path}" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 registry = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+tool_registry = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
 agents = {
     agent.get("agent_name"): agent
     for agent in registry.get("agents", ())
     if isinstance(agent, dict)
+}
+registered_tools = {
+    tool.get("tool_name"): tool
+    for tool in tool_registry.get("tools", ())
+    if isinstance(tool, dict)
 }
 agent = agents.get("setup_doctor_explanation_agent")
 if not isinstance(agent, dict):
     raise SystemExit("Missing setup_doctor_explanation_agent registry row.")
 if agent.get("authority_ceiling") != "advisory_only_subordinate_to_aegisops_records":
     raise SystemExit("setup_doctor_explanation_agent must keep advisory-only authority ceiling.")
-if "doctor_explanation" not in agent.get("allowed_tools", ()):
+allowed_tools = set(agent.get("allowed_tools", ()))
+if "doctor_explanation" not in allowed_tools:
     raise SystemExit("setup_doctor_explanation_agent must use the registered doctor_explanation tool.")
+unknown_tools = sorted(allowed_tools - set(registered_tools))
+if unknown_tools:
+    raise SystemExit(
+        "setup_doctor_explanation_agent references unregistered tool(s): "
+        + ", ".join(unknown_tools)
+    )
+doctor_tool = registered_tools.get("doctor_explanation")
+if not isinstance(doctor_tool, dict):
+    raise SystemExit("Missing registered doctor_explanation tool.")
+unexpected_families = sorted(
+    set(agent.get("record_families", ()))
+    - set(doctor_tool.get("allowed_record_families", ()))
+)
+if unexpected_families:
+    raise SystemExit(
+        "setup_doctor_explanation_agent declares record family outside "
+        "doctor_explanation allowlist: "
+        + ", ".join(unexpected_families)
+    )
 for disallowed in (
     "approve_action",
     "execute_action",
