@@ -58,7 +58,6 @@ _AUTHORITY_PRESSURE_TERMS = (
     "bypass the policy",
     "controlled write",
     "hard write",
-    "dispatch",
     "dispatch action",
     "dispatch the action",
 )
@@ -474,21 +473,45 @@ def _draft_text_pressure_flags(draft_text: object) -> tuple[str, ...]:
     if not isinstance(draft_text, str):
         return ("malformed_prompt_payload",)
 
-    lowered = draft_text.lower()
-    flags: tuple[str, ...] = ()
-    if "prompt_injection_attempt" in phase24_live_assistant_prompt_injection_flags(draft_text):
-        flags = (*flags, "prompt_injection_attempt")
-    if _contains_prompt_pressure_term(lowered, _AUTHORITY_PRESSURE_TERMS):
+    lowered = _normalized_pressure_text(draft_text)
+    phase24_flags = phase24_live_assistant_prompt_injection_flags(draft_text)
+    flags: tuple[str, ...] = phase24_flags
+    if _contains_normalized_pressure_term(lowered, _AUTHORITY_PRESSURE_TERMS):
         flags = (*flags, "authority_overreach")
-    if _contains_prompt_pressure_term(lowered, _ACTION_REQUEST_DRAFT_ADDITIONAL_TERMS):
+    if _contains_normalized_pressure_term(lowered, _ACTION_REQUEST_DRAFT_ADDITIONAL_TERMS):
         flags = (*flags, "authority_overreach")
-    if _contains_prompt_pressure_term(lowered, _FEEDBACK_COERCION_TERMS):
+    if _contains_normalized_pressure_term(lowered, _FEEDBACK_COERCION_TERMS):
         flags = (*flags, "feedback_coercion_attempt")
-    if _contains_prompt_pressure_term(lowered, _WORKFLOW_COMPLETION_TERMS):
+    if _contains_normalized_pressure_term(lowered, _WORKFLOW_COMPLETION_TERMS):
         flags = (*flags, "workflow_completion_attempt")
-    if _contains_prompt_pressure_term(lowered, _UNCERTAINTY_SUPPRESSION_TERMS):
+    if _contains_normalized_pressure_term(lowered, _UNCERTAINTY_SUPPRESSION_TERMS):
         flags = (*flags, "uncertainty_suppression_attempt")
     return _dedupe_strings(flags)
+
+
+def _normalized_pressure_text(prompt_text: str) -> str:
+    normalized = re.sub(r"[\\W_]+", " ", prompt_text.lower())
+    return re.sub(r"\\s+", " ", normalized).strip()
+
+
+def _contains_normalized_pressure_term(
+    normalized_prompt_text: str,
+    terms: tuple[str, ...],
+) -> bool:
+    return any(
+        _contains_normalized_term(normalized_prompt_text, term) for term in terms
+    )
+
+
+def _contains_normalized_term(
+    normalized_prompt_text: str,
+    term: str,
+) -> bool:
+    normalized_term = re.sub(r"[\\W_]+", " ", term.lower()).strip()
+    if not normalized_term:
+        return False
+    pattern = rf"(?<!\\w){re.escape(normalized_term)}(?!\\w)"
+    return re.search(pattern, normalized_prompt_text) is not None
 
 
 def _contains_prompt_pressure_term(prompt_text: str, terms: tuple[str, ...]) -> bool:

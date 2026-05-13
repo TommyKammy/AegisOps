@@ -268,7 +268,6 @@ def _advisory_text_claims_authority_or_scope_expansion(text: object) -> tuple[st
         "override scope",
         "controlled write",
         "hard write",
-        "dispatch",
         "dispatch action",
         "dispatch the action",
     )
