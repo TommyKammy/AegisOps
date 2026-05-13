@@ -72,6 +72,23 @@ printf '%s\n' \
   >>"${url_path_repo}/docs/phase-60-closeout-evaluation.md"
 assert_passes "${url_path_repo}"
 
+url_query_repo="${workdir}/url-query"
+copy_valid_repo "${url_query_repo}"
+printf '%s\n' \
+  "API path: https://example.com/open?file=/Users/example/ignore-me.md" \
+  "API path: https://example.com/open?root=/home/ignored" \
+  >>"${url_query_repo}/docs/phase-60-closeout-evaluation.md"
+assert_passes "${url_query_repo}"
+
+absolute_path_case_repo="${workdir}/absolute-path-case"
+copy_valid_repo "${absolute_path_case_repo}"
+printf '%s\n' \
+  "Run(/users/example/Dev/codex-supervisor/dist/index.js)." \
+  >>"${absolute_path_case_repo}/docs/phase-60-closeout-evaluation.md"
+assert_fails_with \
+  "${absolute_path_case_repo}" \
+  "Forbidden Phase 60 closeout evaluation: workstation-local absolute path detected"
+
 missing_doc_repo="${workdir}/missing-doc"
 mkdir -p "${missing_doc_repo}/docs"
 cp "${repo_root}/README.md" "${missing_doc_repo}/README.md"
@@ -200,6 +217,20 @@ assert_fails_with \
   "${overclaim_approval_plain_repo}" \
   "Forbidden Phase 60 closeout evaluation claim: AI may approve actions"
 
+overclaim_approval_could_repo="${workdir}/overclaim-plain-approval-could"
+copy_valid_repo "${overclaim_approval_could_repo}"
+printf '%s\n' "AI could approve actions" >>"${overclaim_approval_could_repo}/docs/phase-60-closeout-evaluation.md"
+assert_fails_with \
+  "${overclaim_approval_could_repo}" \
+  "Forbidden Phase 60 closeout evaluation claim: AI could approve actions"
+
+overclaim_approval_might_repo="${workdir}/overclaim-plain-approval-might"
+copy_valid_repo "${overclaim_approval_might_repo}"
+printf '%s\n' "AI might approve actions" >>"${overclaim_approval_might_repo}/docs/phase-60-closeout-evaluation.md"
+assert_fails_with \
+  "${overclaim_approval_might_repo}" \
+  "Forbidden Phase 60 closeout evaluation claim: AI might approve actions"
+
 overclaim_execute_plain_repo="${workdir}/overclaim-plain-execute"
 copy_valid_repo "${overclaim_execute_plain_repo}"
 printf '%s\n' "AI may execute actions" >>"${overclaim_execute_plain_repo}/docs/phase-60-closeout-evaluation.md"
@@ -207,12 +238,40 @@ assert_fails_with \
   "${overclaim_execute_plain_repo}" \
   "Forbidden Phase 60 closeout evaluation claim: AI may execute actions"
 
+overclaim_execute_could_repo="${workdir}/overclaim-plain-execute-could"
+copy_valid_repo "${overclaim_execute_could_repo}"
+printf '%s\n' "AI could execute actions" >>"${overclaim_execute_could_repo}/docs/phase-60-closeout-evaluation.md"
+assert_fails_with \
+  "${overclaim_execute_could_repo}" \
+  "Forbidden Phase 60 closeout evaluation claim: AI could execute actions"
+
+overclaim_execute_might_repo="${workdir}/overclaim-plain-execute-might"
+copy_valid_repo "${overclaim_execute_might_repo}"
+printf '%s\n' "AI might execute actions" >>"${overclaim_execute_might_repo}/docs/phase-60-closeout-evaluation.md"
+assert_fails_with \
+  "${overclaim_execute_might_repo}" \
+  "Forbidden Phase 60 closeout evaluation claim: AI might execute actions"
+
 overclaim_degraded_cap_repo="${workdir}/overclaim-degraded-capitalized"
 copy_valid_repo "${overclaim_degraded_cap_repo}"
 printf '%s\n' "Degraded AI may block case review" >>"${overclaim_degraded_cap_repo}/docs/phase-60-closeout-evaluation.md"
 assert_fails_with \
   "${overclaim_degraded_cap_repo}" \
   "Forbidden Phase 60 closeout evaluation claim: Degraded AI may block case review"
+
+overclaim_degraded_could_repo="${workdir}/overclaim-degraded-could"
+copy_valid_repo "${overclaim_degraded_could_repo}"
+printf '%s\n' "Degraded AI could block case review" >>"${overclaim_degraded_could_repo}/docs/phase-60-closeout-evaluation.md"
+assert_fails_with \
+  "${overclaim_degraded_could_repo}" \
+  "Forbidden Phase 60 closeout evaluation claim: Degraded AI could block case review"
+
+overclaim_degraded_might_repo="${workdir}/overclaim-degraded-might"
+copy_valid_repo "${overclaim_degraded_might_repo}"
+printf '%s\n' "Degraded AI might block case review" >>"${overclaim_degraded_might_repo}/docs/phase-60-closeout-evaluation.md"
+assert_fails_with \
+  "${overclaim_degraded_might_repo}" \
+  "Forbidden Phase 60 closeout evaluation claim: Degraded AI might block case review"
 
 overclaim_conflict_repo="${workdir}/overclaim-conflict-autoresolve"
 copy_valid_repo "${overclaim_conflict_repo}"

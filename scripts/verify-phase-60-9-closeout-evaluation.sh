@@ -68,13 +68,14 @@ for phrase in "${required_phrases[@]}"; do
   require_phrase "${absolute_doc_path}" "${phrase}" "required Phase 60 closeout term in ${doc_path}"
 done
 
-absolute_path_boundary="(^|[[:space:]([{\"'\\\`<={])"
-macos_home_pattern="/""Users/"
+absolute_path_boundary='(^|[[:space:](){}<>;,!?.])'
+macos_home_pattern="/""users/"
 linux_home_pattern="/""home/"
-windows_backslash_home_pattern='[A-Za-z]:\\+Users\\+'
-windows_slash_home_pattern='[A-Za-z]:/'"Users"'/'
+windows_backslash_home_pattern='[a-z]:\\+users\\+'
+windows_slash_home_pattern='[a-z]:/'"users"'/'
 absolute_path_pattern="${absolute_path_boundary}(${macos_home_pattern}|${linux_home_pattern}|${windows_backslash_home_pattern}|${windows_slash_home_pattern})[^ ]+"
-if grep -Eq -- "${absolute_path_pattern}" "${absolute_doc_path}" "${readme_path}"; then
+if tr '[:upper:]' '[:lower:]' < "${absolute_doc_path}" | grep -Eq -- "${absolute_path_pattern}" || \
+   tr '[:upper:]' '[:lower:]' < "${readme_path}" | grep -Eq -- "${absolute_path_pattern}"; then
   echo "Forbidden Phase 60 closeout evaluation: workstation-local absolute path detected" >&2
   exit 1
 fi
@@ -101,21 +102,33 @@ forbidden_claims=(
   "ai output might approve actions"
   "ai may approve actions"
   "ai can approve actions"
+  "ai could approve actions"
+  "ai might approve actions"
   "ai output may execute actions"
   "ai output can execute actions"
   "ai output could execute actions"
   "ai output might execute actions"
   "ai may execute actions"
   "ai can execute actions"
+  "ai could execute actions"
+  "ai might execute actions"
   "degraded ai may block case review"
+  "degraded ai could block case review"
+  "degraded ai might block case review"
   "degraded ai can block case review"
   "ai output can block case review"
   "ai can be disabled or degraded to block case review"
   "ai may be disabled or degraded to block case review"
+  "ai could be disabled or degraded to block case review"
+  "ai might be disabled or degraded to block case review"
   "disabled ai may block case review"
   "disabled ai can block case review"
+  "disabled ai could block case review"
+  "disabled ai might block case review"
   "degraded ai workflow may block case review"
   "degraded ai can block case review"
+  "degraded ai workflow could block case review"
+  "degraded ai workflow might block case review"
   "conflicting evidence may be automatically resolved"
   "conflicting evidence can be automatically resolved"
   "conflicting evidence may be auto-resolved"
