@@ -71,7 +71,7 @@ done
 absolute_path_boundary="(^|[[:space:]([{\"'\\\`<={])"
 macos_home_pattern="/""Users/"
 linux_home_pattern="/""home/"
-windows_backslash_home_pattern='[A-Za-z]:\\'"Users"'\\'
+windows_backslash_home_pattern='[A-Za-z]:\\+Users\\+'
 windows_slash_home_pattern='[A-Za-z]:/'"Users"'/'
 absolute_path_pattern="${absolute_path_boundary}(${macos_home_pattern}|${linux_home_pattern}|${windows_backslash_home_pattern}|${windows_slash_home_pattern})[^ ]+"
 if grep -Eq -- "${absolute_path_pattern}" "${absolute_doc_path}" "${readme_path}"; then
@@ -112,11 +112,13 @@ for forbidden in \
   "conflicting evidence may be auto-resolved" \
   "conflicting evidence can be auto-resolved" \
   "conflicting evidence is automatically resolved" \
+  "conflicting evidence can be silently resolved" \
   "Conflicting evidence may be automatically resolved" \
   "Conflicting evidence can be automatically resolved" \
   "Conflicting evidence may be auto-resolved" \
   "Conflicting evidence can be auto-resolved" \
   "Conflicting evidence is automatically resolved" \
+  "Conflicting evidence can be silently resolved" \
   "Stale evidence is current truth" \
   "Missing citations may be hidden" \
   ; do

@@ -171,9 +171,12 @@ assert_fails_with \
 
 absolute_path_windows_backslash_repo="${workdir}/absolute-path-windows-backslash"
 copy_valid_repo "${absolute_path_windows_backslash_repo}"
-printf 'Run C:\\%s\\example\\Dev\\codex-supervisor\\dist\\index.js.\n' "Users" >>"${absolute_path_windows_backslash_repo}/docs/phase-60-closeout-evaluation.md"
-printf 'Run "C:\\%s\\example\\Dev\\codex-supervisor\\dist\\index.js".\n' "Users" >>"${absolute_path_windows_backslash_repo}/docs/phase-60-closeout-evaluation.md"
-printf 'Run `C:\\%s\\example\\Dev\\codex-supervisor\\dist\\index.js`.\n' "Users" >>"${absolute_path_windows_backslash_repo}/docs/phase-60-closeout-evaluation.md"
+cat >>"${absolute_path_windows_backslash_repo}/docs/phase-60-closeout-evaluation.md" <<'EOF'
+Run C:\Users\example\Dev\codex-supervisor\dist\index.js.
+Run "C:\Users\example\Dev\codex-supervisor\dist\index.js".
+Run `C:\Users\example\Dev\codex-supervisor\dist\index.js`.
+Run C:\\Users\\example\\Dev\\codex-supervisor\\dist\\index.js.
+EOF
 assert_fails_with \
   "${absolute_path_windows_backslash_repo}" \
   "Forbidden Phase 60 closeout evaluation: workstation-local absolute path detected"
@@ -212,5 +215,12 @@ printf '%s\n' "Conflicting evidence may be automatically resolved." >>"${overcla
 assert_fails_with \
   "${overclaim_conflict_repo}" \
   "Forbidden Phase 60 closeout evaluation claim: conflicting evidence may be automatically resolved"
+
+overclaim_conflict_silent_repo="${workdir}/overclaim-conflict-silent"
+copy_valid_repo "${overclaim_conflict_silent_repo}"
+printf '%s\n' "Conflicting evidence can be silently resolved by AI." >>"${overclaim_conflict_silent_repo}/docs/phase-60-closeout-evaluation.md"
+assert_fails_with \
+  "${overclaim_conflict_silent_repo}" \
+  "Forbidden Phase 60 closeout evaluation claim: conflicting evidence can be silently resolved"
 
 echo "Phase 60 closeout verification tests passed."
