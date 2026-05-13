@@ -373,7 +373,11 @@ def _segment_citations(segment: Mapping[str, object]) -> tuple[str, ...]:
     record_id = _string(binding.get("record_id"))
     segment_name = _string(segment.get("segment"))
     citations: list[str] = []
-    if record_family is not None and record_id is not None:
+    if (
+        record_family is not None
+        and record_family in _SUPPORTED_RECORD_FAMILIES
+        and record_id is not None
+    ):
         citations.append(f"{record_family}:{record_id}")
     if record_id is None and segment_name is not None:
         citations.append(f"timeline_gap:{segment_name}")

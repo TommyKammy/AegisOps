@@ -268,6 +268,7 @@ function validateCaseTimelineSummary(payload: unknown) {
     );
   }
 
+  const topLevelCitationSet = new Set(citations.map((citation) => asString(citation)));
   const summarySegments = Array.isArray(summary.summary_segments)
     ? summary.summary_segments
     : null;
@@ -315,11 +316,12 @@ function validateCaseTimelineSummary(payload: unknown) {
       citationIds === null ||
       citationIds.length === 0 ||
       citationIds.some((citationId) => asString(citationId) === null) ||
+      citationIds.some((citationId) => !topLevelCitationSet.has(asString(citationId))) ||
       segment.advisory_only !== true ||
       segment.can_complete_workflow !== false
     ) {
       throw new OperatorDataProviderContractError(
-        `Resource cases case_timeline_summary segment ${segmentName} must stay cited advisory-only context.`,
+        `Resource cases case_timeline_summary segment ${segmentName} must stay cited by top-level advisory-only context.`,
       );
     }
   });

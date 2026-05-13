@@ -75,12 +75,18 @@ function createCaseTimelineSummary(overrides: Record<string, unknown> = {}) {
       };
     },
   );
+  const summaryCitations = Array.from(
+    new Set([
+      "case:case-456",
+      ...summarySegments.flatMap((segment) => segment.citation_ids),
+    ]),
+  );
 
   return {
     agent_name: "case_timeline_summary_agent",
     authoritative_workflow_truth: false,
     authority_ceiling: "advisory_only",
-    citations: ["case:case-456", "alert:alert-123"],
+    citations: summaryCitations,
     decision: "summarize",
     mode: "case_timeline_summary",
     mutates_authoritative_records: false,
@@ -323,7 +329,18 @@ export function registerOperatorRoutesCaseworkDetailTests() {
         "summary without reviewed case citation",
         createCaseTimelineProjection(),
         createCaseTimelineSummary({
-          citations: ["alert:alert-123"],
+          citations: createCaseTimelineSummary().citations.filter(
+            (citation) => citation !== "case:case-456",
+          ),
+        }),
+      ],
+      [
+        "summary missing segment citation in top-level citations",
+        createCaseTimelineProjection(),
+        createCaseTimelineSummary({
+          citations: createCaseTimelineSummary().citations.filter(
+            (citation) => citation !== "reconciliation:recon-123",
+          ),
         }),
       ],
       [
