@@ -31,7 +31,7 @@ This slice cites the Phase 51.6 authority-boundary negative-test policy in `docs
 
 ## 3. Registered Agents
 
-The initial registry covers the AI surfaces already present in the reviewed product path:
+The registry covers the AI surfaces already present in the reviewed product path and additive advisory agents registered by later accepted slices:
 
 | Agent | Purpose | Authority ceiling |
 | --- | --- | --- |
@@ -39,6 +39,7 @@ The initial registry covers the AI surfaces already present in the reviewed prod
 | `live_assistant_summary_agent` | Draft a bounded cited summary from reviewed context. | Advisory only, subordinate to AegisOps records. |
 | `advisory_action_request_drafting_agent` | Prepare reviewable action-request draft text from cited advisory context. | Advisory only, subordinate to AegisOps records. |
 | `today_focus_advisory_agent` | Suggest focus lanes for daily workbench projection from directly linked backend records. | Advisory only, subordinate to AegisOps records. |
+| `setup_doctor_explanation_agent` | Explain setup, dependency, degraded-source, AI-disabled, and doctor posture findings from cited records. | Advisory only, subordinate to AegisOps records. |
 
 These names identify contract rows, not autonomous actors with independent authority.
 
