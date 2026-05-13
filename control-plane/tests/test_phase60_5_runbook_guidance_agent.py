@@ -122,6 +122,24 @@ class Phase605RunbookGuidanceAgentTests(unittest.TestCase):
         self.assertFalse(payload["ai_generation_allowed"])
         self.assertEqual(payload["guidance_steps"], ())
 
+    def test_unbound_runbook_record_fails_closed(self) -> None:
+        detail = _runbook_payload()
+        records = list(_reviewed_records())
+        records[1] = {
+            **records[1],
+            "anchored_record_id": "case-999",
+        }
+        detail["reviewed_records"] = tuple(records)
+
+        payload = build_runbook_guidance(runbook_context_payload=detail)
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertEqual(payload["mode"], "runbook_guidance_untrusted")
+        self.assertIn("record_not_bound_to_review_anchor", payload["unresolved_reasons"])
+        self.assertIn("missing_reviewed_runbook_record", payload["unresolved_reasons"])
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["guidance_steps"], ())
+
     def test_missing_runbook_step_title_fails_closed(self) -> None:
         detail = _runbook_payload()
         steps = list(_runbook_steps())

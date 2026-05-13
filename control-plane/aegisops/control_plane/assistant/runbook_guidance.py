@@ -137,7 +137,24 @@ def build_runbook_guidance(
             unresolved_reasons=("malformed_ai_enablement_posture",),
         )
 
-    guidance_steps = tuple(_guidance_step(step) for step in steps)
+    trusted_record_citations = _reviewed_record_citation_set(
+        records,
+        anchor_family="case",
+        anchor_id=validation["anchor_id"],
+    )
+    trusted_degraded_sources = _reviewed_degraded_source_citation_set(
+        records,
+        anchor_family="case",
+        anchor_id=validation["anchor_id"],
+    )
+    guidance_steps = tuple(
+        _guidance_step(
+            step,
+            trusted_record_citations=trusted_record_citations,
+            trusted_degraded_sources=trusted_degraded_sources,
+        )
+        for step in steps
+    )
     unresolved_reasons = _dedupe_strings(
         tuple(
             reason
@@ -343,6 +360,7 @@ def _validated_runbook_payload(
     if not any(
         _string(record.get("record_family")) == "runbook"
         and _string(record.get("record_id")) == "docs/runbook.md"
+        and _record_bound_to_review_anchor(record, anchor_family, anchor_id)
         for record in records
     ):
         reasons.append("missing_reviewed_runbook_record")
@@ -374,14 +392,29 @@ def _anchor_case_id(runbook_context_payload: object) -> str | None:
     return _string(anchor.get("record_id")) if anchor.get("record_family") == "case" else None
 
 
-def _guidance_step(step: Mapping[str, object]) -> dict[str, object]:
+def _guidance_step(
+    step: Mapping[str, object],
+    *,
+    trusted_record_citations: set[str],
+    trusted_degraded_sources: set[str],
+) -> dict[str, object]:
     reviewed_status = _normalized_string(step.get("reviewed_status"))
     operator_posture = _string(step.get("operator_posture")) or "needs_review"
+    linked_record_citations = tuple(
+        citation
+        for citation in _string_tuple(step.get("linked_record_citations"))
+        if citation in trusted_record_citations
+    )
+    blocked_by = tuple(
+        citation
+        for citation in _string_tuple(step.get("blocked_by"))
+        if citation in trusted_degraded_sources
+    )
     unresolved_reasons: list[str] = []
     if reviewed_status == "stale":
         unresolved_reasons.append("stale_runbook_step")
         operator_posture = "needs_review"
-    if _string_tuple(step.get("blocked_by")):
+    if blocked_by:
         unresolved_reasons.append("blocked_by_degraded_source")
         operator_posture = "blocked"
     return {
@@ -393,8 +426,8 @@ def _guidance_step(step: Mapping[str, object]) -> dict[str, object]:
         "citation_ids": _dedupe_strings(
             (
                 *_runbook_step_citations(step),
-                *_string_tuple(step.get("linked_record_citations")),
-                *_string_tuple(step.get("blocked_by")),
+                *linked_record_citations,
+                *blocked_by,
             )
         ),
         "advisory_only": True,
@@ -458,6 +491,22 @@ def _reviewed_degraded_source(
             and _normalized_string(record.get("source_health")) == "degraded"
         )
     return False
+
+
+def _reviewed_degraded_source_citation_set(
+    records: tuple[Mapping[str, object], ...],
+    *,
+    anchor_family: str,
+    anchor_id: str,
+) -> set[str]:
+    return {
+        citation
+        for record in records
+        if _record_bound_to_review_anchor(record, anchor_family, anchor_id)
+        and _string(record.get("record_family")) == "source_health"
+        and _normalized_string(record.get("source_health")) == "degraded"
+        for citation in _reviewed_record_citations(record)
+    }
 
 
 def _record_bound_to_review_anchor(
