@@ -88,7 +88,7 @@ class Phase604EvidenceGapDetectorAgentTests(unittest.TestCase):
             {
                 "record_family": "evidence",
                 "record_id": "evidence-604-ai-created",
-                "created_by": "ai",
+                "created_by": " AI ",
                 "citation": {
                     "record_family": "evidence",
                     "record_id": "evidence-604-ai-created",
@@ -108,6 +108,51 @@ class Phase604EvidenceGapDetectorAgentTests(unittest.TestCase):
         self.assertIn("case:case-604", payload["citations"])
         self.assertNotIn("reconciliation:recon-604-neighbor", payload["citations"])
         self.assertNotIn("evidence:evidence-604-ai-created", payload["citations"])
+
+    def test_gap_item_citations_are_limited_to_implicated_records(self) -> None:
+        detail = _review_payload()
+        detail["reviewed_records"] = (
+            *_reviewed_records(),
+            _record("source_health", "okta", source_health="healthy"),
+            _record(
+                "action_execution",
+                "exec-604-reconciled",
+                receipt_id="receipt-604-reconciled",
+                reconciliation_id="recon-604-reconciled",
+            ),
+            _record(
+                "evidence",
+                "evidence-604-non-conflicting",
+                conflict_group="asset-owner",
+                reviewed_value="identity-team",
+            ),
+        )
+
+        payload = build_evidence_gap_detector(evidence_review_payload=detail)
+        gap_items = {
+            gap["gap_type"]: gap["citation_ids"] for gap in payload["gap_items"]
+        }
+
+        self.assertIn("source_health:wazuh", gap_items["stale_source_health"])
+        self.assertNotIn("source_health:okta", gap_items["stale_source_health"])
+        self.assertIn(
+            "action_execution:exec-604",
+            gap_items["receipt_without_reconciliation"],
+        )
+        self.assertNotIn(
+            "action_execution:exec-604-reconciled",
+            gap_items["receipt_without_reconciliation"],
+        )
+        self.assertIn("evidence:evidence-604-source-a", gap_items["evidence_conflict"])
+        self.assertIn("evidence:evidence-604-source-b", gap_items["evidence_conflict"])
+        self.assertNotIn(
+            "evidence:evidence-604-primary",
+            gap_items["evidence_conflict"],
+        )
+        self.assertNotIn(
+            "evidence:evidence-604-non-conflicting",
+            gap_items["evidence_conflict"],
+        )
 
     def test_uncited_review_payload_fails_closed_without_record_citation_leak(self) -> None:
         detail = _review_payload()

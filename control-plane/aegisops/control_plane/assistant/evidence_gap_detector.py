@@ -253,7 +253,7 @@ def _validated_review_payload(evidence_review_payload: object) -> dict[str, obje
         anchored_id = _string(raw_record.get("anchored_record_id"))
         if anchored_family != record_family or anchored_id != record_id:
             reasons.append("mismatched_record_family")
-        if _string(raw_record.get("created_by")) == "ai":
+        if _normalized_string(raw_record.get("created_by")) == "ai":
             reasons.append("ai_created_evidence_truth")
         citation = raw_record.get("citation")
         if citation is None and record_family != "recommendation":
@@ -376,15 +376,30 @@ def _gap_record_citations(
     records: tuple[Mapping[str, object], ...],
 ) -> tuple[str, ...]:
     citations: list[str] = []
+    conflicting_evidence_groups = _conflicting_evidence_groups(records)
     for record in records:
         record_family = _string(record.get("record_family"))
-        if gap_type == "missing_identity_owner" and record_family != "case":
+        if gap_type == "missing_identity_owner" and (
+            record_family != "case" or _string(record.get("identity_owner")) is not None
+        ):
             continue
-        if gap_type == "stale_source_health" and record_family != "source_health":
+        if gap_type == "stale_source_health" and (
+            record_family != "source_health"
+            or _string(record.get("source_health"))
+            not in {"stale", "outdated", "degraded"}
+        ):
             continue
-        if gap_type == "receipt_without_reconciliation" and record_family != "action_execution":
+        if gap_type == "receipt_without_reconciliation" and (
+            record_family != "action_execution"
+            or _string(record.get("receipt_id")) is None
+            or _string(record.get("reconciliation_id")) is not None
+        ):
             continue
-        if gap_type == "evidence_conflict" and record_family != "evidence":
+        if gap_type == "evidence_conflict" and (
+            record_family != "evidence"
+            or _string(record.get("conflict_group")) not in conflicting_evidence_groups
+            or _string(record.get("reviewed_value")) is None
+        ):
             continue
         if gap_type == "missing_citation" and record.get("citation") is not None:
             continue
@@ -393,6 +408,10 @@ def _gap_record_citations(
 
 
 def _has_evidence_conflict(records: tuple[Mapping[str, object], ...]) -> bool:
+    return bool(_conflicting_evidence_groups(records))
+
+
+def _conflicting_evidence_groups(records: tuple[Mapping[str, object], ...]) -> set[str]:
     values_by_group: dict[str, set[str]] = {}
     for record in records:
         if _string(record.get("record_family")) != "evidence":
@@ -402,7 +421,11 @@ def _has_evidence_conflict(records: tuple[Mapping[str, object], ...]) -> bool:
         if conflict_group is None or reviewed_value is None:
             continue
         values_by_group.setdefault(conflict_group, set()).add(reviewed_value)
-    return any(len(values) > 1 for values in values_by_group.values())
+    return {
+        conflict_group
+        for conflict_group, reviewed_values in values_by_group.items()
+        if len(reviewed_values) > 1
+    }
 
 
 def _reviewed_record_citations(record: Mapping[str, object]) -> tuple[str, ...]:
@@ -457,6 +480,13 @@ def _contains_prompt_pressure_term(prompt_text: str, terms: tuple[str, ...]) -> 
 
 def _string(value: object) -> str | None:
     return value if isinstance(value, str) and value else None
+
+
+def _normalized_string(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().lower()
+    return normalized or None
 
 
 def _dedupe_strings(values: tuple[object, ...]) -> tuple[str, ...]:
