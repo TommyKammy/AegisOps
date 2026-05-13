@@ -6,6 +6,7 @@ tool_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 repo_root="${1:-${tool_root}}"
 doc_path="${repo_root}/docs/phase-60-6-cited-recommendation-draft-agent.md"
 module_path="${repo_root}/control-plane/aegisops/control_plane/assistant/cited_recommendation_draft.py"
+assistant_advisory_path="${repo_root}/control-plane/aegisops/control_plane/assistant/assistant_advisory.py"
 test_path="${repo_root}/control-plane/tests/test_phase60_6_cited_recommendation_draft_agent.py"
 ui_surface_path="${repo_root}/apps/operator-ui/src/app/operatorConsolePages/advisorySurfaces.tsx"
 ui_page_path="${repo_root}/apps/operator-ui/src/app/operatorConsolePages/assistantPages.tsx"
@@ -16,6 +17,7 @@ tool_registry_path="${repo_root}/docs/automation/ai-tool-registry.json"
 for path in \
   "${doc_path}" \
   "${module_path}" \
+  "${assistant_advisory_path}" \
   "${test_path}" \
   "${ui_surface_path}" \
   "${ui_page_path}" \
@@ -91,6 +93,20 @@ required_module_phrases=(
 for phrase in "${required_module_phrases[@]}"; do
   if ! grep -Fq -- "${phrase}" "${module_path}"; then
     echo "Missing Phase 60.6 cited recommendation draft implementation guard: ${phrase}" >&2
+    exit 1
+  fi
+done
+
+required_render_path_phrases=(
+  "from .cited_recommendation_draft import build_cited_recommendation_draft"
+  "def recommendation_draft_snapshot_from_context("
+  "cited_recommendation_draft = build_cited_recommendation_draft("
+  "\"cited_recommendation_draft\": cited_recommendation_draft"
+)
+
+for phrase in "${required_render_path_phrases[@]}"; do
+  if ! grep -Fq -- "${phrase}" "${assistant_advisory_path}"; then
+    echo "Missing Phase 60.6 advisory render path integration guard: ${phrase}" >&2
     exit 1
   fi
 done
