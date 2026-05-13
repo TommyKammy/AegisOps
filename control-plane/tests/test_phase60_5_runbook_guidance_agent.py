@@ -153,6 +153,24 @@ class Phase605RunbookGuidanceAgentTests(unittest.TestCase):
         self.assertFalse(payload["ai_generation_allowed"])
         self.assertEqual(payload["guidance_steps"], ())
 
+    def test_cross_anchor_linked_record_citation_fails_closed(self) -> None:
+        detail = _runbook_payload()
+        records = list(_reviewed_records())
+        records[2] = {
+            **records[2],
+            "anchored_record_id": "case-999",
+        }
+        detail["reviewed_records"] = tuple(records)
+
+        payload = build_runbook_guidance(runbook_context_payload=detail)
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertEqual(payload["mode"], "runbook_guidance_untrusted")
+        self.assertIn("record_not_bound_to_review_anchor", payload["unresolved_reasons"])
+        self.assertIn("untrusted_linked_record_citation", payload["unresolved_reasons"])
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["guidance_steps"], ())
+
     def test_blocked_posture_requires_verified_degraded_source(self) -> None:
         for blocked_by, expected_reason in (
             ((), "missing_blocked_by_degraded_source"),
@@ -280,8 +298,8 @@ def _record(
     return {
         "record_family": record_family,
         "record_id": record_id,
-        "anchored_record_family": record_family,
-        "anchored_record_id": record_id,
+        "anchored_record_family": "case",
+        "anchored_record_id": "case-605",
         "created_by": "aegisops",
         "citation": {
             "record_family": record_family,

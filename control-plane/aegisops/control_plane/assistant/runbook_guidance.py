@@ -274,18 +274,19 @@ def _validated_runbook_payload(
             reasons.append("unsupported_reviewed_record_family")
         if record_id is None:
             reasons.append("missing_reviewed_record_id")
-        if (
-            _string(raw_record.get("anchored_record_family")) != record_family
-            or _string(raw_record.get("anchored_record_id")) != record_id
-        ):
-            reasons.append("mismatched_record_family")
+        if not _record_bound_to_review_anchor(raw_record, anchor_family, anchor_id):
+            reasons.append("record_not_bound_to_review_anchor")
         if _normalized_string(raw_record.get("created_by")) == "ai":
             reasons.append("ai_created_source_truth")
         if not _citation_matches(raw_record.get("citation"), raw_record):
             reasons.append("missing_reviewed_record_citation")
         records.append(raw_record)
 
-    reviewed_record_citations = _reviewed_record_citation_set(tuple(records))
+    reviewed_record_citations = _reviewed_record_citation_set(
+        tuple(records),
+        anchor_family=anchor_family,
+        anchor_id=anchor_id,
+    )
     steps: list[Mapping[str, object]] = []
     for raw_step in raw_steps:
         if not isinstance(raw_step, Mapping):
@@ -322,7 +323,12 @@ def _validated_runbook_payload(
             if not set(blocked_by).issubset(reviewed_record_citations):
                 reasons.append("untrusted_blocked_by_citation")
             if not all(
-                _reviewed_degraded_source(blocked, tuple(records))
+                _reviewed_degraded_source(
+                    blocked,
+                    tuple(records),
+                    anchor_family=anchor_family,
+                    anchor_id=anchor_id,
+                )
                 for blocked in blocked_by
             ):
                 reasons.append("blocked_by_without_degraded_source")
@@ -423,10 +429,14 @@ def _reviewed_record_citations(record: Mapping[str, object]) -> tuple[str, ...]:
 
 def _reviewed_record_citation_set(
     records: tuple[Mapping[str, object], ...],
+    *,
+    anchor_family: str,
+    anchor_id: str,
 ) -> set[str]:
     return {
         citation
         for record in records
+        if _record_bound_to_review_anchor(record, anchor_family, anchor_id)
         for citation in _reviewed_record_citations(record)
     }
 
@@ -434,8 +444,13 @@ def _reviewed_record_citation_set(
 def _reviewed_degraded_source(
     citation_id: str,
     records: tuple[Mapping[str, object], ...],
+    *,
+    anchor_family: str,
+    anchor_id: str,
 ) -> bool:
     for record in records:
+        if not _record_bound_to_review_anchor(record, anchor_family, anchor_id):
+            continue
         if citation_id not in _reviewed_record_citations(record):
             continue
         return (
@@ -443,6 +458,17 @@ def _reviewed_degraded_source(
             and _normalized_string(record.get("source_health")) == "degraded"
         )
     return False
+
+
+def _record_bound_to_review_anchor(
+    record: Mapping[str, object],
+    anchor_family: str,
+    anchor_id: str,
+) -> bool:
+    return (
+        _string(record.get("anchored_record_family")) == anchor_family
+        and _string(record.get("anchored_record_id")) == anchor_id
+    )
 
 
 def _citation_matches(citation: object, record: Mapping[str, object]) -> bool:
