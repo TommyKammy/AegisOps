@@ -69,7 +69,7 @@ def build_today_queue_digest(
     ai_enablement_posture: str = "enabled",
     prompt_text: object = "",
 ) -> dict[str, object]:
-    base = _base_payload(queue_payload)
+    base = _base_payload()
     prompt_flags = _prompt_pressure_flags(prompt_text)
     if prompt_flags:
         return _blocked_payload(base, prompt_flags)
@@ -82,6 +82,7 @@ def build_today_queue_digest(
             unresolved_reasons=queue_reasons,
         )
 
+    base = _base_payload(queue_payload)
     if ai_enablement_posture == "disabled":
         return _fallback_payload(
             base,
@@ -115,7 +116,7 @@ def build_today_queue_digest(
     }
 
 
-def _base_payload(queue_payload: object) -> dict[str, object]:
+def _base_payload(queue_payload: object | None = None) -> dict[str, object]:
     citations = _dedupe_strings(
         (
             *_REGISTRY_CITATIONS,
@@ -123,7 +124,11 @@ def _base_payload(queue_payload: object) -> dict[str, object]:
             "docs/phase-56-closeout-evaluation.md",
             "docs/phase-59-closeout-evaluation.md",
             "queue:analyst_review",
-            *_queue_record_citations(queue_payload),
+            *(
+                _queue_record_citations(queue_payload)
+                if queue_payload is not None
+                else ()
+            ),
         )
     )
     return {
@@ -253,7 +258,7 @@ def _record_unresolved_reasons(record: Mapping[str, object]) -> tuple[str, ...]:
         reasons.append("missing_evidence")
     if "stale_receipt" in lanes:
         reasons.append("stale_work")
-    if "optional_extension_degraded" in lanes:
+    if _record_has_degraded_source(record):
         reasons.append("degraded_source")
     if "reconciliation_mismatch" in lanes:
         reasons.append("reconciliation_mismatch")
@@ -265,18 +270,18 @@ def _queue_record_citations(queue_payload: object) -> tuple[str, ...]:
     for record in _queue_records(queue_payload):
         alert_id = _string(record.get("alert_id"))
         case_id = _string(record.get("case_id"))
-        source_system = _string(record.get("source_system"))
         correlation_key = _string(record.get("correlation_key"))
         if alert_id is not None:
             citations.append(f"alert:{alert_id}")
-            citations.append(f"handoff:{alert_id}")
+            if _record_has_handoff_context(record):
+                citations.append(f"handoff:{alert_id}")
         if case_id is not None:
             citations.append(f"case:{case_id}")
         for evidence_id in _string_tuple(record.get("evidence_ids")):
             citations.append(f"evidence:{evidence_id}")
         if alert_id is not None and not _string_tuple(record.get("evidence_ids")):
             citations.append(f"missing_evidence:{alert_id}")
-        if source_system is not None and _record_has_degraded_source(record):
+        for source_system in _degraded_extension_sources(record):
             citations.append(f"source_health:{source_system}")
         if correlation_key is not None:
             citations.append(f"reconciliation:{correlation_key}")
@@ -294,8 +299,26 @@ def _queue_record_citations(queue_payload: object) -> tuple[str, ...]:
 def _record_has_degraded_source(record: Mapping[str, object]) -> bool:
     if "optional_extension_degraded" in _string_tuple(record.get("queue_lanes")):
         return True
+    return bool(_degraded_extension_sources(record))
+
+
+def _degraded_extension_sources(record: Mapping[str, object]) -> tuple[str, ...]:
     details = record.get("queue_lane_details")
-    return isinstance(details, Mapping) and "optional_extension_degraded" in details
+    if not isinstance(details, Mapping):
+        return ()
+    degraded_details = details.get("optional_extension_degraded")
+    if not isinstance(degraded_details, Mapping):
+        return ()
+    return _dedupe_strings(
+        tuple(source for source in degraded_details if isinstance(source, str))
+    )
+
+
+def _record_has_handoff_context(record: Mapping[str, object]) -> bool:
+    reviewed_context = record.get("reviewed_context")
+    if not isinstance(reviewed_context, Mapping):
+        return False
+    return isinstance(reviewed_context.get("handoff"), Mapping)
 
 
 def _prompt_pressure_flags(prompt_text: object) -> tuple[str, ...]:

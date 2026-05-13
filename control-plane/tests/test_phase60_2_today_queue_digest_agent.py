@@ -82,6 +82,38 @@ class Phase602TodayQueueDigestAgentTests(unittest.TestCase):
 
         _assert_no_forbidden_authority_or_path_literals(payload)
 
+    def test_untrusted_queue_payload_does_not_leak_record_citations(self) -> None:
+        payload = build_today_queue_digest(
+            queue_payload={
+                "read_only": False,
+                "queue_name": "operator_supplied",
+                "records": (
+                    _queue_record(
+                        alert_id="untrusted-alert",
+                        case_id="untrusted-case",
+                        evidence_ids=("untrusted-evidence",),
+                        queue_lanes=("optional_extension_degraded",),
+                        queue_lane_details={
+                            "optional_extension_degraded": {
+                                "untrusted-extension": {
+                                    "readiness": "degraded",
+                                }
+                            }
+                        },
+                    ),
+                ),
+            }
+        )
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertEqual(payload["mode"], "queue_evidence_missing")
+        self.assertIn("queue_payload_not_reviewed_read_only", payload["unresolved_reasons"])
+        self.assertNotIn("alert:untrusted-alert", payload["citations"])
+        self.assertNotIn("case:untrusted-case", payload["citations"])
+        self.assertNotIn("evidence:untrusted-evidence", payload["citations"])
+        self.assertNotIn("handoff:untrusted-alert", payload["citations"])
+        self.assertNotIn("source_health:untrusted-extension", payload["citations"])
+
     def test_uncited_or_unreviewed_queue_record_fails_closed(self) -> None:
         payload = build_today_queue_digest(
             queue_payload=_queue_payload(
@@ -97,6 +129,73 @@ class Phase602TodayQueueDigestAgentTests(unittest.TestCase):
         self.assertFalse(payload["ai_generation_allowed"])
         self.assertFalse(payload["trace_creation_allowed"])
         self.assertEqual(payload["digest_items"], ())
+        self.assertNotIn("case:case-602", payload["citations"])
+        self.assertNotIn("evidence:evidence-602", payload["citations"])
+        self.assertNotIn("reconciliation:corr-", payload["citations"])
+
+    def test_degraded_source_citation_uses_lane_detail_source(self) -> None:
+        payload = build_today_queue_digest(
+            queue_payload=_queue_payload(
+                records=(
+                    _queue_record(
+                        alert_id="alert-602-sentinel",
+                        queue_lanes=("action_required", "optional_extension_degraded"),
+                        queue_lane_details={
+                            "optional_extension_degraded": {
+                                "sentinel": {
+                                    "readiness": "degraded",
+                                }
+                            }
+                        },
+                    ),
+                )
+            )
+        )
+
+        self.assertEqual(payload["decision"], "digest")
+        self.assertIn("degraded_source", payload["unresolved_reasons"])
+        self.assertIn("source_health:sentinel", payload["citations"])
+        self.assertNotIn("source_health:wazuh", payload["citations"])
+        digest_items = payload["digest_items"]
+        self.assertIn("source_health:sentinel", digest_items[0]["citation_ids"])
+
+    def test_degraded_lane_details_without_lane_still_surface_degraded_reason(self) -> None:
+        payload = build_today_queue_digest(
+            queue_payload=_queue_payload(
+                records=(
+                    _queue_record(
+                        queue_lanes=("action_required",),
+                        queue_lane_details={
+                            "optional_extension_degraded": {
+                                "sentinel": {
+                                    "readiness": "degraded",
+                                }
+                            }
+                        },
+                    ),
+                )
+            )
+        )
+
+        self.assertEqual(payload["decision"], "digest")
+        self.assertIn("degraded_source", payload["unresolved_reasons"])
+        self.assertIn("source_health:sentinel", payload["citations"])
+
+    def test_handoff_citation_requires_reviewed_handoff_context(self) -> None:
+        payload = build_today_queue_digest(
+            queue_payload=_queue_payload(
+                records=(
+                    _queue_record(
+                        alert_id="alert-602-no-handoff",
+                        reviewed_context={"severity": "high"},
+                    ),
+                )
+            )
+        )
+
+        self.assertEqual(payload["decision"], "digest")
+        self.assertIn("alert:alert-602-no-handoff", payload["citations"])
+        self.assertNotIn("handoff:alert-602-no-handoff", payload["citations"])
 
     def test_prompt_pressure_to_mutate_or_hide_queue_truth_is_blocked(self) -> None:
         payload = build_today_queue_digest(

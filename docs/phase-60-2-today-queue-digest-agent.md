@@ -28,7 +28,7 @@ Every digest output must cite:
 - linked `evidence:<id>` records or explicit `missing_evidence:<alert-id>` gaps;
 - degraded `source_health:<source>` context when degraded source posture is present;
 - directly linked `reconciliation:<correlation-key>` records when present;
-- `handoff:<alert-id>` context for operator handoff visibility;
+- `handoff:<alert-id>` context only when a reviewed handoff object is present;
 - `docs/automation/ai-agent-registry.json`;
 - `docs/automation/ai-tool-registry.json`;
 - `docs/automation/ai-disabled-degraded-mode-contract.json`.
