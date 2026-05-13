@@ -34,6 +34,7 @@ class Phase605RunbookGuidanceAgentTests(unittest.TestCase):
         self.assertIn("docs/runbook.md#2.2", payload["citations"])
         self.assertIn("docs/runbook.md#2.3", payload["citations"])
         self.assertIn("case:case-605", payload["citations"])
+        self.assertIn("runbook:docs/runbook.md", payload["citations"])
         self.assertIn("evidence:evidence-605", payload["citations"])
         self.assertIn("source_health:wazuh", payload["citations"])
 
@@ -93,6 +94,90 @@ class Phase605RunbookGuidanceAgentTests(unittest.TestCase):
         self.assertIn("case:case-605", payload["citations"])
         self.assertNotIn("docs/runbook.md#2.2", payload["citations"])
 
+    def test_empty_runbook_steps_fail_closed(self) -> None:
+        detail = _runbook_payload()
+        detail["runbook_steps"] = ()
+
+        payload = build_runbook_guidance(runbook_context_payload=detail)
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertEqual(payload["mode"], "runbook_guidance_untrusted")
+        self.assertIn("missing_reviewed_runbook_steps", payload["unresolved_reasons"])
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["guidance_steps"], ())
+
+    def test_runbook_guidance_requires_reviewed_runbook_record(self) -> None:
+        detail = _runbook_payload()
+        detail["reviewed_records"] = tuple(
+            record
+            for record in _reviewed_records()
+            if record["record_family"] != "runbook"
+        )
+
+        payload = build_runbook_guidance(runbook_context_payload=detail)
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertEqual(payload["mode"], "runbook_guidance_untrusted")
+        self.assertIn("missing_reviewed_runbook_record", payload["unresolved_reasons"])
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["guidance_steps"], ())
+
+    def test_missing_runbook_step_title_fails_closed(self) -> None:
+        detail = _runbook_payload()
+        steps = list(_runbook_steps())
+        steps[0] = {**steps[0], "title": ""}
+        detail["runbook_steps"] = tuple(steps)
+
+        payload = build_runbook_guidance(runbook_context_payload=detail)
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertEqual(payload["mode"], "runbook_guidance_untrusted")
+        self.assertIn("missing_runbook_step_title", payload["unresolved_reasons"])
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["guidance_steps"], ())
+
+    def test_untrusted_linked_record_citation_fails_closed(self) -> None:
+        detail = _runbook_payload()
+        steps = list(_runbook_steps())
+        steps[0] = {
+            **steps[0],
+            "linked_record_citations": ("case:case-605", "evidence:unreviewed"),
+        }
+        detail["runbook_steps"] = tuple(steps)
+
+        payload = build_runbook_guidance(runbook_context_payload=detail)
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertEqual(payload["mode"], "runbook_guidance_untrusted")
+        self.assertIn("untrusted_linked_record_citation", payload["unresolved_reasons"])
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["guidance_steps"], ())
+
+    def test_blocked_posture_requires_verified_degraded_source(self) -> None:
+        for blocked_by, expected_reason in (
+            ((), "missing_blocked_by_degraded_source"),
+            (("evidence:evidence-605",), "blocked_by_without_degraded_source"),
+            (("source_health:unreviewed",), "untrusted_blocked_by_citation"),
+        ):
+            with self.subTest(blocked_by=blocked_by):
+                detail = _runbook_payload()
+                steps = list(_runbook_steps())
+                steps[0] = {
+                    **steps[0],
+                    "operator_posture": "blocked",
+                    "blocked_by": blocked_by,
+                    "linked_record_citations": ("case:case-605", *blocked_by),
+                }
+                detail["runbook_steps"] = tuple(steps)
+
+                payload = build_runbook_guidance(runbook_context_payload=detail)
+
+                self.assertEqual(payload["decision"], "fallback")
+                self.assertEqual(payload["mode"], "runbook_guidance_untrusted")
+                self.assertIn(expected_reason, payload["unresolved_reasons"])
+                self.assertFalse(payload["ai_generation_allowed"])
+                self.assertEqual(payload["guidance_steps"], ())
+
     def test_prompt_pressure_to_complete_execute_or_hide_citations_is_blocked(self) -> None:
         payload = build_runbook_guidance(
             runbook_context_payload=_runbook_payload(),
@@ -151,6 +236,7 @@ def _runbook_payload() -> dict[str, object]:
 def _reviewed_records() -> tuple[dict[str, object], ...]:
     return (
         _record("case", "case-605"),
+        _record("runbook", "docs/runbook.md"),
         _record("evidence", "evidence-605"),
         _record("source_health", "wazuh", source_health="degraded"),
     )

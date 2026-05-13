@@ -259,6 +259,8 @@ def _validated_runbook_payload(
     raw_steps = runbook_context_payload.get("runbook_steps")
     if not isinstance(raw_steps, Sequence) or isinstance(raw_steps, (str, bytes)):
         return _invalid(("malformed_runbook_steps",))
+    if not raw_steps:
+        return _invalid(("missing_reviewed_runbook_steps",))
 
     reasons: list[str] = []
     records: list[Mapping[str, object]] = []
@@ -283,6 +285,7 @@ def _validated_runbook_payload(
             reasons.append("missing_reviewed_record_citation")
         records.append(raw_record)
 
+    reviewed_record_citations = _reviewed_record_citation_set(tuple(records))
     steps: list[Mapping[str, object]] = []
     for raw_step in raw_steps:
         if not isinstance(raw_step, Mapping):
@@ -290,6 +293,8 @@ def _validated_runbook_payload(
             continue
         if _string(raw_step.get("step_id")) is None:
             reasons.append("missing_runbook_step_id")
+        if _normalized_string(raw_step.get("title")) is None:
+            reasons.append("missing_runbook_step_title")
         if _normalized_string(raw_step.get("reviewed_source")) != "docs/runbook.md":
             reasons.append("unreviewed_runbook_source")
         posture = _string(raw_step.get("operator_posture"))
@@ -305,6 +310,22 @@ def _validated_runbook_payload(
             reasons.append("unsupported_runbook_review_status")
         if not _runbook_step_citations(raw_step):
             reasons.append("missing_runbook_step_citation")
+        linked_record_citations = _string_tuple(raw_step.get("linked_record_citations"))
+        if not linked_record_citations:
+            reasons.append("missing_linked_record_citation")
+        elif not set(linked_record_citations).issubset(reviewed_record_citations):
+            reasons.append("untrusted_linked_record_citation")
+        blocked_by = _string_tuple(raw_step.get("blocked_by"))
+        if posture == "blocked" and not blocked_by:
+            reasons.append("missing_blocked_by_degraded_source")
+        if blocked_by:
+            if not set(blocked_by).issubset(reviewed_record_citations):
+                reasons.append("untrusted_blocked_by_citation")
+            if not all(
+                _reviewed_degraded_source(blocked, tuple(records))
+                for blocked in blocked_by
+            ):
+                reasons.append("blocked_by_without_degraded_source")
         steps.append(raw_step)
 
     if not any(
@@ -313,6 +334,12 @@ def _validated_runbook_payload(
         for record in records
     ):
         reasons.append("missing_anchor_case_record")
+    if not any(
+        _string(record.get("record_family")) == "runbook"
+        and _string(record.get("record_id")) == "docs/runbook.md"
+        for record in records
+    ):
+        reasons.append("missing_reviewed_runbook_record")
     if reasons:
         return _invalid(_dedupe_strings(tuple(reasons)))
     return {
@@ -392,6 +419,30 @@ def _reviewed_record_citations(record: Mapping[str, object]) -> tuple[str, ...]:
     if record_family is None or record_id is None:
         return ()
     return (f"{record_family}:{record_id}",)
+
+
+def _reviewed_record_citation_set(
+    records: tuple[Mapping[str, object], ...],
+) -> set[str]:
+    return {
+        citation
+        for record in records
+        for citation in _reviewed_record_citations(record)
+    }
+
+
+def _reviewed_degraded_source(
+    citation_id: str,
+    records: tuple[Mapping[str, object], ...],
+) -> bool:
+    for record in records:
+        if citation_id not in _reviewed_record_citations(record):
+            continue
+        return (
+            _string(record.get("record_family")) == "source_health"
+            and _normalized_string(record.get("source_health")) == "degraded"
+        )
+    return False
 
 
 def _citation_matches(citation: object, record: Mapping[str, object]) -> bool:
