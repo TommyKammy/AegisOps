@@ -185,11 +185,32 @@ assert_fails_with \
   "${overclaim_disabled_repo}" \
   "Forbidden Phase 60 closeout evaluation claim: AI can be disabled or degraded to block case review"
 
+overclaim_approval_plain_repo="${workdir}/overclaim-plain-approval"
+copy_valid_repo "${overclaim_approval_plain_repo}"
+printf '%s\n' "AI may approve actions" >>"${overclaim_approval_plain_repo}/docs/phase-60-closeout-evaluation.md"
+assert_fails_with \
+  "${overclaim_approval_plain_repo}" \
+  "Forbidden Phase 60 closeout evaluation claim: AI may approve actions"
+
+overclaim_execute_plain_repo="${workdir}/overclaim-plain-execute"
+copy_valid_repo "${overclaim_execute_plain_repo}"
+printf '%s\n' "AI may execute actions" >>"${overclaim_execute_plain_repo}/docs/phase-60-closeout-evaluation.md"
+assert_fails_with \
+  "${overclaim_execute_plain_repo}" \
+  "Forbidden Phase 60 closeout evaluation claim: AI may execute actions"
+
+overclaim_degraded_cap_repo="${workdir}/overclaim-degraded-capitalized"
+copy_valid_repo "${overclaim_degraded_cap_repo}"
+printf '%s\n' "Degraded AI may block case review" >>"${overclaim_degraded_cap_repo}/docs/phase-60-closeout-evaluation.md"
+assert_fails_with \
+  "${overclaim_degraded_cap_repo}" \
+  "Forbidden Phase 60 closeout evaluation claim: Degraded AI may block case review"
+
 overclaim_conflict_repo="${workdir}/overclaim-conflict-autoresolve"
 copy_valid_repo "${overclaim_conflict_repo}"
 printf '%s\n' "Conflicting evidence may be automatically resolved." >>"${overclaim_conflict_repo}/docs/phase-60-closeout-evaluation.md"
 assert_fails_with \
   "${overclaim_conflict_repo}" \
-  "Forbidden Phase 60 closeout evaluation claim: Conflicting evidence may be automatically resolved"
+  "Forbidden Phase 60 closeout evaluation claim: conflicting evidence may be automatically resolved"
 
 echo "Phase 60 closeout verification tests passed."

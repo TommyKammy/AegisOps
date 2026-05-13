@@ -95,7 +95,11 @@ for forbidden in \
   "AI output is recommendation truth" \
   "AI output approves actions" \
   "AI output may approve actions" \
+  "AI may approve actions" \
   "AI output may execute actions" \
+  "AI may execute actions" \
+  "Degraded AI may block case review" \
+  "Degraded AI can block case review" \
   "AI output can block case review" \
   "AI can be disabled or degraded to block case review" \
   "AI may be disabled or degraded to block case review" \
@@ -116,7 +120,7 @@ for forbidden in \
   "Stale evidence is current truth" \
   "Missing citations may be hidden" \
   ; do
-  if grep -Fxv -- "${allowed_non_claim_line}" "${absolute_doc_path}" | grep -Fq -- "${forbidden}"; then
+  if grep -Fxv -- "${allowed_non_claim_line}" "${absolute_doc_path}" | grep -Fiq -- "${forbidden}"; then
     echo "Forbidden Phase 60 closeout evaluation claim: ${forbidden}" >&2
     exit 1
   fi
