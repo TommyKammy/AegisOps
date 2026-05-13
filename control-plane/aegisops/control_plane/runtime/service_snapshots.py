@@ -127,6 +127,36 @@ class AITraceReviewQueueSnapshot:
 
 
 @dataclass(frozen=True)
+class AIQualityMetricsSnapshot:
+    read_only: bool
+    generated_at: datetime
+    assistant_operability: dict[str, object]
+    citation_completeness: dict[str, object]
+    unresolved_rate: dict[str, object]
+    acceptance_rate: dict[str, object]
+    correction_rate: dict[str, object]
+    stale_evidence_usage: dict[str, object]
+    prompt_pressure_refusal: dict[str, object]
+    malformed_trace_records: tuple[dict[str, object], ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return _json_ready(
+            {
+                "read_only": self.read_only,
+                "generated_at": self.generated_at,
+                "assistant_operability": self.assistant_operability,
+                "citation_completeness": self.citation_completeness,
+                "unresolved_rate": self.unresolved_rate,
+                "acceptance_rate": self.acceptance_rate,
+                "correction_rate": self.correction_rate,
+                "stale_evidence_usage": self.stale_evidence_usage,
+                "prompt_pressure_refusal": self.prompt_pressure_refusal,
+                "malformed_trace_records": self.malformed_trace_records,
+            }
+        )
+
+
+@dataclass(frozen=True)
 class AlertDetailSnapshot:
     read_only: bool
     alert_id: str
@@ -494,6 +524,7 @@ class DoctorSnapshot:
 __all__ = [
     "ActionReviewDetailSnapshot",
     "AITraceReviewQueueSnapshot",
+    "AIQualityMetricsSnapshot",
     "AdvisoryInspectionSnapshot",
     "AlertDetailSnapshot",
     "AnalystAssistantContextSnapshot",

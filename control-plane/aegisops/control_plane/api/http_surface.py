@@ -212,6 +212,25 @@ def _handle_inspect_ai_trace_review_queue(
     )
 
 
+def _handle_inspect_ai_quality_metrics(
+    handler: BaseHTTPRequestHandler,
+    context: HttpSurfaceContext,
+    principal: object,
+) -> None:
+    try:
+        payload = (
+            context.service._operator_inspection_read_surface.inspect_ai_quality_metrics().to_dict()
+        )
+    except (LookupError, ValueError) as exc:
+        _write_lookup_or_bad_request(handler, exc)
+        return
+    _write_json(
+        handler,
+        HTTPStatus.OK,
+        payload,
+    )
+
+
 def _handle_inspect_alert_detail(
     handler: BaseHTTPRequestHandler,
     context: HttpSurfaceContext,
@@ -406,6 +425,7 @@ HTTP_GET_ROUTES: dict[str, GetRouteHandler] = {
     "/inspect-reconciliation-status": _handle_inspect_reconciliation_status,
     "/inspect-analyst-queue": _handle_inspect_analyst_queue,
     "/inspect-ai-trace-review-queue": _handle_inspect_ai_trace_review_queue,
+    "/inspect-ai-quality-metrics": _handle_inspect_ai_quality_metrics,
     "/inspect-alert-detail": _handle_inspect_alert_detail,
     "/inspect-case-detail": _handle_inspect_case_detail,
     "/inspect-action-review": _handle_inspect_action_review,

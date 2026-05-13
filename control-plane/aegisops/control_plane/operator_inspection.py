@@ -21,6 +21,7 @@ from .models import (
     ReconciliationRecord,
 )
 from .runtime.service_snapshots import AITraceReviewQueueSnapshot
+from .runtime.service_snapshots import AIQualityMetricsSnapshot
 
 
 RecordT = TypeVar("RecordT", bound=ControlPlaneRecord)
@@ -210,6 +211,183 @@ class OperatorInspectionReadSurface:
             total_records=len(records),
             state_counts=state_counts,
             records=records,
+        )
+
+    def inspect_ai_quality_metrics(self) -> AIQualityMetricsSnapshot:
+        traces = self._service._store.list(AITraceRecord)
+        readiness = self._service.inspect_readiness_diagnostics()
+        optional_extensions = readiness.metrics.get("optional_extensions", {})
+        assistant_extension = (
+            optional_extensions.get("extensions", {}).get("assistant", {})
+            if isinstance(optional_extensions, Mapping)
+            else {}
+        )
+        if not isinstance(assistant_extension, Mapping):
+            assistant_extension = {}
+
+        prompt_pressure_reasons = frozenset(
+            {
+                "prompt_injection_attempt",
+                "authority_overreach",
+                "scope_expansion_attempt",
+                "tool_scope_expansion_attempt",
+                "record_family_expansion_attempt",
+                "citation_suppression_attempt",
+            }
+        )
+        trace_metrics: list[dict[str, object]] = []
+        total_records = len(traces)
+        citation_complete = 0
+        unresolved_count = 0
+        accepted_count = 0
+        corrected_count = 0
+        stale_evidence_count = 0
+        prompt_pressure_refusal_count = 0
+
+        for trace in traces:
+            subject_linkage = trace.subject_linkage
+            advisory_draft = trace.assistant_advisory_draft
+            review_state = self._ai_trace_queue_review_state(
+                lifecycle_state=trace.lifecycle_state,
+                draft_review_state=self._optional_string_from_mapping(
+                    advisory_draft,
+                    "review_state",
+                ),
+            )
+
+            citations = self._dedupe_strings(
+                (
+                    *self._string_tuple_from_object(subject_linkage.get("citations")),
+                    *self._string_tuple_from_object(advisory_draft.get("citations")),
+                    *self._string_tuple_from_object(trace.material_input_refs),
+                )
+            )
+            unresolved_reasons = self._string_tuple_from_object(
+                advisory_draft.get("unresolved_reasons")
+            )
+            provider_status = self._optional_string_from_mapping(
+                subject_linkage,
+                "provider_status",
+            )
+            provider_operational_quality = self._optional_string_from_mapping(
+                subject_linkage,
+                "provider_operational_quality",
+            )
+            draft_status = self._optional_string_from_mapping(
+                advisory_draft,
+                "status",
+            )
+            trace_states = self._ai_trace_review_states(
+                lifecycle_state=trace.lifecycle_state,
+                provider_status=provider_status,
+                provider_operational_quality=provider_operational_quality,
+                draft_status=draft_status,
+                unresolved_reasons=unresolved_reasons,
+            )
+            if "unresolved" in trace_states:
+                unresolved_count += 1
+            if review_state == "accepted":
+                accepted_count += 1
+            if review_state == "corrected":
+                corrected_count += 1
+
+            if "stale_evidence" in unresolved_reasons:
+                stale_evidence_count += 1
+            if unresolved_reasons and prompt_pressure_reasons.intersection(unresolved_reasons):
+                prompt_pressure_refusal_count += 1
+
+            registered_agent_id = self._optional_string_from_mapping(
+                subject_linkage,
+                "registered_agent_id",
+            )
+            registered_tool_id = self._optional_string_from_mapping(
+                subject_linkage,
+                "registered_tool_id",
+            )
+            reviewed_record_family = (
+                self._optional_string_from_mapping(subject_linkage, "reviewed_record_family")
+                or self._optional_string_from_mapping(subject_linkage, "source_record_family")
+            )
+            reviewed_record_id = (
+                self._optional_string_from_mapping(subject_linkage, "reviewed_record_id")
+                or self._optional_string_from_mapping(subject_linkage, "source_record_id")
+                or self._optional_string_from_mapping(subject_linkage, "source_case_id")
+                or self._optional_string_from_mapping(subject_linkage, "source_alert_id")
+            )
+            missing_required_fields = tuple(
+                field_name
+                for field_name, value in (
+                    ("registered_agent_id", registered_agent_id),
+                    ("registered_tool_id", registered_tool_id),
+                    ("reviewed_record_family", reviewed_record_family),
+                    ("reviewed_record_id", reviewed_record_id),
+                    ("citations", citations),
+                )
+                if (
+                    value is None
+                    or (isinstance(value, str) and not value.strip())
+                    or (isinstance(value, tuple) and not value)
+                    or (isinstance(value, list) and not value)
+                )
+            )
+            if not citations or "missing_supporting_citations" in unresolved_reasons or "missing_evidence_citation" in unresolved_reasons:
+                citation_complete += 0
+            else:
+                citation_complete += 1
+
+            if missing_required_fields:
+                missing_required = ", ".join(missing_required_fields)
+                trace_metrics.append(
+                    {
+                        "ai_trace_id": trace.ai_trace_id,
+                        "missing_required_fields": missing_required_fields,
+                        "missing_required_fields_text": missing_required,
+                        "review_state": review_state,
+                    }
+                )
+
+        def ratio(numerator: int, denominator: int) -> float:
+            if denominator <= 0:
+                return 0.0
+            return round(numerator / denominator, 4)
+
+        missing_citation_count = total_records - citation_complete
+        return AIQualityMetricsSnapshot(
+            read_only=True,
+            generated_at=datetime.now(timezone.utc),
+            assistant_operability=dict(assistant_extension),
+            citation_completeness={
+                "total_records": total_records,
+                "complete_citation_records": citation_complete,
+                "missing_citation_records": missing_citation_count,
+                "completeness_ratio": ratio(citation_complete, total_records),
+            },
+            unresolved_rate={
+                "total_records": total_records,
+                "unresolved_records": unresolved_count,
+                "unresolved_ratio": ratio(unresolved_count, total_records),
+            },
+            acceptance_rate={
+                "total_records": total_records,
+                "accepted_records": accepted_count,
+                "acceptance_ratio": ratio(accepted_count, total_records),
+            },
+            correction_rate={
+                "total_records": total_records,
+                "corrected_records": corrected_count,
+                "correction_ratio": ratio(corrected_count, total_records),
+            },
+            stale_evidence_usage={
+                "total_records": total_records,
+                "stale_evidence_records": stale_evidence_count,
+                "stale_evidence_ratio": ratio(stale_evidence_count, total_records),
+            },
+            prompt_pressure_refusal={
+                "total_records": total_records,
+                "prompt_pressure_records": prompt_pressure_refusal_count,
+                "prompt_pressure_ratio": ratio(prompt_pressure_refusal_count, total_records),
+            },
+            malformed_trace_records=tuple(trace_metrics),
         )
 
     def _ai_trace_review_queue_record(

@@ -423,6 +423,256 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
         self.assertIn("AI trace review queue requires", stderr.getvalue())
         self.assertIn("missing registered_tool_id, citations", stderr.getvalue())
 
+    def test_cli_renders_ai_quality_metrics(self) -> None:
+        _, service, promoted_case, evidence_id, _ = (
+            self._build_phase19_in_scope_case()
+        )
+        common_linkage = {
+            "source_case_id": promoted_case.case_id,
+            "registered_agent_id": "agent-governed-summary-001",
+            "registered_tool_id": "tool-case-summary-001",
+            "reviewed_record_family": "case",
+            "reviewed_record_id": promoted_case.case_id,
+            "expiration_posture": "inherits_reviewed_record_retention",
+        }
+        service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-quality-accepted-001",
+                subject_linkage={
+                    **common_linkage,
+                    "citations": (promoted_case.case_id, evidence_id),
+                },
+                model_identity="gpt-5.4",
+                prompt_version="phase-60-quality-v1",
+                generated_at=datetime(2026, 5, 13, 9, 0, tzinfo=timezone.utc),
+                material_input_refs=(evidence_id,),
+                reviewer_identity="analyst-001",
+                lifecycle_state="accepted_for_reference",
+                assistant_advisory_draft={
+                    "status": "ready",
+                    "review_state": "accepted",
+                },
+            )
+        )
+        service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-quality-rejected-001",
+                subject_linkage={
+                    **common_linkage,
+                    "citations": (promoted_case.case_id,),
+                },
+                model_identity="gpt-5.4",
+                prompt_version="phase-60-quality-v1",
+                generated_at=datetime(2026, 5, 13, 9, 5, tzinfo=timezone.utc),
+                material_input_refs=(promoted_case.case_id,),
+                reviewer_identity="analyst-001",
+                lifecycle_state="rejected_for_reference",
+                assistant_advisory_draft={
+                    "status": "ready",
+                    "review_state": "rejected",
+                },
+            )
+        )
+        service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-quality-corrected-001",
+                subject_linkage={
+                    **common_linkage,
+                    "citations": (promoted_case.case_id,),
+                },
+                model_identity="gpt-5.4",
+                prompt_version="phase-60-quality-v1",
+                generated_at=datetime(2026, 5, 13, 9, 10, tzinfo=timezone.utc),
+                material_input_refs=(promoted_case.case_id,),
+                reviewer_identity="analyst-001",
+                lifecycle_state="accepted_for_reference",
+                assistant_advisory_draft={
+                    "status": "ready",
+                    "review_state": "corrected",
+                },
+            )
+        )
+        service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-quality-unresolved-001",
+                subject_linkage={
+                    **common_linkage,
+                    "citations": (),
+                },
+                model_identity="gpt-5.4",
+                prompt_version="phase-60-quality-v1",
+                generated_at=datetime(2026, 5, 13, 9, 15, tzinfo=timezone.utc),
+                material_input_refs=("   ",),
+                reviewer_identity="analyst-001",
+                lifecycle_state="under_review",
+                assistant_advisory_draft={
+                    "status": "unresolved",
+                    "review_state": "unresolved",
+                    "unresolved_reasons": (
+                        "provider_generation_failed",
+                        "missing_supporting_citations",
+                        "stale_evidence",
+                        "prompt_injection_attempt",
+                    ),
+                },
+            )
+        )
+        service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-quality-malformed-001",
+                subject_linkage={
+                    "source_case_id": promoted_case.case_id,
+                    "registered_agent_id": "agent-governed-summary-001",
+                    "reviewed_record_family": "case",
+                    "reviewed_record_id": promoted_case.case_id,
+                },
+                model_identity="gpt-5.4",
+                prompt_version="phase-60-quality-v1",
+                generated_at=datetime(2026, 5, 13, 9, 20, tzinfo=timezone.utc),
+                material_input_refs=("   ",),
+                reviewer_identity="analyst-001",
+                lifecycle_state="accepted_for_reference",
+                assistant_advisory_draft={
+                    "status": "ready",
+                    "review_state": "accepted",
+                },
+            )
+        )
+
+        stdout = io.StringIO()
+        main.main(["inspect-ai-quality-metrics"], stdout=stdout, service=service)
+        payload = json.loads(stdout.getvalue())
+
+        self.assertTrue(payload["read_only"])
+        self.assertEqual(payload["assistant_operability"]["enablement"], "enabled")
+        self.assertEqual(payload["citation_completeness"], {
+            "total_records": 5,
+            "complete_citation_records": 3,
+            "missing_citation_records": 2,
+            "completeness_ratio": 0.6,
+        })
+        self.assertEqual(payload["unresolved_rate"], {
+            "total_records": 5,
+            "unresolved_records": 1,
+            "unresolved_ratio": 0.2,
+        })
+        self.assertEqual(payload["acceptance_rate"], {
+            "total_records": 5,
+            "accepted_records": 2,
+            "acceptance_ratio": 0.4,
+        })
+        self.assertEqual(payload["correction_rate"], {
+            "total_records": 5,
+            "corrected_records": 1,
+            "correction_ratio": 0.2,
+        })
+        self.assertEqual(payload["stale_evidence_usage"], {
+            "total_records": 5,
+            "stale_evidence_records": 1,
+            "stale_evidence_ratio": 0.2,
+        })
+        self.assertEqual(payload["prompt_pressure_refusal"], {
+            "total_records": 5,
+            "prompt_pressure_records": 1,
+            "prompt_pressure_ratio": 0.2,
+        })
+        malformed_trace_records = {
+            malformed["ai_trace_id"]: malformed for malformed in payload["malformed_trace_records"]
+        }
+        self.assertIn("ai-trace-quality-malformed-001", malformed_trace_records)
+        self.assertIn("ai-trace-quality-unresolved-001", malformed_trace_records)
+        malformed = malformed_trace_records["ai-trace-quality-malformed-001"]
+        self.assertEqual(
+            set(malformed["missing_required_fields"]),
+            {"registered_tool_id", "citations"},
+        )
+
+    def test_cli_ai_quality_metrics_missing_citation_is_explicit(self) -> None:
+        _, service, promoted_case, evidence_id, _ = (
+            self._build_phase19_in_scope_case()
+        )
+        service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-quality-missing-citation-001",
+                subject_linkage={
+                    "source_case_id": promoted_case.case_id,
+                    "registered_agent_id": "agent-governed-summary-001",
+                    "registered_tool_id": "tool-case-summary-001",
+                    "reviewed_record_family": "case",
+                    "reviewed_record_id": promoted_case.case_id,
+                    "citations": (),
+                },
+                model_identity="gpt-5.4",
+                prompt_version="phase-60-quality-v1",
+                generated_at=datetime(2026, 5, 13, 9, 25, tzinfo=timezone.utc),
+                material_input_refs=("   ",),
+                reviewer_identity="analyst-001",
+                lifecycle_state="accepted_for_reference",
+                assistant_advisory_draft={"status": "ready", "review_state": "accepted"},
+            )
+        )
+
+        stdout = io.StringIO()
+        main.main(["inspect-ai-quality-metrics"], stdout=stdout, service=service)
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(payload["citation_completeness"]["missing_citation_records"], 1)
+        self.assertEqual(payload["citation_completeness"]["completeness_ratio"], 0.0)
+        self.assertEqual(len(payload["malformed_trace_records"]), 1)
+        malformed = payload["malformed_trace_records"][0]
+        self.assertEqual(malformed["missing_required_fields"], ["citations"])
+        self.assertIn("citations", malformed["missing_required_fields_text"])
+
+    def test_cli_renders_ai_quality_metrics_for_degraded_and_disabled_ai_posture(
+        self,
+    ) -> None:
+        reviewed_record_id = "case-quality-posture-001"
+        for posture in ("degraded", "disabled"):
+            with self.subTest(ai_enablement_posture=posture):
+                store, _ = make_store()
+                service = AegisOpsControlPlaneService(
+                    RuntimeConfig(
+                        postgres_dsn="postgresql://control-plane.local/aegisops",
+                        ai_enablement_posture=posture,
+                    ),
+                    store=store,
+                )
+                service.persist_record(
+                    AITraceRecord(
+                        ai_trace_id=f"ai-trace-quality-{posture}-001",
+                        subject_linkage={
+                            "source_case_id": reviewed_record_id,
+                            "registered_agent_id": "agent-governed-summary-001",
+                            "registered_tool_id": "tool-case-summary-001",
+                            "reviewed_record_family": "case",
+                            "reviewed_record_id": reviewed_record_id,
+                            "citations": (reviewed_record_id,),
+                        },
+                        model_identity="gpt-5.4",
+                        prompt_version="phase-60-quality-v1",
+                        generated_at=datetime(2026, 5, 13, 9, 30, tzinfo=timezone.utc),
+                        material_input_refs=(reviewed_record_id,),
+                        reviewer_identity="analyst-001",
+                        lifecycle_state="accepted_for_reference",
+                        assistant_advisory_draft={
+                            "status": "ready",
+                            "review_state": "accepted",
+                        },
+                    )
+                )
+
+                stdout = io.StringIO()
+                main.main(["inspect-ai-quality-metrics"], stdout=stdout, service=service)
+                payload = json.loads(stdout.getvalue())
+
+                self.assertEqual(payload["assistant_operability"]["enablement"], posture)
+                if posture == "disabled":
+                    self.assertEqual(payload["assistant_operability"]["readiness"], "not_applicable")
+                    self.assertEqual(payload["assistant_operability"]["availability"], "unavailable")
+                else:
+                    self.assertEqual(payload["assistant_operability"]["readiness"], "degraded")
+                    self.assertEqual(payload["assistant_operability"]["availability"], "unavailable")
+
     def test_http_ai_trace_review_queue_reports_validation_error_as_bad_request(self) -> None:
         store, _ = make_store()
         service = AegisOpsControlPlaneService(
@@ -493,6 +743,82 @@ class CliInspectionWorkflowFamilyTests(ControlPlaneCliInspectionTestBase):
                 payload = json.loads(raised.exception.read().decode("utf-8"))
                 self.assertEqual(payload["error"], "invalid_request")
                 self.assertIn("AI trace review queue requires", payload["message"])
+            finally:
+                if servers:
+                    servers[0].shutdown()
+                thread.join(1)
+
+    def test_http_ai_quality_metrics(self) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(
+                host="127.0.0.1",
+                port=0,
+                postgres_dsn="postgresql://control-plane.local/aegisops",
+                wazuh_ingest_shared_secret="reviewed-shared-secret",  # noqa: S106 - test fixture secret
+                wazuh_ingest_reverse_proxy_secret="reviewed-proxy-secret",  # noqa: S106 - test fixture secret
+            ),
+            store=store,
+        )
+        service.persist_record(
+            AITraceRecord(
+                ai_trace_id="ai-trace-quality-http-001",
+                subject_linkage={
+                    "source_case_id": "case-001",
+                    "registered_agent_id": "agent-governed-summary-001",
+                    "registered_tool_id": "tool-case-summary-001",
+                    "reviewed_record_family": "case",
+                    "reviewed_record_id": "case-001",
+                    "citations": ("case-001",),
+                },
+                model_identity="gpt-5.4",
+                prompt_version="phase-60-quality-v1",
+                generated_at=datetime(2026, 5, 13, 9, 35, tzinfo=timezone.utc),
+                material_input_refs=("case-001",),
+                reviewer_identity="analyst-001",
+                lifecycle_state="accepted_for_reference",
+                assistant_advisory_draft={
+                    "status": "ready",
+                    "review_state": "accepted",
+                },
+            )
+        )
+        servers: list[main.ThreadingHTTPServer] = []
+
+        class RecordingServer(main.ThreadingHTTPServer):
+            def __init__(self, server_address: tuple[str, int], handler_class: type) -> None:
+                super().__init__(server_address, handler_class)
+                servers.append(self)
+
+        with mock.patch.object(main, "ThreadingHTTPServer", RecordingServer), self._mock_authenticated_surface_access(
+            service,
+            principal=REVIEWED_ANALYST_PRINCIPAL,
+        ):
+            thread = threading.Thread(
+                target=main.run_control_plane_service,
+                args=(service,),
+                daemon=True,
+            )
+            thread.start()
+            try:
+                for _ in range(100):
+                    if servers:
+                        break
+                    thread.join(0.01)
+                self.assertTrue(servers, "expected test HTTP server to start")
+
+                base_url = f"http://127.0.0.1:{servers[0].server_port}"
+                response = json.loads(
+                    request.urlopen(  # noqa: S310 - local in-process test HTTP server
+                        f"{base_url}/inspect-ai-quality-metrics",
+                        timeout=2,
+                    )
+                    .read()
+                    .decode("utf-8")
+                )
+                self.assertTrue(response["read_only"])
+                self.assertEqual(response["assistant_operability"]["enablement"], "enabled")
+                self.assertEqual(response["acceptance_rate"]["total_records"], 1)
             finally:
                 if servers:
                     servers[0].shutdown()
