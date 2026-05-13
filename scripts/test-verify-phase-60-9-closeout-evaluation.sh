@@ -34,7 +34,7 @@ assert_fails_with() {
     exit 1
   fi
 
-  if ! grep -Fq -- "${expected}" "${fail_stderr}"; then
+  if ! grep -Fiq -- "${expected}" "${fail_stderr}"; then
     echo "Expected failure output to contain: ${expected}" >&2
     cat "${fail_stdout}" >&2
     cat "${fail_stderr}" >&2

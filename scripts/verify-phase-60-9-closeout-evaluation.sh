@@ -80,49 +80,58 @@ if grep -Eq -- "${absolute_path_pattern}" "${absolute_doc_path}" "${readme_path}
 fi
 
 allowed_non_claim_line="This closeout does not claim Phase 61 SIEM breadth is complete, Phase 62 SOAR breadth is complete, Phase 66 RC proof is complete, AegisOps is Beta, RC, GA, self-service commercially ready, or a commercial replacement for every SIEM/SOAR capability."
+allowed_non_claim_line_lower="$(printf '%s' "${allowed_non_claim_line}" | tr '[:upper:]' '[:lower:]')"
 
-for forbidden in \
-  "Phase 61 SIEM breadth is complete" \
-  "Phase 62 SOAR breadth is complete" \
-  "Phase 66 RC proof is complete" \
-  "AegisOps is Beta" \
-  "AegisOps is RC" \
-  "AegisOps is GA" \
-  "AegisOps is self-service commercially ready" \
-  "AegisOps is a commercial replacement for every SIEM/SOAR capability" \
-  "AI output is workflow truth" \
-  "AI output is closeout truth" \
-  "AI output is recommendation truth" \
-  "AI output approves actions" \
-  "AI output may approve actions" \
-  "AI may approve actions" \
-  "AI output may execute actions" \
-  "AI may execute actions" \
-  "Degraded AI may block case review" \
-  "Degraded AI can block case review" \
-  "AI output can block case review" \
-  "AI can be disabled or degraded to block case review" \
-  "AI may be disabled or degraded to block case review" \
-  "Disabled AI may block case review" \
-  "Disabled AI can block case review" \
-  "degraded AI workflow may block case review" \
-  "degraded AI can block case review" \
-  "conflicting evidence may be automatically resolved" \
-  "conflicting evidence can be automatically resolved" \
-  "conflicting evidence may be auto-resolved" \
-  "conflicting evidence can be auto-resolved" \
-  "conflicting evidence is automatically resolved" \
-  "conflicting evidence can be silently resolved" \
-  "Conflicting evidence may be automatically resolved" \
-  "Conflicting evidence can be automatically resolved" \
-  "Conflicting evidence may be auto-resolved" \
-  "Conflicting evidence can be auto-resolved" \
-  "Conflicting evidence is automatically resolved" \
-  "Conflicting evidence can be silently resolved" \
-  "Stale evidence is current truth" \
-  "Missing citations may be hidden" \
-  ; do
-  if grep -Fxv -- "${allowed_non_claim_line}" "${absolute_doc_path}" | grep -Fiq -- "${forbidden}"; then
+forbidden_claims=(
+  "phase 61 siem breadth is complete"
+  "phase 62 soar breadth is complete"
+  "phase 66 rc proof is complete"
+  "aegisops is beta"
+  "aegisops is rc"
+  "aegisops is ga"
+  "aegisops is self-service commercially ready"
+  "aegisops is a commercial replacement for every siem/soar capability"
+  "ai output is workflow truth"
+  "ai output is closeout truth"
+  "ai output is recommendation truth"
+  "ai output approves actions"
+  "ai output may approve actions"
+  "ai output can approve actions"
+  "ai output could approve actions"
+  "ai output might approve actions"
+  "ai may approve actions"
+  "ai can approve actions"
+  "ai output may execute actions"
+  "ai output can execute actions"
+  "ai output could execute actions"
+  "ai output might execute actions"
+  "ai may execute actions"
+  "ai can execute actions"
+  "degraded ai may block case review"
+  "degraded ai can block case review"
+  "ai output can block case review"
+  "ai can be disabled or degraded to block case review"
+  "ai may be disabled or degraded to block case review"
+  "disabled ai may block case review"
+  "disabled ai can block case review"
+  "degraded ai workflow may block case review"
+  "degraded ai can block case review"
+  "conflicting evidence may be automatically resolved"
+  "conflicting evidence can be automatically resolved"
+  "conflicting evidence may be auto-resolved"
+  "conflicting evidence can be auto-resolved"
+  "conflicting evidence is automatically resolved"
+  "conflicting evidence can be silently resolved"
+  "stale evidence is current truth"
+  "missing citations may be hidden"
+  "stale evidence may be hidden"
+  "stale evidence can be hidden"
+)
+
+for forbidden in "${forbidden_claims[@]}"; do
+  if tr '[:upper:]' '[:lower:]' < "${absolute_doc_path}" | \
+    grep -Fxv -- "${allowed_non_claim_line_lower}" | \
+    grep -Fq -- "${forbidden}"; then
     echo "Forbidden Phase 60 closeout evaluation claim: ${forbidden}" >&2
     exit 1
   fi
