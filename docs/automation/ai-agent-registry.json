@@ -170,6 +170,38 @@
         "evidence_reference must identify cited doctor output, supportability evidence, runbook reference, limitation, or explicit missing prerequisite"
       ],
       "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
+    },
+    {
+      "agent_name": "today_queue_digest_agent",
+      "purpose": "Summarize the reviewed Today analyst queue with citations, stale/degraded posture, explicit evidence gaps, and no queue, case, approval, execution, reconciliation, or workflow mutation authority.",
+      "allowed_tools": [
+        "today_queue_digest"
+      ],
+      "disallowed_tools": [
+        "approve_action",
+        "execute_action",
+        "reconcile_execution",
+        "close_case",
+        "activate_detector",
+        "create_source_truth",
+        "bypass_policy"
+      ],
+      "record_families": [
+        "alert",
+        "case",
+        "evidence",
+        "action_review",
+        "reconciliation",
+        "source_health",
+        "handoff",
+        "ai_trace"
+      ],
+      "citation_requirements": [
+        "record_family must identify the directly linked reviewed Today queue record family behind each digest claim",
+        "record_id must identify the directly linked AegisOps record behind each digest claim",
+        "evidence_reference must identify linked reviewed evidence, degraded-source evidence, handoff context, or an explicit missing-evidence gap"
+      ],
+      "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
     }
   ]
 }

@@ -98,6 +98,7 @@ required_agent_names = {
     "advisory_action_request_drafting_agent",
     "today_focus_advisory_agent",
     "setup_doctor_explanation_agent",
+    "today_queue_digest_agent",
 }
 required_agent_fields = {
     "agent_name",
