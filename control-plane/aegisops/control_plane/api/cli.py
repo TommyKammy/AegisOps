@@ -616,7 +616,9 @@ def run_command(
             _usage_error(parser, str(exc))
     if command == "inspect-ai-quality-metrics":
         try:
-            return service.inspect_ai_quality_metrics().to_dict()
+            return (
+                service._operator_inspection_read_surface.inspect_ai_quality_metrics().to_dict()
+            )
         except (LookupError, ValueError) as exc:
             _usage_error(parser, str(exc))
     if command == "inspect-alert-detail":

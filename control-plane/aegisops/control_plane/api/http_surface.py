@@ -218,7 +218,9 @@ def _handle_inspect_ai_quality_metrics(
     principal: object,
 ) -> None:
     try:
-        payload = context.service.inspect_ai_quality_metrics().to_dict()
+        payload = (
+            context.service._operator_inspection_read_surface.inspect_ai_quality_metrics().to_dict()
+        )
     except (LookupError, ValueError) as exc:
         _write_lookup_or_bad_request(handler, exc)
         return

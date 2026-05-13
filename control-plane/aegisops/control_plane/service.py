@@ -68,7 +68,6 @@ from .runtime.service_snapshots import (
     AnalystQueueSnapshot,
     AuthenticatedRuntimePrincipal,
     CaseDetailSnapshot,
-    AIQualityMetricsSnapshot,
     LiveAssistantWorkflowSnapshot,
     ReadinessDiagnosticsSnapshot,
     RecommendationDraftSnapshot,
@@ -897,9 +896,6 @@ class AegisOpsControlPlaneService(CaseWorkflowFacade, ExternalEvidenceFacade):
 
     def inspect_analyst_queue(self) -> AnalystQueueSnapshot:
         return self._operator_inspection_read_surface.inspect_analyst_queue()
-
-    def inspect_ai_quality_metrics(self) -> AIQualityMetricsSnapshot:
-        return self._operator_inspection_read_surface.inspect_ai_quality_metrics()
 
     def inspect_alert_detail(self, alert_id: str) -> AlertDetailSnapshot:
         return self._operator_inspection_read_surface.inspect_alert_detail(alert_id)
