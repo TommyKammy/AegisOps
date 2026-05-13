@@ -474,7 +474,13 @@ def _draft_text_pressure_flags(draft_text: object) -> tuple[str, ...]:
         return ("malformed_prompt_payload",)
 
     lowered = _normalized_pressure_text(draft_text)
-    phase24_flags = phase24_live_assistant_prompt_injection_flags(draft_text)
+    # Keep reusable live-workflow scope/suppression/tool flags, but avoid importing
+    # phase24 authority language from draft phrases that are explicitly non-actionable.
+    phase24_flags = tuple(
+        flag
+        for flag in phase24_live_assistant_prompt_injection_flags(draft_text)
+        if flag != "authority_overreach"
+    )
     flags: tuple[str, ...] = phase24_flags
     if _contains_normalized_pressure_term(lowered, _AUTHORITY_PRESSURE_TERMS):
         flags = (*flags, "authority_overreach")
@@ -490,8 +496,8 @@ def _draft_text_pressure_flags(draft_text: object) -> tuple[str, ...]:
 
 
 def _normalized_pressure_text(prompt_text: str) -> str:
-    normalized = re.sub(r"[\\W_]+", " ", prompt_text.lower())
-    return re.sub(r"\\s+", " ", normalized).strip()
+    normalized = re.sub(r"[\W_]+", " ", prompt_text.lower())
+    return re.sub(r"\s+", " ", normalized).strip()
 
 
 def _contains_normalized_pressure_term(
@@ -507,10 +513,10 @@ def _contains_normalized_term(
     normalized_prompt_text: str,
     term: str,
 ) -> bool:
-    normalized_term = re.sub(r"[\\W_]+", " ", term.lower()).strip()
+    normalized_term = re.sub(r"[\W_]+", " ", term.lower()).strip()
     if not normalized_term:
         return False
-    pattern = rf"(?<!\\w){re.escape(normalized_term)}(?!\\w)"
+    pattern = rf"(?<!\w){re.escape(normalized_term)}(?!\w)"
     return re.search(pattern, normalized_prompt_text) is not None
 
 
