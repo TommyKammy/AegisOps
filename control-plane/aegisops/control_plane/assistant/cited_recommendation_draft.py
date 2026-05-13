@@ -70,6 +70,16 @@ _FEEDBACK_COERCION_TERMS = (
     "hide rejected",
     "hide corrected",
 )
+_ACTION_REQUEST_DRAFT_ADDITIONAL_TERMS = (
+    "bypass policy",
+    "bypass the policy",
+    "override policy",
+    "override the policy",
+    "disallowed tool",
+    "disallowed tools",
+    "unregistered tool",
+    "unregistered tools",
+)
 _WORKFLOW_COMPLETION_TERMS = (
     "mark workflow complete",
     "mark the workflow complete",
@@ -292,7 +302,7 @@ def _validated_recommendation_payload(
         if draft_text is None:
             reasons.append("missing_draft_text")
         else:
-            for draft_flag in _prompt_pressure_flags(draft_text):
+            for draft_flag in _draft_text_pressure_flags(draft_text):
                 reasons.append(f"action_request_draft_{draft_flag}")
         if _string(raw_draft.get("draft_id")) is None:
             reasons.append("missing_draft_id")
@@ -458,6 +468,25 @@ def _prompt_pressure_flags(prompt_text: object) -> tuple[str, ...]:
     if _contains_prompt_pressure_term(lowered, _UNCERTAINTY_SUPPRESSION_TERMS):
         flags = _dedupe_strings((*flags, "uncertainty_suppression_attempt"))
     return flags
+
+
+def _draft_text_pressure_flags(draft_text: object) -> tuple[str, ...]:
+    if not isinstance(draft_text, str):
+        return ("malformed_prompt_payload",)
+
+    lowered = draft_text.lower()
+    flags: tuple[str, ...] = ()
+    if _contains_prompt_pressure_term(lowered, _AUTHORITY_PRESSURE_TERMS):
+        flags = (*flags, "authority_overreach")
+    if _contains_prompt_pressure_term(lowered, _ACTION_REQUEST_DRAFT_ADDITIONAL_TERMS):
+        flags = (*flags, "authority_overreach")
+    if _contains_prompt_pressure_term(lowered, _FEEDBACK_COERCION_TERMS):
+        flags = (*flags, "feedback_coercion_attempt")
+    if _contains_prompt_pressure_term(lowered, _WORKFLOW_COMPLETION_TERMS):
+        flags = (*flags, "workflow_completion_attempt")
+    if _contains_prompt_pressure_term(lowered, _UNCERTAINTY_SUPPRESSION_TERMS):
+        flags = (*flags, "uncertainty_suppression_attempt")
+    return _dedupe_strings(flags)
 
 
 def _contains_prompt_pressure_term(prompt_text: str, terms: tuple[str, ...]) -> bool:
