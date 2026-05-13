@@ -56,6 +56,10 @@ _AUTHORITY_PRESSURE_TERMS = (
     "create source truth",
     "bypass policy",
     "bypass the policy",
+    "controlled write",
+    "hard write",
+    "dispatch action",
+    "dispatch the action",
 )
 _FEEDBACK_COERCION_TERMS = (
     "accept every recommendation",
@@ -64,6 +68,16 @@ _FEEDBACK_COERCION_TERMS = (
     "force accept",
     "hide rejected",
     "hide corrected",
+)
+_ACTION_REQUEST_DRAFT_ADDITIONAL_TERMS = (
+    "bypass policy",
+    "bypass the policy",
+    "override policy",
+    "override the policy",
+    "disallowed tool",
+    "disallowed tools",
+    "unregistered tool",
+    "unregistered tools",
 )
 _WORKFLOW_COMPLETION_TERMS = (
     "mark workflow complete",
@@ -283,10 +297,14 @@ def _validated_recommendation_payload(
         if not isinstance(raw_draft, Mapping):
             reasons.append("malformed_draft_request")
             continue
+        draft_text = _normalized_string(raw_draft.get("draft_text"))
+        if draft_text is None:
+            reasons.append("missing_draft_text")
+        else:
+            for draft_flag in _draft_text_pressure_flags(draft_text):
+                reasons.append(f"action_request_draft_{draft_flag}")
         if _string(raw_draft.get("draft_id")) is None:
             reasons.append("missing_draft_id")
-        if _normalized_string(raw_draft.get("draft_text")) is None:
-            reasons.append("missing_draft_text")
         posture = _string(raw_draft.get("operator_feedback_posture"))
         if posture not in _SUPPORTED_FEEDBACK_POSTURES:
             reasons.append("unsupported_operator_feedback_posture")
@@ -449,6 +467,57 @@ def _prompt_pressure_flags(prompt_text: object) -> tuple[str, ...]:
     if _contains_prompt_pressure_term(lowered, _UNCERTAINTY_SUPPRESSION_TERMS):
         flags = _dedupe_strings((*flags, "uncertainty_suppression_attempt"))
     return flags
+
+
+def _draft_text_pressure_flags(draft_text: object) -> tuple[str, ...]:
+    if not isinstance(draft_text, str):
+        return ("malformed_prompt_payload",)
+
+    lowered = _normalized_pressure_text(draft_text)
+    # Keep reusable live-workflow scope/suppression/tool flags, but avoid importing
+    # phase24 authority language from draft phrases that are explicitly non-actionable.
+    phase24_flags = tuple(
+        flag
+        for flag in phase24_live_assistant_prompt_injection_flags(draft_text)
+        if flag != "authority_overreach"
+    )
+    flags: tuple[str, ...] = phase24_flags
+    if _contains_normalized_pressure_term(lowered, _AUTHORITY_PRESSURE_TERMS):
+        flags = (*flags, "authority_overreach")
+    if _contains_normalized_pressure_term(lowered, _ACTION_REQUEST_DRAFT_ADDITIONAL_TERMS):
+        flags = (*flags, "authority_overreach")
+    if _contains_normalized_pressure_term(lowered, _FEEDBACK_COERCION_TERMS):
+        flags = (*flags, "feedback_coercion_attempt")
+    if _contains_normalized_pressure_term(lowered, _WORKFLOW_COMPLETION_TERMS):
+        flags = (*flags, "workflow_completion_attempt")
+    if _contains_normalized_pressure_term(lowered, _UNCERTAINTY_SUPPRESSION_TERMS):
+        flags = (*flags, "uncertainty_suppression_attempt")
+    return _dedupe_strings(flags)
+
+
+def _normalized_pressure_text(prompt_text: str) -> str:
+    normalized = re.sub(r"[\W_]+", " ", prompt_text.lower())
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _contains_normalized_pressure_term(
+    normalized_prompt_text: str,
+    terms: tuple[str, ...],
+) -> bool:
+    return any(
+        _contains_normalized_term(normalized_prompt_text, term) for term in terms
+    )
+
+
+def _contains_normalized_term(
+    normalized_prompt_text: str,
+    term: str,
+) -> bool:
+    normalized_term = re.sub(r"[\W_]+", " ", term.lower()).strip()
+    if not normalized_term:
+        return False
+    pattern = rf"(?<!\w){re.escape(normalized_term)}(?!\w)"
+    return re.search(pattern, normalized_prompt_text) is not None
 
 
 def _contains_prompt_pressure_term(prompt_text: str, terms: tuple[str, ...]) -> bool:

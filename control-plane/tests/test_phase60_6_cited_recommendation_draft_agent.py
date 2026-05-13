@@ -160,6 +160,113 @@ class Phase606CitedRecommendationDraftAgentTests(unittest.TestCase):
         self.assertEqual(payload["recommendation_drafts"], ())
         self.assertIn("case:case-606", payload["citations"])
 
+    def test_action_request_draft_with_controlled_or_hard_write_terms_is_blocked(self) -> None:
+        detail = _recommendation_payload()
+        drafts = list(detail["draft_requests"])
+        drafts[0] = {
+            **drafts[0],
+            "draft_text": "Move this to controlled write and dispatch to execution team.",
+        }
+        detail["draft_requests"] = tuple(drafts)
+
+        payload = build_cited_recommendation_draft(
+            recommendation_context_payload=detail,
+        )
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertEqual(payload["mode"], "recommendation_draft_untrusted")
+        self.assertIn(
+            "action_request_draft_authority_overreach",
+            payload["unresolved_reasons"],
+        )
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["recommendation_drafts"], ())
+
+    def test_action_request_draft_with_hard_write_phrase_is_blocked(self) -> None:
+        detail = _recommendation_payload()
+        drafts = list(detail["draft_requests"])
+        drafts[1] = {
+            **drafts[1],
+            "draft_text": "Apply this as a hard write action-request draft only for guidance.",
+        }
+        detail["draft_requests"] = tuple(drafts)
+
+        payload = build_cited_recommendation_draft(
+            recommendation_context_payload=detail,
+        )
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertEqual(payload["mode"], "recommendation_draft_untrusted")
+        self.assertIn(
+            "action_request_draft_authority_overreach",
+            payload["unresolved_reasons"],
+        )
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["recommendation_drafts"], ())
+
+    def test_action_request_draft_with_scope_expansion_term_is_blocked(self) -> None:
+        detail = _recommendation_payload()
+        drafts = list(detail["draft_requests"])
+        drafts[0] = {
+            **drafts[0],
+            "draft_text": "Apply this recommendation across all tenants and the asset fleet.",
+        }
+        detail["draft_requests"] = tuple(drafts)
+
+        payload = build_cited_recommendation_draft(
+            recommendation_context_payload=detail,
+        )
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertEqual(payload["mode"], "recommendation_draft_untrusted")
+        self.assertIn(
+            "action_request_draft_scope_expansion_attempt",
+            payload["unresolved_reasons"],
+        )
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["recommendation_drafts"], ())
+
+    def test_action_request_draft_with_dispatch_term_only_is_not_authority_overreach(self) -> None:
+        detail = _recommendation_payload()
+        drafts = list(detail["draft_requests"])
+        drafts[0] = {**drafts[0], "draft_text": "Dispatch this review draft to the operations channel."}
+        detail["draft_requests"] = tuple(drafts)
+
+        payload = build_cited_recommendation_draft(
+            recommendation_context_payload=detail,
+        )
+
+        self.assertEqual(payload["decision"], "draft")
+        self.assertEqual(payload["mode"], "cited_recommendation_draft")
+        self.assertNotIn(
+            "action_request_draft_authority_overreach",
+            payload["unresolved_reasons"],
+        )
+        self.assertTrue(payload["ai_generation_allowed"])
+        self.assertEqual(len(payload["recommendation_drafts"]), 4)
+
+    def test_action_request_draft_with_punctuated_authority_term_is_blocked(self) -> None:
+        detail = _recommendation_payload()
+        drafts = list(detail["draft_requests"])
+        drafts[0] = {
+            **drafts[0],
+            "draft_text": "Please APPROVE-the-action request after review.",
+        }
+        detail["draft_requests"] = tuple(drafts)
+
+        payload = build_cited_recommendation_draft(
+            recommendation_context_payload=detail,
+        )
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertEqual(payload["mode"], "recommendation_draft_untrusted")
+        self.assertIn(
+            "action_request_draft_authority_overreach",
+            payload["unresolved_reasons"],
+        )
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["recommendation_drafts"], ())
+
     def test_ai_disabled_or_degraded_returns_non_ai_feedback_fallback(self) -> None:
         for posture, mode in (
             ("disabled", "ai_disabled"),
