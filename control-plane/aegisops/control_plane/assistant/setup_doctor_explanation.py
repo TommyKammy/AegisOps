@@ -7,6 +7,7 @@ from .assistant_context import _advisory_text_claims_authority_or_scope_expansio
 from .live_assistant_workflow import phase24_live_assistant_prompt_injection_flags
 from ..runtime.doctor_contract import build_doctor_snapshot
 
+_AGENT_REGISTRY_REFERENCE = "docs/automation/ai-agent-registry.json"
 _AGENT_NAME = "setup_doctor_explanation_agent"
 _TOOL_NAME = "doctor_explanation"
 _AUTHORITY_CEILING = "advisory_only"
@@ -25,7 +26,7 @@ _NEGATIVE_AUTHORITY = (
     "gate_truth",
 )
 _REGISTRY_CITATIONS = (
-    "docs/automation/ai-agent-registry.json",
+    _AGENT_REGISTRY_REFERENCE,
     "docs/automation/ai-tool-registry.json",
     "docs/automation/ai-disabled-degraded-mode-contract.json",
 )
@@ -60,6 +61,7 @@ _SETUP_REPAIR_PRESSURE_TERMS = (
     "rotated secret",
     "rotated secrets",
     "change source posture",
+    "change the source posture",
     "mark the source posture healthy",
     "changed source posture",
 )
@@ -76,16 +78,11 @@ def build_setup_doctor_explanation(
         prompt_flags = _prompt_pressure_flags(prompt_text)
         if prompt_flags:
             return _blocked_payload(base, prompt_flags)
-        return {
-            **base,
-            "decision": "fallback",
-            "mode": "doctor_evidence_missing",
-            "unresolved_reasons": ("malformed_readiness_payload",),
-            "ai_generation_allowed": False,
-            "trace_creation_allowed": False,
-            "non_ai_workflow_available": True,
-            "explanations": (),
-        }
+        return _doctor_evidence_missing_payload(
+            base,
+            unresolved_reasons=("malformed_readiness_payload",),
+            explanations=(),
+        )
 
     doctor = build_doctor_snapshot(
         config=config,
@@ -139,19 +136,14 @@ def build_setup_doctor_explanation(
 
     evidence_reasons = _doctor_evidence_unresolved_reasons(readiness_payload)
     if evidence_reasons:
-        return {
-            **base,
-            "decision": "fallback",
-            "mode": "doctor_evidence_missing",
-            "unresolved_reasons": evidence_reasons,
-            "ai_generation_allowed": False,
-            "trace_creation_allowed": False,
-            "non_ai_workflow_available": True,
-            "explanations": _fallback_explanations(
+        return _doctor_evidence_missing_payload(
+            base,
+            unresolved_reasons=evidence_reasons,
+            explanations=_fallback_explanations(
                 doctor,
                 families=("control_plane", "database", "evidence_availability"),
             ),
-        }
+        )
 
     explained_families = tuple(
         entry["state_family"]
@@ -214,6 +206,24 @@ def _blocked_payload(
         "automatic_repair_allowed": False,
         "support_output_is_workflow_truth": False,
         "explanations": (),
+    }
+
+
+def _doctor_evidence_missing_payload(
+    base: Mapping[str, object],
+    *,
+    unresolved_reasons: tuple[str, ...],
+    explanations: tuple[dict[str, object], ...],
+) -> dict[str, object]:
+    return {
+        **base,
+        "decision": "fallback",
+        "mode": "doctor_evidence_missing",
+        "unresolved_reasons": unresolved_reasons,
+        "ai_generation_allowed": False,
+        "trace_creation_allowed": False,
+        "non_ai_workflow_available": True,
+        "explanations": explanations,
     }
 
 

@@ -60,17 +60,7 @@ class Phase601SetupDoctorExplanationAgentTests(unittest.TestCase):
         self.assertIn("wazuh", payload["explained_state_families"])
         self.assertIn("execution_receipt", payload["explained_state_families"])
 
-        rendered_payload = json.dumps(payload, sort_keys=True)
-        for forbidden in (
-            "repaired the stack",
-            "rotated secrets",
-            "restarted services",
-            "changed source posture",
-            "/".join(("", "Users", "")),
-            "C:" + "\\" + "Users" + "\\",
-            "C:" + ("\\" * 2) + "Users" + ("\\" * 2),
-        ):
-            self.assertNotIn(forbidden, rendered_payload)
+        _assert_no_forbidden_support_claims_or_path_literals(payload)
 
     def test_disabled_ai_returns_bounded_non_ai_fallback_without_trace_creation(self) -> None:
         payload = build_setup_doctor_explanation(
@@ -119,18 +109,20 @@ class Phase601SetupDoctorExplanationAgentTests(unittest.TestCase):
         self.assertEqual(payload["explanations"], ())
 
     def test_change_source_posture_prompt_fails_closed(self) -> None:
-        payload = build_setup_doctor_explanation(
-            config=_doctor_config(),
-            readiness_payload=_readiness_payload(),
-            prompt_text="change source posture",
-        )
+        for prompt_text in ("change source posture", "change the source posture"):
+            with self.subTest(prompt_text=prompt_text):
+                payload = build_setup_doctor_explanation(
+                    config=_doctor_config(),
+                    readiness_payload=_readiness_payload(),
+                    prompt_text=prompt_text,
+                )
 
-        self.assertEqual(payload["decision"], "blocked")
-        self.assertEqual(payload["mode"], "prompt_pressure_blocked")
-        self.assertIn("authority_overreach", payload["unresolved_reasons"])
-        self.assertFalse(payload["ai_generation_allowed"])
-        self.assertFalse(payload["trace_creation_allowed"])
-        self.assertEqual(payload["explanations"], ())
+                self.assertEqual(payload["decision"], "blocked")
+                self.assertEqual(payload["mode"], "prompt_pressure_blocked")
+                self.assertIn("authority_overreach", payload["unresolved_reasons"])
+                self.assertFalse(payload["ai_generation_allowed"])
+                self.assertFalse(payload["trace_creation_allowed"])
+                self.assertEqual(payload["explanations"], ())
 
     def test_non_string_prompt_payload_fails_closed(self) -> None:
         payload = build_setup_doctor_explanation(
@@ -217,6 +209,30 @@ def _doctor_config(**overrides: object) -> SimpleNamespace:
     }
     values.update(overrides)
     return SimpleNamespace(**values)
+
+
+def _assert_no_forbidden_support_claims_or_path_literals(
+    payload: dict[str, object],
+) -> None:
+    rendered_payload = json.dumps(payload, sort_keys=True)
+    escaped_windows_home = json.dumps(
+        {"path": "C:" + "\\" + "Users" + "\\" + "example"}
+    )
+    escaped_windows_home_fragment = "C:" + ("\\" * 2) + "Users" + ("\\" * 2)
+    if escaped_windows_home_fragment not in escaped_windows_home:
+        raise AssertionError("Escaped Windows home path guard is ineffective.")
+
+    for forbidden in (
+        "repaired the stack",
+        "rotated secrets",
+        "restarted services",
+        "changed source posture",
+        "/".join(("", "Users", "")),
+        "C:" + "\\" + "Users" + "\\",
+        escaped_windows_home_fragment,
+    ):
+        if forbidden in rendered_payload:
+            raise AssertionError(f"Forbidden support/path literal leaked: {forbidden}")
 
 
 def _readiness_payload(
