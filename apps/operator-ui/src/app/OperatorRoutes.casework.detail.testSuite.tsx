@@ -296,6 +296,43 @@ export function registerOperatorRoutesCaseworkDetailTests() {
           ),
         }),
       ],
+      [
+        "blocked summary with rendered rows",
+        createCaseTimelineProjection(),
+        createCaseTimelineSummary({
+          decision: "blocked",
+          mode: "prompt_pressure_blocked",
+        }),
+      ],
+      [
+        "fallback summary with rendered rows",
+        createCaseTimelineProjection(),
+        createCaseTimelineSummary({
+          decision: "fallback",
+          mode: "ai_disabled",
+        }),
+      ],
+      [
+        "summary without top-level citations",
+        createCaseTimelineProjection(),
+        createCaseTimelineSummary({
+          citations: [],
+        }),
+      ],
+      [
+        "summary from unregistered agent",
+        createCaseTimelineProjection(),
+        createCaseTimelineSummary({
+          agent_name: "browser_case_timeline_summary_agent",
+        }),
+      ],
+      [
+        "summary from unregistered tool",
+        createCaseTimelineProjection(),
+        createCaseTimelineSummary({
+          registered_tool_name: "browser_case_timeline_summary",
+        }),
+      ],
     ])("fails closed on %s", async (_label, caseTimelineProjection, caseTimelineSummary) => {
       const dependencies = createDefaultDependencies({
         fetchFn: createAuthorizedFetch({

@@ -84,6 +84,7 @@ class Phase603CaseTimelineSummaryAgentTests(unittest.TestCase):
         self.assertFalse(payload["ai_generation_allowed"])
         self.assertFalse(payload["trace_creation_allowed"])
         self.assertEqual(payload["summary_segments"], ())
+        self.assertIn("case:case-603", payload["citations"])
         self.assertNotIn("alert:alert-603", payload["citations"])
 
     def test_malformed_timeline_projection_fails_closed(self) -> None:
@@ -102,6 +103,33 @@ class Phase603CaseTimelineSummaryAgentTests(unittest.TestCase):
         self.assertIn("unsupported_timeline_contract_version", payload["unresolved_reasons"])
         self.assertFalse(payload["ai_generation_allowed"])
         self.assertEqual(payload["summary_segments"], ())
+        self.assertIn("case:case-603", payload["citations"])
+
+    def test_unsupported_record_family_fails_closed(self) -> None:
+        detail = _case_detail_payload()
+        segments = list(detail["case_timeline_projection"]["segments"])
+        segments[1] = {
+            **segments[1],
+            "backend_record_binding": {
+                "direct_binding_required": True,
+                "record_family": "browser_alert",
+                "record_id": "alert-603",
+            },
+        }
+        detail["case_timeline_projection"] = {
+            **detail["case_timeline_projection"],
+            "segments": tuple(segments),
+        }
+
+        payload = build_case_timeline_summary(case_detail_payload=detail)
+
+        self.assertEqual(payload["decision"], "fallback")
+        self.assertEqual(payload["mode"], "timeline_evidence_missing")
+        self.assertIn("unsupported_timeline_record_family", payload["unresolved_reasons"])
+        self.assertFalse(payload["ai_generation_allowed"])
+        self.assertEqual(payload["summary_segments"], ())
+        self.assertIn("case:case-603", payload["citations"])
+        self.assertNotIn("browser_alert:alert-603", payload["citations"])
 
     def test_prompt_pressure_to_mutate_or_hide_case_truth_is_blocked(self) -> None:
         payload = build_case_timeline_summary(
@@ -122,6 +150,7 @@ class Phase603CaseTimelineSummaryAgentTests(unittest.TestCase):
         self.assertFalse(payload["ai_generation_allowed"])
         self.assertFalse(payload["trace_creation_allowed"])
         self.assertEqual(payload["summary_segments"], ())
+        self.assertIn("case:case-603", payload["citations"])
 
     def test_ai_disabled_or_degraded_returns_non_ai_case_fallback(self) -> None:
         for posture, mode in (

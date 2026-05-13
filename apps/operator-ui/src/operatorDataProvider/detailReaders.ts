@@ -41,6 +41,8 @@ const CASE_TIMELINE_AUTHORITY_POSTURES = new Set([
 ]);
 
 const CASE_TIMELINE_CONTRACT_VERSION = "phase-56-3";
+const CASE_TIMELINE_SUMMARY_AGENT_NAME = "case_timeline_summary_agent";
+const CASE_TIMELINE_SUMMARY_TOOL_NAME = "case_timeline_summary";
 const CASE_TIMELINE_SUMMARY_DECISIONS = new Set([
   "summarize",
   "fallback",
@@ -218,7 +220,12 @@ function validateCaseTimelineSummary(payload: unknown) {
     summaryValue,
     "Resource cases case_timeline_summary must be an object.",
   );
+  const agentName = asString(summary.agent_name);
+  const registeredToolName = asString(summary.registered_tool_name);
   const decision = asString(summary.decision);
+  const citations = Array.isArray(summary.citations)
+    ? summary.citations
+    : null;
 
   if (
     summary.read_only !== true ||
@@ -230,6 +237,14 @@ function validateCaseTimelineSummary(payload: unknown) {
       "Resource cases case_timeline_summary must remain read-only advisory context.",
     );
   }
+  if (
+    agentName !== CASE_TIMELINE_SUMMARY_AGENT_NAME ||
+    registeredToolName !== CASE_TIMELINE_SUMMARY_TOOL_NAME
+  ) {
+    throw new OperatorDataProviderContractError(
+      "Resource cases case_timeline_summary must come from the registered summary agent and tool.",
+    );
+  }
   if (decision === null || !CASE_TIMELINE_SUMMARY_DECISIONS.has(decision)) {
     throw new OperatorDataProviderContractError(
       "Resource cases case_timeline_summary has unsupported decision.",
@@ -238,6 +253,15 @@ function validateCaseTimelineSummary(payload: unknown) {
   if (summary.trace_creation_allowed !== false) {
     throw new OperatorDataProviderContractError(
       "Resource cases case_timeline_summary cannot create trace truth from display context.",
+    );
+  }
+  if (
+    citations === null ||
+    citations.length === 0 ||
+    citations.some((citation) => asString(citation) === null)
+  ) {
+    throw new OperatorDataProviderContractError(
+      "Resource cases case_timeline_summary must include top-level citations.",
     );
   }
 
@@ -252,6 +276,11 @@ function validateCaseTimelineSummary(payload: unknown) {
   if (decision === "summarize" && summarySegments.length !== CASE_TIMELINE_SEGMENTS.length) {
     throw new OperatorDataProviderContractError(
       "Resource cases case_timeline_summary must include every reviewed timeline segment when summarizing.",
+    );
+  }
+  if (decision !== "summarize" && summarySegments.length !== 0) {
+    throw new OperatorDataProviderContractError(
+      "Resource cases case_timeline_summary fallback or blocked decisions cannot render summary rows.",
     );
   }
 

@@ -40,6 +40,18 @@ _SUPPORTED_AUTHORITY_POSTURES = (
     "authoritative_aegisops_record",
     "subordinate_context",
 )
+_SUPPORTED_RECORD_FAMILIES = (
+    "case",
+    "alert",
+    "evidence",
+    "recommendation",
+    "action_request",
+    "approval_decision",
+    "action_execution",
+    "reconciliation",
+    "source_health",
+    "ai_trace",
+)
 _NEGATIVE_AUTHORITY = (
     "approval",
     "execution",
@@ -102,7 +114,7 @@ def build_case_timeline_summary(
     ai_enablement_posture: str = "enabled",
     prompt_text: object = "",
 ) -> dict[str, object]:
-    base = _base_payload()
+    base = _base_payload(case_id=_case_citation_id(case_detail_payload))
     prompt_flags = _prompt_pressure_flags(prompt_text)
     if prompt_flags:
         return _blocked_payload(base, prompt_flags)
@@ -295,6 +307,8 @@ def _validated_timeline(case_detail_payload: object) -> dict[str, object]:
             reasons.append("timeline_projection_completion_untrusted")
         if record_family is None:
             reasons.append("missing_timeline_record_family")
+        elif record_family not in _SUPPORTED_RECORD_FAMILIES:
+            reasons.append("unsupported_timeline_record_family")
         if record_id is None and incomplete_reason is None:
             reasons.append("uncited_timeline_segment")
         segments.append(raw_segment)
@@ -313,6 +327,12 @@ def _invalid(reasons: tuple[str, ...]) -> dict[str, object]:
         "segments": (),
         "reasons": reasons,
     }
+
+
+def _case_citation_id(case_detail_payload: object) -> str | None:
+    if not isinstance(case_detail_payload, Mapping):
+        return None
+    return _string(case_detail_payload.get("case_id"))
 
 
 def _summary_segment(segment: Mapping[str, object]) -> dict[str, object]:
