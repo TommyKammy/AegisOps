@@ -171,12 +171,17 @@ assert_fails_with \
 
 absolute_path_windows_backslash_repo="${workdir}/absolute-path-windows-backslash"
 copy_valid_repo "${absolute_path_windows_backslash_repo}"
-cat >>"${absolute_path_windows_backslash_repo}/docs/phase-60-closeout-evaluation.md" <<'EOF'
-Run C:\Users\example\Dev\codex-supervisor\dist\index.js.
-Run "C:\Users\example\Dev\codex-supervisor\dist\index.js".
-Run `C:\Users\example\Dev\codex-supervisor\dist\index.js`.
-Run C:\\Users\\example\\Dev\\codex-supervisor\\dist\\index.js.
-EOF
+windows_drive="C:"
+windows_sep="\\"
+windows_path="${windows_drive}${windows_sep}Users${windows_sep}example${windows_sep}Dev${windows_sep}codex-supervisor${windows_sep}dist${windows_sep}index.js"
+windows_quoted_path="\"${windows_path}\""
+windows_backtick_path="\`${windows_path}\`"
+windows_double_escape="${windows_path//\\/\\\\}"
+printf '%s\n' \
+  "Run ${windows_path}." \
+  "Run ${windows_quoted_path}." \
+  "Run ${windows_backtick_path}." \
+  "Run ${windows_double_escape}." >>"${absolute_path_windows_backslash_repo}/docs/phase-60-closeout-evaluation.md"
 assert_fails_with \
   "${absolute_path_windows_backslash_repo}" \
   "Forbidden Phase 60 closeout evaluation: workstation-local absolute path detected"
