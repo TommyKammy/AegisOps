@@ -69,6 +69,14 @@ _SETUP_REPAIR_PRESSURE_TERMS = (
     "rotated secrets",
     *_SOURCE_POSTURE_PRESSURE_TERMS,
 )
+_AI_DISABLED_FALLBACK_FIELDS: Mapping[str, object] = {
+    "mode": "ai_disabled",
+    "unresolved_reasons": ("ai_advisory_disabled",),
+}
+_AI_DEGRADED_FALLBACK_FIELDS: Mapping[str, object] = {
+    "mode": "ai_degraded",
+    "unresolved_reasons": ("ai_advisory_degraded",),
+}
 
 
 def build_setup_doctor_explanation(
@@ -111,27 +119,17 @@ def build_setup_doctor_explanation(
     ai_state = _doctor_state(doctor, "ai_enablement")
     ai_reason = ai_state.get("reason")
     if ai_reason == "ai_disabled":
-        return {
-            **base,
-            "decision": "fallback",
-            "mode": "ai_disabled",
-            "unresolved_reasons": ("ai_advisory_disabled",),
-            "ai_generation_allowed": False,
-            "trace_creation_allowed": False,
-            "non_ai_workflow_available": True,
-            "explanations": _fallback_explanations(doctor, families=("ai_enablement",)),
-        }
+        return _ai_enablement_fallback_payload(
+            base,
+            doctor,
+            fallback_fields=_AI_DISABLED_FALLBACK_FIELDS,
+        )
     if ai_reason == "ai_degraded":
-        return {
-            **base,
-            "decision": "fallback",
-            "mode": "ai_degraded",
-            "unresolved_reasons": ("ai_advisory_degraded",),
-            "ai_generation_allowed": False,
-            "trace_creation_allowed": False,
-            "non_ai_workflow_available": True,
-            "explanations": _fallback_explanations(doctor, families=("ai_enablement",)),
-        }
+        return _ai_enablement_fallback_payload(
+            base,
+            doctor,
+            fallback_fields=_AI_DEGRADED_FALLBACK_FIELDS,
+        )
     if ai_reason != "ai_enabled":
         unresolved_reason = (
             ai_reason
@@ -239,6 +237,23 @@ def _doctor_evidence_missing_payload(
         "trace_creation_allowed": False,
         "non_ai_workflow_available": True,
         "explanations": explanations,
+    }
+
+
+def _ai_enablement_fallback_payload(
+    base: Mapping[str, object],
+    doctor: Mapping[str, object],
+    *,
+    fallback_fields: Mapping[str, object],
+) -> dict[str, object]:
+    return {
+        **base,
+        "decision": "fallback",
+        **fallback_fields,
+        "ai_generation_allowed": False,
+        "trace_creation_allowed": False,
+        "non_ai_workflow_available": True,
+        "explanations": _fallback_explanations(doctor, families=("ai_enablement",)),
     }
 
 
