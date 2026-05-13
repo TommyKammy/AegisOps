@@ -79,7 +79,7 @@ class Phase606CitedRecommendationDraftAgentTests(unittest.TestCase):
         self.assertFalse(payload["ai_generation_allowed"])
         self.assertFalse(payload["trace_creation_allowed"])
         self.assertEqual(payload["recommendation_drafts"], ())
-        self.assertIn("case:case-606", payload["citations"])
+        self.assertNotIn("case:case-606", payload["citations"])
         self.assertNotIn("draft:draft-606-accept", payload["citations"])
 
     def test_stale_or_conflicting_evidence_keeps_recommendation_unresolved(self) -> None:

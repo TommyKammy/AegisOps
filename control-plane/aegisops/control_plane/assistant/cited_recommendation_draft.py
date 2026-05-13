@@ -89,26 +89,25 @@ def build_cited_recommendation_draft(
     ai_enablement_posture: str = "enabled",
     prompt_text: object = "",
 ) -> dict[str, object]:
-    base = _base_payload(anchor_id=_anchor_case_id(recommendation_context_payload))
-    prompt_flags = _prompt_pressure_flags(prompt_text)
-    if prompt_flags:
-        return _blocked_payload(base, prompt_flags)
-
     validation = _validated_recommendation_payload(recommendation_context_payload)
     if validation["reasons"]:
         return _fallback_payload(
-            base,
+            _base_payload(),
             mode="recommendation_draft_untrusted",
             unresolved_reasons=validation["reasons"],
         )
 
     records = validation["records"]
     drafts = validation["draft_requests"]
-    global_uncertainty = _record_uncertainty_flags(records)
     base = _base_payload(
         anchor_id=validation["anchor_id"],
         records=records,
     )
+    prompt_flags = _prompt_pressure_flags(prompt_text)
+    if prompt_flags:
+        return _blocked_payload(base, prompt_flags)
+
+    global_uncertainty = _record_uncertainty_flags(records)
     if ai_enablement_posture == "disabled":
         return _fallback_payload(
             base,
@@ -355,15 +354,6 @@ def _recommendation_draft(
         "can_reconcile": False,
         "can_close_case": False,
     }
-
-
-def _anchor_case_id(recommendation_context_payload: object) -> str | None:
-    if not isinstance(recommendation_context_payload, Mapping):
-        return None
-    anchor = recommendation_context_payload.get("review_anchor")
-    if not isinstance(anchor, Mapping):
-        return None
-    return _string(anchor.get("record_id")) if anchor.get("record_family") == "case" else None
 
 
 def _record_uncertainty_flags(
