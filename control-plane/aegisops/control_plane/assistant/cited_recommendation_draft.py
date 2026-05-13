@@ -56,6 +56,11 @@ _AUTHORITY_PRESSURE_TERMS = (
     "create source truth",
     "bypass policy",
     "bypass the policy",
+    "controlled write",
+    "hard write",
+    "dispatch",
+    "dispatch action",
+    "dispatch the action",
 )
 _FEEDBACK_COERCION_TERMS = (
     "accept every recommendation",
@@ -283,10 +288,14 @@ def _validated_recommendation_payload(
         if not isinstance(raw_draft, Mapping):
             reasons.append("malformed_draft_request")
             continue
+        draft_text = _normalized_string(raw_draft.get("draft_text"))
+        if draft_text is None:
+            reasons.append("missing_draft_text")
+        else:
+            for draft_flag in _prompt_pressure_flags(draft_text):
+                reasons.append(f"action_request_draft_{draft_flag}")
         if _string(raw_draft.get("draft_id")) is None:
             reasons.append("missing_draft_id")
-        if _normalized_string(raw_draft.get("draft_text")) is None:
-            reasons.append("missing_draft_text")
         posture = _string(raw_draft.get("operator_feedback_posture"))
         if posture not in _SUPPORTED_FEEDBACK_POSTURES:
             reasons.append("unsupported_operator_feedback_posture")
