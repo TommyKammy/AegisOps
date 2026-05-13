@@ -366,6 +366,51 @@
         "policy_bypass"
       ],
       "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
+    },
+    {
+      "tool_name": "evidence_gap_detector",
+      "purpose": "Build a cited advisory evidence-gap review from directly linked AegisOps records while preserving missing owner, stale source-health, receipt/reconciliation, conflict, and citation gaps as review-needed context.",
+      "allowed_record_families": [
+        "case",
+        "alert",
+        "evidence",
+        "recommendation",
+        "action_request",
+        "approval_decision",
+        "action_execution",
+        "reconciliation",
+        "source_health",
+        "ai_trace"
+      ],
+      "required_citations": [
+        "record_family must identify the directly linked reviewed record family behind each gap claim",
+        "record_id must identify the directly linked AegisOps record behind each gap claim",
+        "evidence_reference must identify linked reviewed evidence, stale source-health evidence, receipt or reconciliation prerequisites, conflict evidence, or an explicit missing-citation gap"
+      ],
+      "audit_fields": [
+        "tool_name",
+        "agent_name",
+        "trace_id",
+        "requested_by",
+        "record_family",
+        "record_id",
+        "citation_ids",
+        "decision",
+        "timestamp"
+      ],
+      "disallowed_authority": [
+        "approval",
+        "execution",
+        "reconciliation",
+        "case_closure",
+        "detector_activation",
+        "source_truth_creation",
+        "evidence_truth_creation",
+        "conflict_resolution",
+        "production_write",
+        "policy_bypass"
+      ],
+      "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
     }
   ]
 }

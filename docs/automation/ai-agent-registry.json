@@ -236,6 +236,40 @@
         "evidence_reference must identify linked reviewed evidence, subordinate context, stale or conflicting segment evidence, or an explicit timeline gap"
       ],
       "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
+    },
+    {
+      "agent_name": "evidence_gap_detector_agent",
+      "purpose": "Identify missing, stale, conflicting, or uncited evidence gaps from directly linked reviewed records and route them to operator review without creating evidence truth or advancing reconciliation.",
+      "allowed_tools": [
+        "evidence_gap_detector"
+      ],
+      "disallowed_tools": [
+        "approve_action",
+        "execute_action",
+        "reconcile_execution",
+        "close_case",
+        "activate_detector",
+        "create_source_truth",
+        "bypass_policy"
+      ],
+      "record_families": [
+        "case",
+        "alert",
+        "evidence",
+        "recommendation",
+        "action_request",
+        "approval_decision",
+        "action_execution",
+        "reconciliation",
+        "source_health",
+        "ai_trace"
+      ],
+      "citation_requirements": [
+        "record_family must identify the directly linked reviewed record family behind each gap claim",
+        "record_id must identify the directly linked AegisOps record behind each gap claim",
+        "evidence_reference must identify linked reviewed evidence, stale source-health evidence, receipt or reconciliation prerequisites, conflict evidence, or an explicit missing-citation gap"
+      ],
+      "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
     }
   ]
 }
