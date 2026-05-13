@@ -305,6 +305,38 @@
         "evidence_reference must identify the runbook reference, linked reviewed record, degraded-source blocker, or explicit stale or missing-guidance prerequisite"
       ],
       "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
+    },
+    {
+      "agent_name": "cited_recommendation_draft_agent",
+      "purpose": "Draft cited, reviewable recommendations from directly linked queue, case, evidence, timeline, gap, runbook, and recommendation context while keeping acceptance, rejection, correction, and unresolved posture operator-owned.",
+      "allowed_tools": [
+        "recommendation_draft"
+      ],
+      "disallowed_tools": [
+        "approve_action",
+        "execute_action",
+        "reconcile_execution",
+        "close_case",
+        "activate_detector",
+        "create_source_truth",
+        "bypass_policy"
+      ],
+      "record_families": [
+        "case",
+        "queue",
+        "alert",
+        "evidence",
+        "recommendation",
+        "runbook",
+        "source_health",
+        "ai_trace"
+      ],
+      "citation_requirements": [
+        "record_family must identify the directly linked reviewed record family behind each recommendation draft claim",
+        "record_id must identify the directly linked AegisOps record behind each recommendation draft claim",
+        "evidence_reference must identify linked reviewed evidence, queue context, runbook context, stale or conflicting evidence, or an explicit unresolved prerequisite"
+      ],
+      "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
     }
   ]
 }

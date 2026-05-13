@@ -106,7 +106,11 @@ function AssistantAdvisoryPageBody({
 
   const summary = advisorySummary(data);
   const recommendationDrafts = advisoryRecommendations(data).filter(
-    (entry): entry is { citations: string[]; text: string } => entry.text !== null,
+    (
+      entry,
+    ): entry is ReturnType<typeof advisoryRecommendations>[number] & {
+      text: string;
+    } => entry.text !== null,
   );
   const runbookGuidanceSteps = advisoryRunbookGuidanceSteps(data).filter(
     (entry): entry is ReturnType<typeof advisoryRunbookGuidanceSteps>[number] & {
@@ -292,6 +296,51 @@ function AssistantAdvisoryPageBody({
                     <CardContent>
                       <Stack spacing={2}>
                         <Typography variant="body1">{draft.text}</Typography>
+                        {draft.operatorFeedbackPosture ? (
+                          <Stack direction="row" flexWrap="wrap" gap={1}>
+                            <Chip
+                              color={
+                                draft.operatorFeedbackPosture === "unresolved"
+                                  ? "warning"
+                                  : "default"
+                              }
+                              label={`Feedback: ${formatLabel(draft.operatorFeedbackPosture)}`}
+                              size="small"
+                              variant={
+                                draft.operatorFeedbackPosture === "unresolved"
+                                  ? "filled"
+                                  : "outlined"
+                              }
+                            />
+                            {draft.requestedFeedbackPosture &&
+                            draft.requestedFeedbackPosture !== draft.operatorFeedbackPosture ? (
+                              <Chip
+                                label={`Requested: ${formatLabel(draft.requestedFeedbackPosture)}`}
+                                size="small"
+                                variant="outlined"
+                              />
+                            ) : null}
+                            <Chip label="Review context only" size="small" variant="outlined" />
+                          </Stack>
+                        ) : null}
+                        {draft.operatorCorrection ? (
+                          <Alert severity="info" variant="outlined">
+                            Correction: {draft.operatorCorrection}
+                          </Alert>
+                        ) : null}
+                        {draft.unresolvedReasons.length > 0 ? (
+                          <Stack direction="row" flexWrap="wrap" gap={1}>
+                            {draft.unresolvedReasons.map((reason) => (
+                              <Chip
+                                color="warning"
+                                key={`${draft.text}-${reason}`}
+                                label={formatLabel(reason)}
+                                size="small"
+                                variant="outlined"
+                              />
+                            ))}
+                          </Stack>
+                        ) : null}
                         {draft.citations.length > 0 ? (
                           <Stack direction="row" flexWrap="wrap" gap={1}>
                             {draft.citations.map((citation) => (

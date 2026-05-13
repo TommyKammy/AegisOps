@@ -165,18 +165,21 @@
     },
     {
       "tool_name": "recommendation_draft",
-      "purpose": "Draft reviewable recommendation text from cited records while preserving unresolved evidence gaps and human review requirements.",
+      "purpose": "Draft reviewable recommendation text from cited queue, case, evidence, runbook, and recommendation context while preserving unresolved evidence gaps and human feedback requirements.",
       "allowed_record_families": [
         "case",
+        "queue",
+        "alert",
         "evidence",
         "recommendation",
+        "runbook",
         "source_health",
         "ai_trace"
       ],
       "required_citations": [
         "record_family must identify the directly linked record family behind each recommendation claim",
         "record_id must identify the reviewed record behind each recommendation claim",
-        "evidence_reference must identify reviewed evidence, a limitation, or a missing-evidence prerequisite"
+        "evidence_reference must identify reviewed evidence, queue context, runbook context, a limitation, or a missing-evidence prerequisite"
       ],
       "audit_fields": [
         "tool_name",
@@ -196,6 +199,8 @@
         "case_closure",
         "detector_activation",
         "source_truth_creation",
+        "recommendation_truth",
+        "workflow_completion",
         "production_write",
         "policy_bypass"
       ],
