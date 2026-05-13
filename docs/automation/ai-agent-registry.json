@@ -202,6 +202,40 @@
         "evidence_reference must identify linked reviewed evidence, degraded-source evidence, handoff context, or an explicit missing-evidence gap"
       ],
       "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
+    },
+    {
+      "agent_name": "case_timeline_summary_agent",
+      "purpose": "Summarize reviewed case timeline chains with citations, authority labels, uncertainty flags, and no case, approval, execution, reconciliation, subordinate-evidence, or workflow mutation authority.",
+      "allowed_tools": [
+        "case_timeline_summary"
+      ],
+      "disallowed_tools": [
+        "approve_action",
+        "execute_action",
+        "reconcile_execution",
+        "close_case",
+        "activate_detector",
+        "create_source_truth",
+        "bypass_policy"
+      ],
+      "record_families": [
+        "case",
+        "alert",
+        "evidence",
+        "recommendation",
+        "action_request",
+        "approval_decision",
+        "action_execution",
+        "reconciliation",
+        "source_health",
+        "ai_trace"
+      ],
+      "citation_requirements": [
+        "record_family must identify the directly linked reviewed case timeline record family behind each summary claim",
+        "record_id must identify the directly linked AegisOps record behind each summary claim",
+        "evidence_reference must identify linked reviewed evidence, subordinate context, stale or conflicting segment evidence, or an explicit timeline gap"
+      ],
+      "authority_ceiling": "advisory_only_subordinate_to_aegisops_records"
     }
   ]
 }

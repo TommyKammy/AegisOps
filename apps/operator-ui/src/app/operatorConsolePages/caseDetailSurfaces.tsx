@@ -75,6 +75,8 @@ export function CaseDetailPageBody({
   const timelineEntries = asRecordArray(data.cross_source_timeline);
   const caseTimelineProjection = asRecord(data.case_timeline_projection);
   const caseTimelineSegments = asRecordArray(caseTimelineProjection?.segments);
+  const caseTimelineSummary = asRecord(data.case_timeline_summary);
+  const caseTimelineSummarySegments = asRecordArray(caseTimelineSummary?.summary_segments);
   const currentActionReview = asRecord(data.current_action_review);
   const linkedEvidenceIds = asStringArray(data.linked_evidence_ids);
   const linkedObservationIds = asStringArray(data.linked_observation_ids);
@@ -225,6 +227,53 @@ export function CaseDetailPageBody({
           </Table>
         ) : (
           <EmptyState message="No reviewed case timeline projection was returned." />
+        )}
+      </SectionCard>
+
+      <SectionCard
+        subtitle="AI timeline summary is cited advisory review context only. It cannot close a case, complete a segment, or promote subordinate evidence to AegisOps truth."
+        title="Case timeline summary"
+      >
+        {caseTimelineSummarySegments.length > 0 ? (
+          <Stack spacing={2}>
+            <StatusStrip
+              values={[
+                ["Decision", asString(caseTimelineSummary?.decision)],
+                ["Authority", asString(caseTimelineSummary?.authority_ceiling)],
+                ["Trace creation", String(caseTimelineSummary?.trace_creation_allowed)],
+              ]}
+            />
+            <Table aria-label="Case timeline summary" size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Segment</TableCell>
+                  <TableCell>Authority</TableCell>
+                  <TableCell>Summary</TableCell>
+                  <TableCell>Citations</TableCell>
+                  <TableCell>Uncertainty</TableCell>
+                  <TableCell>Boundary</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {caseTimelineSummarySegments.map((segment, index) => (
+                  <TableRow key={`${asString(segment.segment) ?? index}-${index}`}>
+                    <TableCell>{formatLabel(asString(segment.segment) ?? "unknown")}</TableCell>
+                    <TableCell>{formatLabel(asString(segment.authority_label) ?? "unknown")}</TableCell>
+                    <TableCell>{formatValue(segment.summary)}</TableCell>
+                    <TableCell>{formatValue(segment.citation_ids)}</TableCell>
+                    <TableCell>{formatValue(segment.uncertainty_flags)}</TableCell>
+                    <TableCell>
+                      <Typography color="text.secondary" variant="body2">
+                        Advisory review context only
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Stack>
+        ) : (
+          <EmptyState message="No cited case timeline summary was returned." />
         )}
       </SectionCard>
 
