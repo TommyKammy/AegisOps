@@ -476,6 +476,8 @@ def _draft_text_pressure_flags(draft_text: object) -> tuple[str, ...]:
 
     lowered = draft_text.lower()
     flags: tuple[str, ...] = ()
+    if "prompt_injection_attempt" in phase24_live_assistant_prompt_injection_flags(draft_text):
+        flags = (*flags, "prompt_injection_attempt")
     if _contains_prompt_pressure_term(lowered, _AUTHORITY_PRESSURE_TERMS):
         flags = (*flags, "authority_overreach")
     if _contains_prompt_pressure_term(lowered, _ACTION_REQUEST_DRAFT_ADDITIONAL_TERMS):
