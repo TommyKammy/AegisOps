@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import re
 from typing import Any
 
 from .assistant_context import _advisory_text_claims_authority_or_scope_expansion
@@ -326,11 +327,18 @@ def _prompt_pressure_flags(prompt_text: object) -> tuple[str, ...]:
         )
     )
     lowered = prompt_text.lower()
-    if any(term in lowered for term in _POLICY_PRESSURE_TERMS):
+    if _contains_prompt_pressure_term(lowered, _POLICY_PRESSURE_TERMS):
         flags = _dedupe_strings((*flags, "tool_scope_expansion_attempt"))
-    if any(term in lowered for term in _SETUP_REPAIR_PRESSURE_TERMS):
+    if _contains_prompt_pressure_term(lowered, _SETUP_REPAIR_PRESSURE_TERMS):
         flags = _dedupe_strings((*flags, "authority_overreach"))
     return flags
+
+
+def _contains_prompt_pressure_term(prompt_text: str, terms: tuple[str, ...]) -> bool:
+    return any(
+        re.search(rf"(?<![a-z0-9_]){re.escape(term)}(?![a-z0-9_])", prompt_text)
+        for term in terms
+    )
 
 
 def _dedupe_strings(values: tuple[object, ...]) -> tuple[str, ...]:

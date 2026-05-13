@@ -149,6 +149,31 @@ class Phase601SetupDoctorExplanationAgentTests(unittest.TestCase):
                 self.assertFalse(payload["trace_creation_allowed"])
                 self.assertEqual(payload["explanations"], ())
 
+    def test_repair_pressure_terms_use_word_boundaries(self) -> None:
+        allowed_payload = build_setup_doctor_explanation(
+            config=_doctor_config(),
+            readiness_payload=_readiness_payload(),
+            prompt_text=(
+                "Explain whether this setup is repairable and restartable "
+                "without taking action."
+            ),
+        )
+
+        self.assertEqual(allowed_payload["decision"], "explain")
+        self.assertNotIn(
+            "authority_overreach",
+            allowed_payload["unresolved_reasons"],
+        )
+
+        blocked_payload = build_setup_doctor_explanation(
+            config=_doctor_config(),
+            readiness_payload=_readiness_payload(),
+            prompt_text="repair the stack and restart services",
+        )
+
+        self.assertEqual(blocked_payload["decision"], "blocked")
+        self.assertIn("authority_overreach", blocked_payload["unresolved_reasons"])
+
     def test_non_string_prompt_payload_fails_closed(self) -> None:
         payload = build_setup_doctor_explanation(
             config=_doctor_config(),
