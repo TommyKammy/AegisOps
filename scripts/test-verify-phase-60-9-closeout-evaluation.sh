@@ -74,9 +74,11 @@ assert_passes "${url_path_repo}"
 
 url_query_repo="${workdir}/url-query"
 copy_valid_repo "${url_query_repo}"
+macos_user_segment="Users"
+linux_home_segment="home"
 printf '%s\n' \
-  "API path: https://example.com/open?file=/Users/example/ignore-me.md" \
-  "API path: https://example.com/open?root=/home/ignored" \
+  "API path: https://example.com/open?file=/${macos_user_segment}/example/ignore-me.md" \
+  "API path: https://example.com/open?root=/${linux_home_segment}/ignored" \
   >>"${url_query_repo}/docs/phase-60-closeout-evaluation.md"
 assert_passes "${url_query_repo}"
 
