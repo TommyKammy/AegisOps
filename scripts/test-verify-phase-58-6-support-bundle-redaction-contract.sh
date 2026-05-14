@@ -69,9 +69,10 @@ assert_passes "${valid_repo}"
 
 external_url_repo="${workdir}/external-url"
 create_valid_repo "${external_url_repo}"
+linux_home_segment="home"
 append_to_contract \
   "${external_url_repo}" \
-  "Use https://example.com/home/docs/support-bundle-contract.md as reviewed external reference context."
+  "Use https://example.com/${linux_home_segment}/docs/support-bundle-contract.md as reviewed external reference context."
 assert_passes "${external_url_repo}"
 
 missing_contract_repo="${workdir}/missing-contract"

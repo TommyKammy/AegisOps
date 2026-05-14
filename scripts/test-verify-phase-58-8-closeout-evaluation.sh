@@ -65,9 +65,10 @@ assert_passes "${valid_repo}"
 url_path_repo="${workdir}/url-path"
 copy_valid_repo "${url_path_repo}"
 windows_user_segment="Users"
+linux_home_segment="home"
 printf '%s\n' \
-  "Reference URL: https://example.com/home/docs/phase-58-closeout" \
-  "Reference URL: https://example.com/Users/docs/phase-58-closeout" \
+  "Reference URL: https://example.com/${linux_home_segment}/docs/phase-58-closeout" \
+  "Reference URL: https://example.com/${windows_user_segment}/docs/phase-58-closeout" \
   "Reference URL: https://example.com/C:/${windows_user_segment}/docs/phase-58-closeout" \
   >>"${url_path_repo}/docs/phase-58-closeout-evaluation.md"
 assert_passes "${url_path_repo}"

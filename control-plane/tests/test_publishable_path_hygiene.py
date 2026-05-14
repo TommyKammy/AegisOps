@@ -17,12 +17,16 @@ from aegisops.control_plane.publishable_paths import is_workstation_local_path
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 VERIFY_SCRIPT = REPO_ROOT / "scripts/verify-publishable-path-hygiene.sh"
-UNIX_USERS_PATH = "/Users/alice/project/docs"  # publishable-path-hygiene: allowlist
-UNIX_HOME_PATH = "/home/alice/project/docs"  # publishable-path-hygiene: allowlist
-WINDOWS_USERS_PATH = r"C:\Users\alice\project\docs"  # publishable-path-hygiene: allowlist
-WINDOWS_USERS_PATH_POSIX = "C:/Users/alice/project/docs"  # publishable-path-hygiene: allowlist
-OFFENDER_PATH = "/Users/alice/private/project"  # publishable-path-hygiene: allowlist
-ROOT_PATH = "/root/private/project"  # publishable-path-hygiene: allowlist
+MACOS_HOME_SEGMENT = "Users"
+LINUX_HOME_SEGMENT = "home"
+WINDOWS_HOME_SEGMENT = "Users"
+UNIX_USERS_PATH = f"/{MACOS_HOME_SEGMENT}/alice/project/docs"
+UNIX_HOME_PATH = f"/{LINUX_HOME_SEGMENT}/alice/project/docs"
+WINDOWS_USERS_PATH = rf"C:\{WINDOWS_HOME_SEGMENT}\alice\project\docs"
+WINDOWS_USERS_PATH_POSIX = f"C:/{WINDOWS_HOME_SEGMENT}/alice/project/docs"
+OFFENDER_PATH = f"/{MACOS_HOME_SEGMENT}/alice/private/project"
+ROOT_SEGMENT = "root"
+ROOT_PATH = f"/{ROOT_SEGMENT}/private/project"
 
 
 class PublishablePathHygieneTests(unittest.TestCase):
@@ -62,10 +66,14 @@ class PublishablePathHygieneTests(unittest.TestCase):
 
     def test_ignores_urls_and_non_user_windows_paths(self) -> None:
         self.assertFalse(
-            is_workstation_local_path("https://example.com/home/alice/project/docs")  # publishable-path-hygiene: allowlist
+            is_workstation_local_path(
+                f"https://example.com/{LINUX_HOME_SEGMENT}/alice/project/docs"
+            )
         )
         self.assertFalse(
-            is_workstation_local_path("https://example.com/C:/Users/alice/project/docs")  # publishable-path-hygiene: allowlist
+            is_workstation_local_path(
+                f"https://example.com/C:/{WINDOWS_HOME_SEGMENT}/alice/project/docs"
+            )
         )
         self.assertFalse(is_workstation_local_path(r"D:\Program Files\AegisOps"))
         self.assertFalse(is_workstation_local_path("relative/path/to/docs"))
@@ -83,7 +91,9 @@ class PublishablePathHygieneTests(unittest.TestCase):
             (repo_root / ".github" / "workflows").mkdir(parents=True)
 
             (repo_root / "README.md").write_text("No local paths here.\n", encoding="utf-8")
-            (docs_dir / "binary.bin").write_bytes(b"\x00\x01\x02/home/alice/private")  # publishable-path-hygiene: allowlist
+            (docs_dir / "binary.bin").write_bytes(
+                b"\x00\x01\x02/" + LINUX_HOME_SEGMENT.encode("utf-8") + b"/alice/private"
+            )
             (docs_dir / "offender.md").write_text(
                 f"operator note: {OFFENDER_PATH}\n",
                 encoding="utf-8",

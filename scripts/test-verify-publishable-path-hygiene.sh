@@ -67,10 +67,11 @@ create_repo \
 assert_passes "${clean_repo}"
 
 allowlisted_repo="${workdir}/allowlisted"
+macos_user_segment="Users"
 create_repo \
   "${allowlisted_repo}" \
   "README.md" "# Allowlisted fixture" \
-  "control-plane/tests/test_publishable_path_hygiene.py" "PATH = '/Users/jp.infra/tmp'  # publishable-path-hygiene: allowlist fixture" \
+  "control-plane/tests/test_publishable_path_hygiene.py" "PATH = '/${macos_user_segment}/jp.infra/tmp'  # publishable-path-hygiene: allowlist fixture" \
   "docs/phase-25.md" "Reviewed roadmap reference stays vault-relative."
 assert_passes "${allowlisted_repo}"
 

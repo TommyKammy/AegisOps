@@ -21,9 +21,8 @@ from aegisops.control_plane.service import AegisOpsControlPlaneService
 from postgres_test_support import make_store
 
 
-LOCAL_EXPORT_PATH = (
-    "/Users/alice/aegisops/pilot-summary.json"  # publishable-path-hygiene: allowlist
-)
+MACOS_HOME_SEGMENT = "Users"
+LOCAL_EXPORT_PATH = f"/{MACOS_HOME_SEGMENT}/alice/aegisops/pilot-summary.json"
 
 
 class Phase495PilotReportingExportTests(unittest.TestCase):

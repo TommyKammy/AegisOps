@@ -118,9 +118,10 @@ assert_fails_with "${openbao_env}" "Missing required rehearsal input: AEGISOPS_O
 path_hygiene_repo="${workdir}/path-hygiene-repo"
 mkdir -p "${path_hygiene_repo}"
 cp -R "${repo_root}/docs" "${path_hygiene_repo}/docs"
-cat >> "${path_hygiene_repo}/docs/deployment/customer-like-rehearsal-environment.md" <<'EOF'
+macos_user_segment="Users"
+cat >> "${path_hygiene_repo}/docs/deployment/customer-like-rehearsal-environment.md" <<EOF
 
-Invalid workstation-local example: /Users/example/AegisOps  # publishable-path-hygiene: allowlist fixture
+Invalid workstation-local example: /${macos_user_segment}/example/AegisOps
 EOF
 assert_repo_fails_with "${path_hygiene_repo}" "Forbidden customer-like rehearsal environment statement: workstation-local absolute path detected"
 

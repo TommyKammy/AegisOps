@@ -61,8 +61,9 @@ assert_passes "${valid_repo}"
 
 external_url_repo="${workdir}/external-url"
 create_valid_repo "${external_url_repo}"
+linux_home_segment="home"
 printf '%s\n' \
-  "Use https://example.com/home/docs/upgrade-plan.md as reviewed external reference context." \
+  "Use https://example.com/${linux_home_segment}/docs/upgrade-plan.md as reviewed external reference context." \
   >>"${external_url_repo}/docs/phase-58-5-upgrade-rollback-plan-contract.md"
 assert_passes "${external_url_repo}"
 
