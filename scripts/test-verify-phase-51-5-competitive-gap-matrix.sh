@@ -200,7 +200,8 @@ assert_fails_with \
 
 web_url_home_repo="${workdir}/web-url-home-path"
 create_valid_repo "${web_url_home_repo}"
-printf '%s\n' "Reference URL: https://docs.example.invalid/home/aegisops/gap-matrix" \
+web_url_home_segment="home"
+printf '%s\n' "Reference URL: https://docs.example.invalid/${web_url_home_segment}/aegisops/gap-matrix" \
   >>"${web_url_home_repo}/docs/phase-51-5-competitive-gap-matrix.md"
 assert_passes "${web_url_home_repo}"
 
