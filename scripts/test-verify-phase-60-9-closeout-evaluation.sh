@@ -181,6 +181,20 @@ assert_fails_with \
   "${disabled_ai_block_repo}" \
   "Forbidden Phase 60 closeout evaluation claim: Disabled AI may block case review"
 
+disabled_or_degraded_could_repo="${workdir}/disabled-or-degraded-plain-could"
+copy_valid_repo "${disabled_or_degraded_could_repo}"
+printf '%s\n' "AI could be disabled or degraded to block case review" >>"${disabled_or_degraded_could_repo}/docs/phase-60-closeout-evaluation.md"
+assert_fails_with \
+  "${disabled_or_degraded_could_repo}" \
+  "Forbidden Phase 60 closeout evaluation claim: AI could be disabled or degraded to block case review"
+
+disabled_or_degraded_might_repo="${workdir}/disabled-or-degraded-plain-might"
+copy_valid_repo "${disabled_or_degraded_might_repo}"
+printf '%s\n' "AI might be disabled or degraded to block case review" >>"${disabled_or_degraded_might_repo}/docs/phase-60-closeout-evaluation.md"
+assert_fails_with \
+  "${disabled_or_degraded_might_repo}" \
+  "Forbidden Phase 60 closeout evaluation claim: AI might be disabled or degraded to block case review"
+
 absolute_path_repo="${workdir}/absolute-path"
 copy_valid_repo "${absolute_path_repo}"
 printf 'Run /%s/example/Dev/codex-supervisor/dist/index.js.\n' "Users" >>"${absolute_path_repo}/docs/phase-60-closeout-evaluation.md"
