@@ -92,11 +92,11 @@ class RecordSearchInspectionService:
     ) -> RecordInspectionSnapshot:
         search_query = self._normalize_record_search_query(query)
         selected_families = self._normalize_record_search_families(record_families)
-        normalized_source_family = self._service._normalize_optional_string(
+        normalized_source_family = self._normalize_record_search_filter(
             source_family,
             "source_family",
         )
-        normalized_lifecycle_state = self._service._normalize_optional_string(
+        normalized_lifecycle_state = self._normalize_record_search_filter(
             lifecycle_state,
             "lifecycle_state",
         )
@@ -205,6 +205,9 @@ class RecordSearchInspectionService:
             return None
 
         record_id = record.record_id
+        route = self._record_search_route(record)
+        if route is None:
+            return None
         return {
             "record_family": family,
             "record_id": record_id,
@@ -212,7 +215,7 @@ class RecordSearchInspectionService:
             "source_family": record_source_family,
             "lifecycle_state": record_lifecycle_state,
             "matched_query": query,
-            "route": self._record_search_route(family, record_id),
+            "route": route,
             "route_kind": "reviewed_surface",
             "authority": "navigation_only",
             "raw_source_authority": False,
@@ -233,11 +236,17 @@ class RecordSearchInspectionService:
         if isinstance(record, EvidenceRecord):
             if record.case_id is not None:
                 case = self._service._store.get(CaseRecord, record.case_id)
-                if isinstance(case, CaseRecord) and self._service._case_is_in_reviewed_operator_slice(case):
+                if (
+                    isinstance(case, CaseRecord)
+                    and self._service._case_is_in_reviewed_operator_slice(case)
+                ):
                     return self._service._reviewed_operator_source_family(case.reviewed_context)
             if record.alert_id is not None:
                 alert = self._service._store.get(AlertRecord, record.alert_id)
-                if isinstance(alert, AlertRecord) and self._service._alert_is_in_reviewed_operator_slice(alert):
+                if (
+                    isinstance(alert, AlertRecord)
+                    and self._service._alert_is_in_reviewed_operator_slice(alert)
+                ):
                     return self._service._reviewed_operator_source_family(alert.reviewed_context)
             return None
 
@@ -250,7 +259,7 @@ class RecordSearchInspectionService:
                 SourceHealthRecord,
             ),
         ):
-            return record.source_family
+            return record.source_family.strip()
 
         return None
 
@@ -262,19 +271,61 @@ class RecordSearchInspectionService:
         haystack = json.dumps(_json_ready(payload), sort_keys=True).lower()
         return query.lower() in haystack
 
-    @staticmethod
-    def _record_search_route(record_family: str, record_id: str) -> str:
-        if record_family == "alert":
-            return f"/operator/alerts/{record_id}"
-        if record_family == "case":
-            return f"/operator/cases/{record_id}"
-        if record_family == "evidence":
-            return f"/operator/provenance/evidence/{record_id}"
-        if record_family == "detector_lifecycle":
+    def _record_search_route(self, record: ControlPlaneRecord) -> str | None:
+        if isinstance(record, AlertRecord):
+            return f"/operator/alerts/{record.record_id}"
+        if isinstance(record, CaseRecord):
+            return f"/operator/cases/{record.record_id}"
+        if isinstance(record, EvidenceRecord):
+            return self._reviewed_anchor_route(
+                case_id=record.case_id,
+                alert_id=record.alert_id,
+            )
+        if isinstance(record, DetectorLifecycleRecord):
             return "/operator/detectors"
-        if record_family == "source_health":
+        if isinstance(record, (FalsePositiveReviewRecord, SuppressionProposalRecord)):
+            return (
+                self._reviewed_anchor_route(
+                    case_id=record.case_id,
+                    alert_id=record.alert_id,
+                )
+                or "/operator/detectors"
+            )
+        if isinstance(record, SourceHealthRecord):
             return "/operator/source-health"
-        return f"/operator/provenance/{record_family}/{record_id}"
+        return None
+
+    def _reviewed_anchor_route(
+        self,
+        *,
+        case_id: str | None,
+        alert_id: str | None,
+    ) -> str | None:
+        if case_id is not None:
+            case = self._service._store.get(CaseRecord, case_id)
+            if (
+                isinstance(case, CaseRecord)
+                and self._service._case_is_in_reviewed_operator_slice(case)
+            ):
+                return f"/operator/cases/{case.case_id}"
+        if alert_id is not None:
+            alert = self._service._store.get(AlertRecord, alert_id)
+            if (
+                isinstance(alert, AlertRecord)
+                and self._service._alert_is_in_reviewed_operator_slice(alert)
+            ):
+                return f"/operator/alerts/{alert.alert_id}"
+        return None
+
+    def _normalize_record_search_filter(
+        self,
+        value: str | None,
+        field_name: str,
+    ) -> str | None:
+        normalized = self._service._normalize_optional_string(value, field_name)
+        if normalized is None:
+            return None
+        return normalized.strip()
 
     @staticmethod
     def _record_search_summary(
