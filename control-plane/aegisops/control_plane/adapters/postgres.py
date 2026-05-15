@@ -27,6 +27,7 @@ from ..models import (
     ObservationRecord,
     ReconciliationRecord,
     RecommendationRecord,
+    SourceHealthRecord,
     SuppressionProposalRecord,
 )
 from ..runtime.readiness_contracts import (
@@ -142,6 +143,11 @@ _TABLES_BY_RECORD_TYPE: dict[Type[ControlPlaneRecord], TableConfig] = {
         SuppressionProposalRecord,
         "suppression_proposal_records",
         array_fields=frozenset({"evidence_ids", "citation_references"}),
+    ),
+    SourceHealthRecord: TableConfig(
+        SourceHealthRecord,
+        "source_health_records",
+        array_fields=frozenset({"evidence_references"}),
     ),
     EvidenceRecord: TableConfig(
         EvidenceRecord,

@@ -547,6 +547,13 @@ class PostgresControlPlaneStoreTests(unittest.TestCase):
             / "migrations"
             / "0006_phase_23_lifecycle_transition_records.sql"
         ).read_text(encoding="utf-8").lower()
+        migration_sql += "\n" + (
+            CONTROL_PLANE_ROOT.parent
+            / "postgres"
+            / "control-plane"
+            / "migrations"
+            / "0014_phase_61_source_health_records.sql"
+        ).read_text(encoding="utf-8").lower()
         schema_sql = (
             CONTROL_PLANE_ROOT.parent / "postgres" / "control-plane" / "schema.sql"
         ).read_text(encoding="utf-8").lower()

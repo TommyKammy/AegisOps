@@ -23,6 +23,7 @@ from .models import (
     ObservationRecord,
     ReconciliationRecord,
     RecommendationRecord,
+    SourceHealthRecord,
     SuppressionProposalRecord,
 )
 
@@ -209,6 +210,7 @@ _LIFECYCLE_STATES_BY_FAMILY: dict[str, frozenset[str]] = {
     "suppression_proposal": frozenset(
         {"proposed", "under_review", "rejected", "withdrawn", "expired", "superseded"}
     ),
+    "source_health": frozenset({"reviewed", "superseded", "withdrawn"}),
 }
 _DETECTOR_SOURCE_CATALOG_ENTRIES_BY_FAMILY: dict[str, frozenset[str]] = {
     "wazuh_detection": frozenset(
@@ -275,6 +277,26 @@ _SUPPRESSION_PROPOSAL_SCOPES = frozenset(
 _SUPPRESSION_PROPOSAL_SOURCE_SIGNAL_HANDLING = frozenset(
     {"preserve_source_signal", "preserve_and_escalate_for_review"}
 )
+_SOURCE_HEALTH_STATES = frozenset(
+    {
+        "available",
+        "degraded",
+        "unavailable",
+        "stale_source",
+        "missing_agent",
+        "parser_failure",
+        "volume_anomaly",
+        "credential_degraded",
+        "detector_drift",
+        "mismatched",
+    }
+)
+_SOURCE_HEALTH_DETECTOR_DRIFT_STATES = frozenset(
+    {"none", "review_required", "mismatched"}
+)
+_SOURCE_HEALTH_CREDENTIAL_POSTURES = frozenset(
+    {"reviewed", "degraded", "unavailable"}
+)
 
 _RECONCILIATION_INGEST_DISPOSITIONS = frozenset(
     {
@@ -305,6 +327,18 @@ _LIFECYCLE_TRANSITION_SUBJECT_FAMILIES = frozenset(
 
 
 def _validate_lifecycle_state(record: ControlPlaneRecord) -> None:
+    if isinstance(record, SourceHealthRecord):
+        if record.reviewed_state not in {"reviewed", "superseded", "withdrawn"}:
+            raise ValueError(
+                f"source_health record {record.record_id!r} has invalid reviewed_state "
+                f"{record.reviewed_state!r}; expected one of "
+                f"{['reviewed', 'superseded', 'withdrawn']!r}"
+            )
+        if record.lifecycle_state != record.reviewed_state:
+            raise ValueError(
+                f"source_health record {record.record_id!r} requires lifecycle_state to match reviewed_state"
+            )
+        return
     if isinstance(record, DetectorLifecycleRecord):
         if record.lifecycle_state not in _DETECTOR_LIFECYCLE_STATES:
             raise ValueError(
@@ -432,6 +466,9 @@ def _validate_record(record: ControlPlaneRecord) -> None:
         return
     if isinstance(record, SuppressionProposalRecord):
         _validate_suppression_proposal_record(record)
+        return
+    if isinstance(record, SourceHealthRecord):
+        _validate_source_health_record(record)
         return
     if isinstance(record, AnalyticSignalRecord):
         _require_any_linkage(
@@ -755,6 +792,84 @@ def _validate_suppression_proposal_record(
         raise ValueError(
             f"suppression_proposal record {record.record_id!r} must preserve source "
             "signals and may not delete, hide, silently suppress, or apply source-native truth"
+        )
+
+
+def _validate_source_health_record(record: SourceHealthRecord) -> None:
+    _require_non_blank_fields(
+        record,
+        (
+            "source_family",
+            "source_catalog_entry",
+            "health_state",
+            "reviewed_state",
+            "detector_drift",
+            "credential_posture",
+            "operator_visible_reason",
+        ),
+    )
+    _require_non_empty_tuple(record, "evidence_references")
+    for evidence_reference in record.evidence_references:
+        if not isinstance(evidence_reference, str) or not _has_linkage_value(
+            evidence_reference
+        ):
+            raise ValueError(
+                f"source_health record {record.record_id!r} requires non-blank "
+                "evidence_references entries"
+            )
+
+    source_family = record.source_family.strip()
+    if source_family not in _DETECTOR_SOURCE_CATALOG_ENTRIES_BY_FAMILY:
+        raise ValueError(
+            f"source_health record {record.record_id!r} has unsupported source_family "
+            f"{record.source_family!r}; expected one of "
+            f"{sorted(_DETECTOR_SOURCE_CATALOG_ENTRIES_BY_FAMILY)!r}"
+        )
+    source_catalog_entry = record.source_catalog_entry.strip()
+    if (
+        source_catalog_entry
+        not in _DETECTOR_SOURCE_CATALOG_ENTRIES_BY_FAMILY[source_family]
+    ):
+        raise ValueError(
+            f"source_health record {record.record_id!r} has unsupported "
+            f"source_catalog_entry {record.source_catalog_entry!r} for "
+            f"source_family {source_family!r}; expected one of "
+            f"{sorted(_DETECTOR_SOURCE_CATALOG_ENTRIES_BY_FAMILY[source_family])!r}"
+        )
+    if record.health_state not in _SOURCE_HEALTH_STATES:
+        raise ValueError(
+            f"source_health record {record.record_id!r} has invalid health_state "
+            f"{record.health_state!r}; expected one of "
+            f"{sorted(_SOURCE_HEALTH_STATES)!r}"
+        )
+    if record.reviewed_state != record.lifecycle_state:
+        raise ValueError(
+            f"source_health record {record.record_id!r} requires reviewed_state to match lifecycle_state"
+        )
+    if record.detector_drift not in _SOURCE_HEALTH_DETECTOR_DRIFT_STATES:
+        raise ValueError(
+            f"source_health record {record.record_id!r} has invalid detector_drift "
+            f"{record.detector_drift!r}; expected one of "
+            f"{sorted(_SOURCE_HEALTH_DETECTOR_DRIFT_STATES)!r}"
+        )
+    if record.credential_posture not in _SOURCE_HEALTH_CREDENTIAL_POSTURES:
+        raise ValueError(
+            f"source_health record {record.record_id!r} has invalid credential_posture "
+            f"{record.credential_posture!r}; expected one of "
+            f"{sorted(_SOURCE_HEALTH_CREDENTIAL_POSTURES)!r}"
+        )
+    if record.observed_at > record.reviewed_at:
+        raise ValueError(
+            f"source_health record {record.record_id!r} requires observed_at <= reviewed_at"
+        )
+    if record.source_native_authority or record.display_state_authority:
+        raise ValueError(
+            f"source_health record {record.record_id!r} must remain subordinate "
+            "operational context and cannot become workflow truth"
+        )
+    if record.cache_sourced:
+        raise ValueError(
+            f"source_health record {record.record_id!r} must not be cache sourced"
         )
 
 

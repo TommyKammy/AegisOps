@@ -8,6 +8,7 @@ import { registerOperatorRoutesCaseworkTests } from "./OperatorRoutes.casework.t
 import { registerOperatorRoutesControlPlaneTests } from "./OperatorRoutes.controlPlane.testSuite";
 import { registerOperatorRoutesDetectorActivationReviewTests } from "./OperatorRoutes.detectorActivationReview.testSuite";
 import { registerOperatorRoutesFirstLoginChecklistTests } from "./OperatorRoutes.firstLoginChecklist.testSuite";
+import { registerOperatorRoutesSourceHealthDashboardTests } from "./OperatorRoutes.sourceHealthDashboard.testSuite";
 import { registerOperatorRoutesTodayTests } from "./OperatorRoutes.today.testSuite";
 
 describe("OperatorRoutes", () => {
@@ -21,6 +22,7 @@ describe("OperatorRoutes", () => {
   registerOperatorRoutesAssistantTests();
   registerOperatorRoutesControlPlaneTests();
   registerOperatorRoutesDetectorActivationReviewTests();
+  registerOperatorRoutesSourceHealthDashboardTests();
   registerOperatorRoutesFirstLoginChecklistTests();
   registerOperatorRoutesTodayTests();
   registerOperatorRoutesBusinessHoursHandoffTests();

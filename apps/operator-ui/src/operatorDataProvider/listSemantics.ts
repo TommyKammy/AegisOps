@@ -25,6 +25,70 @@ const DETECTOR_ACTIVATION_REVIEW_REQUIRED_FIELDS = [
   "disable_owner",
 ] as const;
 
+const SOURCE_HEALTH_STATES = new Set([
+  "available",
+  "degraded",
+  "unavailable",
+  "stale_source",
+  "missing_agent",
+  "parser_failure",
+  "volume_anomaly",
+  "credential_degraded",
+  "detector_drift",
+  "mismatched",
+]);
+
+const SOURCE_HEALTH_REQUIRED_FIELDS = [
+  "source_health_id",
+  "source_family",
+  "source_catalog_entry",
+  "health_state",
+  "reviewed_state",
+  "lifecycle_state",
+  "reviewed_at",
+  "observed_at",
+  "detector_drift",
+  "credential_posture",
+  "operator_visible_reason",
+] as const;
+
+const SOURCE_HEALTH_REVIEWED_STATES = new Set([
+  "reviewed",
+  "superseded",
+  "withdrawn",
+]);
+
+const REVIEWED_SOURCE_CATALOG_ENTRIES_BY_FAMILY = new Map<string, Set<string>>([
+  [
+    "wazuh_detection",
+    new Set(["docs/phase-61-minimum-source-catalog-contract.md"]),
+  ],
+  [
+    "github_audit",
+    new Set([
+      "docs/source-families/github-audit/onboarding-package.md",
+      "docs/source-families/github-audit/detector-activation-candidates/repository-admin-membership-change.md",
+    ]),
+  ],
+  [
+    "microsoft_365_audit",
+    new Set(["docs/source-families/microsoft-365-audit/onboarding-package.md"]),
+  ],
+  [
+    "entra_id",
+    new Set([
+      "docs/source-families/entra-id/onboarding-package.md",
+      "docs/source-families/entra-id/detector-activation-candidates/privileged-role-assignment.md",
+    ]),
+  ],
+  [
+    "windows_security_endpoint",
+    new Set([
+      "docs/source-families/windows-security-and-endpoint/onboarding-package.md",
+    ]),
+  ],
+]);
+
 function comparePrimitiveValues(left: unknown, right: unknown): number {
   if (left === right) {
     return 0;
@@ -336,6 +400,82 @@ function validateDetectorActivationReviewRecord(record: Record<string, unknown>)
   }
 }
 
+function validateSourceHealthDashboardRecord(record: Record<string, unknown>) {
+  for (const field of SOURCE_HEALTH_REQUIRED_FIELDS) {
+    if (asString(record[field]) === null) {
+      throw new OperatorDataProviderContractError(
+        `Resource sourceHealthDashboard record is missing reviewed field ${field}.`,
+      );
+    }
+  }
+
+  const healthState = asString(record.health_state);
+  if (healthState === null || !SOURCE_HEALTH_STATES.has(healthState)) {
+    throw new OperatorDataProviderContractError(
+      "Resource sourceHealthDashboard record has unsupported health_state.",
+    );
+  }
+
+  const reviewedState = asString(record.reviewed_state);
+  if (
+    reviewedState === null ||
+    !SOURCE_HEALTH_REVIEWED_STATES.has(reviewedState)
+  ) {
+    throw new OperatorDataProviderContractError(
+      "Resource sourceHealthDashboard record has unsupported reviewed_state.",
+    );
+  }
+  if (asString(record.lifecycle_state) !== reviewedState) {
+    throw new OperatorDataProviderContractError(
+      "Resource sourceHealthDashboard requires lifecycle_state to match reviewed_state.",
+    );
+  }
+
+  const sourceFamily = asString(record.source_family);
+  const sourceCatalogEntry = asString(record.source_catalog_entry);
+  const reviewedCatalogEntries =
+    sourceFamily === null
+      ? undefined
+      : REVIEWED_SOURCE_CATALOG_ENTRIES_BY_FAMILY.get(sourceFamily);
+  if (
+    sourceFamily === null ||
+    sourceCatalogEntry === null ||
+    reviewedCatalogEntries === undefined ||
+    !reviewedCatalogEntries.has(sourceCatalogEntry)
+  ) {
+    throw new OperatorDataProviderContractError(
+      "Resource sourceHealthDashboard requires a reviewed source catalog entry.",
+    );
+  }
+
+  if (record.cache_sourced !== false) {
+    throw new OperatorDataProviderContractError(
+      "Resource sourceHealthDashboard rejects cache-sourced source health.",
+    );
+  }
+  if (
+    record.source_native_authority !== false ||
+    record.display_state_authority !== false
+  ) {
+    throw new OperatorDataProviderContractError(
+      "Resource sourceHealthDashboard rejects source-health display state as workflow truth.",
+    );
+  }
+  if (!Array.isArray(record.evidence_references)) {
+    throw new OperatorDataProviderContractError(
+      "Resource sourceHealthDashboard requires evidence_references.",
+    );
+  }
+  if (
+    record.evidence_references.length === 0 ||
+    record.evidence_references.some((reference) => asString(reference) === null)
+  ) {
+    throw new OperatorDataProviderContractError(
+      "Resource sourceHealthDashboard requires non-empty reviewed evidence references.",
+    );
+  }
+}
+
 export async function getListForStandardResource({
   binding,
   fetchFn,
@@ -366,6 +506,9 @@ export async function getListForStandardResource({
     );
     if (resource === "detectorActivationReview") {
       records.forEach(validateDetectorActivationReviewRecord);
+    }
+    if (resource === "sourceHealthDashboard") {
+      records.forEach(validateSourceHealthDashboardRecord);
     }
     totalRecords =
       typeof response.total_records === "number"
