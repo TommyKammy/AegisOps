@@ -155,6 +155,32 @@ class Phase61DetectorLifecycleRecordContractTests(unittest.TestCase):
                 )
             )
 
+    def test_detector_lifecycle_record_rejects_non_matching_lifecycle_reason_fields(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            r"must not set disabled_reason; expected reason fields \[\]",
+        ):
+            _validate_record(
+                _detector_lifecycle_record(
+                    lifecycle_state="active",
+                    disabled_reason="disabled for now",
+                )
+            )
+
+    def test_detector_lifecycle_record_rejects_blank_lifecycle_audit_references(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            r"requires non-blank lifecycle_audit_references",
+        ):
+            _validate_record(
+                _detector_lifecycle_record(
+                    lifecycle_state="active",
+                    lifecycle_audit_references=("",),
+                )
+            )
+
     def test_detector_lifecycle_record_requires_initial_candidate_state(self) -> None:
         helper = DetectionLifecycleTransitionHelper(
             _FakeLifecycleTransitionService(latest_transition=None)

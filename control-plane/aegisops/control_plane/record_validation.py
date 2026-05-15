@@ -182,6 +182,16 @@ _LIFECYCLE_STATES_BY_FAMILY: dict[str, frozenset[str]] = {
     "reconciliation": frozenset(
         {"pending", "matched", "mismatched", "stale", "resolved", "superseded"}
     ),
+    "detector_lifecycle": frozenset(
+        {
+            "candidate",
+            "staging",
+            "active",
+            "disabled",
+            "rollback",
+            "review-overdue",
+        }
+    ),
 }
 _DETECTOR_LIFECYCLE_STATES: frozenset[str] = frozenset(
     {
@@ -221,6 +231,9 @@ _DETECTOR_STATE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "rollback": ("rollback_reason",),
     "review-overdue": ("review_overdue_reason",),
 }
+_DETECTOR_REASON_FIELDS = frozenset(
+    {"disabled_reason", "rollback_reason", "review_overdue_reason"}
+)
 
 _RECONCILIATION_INGEST_DISPOSITIONS = frozenset(
     {
@@ -465,6 +478,12 @@ def _validate_detector_lifecycle_record(record: DetectorLifecycleRecord) -> None
         ),
     )
     _require_non_empty_tuple(record, "lifecycle_audit_references")
+    for audit_reference in record.lifecycle_audit_references:
+        if not _has_linkage_value(audit_reference):
+            raise ValueError(
+                f"{record.record_family} record {record.record_id!r} requires non-blank "
+                f"lifecycle_audit_references entries"
+            )
     source_family = record.source_family.strip()
     if source_family not in _DETECTOR_SOURCE_CATALOG_ENTRIES_BY_FAMILY:
         raise ValueError(
@@ -483,11 +502,23 @@ def _validate_detector_lifecycle_record(record: DetectorLifecycleRecord) -> None
             f"{sorted(_DETECTOR_SOURCE_CATALOG_ENTRIES_BY_FAMILY[source_family])!r}"
         )
 
-    for field_name in _DETECTOR_STATE_REQUIRED_FIELDS.get(record.lifecycle_state, ()):
-        if not _has_linkage_value(getattr(record, field_name)):
+    expected_reason_fields = frozenset(
+        _DETECTOR_STATE_REQUIRED_FIELDS.get(record.lifecycle_state, ())
+    )
+    for field_name in _DETECTOR_REASON_FIELDS:
+        reason_value = getattr(record, field_name)
+        if field_name in expected_reason_fields:
+            if not _has_linkage_value(reason_value):
+                raise ValueError(
+                    f"detector_lifecycle record {record.record_id!r} in state "
+                    f"{record.lifecycle_state!r} requires non-blank {field_name}"
+                )
+            continue
+        if _has_linkage_value(reason_value):
             raise ValueError(
                 f"detector_lifecycle record {record.record_id!r} in state "
-                f"{record.lifecycle_state!r} requires non-blank {field_name}"
+                f"{record.lifecycle_state!r} must not set {field_name}; expected reason fields "
+                f"{sorted(expected_reason_fields)!r}"
             )
 
 
