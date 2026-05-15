@@ -45,7 +45,6 @@ from .runtime.readiness_contracts import (
 )
 from .runtime.runtime_boundary import RuntimeBoundaryService
 from .reviewed_slice_policy import REVIEWED_LIVE_SLICE_LABEL, ReviewedSlicePolicy
-from .record_search import RecordSearchInspectionService
 from .ingestion.case_workflow import CaseWorkflowFacade
 from .ingestion.detection_lifecycle_helpers import LATEST_LIFECYCLE_TRANSITION_UNSET
 from .evidence.external_evidence_facade import ExternalEvidenceFacade
@@ -78,6 +77,9 @@ from .structured_events import sanitize_structured_event_fields
 
 
 RecordT = TypeVar("RecordT", bound=ControlPlaneRecord)
+RECORD_SEARCH_INSPECTION_FAMILY = "record_search"
+RECORD_SEARCH_INSPECTION_AUTHORITY = "navigation_only"
+RECORD_SEARCH_INSPECTION_SURFACE = "read_only"
 
 _CASE_CLOSED_TRIAGE_DISPOSITIONS = frozenset(
     {
@@ -470,7 +472,6 @@ class AegisOpsControlPlaneService(CaseWorkflowFacade, ExternalEvidenceFacade):
             service=self,
             composition=composition,
         )
-        self.inspect_record_search = RecordSearchInspectionService(self, record_to_dict=_record_to_dict).inspect_record_search
 
     def describe_runtime(self) -> RuntimeSnapshot:
         return self._runtime_restore_readiness_diagnostics_service.describe_runtime()

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Iterable, Mapping, Protocol, Type
 import json
 
-from .models import (
+from ..models import (
     AlertRecord,
     CaseRecord,
     ControlPlaneRecord,
@@ -13,7 +13,7 @@ from .models import (
     SourceHealthRecord,
     SuppressionProposalRecord,
 )
-from .runtime.service_snapshots import RecordInspectionSnapshot, _json_ready
+from ..runtime.service_snapshots import RecordInspectionSnapshot, _json_ready
 
 
 RECORD_SEARCH_RECORD_TYPES: tuple[Type[ControlPlaneRecord], ...] = (
