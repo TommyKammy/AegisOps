@@ -168,6 +168,16 @@ export function registerOperatorRoutesSourceHealthDashboardTests() {
           source_health_id: "source-health-authority-leak",
           source_native_authority: true,
         },
+        {
+          ...sourceHealthRecords[0],
+          source_health_id: "source-health-unreviewed-state",
+          reviewed_state: "pending",
+        },
+        {
+          ...sourceHealthRecords[0],
+          source_health_id: "source-health-unreviewed-catalog",
+          source_catalog_entry: "docs/source-families/github-audit/unreviewed.md",
+        },
       ];
       const dependencies = createDefaultDependencies({
         fetchFn: createAuthorizedFetch({
@@ -189,6 +199,7 @@ export function registerOperatorRoutesSourceHealthDashboardTests() {
       });
       expect(screen.queryByText("source_native_ok")).not.toBeInTheDocument();
       expect(screen.queryByText("source-health-authority-leak")).not.toBeInTheDocument();
+      expect(screen.queryByText("source-health-unreviewed-catalog")).not.toBeInTheDocument();
     });
   });
 }

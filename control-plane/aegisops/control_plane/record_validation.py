@@ -210,6 +210,7 @@ _LIFECYCLE_STATES_BY_FAMILY: dict[str, frozenset[str]] = {
     "suppression_proposal": frozenset(
         {"proposed", "under_review", "rejected", "withdrawn", "expired", "superseded"}
     ),
+    "source_health": frozenset({"reviewed", "superseded", "withdrawn"}),
 }
 _DETECTOR_SOURCE_CATALOG_ENTRIES_BY_FAMILY: dict[str, frozenset[str]] = {
     "wazuh_detection": frozenset(

@@ -502,6 +502,37 @@ class Phase61DetectorLifecycleRecordContractTests(unittest.TestCase):
             "source-health dashboard rows stay subordinate context, not workflow truth",
         )
 
+    def test_source_health_record_family_allows_reviewed_lifecycle_transitions(
+        self,
+    ) -> None:
+        _validate_record(
+            LifecycleTransitionRecord(
+                transition_id="t-source-health-reviewed-001",
+                subject_record_family="source_health",
+                subject_record_id="source-health-github-audit-001",
+                previous_lifecycle_state="reviewed",
+                lifecycle_state="superseded",
+                transitioned_at=datetime.now(timezone.utc),
+                attribution={},
+            )
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "invalid lifecycle_state 'available'",
+        ):
+            _validate_record(
+                LifecycleTransitionRecord(
+                    transition_id="t-source-health-invalid-001",
+                    subject_record_family="source_health",
+                    subject_record_id="source-health-github-audit-001",
+                    previous_lifecycle_state="reviewed",
+                    lifecycle_state="available",
+                    transitioned_at=datetime.now(timezone.utc),
+                    attribution={},
+                )
+            )
+
     def test_detector_lifecycle_record_requires_initial_candidate_state(self) -> None:
         helper = DetectionLifecycleTransitionHelper(
             _FakeLifecycleTransitionService(latest_transition=None)
