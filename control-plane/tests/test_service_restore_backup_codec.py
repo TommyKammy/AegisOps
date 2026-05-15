@@ -35,6 +35,7 @@ from _restore_readiness_test_support import (
     timedelta,
     timezone,
 )
+from aegisops.control_plane.models import DetectorLifecycleRecord
 
 
 class RestoreBackupCodecTests(ServicePersistenceTestBase):
@@ -285,6 +286,48 @@ class RestoreBackupCodecTests(ServicePersistenceTestBase):
             "phase23.authoritative-record-chain.v3",
         )
         self.assertEqual(round_trip_backup["record_counts"]["detector_lifecycle"], 0)
+
+    def test_detector_lifecycle_restore_rejects_scalar_audit_references(
+        self,
+    ) -> None:
+        _store, service, _promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        backup["record_families"]["detector_lifecycle"] = [
+            {
+                "detector_lifecycle_id": "detector-lifecycle-restore-audit-001",
+                "owner": "detector-owner",
+                "source_family": "github_audit",
+                "source_catalog_entry": (
+                    "docs/source-families/github-audit/onboarding-package.md"
+                ),
+                "detector_identifier": "wazuh-rule-windows-004",
+                "expected_signal_posture": "high-confidence",
+                "review_cadence": "daily",
+                "rollback_owner": "rollback-owner",
+                "disable_owner": "disable-owner",
+                "lifecycle_audit_references": "audit-evidence://catalog-entry",
+                "lifecycle_state": "candidate",
+                "disabled_reason": None,
+                "rollback_reason": None,
+                "review_overdue_reason": None,
+            }
+        ]
+        backup["record_counts"]["detector_lifecycle"] = 1
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"detector_lifecycle.lifecycle_audit_references must be a JSON array",
+        ):
+            self._dry_run_restore(restored_service, backup)
+        self.assertEqual(restored_service._store.list(DetectorLifecycleRecord), ())
 
     def test_service_phase21_restore_ignores_triage_timestamp_when_case_state_mismatches(
         self,

@@ -103,6 +103,51 @@ class Phase61DetectorLifecycleRecordContractTests(unittest.TestCase):
             require_lifecycle_transition_history=True,
         )
 
+    def test_restore_validation_rejects_detector_lifecycle_transition_skips(self) -> None:
+        detector = _detector_lifecycle_record(lifecycle_state="active")
+        candidate_transition = LifecycleTransitionRecord(
+            transition_id="t-detector-candidate-001",
+            subject_record_family="detector_lifecycle",
+            subject_record_id=detector.detector_lifecycle_id,
+            previous_lifecycle_state=None,
+            lifecycle_state="candidate",
+            transitioned_at=datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc),
+            attribution={},
+        )
+        active_skip_transition = LifecycleTransitionRecord(
+            transition_id="t-detector-active-skip-001",
+            subject_record_family="detector_lifecycle",
+            subject_record_id=detector.detector_lifecycle_id,
+            previous_lifecycle_state="candidate",
+            lifecycle_state="active",
+            transitioned_at=datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
+            attribution={},
+        )
+        boundary = RestoreValidationBoundary(
+            authoritative_primary_id_field_by_family=_AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY,
+            find_duplicate_strings=lambda values: tuple(
+                value
+                for index, value in enumerate(values)
+                if value in values[:index]
+            ),
+            assistant_ids_from_mapping=lambda _mapping, _field_name: (),
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"detector_lifecycle record transition from 'candidate' to 'active' is not supported",
+        ):
+            boundary.validate_authoritative_record_chain_restore(
+                {
+                    "detector_lifecycle": (detector,),
+                    "lifecycle_transition": (
+                        candidate_transition,
+                        active_skip_transition,
+                    ),
+                },
+                require_lifecycle_transition_history=True,
+            )
+
     def test_detector_lifecycle_transition_helper_rejects_candidate_to_active_skip(self) -> None:
         baseline_transition = LifecycleTransitionRecord(
             transition_id="t-candidate-001",
