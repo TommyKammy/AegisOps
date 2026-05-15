@@ -24,6 +24,7 @@ from _restore_readiness_test_support import (
     timedelta,
     timezone,
 )
+from aegisops.control_plane.models import DetectorLifecycleRecord
 
 
 class RestoreValidationTests(ServicePersistenceTestBase):
@@ -526,6 +527,61 @@ class RestoreValidationTests(ServicePersistenceTestBase):
         ):
             restored_service.restore_authoritative_record_chain_backup(backup)
         self._assert_authoritative_store_empty(restored_store)
+
+    def test_service_phase61_restore_accepts_detector_lifecycle_transitions(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        detector = service.persist_record(
+            DetectorLifecycleRecord(
+                detector_lifecycle_id="detector-lifecycle-restore-001",
+                owner="detector-owner",
+                source_family="github_audit",
+                source_catalog_entry=(
+                    "docs/source-families/github-audit/onboarding-package.md"
+                ),
+                detector_identifier="github-audit-admin-membership-change",
+                expected_signal_posture="reviewed high-confidence admin change signal",
+                review_cadence="daily",
+                rollback_owner="rollback-owner",
+                disable_owner="disable-owner",
+                lifecycle_audit_references=("audit-evidence://restore-round-trip",),
+                lifecycle_state="candidate",
+            ),
+            transitioned_at=datetime(2026, 5, 15, 0, 0, tzinfo=timezone.utc),
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        detector_transitions = [
+            record
+            for record in backup["record_families"]["lifecycle_transition"]
+            if record["subject_record_family"] == "detector_lifecycle"
+            and record["subject_record_id"] == detector.detector_lifecycle_id
+        ]
+
+        self.assertEqual(
+            backup["backup_schema_version"],
+            "phase23.authoritative-record-chain.v3",
+        )
+        self.assertEqual(backup["record_counts"]["detector_lifecycle"], 1)
+        self.assertEqual(len(detector_transitions), 1)
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        restored_service.restore_authoritative_record_chain_backup(backup)
+
+        restored_detector = restored_service.get_record(
+            DetectorLifecycleRecord,
+            detector.detector_lifecycle_id,
+        )
+        self.assertEqual(restored_detector, detector)
 
     def test_service_phase21_restore_fails_closed_on_duplicate_execution_run_ids(
         self,
