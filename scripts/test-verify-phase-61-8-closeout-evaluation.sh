@@ -178,7 +178,11 @@ assert_fails_with \
 
 colon_prefixed_absolute_path_repo="${workdir}/colon-prefixed-absolute-path"
 copy_valid_repo "${colon_prefixed_absolute_path_repo}"
-printf 'Run:/%s/example/Dev/codex-supervisor/dist/index.js.\n' "Users" \
+printf '%s\n' \
+  "Run:/${users_segment}/example/Dev/codex-supervisor/dist/index.js." \
+  "Path:/${home_segment}/alice/file." \
+  "Path:C:\\${users_segment}\\alice\\file." \
+  "Path:C:/${users_segment}/alice/file." \
   >>"${colon_prefixed_absolute_path_repo}/docs/phase-61-closeout-evaluation.md"
 assert_fails_with \
   "${colon_prefixed_absolute_path_repo}" \
