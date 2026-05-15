@@ -38,6 +38,7 @@ _PHASE21_LEGACY_MISSING_AUTHORITATIVE_FAMILIES = (
     "ai_trace",
     "detector_lifecycle",
     "false_positive_review",
+    "suppression_proposal",
 )
 
 

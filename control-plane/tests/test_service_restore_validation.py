@@ -564,7 +564,7 @@ class RestoreValidationTests(ServicePersistenceTestBase):
 
         self.assertEqual(
             backup["backup_schema_version"],
-            "phase23.authoritative-record-chain.v4",
+            "phase23.authoritative-record-chain.v5",
         )
         self.assertEqual(backup["record_counts"]["detector_lifecycle"], 1)
         self.assertEqual(len(detector_transitions), 1)

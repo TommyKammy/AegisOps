@@ -77,6 +77,53 @@ create table if not exists aegisops_control.false_positive_review_records (
   check (lifecycle_state in ('reviewed', 'disputed', 'superseded', 'withdrawn'))
 );
 
+create table if not exists aegisops_control.suppression_proposal_records (
+  suppression_proposal_id text primary key,
+  detector_lifecycle_id text not null,
+  source_family text not null,
+  source_catalog_entry text not null,
+  alert_id text,
+  case_id text,
+  evidence_ids text[] not null default '{}'::text[],
+  owner text not null,
+  rationale text not null,
+  citation_references text[] not null default '{}'::text[],
+  expires_at timestamptz not null,
+  review_cadence text not null,
+  expected_signal_impact text not null,
+  scope text not null,
+  source_signal_handling text not null,
+  lifecycle_state text not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (alert_id is not null or case_id is not null or cardinality(evidence_ids) >= 1),
+  check (cardinality(citation_references) >= 1),
+  check (
+    scope in (
+      'detector_case_context',
+      'detector_alert_context',
+      'detector_evidence_context',
+      'reviewed_recurring_pattern'
+    )
+  ),
+  check (
+    source_signal_handling in (
+      'preserve_source_signal',
+      'preserve_and_escalate_for_review'
+    )
+  ),
+  check (
+    lifecycle_state in (
+      'proposed',
+      'under_review',
+      'rejected',
+      'withdrawn',
+      'expired',
+      'superseded'
+    )
+  )
+);
+
 do $$
 declare
   constraint_name text;
@@ -112,7 +159,8 @@ begin
         'ai_trace',
         'reconciliation',
         'detector_lifecycle',
-        'false_positive_review'
+        'false_positive_review',
+        'suppression_proposal'
       )
     ),
     add constraint lifecycle_transition_records_lifecycle_state_known check (
@@ -367,6 +415,14 @@ begin
         'superseded',
         'withdrawn'
       ))
+      or (subject_record_family = 'suppression_proposal' and lifecycle_state in (
+        'proposed',
+        'under_review',
+        'rejected',
+        'withdrawn',
+        'expired',
+        'superseded'
+      ))
     ),
     add constraint lifecycle_transition_records_previous_state_matches_subject_family check (
       previous_lifecycle_state is null or (
@@ -499,6 +555,14 @@ begin
           'disputed',
           'superseded',
           'withdrawn'
+        ))
+        or (subject_record_family = 'suppression_proposal' and previous_lifecycle_state in (
+          'proposed',
+          'under_review',
+          'rejected',
+          'withdrawn',
+          'expired',
+          'superseded'
         ))
       )
     );

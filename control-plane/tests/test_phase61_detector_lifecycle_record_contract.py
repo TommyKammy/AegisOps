@@ -16,6 +16,7 @@ from aegisops.control_plane.models import (
     DetectorLifecycleRecord,
     FalsePositiveReviewRecord,
     LifecycleTransitionRecord,
+    SuppressionProposalRecord,
 )
 from aegisops.control_plane.runtime.restore_backup_validation import (
     RestoreValidationBoundary,
@@ -107,6 +108,45 @@ def _false_positive_review_record(
         dispute_state=dispute_state,
         recurrence_posture=recurrence_posture,
         review_evidence_references=review_evidence_references,
+        source_signal_handling=source_signal_handling,
+        lifecycle_state=lifecycle_state,
+    )
+
+
+def _suppression_proposal_record(
+    *,
+    suppression_proposal_id: str = "suppression-proposal-001",
+    detector_lifecycle_id: str = "det-001",
+    source_family: str = "github_audit",
+    source_catalog_entry: str = "docs/source-families/github-audit/onboarding-package.md",
+    alert_id: str | None = "alert-001",
+    case_id: str | None = "case-001",
+    evidence_ids: tuple[str, ...] = ("evidence-001",),
+    owner: str = "suppression-owner",
+    rationale: str = "Reviewed admin membership churn from approved break-glass rotation.",
+    citation_references: tuple[str, ...] = ("evidence://case-001/change-ticket",),
+    expires_at: datetime | None = datetime(2026, 6, 1, 0, 0, tzinfo=timezone.utc),
+    review_cadence: str = "weekly",
+    expected_signal_impact: str = "Reduce duplicate admin-membership alerts while preserving source signals.",
+    scope: str = "detector_case_context",
+    source_signal_handling: str = "preserve_source_signal",
+    lifecycle_state: str = "proposed",
+) -> SuppressionProposalRecord:
+    return SuppressionProposalRecord(
+        suppression_proposal_id=suppression_proposal_id,
+        detector_lifecycle_id=detector_lifecycle_id,
+        source_family=source_family,
+        source_catalog_entry=source_catalog_entry,
+        alert_id=alert_id,
+        case_id=case_id,
+        evidence_ids=evidence_ids,
+        owner=owner,
+        rationale=rationale,
+        citation_references=citation_references,
+        expires_at=expires_at,
+        review_cadence=review_cadence,
+        expected_signal_impact=expected_signal_impact,
+        scope=scope,
         source_signal_handling=source_signal_handling,
         lifecycle_state=lifecycle_state,
     )
@@ -479,8 +519,54 @@ class Phase61DetectorLifecycleRecordContractTests(unittest.TestCase):
         )
         self.assertEqual(
             AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION,
-            "phase23.authoritative-record-chain.v4",
+            "phase23.authoritative-record-chain.v5",
         )
+
+    def test_suppression_proposal_record_is_proposal_only_and_reviewable(self) -> None:
+        _validate_record(_suppression_proposal_record())
+
+        self.assertIn("suppression_proposal", RECORD_TYPES_BY_FAMILY)
+        self.assertIs(
+            RECORD_TYPES_BY_FAMILY["suppression_proposal"],
+            SuppressionProposalRecord,
+        )
+        self.assertIn(
+            SuppressionProposalRecord,
+            AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES,
+        )
+        self.assertEqual(
+            _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY["suppression_proposal"],
+            "suppression_proposal_id",
+        )
+
+    def test_suppression_proposal_rejects_uncited_ownerless_or_silent_suppression(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "requires non-blank owner"):
+            _validate_record(_suppression_proposal_record(owner=" "))
+
+        with self.assertRaisesRegex(ValueError, "requires non-empty citation_references"):
+            _validate_record(_suppression_proposal_record(citation_references=()))
+
+        with self.assertRaisesRegex(ValueError, "requires non-blank rationale"):
+            _validate_record(_suppression_proposal_record(rationale=""))
+
+        with self.assertRaisesRegex(ValueError, "must preserve source signals"):
+            _validate_record(
+                _suppression_proposal_record(source_signal_handling="hide_source_signal")
+            )
+
+    def test_suppression_proposal_rejects_overbroad_permanent_or_applied_suppression(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "must set a finite expires_at"):
+            _validate_record(_suppression_proposal_record(expires_at=None))
+
+        with self.assertRaisesRegex(ValueError, "has invalid scope"):
+            _validate_record(_suppression_proposal_record(scope="all_sources"))
+
+        with self.assertRaisesRegex(ValueError, "has invalid lifecycle_state"):
+            _validate_record(_suppression_proposal_record(lifecycle_state="applied"))
 
     def test_restore_validation_rejects_false_positive_review_without_detector_anchor(
         self,
@@ -503,6 +589,35 @@ class Phase61DetectorLifecycleRecordContractTests(unittest.TestCase):
                 {
                     "false_positive_review": (
                         _false_positive_review_record(
+                            alert_id=None,
+                            case_id=None,
+                        ),
+                    ),
+                },
+                require_lifecycle_transition_history=False,
+            )
+
+    def test_restore_validation_rejects_suppression_proposal_without_detector_anchor(
+        self,
+    ) -> None:
+        boundary = RestoreValidationBoundary(
+            authoritative_primary_id_field_by_family=_AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY,
+            find_duplicate_strings=lambda values: tuple(
+                value
+                for index, value in enumerate(values)
+                if value in values[:index]
+            ),
+            assistant_ids_from_mapping=lambda _mapping, _field_name: (),
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "missing detector_lifecycle record 'det-001' required by suppression proposal",
+        ):
+            boundary.validate_authoritative_record_chain_restore(
+                {
+                    "suppression_proposal": (
+                        _suppression_proposal_record(
                             alert_id=None,
                             case_id=None,
                         ),

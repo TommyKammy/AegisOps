@@ -88,7 +88,7 @@ class CliInspectionRestoreReadinessTests(ControlPlaneCliInspectionTestBase):
         drill_payload = json.loads(drill_stdout.getvalue())
         self.assertEqual(
             backup_payload["backup_schema_version"],
-            "phase23.authoritative-record-chain.v4",
+            "phase23.authoritative-record-chain.v5",
         )
         self.assertEqual(backup_payload["record_counts"]["action_execution"], 1)
         self.assertTrue(drill_payload["drill_passed"])

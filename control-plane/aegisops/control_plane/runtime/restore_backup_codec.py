@@ -19,6 +19,7 @@ _BACKUP_DATETIME_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
     "hunt_run": ("started_at", "completed_at"),
     "ai_trace": ("generated_at",),
     "reconciliation": ("first_seen_at", "last_seen_at", "compared_at"),
+    "suppression_proposal": ("expires_at",),
 }
 _BACKUP_TUPLE_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
     "analytic_signal": ("alert_ids", "case_ids"),
@@ -27,6 +28,7 @@ _BACKUP_TUPLE_FIELDS_BY_FAMILY: dict[str, tuple[str, ...]] = {
     "approval_decision": ("approver_identities",),
     "detector_lifecycle": ("lifecycle_audit_references",),
     "false_positive_review": ("evidence_ids", "review_evidence_references"),
+    "suppression_proposal": ("evidence_ids", "citation_references"),
     "ai_trace": ("material_input_refs",),
     "reconciliation": ("linked_execution_run_ids",),
 }

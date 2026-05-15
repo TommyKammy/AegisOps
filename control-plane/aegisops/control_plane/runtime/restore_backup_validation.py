@@ -22,6 +22,7 @@ from ..models import (
     ObservationRecord,
     ReconciliationRecord,
     RecommendationRecord,
+    SuppressionProposalRecord,
 )
 from ..ingestion.detection_lifecycle_helpers import (
     validate_detector_lifecycle_transition_path,
@@ -40,6 +41,7 @@ class _RestoreRecordFamilies:
     recommendations: tuple[RecommendationRecord, ...]
     detector_lifecycles: tuple[DetectorLifecycleRecord, ...]
     false_positive_reviews: tuple[FalsePositiveReviewRecord, ...]
+    suppression_proposals: tuple[SuppressionProposalRecord, ...]
     lifecycle_transitions: tuple[LifecycleTransitionRecord, ...]
     approval_decisions: tuple[ApprovalDecisionRecord, ...]
     action_requests: tuple[ActionRequestRecord, ...]
@@ -61,6 +63,7 @@ class _RestoreRecordFamilies:
             ("recommendation", self.recommendations),
             ("detector_lifecycle", self.detector_lifecycles),
             ("false_positive_review", self.false_positive_reviews),
+            ("suppression_proposal", self.suppression_proposals),
             ("lifecycle_transition", self.lifecycle_transitions),
             ("approval_decision", self.approval_decisions),
             ("action_request", self.action_requests),
@@ -83,6 +86,7 @@ class _RestoreRecordIndexes:
     recommendations: Mapping[str, RecommendationRecord]
     detector_lifecycles: Mapping[str, DetectorLifecycleRecord]
     false_positive_reviews: Mapping[str, FalsePositiveReviewRecord]
+    suppression_proposals: Mapping[str, SuppressionProposalRecord]
     approval_decisions: Mapping[str, ApprovalDecisionRecord]
     action_requests: Mapping[str, ActionRequestRecord]
     action_executions: Mapping[str, ActionExecutionRecord]
@@ -104,6 +108,7 @@ class _RestoreRecordIndexes:
             "recommendation": set(self.recommendations),
             "detector_lifecycle": set(self.detector_lifecycles),
             "false_positive_review": set(self.false_positive_reviews),
+            "suppression_proposal": set(self.suppression_proposals),
             "approval_decision": set(self.approval_decisions),
             "action_request": set(self.action_requests),
             "action_execution": set(self.action_executions),
@@ -127,6 +132,7 @@ class _RestoreRecordIndexes:
             "recommendation": self.recommendations,
             "detector_lifecycle": self.detector_lifecycles,
             "false_positive_review": self.false_positive_reviews,
+            "suppression_proposal": self.suppression_proposals,
             "approval_decision": self.approval_decisions,
             "action_request": self.action_requests,
             "action_execution": self.action_executions,
@@ -247,6 +253,13 @@ class RestoreValidationBoundary:
                     records_by_family,
                     "false_positive_review",
                     FalsePositiveReviewRecord,
+                )
+            ),
+            suppression_proposals=tuple(
+                self._require_restore_family_records(
+                    records_by_family,
+                    "suppression_proposal",
+                    SuppressionProposalRecord,
                 )
             ),
             lifecycle_transitions=tuple(
@@ -381,6 +394,10 @@ class RestoreValidationBoundary:
             false_positive_reviews={
                 record.false_positive_review_id: record
                 for record in families.false_positive_reviews
+            },
+            suppression_proposals={
+                record.suppression_proposal_id: record
+                for record in families.suppression_proposals
             },
             approval_decisions={
                 record.approval_decision_id: record
@@ -600,6 +617,43 @@ class RestoreValidationBoundary:
                         f"missing evidence record {evidence_id!r} required by "
                         "false-positive review "
                         f"{false_positive_review.false_positive_review_id!r}"
+                    )
+
+        for suppression_proposal in indexes.suppression_proposals.values():
+            if (
+                suppression_proposal.detector_lifecycle_id
+                not in indexes.detector_lifecycles
+            ):
+                raise ValueError(
+                    "missing detector_lifecycle record "
+                    f"{suppression_proposal.detector_lifecycle_id!r} required by "
+                    "suppression proposal "
+                    f"{suppression_proposal.suppression_proposal_id!r}"
+                )
+            if (
+                suppression_proposal.alert_id
+                and suppression_proposal.alert_id not in indexes.alerts
+            ):
+                raise ValueError(
+                    f"missing alert record {suppression_proposal.alert_id!r} required by "
+                    "suppression proposal "
+                    f"{suppression_proposal.suppression_proposal_id!r}"
+                )
+            if (
+                suppression_proposal.case_id
+                and suppression_proposal.case_id not in indexes.cases
+            ):
+                raise ValueError(
+                    f"missing case record {suppression_proposal.case_id!r} required by "
+                    "suppression proposal "
+                    f"{suppression_proposal.suppression_proposal_id!r}"
+                )
+            for evidence_id in suppression_proposal.evidence_ids:
+                if evidence_id not in indexes.evidence:
+                    raise ValueError(
+                        f"missing evidence record {evidence_id!r} required by "
+                        "suppression proposal "
+                        f"{suppression_proposal.suppression_proposal_id!r}"
                     )
 
         for hunt in indexes.hunts.values():
