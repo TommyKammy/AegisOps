@@ -35,6 +35,11 @@ export const RESOURCE_BINDINGS: Record<
     listSemantics: "client",
     recordFamily: "detector_lifecycle",
   },
+  recordSearch: {
+    idField: "id",
+    listPath: "/inspect-record-search",
+    listSemantics: "client",
+  },
   sourceHealthDashboard: {
     idField: "source_health_id",
     listPath: "/inspect-records",

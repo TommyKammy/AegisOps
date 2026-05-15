@@ -18,6 +18,7 @@ PROTECTED_READ_ROLES_BY_PATH: dict[str, tuple[str, ...]] = {
     "/diagnostics/readiness": READ_ONLY_PROTECTED_ROLES,
     "/admin/bootstrap-status": PLATFORM_ADMIN_ROLES,
     "/inspect-records": READ_ONLY_PROTECTED_ROLES,
+    "/inspect-record-search": READ_ONLY_PROTECTED_ROLES,
     "/inspect-reconciliation-status": READ_ONLY_PROTECTED_ROLES,
     "/inspect-analyst-queue": READ_ONLY_PROTECTED_ROLES,
     "/inspect-ai-trace-review-queue": READ_ONLY_PROTECTED_ROLES,

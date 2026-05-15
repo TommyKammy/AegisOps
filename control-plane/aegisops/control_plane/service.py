@@ -44,10 +44,7 @@ from .runtime.readiness_contracts import (
     resolve_current_readiness_runtime_status,
 )
 from .runtime.runtime_boundary import RuntimeBoundaryService
-from .reviewed_slice_policy import (
-    REVIEWED_LIVE_SLICE_LABEL,
-    ReviewedSlicePolicy,
-)
+from .reviewed_slice_policy import REVIEWED_LIVE_SLICE_LABEL, ReviewedSlicePolicy
 from .ingestion.case_workflow import CaseWorkflowFacade
 from .ingestion.detection_lifecycle_helpers import LATEST_LIFECYCLE_TRANSITION_UNSET
 from .evidence.external_evidence_facade import ExternalEvidenceFacade
@@ -80,6 +77,9 @@ from .structured_events import sanitize_structured_event_fields
 
 
 RecordT = TypeVar("RecordT", bound=ControlPlaneRecord)
+RECORD_SEARCH_INSPECTION_FAMILY = "record_search"
+RECORD_SEARCH_INSPECTION_AUTHORITY = "navigation_only"
+RECORD_SEARCH_INSPECTION_SURFACE = "read_only"
 
 _CASE_CLOSED_TRIAGE_DISPOSITIONS = frozenset(
     {

@@ -58,6 +58,39 @@ const SOURCE_HEALTH_REVIEWED_STATES = new Set([
   "withdrawn",
 ]);
 
+const RECORD_SEARCH_FAMILIES = new Set([
+  "alert",
+  "case",
+  "evidence",
+  "detector_lifecycle",
+  "false_positive_review",
+  "suppression_proposal",
+  "source_health",
+]);
+const RECORD_SEARCH_REVIEWED_ROUTE_PATTERNS_BY_FAMILY = new Map<string, RegExp[]>([
+  ["alert", [/^\/operator\/alerts\/[^/?#]+$/]],
+  ["case", [/^\/operator\/cases\/[^/?#]+$/]],
+  ["evidence", [/^\/operator\/alerts\/[^/?#]+$/, /^\/operator\/cases\/[^/?#]+$/]],
+  ["detector_lifecycle", [/^\/operator\/detectors$/]],
+  [
+    "false_positive_review",
+    [
+      /^\/operator\/alerts\/[^/?#]+$/,
+      /^\/operator\/cases\/[^/?#]+$/,
+      /^\/operator\/detectors$/,
+    ],
+  ],
+  [
+    "suppression_proposal",
+    [
+      /^\/operator\/alerts\/[^/?#]+$/,
+      /^\/operator\/cases\/[^/?#]+$/,
+      /^\/operator\/detectors$/,
+    ],
+  ],
+  ["source_health", [/^\/operator\/source-health$/]],
+]);
+
 const REVIEWED_SOURCE_CATALOG_ENTRIES_BY_FAMILY = new Map<string, Set<string>>([
   [
     "wazuh_detection",
@@ -308,6 +341,20 @@ function applyClientSideListSemantics(
   };
 }
 
+function clientSideListSemanticsParams(
+  resource: StandardOperatorResourceName,
+  params: GetListParams,
+): GetListParams {
+  if (resource !== "recordSearch" || params.filter === undefined) {
+    return params;
+  }
+  const { q: _backendSearchQuery, ...filter } = params.filter;
+  return {
+    ...params,
+    filter,
+  };
+}
+
 function buildListUrl(
   resource: StandardOperatorResourceName,
   params: GetListParams,
@@ -476,6 +523,46 @@ function validateSourceHealthDashboardRecord(record: Record<string, unknown>) {
   }
 }
 
+function validateRecordSearchResult(record: Record<string, unknown>) {
+  const recordFamily = asString(record.record_family);
+  if (recordFamily === null || !RECORD_SEARCH_FAMILIES.has(recordFamily)) {
+    throw new OperatorDataProviderContractError(
+      "Resource recordSearch result has unsupported record_family.",
+    );
+  }
+  if (asString(record.record_id) === null) {
+    throw new OperatorDataProviderContractError(
+      "Resource recordSearch result is missing reviewed record_id.",
+    );
+  }
+  const route = asString(record.route);
+  if (
+    route === null ||
+    asString(record.route_kind) !== "reviewed_surface" ||
+    !isReviewedRecordSearchRoute(recordFamily, route)
+  ) {
+    throw new OperatorDataProviderContractError(
+      "Resource recordSearch result must route to a reviewed surface.",
+    );
+  }
+  if (record.authority !== "navigation_only" || record.raw_source_authority !== false) {
+    throw new OperatorDataProviderContractError(
+      "Resource recordSearch rejects search results as workflow truth.",
+    );
+  }
+  if (record.stale_cache === true || record.cache_sourced === true) {
+    throw new OperatorDataProviderContractError(
+      "Resource recordSearch rejects stale-cache results.",
+    );
+  }
+}
+
+function isReviewedRecordSearchRoute(recordFamily: string, route: string): boolean {
+  const allowedPatterns =
+    RECORD_SEARCH_REVIEWED_ROUTE_PATTERNS_BY_FAMILY.get(recordFamily);
+  return allowedPatterns?.some((pattern) => pattern.test(route)) ?? false;
+}
+
 export async function getListForStandardResource({
   binding,
   fetchFn,
@@ -510,6 +597,9 @@ export async function getListForStandardResource({
     if (resource === "sourceHealthDashboard") {
       records.forEach(validateSourceHealthDashboardRecord);
     }
+    if (resource === "recordSearch") {
+      records.forEach(validateRecordSearchResult);
+    }
     totalRecords =
       typeof response.total_records === "number"
         ? response.total_records
@@ -517,7 +607,10 @@ export async function getListForStandardResource({
   }
 
   if (binding.listSemantics === "client") {
-    return applyClientSideListSemantics(records, params);
+    return applyClientSideListSemantics(
+      records,
+      clientSideListSemanticsParams(resource, params),
+    );
   }
 
   return {

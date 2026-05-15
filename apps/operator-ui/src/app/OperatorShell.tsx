@@ -19,6 +19,7 @@ import HandshakeOutlinedIcon from "@mui/icons-material/HandshakeOutlined";
 import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
 import PlaylistAddCheckOutlinedIcon from "@mui/icons-material/PlaylistAddCheckOutlined";
 import RuleFolderOutlinedIcon from "@mui/icons-material/RuleFolderOutlined";
+import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
 import SecurityOutlinedIcon from "@mui/icons-material/SecurityOutlined";
 import SensorsOutlinedIcon from "@mui/icons-material/SensorsOutlined";
 import TodayOutlinedIcon from "@mui/icons-material/TodayOutlined";
@@ -97,6 +98,8 @@ const ProvenancePage =
   lazyOperatorConsolePage("ProvenancePage") as unknown as typeof import("./operatorConsolePages").ProvenancePage;
 const ProvenanceIndexPage =
   lazyOperatorConsolePage("ProvenanceIndexPage") as unknown as typeof import("./operatorConsolePages").ProvenanceIndexPage;
+const RecordSearchPage =
+  lazyOperatorConsolePage("RecordSearchPage") as unknown as typeof import("./operatorConsolePages").RecordSearchPage;
 const QueuePage =
   lazyOperatorConsolePage("QueuePage") as unknown as typeof import("./operatorConsolePages").QueuePage;
 const ReadinessPage =
@@ -197,6 +200,11 @@ function OperatorMenu({
         leftIcon={<InsightsOutlinedIcon />}
         primaryText="Cases"
         to={buildOperatorShellPath(basePath, "cases")}
+      />
+      <Menu.Item
+        leftIcon={<SearchOutlinedIcon />}
+        primaryText="Search"
+        to={buildOperatorShellPath(basePath, "search")}
       />
       {showActionReview ? (
         <Menu.Item
@@ -552,6 +560,7 @@ function OperatorShellContent({
             path="alerts/:alertId"
           />
           <Route element={<CaseIndexPage />} path="cases" />
+          <Route element={<RecordSearchPage />} path="search" />
           <Route
             element={<CaseDetailPage operatorIdentity={operatorIdentity} />}
             path="cases/:caseId"

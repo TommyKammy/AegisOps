@@ -31,6 +31,7 @@ from .ingestion.evidence_linkage import EvidenceLinkageService
 from .actions.execution_coordinator import ExecutionCoordinator
 from .evidence.external_evidence_boundary import ExternalEvidenceBoundary
 from .assistant.live_assistant_workflow import LiveAssistantWorkflowCoordinator
+from .inspection.record_search import RecordSearchInspectionService
 from .models import ControlPlaneRecord, ReconciliationRecord
 from .operator_inspection import OperatorInspectionReadSurface
 from .persistence_lifecycle import PersistenceLifecycleService
@@ -106,6 +107,7 @@ class ControlPlaneServiceComposition:
     live_assistant_workflow_coordinator: LiveAssistantWorkflowCoordinator
     action_review_inspection_boundary: ActionReviewInspectionBoundary
     operator_inspection_read_surface: OperatorInspectionReadSurface
+    record_search_inspection_service: RecordSearchInspectionService
     action_review_write_surface: ActionReviewWriteSurface
     evidence_linkage_service: EvidenceLinkageService
     case_workflow_service: CaseWorkflowService
@@ -213,6 +215,10 @@ def build_control_plane_service_composition(
         coordination_reference_payload=dependencies.coordination_reference_payload,
         coordination_reference_signature=dependencies.coordination_reference_signature,
         dedupe_strings=dependencies.dedupe_strings,
+    )
+    record_search_inspection_service = RecordSearchInspectionService(
+        service,
+        record_to_dict=dependencies.record_to_dict,
     )
     action_review_write_surface = ActionReviewWriteSurface(
         service,
@@ -353,6 +359,7 @@ def build_control_plane_service_composition(
         live_assistant_workflow_coordinator=live_assistant_workflow_coordinator,
         action_review_inspection_boundary=action_review_inspection_boundary,
         operator_inspection_read_surface=operator_inspection_read_surface,
+        record_search_inspection_service=record_search_inspection_service,
         action_review_write_surface=action_review_write_surface,
         evidence_linkage_service=evidence_linkage_service,
         case_workflow_service=case_workflow_service,
@@ -398,6 +405,9 @@ def install_control_plane_service_composition(
         ),
         "_operator_inspection_read_surface": (
             composition.operator_inspection_read_surface
+        ),
+        "inspect_record_search": (
+            composition.record_search_inspection_service.inspect_record_search
         ),
         "_action_review_write_surface": composition.action_review_write_surface,
         "_evidence_linkage_service": composition.evidence_linkage_service,
