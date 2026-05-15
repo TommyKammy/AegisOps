@@ -66,8 +66,10 @@ url_path_repo="${workdir}/url-path"
 copy_valid_repo "${url_path_repo}"
 users_segment="Users"
 home_segment="home"
+root_segment="root"
 printf '%s\n' \
   "Reference URL: https://example.com/${home_segment}/docs/phase-61-closeout" \
+  "Reference URL: https://example.com/${root_segment}/docs/phase-61-closeout" \
   "Reference URL: https://example.com/C:/${users_segment}/docs/phase-61-closeout" \
   "Reference URL: https://example.com/search?artifact=/${users_segment}/example/Dev/codex-supervisor/dist/index.js" \
   >>"${url_path_repo}/docs/phase-61-closeout-evaluation.md"
@@ -155,6 +157,20 @@ assert_fails_with \
   "${raw_siem_overclaim_repo}" \
   "Forbidden Phase 61 closeout evaluation claim: Raw SIEM search replacement is complete"
 
+production_secret_overclaim_repo="${workdir}/production-secret-overclaim"
+copy_valid_repo "${production_secret_overclaim_repo}"
+printf '%s\n' "Production secrets are valid evidence for Phase 61." >>"${production_secret_overclaim_repo}/docs/phase-61-closeout-evaluation.md"
+assert_fails_with \
+  "${production_secret_overclaim_repo}" \
+  "Forbidden Phase 61 closeout evaluation claim: production secrets are valid"
+
+phase61_production_secret_overclaim_repo="${workdir}/phase61-production-secret-overclaim"
+copy_valid_repo "${phase61_production_secret_overclaim_repo}"
+printf '%s\n' "Phase 61 accepts production secrets." >>"${phase61_production_secret_overclaim_repo}/docs/phase-61-closeout-evaluation.md"
+assert_fails_with \
+  "${phase61_production_secret_overclaim_repo}" \
+  "Forbidden Phase 61 closeout evaluation claim: Phase 61 accepts production secrets"
+
 source_truth_repo="${workdir}/source-truth"
 copy_valid_repo "${source_truth_repo}"
 printf '%s\n' "Source-native status is AegisOps truth" >>"${source_truth_repo}/docs/phase-61-closeout-evaluation.md"
@@ -176,11 +192,19 @@ assert_fails_with \
   "${absolute_path_repo}" \
   "Forbidden Phase 61 closeout evaluation: workstation-local absolute path detected"
 
+root_absolute_path_repo="${workdir}/root-absolute-path"
+copy_valid_repo "${root_absolute_path_repo}"
+printf 'Run /%s/example/Dev/codex-supervisor/dist/index.js.\n' "${root_segment}" >>"${root_absolute_path_repo}/docs/phase-61-closeout-evaluation.md"
+assert_fails_with \
+  "${root_absolute_path_repo}" \
+  "Forbidden Phase 61 closeout evaluation: workstation-local absolute path detected"
+
 colon_prefixed_absolute_path_repo="${workdir}/colon-prefixed-absolute-path"
 copy_valid_repo "${colon_prefixed_absolute_path_repo}"
 printf '%s\n' \
   "Run:/${users_segment}/example/Dev/codex-supervisor/dist/index.js." \
   "Path:/${home_segment}/alice/file." \
+  "Path:/${root_segment}/file." \
   "Path:C:\\${users_segment}\\alice\\file." \
   "Path:C:/${users_segment}/alice/file." \
   >>"${colon_prefixed_absolute_path_repo}/docs/phase-61-closeout-evaluation.md"
@@ -196,6 +220,23 @@ assert_fails_with \
   "${file_url_absolute_path_repo}" \
   "Forbidden Phase 61 closeout evaluation: workstation-local absolute path detected"
 
+json_escaped_unix_absolute_path_repo="${workdir}/json-escaped-unix-absolute-path"
+copy_valid_repo "${json_escaped_unix_absolute_path_repo}"
+json_slash="\\/"
+printf 'Run "%s%s%s%s%s".\n' "${json_slash}" "Users" "${json_slash}" "example" "${json_slash}private.txt" \
+  >>"${json_escaped_unix_absolute_path_repo}/docs/phase-61-closeout-evaluation.md"
+assert_fails_with \
+  "${json_escaped_unix_absolute_path_repo}" \
+  "Forbidden Phase 61 closeout evaluation: workstation-local absolute path detected"
+
+json_escaped_root_absolute_path_repo="${workdir}/json-escaped-root-absolute-path"
+copy_valid_repo "${json_escaped_root_absolute_path_repo}"
+printf 'Run "%s%s%sprivate.txt".\n' "${json_slash}" "${root_segment}" "${json_slash}" \
+  >>"${json_escaped_root_absolute_path_repo}/docs/phase-61-closeout-evaluation.md"
+assert_fails_with \
+  "${json_escaped_root_absolute_path_repo}" \
+  "Forbidden Phase 61 closeout evaluation: workstation-local absolute path detected"
+
 absolute_path_windows_backslash_repo="${workdir}/absolute-path-windows-backslash"
 copy_valid_repo "${absolute_path_windows_backslash_repo}"
 windows_drive="C:"
@@ -204,6 +245,15 @@ windows_path="${windows_drive}${windows_sep}Users${windows_sep}example${windows_
 printf '%s\n' "Run ${windows_path}." >>"${absolute_path_windows_backslash_repo}/docs/phase-61-closeout-evaluation.md"
 assert_fails_with \
   "${absolute_path_windows_backslash_repo}" \
+  "Forbidden Phase 61 closeout evaluation: workstation-local absolute path detected"
+
+json_escaped_windows_backslash_repo="${workdir}/json-escaped-windows-backslash"
+copy_valid_repo "${json_escaped_windows_backslash_repo}"
+json_windows_sep="\\\\"
+printf '%s\n' "Run ${windows_drive}${json_windows_sep}${users_segment}${json_windows_sep}example${json_windows_sep}private.txt." \
+  >>"${json_escaped_windows_backslash_repo}/docs/phase-61-closeout-evaluation.md"
+assert_fails_with \
+  "${json_escaped_windows_backslash_repo}" \
   "Forbidden Phase 61 closeout evaluation: workstation-local absolute path detected"
 
 echo "Phase 61 closeout evaluation verifier tests passed."

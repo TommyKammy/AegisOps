@@ -88,23 +88,34 @@ for phrase in "${required_phrases[@]}"; do
   require_phrase "${absolute_doc_path}" "${phrase}" "required Phase 61 closeout term in ${doc_path}"
 done
 
+path_hygiene_text() {
+  local file="$1"
+
+  tr '[:upper:]' '[:lower:]' < "${file}" | sed 's#\\/#/#g'
+}
+
 absolute_path_boundary='(^|[[:space:](){}<>;,!?`"'\''])'
 macos_home_pattern="/""users/"
 linux_home_pattern="/""home/"
+root_home_pattern="/""root/"
 windows_backslash_home_pattern='[a-z]:\\+users\\+'
 windows_slash_home_pattern='[a-z]:/'"users"'/'
-absolute_path_pattern="(${absolute_path_boundary}(${macos_home_pattern}|${linux_home_pattern}|${windows_backslash_home_pattern}|${windows_slash_home_pattern})|file:///?(${macos_home_pattern}|${linux_home_pattern}|${windows_backslash_home_pattern}|${windows_slash_home_pattern}))[^[:space:]]+"
-colon_prefixed_absolute_path_pattern="${absolute_path_boundary}[^[:space:]/:]+:(${macos_home_pattern}|${linux_home_pattern}|${windows_backslash_home_pattern}|${windows_slash_home_pattern})[^[:space:]]+"
-if tr '[:upper:]' '[:lower:]' < "${absolute_doc_path}" | grep -Eq -- "${absolute_path_pattern}" || \
-   tr '[:upper:]' '[:lower:]' < "${readme_path}" | grep -Eq -- "${absolute_path_pattern}" || \
-   tr '[:upper:]' '[:lower:]' < "${absolute_doc_path}" | grep -Eq -- "${colon_prefixed_absolute_path_pattern}" || \
-   tr '[:upper:]' '[:lower:]' < "${readme_path}" | grep -Eq -- "${colon_prefixed_absolute_path_pattern}"; then
+unix_local_path_pattern="(${macos_home_pattern}|${linux_home_pattern}|${root_home_pattern})"
+local_path_pattern="(${unix_local_path_pattern}|${windows_backslash_home_pattern}|${windows_slash_home_pattern})"
+absolute_path_pattern="(${absolute_path_boundary}${local_path_pattern}|file:///?${local_path_pattern})[^[:space:]]+"
+colon_prefixed_absolute_path_pattern="${absolute_path_boundary}[^[:space:]/:]+:${local_path_pattern}[^[:space:]]+"
+if path_hygiene_text "${absolute_doc_path}" | grep -Eq -- "${absolute_path_pattern}" || \
+   path_hygiene_text "${readme_path}" | grep -Eq -- "${absolute_path_pattern}" || \
+   path_hygiene_text "${absolute_doc_path}" | grep -Eq -- "${colon_prefixed_absolute_path_pattern}" || \
+   path_hygiene_text "${readme_path}" | grep -Eq -- "${colon_prefixed_absolute_path_pattern}"; then
   echo "Forbidden Phase 61 closeout evaluation: workstation-local absolute path detected" >&2
   exit 1
 fi
 
 allowed_non_claim_line="This closeout does not claim Phase 62 SOAR breadth is complete, Phase 66 RC proof is complete, AegisOps is Beta, RC, GA, self-service commercially ready, or a commercial replacement for every SIEM/SOAR capability."
 allowed_non_claim_line_lower="$(printf '%s' "${allowed_non_claim_line}" | tr '[:upper:]' '[:lower:]')"
+required_rejection_line="Phase 61 must reject missing child evidence, missing verifier output, raw Wazuh or source-native status as AegisOps truth, detector lifecycle skips, silent suppression, uncited or ownerless suppression, false-positive silent deletion, raw SIEM replacement claims, custom rule authoring expansion, network-heavy strategy shift, production secrets, workstation-local paths, and Phase 62/66/Beta/RC/GA/commercial-readiness claims."
+required_rejection_line_lower="$(printf '%s' "${required_rejection_line}" | tr '[:upper:]' '[:lower:]')"
 
 forbidden_claims=(
   "phase 62 soar breadth is complete"
@@ -133,6 +144,10 @@ forbidden_claims=(
   "silent suppression is allowed"
   "ownerless suppression is allowed"
   "uncited suppression is allowed"
+  "production secrets are accepted"
+  "production secrets are valid"
+  "phase 61 accepts production secrets"
+  "phase 61 validates production secrets"
 )
 
 for forbidden in "${forbidden_claims[@]}"; do
@@ -143,5 +158,28 @@ for forbidden in "${forbidden_claims[@]}"; do
     exit 1
   fi
 done
+
+if awk -v required_rejection_line="${required_rejection_line_lower}" '
+  {
+    line = tolower($0)
+    if (line == required_rejection_line) {
+      next
+    }
+    negative_context = line ~ /(must reject|must fail|fail closed|fails validation|invalid|must not|cannot|not satisfy|rejected|not valid|does not|without|excluded|redacted|forbidden)/
+    if (negative_context) {
+      next
+    }
+    if (line ~ /(^|[^[:alnum:]_])(production|prod|live)[- ]?secrets?[[:space:]]+(are|is|count as|counts as|may be|can be|remain|stays|accepted as|treated as|allowed as)[[:space:]]+([^.]*[^[:alnum:]_])?(valid|trusted|accepted|allowed|ready|verified|sufficient)([^[:alnum:]_]|$)/) {
+      found = 1
+    }
+    if (line ~ /(^|[^[:alnum:]_])phase 61[[:space:]]+(accepts|validates|proves|ships|includes|uses)[[:space:]]+([^.]*[[:space:]])?production[- ]?secrets?([^[:alnum:]_]|$)/) {
+      found = 1
+    }
+  }
+  END { exit(found ? 0 : 1) }
+' "${absolute_doc_path}"; then
+  echo "Forbidden Phase 61 closeout evaluation claim: production secrets accepted as valid evidence" >&2
+  exit 1
+fi
 
 echo "Phase 61 closeout evaluation records minimum SIEM breadth outcomes, bounded authority posture, verifier evidence, accepted limitations, and Phase 62/66 handoff."
