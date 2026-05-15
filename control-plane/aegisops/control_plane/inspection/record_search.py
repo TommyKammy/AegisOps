@@ -183,9 +183,9 @@ class RecordSearchInspectionService:
             return None
 
         record_lifecycle_state = payload.get("lifecycle_state")
-        if (
-            lifecycle_state is not None
-            and str(record_lifecycle_state).strip() != lifecycle_state
+        if not self._record_search_lifecycle_state_matches(
+            record_lifecycle_state,
+            lifecycle_state,
         ):
             return None
 
@@ -326,6 +326,15 @@ class RecordSearchInspectionService:
         if normalized is None:
             return None
         return normalized.strip()
+
+    @staticmethod
+    def _record_search_lifecycle_state_matches(
+        record_lifecycle_state: object,
+        lifecycle_state: str | None,
+    ) -> bool:
+        if lifecycle_state is None:
+            return True
+        return str(record_lifecycle_state).strip() == lifecycle_state
 
     @staticmethod
     def _record_search_summary(
