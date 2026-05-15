@@ -869,7 +869,8 @@ def _validate_source_health_record(record: SourceHealthRecord) -> None:
         )
     if record.cache_sourced:
         raise ValueError(
-            f"source_health record {record.record_id!r} must not be cache sourced"
+            f"source_health record {record.record_id!r} must not be stale-cache "
+            "or cache sourced"
         )
 
 

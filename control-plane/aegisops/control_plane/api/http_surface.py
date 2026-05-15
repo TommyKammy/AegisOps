@@ -173,6 +173,42 @@ def _handle_inspect_records(
     _write_json(handler, HTTPStatus.OK, payload)
 
 
+def _handle_inspect_record_search(
+    handler: BaseHTTPRequestHandler,
+    context: HttpSurfaceContext,
+    principal: object,
+) -> None:
+    query = _query_value(handler, "q")
+    raw_family = _query_value(handler, "family")
+    record_families = (
+        tuple(
+            family.strip()
+            for family in raw_family.split(",")
+            if family.strip()
+        )
+        if raw_family
+        else None
+    )
+    try:
+        payload = context.service.inspect_record_search(
+            query=query,
+            record_families=record_families,
+            source_family=_query_value(handler, "source_family"),
+            lifecycle_state=_query_value(handler, "lifecycle_state"),
+        ).to_dict()
+    except ValueError as exc:
+        _write_json(
+            handler,
+            HTTPStatus.BAD_REQUEST,
+            {
+                "error": "invalid_request",
+                "message": str(exc),
+            },
+        )
+        return
+    _write_json(handler, HTTPStatus.OK, payload)
+
+
 def _handle_inspect_reconciliation_status(
     handler: BaseHTTPRequestHandler,
     context: HttpSurfaceContext,
@@ -422,6 +458,7 @@ HTTP_GET_ROUTES: dict[str, GetRouteHandler] = {
     "/diagnostics/readiness": _handle_runtime_read,
     "/admin/bootstrap-status": _handle_runtime_read,
     "/inspect-records": _handle_inspect_records,
+    "/inspect-record-search": _handle_inspect_record_search,
     "/inspect-reconciliation-status": _handle_inspect_reconciliation_status,
     "/inspect-analyst-queue": _handle_inspect_analyst_queue,
     "/inspect-ai-trace-review-queue": _handle_inspect_ai_trace_review_queue,

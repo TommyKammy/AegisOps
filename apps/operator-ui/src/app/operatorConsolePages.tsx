@@ -10,6 +10,7 @@ export {
   CaseIndexPage,
   ProvenanceIndexPage,
 } from "./operatorConsolePages/drilldownIndexPages";
+export { RecordSearchPage } from "./operatorConsolePages/recordSearchPages";
 export { DetectorActivationReviewPage } from "./operatorConsolePages/detectorActivationReviewPages";
 export { SourceHealthDashboardPage } from "./operatorConsolePages/sourceHealthDashboardPages";
 export { ActionReviewPage } from "./operatorConsolePages/actionReviewPages";
