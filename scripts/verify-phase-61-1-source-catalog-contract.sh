@@ -64,7 +64,7 @@ for phrase in "${required_validation_phrases[@]}"; do
   require_phrase "${validation_path}" "${phrase}"
 done
 
-python3 -m unittest control-plane.tests.test_phase61_source_catalog_contract >/tmp/phase61_source_catalog_tests.out
+(cd "${repo_root}" && python3 -m unittest control-plane.tests.test_phase61_source_catalog_contract) >/tmp/phase61_source_catalog_tests.out
 
 path_hygiene_stderr="${repo_root}/.tmp-phase61-path-hygiene.err"
 trap 'rm -f "${path_hygiene_stderr}"' EXIT
