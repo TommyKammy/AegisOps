@@ -16,6 +16,11 @@ from aegisops.control_plane.models import (
     DetectorLifecycleRecord,
     LifecycleTransitionRecord,
 )
+from aegisops.control_plane.service import (
+    AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES,
+    RECORD_TYPES_BY_FAMILY,
+    _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY,
+)
 from aegisops.control_plane.record_validation import _validate_record
 
 
@@ -180,6 +185,42 @@ class Phase61DetectorLifecycleRecordContractTests(unittest.TestCase):
                     lifecycle_audit_references=("",),
                 )
             )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"requires non-blank lifecycle_audit_references",
+        ):
+            _validate_record(
+                _detector_lifecycle_record(
+                    lifecycle_state="active",
+                    lifecycle_audit_references=("   ",),
+                )
+            )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"requires non-blank lifecycle_audit_references",
+        ):
+            _validate_record(
+                _detector_lifecycle_record(
+                    lifecycle_state="active",
+                    lifecycle_audit_references=(123,),  # type: ignore[arg-type]
+                )
+            )
+
+    def test_detector_lifecycle_record_is_registered_in_service_registries(self) -> None:
+        self.assertIn("detector_lifecycle", RECORD_TYPES_BY_FAMILY)
+        self.assertIs(
+            RECORD_TYPES_BY_FAMILY["detector_lifecycle"], DetectorLifecycleRecord
+        )
+        self.assertIn(
+            DetectorLifecycleRecord,
+            AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES,
+        )
+        self.assertEqual(
+            _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY["detector_lifecycle"],
+            "detector_lifecycle_id",
+        )
 
     def test_detector_lifecycle_record_requires_initial_candidate_state(self) -> None:
         helper = DetectionLifecycleTransitionHelper(

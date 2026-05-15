@@ -476,7 +476,7 @@ def _validate_detector_lifecycle_record(record: DetectorLifecycleRecord) -> None
     )
     _require_non_empty_tuple(record, "lifecycle_audit_references")
     for audit_reference in record.lifecycle_audit_references:
-        if not _has_linkage_value(audit_reference):
+        if not isinstance(audit_reference, str) or not _has_linkage_value(audit_reference):
             raise ValueError(
                 f"{record.record_family} record {record.record_id!r} requires non-blank "
                 f"lifecycle_audit_references entries"
