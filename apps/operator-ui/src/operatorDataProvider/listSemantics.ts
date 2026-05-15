@@ -44,6 +44,7 @@ const SOURCE_HEALTH_REQUIRED_FIELDS = [
   "source_catalog_entry",
   "health_state",
   "reviewed_state",
+  "lifecycle_state",
   "reviewed_at",
   "observed_at",
   "detector_drift",
@@ -424,10 +425,7 @@ function validateSourceHealthDashboardRecord(record: Record<string, unknown>) {
       "Resource sourceHealthDashboard record has unsupported reviewed_state.",
     );
   }
-  if (
-    "lifecycle_state" in record &&
-    asString(record.lifecycle_state) !== reviewedState
-  ) {
+  if (asString(record.lifecycle_state) !== reviewedState) {
     throw new OperatorDataProviderContractError(
       "Resource sourceHealthDashboard requires lifecycle_state to match reviewed_state.",
     );
