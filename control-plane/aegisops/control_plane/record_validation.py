@@ -13,6 +13,7 @@ from .models import (
     ApprovalDecisionRecord,
     CaseRecord,
     ControlPlaneRecord,
+    DetectorLifecycleRecord,
     EvidenceRecord,
     HuntRecord,
     HuntRunRecord,
@@ -28,6 +29,18 @@ _TICKET_REFERENCE_URL_PATTERN = re.compile(
     r"^https://[^/?#\s]+([/?#][^\s]*)?$",
     re.IGNORECASE,
 )
+
+_DETECTOR_LIFECYCLE_STATES: frozenset[str] = frozenset(
+    {
+        "candidate",
+        "staging",
+        "active",
+        "disabled",
+        "rollback",
+        "review-overdue",
+    }
+)
+
 
 _LIFECYCLE_STATES_BY_FAMILY: dict[str, frozenset[str]] = {
     "alert": frozenset(
@@ -181,7 +194,43 @@ _LIFECYCLE_STATES_BY_FAMILY: dict[str, frozenset[str]] = {
     "reconciliation": frozenset(
         {"pending", "matched", "mismatched", "stale", "resolved", "superseded"}
     ),
+    "detector_lifecycle": frozenset(
+        {
+            *sorted(_DETECTOR_LIFECYCLE_STATES),
+        }
+    ),
 }
+_DETECTOR_SOURCE_CATALOG_ENTRIES_BY_FAMILY: dict[str, frozenset[str]] = {
+    "wazuh_detection": frozenset(
+        {"docs/phase-61-minimum-source-catalog-contract.md"}
+    ),
+    "github_audit": frozenset(
+        {
+            "docs/source-families/github-audit/onboarding-package.md",
+            "docs/source-families/github-audit/detector-activation-candidates/repository-admin-membership-change.md",
+        }
+    ),
+    "microsoft_365_audit": frozenset(
+        {"docs/source-families/microsoft-365-audit/onboarding-package.md"}
+    ),
+    "entra_id": frozenset(
+        {
+            "docs/source-families/entra-id/onboarding-package.md",
+            "docs/source-families/entra-id/detector-activation-candidates/privileged-role-assignment.md",
+        }
+    ),
+    "windows_security_endpoint": frozenset(
+        {"docs/source-families/windows-security-and-endpoint/onboarding-package.md"}
+    ),
+}
+_DETECTOR_STATE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
+    "disabled": ("disabled_reason",),
+    "rollback": ("rollback_reason",),
+    "review-overdue": ("review_overdue_reason",),
+}
+_DETECTOR_REASON_FIELDS = frozenset(
+    {"disabled_reason", "rollback_reason", "review_overdue_reason"}
+)
 
 _RECONCILIATION_INGEST_DISPOSITIONS = frozenset(
     {
@@ -212,6 +261,14 @@ _LIFECYCLE_TRANSITION_SUBJECT_FAMILIES = frozenset(
 
 
 def _validate_lifecycle_state(record: ControlPlaneRecord) -> None:
+    if isinstance(record, DetectorLifecycleRecord):
+        if record.lifecycle_state not in _DETECTOR_LIFECYCLE_STATES:
+            raise ValueError(
+                f"detector_lifecycle record {record.record_id!r} has invalid lifecycle_state "
+                f"{record.lifecycle_state!r}; expected one of "
+                f"{sorted(_DETECTOR_LIFECYCLE_STATES)!r}"
+            )
+        return
     if isinstance(record, LifecycleTransitionRecord):
         allowed_states = _LIFECYCLE_STATES_BY_FAMILY.get(record.subject_record_family)
         if (
@@ -286,6 +343,11 @@ def _require_non_empty_tuple(
     field_name: str,
 ) -> None:
     values = getattr(record, field_name)
+    if not isinstance(values, (tuple, list)):
+        raise ValueError(
+            f"{record.record_family} record {record.record_id!r} requires {field_name} "
+            "to be a tuple/list"
+        )
     if len(values) >= 1:
         return
     raise ValueError(
@@ -308,6 +370,9 @@ def _require_non_blank_fields(
 def _validate_record(record: ControlPlaneRecord) -> None:
     _validate_lifecycle_state(record)
 
+    if isinstance(record, DetectorLifecycleRecord):
+        _validate_detector_lifecycle_record(record)
+        return
     if isinstance(record, AnalyticSignalRecord):
         _require_any_linkage(
             record,
@@ -398,6 +463,65 @@ def _validate_record(record: ControlPlaneRecord) -> None:
         _validate_coordination_reference_fields(record)
         return
     raise TypeError(f"Unsupported control-plane record type: {type(record).__name__}")
+
+
+def _validate_detector_lifecycle_record(record: DetectorLifecycleRecord) -> None:
+    _require_non_blank_fields(
+        record,
+        (
+            "owner",
+            "source_family",
+            "source_catalog_entry",
+            "detector_identifier",
+            "expected_signal_posture",
+            "review_cadence",
+            "rollback_owner",
+            "disable_owner",
+        ),
+    )
+    _require_non_empty_tuple(record, "lifecycle_audit_references")
+    for audit_reference in record.lifecycle_audit_references:
+        if not isinstance(audit_reference, str) or not _has_linkage_value(audit_reference):
+            raise ValueError(
+                f"{record.record_family} record {record.record_id!r} requires non-blank "
+                f"lifecycle_audit_references entries"
+            )
+    source_family = record.source_family.strip()
+    if source_family not in _DETECTOR_SOURCE_CATALOG_ENTRIES_BY_FAMILY:
+        raise ValueError(
+            f"detector_lifecycle record {record.record_id!r} has unsupported source_family "
+            f"{record.source_family!r}; expected one of "
+            f"{sorted(_DETECTOR_SOURCE_CATALOG_ENTRIES_BY_FAMILY)!r}"
+        )
+    source_catalog_entry = record.source_catalog_entry.strip()
+    if (
+        source_catalog_entry
+        not in _DETECTOR_SOURCE_CATALOG_ENTRIES_BY_FAMILY[source_family]
+    ):
+        raise ValueError(
+            f"detector_lifecycle record {record.record_id!r} has unsupported source_catalog_entry "
+            f"{record.source_catalog_entry!r} for source_family {source_family!r}; expected one of "
+            f"{sorted(_DETECTOR_SOURCE_CATALOG_ENTRIES_BY_FAMILY[source_family])!r}"
+        )
+
+    expected_reason_fields = frozenset(
+        _DETECTOR_STATE_REQUIRED_FIELDS.get(record.lifecycle_state, ())
+    )
+    for field_name in _DETECTOR_REASON_FIELDS:
+        reason_value = getattr(record, field_name)
+        if field_name in expected_reason_fields:
+            if not _has_linkage_value(reason_value):
+                raise ValueError(
+                    f"detector_lifecycle record {record.record_id!r} in state "
+                    f"{record.lifecycle_state!r} requires non-blank {field_name}"
+                )
+            continue
+        if _has_linkage_value(reason_value):
+            raise ValueError(
+                f"detector_lifecycle record {record.record_id!r} in state "
+                f"{record.lifecycle_state!r} must not set {field_name}; expected reason fields "
+                f"{sorted(expected_reason_fields)!r}"
+            )
 
 
 def _validate_coordination_reference_fields(

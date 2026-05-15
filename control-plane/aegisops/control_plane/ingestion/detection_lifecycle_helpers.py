@@ -28,6 +28,7 @@ from ..models import (
     ReconciliationRecord,
     RecommendationRecord,
 )
+from ..models import DetectorLifecycleRecord
 from ..reviewed_slice_policy import REVIEWED_LIVE_SOURCE_FAMILIES
 
 if TYPE_CHECKING:
@@ -38,6 +39,39 @@ if TYPE_CHECKING:
 LATEST_LIFECYCLE_TRANSITION_UNSET = object()
 _LINKED_ALERT_CASE_LIFECYCLE_LOCK_FAMILY = "linked_alert_case_lifecycle"
 _SAME_TIMESTAMP_LIFECYCLE_TRANSITION_ID_PREFIX = "~"
+_DETECTOR_LIFECYCLE_TRANSITIONS_BY_PREVIOUS_STATE: dict[str, frozenset[str]] = {
+    "candidate": frozenset({"staging"}),
+    "staging": frozenset({"active", "disabled", "rollback", "review-overdue"}),
+    "active": frozenset({"disabled", "rollback", "review-overdue"}),
+    "disabled": frozenset({"active", "rollback", "review-overdue"}),
+    "rollback": frozenset({"staging", "active", "review-overdue"}),
+    "review-overdue": frozenset({"active", "disabled", "rollback"}),
+}
+
+
+def validate_detector_lifecycle_transition_path(
+    *,
+    existing_lifecycle_state: str | None,
+    next_lifecycle_state: str,
+) -> None:
+    if existing_lifecycle_state is None:
+        if next_lifecycle_state != "candidate":
+            raise ValueError(
+                "detector_lifecycle records must start at lifecycle_state 'candidate' "
+                f"and reject invalid initial transition to {next_lifecycle_state!r}"
+            )
+        return
+    valid_transitions = _DETECTOR_LIFECYCLE_TRANSITIONS_BY_PREVIOUS_STATE.get(
+        existing_lifecycle_state
+    )
+    if valid_transitions is None:
+        return
+    if next_lifecycle_state not in valid_transitions:
+        raise ValueError(
+            f"detector_lifecycle record transition from {existing_lifecycle_state!r} "
+            f"to {next_lifecycle_state!r} is not supported; expected one of "
+            f"{sorted(valid_transitions)!r}"
+        )
 
 
 class DetectionLifecycleTransitionHelper:
@@ -127,6 +161,11 @@ class DetectionLifecycleTransitionHelper:
             previous_lifecycle_state = latest_transition.lifecycle_state
         if previous_lifecycle_state == next_lifecycle_state:
             return None
+        if isinstance(record, DetectorLifecycleRecord):
+            self.validate_detector_lifecycle_transition(
+                existing_lifecycle_state=previous_lifecycle_state,
+                next_lifecycle_state=next_lifecycle_state,
+            )
 
         explicit_transitioned_at = transitioned_at is not None
         resolved_transitioned_at = (
@@ -180,6 +219,17 @@ class DetectionLifecycleTransitionHelper:
             lifecycle_state=next_lifecycle_state,
             transitioned_at=resolved_transitioned_at,
             attribution=self.lifecycle_transition_attribution(record),
+        )
+
+    def validate_detector_lifecycle_transition(
+        self,
+        *,
+        existing_lifecycle_state: str | None,
+        next_lifecycle_state: str,
+    ) -> None:
+        validate_detector_lifecycle_transition_path(
+            existing_lifecycle_state=existing_lifecycle_state,
+            next_lifecycle_state=next_lifecycle_state,
         )
 
     def lifecycle_transition_id(

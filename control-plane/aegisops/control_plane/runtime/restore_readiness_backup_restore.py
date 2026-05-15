@@ -14,6 +14,7 @@ from ..models import (
     ApprovalDecisionRecord,
     CaseRecord,
     ControlPlaneRecord,
+    DetectorLifecycleRecord,
     EvidenceRecord,
     HuntRecord,
     HuntRunRecord,
@@ -37,8 +38,15 @@ _LEGACY_PHASE21_MISSING_RECORD_FAMILIES = frozenset(
         HuntRecord.record_family,
         HuntRunRecord.record_family,
         AITraceRecord.record_family,
+        DetectorLifecycleRecord.record_family,
     }
 )
+_COMPATIBLE_SCHEMA_MISSING_RECORD_FAMILIES_BY_VERSION: dict[str, frozenset[str]] = {
+    "phase21.authoritative-record-chain.v1": _LEGACY_PHASE21_MISSING_RECORD_FAMILIES,
+    "phase23.authoritative-record-chain.v2": frozenset(
+        {DetectorLifecycleRecord.record_family}
+    ),
+}
 _LEGACY_RESTORE_FALLBACK_TRANSITION_ANCHOR = datetime(
     2000,
     1,
@@ -277,10 +285,13 @@ class _BackupRestoreFlow:
         if not isinstance(backup_payload, Mapping):
             raise ValueError("restore payload must be a JSON object")
         backup_schema_version = backup_payload.get("backup_schema_version")
-        legacy_phase21_backup = (
-            backup_schema_version == "phase21.authoritative-record-chain.v1"
+        compatible_missing_record_families = (
+            _COMPATIBLE_SCHEMA_MISSING_RECORD_FAMILIES_BY_VERSION.get(
+                backup_schema_version
+            )
         )
-        if not legacy_phase21_backup and (
+        compatible_schema_backup = compatible_missing_record_families is not None
+        if not compatible_schema_backup and (
             backup_schema_version
             != self._authoritative_record_chain_backup_schema_version
         ):
@@ -322,8 +333,8 @@ class _BackupRestoreFlow:
             raw_records = record_families_payload.get(family)
             expected_count = record_counts_payload.get(family)
             if (
-                legacy_phase21_backup
-                and family in _LEGACY_PHASE21_MISSING_RECORD_FAMILIES
+                compatible_missing_record_families is not None
+                and family in compatible_missing_record_families
             ):
                 raw_records = [] if raw_records is None else raw_records
                 expected_count = 0 if expected_count is None else expected_count
@@ -347,7 +358,7 @@ class _BackupRestoreFlow:
             parsed_records[family] = parsed
             restored_record_counts[family] = len(parsed)
 
-        if legacy_phase21_backup:
+        if backup_schema_version == "phase21.authoritative-record-chain.v1":
             synthesized_transitions = self._synthesize_missing_lifecycle_transition_records(
                 parsed_records,
                 backup_created_at=backup_created_at,

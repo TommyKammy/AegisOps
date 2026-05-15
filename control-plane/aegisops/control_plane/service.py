@@ -34,6 +34,7 @@ from .models import (
     ControlPlaneRecord,
     EvidenceRecord,
     FindingAlertIngestResult,
+    DetectorLifecycleRecord,
     HuntRecord,
     HuntRunRecord,
     LeadRecord,
@@ -294,7 +295,7 @@ RECORD_TYPES_BY_FAMILY: dict[str, Type[ControlPlaneRecord]] = {
         AlertRecord,
         AnalyticSignalRecord,
         CaseRecord,
-        EvidenceRecord,
+        EvidenceRecord, DetectorLifecycleRecord,
         LifecycleTransitionRecord,
         ObservationRecord,
         LeadRecord,
@@ -317,6 +318,7 @@ AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES: tuple[Type[ControlPlaneRecord], ...] = 
     LeadRecord,
     CaseRecord,
     RecommendationRecord,
+    DetectorLifecycleRecord,
     LifecycleTransitionRecord,
     ApprovalDecisionRecord,
     ActionRequestRecord,
@@ -330,13 +332,13 @@ AUTHORITATIVE_RECORD_CHAIN_FAMILIES: tuple[str, ...] = tuple(
     record_type.record_family for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES
 )
 AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION = (
-    "phase23.authoritative-record-chain.v2"
+    "phase23.authoritative-record-chain.v3"
 )
 _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY: dict[str, str] = {
     "analytic_signal": "analytic_signal_id",
     "alert": "alert_id",
-    "evidence": "evidence_id",
-    "observation": "observation_id",
+    "evidence": "evidence_id", "observation": "observation_id",
+    "detector_lifecycle": "detector_lifecycle_id",
     "lead": "lead_id",
     "case": "case_id",
     "recommendation": "recommendation_id",

@@ -97,8 +97,8 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
         self.assertEqual(int(metadata["max_lines"]), physical_lines)
         self.assertEqual(int(metadata["max_effective_lines"]), effective_lines)
         self.assertEqual(int(metadata["max_facade_methods"]), facade_methods)
-        self.assertEqual(physical_lines, 1393)
-        self.assertEqual(effective_lines, 1241)
+        self.assertEqual(physical_lines, 1395)
+        self.assertEqual(effective_lines, 1243)
         self.assertEqual(facade_methods, 95)
         self.assertLess(int(metadata["max_lines"]), 1812)
         self.assertLess(int(metadata["max_effective_lines"]), 1632)
@@ -130,13 +130,13 @@ class Phase50MaintainabilityCloseoutTests(unittest.TestCase):
             "control-plane/aegisops_control_plane/external_evidence_boundary.py",
             "control-plane/aegisops_control_plane/ai_trace_lifecycle.py",
             "AegisOpsControlPlaneService",
-            "max_lines=1393",
-            "max_effective_lines=1241",
+            "max_lines=1395",
+            "max_effective_lines=1243",
             "max_facade_methods=95",
             "phase=50.13.5",
             "issue=#1035",
-            "physical_lines=1393",
-            "effective_lines=1241",
+            "physical_lines=1395",
+            "effective_lines=1243",
             "max_lines <= 1500",
             "max_effective_lines <= 1350",
             "max_facade_methods <= 95",

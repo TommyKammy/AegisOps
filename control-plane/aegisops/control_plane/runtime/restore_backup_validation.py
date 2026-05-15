@@ -12,6 +12,7 @@ from ..models import (
     ApprovalDecisionRecord,
     CaseRecord,
     ControlPlaneRecord,
+    DetectorLifecycleRecord,
     EvidenceRecord,
     HuntRecord,
     HuntRunRecord,
@@ -20,6 +21,9 @@ from ..models import (
     ObservationRecord,
     ReconciliationRecord,
     RecommendationRecord,
+)
+from ..ingestion.detection_lifecycle_helpers import (
+    validate_detector_lifecycle_transition_path,
 )
 from ..record_validation import _validate_lifecycle_state, _validate_record
 
@@ -33,6 +37,7 @@ class _RestoreRecordFamilies:
     leads: tuple[LeadRecord, ...]
     cases: tuple[CaseRecord, ...]
     recommendations: tuple[RecommendationRecord, ...]
+    detector_lifecycles: tuple[DetectorLifecycleRecord, ...]
     lifecycle_transitions: tuple[LifecycleTransitionRecord, ...]
     approval_decisions: tuple[ApprovalDecisionRecord, ...]
     action_requests: tuple[ActionRequestRecord, ...]
@@ -52,6 +57,7 @@ class _RestoreRecordFamilies:
             ("lead", self.leads),
             ("case", self.cases),
             ("recommendation", self.recommendations),
+            ("detector_lifecycle", self.detector_lifecycles),
             ("lifecycle_transition", self.lifecycle_transitions),
             ("approval_decision", self.approval_decisions),
             ("action_request", self.action_requests),
@@ -72,6 +78,7 @@ class _RestoreRecordIndexes:
     leads: Mapping[str, LeadRecord]
     cases: Mapping[str, CaseRecord]
     recommendations: Mapping[str, RecommendationRecord]
+    detector_lifecycles: Mapping[str, DetectorLifecycleRecord]
     approval_decisions: Mapping[str, ApprovalDecisionRecord]
     action_requests: Mapping[str, ActionRequestRecord]
     action_executions: Mapping[str, ActionExecutionRecord]
@@ -91,6 +98,7 @@ class _RestoreRecordIndexes:
             "lead": set(self.leads),
             "case": set(self.cases),
             "recommendation": set(self.recommendations),
+            "detector_lifecycle": set(self.detector_lifecycles),
             "approval_decision": set(self.approval_decisions),
             "action_request": set(self.action_requests),
             "action_execution": set(self.action_executions),
@@ -112,6 +120,7 @@ class _RestoreRecordIndexes:
             "lead": self.leads,
             "case": self.cases,
             "recommendation": self.recommendations,
+            "detector_lifecycle": self.detector_lifecycles,
             "approval_decision": self.approval_decisions,
             "action_request": self.action_requests,
             "action_execution": self.action_executions,
@@ -220,6 +229,13 @@ class RestoreValidationBoundary:
                     RecommendationRecord,
                 )
             ),
+            detector_lifecycles=tuple(
+                self._require_restore_family_records(
+                    records_by_family,
+                    "detector_lifecycle",
+                    DetectorLifecycleRecord,
+                )
+            ),
             lifecycle_transitions=tuple(
                 self._require_restore_family_records(
                     records_by_family,
@@ -320,6 +336,7 @@ class RestoreValidationBoundary:
             *families.observations,
             *families.leads,
             *families.recommendations,
+            *families.detector_lifecycles,
         ):
             _validate_record(record)
 
@@ -342,6 +359,10 @@ class RestoreValidationBoundary:
             recommendations={
                 record.recommendation_id: record
                 for record in families.recommendations
+            },
+            detector_lifecycles={
+                record.detector_lifecycle_id: record
+                for record in families.detector_lifecycles
             },
             approval_decisions={
                 record.approval_decision_id: record
@@ -877,6 +898,11 @@ class RestoreValidationBoundary:
                         f"{transition.transition_id!r} previous_lifecycle_state "
                         f"{transition.previous_lifecycle_state!r} matches lifecycle_state "
                         f"{transition.lifecycle_state!r}"
+                    )
+                if subject_family == DetectorLifecycleRecord.record_family:
+                    validate_detector_lifecycle_transition_path(
+                        existing_lifecycle_state=transition.previous_lifecycle_state,
+                        next_lifecycle_state=transition.lifecycle_state,
                     )
                 prior_transition = transition
 

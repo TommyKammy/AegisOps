@@ -133,6 +133,27 @@ create table if not exists aegisops_control.case_records (
   check (lifecycle_state in ('open','investigating','pending_action','contained_pending_validation','closed','reopened','superseded'))
 );
 
+create table if not exists aegisops_control.detector_lifecycle_records (
+  detector_lifecycle_id text primary key,
+  owner text not null,
+  source_family text not null,
+  source_catalog_entry text not null,
+  detector_identifier text not null,
+  expected_signal_posture text not null,
+  review_cadence text not null,
+  rollback_owner text not null,
+  disable_owner text not null,
+  lifecycle_audit_references text[] not null default '{}'::text[],
+  lifecycle_state text not null,
+  disabled_reason text,
+  rollback_reason text,
+  review_overdue_reason text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (cardinality(lifecycle_audit_references) >= 1),
+  check (lifecycle_state in ('candidate','staging','active','disabled','rollback','review-overdue'))
+);
+
 create table if not exists aegisops_control.evidence_records (
   evidence_id text primary key,
   source_record_id text not null,
@@ -375,7 +396,7 @@ create table if not exists aegisops_control.lifecycle_transition_records (
   transitioned_at timestamptz not null,
   attribution jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default timezone('utc', now()),
-  check (
+    check (
     subject_record_family in (
       'alert',
       'analytic_signal',
@@ -390,7 +411,8 @@ create table if not exists aegisops_control.lifecycle_transition_records (
       'hunt',
       'hunt_run',
       'ai_trace',
-      'reconciliation'
+      'reconciliation',
+      'detector_lifecycle'
     )
   ),
   check (
@@ -443,7 +465,12 @@ create table if not exists aegisops_control.lifecycle_transition_records (
       'matched',
       'mismatched',
       'stale',
-      'resolved'
+      'resolved',
+      'candidate',
+      'staging',
+      'disabled',
+      'rollback',
+      'review-overdue'
     )
   ),
   check (
@@ -496,7 +523,12 @@ create table if not exists aegisops_control.lifecycle_transition_records (
       'matched',
       'mismatched',
       'stale',
-      'resolved'
+      'resolved',
+      'candidate',
+      'staging',
+      'disabled',
+      'rollback',
+      'review-overdue'
     )
   ),
   constraint lifecycle_transition_records_state_matches_subject_family check (
@@ -616,6 +648,14 @@ create table if not exists aegisops_control.lifecycle_transition_records (
       'resolved',
       'superseded'
     ))
+    or (subject_record_family = 'detector_lifecycle' and lifecycle_state in (
+      'candidate',
+      'staging',
+      'active',
+      'disabled',
+      'rollback',
+      'review-overdue'
+    ))
   ),
   constraint lifecycle_transition_records_previous_state_matches_subject_family check (
     previous_lifecycle_state is null or (
@@ -734,6 +774,14 @@ create table if not exists aegisops_control.lifecycle_transition_records (
         'stale',
         'resolved',
         'superseded'
+      ))
+      or (subject_record_family = 'detector_lifecycle' and previous_lifecycle_state in (
+        'candidate',
+        'staging',
+        'active',
+        'disabled',
+        'rollback',
+        'review-overdue'
       ))
     )
   )
