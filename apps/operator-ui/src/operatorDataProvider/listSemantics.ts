@@ -67,6 +67,29 @@ const RECORD_SEARCH_FAMILIES = new Set([
   "suppression_proposal",
   "source_health",
 ]);
+const RECORD_SEARCH_REVIEWED_ROUTE_PATTERNS_BY_FAMILY = new Map<string, RegExp[]>([
+  ["alert", [/^\/operator\/alerts\/[^/?#]+$/]],
+  ["case", [/^\/operator\/cases\/[^/?#]+$/]],
+  ["evidence", [/^\/operator\/alerts\/[^/?#]+$/, /^\/operator\/cases\/[^/?#]+$/]],
+  ["detector_lifecycle", [/^\/operator\/detectors$/]],
+  [
+    "false_positive_review",
+    [
+      /^\/operator\/alerts\/[^/?#]+$/,
+      /^\/operator\/cases\/[^/?#]+$/,
+      /^\/operator\/detectors$/,
+    ],
+  ],
+  [
+    "suppression_proposal",
+    [
+      /^\/operator\/alerts\/[^/?#]+$/,
+      /^\/operator\/cases\/[^/?#]+$/,
+      /^\/operator\/detectors$/,
+    ],
+  ],
+  ["source_health", [/^\/operator\/source-health$/]],
+]);
 
 const REVIEWED_SOURCE_CATALOG_ENTRIES_BY_FAMILY = new Map<string, Set<string>>([
   [
@@ -498,7 +521,12 @@ function validateRecordSearchResult(record: Record<string, unknown>) {
       "Resource recordSearch result is missing reviewed record_id.",
     );
   }
-  if (asString(record.route) === null || asString(record.route_kind) !== "reviewed_surface") {
+  const route = asString(record.route);
+  if (
+    route === null ||
+    asString(record.route_kind) !== "reviewed_surface" ||
+    !isReviewedRecordSearchRoute(recordFamily, route)
+  ) {
     throw new OperatorDataProviderContractError(
       "Resource recordSearch result must route to a reviewed surface.",
     );
@@ -513,6 +541,12 @@ function validateRecordSearchResult(record: Record<string, unknown>) {
       "Resource recordSearch rejects stale-cache results.",
     );
   }
+}
+
+function isReviewedRecordSearchRoute(recordFamily: string, route: string): boolean {
+  const allowedPatterns =
+    RECORD_SEARCH_REVIEWED_ROUTE_PATTERNS_BY_FAMILY.get(recordFamily);
+  return allowedPatterns?.some((pattern) => pattern.test(route)) ?? false;
 }
 
 export async function getListForStandardResource({

@@ -110,5 +110,33 @@ export function registerOperatorRoutesRecordSearchTests() {
       });
       expect(screen.queryByText("workflow_truth")).not.toBeInTheDocument();
     });
+
+    it("fails closed for non-reviewed search result routes", async () => {
+      const dependencies = createDefaultDependencies({
+        fetchFn: createAuthorizedFetch({
+          "/inspect-record-search": {
+            records: [
+              {
+                ...recordSearchResults[0],
+                route: "https://source.example.invalid/raw/case-001",
+                route_kind: "reviewed_surface",
+              },
+            ],
+            total_records: 1,
+          },
+        }),
+      });
+
+      renderOperatorRoute("/operator/search", dependencies);
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(
+            "Reviewed operator data could not be verified. The browser stayed fail-closed instead of rendering an untrusted record.",
+          ),
+        ).toBeInTheDocument();
+      });
+      expect(screen.queryByRole("link", { name: "case:case-001" })).toBeNull();
+    });
   });
 }

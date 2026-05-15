@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import Iterable, Mapping, Protocol, Type
-import json
 
 from ..models import (
     AlertRecord,
@@ -39,6 +38,90 @@ RECORD_SEARCH_BLOCKED_TERMS = (
     "approve detector",
     "suppress signal",
 )
+RECORD_SEARCH_COMMON_REVIEWED_FIELDS = (
+    "record_family",
+    "record_id",
+    "source_family",
+    "lifecycle_state",
+)
+RECORD_SEARCH_REVIEWED_FIELDS_BY_FAMILY = {
+    "alert": (
+        "alert_id",
+        "analytic_signal_id",
+        "case_id",
+        "finding_id",
+        "reviewed_context",
+    ),
+    "case": (
+        "case_id",
+        "alert_id",
+        "finding_id",
+        "evidence_ids",
+        "reviewed_context",
+    ),
+    "evidence": (
+        "evidence_id",
+        "alert_id",
+        "case_id",
+    ),
+    "detector_lifecycle": (
+        "detector_lifecycle_id",
+        "owner",
+        "source_catalog_entry",
+        "detector_identifier",
+        "expected_signal_posture",
+        "review_cadence",
+        "rollback_owner",
+        "disable_owner",
+        "lifecycle_audit_references",
+        "disabled_reason",
+        "rollback_reason",
+        "review_overdue_reason",
+    ),
+    "false_positive_review": (
+        "false_positive_review_id",
+        "detector_lifecycle_id",
+        "source_catalog_entry",
+        "alert_id",
+        "case_id",
+        "evidence_ids",
+        "owner",
+        "disposition",
+        "disposition_rationale",
+        "dispute_state",
+        "recurrence_posture",
+        "review_evidence_references",
+        "source_signal_handling",
+    ),
+    "suppression_proposal": (
+        "suppression_proposal_id",
+        "detector_lifecycle_id",
+        "source_catalog_entry",
+        "alert_id",
+        "case_id",
+        "evidence_ids",
+        "owner",
+        "rationale",
+        "citation_references",
+        "expires_at",
+        "review_cadence",
+        "expected_signal_impact",
+        "scope",
+        "source_signal_handling",
+    ),
+    "source_health": (
+        "source_health_id",
+        "source_catalog_entry",
+        "health_state",
+        "reviewed_state",
+        "reviewed_at",
+        "observed_at",
+        "detector_drift",
+        "credential_posture",
+        "evidence_references",
+        "operator_visible_reason",
+    ),
+}
 
 
 class RecordSearchStore(Protocol):
@@ -268,8 +351,57 @@ class RecordSearchInspectionService:
         payload: Mapping[str, object],
         query: str,
     ) -> bool:
-        haystack = json.dumps(_json_ready(payload), sort_keys=True).lower()
+        haystack = " ".join(
+            value.lower()
+            for value in RecordSearchInspectionService._record_search_payload_values(
+                payload
+            )
+        )
         return query.lower() in haystack
+
+    @staticmethod
+    def _record_search_payload_values(
+        payload: Mapping[str, object],
+    ) -> tuple[str, ...]:
+        family = payload.get("record_family")
+        selected_fields = (
+            *RECORD_SEARCH_COMMON_REVIEWED_FIELDS,
+            *RECORD_SEARCH_REVIEWED_FIELDS_BY_FAMILY.get(str(family), ()),
+        )
+        values: list[str] = []
+        for field_name in selected_fields:
+            if field_name in payload:
+                values.extend(
+                    RecordSearchInspectionService._record_search_value_text(
+                        _json_ready(payload[field_name])
+                    )
+                )
+        return tuple(values)
+
+    @staticmethod
+    def _record_search_value_text(value: object) -> tuple[str, ...]:
+        if value is None:
+            return ()
+        if isinstance(value, Mapping):
+            text: list[str] = []
+            for nested_value in value.values():
+                text.extend(
+                    RecordSearchInspectionService._record_search_value_text(
+                        nested_value
+                    )
+                )
+            return tuple(text)
+        if isinstance(value, (list, tuple)):
+            text: list[str] = []
+            for item in value:
+                text.extend(
+                    RecordSearchInspectionService._record_search_value_text(item)
+                )
+            return tuple(text)
+        rendered = str(value).strip()
+        if not rendered:
+            return ()
+        return (rendered,)
 
     def _record_search_route(self, record: ControlPlaneRecord) -> str | None:
         if isinstance(record, AlertRecord):

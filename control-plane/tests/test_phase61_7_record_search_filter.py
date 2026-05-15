@@ -199,7 +199,7 @@ class Phase617RecordSearchFilterTests(ServicePersistenceTestBase):
             service.persist_record(stale_source_health)
 
     def test_record_search_rejects_malformed_or_raw_source_queries(self) -> None:
-        _store, service, _case, _evidence_id, _reviewed_at = (
+        _store, service, case, _evidence_id, _reviewed_at = (
             self._build_phase19_in_scope_case()
         )
 
@@ -220,6 +220,36 @@ class Phase617RecordSearchFilterTests(ServicePersistenceTestBase):
                 query="github",
                 record_families=("native_detection",),
             )
+
+        reviewed_raw_content_evidence = EvidenceRecord(
+            evidence_id="evidence-reviewed-raw-content-only-001",
+            source_record_id="native-reviewed-content-only-001",
+            alert_id=case.alert_id,
+            case_id=case.case_id,
+            source_system="wazuh",
+            collector_identity="collector://wazuh/reviewed-content-only",
+            acquired_at=datetime(2026, 5, 15, 8, 0, tzinfo=timezone.utc),
+            derivation_relationship="native_detection_record",
+            lifecycle_state="collected",
+            provenance={"raw_only_marker": "needle-provenance-only"},
+            content={"message": "needle-content-only"},
+        )
+        service.persist_record(reviewed_raw_content_evidence)
+
+        raw_content_snapshot = service.inspect_record_search(
+            query="needle-content-only",
+            record_families=("evidence",),
+        )
+        self.assertNotIn(
+            reviewed_raw_content_evidence.evidence_id,
+            {
+                result["record_id"]
+                for result in raw_content_snapshot.to_dict()["records"]
+            },
+        )
+
+        field_name_snapshot = service.inspect_record_search(query="record_id")
+        self.assertEqual(field_name_snapshot.to_dict()["records"], [])
 
         raw_evidence = EvidenceRecord(
             evidence_id="evidence-raw-unlinked-001",
