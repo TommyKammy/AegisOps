@@ -35,7 +35,10 @@ from _restore_readiness_test_support import (
     timedelta,
     timezone,
 )
-from aegisops.control_plane.models import DetectorLifecycleRecord
+from aegisops.control_plane.models import (
+    DetectorLifecycleRecord,
+    FalsePositiveReviewRecord,
+)
 
 
 class RestoreBackupCodecTests(ServicePersistenceTestBase):
@@ -222,7 +225,7 @@ class RestoreBackupCodecTests(ServicePersistenceTestBase):
 
         self.assertEqual(
             round_trip_backup["backup_schema_version"],
-            "phase23.authoritative-record-chain.v3",
+            "phase23.authoritative-record-chain.v4",
         )
         for family in _PHASE21_LEGACY_MISSING_AUTHORITATIVE_FAMILIES:
             self.assertIn(family, round_trip_backup["record_families"])
@@ -251,7 +254,7 @@ class RestoreBackupCodecTests(ServicePersistenceTestBase):
             len(round_trip_store.list(LifecycleTransitionRecord)),
         )
 
-    def test_service_phase23_v2_restore_allows_missing_detector_lifecycle_family(
+    def test_service_phase23_v2_restore_allows_missing_detector_and_false_positive_families(
         self,
     ) -> None:
         _store, service, promoted_case, _evidence_id, _reviewed_at = (
@@ -261,6 +264,8 @@ class RestoreBackupCodecTests(ServicePersistenceTestBase):
         backup["backup_schema_version"] = "phase23.authoritative-record-chain.v2"
         del backup["record_families"]["detector_lifecycle"]
         del backup["record_counts"]["detector_lifecycle"]
+        del backup["record_families"]["false_positive_review"]
+        del backup["record_counts"]["false_positive_review"]
 
         restored_store, _ = make_store()
         restored_service = AegisOpsControlPlaneService(
@@ -282,10 +287,55 @@ class RestoreBackupCodecTests(ServicePersistenceTestBase):
             0,
         )
         self.assertEqual(
+            restored_summary.restored_record_counts["false_positive_review"],
+            0,
+        )
+        self.assertEqual(
             round_trip_backup["backup_schema_version"],
-            "phase23.authoritative-record-chain.v3",
+            "phase23.authoritative-record-chain.v4",
         )
         self.assertEqual(round_trip_backup["record_counts"]["detector_lifecycle"], 0)
+        self.assertEqual(
+            round_trip_backup["record_counts"]["false_positive_review"],
+            0,
+        )
+
+    def test_service_phase23_v3_restore_allows_missing_false_positive_family(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        backup["backup_schema_version"] = "phase23.authoritative-record-chain.v3"
+        del backup["record_families"]["false_positive_review"]
+        del backup["record_counts"]["false_positive_review"]
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        restored_summary = restored_service.restore_authoritative_record_chain_backup(
+            backup
+        )
+        round_trip_backup = restored_service.export_authoritative_record_chain_backup()
+
+        self.assertIn(
+            promoted_case.case_id,
+            restored_summary.restore_drill.verified_case_ids,
+        )
+        self.assertEqual(
+            restored_summary.restored_record_counts["false_positive_review"],
+            0,
+        )
+        self.assertEqual(
+            round_trip_backup["backup_schema_version"],
+            "phase23.authoritative-record-chain.v4",
+        )
+        self.assertEqual(round_trip_backup["record_counts"]["false_positive_review"], 0)
+        self.assertEqual(restored_service._store.list(FalsePositiveReviewRecord), ())
 
     def test_detector_lifecycle_restore_rejects_scalar_audit_references(
         self,
@@ -595,7 +645,7 @@ class RestoreBackupCodecTests(ServicePersistenceTestBase):
 
         self.assertEqual(
             backup["backup_schema_version"],
-            "phase23.authoritative-record-chain.v3",
+            "phase23.authoritative-record-chain.v4",
         )
         self.assertEqual(backup["record_counts"]["action_execution"], 1)
         self.assertEqual(backup["record_counts"]["observation"], 1)

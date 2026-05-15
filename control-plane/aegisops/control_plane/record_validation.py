@@ -373,16 +373,24 @@ def _require_non_empty_tuple(
     record: ControlPlaneRecord,
     field_name: str,
 ) -> None:
-    values = getattr(record, field_name)
-    if not isinstance(values, (tuple, list)):
-        raise ValueError(
-            f"{record.record_family} record {record.record_id!r} requires {field_name} "
-            "to be a tuple/list"
-        )
+    values = _require_tuple_or_list(record, field_name)
     if len(values) >= 1:
         return
     raise ValueError(
         f"{record.record_family} record {record.record_id!r} requires non-empty {field_name}"
+    )
+
+
+def _require_tuple_or_list(
+    record: ControlPlaneRecord,
+    field_name: str,
+) -> tuple[object, ...] | list[object]:
+    values = getattr(record, field_name)
+    if isinstance(values, (tuple, list)):
+        return values
+    raise ValueError(
+        f"{record.record_family} record {record.record_id!r} requires {field_name} "
+        "to be a tuple/list"
     )
 
 
@@ -576,6 +584,7 @@ def _validate_false_positive_review_record(
         ),
     )
     _require_non_empty_tuple(record, "review_evidence_references")
+    _require_tuple_or_list(record, "evidence_ids")
     _require_any_linkage(record, ("alert_id", "case_id", "evidence_ids"))
     if record.alert_id is None and record.case_id is None:
         _require_non_empty_tuple(record, "evidence_ids")

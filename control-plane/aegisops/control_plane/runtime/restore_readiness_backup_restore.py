@@ -16,6 +16,7 @@ from ..models import (
     ControlPlaneRecord,
     DetectorLifecycleRecord,
     EvidenceRecord,
+    FalsePositiveReviewRecord,
     HuntRecord,
     HuntRunRecord,
     LeadRecord,
@@ -39,12 +40,19 @@ _LEGACY_PHASE21_MISSING_RECORD_FAMILIES = frozenset(
         HuntRunRecord.record_family,
         AITraceRecord.record_family,
         DetectorLifecycleRecord.record_family,
+        FalsePositiveReviewRecord.record_family,
     }
 )
 _COMPATIBLE_SCHEMA_MISSING_RECORD_FAMILIES_BY_VERSION: dict[str, frozenset[str]] = {
     "phase21.authoritative-record-chain.v1": _LEGACY_PHASE21_MISSING_RECORD_FAMILIES,
     "phase23.authoritative-record-chain.v2": frozenset(
-        {DetectorLifecycleRecord.record_family}
+        {
+            DetectorLifecycleRecord.record_family,
+            FalsePositiveReviewRecord.record_family,
+        }
+    ),
+    "phase23.authoritative-record-chain.v3": frozenset(
+        {FalsePositiveReviewRecord.record_family}
     ),
 }
 _LEGACY_RESTORE_FALLBACK_TRANSITION_ANCHOR = datetime(

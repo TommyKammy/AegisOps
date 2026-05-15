@@ -22,6 +22,7 @@ from aegisops.control_plane.runtime.restore_backup_validation import (
 )
 from aegisops.control_plane.service import (
     AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES,
+    AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION,
     RECORD_TYPES_BY_FAMILY,
     _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY,
 )
@@ -412,6 +413,18 @@ class Phase61DetectorLifecycleRecordContractTests(unittest.TestCase):
                 )
             )
 
+    def test_false_positive_review_rejects_non_collection_evidence_ids(self) -> None:
+        for evidence_ids in ("evidence-001", 123):
+            with self.subTest(evidence_ids=evidence_ids):
+                record = _false_positive_review_record()
+                object.__setattr__(record, "evidence_ids", evidence_ids)
+
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "requires evidence_ids to be a tuple/list",
+                ):
+                    _validate_record(record)
+
     def test_false_positive_review_rejects_uncited_or_silent_source_suppression(
         self,
     ) -> None:
@@ -463,6 +476,10 @@ class Phase61DetectorLifecycleRecordContractTests(unittest.TestCase):
         self.assertEqual(
             _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY["false_positive_review"],
             "false_positive_review_id",
+        )
+        self.assertEqual(
+            AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION,
+            "phase23.authoritative-record-chain.v4",
         )
 
     def test_restore_validation_rejects_false_positive_review_without_detector_anchor(

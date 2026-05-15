@@ -37,6 +37,7 @@ _PHASE21_LEGACY_MISSING_AUTHORITATIVE_FAMILIES = (
     "hunt_run",
     "ai_trace",
     "detector_lifecycle",
+    "false_positive_review",
 )
 
 
