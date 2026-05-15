@@ -209,6 +209,17 @@ class Phase61DetectorLifecycleRecordContractTests(unittest.TestCase):
     def test_detector_lifecycle_record_rejects_blank_lifecycle_audit_references(self) -> None:
         with self.assertRaisesRegex(
             ValueError,
+            r"requires lifecycle_audit_references to be a tuple/list",
+        ):
+            _validate_record(
+                _detector_lifecycle_record(
+                    lifecycle_state="active",
+                    lifecycle_audit_references="abc",  # type: ignore[arg-type]
+                )
+            )
+
+        with self.assertRaisesRegex(
+            ValueError,
             r"requires non-blank lifecycle_audit_references",
         ):
             _validate_record(

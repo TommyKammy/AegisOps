@@ -250,6 +250,42 @@ class RestoreBackupCodecTests(ServicePersistenceTestBase):
             len(round_trip_store.list(LifecycleTransitionRecord)),
         )
 
+    def test_service_phase23_v2_restore_allows_missing_detector_lifecycle_family(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        backup["backup_schema_version"] = "phase23.authoritative-record-chain.v2"
+        del backup["record_families"]["detector_lifecycle"]
+        del backup["record_counts"]["detector_lifecycle"]
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        restored_summary = restored_service.restore_authoritative_record_chain_backup(
+            backup
+        )
+        round_trip_backup = restored_service.export_authoritative_record_chain_backup()
+
+        self.assertIn(
+            promoted_case.case_id,
+            restored_summary.restore_drill.verified_case_ids,
+        )
+        self.assertEqual(
+            restored_summary.restored_record_counts["detector_lifecycle"],
+            0,
+        )
+        self.assertEqual(
+            round_trip_backup["backup_schema_version"],
+            "phase23.authoritative-record-chain.v3",
+        )
+        self.assertEqual(round_trip_backup["record_counts"]["detector_lifecycle"], 0)
+
     def test_service_phase21_restore_ignores_triage_timestamp_when_case_state_mismatches(
         self,
     ) -> None:

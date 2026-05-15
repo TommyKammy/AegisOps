@@ -583,6 +583,106 @@ class RestoreValidationTests(ServicePersistenceTestBase):
         )
         self.assertEqual(restored_detector, detector)
 
+    def test_service_phase61_restore_rejects_scalar_detector_audit_references(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        service.persist_record(
+            DetectorLifecycleRecord(
+                detector_lifecycle_id="detector-lifecycle-restore-001",
+                owner="detector-owner",
+                source_family="github_audit",
+                source_catalog_entry=(
+                    "docs/source-families/github-audit/onboarding-package.md"
+                ),
+                detector_identifier="github-audit-admin-membership-change",
+                expected_signal_posture="reviewed high-confidence admin change signal",
+                review_cadence="daily",
+                rollback_owner="rollback-owner",
+                disable_owner="disable-owner",
+                lifecycle_audit_references=("audit-evidence://restore-round-trip",),
+                lifecycle_state="candidate",
+            ),
+            transitioned_at=datetime(2026, 5, 15, 0, 0, tzinfo=timezone.utc),
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        backup["record_families"]["detector_lifecycle"][0][
+            "lifecycle_audit_references"
+        ] = "audit-evidence://scalar"
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"detector_lifecycle.lifecycle_audit_references must be a JSON array",
+        ):
+            restored_service.restore_authoritative_record_chain_backup(backup)
+        self._assert_authoritative_store_empty(restored_store)
+
+    def test_service_phase61_restore_rejects_detector_candidate_to_active_skip(
+        self,
+    ) -> None:
+        store, _ = make_store()
+        service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=store,
+        )
+        detector = service.persist_record(
+            DetectorLifecycleRecord(
+                detector_lifecycle_id="detector-lifecycle-restore-001",
+                owner="detector-owner",
+                source_family="github_audit",
+                source_catalog_entry=(
+                    "docs/source-families/github-audit/onboarding-package.md"
+                ),
+                detector_identifier="github-audit-admin-membership-change",
+                expected_signal_posture="reviewed high-confidence admin change signal",
+                review_cadence="daily",
+                rollback_owner="rollback-owner",
+                disable_owner="disable-owner",
+                lifecycle_audit_references=("audit-evidence://restore-round-trip",),
+                lifecycle_state="candidate",
+            ),
+            transitioned_at=datetime(2026, 5, 15, 0, 0, tzinfo=timezone.utc),
+        )
+        backup = service.export_authoritative_record_chain_backup()
+        detector_payload = backup["record_families"]["detector_lifecycle"][0]
+        detector_payload["lifecycle_state"] = "active"
+        active_transition = dict(backup["record_families"]["lifecycle_transition"][0])
+        active_transition["transition_id"] = "t-detector-invalid-active-skip"
+        active_transition["subject_record_family"] = "detector_lifecycle"
+        active_transition["subject_record_id"] = detector.detector_lifecycle_id
+        active_transition["previous_lifecycle_state"] = "candidate"
+        active_transition["lifecycle_state"] = "active"
+        active_transition["transitioned_at"] = (
+            datetime(2026, 5, 15, 0, 0, 1, tzinfo=timezone.utc).isoformat()
+        )
+        backup["record_families"]["lifecycle_transition"].append(active_transition)
+        backup["record_counts"]["lifecycle_transition"] = len(
+            backup["record_families"]["lifecycle_transition"]
+        )
+
+        restored_store, _ = make_store()
+        restored_service = AegisOpsControlPlaneService(
+            RuntimeConfig(postgres_dsn="postgresql://control-plane.local/aegisops"),
+            store=restored_store,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"detector_lifecycle record transition from 'candidate' to 'active' is not supported",
+        ):
+            restored_service.restore_authoritative_record_chain_backup(backup)
+        self._assert_authoritative_store_empty(restored_store)
+
     def test_service_phase21_restore_fails_closed_on_duplicate_execution_run_ids(
         self,
     ) -> None:

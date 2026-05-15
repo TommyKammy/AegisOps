@@ -49,6 +49,31 @@ _DETECTOR_LIFECYCLE_TRANSITIONS_BY_PREVIOUS_STATE: dict[str, frozenset[str]] = {
 }
 
 
+def validate_detector_lifecycle_transition_path(
+    *,
+    existing_lifecycle_state: str | None,
+    next_lifecycle_state: str,
+) -> None:
+    if existing_lifecycle_state is None:
+        if next_lifecycle_state != "candidate":
+            raise ValueError(
+                "detector_lifecycle records must start at lifecycle_state 'candidate' "
+                f"and reject invalid initial transition to {next_lifecycle_state!r}"
+            )
+        return
+    valid_transitions = _DETECTOR_LIFECYCLE_TRANSITIONS_BY_PREVIOUS_STATE.get(
+        existing_lifecycle_state
+    )
+    if valid_transitions is None:
+        return
+    if next_lifecycle_state not in valid_transitions:
+        raise ValueError(
+            f"detector_lifecycle record transition from {existing_lifecycle_state!r} "
+            f"to {next_lifecycle_state!r} is not supported; expected one of "
+            f"{sorted(valid_transitions)!r}"
+        )
+
+
 class DetectionLifecycleTransitionHelper:
     def __init__(self, service: AegisOpsControlPlaneService) -> None:
         self._service = service
@@ -202,24 +227,10 @@ class DetectionLifecycleTransitionHelper:
         existing_lifecycle_state: str | None,
         next_lifecycle_state: str,
     ) -> None:
-        if existing_lifecycle_state is None:
-            if next_lifecycle_state != "candidate":
-                raise ValueError(
-                    "detector_lifecycle records must start at lifecycle_state 'candidate' "
-                    f"and reject invalid initial transition to {next_lifecycle_state!r}"
-                )
-            return
-        valid_transitions = _DETECTOR_LIFECYCLE_TRANSITIONS_BY_PREVIOUS_STATE.get(
-            existing_lifecycle_state
+        validate_detector_lifecycle_transition_path(
+            existing_lifecycle_state=existing_lifecycle_state,
+            next_lifecycle_state=next_lifecycle_state,
         )
-        if valid_transitions is None:
-            return
-        if next_lifecycle_state not in valid_transitions:
-            raise ValueError(
-                f"detector_lifecycle record transition from {existing_lifecycle_state!r} "
-                f"to {next_lifecycle_state!r} is not supported; expected one of "
-                f"{sorted(valid_transitions)!r}"
-            )
 
     def lifecycle_transition_id(
         self,

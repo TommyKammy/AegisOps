@@ -343,6 +343,11 @@ def _require_non_empty_tuple(
     field_name: str,
 ) -> None:
     values = getattr(record, field_name)
+    if not isinstance(values, (tuple, list)):
+        raise ValueError(
+            f"{record.record_family} record {record.record_id!r} requires {field_name} "
+            "to be a tuple/list"
+        )
     if len(values) >= 1:
         return
     raise ValueError(

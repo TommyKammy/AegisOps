@@ -22,6 +22,9 @@ from ..models import (
     ReconciliationRecord,
     RecommendationRecord,
 )
+from ..ingestion.detection_lifecycle_helpers import (
+    validate_detector_lifecycle_transition_path,
+)
 from ..record_validation import _validate_lifecycle_state, _validate_record
 
 
@@ -895,6 +898,11 @@ class RestoreValidationBoundary:
                         f"{transition.transition_id!r} previous_lifecycle_state "
                         f"{transition.previous_lifecycle_state!r} matches lifecycle_state "
                         f"{transition.lifecycle_state!r}"
+                    )
+                if subject_family == DetectorLifecycleRecord.record_family:
+                    validate_detector_lifecycle_transition_path(
+                        existing_lifecycle_state=transition.previous_lifecycle_state,
+                        next_lifecycle_state=transition.lifecycle_state,
                     )
                 prior_transition = transition
 

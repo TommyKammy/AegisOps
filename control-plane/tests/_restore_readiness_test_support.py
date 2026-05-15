@@ -36,6 +36,7 @@ _PHASE21_LEGACY_MISSING_AUTHORITATIVE_FAMILIES = (
     "hunt",
     "hunt_run",
     "ai_trace",
+    "detector_lifecycle",
 )
 
 
