@@ -18,6 +18,7 @@ from ..models import (
     CaseRecord,
     ControlPlaneRecord,
     EvidenceRecord,
+    DetectorLifecycleRecord,
     HuntRecord,
     HuntRunRecord,
     LeadRecord,
@@ -124,6 +125,11 @@ _TABLES_BY_RECORD_TYPE: dict[Type[ControlPlaneRecord], TableConfig] = {
         "case_records",
         json_fields=frozenset({"reviewed_context"}),
         array_fields=frozenset({"evidence_ids"}),
+    ),
+    DetectorLifecycleRecord: TableConfig(
+        DetectorLifecycleRecord,
+        "detector_lifecycle_records",
+        array_fields=frozenset({"lifecycle_audit_references"}),
     ),
     EvidenceRecord: TableConfig(
         EvidenceRecord,

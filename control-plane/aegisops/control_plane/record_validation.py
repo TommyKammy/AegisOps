@@ -30,6 +30,18 @@ _TICKET_REFERENCE_URL_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+_DETECTOR_LIFECYCLE_STATES: frozenset[str] = frozenset(
+    {
+        "candidate",
+        "staging",
+        "active",
+        "disabled",
+        "rollback",
+        "review-overdue",
+    }
+)
+
+
 _LIFECYCLE_STATES_BY_FAMILY: dict[str, frozenset[str]] = {
     "alert": frozenset(
         {
@@ -184,25 +196,10 @@ _LIFECYCLE_STATES_BY_FAMILY: dict[str, frozenset[str]] = {
     ),
     "detector_lifecycle": frozenset(
         {
-            "candidate",
-            "staging",
-            "active",
-            "disabled",
-            "rollback",
-            "review-overdue",
+            *sorted(_DETECTOR_LIFECYCLE_STATES),
         }
     ),
 }
-_DETECTOR_LIFECYCLE_STATES: frozenset[str] = frozenset(
-    {
-        "candidate",
-        "staging",
-        "active",
-        "disabled",
-        "rollback",
-        "review-overdue",
-    }
-)
 _DETECTOR_SOURCE_CATALOG_ENTRIES_BY_FAMILY: dict[str, frozenset[str]] = {
     "wazuh_detection": frozenset(
         {"docs/phase-61-minimum-source-catalog-contract.md"}
