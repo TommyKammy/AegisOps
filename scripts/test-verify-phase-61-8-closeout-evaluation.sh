@@ -176,6 +176,14 @@ assert_fails_with \
   "${absolute_path_repo}" \
   "Forbidden Phase 61 closeout evaluation: workstation-local absolute path detected"
 
+colon_prefixed_absolute_path_repo="${workdir}/colon-prefixed-absolute-path"
+copy_valid_repo "${colon_prefixed_absolute_path_repo}"
+printf 'Run:/%s/example/Dev/codex-supervisor/dist/index.js.\n' "Users" \
+  >>"${colon_prefixed_absolute_path_repo}/docs/phase-61-closeout-evaluation.md"
+assert_fails_with \
+  "${colon_prefixed_absolute_path_repo}" \
+  "Forbidden Phase 61 closeout evaluation: workstation-local absolute path detected"
+
 file_url_absolute_path_repo="${workdir}/file-url-absolute-path"
 copy_valid_repo "${file_url_absolute_path_repo}"
 printf 'Run file:///%s/example/Dev/codex-supervisor/dist/index.js.\n' "Users" \
