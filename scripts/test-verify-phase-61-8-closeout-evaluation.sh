@@ -159,9 +159,16 @@ assert_fails_with \
 
 production_secret_overclaim_repo="${workdir}/production-secret-overclaim"
 copy_valid_repo "${production_secret_overclaim_repo}"
-printf '%s\n' "Production secrets are valid evidence for Phase 61." >>"${production_secret_overclaim_repo}/docs/phase-61-closeout-evaluation.md"
+printf '%s\n' "Production secrets are allowed." >>"${production_secret_overclaim_repo}/docs/phase-61-closeout-evaluation.md"
 assert_fails_with \
   "${production_secret_overclaim_repo}" \
+  "Forbidden Phase 61 closeout evaluation claim: production secrets are allowed"
+
+production_secret_valid_overclaim_repo="${workdir}/production-secret-valid-overclaim"
+copy_valid_repo "${production_secret_valid_overclaim_repo}"
+printf '%s\n' "Production secrets are valid evidence for Phase 61." >>"${production_secret_valid_overclaim_repo}/docs/phase-61-closeout-evaluation.md"
+assert_fails_with \
+  "${production_secret_valid_overclaim_repo}" \
   "Forbidden Phase 61 closeout evaluation claim: production secrets are valid"
 
 phase61_production_secret_overclaim_repo="${workdir}/phase61-production-secret-overclaim"

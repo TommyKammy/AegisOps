@@ -145,8 +145,10 @@ forbidden_claims=(
   "ownerless suppression is allowed"
   "uncited suppression is allowed"
   "production secrets are accepted"
+  "production secrets are allowed"
   "production secrets are valid"
   "phase 61 accepts production secrets"
+  "phase 61 allows production secrets"
   "phase 61 validates production secrets"
 )
 
