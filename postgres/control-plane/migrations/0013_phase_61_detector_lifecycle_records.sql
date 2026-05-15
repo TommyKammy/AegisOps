@@ -31,6 +31,52 @@ create table if not exists aegisops_control.detector_lifecycle_records (
   )
 );
 
+create table if not exists aegisops_control.false_positive_review_records (
+  false_positive_review_id text primary key,
+  detector_lifecycle_id text not null,
+  source_family text not null,
+  source_catalog_entry text not null,
+  alert_id text,
+  case_id text,
+  evidence_ids text[] not null default '{}'::text[],
+  owner text not null,
+  disposition text not null,
+  disposition_rationale text not null,
+  dispute_state text not null,
+  recurrence_posture text not null,
+  review_evidence_references text[] not null default '{}'::text[],
+  source_signal_handling text not null,
+  lifecycle_state text not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (alert_id is not null or case_id is not null or cardinality(evidence_ids) >= 1),
+  check (cardinality(review_evidence_references) >= 1),
+  check (
+    disposition in (
+      'benign_activity',
+      'expected_activity',
+      'duplicate_signal',
+      'needs_detector_tuning',
+      'recurring_benign_activity'
+    )
+  ),
+  check (dispute_state in ('undisputed', 'disputed', 'resolved')),
+  check (
+    recurrence_posture in (
+      'single_reviewed_instance',
+      'recurring_reviewed_pattern',
+      'recurrence_under_review'
+    )
+  ),
+  check (
+    source_signal_handling in (
+      'preserve_source_signal',
+      'preserve_and_escalate_for_tuning'
+    )
+  ),
+  check (lifecycle_state in ('reviewed', 'disputed', 'superseded', 'withdrawn'))
+);
+
 do $$
 declare
   constraint_name text;
@@ -65,7 +111,8 @@ begin
         'hunt_run',
         'ai_trace',
         'reconciliation',
-        'detector_lifecycle'
+        'detector_lifecycle',
+        'false_positive_review'
       )
     ),
     add constraint lifecycle_transition_records_lifecycle_state_known check (
@@ -123,7 +170,9 @@ begin
         'staging',
         'disabled',
         'rollback',
-        'review-overdue'
+        'review-overdue',
+        'reviewed',
+        'disputed'
       )
     ),
     add constraint lifecycle_transition_records_previous_lifecycle_state_known check (
@@ -182,7 +231,9 @@ begin
         'active',
         'disabled',
         'rollback',
-        'review-overdue'
+        'review-overdue',
+        'reviewed',
+        'disputed'
       )
     ),
     add constraint lifecycle_transition_records_state_matches_subject_family check (
@@ -310,6 +361,12 @@ begin
         'rollback',
         'review-overdue'
       ))
+      or (subject_record_family = 'false_positive_review' and lifecycle_state in (
+        'reviewed',
+        'disputed',
+        'superseded',
+        'withdrawn'
+      ))
     ),
     add constraint lifecycle_transition_records_previous_state_matches_subject_family check (
       previous_lifecycle_state is null or (
@@ -436,6 +493,12 @@ begin
           'disabled',
           'rollback',
           'review-overdue'
+        ))
+        or (subject_record_family = 'false_positive_review' and previous_lifecycle_state in (
+          'reviewed',
+          'disputed',
+          'superseded',
+          'withdrawn'
         ))
       )
     );

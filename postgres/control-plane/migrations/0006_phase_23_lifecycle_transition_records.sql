@@ -25,7 +25,8 @@ create table if not exists aegisops_control.lifecycle_transition_records (
       'hunt_run',
       'ai_trace',
       'reconciliation',
-      'detector_lifecycle'
+      'detector_lifecycle',
+      'false_positive_review'
     )
   ),
   check (
@@ -83,7 +84,9 @@ create table if not exists aegisops_control.lifecycle_transition_records (
       'staging',
       'disabled',
       'rollback',
-      'review-overdue'
+      'review-overdue',
+      'reviewed',
+      'disputed'
     )
   ),
   check (
@@ -141,7 +144,9 @@ create table if not exists aegisops_control.lifecycle_transition_records (
       'staging',
       'disabled',
       'rollback',
-      'review-overdue'
+      'review-overdue',
+      'reviewed',
+      'disputed'
     )
   ),
   constraint lifecycle_transition_records_state_matches_subject_family check (
@@ -269,6 +274,12 @@ create table if not exists aegisops_control.lifecycle_transition_records (
       'rollback',
       'review-overdue'
     ))
+    or (subject_record_family = 'false_positive_review' and lifecycle_state in (
+      'reviewed',
+      'disputed',
+      'superseded',
+      'withdrawn'
+    ))
   ),
   constraint lifecycle_transition_records_previous_state_matches_subject_family check (
     previous_lifecycle_state is null or (
@@ -395,6 +406,12 @@ create table if not exists aegisops_control.lifecycle_transition_records (
         'disabled',
         'rollback',
         'review-overdue'
+      ))
+      or (subject_record_family = 'false_positive_review' and previous_lifecycle_state in (
+        'reviewed',
+        'disputed',
+        'superseded',
+        'withdrawn'
       ))
     )
   )
