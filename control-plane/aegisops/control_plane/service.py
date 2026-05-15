@@ -44,10 +44,8 @@ from .runtime.readiness_contracts import (
     resolve_current_readiness_runtime_status,
 )
 from .runtime.runtime_boundary import RuntimeBoundaryService
-from .reviewed_slice_policy import (
-    REVIEWED_LIVE_SLICE_LABEL,
-    ReviewedSlicePolicy,
-)
+from .reviewed_slice_policy import REVIEWED_LIVE_SLICE_LABEL, ReviewedSlicePolicy
+from .record_search import RecordSearchInspectionService
 from .ingestion.case_workflow import CaseWorkflowFacade
 from .ingestion.detection_lifecycle_helpers import LATEST_LIFECYCLE_TRANSITION_UNSET
 from .evidence.external_evidence_facade import ExternalEvidenceFacade
@@ -316,29 +314,6 @@ AUTHORITATIVE_RECORD_CHAIN_FAMILIES: tuple[str, ...] = tuple(
 AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION = (
     "phase23.authoritative-record-chain.v5"
 )
-RECORD_SEARCH_RECORD_TYPES: tuple[Type[ControlPlaneRecord], ...] = (
-    AlertRecord,
-    CaseRecord,
-    EvidenceRecord,
-    DetectorLifecycleRecord,
-    FalsePositiveReviewRecord,
-    SuppressionProposalRecord,
-    SourceHealthRecord,
-)
-RECORD_SEARCH_RECORD_TYPES_BY_FAMILY: dict[str, Type[ControlPlaneRecord]] = {
-    record_type.record_family: record_type for record_type in RECORD_SEARCH_RECORD_TYPES
-}
-RECORD_SEARCH_BLOCKED_TERMS = (
-    "raw:",
-    "raw wazuh",
-    "raw source",
-    "source-native",
-    "source native",
-    "close case",
-    "reconcile",
-    "approve detector",
-    "suppress signal",
-)
 _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY: dict[str, str] = {
     "analytic_signal": "analytic_signal_id",
     "alert": "alert_id",
@@ -495,6 +470,7 @@ class AegisOpsControlPlaneService(CaseWorkflowFacade, ExternalEvidenceFacade):
             service=self,
             composition=composition,
         )
+        self.inspect_record_search = RecordSearchInspectionService(self, record_to_dict=_record_to_dict).inspect_record_search
 
     def describe_runtime(self) -> RuntimeSnapshot:
         return self._runtime_restore_readiness_diagnostics_service.describe_runtime()
@@ -788,216 +764,6 @@ class AegisOpsControlPlaneService(CaseWorkflowFacade, ExternalEvidenceFacade):
             total_records=len(records),
             records=records,
         )
-
-    def inspect_record_search(
-        self,
-        *,
-        query: str,
-        record_families: Iterable[str] | None = None,
-        source_family: str | None = None,
-        lifecycle_state: str | None = None,
-    ) -> RecordInspectionSnapshot:
-        search_query = self._normalize_record_search_query(query)
-        selected_families = self._normalize_record_search_families(record_families)
-        normalized_source_family = self._normalize_optional_string(
-            source_family,
-            "source_family",
-        )
-        normalized_lifecycle_state = self._normalize_optional_string(
-            lifecycle_state,
-            "lifecycle_state",
-        )
-
-        records: list[dict[str, object]] = []
-        for family in selected_families:
-            record_type = RECORD_SEARCH_RECORD_TYPES_BY_FAMILY[family]
-            for record in self._store.list(record_type):
-                result = self._record_search_result(
-                    record,
-                    query=search_query,
-                    source_family=normalized_source_family,
-                    lifecycle_state=normalized_lifecycle_state,
-                )
-                if result is not None:
-                    records.append(result)
-
-        records = sorted(
-            records,
-            key=lambda result: (
-                str(result["record_family"]),
-                str(result["record_id"]),
-            ),
-        )
-        return RecordInspectionSnapshot(
-            read_only=True,
-            record_family="record_search",
-            total_records=len(records),
-            records=tuple(records),
-        )
-
-    @staticmethod
-    def _normalize_record_search_query(query: str) -> str:
-        if not isinstance(query, str):
-            raise ValueError("unsupported record search query")
-        normalized_query = query.strip()
-        if not normalized_query:
-            raise ValueError("unsupported record search query")
-
-        lowered_query = normalized_query.lower()
-        if any(term in lowered_query for term in RECORD_SEARCH_BLOCKED_TERMS):
-            raise ValueError("unsupported record search query")
-        return normalized_query
-
-    @staticmethod
-    def _normalize_record_search_families(
-        record_families: Iterable[str] | None,
-    ) -> tuple[str, ...]:
-        if record_families is None:
-            return tuple(RECORD_SEARCH_RECORD_TYPES_BY_FAMILY)
-
-        families: list[str] = []
-        for family in record_families:
-            normalized_family = str(family).strip()
-            if normalized_family not in RECORD_SEARCH_RECORD_TYPES_BY_FAMILY:
-                known_families = ", ".join(sorted(RECORD_SEARCH_RECORD_TYPES_BY_FAMILY))
-                raise ValueError(
-                    f"Unsupported search record family {normalized_family!r}; "
-                    f"expected one of: {known_families}"
-                )
-            if normalized_family not in families:
-                families.append(normalized_family)
-        if not families:
-            raise ValueError("unsupported record search query")
-        return tuple(families)
-
-    def _record_search_result(
-        self,
-        record: ControlPlaneRecord,
-        *,
-        query: str,
-        source_family: str | None,
-        lifecycle_state: str | None,
-    ) -> dict[str, object] | None:
-        payload = _record_to_dict(record)
-        family = record.record_family
-        record_source_family = self._record_search_source_family(record)
-
-        if record_source_family is None:
-            return None
-        if source_family is not None and record_source_family != source_family:
-            return None
-
-        record_lifecycle_state = payload.get("lifecycle_state")
-        if (
-            lifecycle_state is not None
-            and str(record_lifecycle_state).strip() != lifecycle_state
-        ):
-            return None
-
-        if isinstance(record, SourceHealthRecord):
-            if record.cache_sourced:
-                raise ValueError("stale-cache record search result refused")
-            if record.source_native_authority or record.display_state_authority:
-                raise ValueError("raw-source authority record search result refused")
-
-        search_payload = {
-            **payload,
-            "record_family": family,
-            "record_id": record.record_id,
-            "source_family": record_source_family,
-        }
-        if not self._record_search_payload_matches(search_payload, query):
-            return None
-
-        record_id = record.record_id
-        return {
-            "record_family": family,
-            "record_id": record_id,
-            "id": f"{family}:{record_id}",
-            "source_family": record_source_family,
-            "lifecycle_state": record_lifecycle_state,
-            "matched_query": query,
-            "route": self._record_search_route(family, record_id),
-            "route_kind": "reviewed_surface",
-            "authority": "navigation_only",
-            "raw_source_authority": False,
-            "summary": self._record_search_summary(payload, family, record_id),
-        }
-
-    def _record_search_source_family(self, record: ControlPlaneRecord) -> str | None:
-        if isinstance(record, AlertRecord):
-            if not self._alert_is_in_reviewed_operator_slice(record):
-                return None
-            return self._reviewed_operator_source_family(record.reviewed_context)
-
-        if isinstance(record, CaseRecord):
-            if not self._case_is_in_reviewed_operator_slice(record):
-                return None
-            return self._reviewed_operator_source_family(record.reviewed_context)
-
-        if isinstance(record, EvidenceRecord):
-            if record.case_id is not None:
-                case = self._store.get(CaseRecord, record.case_id)
-                if case is not None and self._case_is_in_reviewed_operator_slice(case):
-                    return self._reviewed_operator_source_family(case.reviewed_context)
-            if record.alert_id is not None:
-                alert = self._store.get(AlertRecord, record.alert_id)
-                if alert is not None and self._alert_is_in_reviewed_operator_slice(alert):
-                    return self._reviewed_operator_source_family(alert.reviewed_context)
-            return None
-
-        if isinstance(
-            record,
-            (
-                DetectorLifecycleRecord,
-                FalsePositiveReviewRecord,
-                SuppressionProposalRecord,
-                SourceHealthRecord,
-            ),
-        ):
-            return record.source_family
-
-        return None
-
-    @staticmethod
-    def _record_search_payload_matches(
-        payload: Mapping[str, object],
-        query: str,
-    ) -> bool:
-        haystack = json.dumps(_json_ready(payload), sort_keys=True).lower()
-        return query.lower() in haystack
-
-    @staticmethod
-    def _record_search_route(record_family: str, record_id: str) -> str:
-        if record_family == "alert":
-            return f"/operator/alerts/{record_id}"
-        if record_family == "case":
-            return f"/operator/cases/{record_id}"
-        if record_family == "evidence":
-            return f"/operator/provenance/evidence/{record_id}"
-        if record_family == "detector_lifecycle":
-            return "/operator/detectors"
-        if record_family == "source_health":
-            return "/operator/source-health"
-        return f"/operator/provenance/{record_family}/{record_id}"
-
-    @staticmethod
-    def _record_search_summary(
-        payload: Mapping[str, object],
-        record_family: str,
-        record_id: str,
-    ) -> str:
-        for field_name in (
-            "operator_visible_reason",
-            "disposition_rationale",
-            "rationale",
-            "expected_signal_posture",
-            "lifecycle_state",
-        ):
-            value = payload.get(field_name)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-        return f"Reviewed {record_family} record {record_id}"
 
     def inspect_reconciliation_status(self) -> ReconciliationStatusSnapshot:
         records = self._store.list(ReconciliationRecord)
