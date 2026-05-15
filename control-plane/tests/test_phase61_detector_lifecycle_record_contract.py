@@ -16,6 +16,9 @@ from aegisops.control_plane.models import (
     DetectorLifecycleRecord,
     LifecycleTransitionRecord,
 )
+from aegisops.control_plane.runtime.restore_backup_validation import (
+    RestoreValidationBoundary,
+)
 from aegisops.control_plane.service import (
     AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES,
     RECORD_TYPES_BY_FAMILY,
@@ -71,6 +74,35 @@ def _detector_lifecycle_record(
 
 
 class Phase61DetectorLifecycleRecordContractTests(unittest.TestCase):
+    def test_restore_validation_accepts_detector_lifecycle_transition_subjects(self) -> None:
+        detector = _detector_lifecycle_record(lifecycle_state="candidate")
+        transition = LifecycleTransitionRecord(
+            transition_id="t-detector-candidate-001",
+            subject_record_family="detector_lifecycle",
+            subject_record_id=detector.detector_lifecycle_id,
+            previous_lifecycle_state=None,
+            lifecycle_state="candidate",
+            transitioned_at=datetime.now(timezone.utc),
+            attribution={},
+        )
+        boundary = RestoreValidationBoundary(
+            authoritative_primary_id_field_by_family=_AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY,
+            find_duplicate_strings=lambda values: tuple(
+                value
+                for index, value in enumerate(values)
+                if value in values[:index]
+            ),
+            assistant_ids_from_mapping=lambda _mapping, _field_name: (),
+        )
+
+        boundary.validate_authoritative_record_chain_restore(
+            {
+                "detector_lifecycle": (detector,),
+                "lifecycle_transition": (transition,),
+            },
+            require_lifecycle_transition_history=True,
+        )
+
     def test_detector_lifecycle_transition_helper_rejects_candidate_to_active_skip(self) -> None:
         baseline_transition = LifecycleTransitionRecord(
             transition_id="t-candidate-001",

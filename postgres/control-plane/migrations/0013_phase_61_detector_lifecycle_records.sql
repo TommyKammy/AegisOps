@@ -16,6 +16,8 @@ create table if not exists aegisops_control.detector_lifecycle_records (
   disabled_reason text,
   rollback_reason text,
   review_overdue_reason text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
   check (cardinality(lifecycle_audit_references) >= 1),
   check (
     lifecycle_state in (
@@ -47,7 +49,7 @@ begin
   end loop;
 
   alter table aegisops_control.lifecycle_transition_records
-    add constraint lifecycle_transition_records_subject_family_matches (
+    add constraint lifecycle_transition_records_subject_family_matches check (
       subject_record_family in (
         'alert',
         'analytic_signal',
@@ -66,7 +68,7 @@ begin
         'detector_lifecycle'
       )
     ),
-    add constraint lifecycle_transition_records_lifecycle_state_known (
+    add constraint lifecycle_transition_records_lifecycle_state_known check (
       lifecycle_state in (
         'new',
         'triaged',
@@ -124,7 +126,7 @@ begin
         'review-overdue'
       )
     ),
-    add constraint lifecycle_transition_records_previous_lifecycle_state_known (
+    add constraint lifecycle_transition_records_previous_lifecycle_state_known check (
       previous_lifecycle_state is null or previous_lifecycle_state in (
         'new',
         'triaged',
@@ -309,7 +311,7 @@ begin
         'review-overdue'
       ))
     ),
-    add constraint lifecycle_transition_records_previous_state_matches_subject_family (
+    add constraint lifecycle_transition_records_previous_state_matches_subject_family check (
       previous_lifecycle_state is null or (
         (subject_record_family = 'alert' and previous_lifecycle_state in (
           'new',
