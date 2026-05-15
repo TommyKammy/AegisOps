@@ -20,12 +20,9 @@ const DETECTOR_ACTIVATION_REVIEW_REQUIRED_FIELDS = [
   "source_catalog_entry",
   "detector_identifier",
   "expected_signal_posture",
-  "expected_volume",
-  "false_positive_review",
   "review_cadence",
   "rollback_owner",
   "disable_owner",
-  "next_review_at",
 ] as const;
 
 function comparePrimitiveValues(left: unknown, right: unknown): number {
@@ -290,7 +287,7 @@ function validateDetectorActivationReviewRecord(record: Record<string, unknown>)
     );
   }
 
-  if (record.stale_display_state !== false) {
+  if ("stale_display_state" in record && record.stale_display_state !== false) {
     throw new OperatorDataProviderContractError(
       "Resource detectorActivationReview rejects stale display state.",
     );

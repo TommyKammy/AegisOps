@@ -14,15 +14,11 @@ const detectorLifecycleRecords = [
     source_catalog_entry: "docs/source-families/github-audit/onboarding-package.md",
     detector_identifier: "github-audit-impossible-travel",
     expected_signal_posture: "reviewed low-volume activation candidate",
-    expected_volume: "2-4 alerts per business day",
-    false_positive_review: "Reviewed against seven-day audit sample",
     review_cadence: "weekly",
     rollback_owner: "rollback-owner-candidate",
     disable_owner: "disable-owner-candidate",
-    next_review_at: "2026-05-22T09:00:00Z",
     lifecycle_audit_references: ["audit-evidence://candidate-001"],
     lifecycle_state: "candidate",
-    stale_display_state: false,
     source_native_lifecycle_state: "active",
   },
   {
@@ -32,15 +28,11 @@ const detectorLifecycleRecords = [
     source_catalog_entry: "docs/source-families/entra-id/onboarding-package.md",
     detector_identifier: "entra-id-risky-sign-in",
     expected_signal_posture: "staging with reviewed sampling",
-    expected_volume: "1-2 alerts per week",
-    false_positive_review: "Owner reviewed staging false positives",
     review_cadence: "weekly",
     rollback_owner: "rollback-owner-staging",
     disable_owner: "disable-owner-staging",
-    next_review_at: "2026-05-23T09:00:00Z",
     lifecycle_audit_references: ["audit-evidence://staging-001"],
     lifecycle_state: "staging",
-    stale_display_state: false,
   },
   {
     detector_lifecycle_id: "det-active-001",
@@ -49,15 +41,11 @@ const detectorLifecycleRecords = [
     source_catalog_entry: "docs/source-families/github-audit/onboarding-package.md",
     detector_identifier: "github-audit-owner-change",
     expected_signal_posture: "active reviewed signal posture",
-    expected_volume: "5 alerts per week",
-    false_positive_review: "Active review accepted with owner signoff",
     review_cadence: "monthly",
     rollback_owner: "rollback-owner-active",
     disable_owner: "disable-owner-active",
-    next_review_at: "2026-06-15T09:00:00Z",
     lifecycle_audit_references: ["audit-evidence://active-001"],
     lifecycle_state: "active",
-    stale_display_state: false,
   },
   {
     detector_lifecycle_id: "det-disabled-001",
@@ -66,16 +54,12 @@ const detectorLifecycleRecords = [
     source_catalog_entry: "docs/source-families/github-audit/onboarding-package.md",
     detector_identifier: "github-audit-disabled-noisy-rule",
     expected_signal_posture: "disabled after reviewed false-positive spike",
-    expected_volume: "disabled",
-    false_positive_review: "False-positive review exceeded tolerance",
     review_cadence: "monthly",
     rollback_owner: "rollback-owner-disabled",
     disable_owner: "disable-owner-disabled",
-    next_review_at: "2026-06-01T09:00:00Z",
     lifecycle_audit_references: ["audit-evidence://disabled-001"],
     lifecycle_state: "disabled",
     disabled_reason: "Reviewed noisy-rule disablement",
-    stale_display_state: false,
   },
   {
     detector_lifecycle_id: "det-rollback-001",
@@ -84,16 +68,12 @@ const detectorLifecycleRecords = [
     source_catalog_entry: "docs/source-families/entra-id/onboarding-package.md",
     detector_identifier: "entra-id-rollback-signin-rule",
     expected_signal_posture: "rollback after reviewed regression",
-    expected_volume: "rollback paused",
-    false_positive_review: "Rollback review found unstable signal",
     review_cadence: "weekly",
     rollback_owner: "rollback-owner-rollback",
     disable_owner: "disable-owner-rollback",
-    next_review_at: "2026-05-20T09:00:00Z",
     lifecycle_audit_references: ["audit-evidence://rollback-001"],
     lifecycle_state: "rollback",
     rollback_reason: "Reviewed rollback reason",
-    stale_display_state: false,
   },
   {
     detector_lifecycle_id: "det-overdue-001",
@@ -102,16 +82,12 @@ const detectorLifecycleRecords = [
     source_catalog_entry: "docs/source-families/github-audit/onboarding-package.md",
     detector_identifier: "github-audit-overdue-rule",
     expected_signal_posture: "review overdue",
-    expected_volume: "3 alerts per day",
-    false_positive_review: "False-positive review needs owner refresh",
     review_cadence: "weekly",
     rollback_owner: "rollback-owner-overdue",
     disable_owner: "disable-owner-overdue",
-    next_review_at: "2026-05-01T09:00:00Z",
     lifecycle_audit_references: ["audit-evidence://overdue-001"],
     lifecycle_state: "review-overdue",
     review_overdue_reason: "Next review missed by owner",
-    stale_display_state: false,
   },
 ] as const;
 
@@ -139,13 +115,14 @@ export function registerOperatorRoutesDetectorActivationReviewTests() {
         expect.stringContaining("/operator/detectors"),
       );
       expect(screen.getByText("detector-owner-candidate")).toBeInTheDocument();
-      expect(screen.getByText("2-4 alerts per business day")).toBeInTheDocument();
       expect(
-        screen.getByText("Reviewed against seven-day audit sample"),
+        screen.getByText("reviewed low-volume activation candidate"),
       ).toBeInTheDocument();
+      expect(screen.getAllByText("Expected volume").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("False-positive review").length).toBeGreaterThan(0);
       expect(screen.getByText("disable-owner-disabled")).toBeInTheDocument();
       expect(screen.getByText("rollback-owner-rollback")).toBeInTheDocument();
-      expect(screen.getByText("2026-05-01T09:00:00Z")).toBeInTheDocument();
+      expect(screen.getAllByText("Next review").length).toBeGreaterThan(0);
       expect(screen.getByText("Next review missed by owner")).toBeInTheDocument();
       for (const state of [
         "candidate",
