@@ -422,6 +422,28 @@ class DetectorLifecycleRecord(ControlPlaneRecord):
     review_overdue_reason: str | None = None
 
 
+@dataclass(frozen=True)
+class FalsePositiveReviewRecord(ControlPlaneRecord):
+    record_family: ClassVar[str] = "false_positive_review"
+    identifier_field: ClassVar[str] = "false_positive_review_id"
+
+    false_positive_review_id: str
+    detector_lifecycle_id: str
+    source_family: str
+    source_catalog_entry: str
+    alert_id: str | None
+    case_id: str | None
+    evidence_ids: tuple[str, ...]
+    owner: str
+    disposition: str
+    disposition_rationale: str
+    dispute_state: str
+    recurrence_posture: str
+    review_evidence_references: tuple[str, ...]
+    source_signal_handling: str
+    lifecycle_state: str
+
+
 AnyControlPlaneRecord = Union[
     AlertRecord,
     AnalyticSignalRecord,
@@ -439,4 +461,5 @@ AnyControlPlaneRecord = Union[
     AITraceRecord,
     ReconciliationRecord,
     DetectorLifecycleRecord,
+    FalsePositiveReviewRecord,
 ]

@@ -14,6 +14,7 @@ from aegisops.control_plane.ingestion.detection_lifecycle_helpers import (
 )
 from aegisops.control_plane.models import (
     DetectorLifecycleRecord,
+    FalsePositiveReviewRecord,
     LifecycleTransitionRecord,
 )
 from aegisops.control_plane.runtime.restore_backup_validation import (
@@ -70,6 +71,43 @@ def _detector_lifecycle_record(
         disabled_reason=disabled_reason,
         rollback_reason=rollback_reason,
         review_overdue_reason=review_overdue_reason,
+    )
+
+
+def _false_positive_review_record(
+    *,
+    false_positive_review_id: str = "fp-review-001",
+    owner: str = "fp-review-owner",
+    detector_lifecycle_id: str = "det-001",
+    source_family: str = "github_audit",
+    source_catalog_entry: str = "docs/source-families/github-audit/onboarding-package.md",
+    alert_id: str | None = "alert-001",
+    case_id: str | None = "case-001",
+    evidence_ids: tuple[str, ...] = ("evidence-001",),
+    disposition: str = "benign_activity",
+    disposition_rationale: str = "Reviewed admin membership change matched approved access ticket.",
+    dispute_state: str = "undisputed",
+    recurrence_posture: str = "single_reviewed_instance",
+    review_evidence_references: tuple[str, ...] = ("evidence://case-001/admin-ticket",),
+    source_signal_handling: str = "preserve_source_signal",
+    lifecycle_state: str = "reviewed",
+) -> FalsePositiveReviewRecord:
+    return FalsePositiveReviewRecord(
+        false_positive_review_id=false_positive_review_id,
+        detector_lifecycle_id=detector_lifecycle_id,
+        source_family=source_family,
+        source_catalog_entry=source_catalog_entry,
+        alert_id=alert_id,
+        case_id=case_id,
+        evidence_ids=evidence_ids,
+        owner=owner,
+        disposition=disposition,
+        disposition_rationale=disposition_rationale,
+        dispute_state=dispute_state,
+        recurrence_posture=recurrence_posture,
+        review_evidence_references=review_evidence_references,
+        source_signal_handling=source_signal_handling,
+        lifecycle_state=lifecycle_state,
     )
 
 
@@ -334,4 +372,124 @@ class Phase61DetectorLifecycleRecordContractTests(unittest.TestCase):
                     lifecycle_state="review-overdue",
                     review_overdue_reason=" ",
                 )
+            )
+
+    def test_false_positive_review_records_cover_normal_disputed_and_repeated_cases(
+        self,
+    ) -> None:
+        for record in (
+            _false_positive_review_record(),
+            _false_positive_review_record(
+                false_positive_review_id="fp-review-disputed-001",
+                disposition="needs_detector_tuning",
+                dispute_state="disputed",
+                lifecycle_state="disputed",
+            ),
+            _false_positive_review_record(
+                false_positive_review_id="fp-review-repeated-001",
+                disposition="recurring_benign_activity",
+                recurrence_posture="recurring_reviewed_pattern",
+                review_evidence_references=(
+                    "evidence://case-001/admin-ticket",
+                    "evidence://case-002/admin-ticket",
+                ),
+            ),
+        ):
+            _validate_record(record)
+
+    def test_false_positive_review_rejects_missing_authoritative_links(self) -> None:
+        with self.assertRaisesRegex(ValueError, "requires non-blank detector_lifecycle_id"):
+            _validate_record(
+                _false_positive_review_record(detector_lifecycle_id="")
+            )
+
+        with self.assertRaisesRegex(ValueError, "requires at least one linkage field"):
+            _validate_record(
+                _false_positive_review_record(
+                    alert_id=None,
+                    case_id=None,
+                    evidence_ids=(),
+                )
+            )
+
+    def test_false_positive_review_rejects_uncited_or_silent_source_suppression(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "requires non-blank owner"):
+            _validate_record(_false_positive_review_record(owner=" "))
+
+        with self.assertRaisesRegex(ValueError, "requires non-blank disposition_rationale"):
+            _validate_record(_false_positive_review_record(disposition_rationale=""))
+
+        with self.assertRaisesRegex(ValueError, "requires non-empty review_evidence_references"):
+            _validate_record(
+                _false_positive_review_record(review_evidence_references=())
+            )
+
+        with self.assertRaisesRegex(ValueError, "must preserve source signals"):
+            _validate_record(
+                _false_positive_review_record(source_signal_handling="delete_source_signal")
+            )
+
+    def test_false_positive_review_rejects_disputed_or_repeated_as_final_truth(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "disputed reviews must use lifecycle_state 'disputed'"):
+            _validate_record(
+                _false_positive_review_record(
+                    dispute_state="disputed",
+                    lifecycle_state="reviewed",
+                )
+            )
+
+        with self.assertRaisesRegex(ValueError, "repeated false positives require recurrence_posture"):
+            _validate_record(
+                _false_positive_review_record(
+                    disposition="recurring_benign_activity",
+                    recurrence_posture="single_reviewed_instance",
+                )
+            )
+
+    def test_false_positive_review_record_is_registered_in_service_registries(self) -> None:
+        self.assertIn("false_positive_review", RECORD_TYPES_BY_FAMILY)
+        self.assertIs(
+            RECORD_TYPES_BY_FAMILY["false_positive_review"],
+            FalsePositiveReviewRecord,
+        )
+        self.assertIn(
+            FalsePositiveReviewRecord,
+            AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES,
+        )
+        self.assertEqual(
+            _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY["false_positive_review"],
+            "false_positive_review_id",
+        )
+
+    def test_restore_validation_rejects_false_positive_review_without_detector_anchor(
+        self,
+    ) -> None:
+        boundary = RestoreValidationBoundary(
+            authoritative_primary_id_field_by_family=_AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY,
+            find_duplicate_strings=lambda values: tuple(
+                value
+                for index, value in enumerate(values)
+                if value in values[:index]
+            ),
+            assistant_ids_from_mapping=lambda _mapping, _field_name: (),
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "missing detector_lifecycle record 'det-001' required by false-positive review",
+        ):
+            boundary.validate_authoritative_record_chain_restore(
+                {
+                    "false_positive_review": (
+                        _false_positive_review_record(
+                            alert_id=None,
+                            case_id=None,
+                        ),
+                    ),
+                },
+                require_lifecycle_transition_history=False,
             )

@@ -15,6 +15,7 @@ from .models import (
     ControlPlaneRecord,
     DetectorLifecycleRecord,
     EvidenceRecord,
+    FalsePositiveReviewRecord,
     HuntRecord,
     HuntRunRecord,
     LeadRecord,
@@ -133,6 +134,8 @@ _LIFECYCLE_STATES_BY_FAMILY: dict[str, frozenset[str]] = {
             "mismatched",
             "stale",
             "resolved",
+            "reviewed",
+            "disputed",
         }
     ),
     "recommendation": frozenset(
@@ -199,6 +202,9 @@ _LIFECYCLE_STATES_BY_FAMILY: dict[str, frozenset[str]] = {
             *sorted(_DETECTOR_LIFECYCLE_STATES),
         }
     ),
+    "false_positive_review": frozenset(
+        {"reviewed", "disputed", "superseded", "withdrawn"}
+    ),
 }
 _DETECTOR_SOURCE_CATALOG_ENTRIES_BY_FAMILY: dict[str, frozenset[str]] = {
     "wazuh_detection": frozenset(
@@ -230,6 +236,29 @@ _DETECTOR_STATE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
 }
 _DETECTOR_REASON_FIELDS = frozenset(
     {"disabled_reason", "rollback_reason", "review_overdue_reason"}
+)
+
+_FALSE_POSITIVE_REVIEW_DISPOSITIONS = frozenset(
+    {
+        "benign_activity",
+        "expected_activity",
+        "duplicate_signal",
+        "needs_detector_tuning",
+        "recurring_benign_activity",
+    }
+)
+_FALSE_POSITIVE_REVIEW_DISPUTE_STATES = frozenset(
+    {"undisputed", "disputed", "resolved"}
+)
+_FALSE_POSITIVE_REVIEW_RECURRENCE_POSTURES = frozenset(
+    {
+        "single_reviewed_instance",
+        "recurring_reviewed_pattern",
+        "recurrence_under_review",
+    }
+)
+_FALSE_POSITIVE_REVIEW_SOURCE_SIGNAL_HANDLING = frozenset(
+    {"preserve_source_signal", "preserve_and_escalate_for_tuning"}
 )
 
 _RECONCILIATION_INGEST_DISPOSITIONS = frozenset(
@@ -335,6 +364,8 @@ def _has_linkage_value(value: object) -> bool:
         return False
     if isinstance(value, str):
         return value.strip() != ""
+    if isinstance(value, (tuple, list, set, frozenset)):
+        return any(_has_linkage_value(item) for item in value)
     return True
 
 
@@ -372,6 +403,9 @@ def _validate_record(record: ControlPlaneRecord) -> None:
 
     if isinstance(record, DetectorLifecycleRecord):
         _validate_detector_lifecycle_record(record)
+        return
+    if isinstance(record, FalsePositiveReviewRecord):
+        _validate_false_positive_review_record(record)
         return
     if isinstance(record, AnalyticSignalRecord):
         _require_any_linkage(
@@ -522,6 +556,109 @@ def _validate_detector_lifecycle_record(record: DetectorLifecycleRecord) -> None
                 f"{record.lifecycle_state!r} must not set {field_name}; expected reason fields "
                 f"{sorted(expected_reason_fields)!r}"
             )
+
+
+def _validate_false_positive_review_record(
+    record: FalsePositiveReviewRecord,
+) -> None:
+    _require_non_blank_fields(
+        record,
+        (
+            "detector_lifecycle_id",
+            "source_family",
+            "source_catalog_entry",
+            "owner",
+            "disposition",
+            "disposition_rationale",
+            "dispute_state",
+            "recurrence_posture",
+            "source_signal_handling",
+        ),
+    )
+    _require_non_empty_tuple(record, "review_evidence_references")
+    _require_any_linkage(record, ("alert_id", "case_id", "evidence_ids"))
+    if record.alert_id is None and record.case_id is None:
+        _require_non_empty_tuple(record, "evidence_ids")
+    for evidence_id in record.evidence_ids:
+        if not isinstance(evidence_id, str) or not _has_linkage_value(evidence_id):
+            raise ValueError(
+                f"{record.record_family} record {record.record_id!r} requires "
+                "non-blank evidence_ids entries"
+            )
+    for evidence_reference in record.review_evidence_references:
+        if not isinstance(evidence_reference, str) or not _has_linkage_value(
+            evidence_reference
+        ):
+            raise ValueError(
+                f"{record.record_family} record {record.record_id!r} requires "
+                "non-blank review_evidence_references entries"
+            )
+
+    source_family = record.source_family.strip()
+    if source_family not in _DETECTOR_SOURCE_CATALOG_ENTRIES_BY_FAMILY:
+        raise ValueError(
+            f"false_positive_review record {record.record_id!r} has unsupported "
+            f"source_family {record.source_family!r}; expected one of "
+            f"{sorted(_DETECTOR_SOURCE_CATALOG_ENTRIES_BY_FAMILY)!r}"
+        )
+    source_catalog_entry = record.source_catalog_entry.strip()
+    if (
+        source_catalog_entry
+        not in _DETECTOR_SOURCE_CATALOG_ENTRIES_BY_FAMILY[source_family]
+    ):
+        raise ValueError(
+            f"false_positive_review record {record.record_id!r} has unsupported "
+            f"source_catalog_entry {record.source_catalog_entry!r} for "
+            f"source_family {source_family!r}; expected one of "
+            f"{sorted(_DETECTOR_SOURCE_CATALOG_ENTRIES_BY_FAMILY[source_family])!r}"
+        )
+    if record.disposition not in _FALSE_POSITIVE_REVIEW_DISPOSITIONS:
+        raise ValueError(
+            f"false_positive_review record {record.record_id!r} has invalid disposition "
+            f"{record.disposition!r}; expected one of "
+            f"{sorted(_FALSE_POSITIVE_REVIEW_DISPOSITIONS)!r}"
+        )
+    if record.dispute_state not in _FALSE_POSITIVE_REVIEW_DISPUTE_STATES:
+        raise ValueError(
+            f"false_positive_review record {record.record_id!r} has invalid dispute_state "
+            f"{record.dispute_state!r}; expected one of "
+            f"{sorted(_FALSE_POSITIVE_REVIEW_DISPUTE_STATES)!r}"
+        )
+    if record.recurrence_posture not in _FALSE_POSITIVE_REVIEW_RECURRENCE_POSTURES:
+        raise ValueError(
+            f"false_positive_review record {record.record_id!r} has invalid "
+            f"recurrence_posture {record.recurrence_posture!r}; expected one of "
+            f"{sorted(_FALSE_POSITIVE_REVIEW_RECURRENCE_POSTURES)!r}"
+        )
+    if (
+        record.source_signal_handling
+        not in _FALSE_POSITIVE_REVIEW_SOURCE_SIGNAL_HANDLING
+    ):
+        raise ValueError(
+            f"false_positive_review record {record.record_id!r} must preserve source "
+            "signals and may not delete, hide, or silently suppress source-native truth"
+        )
+    if record.dispute_state == "disputed" and record.lifecycle_state != "disputed":
+        raise ValueError(
+            f"false_positive_review record {record.record_id!r} disputed reviews must "
+            "use lifecycle_state 'disputed'"
+        )
+    if (
+        record.dispute_state != "disputed"
+        and record.lifecycle_state == "disputed"
+    ):
+        raise ValueError(
+            f"false_positive_review record {record.record_id!r} lifecycle_state "
+            "'disputed' requires dispute_state 'disputed'"
+        )
+    if (
+        record.disposition == "recurring_benign_activity"
+        and record.recurrence_posture != "recurring_reviewed_pattern"
+    ):
+        raise ValueError(
+            f"false_positive_review record {record.record_id!r} repeated false positives "
+            "require recurrence_posture 'recurring_reviewed_pattern'"
+        )
 
 
 def _validate_coordination_reference_fields(

@@ -14,6 +14,7 @@ from ..models import (
     ControlPlaneRecord,
     DetectorLifecycleRecord,
     EvidenceRecord,
+    FalsePositiveReviewRecord,
     HuntRecord,
     HuntRunRecord,
     LeadRecord,
@@ -38,6 +39,7 @@ class _RestoreRecordFamilies:
     cases: tuple[CaseRecord, ...]
     recommendations: tuple[RecommendationRecord, ...]
     detector_lifecycles: tuple[DetectorLifecycleRecord, ...]
+    false_positive_reviews: tuple[FalsePositiveReviewRecord, ...]
     lifecycle_transitions: tuple[LifecycleTransitionRecord, ...]
     approval_decisions: tuple[ApprovalDecisionRecord, ...]
     action_requests: tuple[ActionRequestRecord, ...]
@@ -58,6 +60,7 @@ class _RestoreRecordFamilies:
             ("case", self.cases),
             ("recommendation", self.recommendations),
             ("detector_lifecycle", self.detector_lifecycles),
+            ("false_positive_review", self.false_positive_reviews),
             ("lifecycle_transition", self.lifecycle_transitions),
             ("approval_decision", self.approval_decisions),
             ("action_request", self.action_requests),
@@ -79,6 +82,7 @@ class _RestoreRecordIndexes:
     cases: Mapping[str, CaseRecord]
     recommendations: Mapping[str, RecommendationRecord]
     detector_lifecycles: Mapping[str, DetectorLifecycleRecord]
+    false_positive_reviews: Mapping[str, FalsePositiveReviewRecord]
     approval_decisions: Mapping[str, ApprovalDecisionRecord]
     action_requests: Mapping[str, ActionRequestRecord]
     action_executions: Mapping[str, ActionExecutionRecord]
@@ -99,6 +103,7 @@ class _RestoreRecordIndexes:
             "case": set(self.cases),
             "recommendation": set(self.recommendations),
             "detector_lifecycle": set(self.detector_lifecycles),
+            "false_positive_review": set(self.false_positive_reviews),
             "approval_decision": set(self.approval_decisions),
             "action_request": set(self.action_requests),
             "action_execution": set(self.action_executions),
@@ -121,6 +126,7 @@ class _RestoreRecordIndexes:
             "case": self.cases,
             "recommendation": self.recommendations,
             "detector_lifecycle": self.detector_lifecycles,
+            "false_positive_review": self.false_positive_reviews,
             "approval_decision": self.approval_decisions,
             "action_request": self.action_requests,
             "action_execution": self.action_executions,
@@ -236,6 +242,13 @@ class RestoreValidationBoundary:
                     DetectorLifecycleRecord,
                 )
             ),
+            false_positive_reviews=tuple(
+                self._require_restore_family_records(
+                    records_by_family,
+                    "false_positive_review",
+                    FalsePositiveReviewRecord,
+                )
+            ),
             lifecycle_transitions=tuple(
                 self._require_restore_family_records(
                     records_by_family,
@@ -337,6 +350,7 @@ class RestoreValidationBoundary:
             *families.leads,
             *families.recommendations,
             *families.detector_lifecycles,
+            *families.false_positive_reviews,
         ):
             _validate_record(record)
 
@@ -363,6 +377,10 @@ class RestoreValidationBoundary:
             detector_lifecycles={
                 record.detector_lifecycle_id: record
                 for record in families.detector_lifecycles
+            },
+            false_positive_reviews={
+                record.false_positive_review_id: record
+                for record in families.false_positive_reviews
             },
             approval_decisions={
                 record.approval_decision_id: record
@@ -546,6 +564,43 @@ class RestoreValidationBoundary:
                     f"{recommendation.ai_trace_id!r} required by recommendation "
                     f"{recommendation.recommendation_id!r}"
                 )
+
+        for false_positive_review in indexes.false_positive_reviews.values():
+            if (
+                false_positive_review.detector_lifecycle_id
+                not in indexes.detector_lifecycles
+            ):
+                raise ValueError(
+                    "missing detector_lifecycle record "
+                    f"{false_positive_review.detector_lifecycle_id!r} required by "
+                    "false-positive review "
+                    f"{false_positive_review.false_positive_review_id!r}"
+                )
+            if (
+                false_positive_review.alert_id
+                and false_positive_review.alert_id not in indexes.alerts
+            ):
+                raise ValueError(
+                    f"missing alert record {false_positive_review.alert_id!r} required by "
+                    "false-positive review "
+                    f"{false_positive_review.false_positive_review_id!r}"
+                )
+            if (
+                false_positive_review.case_id
+                and false_positive_review.case_id not in indexes.cases
+            ):
+                raise ValueError(
+                    f"missing case record {false_positive_review.case_id!r} required by "
+                    "false-positive review "
+                    f"{false_positive_review.false_positive_review_id!r}"
+                )
+            for evidence_id in false_positive_review.evidence_ids:
+                if evidence_id not in indexes.evidence:
+                    raise ValueError(
+                        f"missing evidence record {evidence_id!r} required by "
+                        "false-positive review "
+                        f"{false_positive_review.false_positive_review_id!r}"
+                    )
 
         for hunt in indexes.hunts.values():
             if hunt.alert_id and hunt.alert_id not in indexes.alerts:
