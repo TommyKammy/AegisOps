@@ -375,7 +375,7 @@ create table if not exists aegisops_control.lifecycle_transition_records (
   transitioned_at timestamptz not null,
   attribution jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default timezone('utc', now()),
-  check (
+    check (
     subject_record_family in (
       'alert',
       'analytic_signal',
@@ -390,7 +390,8 @@ create table if not exists aegisops_control.lifecycle_transition_records (
       'hunt',
       'hunt_run',
       'ai_trace',
-      'reconciliation'
+      'reconciliation',
+      'detector_lifecycle'
     )
   ),
   check (
@@ -443,7 +444,12 @@ create table if not exists aegisops_control.lifecycle_transition_records (
       'matched',
       'mismatched',
       'stale',
-      'resolved'
+      'resolved',
+      'candidate',
+      'staging',
+      'disabled',
+      'rollback',
+      'review-overdue'
     )
   ),
   check (
@@ -496,7 +502,12 @@ create table if not exists aegisops_control.lifecycle_transition_records (
       'matched',
       'mismatched',
       'stale',
-      'resolved'
+      'resolved',
+      'candidate',
+      'staging',
+      'disabled',
+      'rollback',
+      'review-overdue'
     )
   ),
   constraint lifecycle_transition_records_state_matches_subject_family check (
@@ -616,6 +627,14 @@ create table if not exists aegisops_control.lifecycle_transition_records (
       'resolved',
       'superseded'
     ))
+    or (subject_record_family = 'detector_lifecycle' and lifecycle_state in (
+      'candidate',
+      'staging',
+      'active',
+      'disabled',
+      'rollback',
+      'review-overdue'
+    ))
   ),
   constraint lifecycle_transition_records_previous_state_matches_subject_family check (
     previous_lifecycle_state is null or (
@@ -734,6 +753,14 @@ create table if not exists aegisops_control.lifecycle_transition_records (
         'stale',
         'resolved',
         'superseded'
+      ))
+      or (subject_record_family = 'detector_lifecycle' and previous_lifecycle_state in (
+        'candidate',
+        'staging',
+        'active',
+        'disabled',
+        'rollback',
+        'review-overdue'
       ))
     )
   )

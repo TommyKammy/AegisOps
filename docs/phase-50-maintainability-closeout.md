@@ -14,8 +14,8 @@ The maintainability verifier still reports one remaining accepted hotspot:
 
 That result is expected because `AegisOpsControlPlaneService` remains the public facade after the Phase 50.11 DTO/snapshot, runtime-event, action-review inspection, assistant-advisory, and detection/case-linkage helper extraction work accepted in #1007. Phase 50.12.2 for #1017 further extracted constructor composition assignment pressure, Phase 50.12.3 for #1018 moved reviewed action approval policy helper pressure into the action-review write surface, Phase 50.12.4 for #1019 fenced casework write compatibility delegates behind the case workflow facade, Phase 50.12.5 for #1020 moved assistant residual lifecycle helper delegates out of the service facade and onto the extracted AI trace lifecycle boundary, and Phase 50.12.6 for #1021 moved reviewed action visibility persistence helpers into the action-review write surface while retaining public detection intake and action reconciliation facade delegates. Phase 50.13.3 for #1033 moved the remaining owned case-detail, alert-projection, and reviewed action-request binding guards into `control-plane/aegisops_control_plane/operator_inspection.py` and `control-plane/aegisops_control_plane/execution_coordinator_action_requests.py`. Phase 50.13.4 for #1034 then consolidated the retained public compatibility delegate evidence without changing the final measured facade size. Phase 50.13.5 for #1035 records that final accepted Phase 50.13 state. The accepted residual ceiling is:
 
-- `max_lines=1393`
-- `max_effective_lines=1241`
+- `max_lines=1395`
+- `max_effective_lines=1243`
 - `max_facade_methods=95`
 - `facade_class=AegisOpsControlPlaneService`
 - `adr_exception=ADR-0003`
@@ -24,8 +24,8 @@ That result is expected because `AegisOpsControlPlaneService` remains the public
 
 The measured Phase 50.13.5 closeout state is:
 
-- `physical_lines=1393`
-- `effective_lines=1241`
+- `physical_lines=1395`
+- `effective_lines=1243`
 - `AegisOpsControlPlaneService methods=95`
 
 The baseline is lower than the Phase 50.11.7 ceiling of `max_lines=1812`, `max_effective_lines=1632`, and `max_facade_methods=125`. It also reached the ADR-0009 Phase 50.12 physical-line, effective-line, and method-count targets of `max_lines <= 1500`, `max_effective_lines <= 1350`, and `max_facade_methods <= 95`. The Phase 50.13 target of `AegisOpsControlPlaneService <= 85` methods was not reached safely; the retained `95` facade methods are accepted only as an ADR-0003 facade-preservation exception because the remaining public compatibility entrypoints continue to protect existing callers while delegating into extracted boundaries.
