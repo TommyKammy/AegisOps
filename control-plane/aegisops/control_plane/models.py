@@ -467,6 +467,28 @@ class SuppressionProposalRecord(ControlPlaneRecord):
     lifecycle_state: str
 
 
+@dataclass(frozen=True)
+class SourceHealthRecord(ControlPlaneRecord):
+    record_family: ClassVar[str] = "source_health"
+    identifier_field: ClassVar[str] = "source_health_id"
+
+    source_health_id: str
+    source_family: str
+    source_catalog_entry: str
+    health_state: str
+    reviewed_state: str
+    reviewed_at: datetime
+    observed_at: datetime
+    detector_drift: str
+    credential_posture: str
+    evidence_references: tuple[str, ...]
+    operator_visible_reason: str
+    source_native_authority: bool
+    display_state_authority: bool
+    cache_sourced: bool
+    lifecycle_state: str = "reviewed"
+
+
 AnyControlPlaneRecord = Union[
     AlertRecord,
     AnalyticSignalRecord,
@@ -486,4 +508,5 @@ AnyControlPlaneRecord = Union[
     DetectorLifecycleRecord,
     FalsePositiveReviewRecord,
     SuppressionProposalRecord,
+    SourceHealthRecord,
 ]

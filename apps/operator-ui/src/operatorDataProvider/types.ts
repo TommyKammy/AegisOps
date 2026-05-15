@@ -7,6 +7,7 @@ export type OperatorResourceName =
   | "cases"
   | "firstLoginChecklist"
   | "detectorActivationReview"
+  | "sourceHealthDashboard"
   | "runtimeReadiness"
   | "reconciliations"
   | "todayView"

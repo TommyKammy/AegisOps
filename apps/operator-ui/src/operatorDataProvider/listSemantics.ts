@@ -25,6 +25,32 @@ const DETECTOR_ACTIVATION_REVIEW_REQUIRED_FIELDS = [
   "disable_owner",
 ] as const;
 
+const SOURCE_HEALTH_STATES = new Set([
+  "available",
+  "degraded",
+  "unavailable",
+  "stale_source",
+  "missing_agent",
+  "parser_failure",
+  "volume_anomaly",
+  "credential_degraded",
+  "detector_drift",
+  "mismatched",
+]);
+
+const SOURCE_HEALTH_REQUIRED_FIELDS = [
+  "source_health_id",
+  "source_family",
+  "source_catalog_entry",
+  "health_state",
+  "reviewed_state",
+  "reviewed_at",
+  "observed_at",
+  "detector_drift",
+  "credential_posture",
+  "operator_visible_reason",
+] as const;
+
 function comparePrimitiveValues(left: unknown, right: unknown): number {
   if (left === right) {
     return 0;
@@ -336,6 +362,50 @@ function validateDetectorActivationReviewRecord(record: Record<string, unknown>)
   }
 }
 
+function validateSourceHealthDashboardRecord(record: Record<string, unknown>) {
+  for (const field of SOURCE_HEALTH_REQUIRED_FIELDS) {
+    if (asString(record[field]) === null) {
+      throw new OperatorDataProviderContractError(
+        `Resource sourceHealthDashboard record is missing reviewed field ${field}.`,
+      );
+    }
+  }
+
+  const healthState = asString(record.health_state);
+  if (healthState === null || !SOURCE_HEALTH_STATES.has(healthState)) {
+    throw new OperatorDataProviderContractError(
+      "Resource sourceHealthDashboard record has unsupported health_state.",
+    );
+  }
+
+  if (record.cache_sourced !== false) {
+    throw new OperatorDataProviderContractError(
+      "Resource sourceHealthDashboard rejects cache-sourced source health.",
+    );
+  }
+  if (
+    record.source_native_authority !== false ||
+    record.display_state_authority !== false
+  ) {
+    throw new OperatorDataProviderContractError(
+      "Resource sourceHealthDashboard rejects source-health display state as workflow truth.",
+    );
+  }
+  if (!Array.isArray(record.evidence_references)) {
+    throw new OperatorDataProviderContractError(
+      "Resource sourceHealthDashboard requires evidence_references.",
+    );
+  }
+  if (
+    record.evidence_references.length === 0 ||
+    record.evidence_references.some((reference) => asString(reference) === null)
+  ) {
+    throw new OperatorDataProviderContractError(
+      "Resource sourceHealthDashboard requires non-empty reviewed evidence references.",
+    );
+  }
+}
+
 export async function getListForStandardResource({
   binding,
   fetchFn,
@@ -366,6 +436,9 @@ export async function getListForStandardResource({
     );
     if (resource === "detectorActivationReview") {
       records.forEach(validateDetectorActivationReviewRecord);
+    }
+    if (resource === "sourceHealthDashboard") {
+      records.forEach(validateSourceHealthDashboardRecord);
     }
     totalRecords =
       typeof response.total_records === "number"

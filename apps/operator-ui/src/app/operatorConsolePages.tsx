@@ -11,6 +11,7 @@ export {
   ProvenanceIndexPage,
 } from "./operatorConsolePages/drilldownIndexPages";
 export { DetectorActivationReviewPage } from "./operatorConsolePages/detectorActivationReviewPages";
+export { SourceHealthDashboardPage } from "./operatorConsolePages/sourceHealthDashboardPages";
 export { ActionReviewPage } from "./operatorConsolePages/actionReviewPages";
 export {
   AITraceReviewQueuePage,

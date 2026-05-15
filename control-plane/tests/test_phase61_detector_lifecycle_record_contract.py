@@ -16,6 +16,7 @@ from aegisops.control_plane.models import (
     DetectorLifecycleRecord,
     FalsePositiveReviewRecord,
     LifecycleTransitionRecord,
+    SourceHealthRecord,
     SuppressionProposalRecord,
 )
 from aegisops.control_plane.runtime.restore_backup_validation import (
@@ -149,6 +150,41 @@ def _suppression_proposal_record(
         scope=scope,
         source_signal_handling=source_signal_handling,
         lifecycle_state=lifecycle_state,
+    )
+
+
+def _source_health_record(
+    *,
+    source_health_id: str = "source-health-github-audit-001",
+    source_family: str = "github_audit",
+    source_catalog_entry: str = "docs/source-families/github-audit/onboarding-package.md",
+    health_state: str = "available",
+    reviewed_state: str = "reviewed",
+    reviewed_at: datetime = datetime(2026, 5, 15, 8, 0, tzinfo=timezone.utc),
+    observed_at: datetime = datetime(2026, 5, 15, 7, 55, tzinfo=timezone.utc),
+    detector_drift: str = "none",
+    credential_posture: str = "reviewed",
+    evidence_references: tuple[str, ...] = ("evidence://source-health/github-audit",),
+    operator_visible_reason: str = "Reviewed source-health dashboard row.",
+    source_native_authority: bool = False,
+    display_state_authority: bool = False,
+    cache_sourced: bool = False,
+) -> SourceHealthRecord:
+    return SourceHealthRecord(
+        source_health_id=source_health_id,
+        source_family=source_family,
+        source_catalog_entry=source_catalog_entry,
+        health_state=health_state,
+        reviewed_state=reviewed_state,
+        reviewed_at=reviewed_at,
+        observed_at=observed_at,
+        detector_drift=detector_drift,
+        credential_posture=credential_posture,
+        evidence_references=evidence_references,
+        operator_visible_reason=operator_visible_reason,
+        source_native_authority=source_native_authority,
+        display_state_authority=display_state_authority,
+        cache_sourced=cache_sourced,
     )
 
 
@@ -387,6 +423,83 @@ class Phase61DetectorLifecycleRecordContractTests(unittest.TestCase):
         self.assertEqual(
             _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY["detector_lifecycle"],
             "detector_lifecycle_id",
+        )
+
+    def test_source_health_records_cover_dashboard_states_and_review_paths(self) -> None:
+        for health_state in (
+            "available",
+            "degraded",
+            "unavailable",
+            "stale_source",
+            "missing_agent",
+            "parser_failure",
+            "volume_anomaly",
+            "credential_degraded",
+            "detector_drift",
+            "mismatched",
+        ):
+            _validate_record(
+                _source_health_record(
+                    source_health_id=f"source-health-{health_state}",
+                    health_state=health_state,
+                    detector_drift=(
+                        "review_required" if health_state == "detector_drift" else "none"
+                    ),
+                    credential_posture=(
+                        "degraded"
+                        if health_state == "credential_degraded"
+                        else "reviewed"
+                    ),
+                )
+            )
+
+    def test_source_health_record_rejects_missing_catalog_stale_cache_and_authority_leak(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "unsupported source_catalog_entry"):
+            _validate_record(
+                _source_health_record(
+                    source_catalog_entry="docs/source-families/github-audit/unreviewed.md"
+                )
+            )
+
+        with self.assertRaisesRegex(ValueError, "must not be cache sourced"):
+            _validate_record(_source_health_record(cache_sourced=True))
+
+        with self.assertRaisesRegex(ValueError, "must remain subordinate"):
+            _validate_record(_source_health_record(source_native_authority=True))
+
+        with self.assertRaisesRegex(ValueError, "must remain subordinate"):
+            _validate_record(_source_health_record(display_state_authority=True))
+
+    def test_source_health_record_rejects_malformed_state_or_hidden_review_reason(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(ValueError, "invalid health_state"):
+            _validate_record(_source_health_record(health_state="source_native_ok"))
+
+        with self.assertRaisesRegex(ValueError, "requires non-blank operator_visible_reason"):
+            _validate_record(
+                _source_health_record(
+                    health_state="credential_degraded",
+                    operator_visible_reason=" ",
+                )
+            )
+
+        with self.assertRaisesRegex(ValueError, "requires observed_at <= reviewed_at"):
+            _validate_record(
+                _source_health_record(
+                    observed_at=datetime(2026, 5, 15, 8, 5, tzinfo=timezone.utc)
+                )
+            )
+
+    def test_source_health_record_is_registered_in_service_registries(self) -> None:
+        self.assertIn("source_health", RECORD_TYPES_BY_FAMILY)
+        self.assertIs(RECORD_TYPES_BY_FAMILY["source_health"], SourceHealthRecord)
+        self.assertNotIn(
+            "source_health",
+            _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY,
+            "source-health dashboard rows stay subordinate context, not workflow truth",
         )
 
     def test_detector_lifecycle_record_requires_initial_candidate_state(self) -> None:

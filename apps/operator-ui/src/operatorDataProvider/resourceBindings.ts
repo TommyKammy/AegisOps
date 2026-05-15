@@ -35,6 +35,12 @@ export const RESOURCE_BINDINGS: Record<
     listSemantics: "client",
     recordFamily: "detector_lifecycle",
   },
+  sourceHealthDashboard: {
+    idField: "source_health_id",
+    listPath: "/inspect-records",
+    listSemantics: "client",
+    recordFamily: "source_health",
+  },
   firstLoginChecklist: {
     idField: "step_key",
     listPath: "/inspect-first-login-checklist",

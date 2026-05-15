@@ -89,6 +89,8 @@ const CaseIndexPage =
   lazyOperatorConsolePage("CaseIndexPage") as unknown as typeof import("./operatorConsolePages").CaseIndexPage;
 const DetectorActivationReviewPage =
   lazyOperatorConsolePage("DetectorActivationReviewPage") as unknown as typeof import("./operatorConsolePages").DetectorActivationReviewPage;
+const SourceHealthDashboardPage =
+  lazyOperatorConsolePage("SourceHealthDashboardPage") as unknown as typeof import("./operatorConsolePages").SourceHealthDashboardPage;
 const FirstLoginChecklistPage =
   lazyOperatorConsolePage("FirstLoginChecklistPage") as unknown as typeof import("./operatorConsolePages").FirstLoginChecklistPage;
 const ProvenancePage =
@@ -207,6 +209,11 @@ function OperatorMenu({
         leftIcon={<SensorsOutlinedIcon />}
         primaryText="Sources"
         to={buildOperatorShellPath(basePath, "sources")}
+      />
+      <Menu.Item
+        leftIcon={<HealthAndSafetyOutlinedIcon />}
+        primaryText="Source Health"
+        to={buildOperatorShellPath(basePath, "source-health")}
       />
       <Menu.Item
         leftIcon={<SecurityOutlinedIcon />}
@@ -555,6 +562,7 @@ function OperatorShellContent({
           <Route element={<ReadinessPage />} path="readiness" />
           <Route element={<ReadinessPage />} path="health" />
           <Route element={<ReadinessPage />} path="sources" />
+          <Route element={<SourceHealthDashboardPage />} path="source-health" />
           <Route element={<DetectorActivationReviewPage />} path="detectors" />
           <Route
             element={
