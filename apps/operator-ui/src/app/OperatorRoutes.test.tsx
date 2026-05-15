@@ -6,6 +6,7 @@ import { registerOperatorRoutesAuthAndShellTests } from "./OperatorRoutes.authAn
 import { registerOperatorRoutesBusinessHoursHandoffTests } from "./OperatorRoutes.businessHoursHandoff.testSuite";
 import { registerOperatorRoutesCaseworkTests } from "./OperatorRoutes.casework.testSuite";
 import { registerOperatorRoutesControlPlaneTests } from "./OperatorRoutes.controlPlane.testSuite";
+import { registerOperatorRoutesDetectorActivationReviewTests } from "./OperatorRoutes.detectorActivationReview.testSuite";
 import { registerOperatorRoutesFirstLoginChecklistTests } from "./OperatorRoutes.firstLoginChecklist.testSuite";
 import { registerOperatorRoutesTodayTests } from "./OperatorRoutes.today.testSuite";
 
@@ -19,6 +20,7 @@ describe("OperatorRoutes", () => {
   registerOperatorRoutesCaseworkTests();
   registerOperatorRoutesAssistantTests();
   registerOperatorRoutesControlPlaneTests();
+  registerOperatorRoutesDetectorActivationReviewTests();
   registerOperatorRoutesFirstLoginChecklistTests();
   registerOperatorRoutesTodayTests();
   registerOperatorRoutesBusinessHoursHandoffTests();
