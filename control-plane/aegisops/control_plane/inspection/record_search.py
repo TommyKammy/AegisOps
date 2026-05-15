@@ -9,6 +9,7 @@ from ..models import (
     DetectorLifecycleRecord,
     EvidenceRecord,
     FalsePositiveReviewRecord,
+    ReconciliationRecord,
     SourceHealthRecord,
     SuppressionProposalRecord,
 )
@@ -152,6 +153,21 @@ class RecordSearchServiceDependencies(Protocol):
         ...
 
     def _alert_is_in_reviewed_operator_slice(self, alert: AlertRecord) -> bool:
+        ...
+
+    def _latest_detection_reconciliation_for_alert(
+        self,
+        alert_id: str,
+    ) -> ReconciliationRecord | None:
+        ...
+
+    def _reconciliation_is_wazuh_origin(
+        self,
+        reconciliation: ReconciliationRecord,
+    ) -> bool:
+        ...
+
+    def _linked_id_exists(self, values: object, expected_id: str) -> bool:
         ...
 
 
@@ -309,12 +325,12 @@ class RecordSearchInspectionService:
         if isinstance(record, AlertRecord):
             if not self._service._alert_is_in_reviewed_operator_slice(record):
                 return None
-            return self._service._reviewed_operator_source_family(record.reviewed_context)
+            return self._record_search_alert_source_family(record)
 
         if isinstance(record, CaseRecord):
             if not self._service._case_is_in_reviewed_operator_slice(record):
                 return None
-            return self._service._reviewed_operator_source_family(record.reviewed_context)
+            return self._record_search_case_source_family(record)
 
         if isinstance(record, EvidenceRecord):
             if record.case_id is not None:
@@ -323,14 +339,16 @@ class RecordSearchInspectionService:
                     isinstance(case, CaseRecord)
                     and self._service._case_is_in_reviewed_operator_slice(case)
                 ):
-                    return self._service._reviewed_operator_source_family(case.reviewed_context)
+                    source_family = self._record_search_case_source_family(case)
+                    if source_family is not None:
+                        return source_family
             if record.alert_id is not None:
                 alert = self._service._store.get(AlertRecord, record.alert_id)
                 if (
                     isinstance(alert, AlertRecord)
                     and self._service._alert_is_in_reviewed_operator_slice(alert)
                 ):
-                    return self._service._reviewed_operator_source_family(alert.reviewed_context)
+                    return self._record_search_alert_source_family(alert)
             return None
 
         if isinstance(
@@ -345,6 +363,77 @@ class RecordSearchInspectionService:
             return record.source_family.strip()
 
         return None
+
+    def _record_search_case_source_family(self, case: CaseRecord) -> str | None:
+        source_family = self._service._reviewed_operator_source_family(
+            case.reviewed_context
+        )
+        if source_family is not None:
+            return source_family
+
+        if case.alert_id is not None:
+            alert = self._service._store.get(AlertRecord, case.alert_id)
+            if isinstance(alert, AlertRecord):
+                source_family = self._service._reviewed_operator_source_family(
+                    alert.reviewed_context
+                )
+                if source_family is not None:
+                    return source_family
+            reconciliation = self._record_search_reviewed_reconciliation_for_alert(
+                case.alert_id,
+                case_id=case.case_id,
+            )
+            if reconciliation is not None:
+                return self._reviewed_reconciliation_source_family(reconciliation)
+
+        return None
+
+    def _record_search_alert_source_family(self, alert: AlertRecord) -> str | None:
+        source_family = self._service._reviewed_operator_source_family(
+            alert.reviewed_context
+        )
+        if source_family is not None:
+            return source_family
+
+        reconciliation = self._record_search_reviewed_reconciliation_for_alert(
+            alert.alert_id
+        )
+        if reconciliation is None:
+            return None
+        return self._reviewed_reconciliation_source_family(reconciliation)
+
+    def _record_search_reviewed_reconciliation_for_alert(
+        self,
+        alert_id: str,
+        *,
+        case_id: str | None = None,
+    ) -> ReconciliationRecord | None:
+        reconciliation = self._service._latest_detection_reconciliation_for_alert(
+            alert_id
+        )
+        if reconciliation is None or not self._service._reconciliation_is_wazuh_origin(
+            reconciliation
+        ):
+            return None
+        if not self._service._linked_id_exists(
+            reconciliation.subject_linkage.get("alert_ids"),
+            alert_id,
+        ):
+            return None
+        if case_id is not None and not self._service._linked_id_exists(
+            reconciliation.subject_linkage.get("case_ids"),
+            case_id,
+        ):
+            return None
+        return reconciliation
+
+    def _reviewed_reconciliation_source_family(
+        self,
+        reconciliation: ReconciliationRecord,
+    ) -> str | None:
+        return self._service._reviewed_operator_source_family(
+            reconciliation.subject_linkage.get("reviewed_source_profile")
+        )
 
     @staticmethod
     def _record_search_payload_matches(

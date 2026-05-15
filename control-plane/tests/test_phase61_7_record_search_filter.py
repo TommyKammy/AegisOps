@@ -14,6 +14,7 @@ if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
 from aegisops.control_plane.models import (
+    AlertRecord,
     DetectorLifecycleRecord,
     EvidenceRecord,
     FalsePositiveReviewRecord,
@@ -197,6 +198,46 @@ class Phase617RecordSearchFilterTests(ServicePersistenceTestBase):
         )
         with self.assertRaisesRegex(ValueError, "stale-cache"):
             service.persist_record(stale_source_health)
+
+    def test_record_search_preserves_reviewed_slice_source_family_fallback(self) -> None:
+        store, service, case, evidence_id, _reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        alert = store.get(AlertRecord, case.alert_id)
+        if not isinstance(alert, AlertRecord):
+            raise AssertionError("expected reviewed alert fixture")
+
+        alert_context_without_source = dict(alert.reviewed_context)
+        alert_context_without_source.pop("source", None)
+        case_context_without_source = dict(case.reviewed_context)
+        case_context_without_source.pop("source", None)
+        service.persist_record(
+            replace(alert, reviewed_context=alert_context_without_source)
+        )
+        service.persist_record(replace(case, reviewed_context=case_context_without_source))
+
+        snapshot = service.inspect_record_search(
+            query="github",
+            record_families=("alert", "case", "evidence"),
+            source_family="github_audit",
+        )
+        results = {
+            (result["record_family"], result["record_id"]): result
+            for result in snapshot.to_dict()["records"]
+        }
+
+        self.assertEqual(
+            results[("alert", alert.alert_id)]["source_family"],
+            "github_audit",
+        )
+        self.assertEqual(
+            results[("case", case.case_id)]["source_family"],
+            "github_audit",
+        )
+        self.assertEqual(
+            results[("evidence", evidence_id)]["source_family"],
+            "github_audit",
+        )
 
     def test_record_search_rejects_malformed_or_raw_source_queries(self) -> None:
         _store, service, case, _evidence_id, _reviewed_at = (

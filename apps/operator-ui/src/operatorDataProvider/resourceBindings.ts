@@ -38,6 +38,7 @@ export const RESOURCE_BINDINGS: Record<
   recordSearch: {
     idField: "id",
     listPath: "/inspect-record-search",
+    listSemantics: "client",
   },
   sourceHealthDashboard: {
     idField: "source_health_id",

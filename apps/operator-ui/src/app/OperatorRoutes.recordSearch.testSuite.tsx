@@ -138,5 +138,32 @@ export function registerOperatorRoutesRecordSearchTests() {
       });
       expect(screen.queryByRole("link", { name: "case:case-001" })).toBeNull();
     });
+
+    it("applies the 25-result client pagination cap", async () => {
+      const records = Array.from({ length: 30 }, (_, index) => {
+        const recordId = `case-${String(index).padStart(3, "0")}`;
+        return {
+          ...recordSearchResults[0],
+          id: `case:${recordId}`,
+          record_id: recordId,
+          route: `/operator/cases/${recordId}`,
+        };
+      });
+      const dependencies = createDefaultDependencies({
+        fetchFn: createAuthorizedFetch({
+          "/inspect-record-search": {
+            records,
+            total_records: records.length,
+          },
+        }),
+      });
+
+      renderOperatorRoute("/operator/search", dependencies);
+
+      expect(
+        await screen.findByRole("link", { name: "case:case-024" }),
+      ).toHaveAttribute("href", "/operator/cases/case-024");
+      expect(screen.queryByRole("link", { name: "case:case-025" })).toBeNull();
+    });
   });
 }

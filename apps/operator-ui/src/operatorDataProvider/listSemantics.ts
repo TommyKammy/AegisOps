@@ -341,6 +341,20 @@ function applyClientSideListSemantics(
   };
 }
 
+function clientSideListSemanticsParams(
+  resource: StandardOperatorResourceName,
+  params: GetListParams,
+): GetListParams {
+  if (resource !== "recordSearch" || params.filter === undefined) {
+    return params;
+  }
+  const { q: _backendSearchQuery, ...filter } = params.filter;
+  return {
+    ...params,
+    filter,
+  };
+}
+
 function buildListUrl(
   resource: StandardOperatorResourceName,
   params: GetListParams,
@@ -593,7 +607,10 @@ export async function getListForStandardResource({
   }
 
   if (binding.listSemantics === "client") {
-    return applyClientSideListSemantics(records, params);
+    return applyClientSideListSemantics(
+      records,
+      clientSideListSemanticsParams(resource, params),
+    );
   }
 
   return {
