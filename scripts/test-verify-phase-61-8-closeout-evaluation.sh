@@ -69,8 +69,15 @@ home_segment="home"
 printf '%s\n' \
   "Reference URL: https://example.com/${home_segment}/docs/phase-61-closeout" \
   "Reference URL: https://example.com/C:/${users_segment}/docs/phase-61-closeout" \
+  "Reference URL: https://example.com/search?artifact=/${users_segment}/example/Dev/codex-supervisor/dist/index.js" \
   >>"${url_path_repo}/docs/phase-61-closeout-evaluation.md"
 assert_passes "${url_path_repo}"
+
+relative_home_repo="${workdir}/relative-home"
+copy_valid_repo "${relative_home_repo}"
+printf '%s\n' "Relative fixture path: ./${home_segment}/example/Dev/codex-supervisor/dist/index.js" \
+  >>"${relative_home_repo}/docs/phase-61-closeout-evaluation.md"
+assert_passes "${relative_home_repo}"
 
 missing_doc_repo="${workdir}/missing-doc"
 mkdir -p "${missing_doc_repo}/docs"
@@ -167,6 +174,14 @@ copy_valid_repo "${absolute_path_repo}"
 printf 'Run /%s/example/Dev/codex-supervisor/dist/index.js.\n' "Users" >>"${absolute_path_repo}/docs/phase-61-closeout-evaluation.md"
 assert_fails_with \
   "${absolute_path_repo}" \
+  "Forbidden Phase 61 closeout evaluation: workstation-local absolute path detected"
+
+file_url_absolute_path_repo="${workdir}/file-url-absolute-path"
+copy_valid_repo "${file_url_absolute_path_repo}"
+printf 'Run file:///%s/example/Dev/codex-supervisor/dist/index.js.\n' "Users" \
+  >>"${file_url_absolute_path_repo}/docs/phase-61-closeout-evaluation.md"
+assert_fails_with \
+  "${file_url_absolute_path_repo}" \
   "Forbidden Phase 61 closeout evaluation: workstation-local absolute path detected"
 
 absolute_path_windows_backslash_repo="${workdir}/absolute-path-windows-backslash"

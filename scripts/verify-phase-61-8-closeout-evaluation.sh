@@ -88,12 +88,12 @@ for phrase in "${required_phrases[@]}"; do
   require_phrase "${absolute_doc_path}" "${phrase}" "required Phase 61 closeout term in ${doc_path}"
 done
 
-absolute_path_boundary='(^|[[:space:](){}<>;,!?.`"'\''=])'
+absolute_path_boundary='(^|[[:space:](){}<>;,!?`"'\''])'
 macos_home_pattern="/""users/"
 linux_home_pattern="/""home/"
 windows_backslash_home_pattern='[a-z]:\\+users\\+'
 windows_slash_home_pattern='[a-z]:/'"users"'/'
-absolute_path_pattern="${absolute_path_boundary}(${macos_home_pattern}|${linux_home_pattern}|${windows_backslash_home_pattern}|${windows_slash_home_pattern})[^ ]+"
+absolute_path_pattern="(${absolute_path_boundary}(${macos_home_pattern}|${linux_home_pattern}|${windows_backslash_home_pattern}|${windows_slash_home_pattern})|file:///?(${macos_home_pattern}|${linux_home_pattern}|${windows_backslash_home_pattern}|${windows_slash_home_pattern}))[^[:space:]]+"
 if tr '[:upper:]' '[:lower:]' < "${absolute_doc_path}" | grep -Eq -- "${absolute_path_pattern}" || \
    tr '[:upper:]' '[:lower:]' < "${readme_path}" | grep -Eq -- "${absolute_path_pattern}"; then
   echo "Forbidden Phase 61 closeout evaluation: workstation-local absolute path detected" >&2
