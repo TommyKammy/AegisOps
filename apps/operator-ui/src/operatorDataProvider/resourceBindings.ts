@@ -29,6 +29,12 @@ export const RESOURCE_BINDINGS: Record<
     listSemantics: "client",
     recordFamily: "case",
   },
+  detectorActivationReview: {
+    idField: "detector_lifecycle_id",
+    listPath: "/inspect-records",
+    listSemantics: "client",
+    recordFamily: "detector_lifecycle",
+  },
   firstLoginChecklist: {
     idField: "step_key",
     listPath: "/inspect-first-login-checklist",

@@ -19,6 +19,7 @@ import HandshakeOutlinedIcon from "@mui/icons-material/HandshakeOutlined";
 import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
 import PlaylistAddCheckOutlinedIcon from "@mui/icons-material/PlaylistAddCheckOutlined";
 import RuleFolderOutlinedIcon from "@mui/icons-material/RuleFolderOutlined";
+import SecurityOutlinedIcon from "@mui/icons-material/SecurityOutlined";
 import SensorsOutlinedIcon from "@mui/icons-material/SensorsOutlined";
 import TodayOutlinedIcon from "@mui/icons-material/TodayOutlined";
 import WarningAmberOutlinedIcon from "@mui/icons-material/WarningAmberOutlined";
@@ -86,6 +87,8 @@ const CaseDetailPage =
   lazyOperatorConsolePage("CaseDetailPage") as unknown as typeof import("./operatorConsolePages").CaseDetailPage;
 const CaseIndexPage =
   lazyOperatorConsolePage("CaseIndexPage") as unknown as typeof import("./operatorConsolePages").CaseIndexPage;
+const DetectorActivationReviewPage =
+  lazyOperatorConsolePage("DetectorActivationReviewPage") as unknown as typeof import("./operatorConsolePages").DetectorActivationReviewPage;
 const FirstLoginChecklistPage =
   lazyOperatorConsolePage("FirstLoginChecklistPage") as unknown as typeof import("./operatorConsolePages").FirstLoginChecklistPage;
 const ProvenancePage =
@@ -204,6 +207,11 @@ function OperatorMenu({
         leftIcon={<SensorsOutlinedIcon />}
         primaryText="Sources"
         to={buildOperatorShellPath(basePath, "sources")}
+      />
+      <Menu.Item
+        leftIcon={<SecurityOutlinedIcon />}
+        primaryText="Detectors"
+        to={buildOperatorShellPath(basePath, "detectors")}
       />
       {showActionReview ? (
         <Menu.Item
@@ -547,6 +555,7 @@ function OperatorShellContent({
           <Route element={<ReadinessPage />} path="readiness" />
           <Route element={<ReadinessPage />} path="health" />
           <Route element={<ReadinessPage />} path="sources" />
+          <Route element={<DetectorActivationReviewPage />} path="detectors" />
           <Route
             element={
               canViewActionReview ? (

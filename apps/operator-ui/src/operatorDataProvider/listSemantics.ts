@@ -4,6 +4,30 @@ import { RESOURCE_BINDINGS } from "./resourceBindings";
 import { appendQuery, asObject, asString, fetchJson, getRecordField, normalizeRecord } from "./shared";
 import type { OperatorRecordFamilyListResponse, StandardListReaderOptions, StandardOperatorResourceName } from "./types";
 
+const DETECTOR_LIFECYCLE_STATES = new Set([
+  "candidate",
+  "staging",
+  "active",
+  "disabled",
+  "rollback",
+  "review-overdue",
+]);
+
+const DETECTOR_ACTIVATION_REVIEW_REQUIRED_FIELDS = [
+  "detector_lifecycle_id",
+  "owner",
+  "source_family",
+  "source_catalog_entry",
+  "detector_identifier",
+  "expected_signal_posture",
+  "expected_volume",
+  "false_positive_review",
+  "review_cadence",
+  "rollback_owner",
+  "disable_owner",
+  "next_review_at",
+] as const;
+
 function comparePrimitiveValues(left: unknown, right: unknown): number {
   if (left === right) {
     return 0;
@@ -250,6 +274,62 @@ function buildListUrl(
   return `${url.pathname}${url.search}`;
 }
 
+function validateDetectorActivationReviewRecord(record: Record<string, unknown>) {
+  for (const field of DETECTOR_ACTIVATION_REVIEW_REQUIRED_FIELDS) {
+    if (asString(record[field]) === null) {
+      throw new OperatorDataProviderContractError(
+        `Resource detectorActivationReview record is missing reviewed field ${field}.`,
+      );
+    }
+  }
+
+  const lifecycleState = asString(record.lifecycle_state);
+  if (lifecycleState === null || !DETECTOR_LIFECYCLE_STATES.has(lifecycleState)) {
+    throw new OperatorDataProviderContractError(
+      "Resource detectorActivationReview record has unsupported lifecycle_state.",
+    );
+  }
+
+  if (record.stale_display_state !== false) {
+    throw new OperatorDataProviderContractError(
+      "Resource detectorActivationReview rejects stale display state.",
+    );
+  }
+
+  if (!Array.isArray(record.lifecycle_audit_references)) {
+    throw new OperatorDataProviderContractError(
+      "Resource detectorActivationReview requires lifecycle_audit_references.",
+    );
+  }
+  if (
+    record.lifecycle_audit_references.length === 0 ||
+    record.lifecycle_audit_references.some((reference) => asString(reference) === null)
+  ) {
+    throw new OperatorDataProviderContractError(
+      "Resource detectorActivationReview requires non-empty reviewed audit references.",
+    );
+  }
+
+  if (lifecycleState === "disabled" && asString(record.disabled_reason) === null) {
+    throw new OperatorDataProviderContractError(
+      "Resource detectorActivationReview disabled records require disabled_reason.",
+    );
+  }
+  if (lifecycleState === "rollback" && asString(record.rollback_reason) === null) {
+    throw new OperatorDataProviderContractError(
+      "Resource detectorActivationReview rollback records require rollback_reason.",
+    );
+  }
+  if (
+    lifecycleState === "review-overdue" &&
+    asString(record.review_overdue_reason) === null
+  ) {
+    throw new OperatorDataProviderContractError(
+      "Resource detectorActivationReview review-overdue records require review_overdue_reason.",
+    );
+  }
+}
+
 export async function getListForStandardResource({
   binding,
   fetchFn,
@@ -278,6 +358,9 @@ export async function getListForStandardResource({
     records = rawRecords.map((record) =>
       normalizeRecord(resource, record, binding.idField),
     );
+    if (resource === "detectorActivationReview") {
+      records.forEach(validateDetectorActivationReviewRecord);
+    }
     totalRecords =
       typeof response.total_records === "number"
         ? response.total_records
