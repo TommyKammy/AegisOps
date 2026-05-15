@@ -332,7 +332,7 @@ AUTHORITATIVE_RECORD_CHAIN_FAMILIES: tuple[str, ...] = tuple(
     record_type.record_family for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES
 )
 AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION = (
-    "phase23.authoritative-record-chain.v2"
+    "phase23.authoritative-record-chain.v3"
 )
 _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY: dict[str, str] = {
     "analytic_signal": "analytic_signal_id",

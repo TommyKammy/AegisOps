@@ -221,7 +221,7 @@ class RestoreBackupCodecTests(ServicePersistenceTestBase):
 
         self.assertEqual(
             round_trip_backup["backup_schema_version"],
-            "phase23.authoritative-record-chain.v2",
+            "phase23.authoritative-record-chain.v3",
         )
         for family in _PHASE21_LEGACY_MISSING_AUTHORITATIVE_FAMILIES:
             self.assertIn(family, round_trip_backup["record_families"])
@@ -516,7 +516,7 @@ class RestoreBackupCodecTests(ServicePersistenceTestBase):
 
         self.assertEqual(
             backup["backup_schema_version"],
-            "phase23.authoritative-record-chain.v2",
+            "phase23.authoritative-record-chain.v3",
         )
         self.assertEqual(backup["record_counts"]["action_execution"], 1)
         self.assertEqual(backup["record_counts"]["observation"], 1)
