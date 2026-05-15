@@ -191,5 +191,40 @@ export function registerOperatorRoutesDetectorActivationReviewTests() {
       expect(screen.queryByText("det-malformed-state")).not.toBeInTheDocument();
       expect(screen.queryByText("source-active")).not.toBeInTheDocument();
     });
+
+    it("requests reviewed detector records without a pagination cap", async () => {
+      const manyDetectorRecords = Array.from({ length: 101 }, (_, index) => ({
+        ...detectorLifecycleRecords[0],
+        detector_identifier: `github-audit-candidate-${String(index).padStart(3, "0")}`,
+        detector_lifecycle_id: `det-candidate-${String(index).padStart(3, "0")}`,
+        lifecycle_audit_references: [`audit-evidence://candidate-${index}`],
+        owner: `detector-owner-${String(index).padStart(3, "0")}`,
+      }));
+      const fetchFn = createAuthorizedFetch({
+        "/inspect-records": {
+          records: manyDetectorRecords,
+          total_records: manyDetectorRecords.length,
+        },
+      });
+      const dependencies = createDefaultDependencies({ fetchFn });
+
+      renderOperatorRoute("/operator/detectors", dependencies);
+
+      await waitFor(() => {
+        expect(screen.getByText("detector-owner-100")).toBeInTheDocument();
+      });
+
+      const detectorCall = fetchFn.mock.calls.find(([url]) =>
+        String(url).startsWith("/inspect-records"),
+      );
+      expect(detectorCall).toBeDefined();
+      const [url] = detectorCall!;
+      const parsedUrl = new URL(String(url), "http://operator-ui.local");
+      expect(parsedUrl.searchParams.get("family")).toBe("detector_lifecycle");
+      expect(parsedUrl.searchParams.get("sort")).toBe("detector_identifier");
+      expect(parsedUrl.searchParams.get("order")).toBe("ASC");
+      expect(parsedUrl.searchParams.has("page")).toBe(false);
+      expect(parsedUrl.searchParams.has("per_page")).toBe(false);
+    });
   });
 }

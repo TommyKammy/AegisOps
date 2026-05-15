@@ -227,8 +227,15 @@ function applyClientSideListSemantics(
       })
     : filteredRecords;
   const total = sortedRecords.length;
-  const page = Math.max(1, params.pagination?.page ?? 1);
-  const perPage = Math.max(1, params.pagination?.perPage ?? 25);
+  if (!params.pagination) {
+    return {
+      data: sortedRecords,
+      total,
+    };
+  }
+
+  const page = Math.max(1, params.pagination.page);
+  const perPage = Math.max(1, params.pagination.perPage);
   const start = (page - 1) * perPage;
 
   return {
@@ -248,8 +255,6 @@ function buildListUrl(
     );
   }
 
-  const page = params.pagination?.page ?? 1;
-  const perPage = params.pagination?.perPage ?? 25;
   const sortField = params.sort?.field ?? RESOURCE_BINDINGS[resource].idField;
   const sortOrder = params.sort?.order ?? "ASC";
 
@@ -257,8 +262,12 @@ function buildListUrl(
   appendQuery(url, {
     family: binding.recordFamily,
     order: sortOrder,
-    page: String(page),
-    per_page: String(perPage),
+    ...(params.pagination
+      ? {
+          page: String(params.pagination.page),
+          per_page: String(params.pagination.perPage),
+        }
+      : {}),
     sort: sortField,
   });
 

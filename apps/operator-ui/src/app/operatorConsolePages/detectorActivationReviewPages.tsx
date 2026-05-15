@@ -23,6 +23,12 @@ import {
   type UnknownRecord,
 } from "./shared";
 
+const DETECTOR_ACTIVATION_REVIEW_FILTER = {};
+const DETECTOR_ACTIVATION_REVIEW_SORT = {
+  field: "detector_identifier",
+  order: "ASC",
+} as const;
+
 function reasonForLifecycle(record: UnknownRecord) {
   const lifecycleState = asString(record.lifecycle_state);
   if (lifecycleState === "disabled") {
@@ -115,12 +121,9 @@ function DetectorLifecycleCard({ record }: { record: UnknownRecord }) {
 export function DetectorActivationReviewPage() {
   const detectorRecords = useOperatorList(
     "detectorActivationReview",
-    {},
-    {
-      field: "detector_identifier",
-      order: "ASC",
-    },
-    100,
+    DETECTOR_ACTIVATION_REVIEW_FILTER,
+    DETECTOR_ACTIVATION_REVIEW_SORT,
+    null,
   );
 
   if (detectorRecords.loading && detectorRecords.data === null) {

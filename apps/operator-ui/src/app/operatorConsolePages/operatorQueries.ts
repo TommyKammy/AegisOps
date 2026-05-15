@@ -18,7 +18,7 @@ export function useOperatorList(
   resource: string,
   filter: Record<string, unknown>,
   sort: { field: string; order: "ASC" | "DESC" },
-  perPage = 25,
+  perPage: number | null = 25,
 ): QueryState<UnknownRecord[]> {
   const dataProvider = useDataProvider();
   const key = useMemo(
@@ -29,10 +29,14 @@ export function useOperatorList(
     () => async () => {
       const result = await dataProvider.getList(resource, {
         filter,
-        pagination: {
-          page: 1,
-          perPage,
-        },
+        ...(perPage === null
+          ? {}
+          : {
+              pagination: {
+                page: 1,
+                perPage,
+              },
+            }),
         sort,
       });
 
