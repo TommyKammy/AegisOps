@@ -401,6 +401,27 @@ class ReconciliationRecord(ControlPlaneRecord):
         object.__setattr__(self, "subject_linkage", _freeze_mapping(self.subject_linkage))
 
 
+@dataclass(frozen=True)
+class DetectorLifecycleRecord(ControlPlaneRecord):
+    record_family: ClassVar[str] = "detector_lifecycle"
+    identifier_field: ClassVar[str] = "detector_lifecycle_id"
+
+    detector_lifecycle_id: str
+    owner: str
+    source_family: str
+    source_catalog_entry: str
+    detector_identifier: str
+    expected_signal_posture: str
+    review_cadence: str
+    rollback_owner: str
+    disable_owner: str
+    lifecycle_audit_references: tuple[str, ...]
+    lifecycle_state: str
+    disabled_reason: str | None = None
+    rollback_reason: str | None = None
+    review_overdue_reason: str | None = None
+
+
 AnyControlPlaneRecord = Union[
     AlertRecord,
     AnalyticSignalRecord,
@@ -417,4 +438,5 @@ AnyControlPlaneRecord = Union[
     HuntRunRecord,
     AITraceRecord,
     ReconciliationRecord,
+    DetectorLifecycleRecord,
 ]
