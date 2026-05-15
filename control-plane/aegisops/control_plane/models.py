@@ -444,6 +444,29 @@ class FalsePositiveReviewRecord(ControlPlaneRecord):
     lifecycle_state: str
 
 
+@dataclass(frozen=True)
+class SuppressionProposalRecord(ControlPlaneRecord):
+    record_family: ClassVar[str] = "suppression_proposal"
+    identifier_field: ClassVar[str] = "suppression_proposal_id"
+
+    suppression_proposal_id: str
+    detector_lifecycle_id: str
+    source_family: str
+    source_catalog_entry: str
+    alert_id: str | None
+    case_id: str | None
+    evidence_ids: tuple[str, ...]
+    owner: str
+    rationale: str
+    citation_references: tuple[str, ...]
+    expires_at: datetime | None
+    review_cadence: str
+    expected_signal_impact: str
+    scope: str
+    source_signal_handling: str
+    lifecycle_state: str
+
+
 AnyControlPlaneRecord = Union[
     AlertRecord,
     AnalyticSignalRecord,
@@ -462,4 +485,5 @@ AnyControlPlaneRecord = Union[
     ReconciliationRecord,
     DetectorLifecycleRecord,
     FalsePositiveReviewRecord,
+    SuppressionProposalRecord,
 ]

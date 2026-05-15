@@ -26,7 +26,8 @@ create table if not exists aegisops_control.lifecycle_transition_records (
       'ai_trace',
       'reconciliation',
       'detector_lifecycle',
-      'false_positive_review'
+      'false_positive_review',
+      'suppression_proposal'
     )
   ),
   check (
@@ -280,6 +281,14 @@ create table if not exists aegisops_control.lifecycle_transition_records (
       'superseded',
       'withdrawn'
     ))
+    or (subject_record_family = 'suppression_proposal' and lifecycle_state in (
+      'proposed',
+      'under_review',
+      'rejected',
+      'withdrawn',
+      'expired',
+      'superseded'
+    ))
   ),
   constraint lifecycle_transition_records_previous_state_matches_subject_family check (
     previous_lifecycle_state is null or (
@@ -412,6 +421,14 @@ create table if not exists aegisops_control.lifecycle_transition_records (
         'disputed',
         'superseded',
         'withdrawn'
+      ))
+      or (subject_record_family = 'suppression_proposal' and previous_lifecycle_state in (
+        'proposed',
+        'under_review',
+        'rejected',
+        'withdrawn',
+        'expired',
+        'superseded'
       ))
     )
   )

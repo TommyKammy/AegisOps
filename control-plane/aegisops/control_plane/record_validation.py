@@ -23,6 +23,7 @@ from .models import (
     ObservationRecord,
     ReconciliationRecord,
     RecommendationRecord,
+    SuppressionProposalRecord,
 )
 
 
@@ -205,6 +206,9 @@ _LIFECYCLE_STATES_BY_FAMILY: dict[str, frozenset[str]] = {
     "false_positive_review": frozenset(
         {"reviewed", "disputed", "superseded", "withdrawn"}
     ),
+    "suppression_proposal": frozenset(
+        {"proposed", "under_review", "rejected", "withdrawn", "expired", "superseded"}
+    ),
 }
 _DETECTOR_SOURCE_CATALOG_ENTRIES_BY_FAMILY: dict[str, frozenset[str]] = {
     "wazuh_detection": frozenset(
@@ -259,6 +263,17 @@ _FALSE_POSITIVE_REVIEW_RECURRENCE_POSTURES = frozenset(
 )
 _FALSE_POSITIVE_REVIEW_SOURCE_SIGNAL_HANDLING = frozenset(
     {"preserve_source_signal", "preserve_and_escalate_for_tuning"}
+)
+_SUPPRESSION_PROPOSAL_SCOPES = frozenset(
+    {
+        "detector_case_context",
+        "detector_alert_context",
+        "detector_evidence_context",
+        "reviewed_recurring_pattern",
+    }
+)
+_SUPPRESSION_PROPOSAL_SOURCE_SIGNAL_HANDLING = frozenset(
+    {"preserve_source_signal", "preserve_and_escalate_for_review"}
 )
 
 _RECONCILIATION_INGEST_DISPOSITIONS = frozenset(
@@ -414,6 +429,9 @@ def _validate_record(record: ControlPlaneRecord) -> None:
         return
     if isinstance(record, FalsePositiveReviewRecord):
         _validate_false_positive_review_record(record)
+        return
+    if isinstance(record, SuppressionProposalRecord):
+        _validate_suppression_proposal_record(record)
         return
     if isinstance(record, AnalyticSignalRecord):
         _require_any_linkage(
@@ -667,6 +685,76 @@ def _validate_false_positive_review_record(
         raise ValueError(
             f"false_positive_review record {record.record_id!r} repeated false positives "
             "require recurrence_posture 'recurring_reviewed_pattern'"
+        )
+
+
+def _validate_suppression_proposal_record(
+    record: SuppressionProposalRecord,
+) -> None:
+    _require_non_blank_fields(
+        record,
+        (
+            "detector_lifecycle_id",
+            "source_family",
+            "source_catalog_entry",
+            "owner",
+            "rationale",
+            "review_cadence",
+            "expected_signal_impact",
+            "scope",
+            "source_signal_handling",
+        ),
+    )
+    _require_non_empty_tuple(record, "citation_references")
+    _require_tuple_or_list(record, "evidence_ids")
+    _require_any_linkage(record, ("alert_id", "case_id", "evidence_ids"))
+    if record.alert_id is None and record.case_id is None:
+        _require_non_empty_tuple(record, "evidence_ids")
+    for evidence_id in record.evidence_ids:
+        if not isinstance(evidence_id, str) or not _has_linkage_value(evidence_id):
+            raise ValueError(
+                f"{record.record_family} record {record.record_id!r} requires "
+                "non-blank evidence_ids entries"
+            )
+    for citation_reference in record.citation_references:
+        if not isinstance(citation_reference, str) or not _has_linkage_value(
+            citation_reference
+        ):
+            raise ValueError(
+                f"{record.record_family} record {record.record_id!r} requires "
+                "non-blank citation_references entries"
+            )
+    if record.expires_at is None:
+        raise ValueError(
+            f"suppression_proposal record {record.record_id!r} must set a finite expires_at"
+        )
+    source_family = record.source_family.strip()
+    if source_family not in _DETECTOR_SOURCE_CATALOG_ENTRIES_BY_FAMILY:
+        raise ValueError(
+            f"suppression_proposal record {record.record_id!r} has unsupported "
+            f"source_family {record.source_family!r}; expected one of "
+            f"{sorted(_DETECTOR_SOURCE_CATALOG_ENTRIES_BY_FAMILY)!r}"
+        )
+    source_catalog_entry = record.source_catalog_entry.strip()
+    if (
+        source_catalog_entry
+        not in _DETECTOR_SOURCE_CATALOG_ENTRIES_BY_FAMILY[source_family]
+    ):
+        raise ValueError(
+            f"suppression_proposal record {record.record_id!r} has unsupported "
+            f"source_catalog_entry {record.source_catalog_entry!r} for "
+            f"source_family {source_family!r}; expected one of "
+            f"{sorted(_DETECTOR_SOURCE_CATALOG_ENTRIES_BY_FAMILY[source_family])!r}"
+        )
+    if record.scope not in _SUPPRESSION_PROPOSAL_SCOPES:
+        raise ValueError(
+            f"suppression_proposal record {record.record_id!r} has invalid scope "
+            f"{record.scope!r}; expected one of {sorted(_SUPPRESSION_PROPOSAL_SCOPES)!r}"
+        )
+    if record.source_signal_handling not in _SUPPRESSION_PROPOSAL_SOURCE_SIGNAL_HANDLING:
+        raise ValueError(
+            f"suppression_proposal record {record.record_id!r} must preserve source "
+            "signals and may not delete, hide, silently suppress, or apply source-native truth"
         )
 
 

@@ -27,6 +27,7 @@ from ..models import (
     ObservationRecord,
     ReconciliationRecord,
     RecommendationRecord,
+    SuppressionProposalRecord,
 )
 from ..runtime.readiness_contracts import (
     ReadinessDiagnosticsAggregates,
@@ -136,6 +137,11 @@ _TABLES_BY_RECORD_TYPE: dict[Type[ControlPlaneRecord], TableConfig] = {
         FalsePositiveReviewRecord,
         "false_positive_review_records",
         array_fields=frozenset({"evidence_ids", "review_evidence_references"}),
+    ),
+    SuppressionProposalRecord: TableConfig(
+        SuppressionProposalRecord,
+        "suppression_proposal_records",
+        array_fields=frozenset({"evidence_ids", "citation_references"}),
     ),
     EvidenceRecord: TableConfig(
         EvidenceRecord,

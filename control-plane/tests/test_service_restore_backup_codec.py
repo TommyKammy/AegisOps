@@ -225,7 +225,7 @@ class RestoreBackupCodecTests(ServicePersistenceTestBase):
 
         self.assertEqual(
             round_trip_backup["backup_schema_version"],
-            "phase23.authoritative-record-chain.v4",
+            "phase23.authoritative-record-chain.v5",
         )
         for family in _PHASE21_LEGACY_MISSING_AUTHORITATIVE_FAMILIES:
             self.assertIn(family, round_trip_backup["record_families"])
@@ -292,7 +292,7 @@ class RestoreBackupCodecTests(ServicePersistenceTestBase):
         )
         self.assertEqual(
             round_trip_backup["backup_schema_version"],
-            "phase23.authoritative-record-chain.v4",
+            "phase23.authoritative-record-chain.v5",
         )
         self.assertEqual(round_trip_backup["record_counts"]["detector_lifecycle"], 0)
         self.assertEqual(
@@ -332,7 +332,7 @@ class RestoreBackupCodecTests(ServicePersistenceTestBase):
         )
         self.assertEqual(
             round_trip_backup["backup_schema_version"],
-            "phase23.authoritative-record-chain.v4",
+            "phase23.authoritative-record-chain.v5",
         )
         self.assertEqual(round_trip_backup["record_counts"]["false_positive_review"], 0)
         self.assertEqual(restored_service._store.list(FalsePositiveReviewRecord), ())
@@ -645,7 +645,7 @@ class RestoreBackupCodecTests(ServicePersistenceTestBase):
 
         self.assertEqual(
             backup["backup_schema_version"],
-            "phase23.authoritative-record-chain.v4",
+            "phase23.authoritative-record-chain.v5",
         )
         self.assertEqual(backup["record_counts"]["action_execution"], 1)
         self.assertEqual(backup["record_counts"]["observation"], 1)

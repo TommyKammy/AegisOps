@@ -41,7 +41,7 @@ from .models import (
     NativeDetectionRecord,
     ObservationRecord,
     ReconciliationRecord,
-    RecommendationRecord,
+    RecommendationRecord, SuppressionProposalRecord,
 )
 from .runtime.readiness_contracts import (
     ReadinessDiagnosticsAggregates,
@@ -294,7 +294,7 @@ RECORD_TYPES_BY_FAMILY: dict[str, Type[ControlPlaneRecord]] = {
         AlertRecord,
         AnalyticSignalRecord,
         CaseRecord,
-        EvidenceRecord, DetectorLifecycleRecord, FalsePositiveReviewRecord,
+        EvidenceRecord, DetectorLifecycleRecord, FalsePositiveReviewRecord, SuppressionProposalRecord,
         LifecycleTransitionRecord,
         ObservationRecord,
         LeadRecord,
@@ -316,7 +316,7 @@ AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES: tuple[Type[ControlPlaneRecord], ...] = 
     ObservationRecord,
     LeadRecord,
     CaseRecord,
-    RecommendationRecord, DetectorLifecycleRecord, FalsePositiveReviewRecord,
+    RecommendationRecord, DetectorLifecycleRecord, FalsePositiveReviewRecord, SuppressionProposalRecord,
     LifecycleTransitionRecord,
     ApprovalDecisionRecord,
     ActionRequestRecord,
@@ -330,7 +330,7 @@ AUTHORITATIVE_RECORD_CHAIN_FAMILIES: tuple[str, ...] = tuple(
     record_type.record_family for record_type in AUTHORITATIVE_RECORD_CHAIN_RECORD_TYPES
 )
 AUTHORITATIVE_RECORD_CHAIN_BACKUP_SCHEMA_VERSION = (
-    "phase23.authoritative-record-chain.v4"
+    "phase23.authoritative-record-chain.v5"
 )
 _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY: dict[str, str] = {
     "analytic_signal": "analytic_signal_id",
@@ -338,7 +338,7 @@ _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY: dict[str, str] = {
     "evidence": "evidence_id",
     "observation": "observation_id",
     "detector_lifecycle": "detector_lifecycle_id",
-    "false_positive_review": "false_positive_review_id",
+    "false_positive_review": "false_positive_review_id", "suppression_proposal": "suppression_proposal_id",
     "lead": "lead_id",
     "case": "case_id",
     "recommendation": "recommendation_id",
