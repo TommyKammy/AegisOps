@@ -217,6 +217,100 @@ describe("createOperatorDataProvider", () => {
     );
   });
 
+  it("rejects invalid Phase 61 list payloads at the provider boundary", async () => {
+    const validDetector = {
+      detector_lifecycle_id: "det-active-001",
+      owner: "detector-owner",
+      source_family: "github_audit",
+      source_catalog_entry: "docs/source-families/github-audit/onboarding-package.md",
+      detector_identifier: "github-audit-owner-change",
+      expected_signal_posture: "reviewed",
+      review_cadence: "P30D",
+      rollback_owner: "rollback-owner",
+      disable_owner: "disable-owner",
+      lifecycle_state: "active",
+      lifecycle_audit_references: ["audit://detector/active"],
+      stale_display_state: false,
+    };
+    const validSourceHealth = {
+      source_health_id: "source-health-001",
+      source_family: "github_audit",
+      source_catalog_entry: "docs/source-families/github-audit/onboarding-package.md",
+      health_state: "available",
+      reviewed_state: "reviewed",
+      lifecycle_state: "reviewed",
+      reviewed_at: "2026-05-16T00:00:00Z",
+      observed_at: "2026-05-16T00:00:00Z",
+      detector_drift: "none",
+      credential_posture: "valid",
+      operator_visible_reason: "Reviewed source-health context.",
+      cache_sourced: false,
+      source_native_authority: false,
+      display_state_authority: false,
+      evidence_references: ["evidence://source-health/github-audit"],
+    };
+    const validRecordSearchResult = {
+      id: "alert:alert-001",
+      record_family: "alert",
+      record_id: "alert-001",
+      route: "/operator/alerts/alert-001",
+      route_kind: "reviewed_surface",
+      authority: "navigation_only",
+      raw_source_authority: false,
+      stale_cache: false,
+      cache_sourced: false,
+    };
+    const cases = [
+      {
+        expectedError: "Resource detectorActivationReview rejects stale display state.",
+        resource: "detectorActivationReview",
+        record: {
+          ...validDetector,
+          stale_display_state: true,
+        },
+        sortField: "detector_lifecycle_id",
+      },
+      {
+        expectedError:
+          "Resource sourceHealthDashboard rejects source-health display state as workflow truth.",
+        resource: "sourceHealthDashboard",
+        record: {
+          ...validSourceHealth,
+          display_state_authority: true,
+        },
+        sortField: "source_health_id",
+      },
+      {
+        expectedError:
+          "Resource recordSearch result must route to a reviewed surface.",
+        resource: "recordSearch",
+        record: {
+          ...validRecordSearchResult,
+          route: "/operator/source-health",
+        },
+        sortField: "record_id",
+      },
+    ] as const;
+
+    for (const testCase of cases) {
+      const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+        jsonResponse({
+          records: [testCase.record],
+          total_records: 1,
+        }),
+      );
+      const dataProvider = createOperatorDataProvider({ fetchFn });
+
+      await expect(
+        dataProvider.getList(testCase.resource, {
+          filter: {},
+          pagination: { page: 1, perPage: 25 },
+          sort: { field: testCase.sortField, order: "ASC" },
+        }),
+      ).rejects.toThrow(testCase.expectedError);
+    }
+  });
+
   it("requires authoritative scope metadata before advisory output reads", async () => {
     const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
       jsonResponse({
