@@ -154,10 +154,14 @@ forbidden_claims=(
   "phase 61 validates production secrets"
 )
 
-for forbidden in "${forbidden_claims[@]}"; do
-  if tr '[:upper:]' '[:lower:]' < "${absolute_doc_path}" | \
+forbidden_claim_text() {
+  tr '[:upper:]' '[:lower:]' < "${absolute_doc_path}" | \
     grep -Fxv -- "${allowed_non_claim_line_lower}" | \
-    grep -Fq -- "${forbidden}"; then
+    grep -Fxv -- "${required_rejection_line_lower}"
+}
+
+for forbidden in "${forbidden_claims[@]}"; do
+  if forbidden_claim_text | grep -Fq -e "${forbidden}"; then
     echo "Forbidden Phase 61 closeout evaluation claim: ${forbidden}" >&2
     exit 1
   fi
