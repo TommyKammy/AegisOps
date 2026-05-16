@@ -28,6 +28,7 @@ from aegisops.control_plane.service import (
     RECORD_TYPES_BY_FAMILY,
     _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY,
 )
+from aegisops.control_plane import phase61_record_validators
 from aegisops.control_plane.record_validation import _validate_record
 
 
@@ -189,6 +190,30 @@ def _source_health_record(
 
 
 class Phase61DetectorLifecycleRecordContractTests(unittest.TestCase):
+    def test_phase61_record_validation_surface_is_extracted(self) -> None:
+        self.assertTrue(
+            callable(phase61_record_validators.validate_phase61_record),
+            "Phase 61 family-specific validators must live outside generic dispatch",
+        )
+        self.assertTrue(
+            phase61_record_validators.is_phase61_record_family(
+                _detector_lifecycle_record(lifecycle_state="candidate")
+            )
+        )
+        self.assertTrue(
+            phase61_record_validators.is_phase61_record_family(
+                _false_positive_review_record()
+            )
+        )
+        self.assertTrue(
+            phase61_record_validators.is_phase61_record_family(
+                _suppression_proposal_record()
+            )
+        )
+        self.assertTrue(
+            phase61_record_validators.is_phase61_record_family(_source_health_record())
+        )
+
     def test_restore_validation_accepts_detector_lifecycle_transition_subjects(self) -> None:
         detector = _detector_lifecycle_record(lifecycle_state="candidate")
         transition = LifecycleTransitionRecord(
