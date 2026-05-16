@@ -45,6 +45,9 @@ RECORD_SEARCH_COMMON_REVIEWED_FIELDS = (
     "source_family",
     "lifecycle_state",
 )
+RECORD_SEARCH_RESULT_ROUTE_KIND = "reviewed_surface"
+RECORD_SEARCH_RESULT_AUTHORITY = "navigation_only"
+RECORD_SEARCH_RESULT_RAW_SOURCE_AUTHORITY = False
 RECORD_SEARCH_REVIEWED_FIELDS_BY_FAMILY = {
     "alert": (
         "alert_id",
@@ -123,6 +126,21 @@ RECORD_SEARCH_REVIEWED_FIELDS_BY_FAMILY = {
         "operator_visible_reason",
     ),
 }
+if set(RECORD_SEARCH_REVIEWED_FIELDS_BY_FAMILY) != set(
+    RECORD_SEARCH_RECORD_TYPES_BY_FAMILY
+):
+    missing_families = sorted(
+        set(RECORD_SEARCH_RECORD_TYPES_BY_FAMILY)
+        - set(RECORD_SEARCH_REVIEWED_FIELDS_BY_FAMILY)
+    )
+    extra_families = sorted(
+        set(RECORD_SEARCH_REVIEWED_FIELDS_BY_FAMILY)
+        - set(RECORD_SEARCH_RECORD_TYPES_BY_FAMILY)
+    )
+    raise RuntimeError(
+        "Record search reviewed field allow-list drift; "
+        f"missing={missing_families!r}; extra={extra_families!r}"
+    )
 
 
 class RecordSearchStore(Protocol):
@@ -315,9 +333,9 @@ class RecordSearchInspectionService:
             "lifecycle_state": record_lifecycle_state,
             "matched_query": query,
             "route": route,
-            "route_kind": "reviewed_surface",
-            "authority": "navigation_only",
-            "raw_source_authority": False,
+            "route_kind": RECORD_SEARCH_RESULT_ROUTE_KIND,
+            "authority": RECORD_SEARCH_RESULT_AUTHORITY,
+            "raw_source_authority": RECORD_SEARCH_RESULT_RAW_SOURCE_AUTHORITY,
             "summary": self._record_search_summary(payload, family, record_id),
         }
 
@@ -360,7 +378,10 @@ class RecordSearchInspectionService:
                 SourceHealthRecord,
             ),
         ):
-            return record.source_family.strip()
+            source_family = record.source_family.strip()
+            if source_family:
+                return source_family
+            return None
 
         return None
 
@@ -452,10 +473,8 @@ class RecordSearchInspectionService:
     def _record_search_payload_values(
         payload: Mapping[str, object],
     ) -> tuple[str, ...]:
-        family = payload.get("record_family")
-        selected_fields = (
-            *RECORD_SEARCH_COMMON_REVIEWED_FIELDS,
-            *RECORD_SEARCH_REVIEWED_FIELDS_BY_FAMILY.get(str(family), ()),
+        selected_fields = RecordSearchInspectionService._reviewed_field_names_for_family(
+            payload.get("record_family")
         )
         values: list[str] = []
         for field_name in selected_fields:
@@ -466,6 +485,20 @@ class RecordSearchInspectionService:
                     )
                 )
         return tuple(values)
+
+    @staticmethod
+    def _reviewed_field_names_for_family(record_family: object) -> tuple[str, ...]:
+        normalized_family = str(record_family).strip()
+        if normalized_family not in RECORD_SEARCH_REVIEWED_FIELDS_BY_FAMILY:
+            known_families = ", ".join(sorted(RECORD_SEARCH_REVIEWED_FIELDS_BY_FAMILY))
+            raise ValueError(
+                f"Unsupported search record family {normalized_family!r}; "
+                f"expected one of: {known_families}"
+            )
+        return (
+            *RECORD_SEARCH_COMMON_REVIEWED_FIELDS,
+            *RECORD_SEARCH_REVIEWED_FIELDS_BY_FAMILY[normalized_family],
+        )
 
     @staticmethod
     def _record_search_value_text(value: object) -> tuple[str, ...]:

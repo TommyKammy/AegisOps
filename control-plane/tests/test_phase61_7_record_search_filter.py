@@ -21,12 +21,38 @@ from aegisops.control_plane.models import (
     SourceHealthRecord,
     SuppressionProposalRecord,
 )
+from aegisops.control_plane.inspection.record_search import (
+    RECORD_SEARCH_RECORD_TYPES_BY_FAMILY,
+    RECORD_SEARCH_REVIEWED_FIELDS_BY_FAMILY,
+    RecordSearchInspectionService,
+)
 from support.service_persistence import ServicePersistenceTestBase
 
 GITHUB_AUDIT_CATALOG_ENTRY = "docs/source-families/github-audit/onboarding-package.md"
 
 
 class Phase617RecordSearchFilterTests(ServicePersistenceTestBase):
+    def test_record_search_requires_explicit_reviewed_fields_for_each_family(
+        self,
+    ) -> None:
+        self.assertEqual(
+            set(RECORD_SEARCH_REVIEWED_FIELDS_BY_FAMILY),
+            set(RECORD_SEARCH_RECORD_TYPES_BY_FAMILY),
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "Unsupported search record family",
+        ):
+            RecordSearchInspectionService._record_search_payload_values(
+                {
+                    "record_family": "native_detection",
+                    "record_id": "native-detection-001",
+                    "source_family": "wazuh_detection",
+                    "lifecycle_state": "collected",
+                }
+            )
+
     def test_record_search_returns_reviewed_navigation_results_only(self) -> None:
         store, service, case, evidence_id, _reviewed_at = (
             self._build_phase19_in_scope_case()
