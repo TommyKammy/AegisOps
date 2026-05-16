@@ -28,8 +28,8 @@ from aegisops.control_plane.service import (
     RECORD_TYPES_BY_FAMILY,
     _AUTHORITATIVE_PRIMARY_ID_FIELD_BY_FAMILY,
 )
-from aegisops.control_plane import phase61_record_validators
 from aegisops.control_plane.record_validation import _validate_record
+from aegisops.control_plane.validation import phase61_record_validators
 
 
 class _FakeLifecycleTransitionStore:

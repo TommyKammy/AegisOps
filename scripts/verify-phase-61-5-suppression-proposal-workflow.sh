@@ -6,7 +6,7 @@ repo_root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 validation_path="${repo_root}/docs/phase-61-5-suppression-proposal-workflow-validation.md"
 test_path="${repo_root}/control-plane/tests/test_phase61_detector_lifecycle_record_contract.py"
 model_path="${repo_root}/control-plane/aegisops/control_plane/models.py"
-validation_code_path="${repo_root}/control-plane/aegisops/control_plane/phase61_record_validators.py"
+validation_code_path="${repo_root}/control-plane/aegisops/control_plane/validation/phase61_record_validators.py"
 migration_path="${repo_root}/postgres/control-plane/migrations/0013_phase_61_detector_lifecycle_records.sql"
 
 for path in \

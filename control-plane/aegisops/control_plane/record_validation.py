@@ -24,7 +24,7 @@ from .models import (
     RecommendationRecord,
     SourceHealthRecord,
 )
-from .phase61_record_validators import (
+from .validation.phase61_record_validators import (
     _DETECTOR_LIFECYCLE_STATES,
     validate_phase61_record,
 )
