@@ -6,6 +6,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 required_files=(
   "control-plane/aegisops/control_plane/models.py"
   "control-plane/aegisops/control_plane/record_validation.py"
+  "control-plane/aegisops/control_plane/validation/phase61_record_validators.py"
   "apps/operator-ui/src/app/operatorConsolePages/sourceHealthDashboardPages.tsx"
   "apps/operator-ui/src/app/OperatorRoutes.sourceHealthDashboard.testSuite.tsx"
   "postgres/control-plane/migrations/0014_phase_61_source_health_records.sql"
@@ -30,6 +31,7 @@ for expected in \
   "cache_sourced"; do
   if ! rg -q "${expected}" \
     "${repo_root}/control-plane/aegisops/control_plane/record_validation.py" \
+    "${repo_root}/control-plane/aegisops/control_plane/validation/phase61_record_validators.py" \
     "${repo_root}/apps/operator-ui/src/operatorDataProvider/listSemantics.ts" \
     "${repo_root}/apps/operator-ui/src/app/operatorConsolePages/sourceHealthDashboardPages.tsx"; then
     echo "Missing Phase 61.6 source-health dashboard term: ${expected}" >&2
