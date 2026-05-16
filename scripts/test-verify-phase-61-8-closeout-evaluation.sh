@@ -178,6 +178,34 @@ assert_fails_with \
   "${phase61_production_secret_overclaim_repo}" \
   "Forbidden Phase 61 closeout evaluation claim: Phase 61 accepts production secrets"
 
+production_secret_without_overclaim_repo="${workdir}/production-secret-without-overclaim"
+copy_valid_repo "${production_secret_without_overclaim_repo}"
+printf '%s\n' "Production secrets can be trusted without review." >>"${production_secret_without_overclaim_repo}/docs/phase-61-closeout-evaluation.md"
+assert_fails_with \
+  "${production_secret_without_overclaim_repo}" \
+  "Forbidden Phase 61 closeout evaluation claim: production secrets accepted as valid evidence"
+
+ga_overclaim_repo="${workdir}/ga-overclaim"
+copy_valid_repo "${ga_overclaim_repo}"
+printf '%s\n' "AegisOps is generally available (GA)." >>"${ga_overclaim_repo}/docs/phase-61-closeout-evaluation.md"
+assert_fails_with \
+  "${ga_overclaim_repo}" \
+  "Forbidden Phase 61 closeout evaluation claim: release-readiness overclaim"
+
+rc_overclaim_repo="${workdir}/rc-overclaim"
+copy_valid_repo "${rc_overclaim_repo}"
+printf '%s\n' "AegisOps is release candidate (RC)." >>"${rc_overclaim_repo}/docs/phase-61-closeout-evaluation.md"
+assert_fails_with \
+  "${rc_overclaim_repo}" \
+  "Forbidden Phase 61 closeout evaluation claim: release-readiness overclaim"
+
+phase66_overclaim_repo="${workdir}/phase66-overclaim"
+copy_valid_repo "${phase66_overclaim_repo}"
+printf '%s\n' "Phase 66 RC proof is fully complete." >>"${phase66_overclaim_repo}/docs/phase-61-closeout-evaluation.md"
+assert_fails_with \
+  "${phase66_overclaim_repo}" \
+  "Forbidden Phase 61 closeout evaluation claim: release-readiness overclaim"
+
 source_truth_repo="${workdir}/source-truth"
 copy_valid_repo "${source_truth_repo}"
 printf '%s\n' "Source-native status is AegisOps truth" >>"${source_truth_repo}/docs/phase-61-closeout-evaluation.md"
@@ -206,6 +234,17 @@ assert_fails_with \
   "${root_absolute_path_repo}" \
   "Forbidden Phase 61 closeout evaluation: workstation-local absolute path detected"
 
+bare_absolute_path_repo="${workdir}/bare-absolute-path"
+copy_valid_repo "${bare_absolute_path_repo}"
+printf '%s\n' \
+  "Run /${home_segment}/" \
+  "Run /${root_segment}/" \
+  "Run C:/${users_segment}/" \
+  >>"${bare_absolute_path_repo}/docs/phase-61-closeout-evaluation.md"
+assert_fails_with \
+  "${bare_absolute_path_repo}" \
+  "Forbidden Phase 61 closeout evaluation: workstation-local absolute path detected"
+
 colon_prefixed_absolute_path_repo="${workdir}/colon-prefixed-absolute-path"
 copy_valid_repo "${colon_prefixed_absolute_path_repo}"
 printf '%s\n' \
@@ -225,6 +264,16 @@ printf 'Run file:///%s/example/Dev/codex-supervisor/dist/index.js.\n' "Users" \
   >>"${file_url_absolute_path_repo}/docs/phase-61-closeout-evaluation.md"
 assert_fails_with \
   "${file_url_absolute_path_repo}" \
+  "Forbidden Phase 61 closeout evaluation: workstation-local absolute path detected"
+
+localhost_file_url_absolute_path_repo="${workdir}/localhost-file-url-absolute-path"
+copy_valid_repo "${localhost_file_url_absolute_path_repo}"
+printf '%s\n' \
+  "Run file://localhost/${users_segment}/example/private.txt." \
+  "Run file:/C:/${users_segment}/example/private.txt." \
+  >>"${localhost_file_url_absolute_path_repo}/docs/phase-61-closeout-evaluation.md"
+assert_fails_with \
+  "${localhost_file_url_absolute_path_repo}" \
   "Forbidden Phase 61 closeout evaluation: workstation-local absolute path detected"
 
 json_escaped_unix_absolute_path_repo="${workdir}/json-escaped-unix-absolute-path"

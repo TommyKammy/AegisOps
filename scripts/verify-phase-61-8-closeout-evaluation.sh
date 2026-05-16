@@ -102,8 +102,10 @@ windows_backslash_home_pattern='[a-z]:\\+users\\+'
 windows_slash_home_pattern='[a-z]:/'"users"'/'
 unix_local_path_pattern="(${macos_home_pattern}|${linux_home_pattern}|${root_home_pattern})"
 local_path_pattern="(${unix_local_path_pattern}|${windows_backslash_home_pattern}|${windows_slash_home_pattern})"
-absolute_path_pattern="(${absolute_path_boundary}${local_path_pattern}|file:///?${local_path_pattern})[^[:space:]]+"
-colon_prefixed_absolute_path_pattern="${absolute_path_boundary}[^[:space:]/:]+:${local_path_pattern}[^[:space:]]+"
+local_path_with_tail="${local_path_pattern}[^[:space:]]*"
+file_uri_local_path_pattern="file:(//localhost)?/*${local_path_with_tail}"
+absolute_path_pattern="(${absolute_path_boundary}${local_path_with_tail}|${file_uri_local_path_pattern})"
+colon_prefixed_absolute_path_pattern="${absolute_path_boundary}[^[:space:]/:]+:${local_path_with_tail}"
 if path_hygiene_text "${absolute_doc_path}" | grep -Eq -- "${absolute_path_pattern}" || \
    path_hygiene_text "${readme_path}" | grep -Eq -- "${absolute_path_pattern}" || \
    path_hygiene_text "${absolute_doc_path}" | grep -Eq -- "${colon_prefixed_absolute_path_pattern}" || \
@@ -161,13 +163,43 @@ for forbidden in "${forbidden_claims[@]}"; do
   fi
 done
 
+if awk -v allowed_non_claim_line="${allowed_non_claim_line_lower}" \
+  -v required_rejection_line="${required_rejection_line_lower}" '
+  {
+    line = tolower($0)
+    if (line == allowed_non_claim_line || line == required_rejection_line) {
+      next
+    }
+    negative_context = line ~ /(must reject|must fail|fail closed|fails validation|invalid|must not|cannot|not satisfy|rejected|not valid|does not|not yet|pre-ga|excluded|redacted|forbidden)/
+    if (negative_context) {
+      next
+    }
+    if (line ~ /(^|[^[:alnum:]_])aegisops[[:space:]]+is[[:space:]]+(beta|rc|ga|release candidate|generally available|self-service commercially ready|commercially ready)([^[:alnum:]_]|$)/) {
+      found = 1
+    }
+    if (line ~ /(^|[^[:alnum:]_])aegisops[[:space:]]+is[[:space:]]+generally[[:space:]]+available[[:space:]]*(\(|$)/) {
+      found = 1
+    }
+    if (line ~ /(^|[^[:alnum:]_])phase 6[26][[:space:]]+(soar breadth|rc proof)([^.]*[[:space:]])?(is[[:space:]]+)?(fully[[:space:]]+)?(complete|ready|verified|accepted|done)([^[:alnum:]_]|$)/) {
+      found = 1
+    }
+    if (line ~ /(^|[^[:alnum:]_])phase 61([^.]*[[:space:]])?(proves|ships|includes|validates)[[:space:]]+(rc readiness|ga readiness|commercial replacement readiness)([^[:alnum:]_]|$)/) {
+      found = 1
+    }
+  }
+  END { exit(found ? 0 : 1) }
+' "${absolute_doc_path}"; then
+  echo "Forbidden Phase 61 closeout evaluation claim: release-readiness overclaim" >&2
+  exit 1
+fi
+
 if awk -v required_rejection_line="${required_rejection_line_lower}" '
   {
     line = tolower($0)
     if (line == required_rejection_line) {
       next
     }
-    negative_context = line ~ /(must reject|must fail|fail closed|fails validation|invalid|must not|cannot|not satisfy|rejected|not valid|does not|without|excluded|redacted|forbidden)/
+    negative_context = line ~ /(must reject|must fail|fail closed|fails validation|invalid|must not|cannot|not satisfy|rejected|not valid|does not|excluded|redacted|forbidden)/
     if (negative_context) {
       next
     }
