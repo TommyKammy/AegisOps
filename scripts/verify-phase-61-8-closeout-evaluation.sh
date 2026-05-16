@@ -105,11 +105,12 @@ local_path_pattern="(${unix_local_path_pattern}|${windows_backslash_home_pattern
 local_path_with_tail="${local_path_pattern}[^[:space:]]*"
 file_uri_local_path_pattern="file:(//localhost)?/*${local_path_with_tail}"
 absolute_path_pattern="(${absolute_path_boundary}${local_path_with_tail}|${file_uri_local_path_pattern})"
-colon_prefixed_absolute_path_pattern="${absolute_path_boundary}[^[:space:]/:]+:${local_path_with_tail}"
+assignment_path_boundary='(^|[[:space:](){}<>;,!`"'\''])'
+assignment_prefixed_absolute_path_pattern="${assignment_path_boundary}[^[:space:]/:=?&]+[:=]${local_path_with_tail}"
 if path_hygiene_text "${absolute_doc_path}" | grep -Eq -- "${absolute_path_pattern}" || \
    path_hygiene_text "${readme_path}" | grep -Eq -- "${absolute_path_pattern}" || \
-   path_hygiene_text "${absolute_doc_path}" | grep -Eq -- "${colon_prefixed_absolute_path_pattern}" || \
-   path_hygiene_text "${readme_path}" | grep -Eq -- "${colon_prefixed_absolute_path_pattern}"; then
+   path_hygiene_text "${absolute_doc_path}" | grep -Eq -- "${assignment_prefixed_absolute_path_pattern}" || \
+   path_hygiene_text "${readme_path}" | grep -Eq -- "${assignment_prefixed_absolute_path_pattern}"; then
   echo "Forbidden Phase 61 closeout evaluation: workstation-local absolute path detected" >&2
   exit 1
 fi
@@ -184,6 +185,9 @@ if awk -v allowed_non_claim_line="${allowed_non_claim_line_lower}" \
     if (line ~ /(^|[^[:alnum:]_])aegisops[[:space:]]+is[[:space:]]+generally[[:space:]]+available[[:space:]]*(\(|$)/) {
       found = 1
     }
+    if (line ~ /(^|[^[:alnum:]_])aegisops[[:space:]]+(reached|reaches|achieved|achieves|entered|enters|shipped|ships)[[:space:]]+(beta|rc|ga|release candidate|general availability|generally available|self-service commercial readiness|self-service commercially ready|commercial readiness|commercially ready)([^[:alnum:]_]|$)/) {
+      found = 1
+    }
     if (line ~ /(^|[^[:alnum:]_])phase 6[26][[:space:]]+(soar breadth|rc proof)([^.]*[[:space:]])?(is[[:space:]]+)?(fully[[:space:]]+)?(complete|ready|verified|accepted|done)([^[:alnum:]_]|$)/) {
       found = 1
     }
@@ -203,11 +207,14 @@ if awk -v required_rejection_line="${required_rejection_line_lower}" '
     if (line == required_rejection_line) {
       next
     }
-    negative_context = line ~ /(must reject|must fail|fail closed|fails validation|invalid|must not|cannot|not satisfy|rejected|not valid|does not|excluded|redacted|forbidden)/
+    negative_context = line ~ /(must reject|must fail|fail closed|fails validation|invalid|must not|cannot|not satisfy|rejected|not valid|not yet|does not|excluded|redacted|forbidden)/
     if (negative_context) {
       next
     }
     if (line ~ /(^|[^[:alnum:]_])(production|prod|live)[- ]?secrets?[[:space:]]+(are|is|count as|counts as|may be|can be|remain|stays|accepted as|treated as|allowed as)[[:space:]]+([^.]*[^[:alnum:]_])?(valid|trusted|accepted|allowed|ready|verified|sufficient)([^[:alnum:]_]|$)/) {
+      found = 1
+    }
+    if (line ~ /(^|[^[:alnum:]_])(production|prod|live)[- ]?secrets?[[:space:]]+(are|is|may be|can be|could be|will be|should be|must be)[[:space:]]+used([[:space:]]+(for|as|in)[^.]*|[^[:alnum:]_]|$)/) {
       found = 1
     }
     if (line ~ /(^|[^[:alnum:]_])phase 61[[:space:]]+(accepts|validates|proves|ships|includes|uses)[[:space:]]+([^.]*[[:space:]])?production[- ]?secrets?([^[:alnum:]_]|$)/) {
