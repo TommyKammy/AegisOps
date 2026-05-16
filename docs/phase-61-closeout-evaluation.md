@@ -140,3 +140,17 @@ Phase 62 can consume Phase 61 reviewed source catalog, detector lifecycle, false
 Phase 66 can consume Phase 61 as one RC evidence input for minimum SIEM replacement breadth. Phase 66 must still prove RC gates, first-user RC readiness, issue-lint and verifier completeness, rollout operational hygiene, support and restore evidence, SOAR breadth evidence, limitation ownership, and production rollout readiness outside this closeout.
 
 Phase 61 closeout is release and planning evidence only. It does not add source-native authority, write authority, active suppression, raw query replacement, rule-workbench expansion, SOAR automation breadth, RC proof, or readiness and replacement claims.
+
+## Phase 61.R Maintainability Refresh
+
+Phase 61.R preserved the accepted Phase 61 behavior contract while reducing review pressure around the record-validation, operator-list-validation, and record-search inspection surfaces before Phase 62 work.
+
+The completed Phase 61.R child issues are:
+
+- #1306 extracted Phase 61 record validators from `control-plane/aegisops/control_plane/record_validation.py` into `control-plane/aegisops/control_plane/validation/phase61_record_validators.py` while preserving fail-closed detector lifecycle, false-positive, suppression proposal, and source-health validation behavior.
+- #1307 extracted operator-ui Phase 61 list validators from `apps/operator-ui/src/operatorDataProvider/listSemantics.ts` into `apps/operator-ui/src/operatorDataProvider/phase61ListValidators.ts` while preserving operator-facing list semantics and rejection behavior.
+- #1308 fenced record-search inspection boundaries in `control-plane/aegisops/control_plane/inspection/record_search.py` so reviewed-field assembly stays explicit and directly linked to authoritative records.
+
+The maintainability guard remains active after those refactors. `docs/maintainability-hotspot-baseline.txt` records the refreshed `AegisOpsControlPlaneService` ceiling as `max_lines=1379`, `max_effective_lines=1227`, and `max_facade_methods=95`, which matches the current verifier measurement and fails on silent re-growth.
+
+Phase 61.R did not add product behavior, source-native authority, active suppression, raw query replacement, Phase 62 SOAR behavior, Phase 66 RC proof, or commercial replacement-readiness claims.
