@@ -127,6 +127,20 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             (),
         )
 
+        self.assertEqual(
+            validate_phase62_simulator_output(
+                catalog_action="operator_notification",
+                output={
+                    **self._valid_simulator_output(),
+                    "production_exclusion": (
+                        "Simulator output excludes production execution receipt "
+                        "and reconciliation truth."
+                    ),
+                },
+            ),
+            (),
+        )
+
     def test_simulator_validation_rejects_production_truth_overclaims(self) -> None:
         cases = {
             "production_mode": ({"mode": "production"}, "unsupported_mode"),
@@ -160,6 +174,46 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                     "production_exclusion": (
                         "Simulator output is excluded from production execution receipt "
                         "and reconciliation truth. It is production reconciliation truth."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "excluded_preamble_then_truth": (
+                {
+                    "production_exclusion": (
+                        "excluded from production execution receipt truth therefore "
+                        "production reconciliation truth"
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "unrelated_exclusion": (
+                {"production_exclusion": "excluded for audit cleanup"},
+                "missing_production_exclusion",
+            ),
+            "case_closed": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "truth and case closed."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "ticket_closed": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "truth and ticket closed."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "production_workflow_delegation": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "truth and delegates production workflow launch."
                     ),
                 },
                 "production_exclusion_promotes_production_truth",

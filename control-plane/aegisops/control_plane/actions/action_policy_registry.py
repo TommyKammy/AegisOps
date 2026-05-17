@@ -678,8 +678,25 @@ _SIMULATOR_PRODUCTION_TRUTH_TERMS = (
     ("close", "case"),
     ("closes", "case"),
     ("closed", "case"),
+    ("case", "closed"),
     ("ticket", "truth"),
+    ("close", "ticket"),
+    ("closes", "ticket"),
+    ("closed", "ticket"),
+    ("ticket", "closed"),
+    ("production", "workflow", "delegation"),
+    ("production", "workflow", "delegate"),
+    ("delegate", "production", "workflow"),
+    ("production", "workflow", "launch"),
+    ("launch", "production", "workflow"),
     ("readiness",),
+)
+_SIMULATOR_EXCLUDABLE_PRODUCTION_TRUTH_TERMS = (
+    ("production", "execution", "receipt", "truth"),
+    ("production", "reconciliation", "truth"),
+    ("execution", "receipt", "truth"),
+    ("reconciliation", "truth"),
+    ("production", "truth"),
 )
 _SIMULATOR_EXCLUSION_CONTEXT_TERMS = (
     "exclude",
@@ -688,6 +705,19 @@ _SIMULATOR_EXCLUSION_CONTEXT_TERMS = (
     "excluding",
     "exclusion",
 )
+_SIMULATOR_PRODUCTION_EXCLUSION_SUBJECT_TERMS = (
+    "execution",
+    "receipt",
+    "reconciliation",
+    "truth",
+)
+_SIMULATOR_EXCLUSION_CLAIM_BOUNDARY_TERMS = {
+    _TERM_BOUNDARY,
+    _TERM_COMMA_BOUNDARY,
+    *_NEGATION_CONTRAST_BOUNDARY_TERMS,
+    "therefore",
+    "thus",
+}
 
 PHASE62_SHUFFLE_WORKFLOW_MAPPINGS: Mapping[str, ShuffleWorkflowMapping] = {
     "enrichment_only_lookup": ShuffleWorkflowMapping(
@@ -976,9 +1006,17 @@ def validate_phase62_simulator_output(
     if _non_blank_string(production_exclusion):
         exclusion_terms = _text_terms(str(production_exclusion))
         has_exclusion_term = any(
-            term in {"exclude", "excluded", "exclusion"} for term in exclusion_terms
+            term in _SIMULATOR_EXCLUSION_CONTEXT_TERMS for term in exclusion_terms
         )
-        if not has_exclusion_term:
+        has_production_exclusion_context = (
+            has_exclusion_term
+            and "production" in exclusion_terms
+            and any(
+                term in _SIMULATOR_PRODUCTION_EXCLUSION_SUBJECT_TERMS
+                for term in exclusion_terms
+            )
+        )
+        if not has_production_exclusion_context:
             errors.append("missing_production_exclusion")
         if _contains_simulator_production_truth_overclaim(exclusion_terms):
             errors.append("production_exclusion_promotes_production_truth")
@@ -1236,7 +1274,10 @@ def _contains_simulator_production_truth_overclaim(terms: tuple[str, ...]) -> bo
                 for index in match
             ):
                 continue
-            if _has_recent_simulator_exclusion_context(terms, match[0]):
+            if (
+                term_group in _SIMULATOR_EXCLUDABLE_PRODUCTION_TRUTH_TERMS
+                and _has_recent_simulator_exclusion_context(terms, match[0])
+            ):
                 continue
             return True
     return False
@@ -1249,11 +1290,7 @@ def _has_recent_simulator_exclusion_context(
     start = max(0, target_index - _NEGATION_SCAN_WINDOW)
     for context_index in range(target_index - 1, start - 1, -1):
         term = terms[context_index]
-        if term in {
-            _TERM_BOUNDARY,
-            _TERM_COMMA_BOUNDARY,
-            *_NEGATION_CONTRAST_BOUNDARY_TERMS,
-        }:
+        if term in _SIMULATOR_EXCLUSION_CLAIM_BOUNDARY_TERMS:
             return False
         if term in _SIMULATOR_EXCLUSION_CONTEXT_TERMS:
             if any(
