@@ -129,38 +129,68 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
 
     def test_simulator_validation_rejects_production_truth_overclaims(self) -> None:
         cases = {
-            "production_mode": {"mode": "production"},
-            "missing_demo_label": {"demo_test_label": ""},
-            "demo_label_production_truth": {
-                "demo_test_label": (
-                    "demo/test evidence only and production execution receipt truth"
-                )
-            },
-            "receipt_truth": {
-                "production_exclusion": (
-                    "Simulator output is production execution receipt truth."
-                )
-            },
-            "reconciliation_truth": {
-                "production_exclusion": (
-                    "Simulator state is production reconciliation truth."
-                )
-            },
-            "excluded_then_truth": {
-                "production_exclusion": (
-                    "Simulator output is excluded from production execution receipt "
-                    "and reconciliation truth. It is production reconciliation truth."
-                )
-            },
-            "authoritative": {"authority_posture": "authoritative_execution_receipt"},
-            "live_secret": {"live_secret_ref": "shuffle-prod-secret"},
-            "customer_data": {"customer_data_classification": "customer_private"},
-            "direct_execution": {"simulated_status": "production_execution_success"},
-            "catalog_mismatch": {"catalog_action": "create_tracking_ticket"},
-            "unsupported_action": {"catalog_action": "disable_account"},
+            "production_mode": ({"mode": "production"}, "unsupported_mode"),
+            "missing_demo_label": ({"demo_test_label": ""}, "missing_demo_test_label"),
+            "demo_label_production_truth": (
+                {
+                    "demo_test_label": (
+                        "demo/test evidence only and production execution receipt truth"
+                    ),
+                },
+                "demo_test_label_promotes_production_truth",
+            ),
+            "receipt_truth": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is production execution receipt truth."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "reconciliation_truth": (
+                {
+                    "production_exclusion": (
+                        "Simulator state is production reconciliation truth."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "excluded_then_truth": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth. It is production reconciliation truth."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "authoritative": (
+                {"authority_posture": "authoritative_execution_receipt"},
+                "authority_posture_mismatch",
+            ),
+            "live_secret": (
+                {"live_secret_ref": "shuffle-prod-secret"},
+                "live_secret_ref_forbidden",
+            ),
+            "customer_data": (
+                {"customer_data_classification": "customer_private"},
+                "customer_data_forbidden",
+            ),
+            "direct_execution": (
+                {"simulated_status": "production_execution_success"},
+                "unsupported_simulated_status",
+            ),
+            "catalog_mismatch": (
+                {"catalog_action": "create_tracking_ticket"},
+                "catalog_action_mismatch",
+            ),
+            "unsupported_action": (
+                {"catalog_action": "disable_account"},
+                "unsupported_action",
+            ),
         }
 
-        for label, override in cases.items():
+        for label, (override, expected_error) in cases.items():
             with self.subTest(label=label):
                 catalog_action = (
                     "disable_account"
@@ -171,7 +201,7 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                     catalog_action=catalog_action,
                     output={**self._valid_simulator_output(), **override},
                 )
-                self.assertTrue(errors, label)
+                self.assertIn(expected_error, errors)
 
     def test_manual_fallback_requirements_cover_every_reviewed_action(self) -> None:
         self.assertEqual(
