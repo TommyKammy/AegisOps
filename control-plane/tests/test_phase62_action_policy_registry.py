@@ -285,6 +285,23 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             separated_authority_errors,
         )
 
+        source_context_authoritative_aegisops_errors = (
+            validate_phase62_manual_fallback_record(
+                catalog_action="operator_notification",
+                record={
+                    **valid_record,
+                    "expected_evidence": (
+                        "ticket output retained only as context; authoritative "
+                        "AegisOps receipt remains required"
+                    ),
+                },
+            )
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            source_context_authoritative_aegisops_errors,
+        )
+
         negated_errors = validate_phase62_manual_fallback_record(
             catalog_action="operator_notification",
             record={

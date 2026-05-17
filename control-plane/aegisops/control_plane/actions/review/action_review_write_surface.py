@@ -698,6 +698,8 @@ def _phase62_has_recent_negation(terms: tuple[str, ...], index: int) -> bool:
     for term in reversed(terms[start:index]):
         if term in {"but", "however", "though", "although", "yet", "instead"}:
             return False
+        if term in {"and", "then"}:
+            return False
         if term in {"not", "no", "never", "without", "cannot", "cant", "wont"}:
             return True
     return False

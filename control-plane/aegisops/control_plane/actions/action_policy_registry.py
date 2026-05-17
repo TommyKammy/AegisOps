@@ -640,13 +640,35 @@ def _authority_claim_matches_source(
     source_end = source_index + len(source_terms)
     authority_end = authority_index + len(authority_terms)
     if source_index <= authority_index:
+        between = terms[source_end:authority_index]
+        if any(
+            term
+            in {
+                "but",
+                "however",
+                "though",
+                "although",
+                "yet",
+                "whereas",
+                "while",
+                "instead",
+            }
+            for term in between
+        ):
+            return False
         authority_anchor_start = max(source_end, authority_index - 3)
-        authority_anchor = terms[authority_anchor_start:authority_end]
+        authority_anchor = terms[
+            authority_anchor_start : min(len(terms), authority_end + 4)
+        ]
         if any(term in {"aegisops", "bound"} for term in authority_anchor):
             return False
         return True
 
     between = terms[authority_end:source_index]
+    if source_index - authority_end <= 3 and not any(
+        term in {"aegisops", "bound"} for term in terms[authority_index:source_end]
+    ):
+        return True
     return any(
         term
         in {
