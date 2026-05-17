@@ -309,6 +309,7 @@ class Phase37ReviewedRecordChainRehearsalTests(ServicePersistenceTestBase):
             ),
             evidence_ids=(evidence.evidence_id,),
         )
+        downstream_binding = execution.provenance["downstream_binding"]
         observed_at = action_request.requested_at + timedelta(
             minutes=_require_number(
                 reconciliation_fixture.get("observed_offset_minutes"),
@@ -328,6 +329,13 @@ class Phase37ReviewedRecordChainRehearsalTests(ServicePersistenceTestBase):
                     "approval_decision_id": execution.approval_decision_id,
                     "delegation_id": execution.delegation_id,
                     "payload_hash": execution.payload_hash,
+                    "action_request_id": execution.action_request_id,
+                    "workflow_id": downstream_binding["workflow_id"],
+                    "workflow_version_id": downstream_binding["workflow_version_id"],
+                    "correlation_id": downstream_binding["correlation_id"],
+                    "expected_execution_receipt_id": downstream_binding[
+                        "expected_execution_receipt_id"
+                    ],
                     "observed_at": observed_at,
                     "status": _require_string(
                         reconciliation_fixture.get("status"),

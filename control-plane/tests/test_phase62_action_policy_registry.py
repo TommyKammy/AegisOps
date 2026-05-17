@@ -38,6 +38,22 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             PHASE62_ACTION_POLICIES["create_tracking_ticket"].allowed_reviewer_roles,
             ("approver",),
         )
+        for policy in PHASE62_ACTION_POLICIES.values():
+            self.assertIn("correlation_id", policy.expected_receipt_fields)
+            self.assertIn("expected_execution_receipt_id", policy.correlation_fields)
+            self.assertEqual(
+                policy.reconciliation_outcomes,
+                (
+                    "success",
+                    "failure",
+                    "missing",
+                    "stale",
+                    "mismatched",
+                    "duplicated",
+                    "wrong_correlation",
+                    "manual_review",
+                ),
+            )
 
     def test_validation_allows_reviewed_tracking_ticket_policy(self) -> None:
         decision = evaluate_phase62_action_policy(

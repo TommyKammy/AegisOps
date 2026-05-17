@@ -533,6 +533,28 @@ class ApprovedActionDelegationCoordinator:
                         "requested_scope": dict(delegation_binding["requested_scope"]),
                     }
                 )
+            else:
+                provenance["downstream_binding"].update(
+                    {
+                        "action_request_id": execution.action_request_id,
+                        "workflow_id": self._require_receipt_string_attribute(
+                            receipt,
+                            "workflow_id",
+                        ),
+                        "workflow_version_id": self._require_receipt_string_attribute(
+                            receipt,
+                            "workflow_version_id",
+                        ),
+                        "correlation_id": self._require_receipt_string_attribute(
+                            receipt,
+                            "correlation_id",
+                        ),
+                        "expected_execution_receipt_id": self._require_receipt_string_attribute(
+                            receipt,
+                            "expected_execution_receipt_id",
+                        ),
+                    }
+                )
             if execution.approved_payload.get("action_type") == "create_tracking_ticket":
                 provenance["downstream_binding"].update(
                     {

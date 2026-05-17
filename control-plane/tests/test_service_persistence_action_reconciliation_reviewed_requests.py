@@ -329,6 +329,7 @@ class ReviewedActionRequestPersistenceTests(ServicePersistenceTestBase):
             delegation_issuer="control-plane-service",
             evidence_ids=(evidence_id,),
         )
+        downstream_binding = execution.provenance["downstream_binding"]
         reconciliation = service.reconcile_action_execution(
             action_request_id=approved_request.action_request_id,
             execution_surface_type="automation_substrate",
@@ -342,6 +343,13 @@ class ReviewedActionRequestPersistenceTests(ServicePersistenceTestBase):
                     "approval_decision_id": execution.approval_decision_id,
                     "delegation_id": execution.delegation_id,
                     "payload_hash": execution.payload_hash,
+                    "action_request_id": execution.action_request_id,
+                    "workflow_id": downstream_binding["workflow_id"],
+                    "workflow_version_id": downstream_binding["workflow_version_id"],
+                    "correlation_id": downstream_binding["correlation_id"],
+                    "expected_execution_receipt_id": downstream_binding[
+                        "expected_execution_receipt_id"
+                    ],
                     "observed_at": observed_at,
                     "status": "success",
                 },
@@ -386,6 +394,81 @@ class ReviewedActionRequestPersistenceTests(ServicePersistenceTestBase):
             reconciliation.subject_linkage["evidence_ids"],
             (evidence_id,),
         )
+
+    def test_service_rejects_phase62_notification_success_without_bound_receipt(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Prepare a reviewed owner notification request.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Reviewed GitHub audit evidence requires bounded owner notification.",
+            expires_at=reviewed_at + timedelta(hours=4),
+        )
+        approval_decision = service.record_action_approval_decision(
+            action_request_id=action_request.action_request_id,
+            approver_identity="approver-001",
+            authenticated_approver_identity="approver-001",
+            decision="grant",
+            decision_rationale="Reviewed notification remains bounded to one recipient.",
+            decided_at=action_request.requested_at + timedelta(minutes=5),
+        )
+        approved_request = service.get_record(
+            ActionRequestRecord,
+            action_request.action_request_id,
+        )
+        self.assertIsNotNone(approved_request)
+        assert approved_request is not None
+
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id=approved_request.action_request_id,
+            approved_payload=dict(approved_request.requested_payload),
+            delegated_at=action_request.requested_at + timedelta(minutes=10),
+            delegation_issuer="control-plane-service",
+            evidence_ids=(evidence_id,),
+        )
+
+        reconciliation = service.reconcile_action_execution(
+            action_request_id=approved_request.action_request_id,
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(
+                {
+                    "execution_run_id": execution.execution_run_id,
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                    "idempotency_key": approved_request.idempotency_key,
+                    "approval_decision_id": approval_decision.approval_decision_id,
+                    "delegation_id": execution.delegation_id,
+                    "payload_hash": execution.payload_hash,
+                    "observed_at": action_request.requested_at + timedelta(minutes=15),
+                    "status": "success",
+                },
+            ),
+            compared_at=action_request.requested_at + timedelta(minutes=16),
+            stale_after=action_request.requested_at + timedelta(hours=1),
+        )
+
+        stored_execution = service.get_record(
+            ActionExecutionRecord,
+            execution.action_execution_id,
+        )
+        self.assertIsNotNone(stored_execution)
+        assert stored_execution is not None
+        self.assertEqual(reconciliation.ingest_disposition, "mismatch")
+        self.assertEqual(reconciliation.lifecycle_state, "mismatched")
+        self.assertIn("receipt binding", reconciliation.mismatch_summary)
+        self.assertEqual(stored_execution.lifecycle_state, "queued")
 
     def test_service_executes_second_low_risk_tracking_ticket_action_from_reviewed_recommendation(
         self,
@@ -547,6 +630,13 @@ class ReviewedActionRequestPersistenceTests(ServicePersistenceTestBase):
                     "approval_decision_id": execution.approval_decision_id,
                     "delegation_id": execution.delegation_id,
                     "payload_hash": execution.payload_hash,
+                    "action_request_id": execution.action_request_id,
+                    "workflow_id": downstream_binding["workflow_id"],
+                    "workflow_version_id": downstream_binding["workflow_version_id"],
+                    "correlation_id": downstream_binding["correlation_id"],
+                    "expected_execution_receipt_id": downstream_binding[
+                        "expected_execution_receipt_id"
+                    ],
                     "coordination_reference_id": downstream_binding[
                         "coordination_reference_id"
                     ],
@@ -914,6 +1004,7 @@ class ReviewedActionRequestPersistenceTests(ServicePersistenceTestBase):
             delegation_issuer="control-plane-service",
             evidence_ids=(evidence_id,),
         )
+        downstream_binding = execution.provenance["downstream_binding"]
         service.persist_record(replace(execution, lifecycle_state="running"))
 
         reconciliation = service.reconcile_action_execution(
@@ -929,6 +1020,13 @@ class ReviewedActionRequestPersistenceTests(ServicePersistenceTestBase):
                     "approval_decision_id": execution.approval_decision_id,
                     "delegation_id": execution.delegation_id,
                     "payload_hash": execution.payload_hash,
+                    "action_request_id": execution.action_request_id,
+                    "workflow_id": downstream_binding["workflow_id"],
+                    "workflow_version_id": downstream_binding["workflow_version_id"],
+                    "correlation_id": downstream_binding["correlation_id"],
+                    "expected_execution_receipt_id": downstream_binding[
+                        "expected_execution_receipt_id"
+                    ],
                     "observed_at": observed_at,
                     "status": "queued",
                 },

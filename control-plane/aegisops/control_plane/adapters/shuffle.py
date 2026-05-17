@@ -64,10 +64,10 @@ class ShuffleActionAdapter:
                     "shuffle delegation binding requested_scope is malformed"
                 )
         else:
-            external_receipt_id = None
-            workflow_id = None
-            workflow_version_id = None
-            correlation_id = None
+            workflow_id = self._default_workflow_id(action_type)
+            workflow_version_id = self._default_workflow_version_id(workflow_id)
+            correlation_id = f"shuffle-correlation-{action_request_id}"
+            external_receipt_id = f"shuffle-receipt-{delegation_id}"
             requested_scope = None
         if action_type == "notify_identity_owner":
             self._require_reviewed_phase20_notify_payload(approved_payload)
@@ -121,6 +121,26 @@ class ShuffleActionAdapter:
                     f"{coordination_target_id}"
                 ),
             )
+        raise ValueError(
+            "approved action is outside the reviewed Phase 20 Shuffle delegation scope"
+        )
+
+    @staticmethod
+    def _default_workflow_id(action_type: object) -> str:
+        if action_type == "notify_identity_owner":
+            return "notify_identity_owner"
+        if action_type == "create_tracking_ticket":
+            return "create_tracking_ticket"
+        raise ValueError(
+            "approved action is outside the reviewed Phase 20 Shuffle delegation scope"
+        )
+
+    @staticmethod
+    def _default_workflow_version_id(workflow_id: str) -> str:
+        if workflow_id == "notify_identity_owner":
+            return "notify_identity_owner-v1-reviewed-2026-05-03"
+        if workflow_id == "create_tracking_ticket":
+            return "create_tracking_ticket-v1-reviewed-2026-05-03"
         raise ValueError(
             "approved action is outside the reviewed Phase 20 Shuffle delegation scope"
         )

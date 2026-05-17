@@ -374,6 +374,17 @@ class ActionDelegationPolicyPersistenceTests(ServicePersistenceTestBase):
                     "approval_decision_id": "approval-routine-001",
                     "delegation_id": execution.delegation_id,
                     "payload_hash": payload_hash,
+                    "action_request_id": "action-request-routine-001",
+                    "workflow_id": "notify_identity_owner",
+                    "workflow_version_id": (
+                        "notify_identity_owner-v1-reviewed-2026-05-03"
+                    ),
+                    "correlation_id": (
+                        "shuffle-correlation-action-request-routine-001"
+                    ),
+                    "expected_execution_receipt_id": (
+                        f"shuffle-receipt-{execution.delegation_id}"
+                    ),
                 },
             },
         )

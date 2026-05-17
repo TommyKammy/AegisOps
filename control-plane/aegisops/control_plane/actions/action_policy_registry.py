@@ -31,6 +31,9 @@ class ActionPolicy:
     allowed_target_scope: str
     idempotency_required: bool
     protected_target_posture: str
+    expected_receipt_fields: tuple[str, ...]
+    correlation_fields: tuple[str, ...]
+    reconciliation_outcomes: tuple[str, ...]
     registry_id: str
     denied_by_default: bool = False
 
@@ -56,6 +59,9 @@ class ActionPolicyDecision:
             "allowed_target_scope": self.policy.allowed_target_scope,
             "idempotency_required": self.policy.idempotency_required,
             "protected_target_posture": self.policy.protected_target_posture,
+            "expected_receipt_fields": self.policy.expected_receipt_fields,
+            "correlation_fields": self.policy.correlation_fields,
+            "reconciliation_outcomes": self.policy.reconciliation_outcomes,
         }
 
     def as_policy_evaluation(self) -> dict[str, object]:
@@ -77,6 +83,39 @@ class ActionPolicyDecision:
         }
 
 
+_COMMON_RECEIPT_FIELDS = (
+    "action_request_id",
+    "catalog_action",
+    "family",
+    "reviewed_template_version",
+    "correlation_id",
+    "idempotency_key",
+    "execution_run_id",
+    "started_at",
+    "finished_at",
+    "status",
+)
+_COMMON_CORRELATION_FIELDS = (
+    "action_request_id",
+    "approval_decision_id",
+    "delegation_id",
+    "execution_run_id",
+    "correlation_id",
+    "expected_execution_receipt_id",
+    "idempotency_key",
+)
+_COMMON_RECONCILIATION_OUTCOMES = (
+    "success",
+    "failure",
+    "missing",
+    "stale",
+    "mismatched",
+    "duplicated",
+    "wrong_correlation",
+    "manual_review",
+)
+
+
 PHASE62_ACTION_POLICIES: Mapping[str, ActionPolicy] = {
     "enrichment_only_lookup": ActionPolicy(
         catalog_action="enrichment_only_lookup",
@@ -87,6 +126,10 @@ PHASE62_ACTION_POLICIES: Mapping[str, ActionPolicy] = {
         allowed_target_scope="single_lookup_subject",
         idempotency_required=True,
         protected_target_posture="mutation_forbidden",
+        expected_receipt_fields=_COMMON_RECEIPT_FIELDS
+        + ("lookup_subject_ref", "lookup_evidence_ref"),
+        correlation_fields=_COMMON_CORRELATION_FIELDS + ("lookup_subject_ref",),
+        reconciliation_outcomes=_COMMON_RECONCILIATION_OUTCOMES,
         registry_id="phase62.2:enrichment_only_lookup",
     ),
     "operator_notification": ActionPolicy(
@@ -98,6 +141,10 @@ PHASE62_ACTION_POLICIES: Mapping[str, ActionPolicy] = {
         allowed_target_scope="single_recipient",
         idempotency_required=True,
         protected_target_posture="mutation_forbidden",
+        expected_receipt_fields=_COMMON_RECEIPT_FIELDS
+        + ("recipient_ref", "delivery_attempt_status", "normalized_receipt_ref"),
+        correlation_fields=_COMMON_CORRELATION_FIELDS + ("recipient_ref",),
+        reconciliation_outcomes=_COMMON_RECONCILIATION_OUTCOMES,
         registry_id="phase62.2:operator_notification",
     ),
     "manual_escalation_request": ActionPolicy(
@@ -109,6 +156,10 @@ PHASE62_ACTION_POLICIES: Mapping[str, ActionPolicy] = {
         allowed_target_scope="single_escalation_owner",
         idempotency_required=True,
         protected_target_posture="approval_required_for_follow_up",
+        expected_receipt_fields=_COMMON_RECEIPT_FIELDS
+        + ("escalation_owner_ref", "delivery_attempt_status", "fallback_needed"),
+        correlation_fields=_COMMON_CORRELATION_FIELDS + ("escalation_owner_ref",),
+        reconciliation_outcomes=_COMMON_RECONCILIATION_OUTCOMES,
         registry_id="phase62.2:manual_escalation_request",
     ),
     "create_tracking_ticket": ActionPolicy(
@@ -120,6 +171,18 @@ PHASE62_ACTION_POLICIES: Mapping[str, ActionPolicy] = {
         allowed_target_scope="single_external_ticket",
         idempotency_required=True,
         protected_target_posture="mutation_forbidden",
+        expected_receipt_fields=_COMMON_RECEIPT_FIELDS
+        + (
+            "approval_decision_id",
+            "ticket_pointer_id",
+            "ticket_system_id",
+            "ticket_pointer_custody",
+            "delivery_status",
+            "normalized_receipt_ref",
+        ),
+        correlation_fields=_COMMON_CORRELATION_FIELDS
+        + ("coordination_reference_id", "coordination_target_type"),
+        reconciliation_outcomes=_COMMON_RECONCILIATION_OUTCOMES,
         registry_id="phase62.2:create_tracking_ticket",
     ),
 }
@@ -161,6 +224,9 @@ def evaluate_phase62_action_policy(
             allowed_target_scope="none",
             idempotency_required=True,
             protected_target_posture="denied",
+            expected_receipt_fields=(),
+            correlation_fields=(),
+            reconciliation_outcomes=("manual_review",),
             registry_id=f"phase62.2:{catalog_action}:missing",
             denied_by_default=True,
         )
