@@ -158,6 +158,12 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "operator_note_proves_reconciliation": {
                 "operator_note": "Operator note proves the reconciliation.",
             },
+            "operator_note_confirms_receipt": {
+                "operator_note": "Operator note confirms receipt.",
+            },
+            "operator_note_validates_reconciliation": {
+                "operator_note": "Operator note validates reconciliation.",
+            },
             "missing_follow_up_state": {"follow_up_state": ""},
             "fallback_as_reconciliation_truth": {
                 "operator_note": "Operator note is reconciliation truth.",

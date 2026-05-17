@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from typing import Mapping
 
 
+ManualFallbackValidationErrors = tuple[str, ...]
+
 _ROLE_ALIASES = {
     "read-only-auditor": "read_only_auditor",
     "readonly-auditor": "read_only_auditor",
@@ -159,7 +161,7 @@ _MANUAL_FALLBACK_RECORD_FIELDS = (
     "fallback_state",
     "blocked_reason",
     "expected_evidence",
-    "follow_up_state",
+    "follow_up_state",  # required alongside fallback_state for schema checklists
 )
 _MANUAL_FALLBACK_BLOCKED_REASON_CATEGORIES = {
     "shuffle_unavailable": (("unavailable",),),
@@ -210,9 +212,13 @@ _NON_AUTHORITATIVE_EVIDENCE_AUTHORITY_TERMS = (
 )
 _AUTHORITY_PROMOTING_TERM_GROUPS = (
     ("bypass",),
+    ("confirms", "receipt"),
+    ("confirms", "reconciliation"),
     ("proves", "execution"),
     ("proves", "receipt"),
     ("proves", "reconciliation"),
+    ("validates", "receipt"),
+    ("validates", "reconciliation"),
     ("execution", "truth"),
     ("receipt", "truth"),
     ("reconciliation", "truth"),
@@ -508,7 +514,7 @@ def validate_phase62_manual_fallback_record(
     *,
     catalog_action: str,
     record: Mapping[str, object],
-) -> tuple[str, ...]:
+) -> ManualFallbackValidationErrors:
     """Return fail-closed Phase 62.5 errors for a candidate fallback record."""
     requirement = PHASE62_MANUAL_FALLBACK_REQUIREMENTS.get(catalog_action)
     if requirement is None:
