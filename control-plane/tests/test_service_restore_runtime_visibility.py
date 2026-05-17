@@ -961,6 +961,11 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
             ),
             "execution_rejected",
         )
+        self.assertIsNone(
+            _phase62_fallback_state_from_text(
+                "The reviewed route was not unavailable, rejected, or timed out."
+            )
+        )
 
         _store, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
@@ -1044,7 +1049,9 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
             "mismatched owner roster blocked manual follow-up",
             "fallback owner unavailable for handoff",
             "fallback owner rejected handoff window",
+            "fallback owner unavailable, reviewed route remains available",
             "receipt not missing, but owner mismatch",
+            "receipt available, missing owner acknowledgement",
             "receipt isnt missing after dispatch",
             "route isnt unavailable",
         ):

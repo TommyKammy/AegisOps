@@ -378,10 +378,6 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "AI output validates receipt",
             "AI output says receipt validates",
             "receipt proof comes from ticket state",
-            (
-                "ticket state includes owner shift case account route queue ticket "
-                "and analyst context, then confirms receipt"
-            ),
             "ticket output cannot prove execution; ticket state confirms receipt",
             "ticket output confirmed execution",
             "ticket output validate receipt",
@@ -682,6 +678,8 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "ticket state is receipt not proof",
             "ticket state is receipt not validation",
             "ticket state isnt receipt proof",
+            "ticket output cannot prove execution, validate receipt, or bypass approval",
+            "manual fallback does not prove execution, validate receipt, or bypass approval",
             (
                 "bound AegisOps receipt is authoritative; ticket output "
                 "remains context"
@@ -700,6 +698,55 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                     "expected_evidence_promotes_non_authoritative_truth",
                     errors,
                 )
+
+        source_context_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "expected_evidence": (
+                    "ticket output and analyst context, then confirms receipt"
+                ),
+            },
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            source_context_errors,
+        )
+        self.assertIn("expected_evidence_promotes_authority", source_context_errors)
+
+        separated_source_context_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "expected_evidence": (
+                    "ticket state includes owner shift case account route queue ticket "
+                    "and analyst context, then confirms receipt"
+                ),
+            },
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            separated_source_context_errors,
+        )
+        self.assertIn(
+            "expected_evidence_promotes_authority",
+            separated_source_context_errors,
+        )
+
+        negated_operator_note_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "operator_note": (
+                    "Manual fallback does not prove execution, validate receipt, "
+                    "or bypass approval."
+                ),
+            },
+        )
+        self.assertNotIn(
+            "operator_note_promotes_authority",
+            negated_operator_note_errors,
+        )
 
         for follow_up_state in (
             "execution succeeds",

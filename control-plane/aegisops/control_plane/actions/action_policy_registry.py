@@ -402,6 +402,7 @@ _NEGATION_TERMS = (
     "without",
 )
 _TERM_BOUNDARY = "boundary"
+_TERM_COMMA_BOUNDARY = "comma_boundary"
 _NEGATION_BOUNDARY_TERMS = {
     _TERM_BOUNDARY,
     "and",
@@ -417,6 +418,7 @@ _NEGATION_BOUNDARY_TERMS = {
     "or",
 }
 _TERM_GROUP_MAX_INTERVENING_TERMS = 6
+_NEGATION_SCAN_WINDOW = 8
 _SOURCE_AUTHORITY_ASSERTION_LINK_TERMS = {
     "is",
     "are",
@@ -428,7 +430,59 @@ _SOURCE_AUTHORITY_ASSERTION_LINK_TERMS = {
     "become",
     "becomes",
     "became",
+    "can",
+    "could",
+    "show",
+    "showed",
+    "shows",
+    "shown",
+    "say",
+    "said",
+    "says",
+    "state",
+    "stated",
+    "states",
+    "will",
+    "would",
 }
+_NEGATION_HARD_BOUNDARY_TERMS = {_TERM_BOUNDARY}
+_NEGATION_CONTRAST_BOUNDARY_TERMS = {
+    "although",
+    "but",
+    "however",
+    "instead",
+    "then",
+    "though",
+    "whereas",
+    "while",
+    "yet",
+}
+_NEGATION_LIST_BOUNDARY_TERMS = {"and", "or"}
+_AUTHORITY_LINK_BOUNDARY_TERMS = {
+    _TERM_BOUNDARY,
+    _TERM_COMMA_BOUNDARY,
+    *_NEGATION_BOUNDARY_TERMS,
+}
+_AUTHORITY_CLAIM_CLAUSE_BOUNDARY_TERMS = {
+    _TERM_BOUNDARY,
+    _TERM_COMMA_BOUNDARY,
+    *_NEGATION_CONTRAST_BOUNDARY_TERMS,
+}
+_NEGATION_LIST_SUBJECT_TERMS = tuple(
+    dict.fromkeys(
+        term
+        for term_group in (
+            *_NON_AUTHORITATIVE_EVIDENCE_SOURCE_BASE_TERMS,
+            ("approval",),
+            ("case",),
+            ("execution",),
+            ("receipt",),
+            ("reconciliation",),
+            ("ticket",),
+        )
+        for term in term_group
+    )
+)
 
 
 PHASE62_ACTION_POLICIES: Mapping[str, ActionPolicy] = {
@@ -782,16 +836,15 @@ def _non_blank_string(value: object) -> bool:
 def _promotes_non_authoritative_evidence(value: str) -> bool:
     terms = _text_terms(value)
     for source_terms in _NON_AUTHORITATIVE_EVIDENCE_SOURCE_TERMS:
-        source_indexes = _term_group_starts(terms, source_terms)
-        if not source_indexes:
+        source_matches = _term_group_matches(terms, source_terms)
+        if not source_matches:
             continue
         if any(
             _source_promotes_non_authoritative_evidence(
                 terms=terms,
-                source_index=source_index,
-                source_terms=source_terms,
+                source_match=source_match,
             )
-            for source_index in source_indexes
+            for source_match in source_matches
         ):
             return True
     return False
@@ -800,9 +853,10 @@ def _promotes_non_authoritative_evidence(value: str) -> bool:
 def _source_promotes_non_authoritative_evidence(
     *,
     terms: tuple[str, ...],
-    source_index: int,
-    source_terms: tuple[str, ...],
+    source_match: tuple[int, ...],
 ) -> bool:
+    source_index = source_match[0]
+    source_end = source_match[-1] + 1
     for authority_terms in _NON_AUTHORITATIVE_EVIDENCE_AUTHORITY_TERMS:
         for authority_match in _term_group_matches(terms, authority_terms):
             authority_index = authority_match[0]
@@ -814,14 +868,14 @@ def _source_promotes_non_authoritative_evidence(
             if _has_source_scoped_negation_before_authority(
                 terms=terms,
                 source_index=source_index,
-                source_terms=source_terms,
+                source_end=source_end,
                 authority_index=authority_index,
             ):
                 continue
             if _authority_claim_matches_source(
                 terms=terms,
                 source_index=source_index,
-                source_terms=source_terms,
+                source_end=source_end,
                 authority_index=authority_index,
                 authority_terms=authority_terms,
             ):
@@ -833,10 +887,9 @@ def _has_source_scoped_negation_before_authority(
     *,
     terms: tuple[str, ...],
     source_index: int,
-    source_terms: tuple[str, ...],
+    source_end: int,
     authority_index: int,
 ) -> bool:
-    source_end = source_index + len(source_terms)
     if authority_index <= source_end:
         return False
     for negation_index in range(authority_index - 1, source_end - 1, -1):
@@ -852,27 +905,21 @@ def _authority_claim_matches_source(
     *,
     terms: tuple[str, ...],
     source_index: int,
-    source_terms: tuple[str, ...],
+    source_end: int,
     authority_index: int,
     authority_terms: tuple[str, ...],
 ) -> bool:
-    source_end = source_index + len(source_terms)
     authority_end = authority_index + len(authority_terms)
     if source_index <= authority_index:
         between = terms[source_end:authority_index]
-        if any(
-            term
-            in {
-                "but",
-                "however",
-                "though",
-                "although",
-                "yet",
-                "whereas",
-                "while",
-                "instead",
-            }
-            for term in between
+        if any(term in _AUTHORITY_CLAIM_CLAUSE_BOUNDARY_TERMS for term in between):
+            return False
+        list_boundaries = [
+            index for index, term in enumerate(between) if term in {"and", "or"}
+        ]
+        if list_boundaries and any(
+            term in _NEGATION_LIST_SUBJECT_TERMS
+            for term in between[list_boundaries[-1] + 1 :]
         ):
             return False
         targets_aegisops_receipt = _authority_claim_targets_aegisops_receipt(
@@ -885,9 +932,11 @@ def _authority_claim_matches_source(
             between
         ):
             return False
-        if source_end <= authority_index and authority_index - source_end <= 2:
+        if source_end == authority_index:
             return True
-        return True
+        if list_boundaries:
+            return True
+        return _source_is_directly_asserted_as_authority(between)
 
     between = terms[authority_end:source_index]
     if any(term in _NEGATION_BOUNDARY_TERMS for term in between):
@@ -931,7 +980,10 @@ def _authority_claim_targets_aegisops_receipt(
 def _source_is_directly_asserted_as_authority(
     between_source_and_authority: tuple[str, ...],
 ) -> bool:
-    if any(term in _NEGATION_BOUNDARY_TERMS for term in between_source_and_authority):
+    if any(
+        term in _AUTHORITY_LINK_BOUNDARY_TERMS
+        for term in between_source_and_authority
+    ):
         return False
     return any(
         term in _SOURCE_AUTHORITY_ASSERTION_LINK_TERMS
@@ -962,7 +1014,10 @@ def _contains_unnegated_term_group(
 ) -> bool:
     for term_group in term_groups:
         if any(
-            not any(_has_recent_negation(terms, index, window=4) for index in match)
+            not any(
+                _has_recent_negation(terms, index, window=_NEGATION_SCAN_WINDOW)
+                for index in match
+            )
             for match in _term_group_matches(terms, term_group)
         ):
             return True
@@ -974,7 +1029,11 @@ def _contains_unnegated_single_term(
     target_terms: tuple[str, ...],
 ) -> bool:
     for index, term in enumerate(terms):
-        if term in target_terms and not _has_recent_negation(terms, index, window=4):
+        if term in target_terms and not _has_recent_negation(
+            terms,
+            index,
+            window=_NEGATION_SCAN_WINDOW,
+        ):
             return True
     return False
 
@@ -1008,7 +1067,7 @@ def _term_group_matches(
             term_index + _TERM_GROUP_MAX_INTERVENING_TERMS + 2,
         )
         for next_index in range(term_index + 1, max_next_index):
-            if terms[next_index] == _TERM_BOUNDARY:
+            if terms[next_index] in {_TERM_BOUNDARY, _TERM_COMMA_BOUNDARY}:
                 break
             if _term_matches_required(terms[next_index], next_term):
                 matches_from(
@@ -1047,7 +1106,18 @@ def _has_recent_negation(
     start = max(0, index - window)
     for negation_index in range(index - 1, start - 1, -1):
         term = terms[negation_index]
-        if term in _NEGATION_BOUNDARY_TERMS:
+        if term in _NEGATION_HARD_BOUNDARY_TERMS:
+            return False
+        if term in _NEGATION_CONTRAST_BOUNDARY_TERMS:
+            return False
+        if (
+            term in {_TERM_COMMA_BOUNDARY, *_NEGATION_LIST_BOUNDARY_TERMS}
+            and _list_boundary_starts_new_subject(
+                terms=terms,
+                boundary_index=negation_index,
+                target_index=index,
+            )
+        ):
             return False
         if term in _NEGATION_TERMS:
             if _is_not_only_phrase(terms, negation_index, index):
@@ -1068,6 +1138,27 @@ def _is_not_only_phrase(
     )
 
 
+def _list_boundary_starts_new_subject(
+    *,
+    terms: tuple[str, ...],
+    boundary_index: int,
+    target_index: int,
+) -> bool:
+    if terms[boundary_index] == "and" and _TERM_COMMA_BOUNDARY not in terms[
+        max(0, boundary_index - _NEGATION_SCAN_WINDOW) : boundary_index
+    ]:
+        return True
+    if any(
+        term in {_TERM_COMMA_BOUNDARY, *_NEGATION_LIST_BOUNDARY_TERMS}
+        for term in terms[boundary_index + 1 : target_index]
+    ):
+        return False
+    return any(
+        term in _NEGATION_LIST_SUBJECT_TERMS
+        for term in terms[boundary_index + 1 : target_index + 1]
+    )
+
+
 def _text_terms(value: str) -> tuple[str, ...]:
     normalized = (
         value.lower()
@@ -1083,7 +1174,9 @@ def _tokenize_with_boundaries(value: str) -> tuple[str, ...]:
     for char in value:
         if char.isalnum():
             characters.append(char)
-        elif char in ".;,:!?":
+        elif char == ",":
+            characters.append(f" {_TERM_COMMA_BOUNDARY} ")
+        elif char in ".;:!?":
             characters.append(f" {_TERM_BOUNDARY} ")
         else:
             characters.append(" ")

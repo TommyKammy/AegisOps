@@ -47,18 +47,32 @@ _PHASE62_NEGATION_TERMS = {
 }
 _PHASE62_NEGATION_BOUNDARY_TERMS = {
     "boundary",
+    "and",
+    "although",
     "but",
     "however",
+    "instead",
+    "then",
     "though",
-    "although",
-    "yet",
     "whereas",
     "while",
-    "instead",
-    "and",
-    "then",
     "or",
+    "yet",
 }
+_PHASE62_HARD_BOUNDARY_TERMS = {"boundary", "comma_boundary"}
+_PHASE62_NEGATION_HARD_BOUNDARY_TERMS = {"boundary"}
+_PHASE62_NEGATION_CONTRAST_BOUNDARY_TERMS = {
+    "although",
+    "but",
+    "however",
+    "instead",
+    "then",
+    "though",
+    "whereas",
+    "while",
+    "yet",
+}
+_PHASE62_NEGATION_LIST_BOUNDARY_TERMS = {"and", "or"}
 
 
 class ActionReviewWriteSurfaceDependencies(Protocol):
@@ -783,10 +797,11 @@ def _phase62_has_nearby_context_term(
 ) -> bool:
     start = max(0, index - _PHASE62_CONTEXT_WINDOW)
     end = min(len(terms), index + _PHASE62_CONTEXT_WINDOW + 1)
+    clause_start = _phase62_clause_start(terms, index, start)
+    clause_end = _phase62_clause_end(terms, index, end)
     return any(
         term in context_terms
-        for term in terms[start:end]
-        if term != "boundary"
+        for term in terms[clause_start:clause_end]
     )
 
 
@@ -810,7 +825,11 @@ def _phase62_contains_unnegated_receipt_loss_terms(
             target_terms=target_terms,
         ):
             continue
-        if any(abs(index - receipt_index) <= 8 for receipt_index in receipt_indexes):
+        if any(
+            abs(index - receipt_index) <= 8
+            and _phase62_terms_share_clause(terms, index, receipt_index)
+            for receipt_index in receipt_indexes
+        ):
             return True
     return False
 
@@ -858,7 +877,18 @@ def _phase62_has_recent_negation(terms: tuple[str, ...], index: int) -> bool:
     start = max(0, index - 8)
     for negation_index in range(index - 1, start - 1, -1):
         term = terms[negation_index]
-        if term in _PHASE62_NEGATION_BOUNDARY_TERMS:
+        if term in _PHASE62_NEGATION_HARD_BOUNDARY_TERMS:
+            return False
+        if term in _PHASE62_NEGATION_CONTRAST_BOUNDARY_TERMS:
+            return False
+        if (
+            term in {"comma_boundary", *_PHASE62_NEGATION_LIST_BOUNDARY_TERMS}
+            and _phase62_list_boundary_starts_new_subject(
+                terms=terms,
+                boundary_index=negation_index,
+                target_index=index,
+            )
+        ):
             return False
         if term in _PHASE62_NEGATION_TERMS:
             if (
@@ -869,6 +899,61 @@ def _phase62_has_recent_negation(terms: tuple[str, ...], index: int) -> bool:
                 continue
             return True
     return False
+
+
+def _phase62_clause_start(
+    terms: tuple[str, ...],
+    index: int,
+    start: int,
+) -> int:
+    for boundary_index in range(index - 1, start - 1, -1):
+        if terms[boundary_index] in _PHASE62_HARD_BOUNDARY_TERMS:
+            return boundary_index + 1
+    return start
+
+
+def _phase62_clause_end(
+    terms: tuple[str, ...],
+    index: int,
+    end: int,
+) -> int:
+    for boundary_index in range(index + 1, end):
+        if terms[boundary_index] in _PHASE62_HARD_BOUNDARY_TERMS:
+            return boundary_index
+    return end
+
+
+def _phase62_terms_share_clause(
+    terms: tuple[str, ...],
+    left_index: int,
+    right_index: int,
+) -> bool:
+    start, end = sorted((left_index, right_index))
+    return not any(
+        term in _PHASE62_HARD_BOUNDARY_TERMS
+        for term in terms[start + 1 : end]
+    )
+
+
+def _phase62_list_boundary_starts_new_subject(
+    *,
+    terms: tuple[str, ...],
+    boundary_index: int,
+    target_index: int,
+) -> bool:
+    if terms[boundary_index] == "and" and "comma_boundary" not in terms[
+        max(0, boundary_index - 8) : boundary_index
+    ]:
+        return True
+    if any(
+        term in {"comma_boundary", *_PHASE62_NEGATION_LIST_BOUNDARY_TERMS}
+        for term in terms[boundary_index + 1 : target_index]
+    ):
+        return False
+    return any(
+        term in _PHASE62_EXECUTION_FAILURE_CONTEXT_TERMS
+        for term in terms[boundary_index + 1 : target_index + 1]
+    )
 
 
 def _phase62_text_terms(value: str) -> tuple[str, ...]:
@@ -882,7 +967,9 @@ def _phase62_text_terms(value: str) -> tuple[str, ...]:
     for char in normalized:
         if char.isalnum():
             characters.append(char)
-        elif char in ".;,:!?":
+        elif char == ",":
+            characters.append(" comma_boundary ")
+        elif char in ".;:!?":
             characters.append(" boundary ")
         else:
             characters.append(" ")
