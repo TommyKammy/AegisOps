@@ -110,7 +110,7 @@ _COMMON_RECONCILIATION_OUTCOMES = (
     "missing",
     "stale",
     "mismatched",
-    "duplicated",
+    "duplicate",
     "wrong_correlation",
     "manual_review",
 )

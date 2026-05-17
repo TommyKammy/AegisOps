@@ -1046,6 +1046,101 @@ class CreateTrackingTicketActionReconciliationPersistenceTests(ServicePersistenc
             reconciliation.subject_linkage["ticket_reference_urls"],
             (downstream_binding["ticket_reference_url"],),
         )
+
+    def test_service_fail_closes_when_create_tracking_ticket_receipt_omits_bound_fields(
+        self,
+    ) -> None:
+        _, service, approved_payload, delegated_at = (
+            self._build_phase54_create_tracking_ticket_context(
+                suffix="missing-bound-fields-001",
+                binding={
+                    "workflow_id": "create_tracking_ticket",
+                    "workflow_version_id": (
+                        "create_tracking_ticket-v1-reviewed-2026-05-03"
+                    ),
+                    "correlation_id": "shuffle-correlation-missing-bound-fields-001",
+                    "expected_execution_receipt_id": (
+                        "shuffle-receipt-missing-bound-fields-001"
+                    ),
+                    "requested_scope": {
+                        "case_id": "case-tracking-missing-bound-fields-001",
+                        "alert_id": "alert-tracking-missing-bound-fields-001",
+                        "finding_id": "finding-tracking-missing-bound-fields-001",
+                        "coordination_reference_id": (
+                            "coord-ref-missing-bound-fields-001"
+                        ),
+                        "coordination_target_type": "zammad",
+                    },
+                },
+            )
+        )
+        compared_at = support.datetime(
+            2026, 5, 3, 4, 10, tzinfo=support.timezone.utc
+        )
+
+        execution = service.delegate_approved_action_to_shuffle(
+            action_request_id="action-request-create-ticket-missing-bound-fields-001",
+            approved_payload=approved_payload,
+            delegated_at=delegated_at,
+            delegation_issuer="control-plane-service",
+            evidence_ids=("evidence-create-ticket-missing-bound-fields-001",),
+        )
+        downstream_binding = execution.provenance["downstream_binding"]
+
+        reconciliation = service.reconcile_action_execution(
+            action_request_id="action-request-create-ticket-missing-bound-fields-001",
+            execution_surface_type="automation_substrate",
+            execution_surface_id="shuffle",
+            observed_executions=(
+                {
+                    "execution_run_id": execution.execution_run_id,
+                    "execution_surface_type": "automation_substrate",
+                    "execution_surface_id": "shuffle",
+                    "idempotency_key": (
+                        "idempotency-create-ticket-missing-bound-fields-001"
+                    ),
+                    "approval_decision_id": execution.approval_decision_id,
+                    "delegation_id": execution.delegation_id,
+                    "payload_hash": execution.payload_hash,
+                    "coordination_reference_id": downstream_binding[
+                        "coordination_reference_id"
+                    ],
+                    "coordination_target_type": downstream_binding[
+                        "coordination_target_type"
+                    ],
+                    "external_receipt_id": downstream_binding["external_receipt_id"],
+                    "coordination_target_id": downstream_binding[
+                        "coordination_target_id"
+                    ],
+                    "ticket_reference_url": downstream_binding["ticket_reference_url"],
+                    "observed_at": compared_at,
+                    "status": "success",
+                },
+            ),
+            compared_at=compared_at,
+            stale_after=support.datetime(
+                2026,
+                5,
+                3,
+                4,
+                30,
+                tzinfo=support.timezone.utc,
+            ),
+        )
+
+        stored_execution = service.get_record(
+            support.ActionExecutionRecord,
+            execution.action_execution_id,
+        )
+        self.assertEqual(reconciliation.ingest_disposition, "mismatch")
+        self.assertEqual(reconciliation.lifecycle_state, "mismatched")
+        self.assertEqual(
+            reconciliation.mismatch_summary,
+            "execution receipt binding mismatch between authoritative action execution "
+            "and observed downstream execution",
+        )
+        self.assertEqual(stored_execution.lifecycle_state, "queued")
+
     def test_service_fail_closes_when_create_tracking_ticket_reconciliation_receipt_drifts(
         self,
     ) -> None:

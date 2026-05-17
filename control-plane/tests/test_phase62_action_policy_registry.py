@@ -49,7 +49,7 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                     "missing",
                     "stale",
                     "mismatched",
-                    "duplicated",
+                    "duplicate",
                     "wrong_correlation",
                     "manual_review",
                 ),

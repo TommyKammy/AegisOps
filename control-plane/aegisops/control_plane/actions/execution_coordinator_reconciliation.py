@@ -547,8 +547,6 @@ class ActionExecutionReconciliationCoordinator:
         for field_name, observed_value in expected_fields:
             if not isinstance(downstream_binding.get(field_name), str):
                 continue
-            if action_type == "create_tracking_ticket" and observed_value is None:
-                continue
             if observed_value != downstream_binding[field_name]:
                 return True
         return False

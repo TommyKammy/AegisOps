@@ -39,7 +39,7 @@ for phrase in \
   '"missing"' \
   '"stale"' \
   '"mismatched"' \
-  '"duplicated"' \
+  '"duplicate"' \
   '"wrong_correlation"' \
   '"manual_review"' \
   '"expected_execution_receipt_id"' \

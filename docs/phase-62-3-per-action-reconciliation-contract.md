@@ -4,7 +4,7 @@ This contract defines the reviewed receipt and reconciliation boundary for the P
 
 ## Contract
 
-Every reviewed Phase 62 action must carry expected receipt fields, correlation fields, and reconciliation outcomes in the action policy registry. The required outcomes are success, failure, missing, stale, mismatched, duplicated, wrong-correlation, and manual review.
+Every reviewed Phase 62 action must carry expected receipt fields, correlation fields, and reconciliation outcomes in the action policy registry. The required outcomes are success, failure, missing, stale, mismatched, duplicate, wrong-correlation, and manual review.
 
 The common receipt fields are `action_request_id`, `catalog_action`, `family`, `reviewed_template_version`, `correlation_id`, `idempotency_key`, `execution_run_id`, `started_at`, `finished_at`, and `status`. The common correlation fields are `action_request_id`, `approval_decision_id`, `delegation_id`, `execution_run_id`, `correlation_id`, `expected_execution_receipt_id`, and `idempotency_key`.
 
@@ -14,7 +14,7 @@ The common receipt fields are `action_request_id`, `catalog_action`, `family`, `
 
 Shuffle receipts are subordinate evidence. A Shuffle `success` status can only update AegisOps action execution state when the observed receipt is bound to the authoritative AegisOps action request, approval decision, delegation, payload hash, workflow, workflow version, correlation identifier, expected receipt identifier, execution run, and idempotency key.
 
-Missing receipt metadata, stale observations, mismatched surface/idempotency/binding values, duplicated unsafe observations, and wrong-correlation receipts reconcile as non-matched AegisOps reconciliation records. They do not mutate authoritative action execution records to succeeded, close cases, approve actions, or make downstream ticket or workflow state authoritative.
+Missing receipt metadata, stale observations, mismatched surface/idempotency/binding values, duplicate unsafe observations, and wrong-correlation receipts reconcile as non-matched AegisOps reconciliation records. They do not mutate authoritative action execution records to succeeded, close cases, approve actions, or make downstream ticket or workflow state authoritative.
 
 ## Validation
 
