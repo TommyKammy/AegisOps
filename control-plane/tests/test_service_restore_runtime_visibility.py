@@ -1044,6 +1044,9 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
             "mismatched owner roster blocked manual follow-up",
             "fallback owner unavailable for handoff",
             "fallback owner rejected handoff window",
+            "receipt not missing, but owner mismatch",
+            "receipt isnt missing after dispatch",
+            "route isnt unavailable",
         ):
             with self.subTest(generic_absent_reason=reason):
                 self.assertIsNone(_phase62_fallback_state_from_text(reason))

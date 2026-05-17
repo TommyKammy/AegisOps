@@ -679,6 +679,9 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
 
         for expected_evidence in (
             "ticket output is not under any circumstances authoritative",
+            "ticket state is receipt not proof",
+            "ticket state is receipt not validation",
+            "ticket state isnt receipt proof",
             (
                 "bound AegisOps receipt is authoritative; ticket output "
                 "remains context"

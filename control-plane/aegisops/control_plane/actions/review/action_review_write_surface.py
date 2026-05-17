@@ -23,7 +23,28 @@ if TYPE_CHECKING:
     from ...service import AegisOpsControlPlaneService
 
 
-_PHASE62_NEGATION_TERMS = {"not", "no", "never", "without", "cannot", "cant", "wont"}
+_PHASE62_NEGATION_TERMS = {
+    "not",
+    "no",
+    "never",
+    "without",
+    "cannot",
+    "cant",
+    "wont",
+    "isnt",
+    "arent",
+    "wasnt",
+    "werent",
+    "dont",
+    "doesnt",
+    "didnt",
+    "hasnt",
+    "havent",
+    "hadnt",
+    "couldnt",
+    "shouldnt",
+    "wouldnt",
+}
 _PHASE62_NEGATION_BOUNDARY_TERMS = {
     "boundary",
     "but",
@@ -777,7 +798,7 @@ def _phase62_contains_unnegated_receipt_loss_terms(
         index
         for index, term in enumerate(terms)
         if term in {"receipt", "receipts"}
-        and not _phase62_has_recent_negation(terms, index)
+        and _phase62_receipt_anchor_is_unnegated(terms, index)
     )
     if not receipt_indexes:
         return False
@@ -802,6 +823,21 @@ def _phase62_term_is_unnegated(
     target_terms: tuple[str, ...],
 ) -> bool:
     return term in target_terms and not _phase62_has_recent_negation(terms, index)
+
+
+def _phase62_receipt_anchor_is_unnegated(
+    terms: tuple[str, ...],
+    index: int,
+) -> bool:
+    if _phase62_has_recent_negation(terms, index):
+        return False
+    end = min(len(terms), index + 5)
+    for term in terms[index + 1 : end]:
+        if term in _PHASE62_NEGATION_BOUNDARY_TERMS:
+            return True
+        if term in _PHASE62_NEGATION_TERMS:
+            return False
+    return True
 
 
 def _phase62_contains_unnegated_term_group(

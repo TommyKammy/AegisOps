@@ -379,7 +379,28 @@ _FOLLOW_UP_COMPLETION_OR_READINESS_TERMS = (
     "reconciliation",
     *_FOLLOW_UP_LAUNCH_READINESS_TERMS,
 )
-_NEGATION_TERMS = ("not", "no", "never", "cannot", "cant", "wont", "without")
+_NEGATION_TERMS = (
+    "not",
+    "no",
+    "never",
+    "cannot",
+    "cant",
+    "wont",
+    "isnt",
+    "arent",
+    "wasnt",
+    "werent",
+    "dont",
+    "doesnt",
+    "didnt",
+    "hasnt",
+    "havent",
+    "hadnt",
+    "couldnt",
+    "shouldnt",
+    "wouldnt",
+    "without",
+)
 _TERM_BOUNDARY = "boundary"
 _NEGATION_BOUNDARY_TERMS = {
     _TERM_BOUNDARY,
@@ -783,8 +804,12 @@ def _source_promotes_non_authoritative_evidence(
     source_terms: tuple[str, ...],
 ) -> bool:
     for authority_terms in _NON_AUTHORITATIVE_EVIDENCE_AUTHORITY_TERMS:
-        for authority_index in _term_group_starts(terms, authority_terms):
-            if _has_recent_negation(terms, authority_index, window=3):
+        for authority_match in _term_group_matches(terms, authority_terms):
+            authority_index = authority_match[0]
+            if any(
+                _has_recent_negation(terms, match_index, window=3)
+                for match_index in authority_match
+            ):
                 continue
             if _has_source_scoped_negation_before_authority(
                 terms=terms,
