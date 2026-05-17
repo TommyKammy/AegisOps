@@ -11,6 +11,7 @@ if str(TESTS_ROOT) not in sys.path:
 
 from _restore_readiness_test_support import (
     AegisOpsControlPlaneService,
+    ActionRequestRecord,
     ApprovalDecisionRecord,
     CaseRecord,
     EvidenceRecord,
@@ -301,6 +302,166 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
         self.assertNotEqual(
             scoped_visibility["manual_fallback"]["fallback_owner_id"],
             "coordination-ref-phase62-fallback-owner-001",
+        )
+
+    def test_manual_escalation_fallback_owner_uses_reviewed_target_scope(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        action_request = service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-phase62-escalation-fallback-owner-001",
+                approval_decision_id=None,
+                case_id=promoted_case.case_id,
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                idempotency_key="manual-escalation-fallback-owner-001",
+                target_scope={
+                    "case_id": promoted_case.case_id,
+                    "alert_id": promoted_case.alert_id,
+                    "finding_id": promoted_case.finding_id,
+                    "escalation_owner_ref": "reviewed-escalation-owner-001",
+                },
+                payload_hash="payload-hash-phase62-escalation-fallback-owner-001",
+                requested_at=reviewed_at,
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+                lifecycle_state="pending_approval",
+                requester_identity="analyst-001",
+                requested_payload={
+                    "action_type": "manual_escalation_request",
+                    "case_id": promoted_case.case_id,
+                    "alert_id": promoted_case.alert_id,
+                    "finding_id": promoted_case.finding_id,
+                    "escalation_owner_id": "payload-escalation-owner-stale-001",
+                },
+                policy_evaluation={
+                    "approval_requirement": "human_required_for_protected_follow_up",
+                },
+            ),
+            transitioned_at=reviewed_at,
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase62-escalation-fallback-owner-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+
+        updated_case = service.record_action_review_manual_fallback(
+            action_request_id=action_request.action_request_id,
+            fallback_at=reviewed_at + timedelta(minutes=45),
+            fallback_actor_identity="analyst-003",
+            authority_boundary="approved_human_fallback",
+            reason="The reviewed Shuffle execution was rejected by the approved route.",
+            action_taken="Documented manual follow-up under the approved procedure.",
+            verification_evidence_ids=(evidence_id,),
+            residual_uncertainty="Awaiting escalation owner follow-up.",
+        )
+
+        scoped_visibility = updated_case.reviewed_context["action_review_visibility"][
+            action_request.action_request_id
+        ]
+        self.assertEqual(
+            scoped_visibility["manual_fallback"]["fallback_owner_id"],
+            "reviewed-escalation-owner-001",
+        )
+        self.assertNotEqual(
+            scoped_visibility["manual_fallback"]["fallback_owner_id"],
+            "payload-escalation-owner-stale-001",
+        )
+
+    def test_enrichment_lookup_fallback_owner_uses_reviewed_lookup_subject(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        action_request = service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-phase62-lookup-fallback-owner-001",
+                approval_decision_id=None,
+                case_id=promoted_case.case_id,
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                idempotency_key="lookup-fallback-owner-001",
+                target_scope={
+                    "case_id": promoted_case.case_id,
+                    "alert_id": promoted_case.alert_id,
+                    "finding_id": promoted_case.finding_id,
+                    "lookup_subject_ref": "reviewed-lookup-subject-001",
+                },
+                payload_hash="payload-hash-phase62-lookup-fallback-owner-001",
+                requested_at=reviewed_at,
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+                lifecycle_state="pending_approval",
+                requester_identity=None,
+                requested_payload={
+                    "action_type": "enrichment_only_lookup",
+                    "case_id": promoted_case.case_id,
+                    "alert_id": promoted_case.alert_id,
+                    "finding_id": promoted_case.finding_id,
+                    "lookup_subject_id": "payload-lookup-subject-stale-001",
+                },
+                policy_evaluation={"approval_requirement": "policy_not_required"},
+            ),
+            transitioned_at=reviewed_at,
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase62-lookup-fallback-owner-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+
+        updated_case = service.record_action_review_manual_fallback(
+            action_request_id=action_request.action_request_id,
+            fallback_at=reviewed_at + timedelta(minutes=45),
+            fallback_actor_identity="analyst-003",
+            authority_boundary="approved_human_fallback",
+            reason="The bound AegisOps execution receipt was missing after handoff.",
+            action_taken="Documented manual follow-up under the approved procedure.",
+            verification_evidence_ids=(evidence_id,),
+            residual_uncertainty="Awaiting lookup reconciliation review.",
+        )
+
+        scoped_visibility = updated_case.reviewed_context["action_review_visibility"][
+            action_request.action_request_id
+        ]
+        self.assertEqual(
+            scoped_visibility["manual_fallback"]["fallback_owner_id"],
+            "reviewed-lookup-subject-001",
+        )
+        self.assertNotEqual(
+            scoped_visibility["manual_fallback"]["fallback_owner_id"],
+            "payload-lookup-subject-stale-001",
         )
 
     def test_manual_fallback_state_ignores_negated_failure_terms(self) -> None:

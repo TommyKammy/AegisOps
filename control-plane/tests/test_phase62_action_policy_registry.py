@@ -158,11 +158,20 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "operator_note_proves_reconciliation": {
                 "operator_note": "Operator note proves the reconciliation.",
             },
+            "operator_note_confirms_execution": {
+                "operator_note": "Operator note confirms execution.",
+            },
             "operator_note_confirms_receipt": {
                 "operator_note": "Operator note confirms receipt.",
             },
+            "operator_note_validates_execution": {
+                "operator_note": "Operator note validates execution.",
+            },
             "operator_note_validates_reconciliation": {
                 "operator_note": "Operator note validates reconciliation.",
+            },
+            "operator_note_execution_authority": {
+                "operator_note": "Operator note is execution authority.",
             },
             "missing_follow_up_state": {"follow_up_state": ""},
             "fallback_as_reconciliation_truth": {

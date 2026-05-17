@@ -589,6 +589,7 @@ def _phase62_declared_fallback_owner_for_request(
         "manual_escalation_request": (
             "fallback_owner_id",
             "fallback_owner_identity",
+            "escalation_owner_ref",
             "escalation_owner_id",
         ),
         "create_tracking_ticket": (
@@ -611,6 +612,7 @@ def _phase62_declared_fallback_owner_for_request(
             "alert_id",
         ),
         "enrichment_only_lookup": (
+            "lookup_subject_ref",
             "lookup_subject_id",
             "case_id",
             "alert_id",

@@ -212,13 +212,16 @@ _NON_AUTHORITATIVE_EVIDENCE_AUTHORITY_TERMS = (
 )
 _AUTHORITY_PROMOTING_TERM_GROUPS = (
     ("bypass",),
+    ("confirms", "execution"),
     ("confirms", "receipt"),
     ("confirms", "reconciliation"),
     ("proves", "execution"),
     ("proves", "receipt"),
     ("proves", "reconciliation"),
+    ("validates", "execution"),
     ("validates", "receipt"),
     ("validates", "reconciliation"),
+    ("execution", "authority"),
     ("execution", "truth"),
     ("receipt", "truth"),
     ("reconciliation", "truth"),  # manual fallback notes cannot become truth records
