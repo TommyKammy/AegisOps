@@ -198,6 +198,9 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "operator_note_closes_case": {
                 "operator_note": "Manual fallback closes case.",
             },
+            "operator_note_closing_case": {
+                "operator_note": "Manual fallback is closing the case.",
+            },
             "operator_note_close_case": {
                 "operator_note": "Manual fallback can close the case.",
             },
@@ -218,6 +221,12 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             },
             "operator_note_ticket_closure": {
                 "operator_note": "Manual fallback supplies ticket closure.",
+            },
+            "operator_note_closure_of_case": {
+                "operator_note": "Manual fallback supplies closure of case.",
+            },
+            "operator_note_closure_of_ticket": {
+                "operator_note": "Manual fallback supplies closure of ticket.",
             },
             "operator_note_execution_successful": {
                 "operator_note": "Manual fallback marks execution successful.",
@@ -619,6 +628,9 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "manual fallback close case",
             "manual fallback closes cases",
             "manual fallback closes tickets",
+            "manual fallback supplies closure of case",
+            "manual fallback supplies closure of tickets",
+            "manual fallback is closing cases",
             "execution confirmed",
             "receipt validated",
             "execution proven",
