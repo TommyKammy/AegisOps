@@ -10,7 +10,7 @@ from ..action_policy import evaluate_action_policy_record
 from ..action_policy_registry import (
     ACTION_TYPE_POLICY_ALIASES,
     PHASE62_MANUAL_FALLBACK_REQUIREMENTS,
-    validate_phase62_manual_fallback_record,
+    require_phase62_manual_fallback_record,
 )
 from ...models import (
     ActionRequestRecord,
@@ -249,15 +249,10 @@ class ActionReviewWriteSurface:
                 residual_uncertainty=normalized_residual_uncertainty,
             )
             if phase62_fallback_context is not None:
-                errors = validate_phase62_manual_fallback_record(
+                require_phase62_manual_fallback_record(
                     catalog_action=str(phase62_fallback_context["affected_action"]),
                     record=phase62_fallback_context,
                 )
-                if errors:
-                    raise ValueError(
-                        "manual fallback violates Phase 62.5 contract: "
-                        + ", ".join(errors)
-                    )
             manual_fallback_context: dict[str, object] = {
                 "action_request_id": action_request.action_request_id,
                 "approval_decision_id": approval_decision.approval_decision_id,
