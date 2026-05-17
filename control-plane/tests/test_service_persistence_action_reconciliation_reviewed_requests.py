@@ -29,6 +29,100 @@ from _service_persistence_support import (
 )
 
 class ReviewedActionRequestPersistenceTests(ServicePersistenceTestBase):
+    def _build_ready_recommendation(self):
+        store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Observed repository permission change requires tracked review.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            triage_owner="analyst-001",
+            triage_rationale="Privilege-impacting change needs durable business-hours follow-up.",
+            observation_id=observation.observation_id,
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before any approval-bound response.",
+            lead_id=lead.lead_id,
+        )
+        return store, service, promoted_case, evidence_id, recommendation
+
+    def test_service_records_phase62_policy_decision_on_tracking_ticket_request(
+        self,
+    ) -> None:
+        _store, service, promoted_case, _evidence_id, recommendation = (
+            self._build_ready_recommendation()
+        )
+
+        action_request = service.create_reviewed_tracking_ticket_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            coordination_reference_id="coordination-ref-phase62-policy-001",
+            coordination_target_type="zammad",
+            ticket_title="Review repository owner change",
+            ticket_description="Coordinate reviewed follow-up without making ticket state authoritative.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+        )
+
+        self.assertEqual(action_request.case_id, promoted_case.case_id)
+        self.assertEqual(
+            action_request.policy_evaluation["policy_registry_id"],
+            "phase62.2:create_tracking_ticket",
+        )
+        self.assertEqual(
+            action_request.policy_evaluation["policy_decision"],
+            "allowed",
+        )
+        self.assertEqual(
+            action_request.policy_evaluation["approval_requirement"],
+            "human_required",
+        )
+        self.assertEqual(
+            action_request.policy_evaluation["requester_role"],
+            "analyst",
+        )
+        self.assertEqual(
+            action_request.policy_evaluation["denial_reasons"],
+            (),
+        )
+        self.assertEqual(
+            action_request.policy_basis["allowed_target_scope"],
+            "single_external_ticket",
+        )
+
+    def test_service_rejects_tracking_ticket_request_from_read_only_role(
+        self,
+    ) -> None:
+        store, service, _promoted_case, _evidence_id, recommendation = (
+            self._build_ready_recommendation()
+        )
+        baseline_requests = store.list(ActionRequestRecord)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "action policy denied create_tracking_ticket: requester_role_not_allowed",
+        ):
+            service.create_reviewed_tracking_ticket_request_from_advisory(
+                record_family="recommendation",
+                record_id=recommendation.recommendation_id,
+                requester_identity="read-only-auditor-001",
+                coordination_reference_id="coordination-ref-phase62-policy-002",
+                coordination_target_type="zammad",
+                ticket_title="Review repository owner change",
+                ticket_description="Coordinate reviewed follow-up without making ticket state authoritative.",
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            )
+
+        self.assertEqual(store.list(ActionRequestRecord), baseline_requests)
+
     def test_service_creates_approval_bound_action_request_from_reviewed_recommendation(
         self,
     ) -> None:
@@ -110,8 +204,21 @@ class ReviewedActionRequestPersistenceTests(ServicePersistenceTestBase):
         self.assertEqual(action_request.expires_at, expires_at)
         self.assertEqual(action_request.lifecycle_state, "pending_approval")
         self.assertEqual(
-            action_request.policy_evaluation,
             {
+                key: action_request.policy_evaluation[key]
+                for key in (
+                    "policy_registry_id",
+                    "policy_decision",
+                    "approval_requirement",
+                    "approval_requirement_override",
+                    "routing_target",
+                    "execution_surface_type",
+                    "execution_surface_id",
+                )
+            },
+            {
+                "policy_registry_id": "phase62.2:operator_notification",
+                "policy_decision": "allowed",
                 "approval_requirement": "human_required",
                 "approval_requirement_override": "human_required",
                 "routing_target": "approval",
@@ -370,8 +477,21 @@ class ReviewedActionRequestPersistenceTests(ServicePersistenceTestBase):
         )
         self.assertEqual(action_request.expires_at, expires_at)
         self.assertEqual(
-            action_request.policy_evaluation,
             {
+                key: action_request.policy_evaluation[key]
+                for key in (
+                    "policy_registry_id",
+                    "policy_decision",
+                    "approval_requirement",
+                    "approval_requirement_override",
+                    "routing_target",
+                    "execution_surface_type",
+                    "execution_surface_id",
+                )
+            },
+            {
+                "policy_registry_id": "phase62.2:create_tracking_ticket",
+                "policy_decision": "allowed",
                 "approval_requirement": "human_required",
                 "approval_requirement_override": "human_required",
                 "routing_target": "approval",

@@ -10,6 +10,7 @@ from .execution_coordinator import (
     _approved_payload_binding_hash,
     _json_ready,
 )
+from .action_policy_registry import evaluate_phase62_action_policy
 from ..models import ActionRequestRecord
 
 
@@ -153,6 +154,28 @@ class ReviewedActionRequestCoordinator:
                 "notify-identity-owner:"
                 + hashlib.sha256(idempotency_material.encode("utf-8")).hexdigest()
             )
+            policy_decision = evaluate_phase62_action_policy(
+                action_type="notify_identity_owner",
+                requester_identity=requester_identity,
+                target_scope=target_scope,
+                expires_at=expires_at,
+                idempotency_key=idempotency_key,
+                now=requested_at,
+            )
+            if not policy_decision.allowed:
+                raise ValueError(
+                    "action policy denied notify_identity_owner: "
+                    + ", ".join(policy_decision.denial_reasons)
+                )
+            policy_evaluation = policy_decision.as_policy_evaluation()
+            policy_evaluation.update(
+                {
+                    "approval_requirement": "human_required",
+                    "approval_requirement_override": "human_required",
+                    "routing_target": "approval",
+                    "policy_elevation_reason": "legacy_identity_owner_notification_requires_human_approval",
+                }
+            )
             for existing in self._service._store.list(ActionRequestRecord):
                 if existing.idempotency_key == idempotency_key:
                     self._service._emit_structured_event(
@@ -187,6 +210,7 @@ class ReviewedActionRequestCoordinator:
                     requester_identity=requester_identity,
                     requested_payload=requested_payload,
                     policy_basis={
+                        **policy_decision.as_policy_basis(),
                         "severity": "low",
                         "target_scope": "single_identity",
                         "action_reversibility": "reversible",
@@ -195,13 +219,7 @@ class ReviewedActionRequestCoordinator:
                         "blast_radius": "single_target",
                         "execution_constraint": "routine_allowed",
                     },
-                    policy_evaluation={
-                        "approval_requirement": "human_required",
-                        "approval_requirement_override": "human_required",
-                        "routing_target": "approval",
-                        "execution_surface_type": "automation_substrate",
-                        "execution_surface_id": "shuffle",
-                    },
+                    policy_evaluation=policy_evaluation,
                 ),
                 transitioned_at=requested_at,
             )
@@ -350,6 +368,19 @@ class ReviewedActionRequestCoordinator:
                 "create-tracking-ticket:"
                 + hashlib.sha256(idempotency_material.encode("utf-8")).hexdigest()
             )
+            policy_decision = evaluate_phase62_action_policy(
+                action_type="create_tracking_ticket",
+                requester_identity=requester_identity,
+                target_scope=target_scope,
+                expires_at=expires_at,
+                idempotency_key=idempotency_key,
+                now=requested_at,
+            )
+            if not policy_decision.allowed:
+                raise ValueError(
+                    "action policy denied create_tracking_ticket: "
+                    + ", ".join(policy_decision.denial_reasons)
+                )
             for existing in self._service._store.list(ActionRequestRecord):
                 if existing.idempotency_key == idempotency_key:
                     self._service._emit_structured_event(
@@ -384,6 +415,7 @@ class ReviewedActionRequestCoordinator:
                     requester_identity=requester_identity,
                     requested_payload=requested_payload,
                     policy_basis={
+                        **policy_decision.as_policy_basis(),
                         "severity": "low",
                         "target_scope": "single_asset",
                         "action_reversibility": "bounded_reversible",
@@ -392,13 +424,7 @@ class ReviewedActionRequestCoordinator:
                         "blast_radius": "single_target",
                         "execution_constraint": "routine_allowed",
                     },
-                    policy_evaluation={
-                        "approval_requirement": "human_required",
-                        "approval_requirement_override": "human_required",
-                        "routing_target": "approval",
-                        "execution_surface_type": "automation_substrate",
-                        "execution_surface_id": "shuffle",
-                    },
+                    policy_evaluation=policy_decision.as_policy_evaluation(),
                 ),
                 transitioned_at=requested_at,
             )

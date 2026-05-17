@@ -125,8 +125,21 @@ class CliInspectionActionReviewTests(ControlPlaneCliInspectionTestBase):
         self.assertEqual(payload["requester_identity"], "analyst-001")
         self.assertEqual(payload["lifecycle_state"], "pending_approval")
         self.assertEqual(
-            payload["policy_evaluation"],
             {
+                key: payload["policy_evaluation"][key]
+                for key in (
+                    "policy_registry_id",
+                    "policy_decision",
+                    "approval_requirement",
+                    "approval_requirement_override",
+                    "routing_target",
+                    "execution_surface_type",
+                    "execution_surface_id",
+                )
+            },
+            {
+                "policy_registry_id": "phase62.2:operator_notification",
+                "policy_decision": "allowed",
                 "approval_requirement": "human_required",
                 "approval_requirement_override": "human_required",
                 "routing_target": "approval",
