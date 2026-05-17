@@ -201,11 +201,20 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "operator_note_close_case": {
                 "operator_note": "Manual fallback can close the case.",
             },
+            "operator_note_close_case_exact": {
+                "operator_note": "Manual fallback close case.",
+            },
             "operator_note_closed_case": {
                 "operator_note": "Manual fallback closed the case.",
             },
+            "operator_note_closed_case_exact": {
+                "operator_note": "Manual fallback closed case.",
+            },
             "operator_note_case_closed": {
                 "operator_note": "Manual fallback marks the case closed.",
+            },
+            "operator_note_ticket_closed": {
+                "operator_note": "Manual fallback says ticket closed.",
             },
             "operator_note_ticket_closure": {
                 "operator_note": "Manual fallback supplies ticket closure.",
@@ -218,6 +227,12 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             },
             "operator_note_receipt_confirmed": {
                 "operator_note": "Manual fallback says receipt confirmed.",
+            },
+            "operator_note_execution_confirmed": {
+                "operator_note": "Manual fallback says execution confirmed.",
+            },
+            "operator_note_receipt_validated": {
+                "operator_note": "Manual fallback says receipt validated.",
             },
             "operator_note_confirm_execution": {
                 "operator_note": "Manual fallback can confirm execution.",
@@ -295,7 +310,9 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             ),
             "ticket output cannot prove execution; ticket state confirms receipt",
             "ticket output confirmed execution",
+            "ticket output validate receipt",
             "workflow result validated receipt",
+            "workflow result says receipt validated",
             "workflow result says receipt validates execution",
             "issue lint a b c d e lint output is authoritative",
             (
@@ -455,6 +472,21 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
         self.assertNotIn(
             "expected_evidence_promotes_non_authoritative_truth",
             long_form_negation_errors,
+        )
+
+        long_form_source_negation_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "expected_evidence": (
+                    "ticket output is not under any circumstances authoritative "
+                    "and cannot replace the bound AegisOps receipt"
+                ),
+            },
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            long_form_source_negation_errors,
         )
 
     def test_manual_fallback_validation_rejects_closure_readiness_follow_up_state(
