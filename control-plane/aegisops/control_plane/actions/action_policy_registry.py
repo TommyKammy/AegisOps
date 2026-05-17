@@ -681,6 +681,13 @@ _SIMULATOR_PRODUCTION_TRUTH_TERMS = (
     ("ticket", "truth"),
     ("readiness",),
 )
+_SIMULATOR_EXCLUSION_CONTEXT_TERMS = (
+    "exclude",
+    "excludes",
+    "excluded",
+    "excluding",
+    "exclusion",
+)
 
 PHASE62_SHUFFLE_WORKFLOW_MAPPINGS: Mapping[str, ShuffleWorkflowMapping] = {
     "enrichment_only_lookup": ShuffleWorkflowMapping(
@@ -959,6 +966,11 @@ def validate_phase62_simulator_output(
             and any(term in {"only", "non", "non_authoritative"} for term in label_terms)
         ):
             errors.append("missing_demo_test_label")
+        if _contains_unnegated_term_group(
+            label_terms,
+            _SIMULATOR_PRODUCTION_TRUTH_TERMS,
+        ):
+            errors.append("demo_test_label_promotes_production_truth")
 
     production_exclusion = output.get("production_exclusion")
     if _non_blank_string(production_exclusion):
@@ -968,10 +980,7 @@ def validate_phase62_simulator_output(
         )
         if not has_exclusion_term:
             errors.append("missing_production_exclusion")
-        if not has_exclusion_term and _contains_unnegated_term_group(
-            exclusion_terms,
-            _SIMULATOR_PRODUCTION_TRUTH_TERMS,
-        ):
+        if _contains_simulator_production_truth_overclaim(exclusion_terms):
             errors.append("production_exclusion_promotes_production_truth")
 
     authority_posture = output.get("authority_posture")
@@ -1215,6 +1224,43 @@ def _contains_unnegated_term_group(
             )
             for match in _term_group_matches(terms, term_group)
         ):
+            return True
+    return False
+
+
+def _contains_simulator_production_truth_overclaim(terms: tuple[str, ...]) -> bool:
+    for term_group in _SIMULATOR_PRODUCTION_TRUTH_TERMS:
+        for match in _term_group_matches(terms, term_group):
+            if any(
+                _has_recent_negation(terms, index, window=_NEGATION_SCAN_WINDOW)
+                for index in match
+            ):
+                continue
+            if _has_recent_simulator_exclusion_context(terms, match[0]):
+                continue
+            return True
+    return False
+
+
+def _has_recent_simulator_exclusion_context(
+    terms: tuple[str, ...],
+    target_index: int,
+) -> bool:
+    start = max(0, target_index - _NEGATION_SCAN_WINDOW)
+    for context_index in range(target_index - 1, start - 1, -1):
+        term = terms[context_index]
+        if term in {
+            _TERM_BOUNDARY,
+            _TERM_COMMA_BOUNDARY,
+            *_NEGATION_CONTRAST_BOUNDARY_TERMS,
+        }:
+            return False
+        if term in _SIMULATOR_EXCLUSION_CONTEXT_TERMS:
+            if any(
+                link_term in _SOURCE_AUTHORITY_ASSERTION_LINK_TERMS
+                for link_term in terms[context_index + 1 : target_index]
+            ):
+                return False
             return True
     return False
 

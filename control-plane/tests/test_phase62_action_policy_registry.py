@@ -131,6 +131,11 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
         cases = {
             "production_mode": {"mode": "production"},
             "missing_demo_label": {"demo_test_label": ""},
+            "demo_label_production_truth": {
+                "demo_test_label": (
+                    "demo/test evidence only and production execution receipt truth"
+                )
+            },
             "receipt_truth": {
                 "production_exclusion": (
                     "Simulator output is production execution receipt truth."
@@ -139,6 +144,12 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "reconciliation_truth": {
                 "production_exclusion": (
                     "Simulator state is production reconciliation truth."
+                )
+            },
+            "excluded_then_truth": {
+                "production_exclusion": (
+                    "Simulator output is excluded from production execution receipt "
+                    "and reconciliation truth. It is production reconciliation truth."
                 )
             },
             "authoritative": {"authority_posture": "authoritative_execution_receipt"},
