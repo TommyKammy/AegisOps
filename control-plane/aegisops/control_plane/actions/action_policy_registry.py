@@ -237,6 +237,12 @@ _AUTHORITY_PROMOTING_TERM_GROUPS = (
     ("closes", "case"),
     ("successful", "execution"),
 )
+_FOLLOW_UP_LAUNCH_READINESS_TERMS = (
+    "commercial",
+    "beta",
+    "rc",
+    "ga",
+)
 _FOLLOW_UP_COMPLETION_OR_READINESS_TERMS = (
     "complete",
     "completed",
@@ -250,10 +256,7 @@ _FOLLOW_UP_COMPLETION_OR_READINESS_TERMS = (
     "readiness",
     "reconciled",
     "reconciliation",
-    "commercial",
-    "beta",
-    "rc",
-    "ga",
+    *_FOLLOW_UP_LAUNCH_READINESS_TERMS,
 )
 _NEGATION_TERMS = ("not", "no", "never", "cannot", "cant", "wont", "without")
 _TERM_BOUNDARY = "boundary"
