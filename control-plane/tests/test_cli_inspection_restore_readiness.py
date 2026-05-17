@@ -58,6 +58,7 @@ class CliInspectionRestoreReadinessTests(ControlPlaneCliInspectionTestBase):
             delegation_issuer="control-plane-service",
             evidence_ids=(evidence_id,),
         )
+        downstream_binding = execution.provenance["downstream_binding"]
         service.reconcile_action_execution(
             action_request_id=approved_request.action_request_id,
             execution_surface_type="automation_substrate",
@@ -71,6 +72,13 @@ class CliInspectionRestoreReadinessTests(ControlPlaneCliInspectionTestBase):
                     "approval_decision_id": execution.approval_decision_id,
                     "delegation_id": execution.delegation_id,
                     "payload_hash": execution.payload_hash,
+                    "action_request_id": execution.action_request_id,
+                    "workflow_id": downstream_binding["workflow_id"],
+                    "workflow_version_id": downstream_binding["workflow_version_id"],
+                    "correlation_id": downstream_binding["correlation_id"],
+                    "expected_execution_receipt_id": downstream_binding[
+                        "expected_execution_receipt_id"
+                    ],
                     "observed_at": action_request.requested_at + timedelta(minutes=15),
                     "status": "success",
                 },
@@ -489,6 +497,7 @@ class CliInspectionRestoreReadinessTests(ControlPlaneCliInspectionTestBase):
             delegation_issuer="control-plane-service",
             evidence_ids=(evidence_id,),
         )
+        downstream_binding = execution.provenance["downstream_binding"]
         reconciliation = service.reconcile_action_execution(
             action_request_id=approved_request.action_request_id,
             execution_surface_type="automation_substrate",
@@ -502,6 +511,13 @@ class CliInspectionRestoreReadinessTests(ControlPlaneCliInspectionTestBase):
                     "approval_decision_id": execution.approval_decision_id,
                     "delegation_id": execution.delegation_id,
                     "payload_hash": execution.payload_hash,
+                    "action_request_id": execution.action_request_id,
+                    "workflow_id": downstream_binding["workflow_id"],
+                    "workflow_version_id": downstream_binding["workflow_version_id"],
+                    "correlation_id": downstream_binding["correlation_id"],
+                    "expected_execution_receipt_id": downstream_binding[
+                        "expected_execution_receipt_id"
+                    ],
                     "observed_at": base_now + timedelta(minutes=15),
                     "status": "success",
                 },

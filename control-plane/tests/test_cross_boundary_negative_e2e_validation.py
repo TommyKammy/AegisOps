@@ -211,7 +211,14 @@ class CrossBoundaryNegativeE2EValidationTests(unittest.TestCase):
                     "idempotency_key": seeded["action_request"].idempotency_key,
                     "approval_decision_id": seeded["approval"].approval_decision_id,
                     "delegation_id": execution.delegation_id,
-                    "payload_hash": seeded["payload_hash"],
+                    "payload_hash": execution.payload_hash,
+                    "action_request_id": execution.action_request_id,
+                    "workflow_id": downstream_binding["workflow_id"],
+                    "workflow_version_id": downstream_binding["workflow_version_id"],
+                    "correlation_id": downstream_binding["correlation_id"],
+                    "expected_execution_receipt_id": downstream_binding[
+                        "expected_execution_receipt_id"
+                    ],
                     "coordination_reference_id": downstream_binding[
                         "coordination_reference_id"
                     ],
@@ -643,7 +650,14 @@ class CrossBoundaryNegativeE2EValidationTests(unittest.TestCase):
                     "idempotency_key": seeded["action_request"].idempotency_key,
                     "approval_decision_id": seeded["approval"].approval_decision_id,
                     "delegation_id": execution.delegation_id,
-                    "payload_hash": seeded["payload_hash"],
+                    "payload_hash": execution.payload_hash,
+                    "action_request_id": execution.action_request_id,
+                    "workflow_id": downstream_binding["workflow_id"],
+                    "workflow_version_id": downstream_binding["workflow_version_id"],
+                    "correlation_id": downstream_binding["correlation_id"],
+                    "expected_execution_receipt_id": downstream_binding[
+                        "expected_execution_receipt_id"
+                    ],
                     "coordination_reference_id": downstream_binding[
                         "coordination_reference_id"
                     ],

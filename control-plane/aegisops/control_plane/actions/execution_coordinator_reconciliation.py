@@ -235,6 +235,9 @@ class ActionExecutionReconciliationCoordinator:
                     observed_expected_execution_receipt_id=(
                         observed_expected_execution_receipt_id
                     ),
+                    action_type=authoritative_execution.approved_payload.get(
+                        "action_type"
+                    ),
                 )
             ):
                 ingest_disposition = "mismatch"
@@ -522,6 +525,7 @@ class ActionExecutionReconciliationCoordinator:
         observed_workflow_version_id: object,
         observed_correlation_id: object,
         observed_expected_execution_receipt_id: object,
+        action_type: object,
     ) -> bool:
         downstream_binding = authoritative_execution.provenance.get(
             "downstream_binding",
@@ -540,11 +544,12 @@ class ActionExecutionReconciliationCoordinator:
                 observed_expected_execution_receipt_id,
             ),
         )
-        return any(
-            isinstance(downstream_binding.get(field_name), str)
-            and observed_value != downstream_binding[field_name]
-            for field_name, observed_value in expected_fields
-        )
+        for field_name, observed_value in expected_fields:
+            if not isinstance(downstream_binding.get(field_name), str):
+                continue
+            if observed_value != downstream_binding[field_name]:
+                return True
+        return False
 
     def _normalize_observed_executions(
         self,
