@@ -7,6 +7,11 @@ from typing import Callable, Mapping, TYPE_CHECKING, Protocol
 
 from . import action_review_projection as _action_review_projection
 from ..action_policy import evaluate_action_policy_record
+from ..action_policy_registry import (
+    ACTION_TYPE_POLICY_ALIASES,
+    PHASE62_MANUAL_FALLBACK_REQUIREMENTS,
+    validate_phase62_manual_fallback_record,
+)
 from ...models import (
     ActionRequestRecord,
     AlertRecord,
@@ -236,6 +241,23 @@ class ActionReviewWriteSurface:
                     evidence_ids=normalized_evidence_ids,
                     field_name="verification_evidence_ids",
                 )
+            phase62_fallback_context = _phase62_manual_fallback_record_for_request(
+                action_request=action_request,
+                fallback_actor_identity=fallback_actor_identity,
+                reason=reason,
+                action_taken=action_taken,
+                residual_uncertainty=normalized_residual_uncertainty,
+            )
+            if phase62_fallback_context is not None:
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action=str(phase62_fallback_context["affected_action"]),
+                    record=phase62_fallback_context,
+                )
+                if errors:
+                    raise ValueError(
+                        "manual fallback violates Phase 62.5 contract: "
+                        + ", ".join(errors)
+                    )
             manual_fallback_context: dict[str, object] = {
                 "action_request_id": action_request.action_request_id,
                 "approval_decision_id": approval_decision.approval_decision_id,
@@ -246,6 +268,8 @@ class ActionReviewWriteSurface:
                 "action_taken": action_taken,
                 "verification_evidence_ids": normalized_evidence_ids,
             }
+            if phase62_fallback_context is not None:
+                manual_fallback_context.update(phase62_fallback_context)
             if normalized_residual_uncertainty is not None:
                 manual_fallback_context["residual_uncertainty"] = (
                     normalized_residual_uncertainty
@@ -512,6 +536,63 @@ def _reviewed_action_class_for_request(action_request: ActionRequestRecord) -> s
     raise PermissionError(
         "approval decisions are not authorized for the reviewed action class"
     )
+
+
+def _phase62_manual_fallback_record_for_request(
+    *,
+    action_request: ActionRequestRecord,
+    fallback_actor_identity: str,
+    reason: str,
+    action_taken: str,
+    residual_uncertainty: str | None,
+) -> dict[str, object] | None:
+    action_type = action_request.requested_payload.get("action_type")
+    if not isinstance(action_type, str):
+        return None
+    catalog_action = ACTION_TYPE_POLICY_ALIASES.get(action_type, action_type)
+    if catalog_action not in PHASE62_MANUAL_FALLBACK_REQUIREMENTS:
+        return None
+    fallback_state = _phase62_fallback_state_from_text(
+        " ".join(
+            value
+            for value in (reason, action_taken, residual_uncertainty or "")
+            if value
+        )
+    )
+    return {
+        "fallback_owner_id": fallback_actor_identity,
+        "operator_note": action_taken,
+        "affected_action": catalog_action,
+        "fallback_state": fallback_state,
+        "blocked_reason": f"{_phase62_fallback_state_label(fallback_state)}: {reason}",
+        "expected_evidence": (
+            "bound AegisOps execution receipt and AegisOps reconciliation review"
+        ),
+        "follow_up_state": "manual_follow_up_pending",
+    }
+
+
+def _phase62_fallback_state_from_text(value: str) -> str:
+    terms = tuple("".join(char if char.isalnum() else " " for char in value.lower()).split())
+    if any(term in terms for term in ("mismatched", "mismatch")):
+        return "mismatched_receipt"
+    if "stale" in terms:
+        return "stale_receipt"
+    if "rejected" in terms:
+        return "execution_rejected"
+    if any(term in terms for term in ("unavailable", "timeout", "timed")):
+        return "shuffle_unavailable"
+    return "missing_receipt"
+
+
+def _phase62_fallback_state_label(fallback_state: str) -> str:
+    return {
+        "shuffle_unavailable": "shuffle unavailable",
+        "execution_rejected": "execution rejected",
+        "missing_receipt": "receipt missing",
+        "stale_receipt": "receipt stale",
+        "mismatched_receipt": "receipt mismatched",
+    }[fallback_state]
 
 
 def _authorized_approver_identities_for_request(

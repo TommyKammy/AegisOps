@@ -156,6 +156,7 @@ _MANUAL_FALLBACK_RECORD_FIELDS = (
     "fallback_owner_id",
     "operator_note",
     "affected_action",
+    "fallback_state",
     "blocked_reason",
     "expected_evidence",
     "follow_up_state",
@@ -168,22 +169,25 @@ _MANUAL_FALLBACK_BLOCKED_REASON_CATEGORIES = {
     "mismatched_receipt": (("mismatched",), ("mismatch",)),
 }
 _NON_AUTHORITATIVE_EVIDENCE_SOURCE_TERMS = (
-    ("shuffle",),
     ("shuffle", "result"),
-    ("workflow",),
+    ("shuffle", "state"),
+    ("shuffle", "output"),
     ("workflow", "result"),
-    ("ticket",),
+    ("workflow", "state"),
+    ("workflow", "output"),
     ("ticket", "output"),
     ("ticket", "state"),
-    ("ui",),
+    ("ticket", "report"),
     ("ui", "cache"),
-    ("browser",),
+    ("ui", "state"),
+    ("ui", "output"),
     ("browser", "state"),
-    ("ai",),
+    ("browser", "output"),
     ("ai", "output"),
-    ("verifier",),
+    ("ai", "result"),
     ("verifier", "output"),
-    ("issue", "lint"),
+    ("verifier", "result"),
+    ("issue", "lint", "output"),
     ("issue", "lint", "report"),
     ("operator", "note"),
 )
@@ -204,6 +208,15 @@ _NON_AUTHORITATIVE_EVIDENCE_AUTHORITY_TERMS = (
     ("receipt", "proof"),
     ("reconciliation", "proof"),
 )
+_AUTHORITY_PROMOTING_TERM_GROUPS = (
+    ("bypass",),
+    ("proves", "execution"),
+    ("execution", "truth"),
+    ("reconciliation", "truth"),
+    ("approval", "truth"),
+    ("closes", "case"),
+    ("successful", "execution"),
+)
 _FOLLOW_UP_COMPLETION_OR_READINESS_TERMS = (
     "complete",
     "completed",
@@ -223,6 +236,7 @@ _FOLLOW_UP_COMPLETION_OR_READINESS_TERMS = (
     "rc",
     "ga",
 )
+_NEGATION_TERMS = ("not", "no", "never", "cannot", "cant", "without")
 
 
 PHASE62_ACTION_POLICIES: Mapping[str, ActionPolicy] = {
@@ -513,28 +527,31 @@ def validate_phase62_manual_fallback_record(
     follow_up_state = str(record.get("follow_up_state") or "").lower()
     blocked_reason = str(record.get("blocked_reason") or "").lower()
 
-    authority_promoting_terms = (
-        "bypass",
-        "proves execution",
-        "execution truth",
-        "reconciliation truth",
-        "approval truth",
-        "closes case",
-        "successful execution",
-    )
-    if any(term in operator_note for term in authority_promoting_terms):
+    operator_note_terms = _text_terms(operator_note)
+    expected_evidence_terms = _text_terms(expected_evidence)
+    if _contains_unnegated_term_group(
+        operator_note_terms,
+        _AUTHORITY_PROMOTING_TERM_GROUPS,
+    ):
         errors.append("operator_note_promotes_authority")
-    if any(term in expected_evidence for term in authority_promoting_terms):
+    if _contains_unnegated_term_group(
+        expected_evidence_terms,
+        _AUTHORITY_PROMOTING_TERM_GROUPS,
+    ):
         errors.append("expected_evidence_promotes_authority")
     if _promotes_non_authoritative_evidence(expected_evidence):
         errors.append("expected_evidence_promotes_non_authoritative_truth")
     follow_up_terms = _text_terms(follow_up_state)
-    if any(
-        term in follow_up_terms
-        for term in _FOLLOW_UP_COMPLETION_OR_READINESS_TERMS
+    if _contains_unnegated_single_term(
+        follow_up_terms,
+        _FOLLOW_UP_COMPLETION_OR_READINESS_TERMS,
     ):
         errors.append("follow_up_state_promotes_completion")
-    if "success" in blocked_reason:
+    blocked_reason_terms = _text_terms(blocked_reason)
+    if _contains_unnegated_term_group(
+        blocked_reason_terms,
+        (("success",), ("successful",)),
+    ):
         errors.append("blocked_reason_promotes_success")
     if (
         isinstance(fallback_state, str)
@@ -556,15 +573,20 @@ def _non_blank_string(value: object) -> bool:
 
 def _promotes_non_authoritative_evidence(value: str) -> bool:
     terms = _text_terms(value)
-    has_untrusted_source = any(
-        _contains_term_group(terms, source_terms)
-        for source_terms in _NON_AUTHORITATIVE_EVIDENCE_SOURCE_TERMS
-    )
-    has_authority_claim = any(
-        _contains_term_group(terms, authority_terms)
-        for authority_terms in _NON_AUTHORITATIVE_EVIDENCE_AUTHORITY_TERMS
-    )
-    return has_untrusted_source and has_authority_claim
+    for source_terms in _NON_AUTHORITATIVE_EVIDENCE_SOURCE_TERMS:
+        source_index = _term_group_start(terms, source_terms)
+        if source_index is None:
+            continue
+        for authority_terms in _NON_AUTHORITATIVE_EVIDENCE_AUTHORITY_TERMS:
+            authority_index = _term_group_start(terms, authority_terms)
+            if (
+                authority_index is not None
+                and source_index <= authority_index
+                and authority_index - source_index <= 6
+                and not _has_recent_negation(terms, authority_index, window=3)
+            ):
+                return True
+    return False
 
 
 def _blocked_reason_matches_declared_failure_category(
@@ -583,6 +605,50 @@ def _blocked_reason_matches_declared_failure_category(
 
 def _contains_term_group(terms: tuple[str, ...], required_terms: tuple[str, ...]) -> bool:
     return all(term in terms for term in required_terms)
+
+
+def _contains_unnegated_term_group(
+    terms: tuple[str, ...],
+    term_groups: tuple[tuple[str, ...], ...],
+) -> bool:
+    for term_group in term_groups:
+        index = _term_group_start(terms, term_group)
+        if index is not None and not _has_recent_negation(terms, index, window=3):
+            return True
+    return False
+
+
+def _contains_unnegated_single_term(
+    terms: tuple[str, ...],
+    target_terms: tuple[str, ...],
+) -> bool:
+    for index, term in enumerate(terms):
+        if term in target_terms and not _has_recent_negation(terms, index, window=4):
+            return True
+    return False
+
+
+def _term_group_start(
+    terms: tuple[str, ...],
+    required_terms: tuple[str, ...],
+) -> int | None:
+    if not required_terms or len(required_terms) > len(terms):
+        return None
+    group_length = len(required_terms)
+    for index in range(0, len(terms) - group_length + 1):
+        if terms[index : index + group_length] == required_terms:
+            return index
+    return None
+
+
+def _has_recent_negation(
+    terms: tuple[str, ...],
+    index: int,
+    *,
+    window: int,
+) -> bool:
+    start = max(0, index - window)
+    return any(term in _NEGATION_TERMS for term in terms[start:index])
 
 
 def _text_terms(value: str) -> tuple[str, ...]:
