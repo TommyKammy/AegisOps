@@ -172,9 +172,14 @@ _MANUAL_FALLBACK_BLOCKED_REASON_CATEGORIES = {
         ("cancelled",),
         ("cancellation",),
     ),
-    "missing_receipt": (("missing",),),
-    "stale_receipt": (("stale",),),
-    "mismatched_receipt": (("mismatched",), ("mismatch",)),
+    "missing_receipt": (("receipt", "missing"), ("missing", "receipt")),
+    "stale_receipt": (("receipt", "stale"), ("stale", "receipt")),
+    "mismatched_receipt": (
+        ("receipt", "mismatched"),
+        ("mismatched", "receipt"),
+        ("receipt", "mismatch"),
+        ("mismatch", "receipt"),
+    ),
 }
 _NON_AUTHORITATIVE_EVIDENCE_SOURCE_BASE_TERMS = (
     ("shuffle", "result"),
@@ -219,6 +224,7 @@ _AUTHORITY_PROOF_VERBS = (
     "prove",
     "proves",
     "proved",
+    "proven",
     "proving",
     "validate",
     "validates",
@@ -236,6 +242,15 @@ _CLOSURE_AUTHORITY_TERM_GROUPS = (
     ("case", "closed"),
     ("case", "closes"),
     ("case", "closure"),
+    ("close", "cases"),
+    ("closed", "cases"),
+    ("closes", "cases"),
+    ("case", "closures"),
+    ("cases", "close"),
+    ("cases", "closed"),
+    ("cases", "closes"),
+    ("cases", "closure"),
+    ("cases", "closures"),
     ("close", "ticket"),
     ("closed", "ticket"),
     ("closes", "ticket"),
@@ -243,6 +258,15 @@ _CLOSURE_AUTHORITY_TERM_GROUPS = (
     ("ticket", "closes"),
     ("ticket", "closed"),
     ("ticket", "closure"),
+    ("close", "tickets"),
+    ("closed", "tickets"),
+    ("closes", "tickets"),
+    ("ticket", "closures"),
+    ("tickets", "close"),
+    ("tickets", "closed"),
+    ("tickets", "closes"),
+    ("tickets", "closure"),
+    ("tickets", "closures"),
 )
 _AUTHORITY_PROOF_TERM_GROUPS = tuple(
     dict.fromkeys(
@@ -309,16 +333,26 @@ _FOLLOW_UP_LAUNCH_READINESS_TERMS = (
 )
 _FOLLOW_UP_COMPLETION_OR_READINESS_TERMS = (
     "complete",
+    "completes",
     "completed",
+    "completing",
+    "succeed",
+    "succeeds",
     "succeeded",
+    "succeeding",
     "success",
     "successful",
+    "closes",
     "closure",
     "closed",
     "close",
+    "closing",
     "ready",
     "readiness",
+    "reconcile",
+    "reconciles",
     "reconciled",
+    "reconciling",
     "reconciliation",
     *_FOLLOW_UP_LAUNCH_READINESS_TERMS,
 )
@@ -928,7 +962,7 @@ def _term_group_matches(
         for next_index in range(term_index + 1, max_next_index):
             if terms[next_index] == _TERM_BOUNDARY:
                 break
-            if terms[next_index] == next_term:
+            if _term_matches_required(terms[next_index], next_term):
                 matches_from(
                     next_index,
                     required_index + 1,
@@ -936,10 +970,24 @@ def _term_group_matches(
                 )
 
     for index, term in enumerate(terms):
-        if term != required_terms[0]:
+        if not _term_matches_required(term, required_terms[0]):
             continue
         matches_from(index, 1, (index,))
     return tuple(matches)
+
+
+def _term_matches_required(term: str, required_term: str) -> bool:
+    if term == required_term:
+        return True
+    if len(required_term) <= 2 or required_term.endswith("s"):
+        return False
+    if term == f"{required_term}s":
+        return True
+    if required_term.endswith(("s", "x", "ch", "sh")) and term == f"{required_term}es":
+        return True
+    if required_term.endswith("y") and term == f"{required_term[:-1]}ies":
+        return True
+    return False
 
 
 def _has_recent_negation(

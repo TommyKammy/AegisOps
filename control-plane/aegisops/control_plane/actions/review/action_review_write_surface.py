@@ -626,19 +626,6 @@ def _phase62_declared_fallback_owner_for_request(
             "lookup_owner_id",
         ),
     }
-    fallback_identifier_keys_by_action = {
-        "create_tracking_ticket": (
-            "coordination_reference_id",
-            "case_id",
-            "alert_id",
-        ),
-        "enrichment_only_lookup": (
-            "lookup_subject_ref",
-            "lookup_subject_id",
-            "case_id",
-            "alert_id",
-        ),
-    }
     for key in identity_owner_keys_by_action.get(catalog_action, ()):
         for mapping in (target_scope, requested_payload):
             value = mapping.get(key)
@@ -646,26 +633,17 @@ def _phase62_declared_fallback_owner_for_request(
                 return value.strip()
     if action_request.requester_identity is not None:
         return action_request.requester_identity.strip() or None
-    for key in fallback_identifier_keys_by_action.get(catalog_action, ()):
-        for mapping in (target_scope, requested_payload):
-            value = mapping.get(key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-    for value in (
-        action_request.case_id,
-        action_request.alert_id,
-        action_request.finding_id,
-    ):
-        if value is not None and value.strip():
-            return value.strip()
     return None
 
 
 def _phase62_fallback_state_from_text(value: str) -> str | None:
     terms = _phase62_text_terms(value)
-    if _phase62_contains_unnegated_terms(terms, ("mismatched", "mismatch")):
+    if _phase62_contains_unnegated_receipt_loss_terms(
+        terms,
+        ("mismatched", "mismatch"),
+    ):
         return "mismatched_receipt"
-    if _phase62_contains_unnegated_terms(terms, ("stale",)):
+    if _phase62_contains_unnegated_receipt_loss_terms(terms, ("stale",)):
         return "stale_receipt"
     if _phase62_contains_unnegated_terms(
         terms,
@@ -690,7 +668,7 @@ def _phase62_fallback_state_from_text(value: str) -> str | None:
         ("unavailable", "timeout"),
     ) or _phase62_contains_unnegated_term_group(terms, ("timed", "out")):
         return "shuffle_unavailable"
-    if _phase62_contains_unnegated_terms(
+    if _phase62_contains_unnegated_receipt_loss_terms(
         terms,
         ("missing",),
     ) or _phase62_contains_unnegated_receipt_loss_terms(

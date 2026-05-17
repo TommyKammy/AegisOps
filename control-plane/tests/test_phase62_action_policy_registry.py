@@ -252,6 +252,9 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "operator_note_proving_execution": {
                 "operator_note": "Manual fallback proving execution.",
             },
+            "operator_note_proven_execution": {
+                "operator_note": "Manual fallback has proven execution.",
+            },
             "operator_note_proof_of_execution": {
                 "operator_note": "Manual fallback is proof of execution.",
             },
@@ -266,6 +269,33 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             },
             "operator_note_not_only_confirmed_execution": {
                 "operator_note": "Manual fallback not only confirmed execution.",
+            },
+            "operator_note_closes_cases": {
+                "operator_note": "Manual fallback closes cases.",
+            },
+            "operator_note_tickets_closed": {
+                "operator_note": "Manual fallback marks tickets closed.",
+            },
+            "missing_receipt_without_receipt_context": {
+                "fallback_state": "missing_receipt",
+                "blocked_reason": "fallback owner missing from rotation",
+            },
+            "stale_receipt_without_receipt_context": {
+                "fallback_state": "stale_receipt",
+                "blocked_reason": "stale operator note present",
+            },
+            "mismatched_receipt_without_receipt_context": {
+                "fallback_state": "mismatched_receipt",
+                "blocked_reason": "mismatched owner roster entry",
+            },
+            "follow_up_state_completes": {
+                "follow_up_state": "manual follow-up completes the action",
+            },
+            "follow_up_state_reconciles": {
+                "follow_up_state": "manual follow-up reconciles the action",
+            },
+            "follow_up_state_closing": {
+                "follow_up_state": "manual follow-up closing ticket",
             },
         }
 
@@ -361,6 +391,11 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "ticket state is proof of receipt",
             "workflow result is confirmation of execution",
             "browser state is validation of receipt",
+            "Shuffle results prove execution",
+            "workflow outputs are authoritative",
+            "ticket states confirm receipt",
+            "browser outputs validate reconciliation",
+            "operator notes are reconciliation truth",
         ):
             with self.subTest(expected_evidence=expected_evidence):
                 errors = validate_phase62_manual_fallback_record(

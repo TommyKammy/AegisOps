@@ -648,7 +648,7 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
             "payload-escalation-owner-stale-001",
         )
 
-    def test_enrichment_lookup_fallback_owner_uses_reviewed_lookup_subject(
+    def test_enrichment_lookup_fallback_owner_uses_reviewed_lookup_owner(
         self,
     ) -> None:
         _store, service, promoted_case, evidence_id, reviewed_at = (
@@ -666,7 +666,7 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
                     "case_id": promoted_case.case_id,
                     "alert_id": promoted_case.alert_id,
                     "finding_id": promoted_case.finding_id,
-                    "lookup_subject_ref": "reviewed-lookup-subject-001",
+                    "lookup_owner_id": "reviewed-lookup-owner-001",
                 },
                 payload_hash="payload-hash-phase62-lookup-fallback-owner-001",
                 requested_at=reviewed_at,
@@ -720,12 +720,90 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
         ]
         self.assertEqual(
             scoped_visibility["manual_fallback"]["fallback_owner_id"],
-            "reviewed-lookup-subject-001",
+            "reviewed-lookup-owner-001",
         )
         self.assertNotEqual(
             scoped_visibility["manual_fallback"]["fallback_owner_id"],
             "payload-lookup-subject-stale-001",
         )
+
+    def test_manual_fallback_owner_rejects_reference_identifier_as_owner(self) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        action_request = service.persist_record(
+            ActionRequestRecord(
+                action_request_id="action-request-phase62-ticket-fallback-missing-owner-001",
+                approval_decision_id=None,
+                case_id=promoted_case.case_id,
+                alert_id=promoted_case.alert_id,
+                finding_id=promoted_case.finding_id,
+                idempotency_key="ticket-fallback-missing-owner-001",
+                target_scope={
+                    "case_id": promoted_case.case_id,
+                    "alert_id": promoted_case.alert_id,
+                    "finding_id": promoted_case.finding_id,
+                    "coordination_reference_id": "coordination-ref-not-owner-001",
+                    "coordination_target_type": "zammad",
+                },
+                payload_hash="payload-hash-phase62-ticket-fallback-missing-owner-001",
+                requested_at=reviewed_at,
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+                lifecycle_state="pending_approval",
+                requester_identity=None,
+                requested_payload={
+                    "action_type": "create_tracking_ticket",
+                    "case_id": promoted_case.case_id,
+                    "alert_id": promoted_case.alert_id,
+                    "finding_id": promoted_case.finding_id,
+                    "coordination_reference_id": "payload-ref-not-owner-001",
+                },
+                policy_evaluation={"approval_requirement": "human_required"},
+            ),
+            transitioned_at=reviewed_at,
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase62-ticket-fallback-missing-owner-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+
+        with self.assertRaisesRegex(ValueError, "missing_fallback_owner_id"):
+            service.record_action_review_manual_fallback(
+                action_request_id=action_request.action_request_id,
+                fallback_at=reviewed_at + timedelta(minutes=45),
+                fallback_actor_identity="analyst-003",
+                authority_boundary="approved_human_fallback",
+                reason="The reviewed Shuffle execution was rejected by the approved route.",
+                action_taken="Documented manual follow-up under the approved procedure.",
+                verification_evidence_ids=(evidence_id,),
+                residual_uncertainty="Awaiting ticket requester follow-up.",
+            )
+
+        case_after_rejection = service.get_record(CaseRecord, promoted_case.case_id)
+        self.assertIsNotNone(case_after_rejection)
+        assert case_after_rejection is not None
+        action_review_visibility = dict(
+            case_after_rejection.reviewed_context.get("action_review_visibility", {})
+        )
+        scoped_visibility = dict(
+            action_review_visibility.get(action_request.action_request_id, {})
+        )
+        self.assertNotIn("manual_fallback", scoped_visibility)
 
     def test_manual_fallback_state_ignores_negated_failure_terms(self) -> None:
         _store, service, promoted_case, evidence_id, reviewed_at = (
@@ -906,21 +984,32 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
         )
 
         for reason in (
+            "missing owner acknowledgement after handoff",
             "operator missed handoff window",
             "fallback owner absent from calendar rotation",
+            "stale owner roster blocked manual follow-up",
+            "mismatched owner roster blocked manual follow-up",
         ):
             with self.subTest(generic_absent_reason=reason):
                 self.assertIsNone(_phase62_fallback_state_from_text(reason))
 
         for reason in (
+            "bound AegisOps receipt missing after dispatch",
             "bound AegisOps receipt absent after dispatch",
             "bound AegisOps receipt was missed after dispatch",
+            "bound AegisOps receipt stale after dispatch",
+            "bound AegisOps receipt mismatched after dispatch",
+            "mismatch in bound AegisOps receipt after dispatch",
         ):
             with self.subTest(receipt_absent_reason=reason):
-                self.assertEqual(
-                    _phase62_fallback_state_from_text(reason),
-                    "missing_receipt",
+                expected_state = (
+                    "stale_receipt"
+                    if "stale" in reason
+                    else "mismatched_receipt"
+                    if "mismatch" in reason or "mismatched" in reason
+                    else "missing_receipt"
                 )
+                self.assertEqual(_phase62_fallback_state_from_text(reason), expected_state)
 
     def test_manual_fallback_state_recognizes_rejection_variants(self) -> None:
         from aegisops.control_plane.actions.review.action_review_write_surface import (
