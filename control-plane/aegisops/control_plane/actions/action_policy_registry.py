@@ -211,9 +211,15 @@ _NON_AUTHORITATIVE_EVIDENCE_AUTHORITY_TERMS = (
 _AUTHORITY_PROMOTING_TERM_GROUPS = (
     ("bypass",),
     ("proves", "execution"),
+    ("proves", "receipt"),
+    ("proves", "reconciliation"),
     ("execution", "truth"),
+    ("receipt", "truth"),
     ("reconciliation", "truth"),
     ("approval", "truth"),
+    ("execution", "proof"),
+    ("receipt", "proof"),
+    ("reconciliation", "proof"),
     ("closes", "case"),
     ("successful", "execution"),
 )
@@ -236,7 +242,7 @@ _FOLLOW_UP_COMPLETION_OR_READINESS_TERMS = (
     "rc",
     "ga",
 )
-_NEGATION_TERMS = ("not", "no", "never", "cannot", "cant", "without")
+_NEGATION_TERMS = ("not", "no", "never", "cannot", "cant", "wont", "without")
 
 
 PHASE62_ACTION_POLICIES: Mapping[str, ActionPolicy] = {
@@ -583,18 +589,6 @@ def require_phase62_manual_fallback_record(
         )
 
 
-def validated_phase62_manual_fallback_record(
-    *,
-    catalog_action: str,
-    record: Mapping[str, object],
-) -> dict[str, object]:
-    require_phase62_manual_fallback_record(
-        catalog_action=catalog_action,
-        record=record,
-    )
-    return dict(record)
-
-
 def _non_blank_string(value: object) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
@@ -624,15 +618,14 @@ def _blocked_reason_matches_declared_failure_category(
 ) -> bool:
     terms = _text_terms(blocked_reason)
     return any(
-        _contains_term_group(terms, category_terms)
+        _contains_unnegated_term_group(
+            terms,
+            (category_terms,),
+        )
         for category_terms in _MANUAL_FALLBACK_BLOCKED_REASON_CATEGORIES[
             fallback_state
         ]
     )
-
-
-def _contains_term_group(terms: tuple[str, ...], required_terms: tuple[str, ...]) -> bool:
-    return all(term in terms for term in required_terms)
 
 
 def _contains_unnegated_term_group(
@@ -641,7 +634,7 @@ def _contains_unnegated_term_group(
 ) -> bool:
     for term_group in term_groups:
         if any(
-            not _has_recent_negation(terms, index, window=3)
+            not _has_recent_negation(terms, index, window=4)
             for index in _term_group_starts(terms, term_group)
         ):
             return True
@@ -664,12 +657,25 @@ def _term_group_starts(
 ) -> tuple[int, ...]:
     if not required_terms or len(required_terms) > len(terms):
         return ()
-    group_length = len(required_terms)
-    return tuple(
-        index
-        for index in range(0, len(terms) - group_length + 1)
-        if terms[index : index + group_length] == required_terms
-    )
+    indexes: list[int] = []
+    for index, term in enumerate(terms):
+        if term != required_terms[0]:
+            continue
+        search_from = index + 1
+        matched = True
+        for required_term in required_terms[1:]:
+            try:
+                next_index = terms.index(required_term, search_from)
+            except ValueError:
+                matched = False
+                break
+            if next_index - search_from > 4:
+                matched = False
+                break
+            search_from = next_index + 1
+        if matched:
+            indexes.append(index)
+    return tuple(indexes)
 
 
 def _has_recent_negation(
@@ -683,7 +689,15 @@ def _has_recent_negation(
 
 
 def _text_terms(value: str) -> tuple[str, ...]:
-    return tuple("".join(char if char.isalnum() else " " for char in value).split())
+    normalized = (
+        value.replace("can't", "cant")
+        .replace("Can't", "Cant")
+        .replace("won't", "wont")
+        .replace("Won't", "Wont")
+    )
+    return tuple(
+        "".join(char if char.isalnum() else " " for char in normalized).split()
+    )
 
 
 def requester_role_from_identity(identity: str) -> str:

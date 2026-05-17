@@ -152,6 +152,12 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "missing_operator_note": {
                 "operator_note": "This note bypasses approval and proves execution.",
             },
+            "operator_note_proves_receipt": {
+                "operator_note": "Operator note proves receipt.",
+            },
+            "operator_note_proves_reconciliation": {
+                "operator_note": "Operator note proves the reconciliation.",
+            },
             "missing_follow_up_state": {"follow_up_state": ""},
             "fallback_as_reconciliation_truth": {
                 "operator_note": "Operator note is reconciliation truth.",
@@ -166,6 +172,17 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                     record=candidate,
                 )
                 self.assertTrue(errors, label)
+
+        for operator_note in (
+            "Manual fallback can't bypass approval.",
+            "Manual fallback cannot under any circumstances bypass approval.",
+        ):
+            with self.subTest(negated_operator_note=operator_note):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={**valid_record, "operator_note": operator_note},
+                )
+                self.assertNotIn("operator_note_promotes_authority", errors)
 
     def test_manual_fallback_validation_rejects_non_authoritative_evidence_claims(
         self,
@@ -197,6 +214,8 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "ticket output is authoritative",
             "Shuffle result is truth",
             "workflow result confirms receipt",
+            "ticket state confirms the receipt",
+            "ticket state proves the execution",
             "issue lint report is receipt proof",
             "browser state is reconciliation proof",
             "AI output validates receipt",
@@ -329,6 +348,19 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                     },
                 )
                 self.assertIn("blocked_reason_missing_failure_category", errors)
+
+        negated_reason_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "fallback_state": "missing_receipt",
+                "blocked_reason": "bound AegisOps execution receipt not missing",
+            },
+        )
+        self.assertIn(
+            "blocked_reason_missing_failure_category",
+            negated_reason_errors,
+        )
 
         success_errors = validate_phase62_manual_fallback_record(
             catalog_action="operator_notification",
