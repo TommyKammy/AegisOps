@@ -614,11 +614,55 @@ def _promotes_non_authoritative_evidence(value: str) -> bool:
             if not authority_indexes:
                 continue
             if any(
-                not _has_recent_negation(terms, authority_index, window=3)
+                _authority_claim_matches_source(
+                    terms=terms,
+                    source_index=source_index,
+                    source_terms=source_terms,
+                    authority_index=authority_index,
+                    authority_terms=authority_terms,
+                )
+                and not _has_recent_negation(terms, authority_index, window=3)
+                for source_index in source_indexes
                 for authority_index in authority_indexes
             ):
                 return True
     return False
+
+
+def _authority_claim_matches_source(
+    *,
+    terms: tuple[str, ...],
+    source_index: int,
+    source_terms: tuple[str, ...],
+    authority_index: int,
+    authority_terms: tuple[str, ...],
+) -> bool:
+    source_end = source_index + len(source_terms)
+    authority_end = authority_index + len(authority_terms)
+    if source_index <= authority_index:
+        authority_anchor_start = max(source_end, authority_index - 3)
+        authority_anchor = terms[authority_anchor_start:authority_end]
+        if any(term in {"aegisops", "bound"} for term in authority_anchor):
+            return False
+        return True
+
+    between = terms[authority_end:source_index]
+    return any(
+        term
+        in {
+            "from",
+            "via",
+            "using",
+            "through",
+            "by",
+            "based",
+            "comes",
+            "come",
+            "coming",
+            "derived",
+        }
+        for term in between
+    )
 
 
 def _blocked_reason_matches_declared_failure_category(

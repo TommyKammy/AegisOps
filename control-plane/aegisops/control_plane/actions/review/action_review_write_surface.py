@@ -624,14 +624,14 @@ def _phase62_declared_fallback_owner_for_request(
         ),
     }
     for key in identity_owner_keys_by_action.get(catalog_action, ()):
-        for mapping in (requested_payload, target_scope):
+        for mapping in (target_scope, requested_payload):
             value = mapping.get(key)
             if isinstance(value, str) and value.strip():
                 return value.strip()
     if action_request.requester_identity is not None:
         return action_request.requester_identity.strip() or None
     for key in fallback_identifier_keys_by_action.get(catalog_action, ()):
-        for mapping in (requested_payload, target_scope):
+        for mapping in (target_scope, requested_payload):
             value = mapping.get(key)
             if isinstance(value, str) and value.strip():
                 return value.strip()
@@ -658,8 +658,8 @@ def _phase62_fallback_state_from_text(value: str) -> str | None:
         return "execution_rejected"
     if _phase62_contains_unnegated_terms(
         terms,
-        ("unavailable", "timeout", "timed"),
-    ):
+        ("unavailable", "timeout"),
+    ) or _phase62_contains_unnegated_term_group(terms, ("timed", "out")):
         return "shuffle_unavailable"
     if _phase62_contains_unnegated_terms(
         terms,
@@ -679,12 +679,28 @@ def _phase62_contains_unnegated_terms(
     return False
 
 
+def _phase62_contains_unnegated_term_group(
+    terms: tuple[str, ...],
+    target_group: tuple[str, ...],
+) -> bool:
+    if not target_group or len(target_group) > len(terms):
+        return False
+    for index in range(0, len(terms) - len(target_group) + 1):
+        if terms[index : index + len(target_group)] != target_group:
+            continue
+        if not _phase62_has_recent_negation(terms, index):
+            return True
+    return False
+
+
 def _phase62_has_recent_negation(terms: tuple[str, ...], index: int) -> bool:
     start = max(0, index - 4)
-    return any(
-        term in {"not", "no", "never", "without", "cannot", "cant", "wont"}
-        for term in terms[start:index]
-    )
+    for term in reversed(terms[start:index]):
+        if term in {"but", "however", "though", "although", "yet", "instead"}:
+            return False
+        if term in {"not", "no", "never", "without", "cannot", "cant", "wont"}:
+            return True
+    return False
 
 
 def _phase62_text_terms(value: str) -> tuple[str, ...]:

@@ -270,6 +270,21 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             compliant_errors,
         )
 
+        separated_authority_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "expected_evidence": (
+                    "retain ticket output as subordinate context; bound AegisOps "
+                    "receipt proof remains required"
+                ),
+            },
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            separated_authority_errors,
+        )
+
         negated_errors = validate_phase62_manual_fallback_record(
             catalog_action="operator_notification",
             record={
