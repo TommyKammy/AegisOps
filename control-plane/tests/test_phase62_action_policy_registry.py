@@ -104,7 +104,7 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     contract.production_exclusion,
-                    "excluded_from_production_execution_and_reconciliation_truth",
+                    "excluded_from_production_execution_receipt_and_reconciliation_truth",
                 )
                 self.assertIn("demo_test_label", contract.required_output_fields)
                 self.assertIn("production_exclusion", contract.required_output_fields)
@@ -426,6 +426,59 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                 },
                 "production_exclusion_promotes_production_truth",
             ),
+            "PRRT_kwDOR2iDUc6CsBlB_contract_default": (
+                {
+                    "production_exclusion": PHASE62_SIMULATOR_CONTRACTS[
+                        "operator_notification"
+                    ].production_exclusion,
+                },
+                None,
+            ),
+            "PRRT_kwDOR2iDUc6CsBlE_standalone_authoritative": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and simulator output is authoritative."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6CsBlF_delegation_of_production_workflow": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and delegation of production workflow."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6CsBlF_delegates_workflow_for_production": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and delegates workflow for production."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6CsBlH_launch_workflow_for_production": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and launch workflow for production."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6CsBlJ_execution_ad_hoc": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and execution ad hoc."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
         }
 
         for thread_id, (override, expected_error) in cases.items():
@@ -434,7 +487,10 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                     catalog_action="operator_notification",
                     output={**self._valid_simulator_output(), **override},
                 )
-                self.assertIn(expected_error, errors)
+                if expected_error is None:
+                    self.assertEqual(errors, ())
+                else:
+                    self.assertIn(expected_error, errors)
 
     def test_manual_fallback_requirements_cover_every_reviewed_action(self) -> None:
         self.assertEqual(

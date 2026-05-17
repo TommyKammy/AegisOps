@@ -81,7 +81,7 @@ class SimulatorContract:
     allowed_statuses: tuple[str, ...]
     authority_posture: str = "non_authoritative_demo_test_evidence"
     production_exclusion: str = (
-        "excluded_from_production_execution_and_reconciliation_truth"
+        "excluded_from_production_execution_receipt_and_reconciliation_truth"
     )
     secret_posture: str = "live_secrets_forbidden"
     data_posture: str = "synthetic_or_sanitized_only"
@@ -674,6 +674,7 @@ _SIMULATOR_PRODUCTION_TRUTH_TERMS = (
     ("reconciliation", "truth"),
     ("production", "truth"),
     ("authority",),
+    ("authoritative",),
     ("authoritative", "execution"),
     ("authoritative", "receipt"),
     ("authoritative", "reconciliation"),
@@ -693,12 +694,18 @@ _SIMULATOR_PRODUCTION_TRUTH_TERMS = (
     ("production", "workflow", "delegation"),
     ("production", "workflow", "delegate"),
     ("production", "workflow", "delegated"),
+    ("delegation", "production", "workflow"),
     ("delegate", "production", "workflow"),
+    ("delegate", "workflow", "production"),
     ("delegated", "production", "workflow"),
+    ("delegated", "workflow", "production"),
     ("production", "workflow", "launch"),
     ("launch", "production", "workflow"),
+    ("launch", "workflow", "production"),
+    ("workflow", "launch", "production"),
     ("direct", "ad", "hoc", "execution"),
     ("ad", "hoc", "execution"),
+    ("execution", "ad", "hoc"),
     ("direct", "execution"),
     ("ready",),
     ("readiness",),
@@ -1291,6 +1298,11 @@ def _contains_simulator_production_truth_overclaim(terms: tuple[str, ...]) -> bo
                 for index in match
             ):
                 continue
+            if term_group == ("authoritative",) and _has_non_authoritative_prefix(
+                terms,
+                match[0],
+            ):
+                continue
             if (
                 term_group in _SIMULATOR_EXCLUDABLE_PRODUCTION_TRUTH_TERMS
                 and _has_recent_simulator_exclusion_context(terms, match[0])
@@ -1298,6 +1310,13 @@ def _contains_simulator_production_truth_overclaim(terms: tuple[str, ...]) -> bo
                 continue
             return True
     return False
+
+
+def _has_non_authoritative_prefix(
+    terms: tuple[str, ...],
+    target_index: int,
+) -> bool:
+    return target_index > 0 and terms[target_index - 1] == "non"
 
 
 def _has_recent_simulator_exclusion_context(
