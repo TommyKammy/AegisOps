@@ -180,6 +180,21 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "repeated_bypass_after_sentence_boundary": {
                 "operator_note": "Manual fallback cannot bypass approval. bypass approval.",
             },
+            "operator_note_bypasses_approval": {
+                "operator_note": "Manual fallback bypasses approval.",
+            },
+            "operator_note_bypassed_approval": {
+                "operator_note": "Manual fallback bypassed approval.",
+            },
+            "operator_note_confirmed_execution": {
+                "operator_note": "Operator note confirmed execution.",
+            },
+            "operator_note_validated_receipt": {
+                "operator_note": "Operator note validated receipt.",
+            },
+            "operator_note_closes_ticket": {
+                "operator_note": "Manual fallback closes ticket.",
+            },
         }
 
         for label, override in cases.items():
@@ -244,6 +259,8 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                 "and analyst context, then confirms receipt"
             ),
             "ticket output cannot prove execution; ticket state confirms receipt",
+            "ticket output confirmed execution",
+            "workflow result validated receipt",
             "issue lint a b c d e lint output is authoritative",
             (
                 "ticket output is authoritative and bound AegisOps execution "
@@ -497,6 +514,16 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             },
         )
         self.assertNotIn("blocked_reason_promotes_success", success_errors)
+
+        succeeded_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "fallback_state": "missing_receipt",
+                "blocked_reason": "receipt missing after execution succeeded",
+            },
+        )
+        self.assertIn("blocked_reason_promotes_success", succeeded_errors)
 
         for canceled_reason in (
             "reviewed Shuffle execution canceled before receipt emission",
