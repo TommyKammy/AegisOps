@@ -61,7 +61,7 @@ class ActionPolicyDecision:
     def as_policy_evaluation(self) -> dict[str, object]:
         routing_target = (
             "approval"
-            if self.policy.approval_requirement == "human_required"
+            if self.policy.approval_requirement.startswith("human_required")
             else "request"
         )
         return {
@@ -179,9 +179,7 @@ def evaluate_phase62_action_policy(
             denial_reasons.append("policy_expired")
     if policy.idempotency_required and not idempotency_key:
         denial_reasons.append("missing_idempotency_key")
-    denial_reasons.extend(
-        _target_scope_denial_reasons(policy.catalog_action, target_scope)
-    )
+    denial_reasons.extend(_target_scope_denial_reasons(policy, target_scope))
 
     return ActionPolicyDecision(
         policy=policy,
@@ -192,25 +190,28 @@ def evaluate_phase62_action_policy(
 
 
 def _target_scope_denial_reasons(
-    catalog_action: str,
+    policy: ActionPolicy,
     target_scope: Mapping[str, object],
 ) -> tuple[str, ...]:
     reasons: list[str] = []
-    if target_scope.get("protected_target") is True:
+    if (
+        target_scope.get("protected_target") is True
+        and policy.protected_target_posture != "approval_required_for_follow_up"
+    ):
         reasons.append("protected_target_misuse")
 
-    if catalog_action == "create_tracking_ticket":
+    if policy.catalog_action == "create_tracking_ticket":
         if target_scope.get("coordination_target_type") not in ("zammad", "glpi"):
             reasons.append("target_scope_not_allowed")
         if not target_scope.get("coordination_reference_id"):
             reasons.append("target_scope_not_allowed")
-    elif catalog_action == "operator_notification":
+    elif policy.catalog_action == "operator_notification":
         if not target_scope.get("recipient_identity"):
             reasons.append("target_scope_not_allowed")
-    elif catalog_action == "manual_escalation_request":
+    elif policy.catalog_action == "manual_escalation_request":
         if not target_scope.get("escalation_owner_ref"):
             reasons.append("target_scope_not_allowed")
-    elif catalog_action == "enrichment_only_lookup":
+    elif policy.catalog_action == "enrichment_only_lookup":
         if not target_scope.get("lookup_subject_ref"):
             reasons.append("target_scope_not_allowed")
 

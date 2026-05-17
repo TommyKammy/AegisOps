@@ -113,6 +113,27 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
         self.assertFalse(decision.allowed)
         self.assertEqual(decision.denial_reasons, ("protected_target_misuse",))
 
+    def test_validation_routes_protected_manual_escalation_to_approval(self) -> None:
+        decision = evaluate_phase62_action_policy(
+            action_type="manual_escalation_request",
+            requester_identity="analyst-001",
+            target_scope={
+                "escalation_owner_ref": "it-operations-duty-owner",
+                "protected_target": True,
+            },
+            expires_at=self.now + timedelta(hours=4),
+            idempotency_key="manual-escalation:abc",
+            now=self.now,
+        )
+
+        self.assertTrue(decision.allowed)
+        self.assertEqual(decision.denial_reasons, ())
+        self.assertEqual(
+            decision.as_policy_evaluation()["approval_requirement"],
+            "human_required_for_protected_follow_up",
+        )
+        self.assertEqual(decision.as_policy_evaluation()["routing_target"], "approval")
+
 
 if __name__ == "__main__":
     unittest.main()
