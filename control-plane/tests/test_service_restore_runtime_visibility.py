@@ -516,6 +516,10 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
                 action_request,
                 requested_payload={
                     **dict(action_request.requested_payload),
+                    "fallback_owner_id": "stale-payload-fallback-owner-001",
+                    "fallback_owner_identity": (
+                        "stale-payload-fallback-owner-identity-001"
+                    ),
                     "requester_identity": "stale-payload-requester-001",
                 },
             )
@@ -561,6 +565,14 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
         self.assertNotEqual(
             scoped_visibility["manual_fallback"]["fallback_owner_id"],
             "coordination-ref-phase62-fallback-owner-001",
+        )
+        self.assertNotEqual(
+            scoped_visibility["manual_fallback"]["fallback_owner_id"],
+            "stale-payload-fallback-owner-001",
+        )
+        self.assertNotEqual(
+            scoped_visibility["manual_fallback"]["fallback_owner_id"],
+            "stale-payload-fallback-owner-identity-001",
         )
         self.assertNotEqual(
             scoped_visibility["manual_fallback"]["fallback_owner_id"],

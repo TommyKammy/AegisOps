@@ -627,12 +627,15 @@ def _phase62_declared_fallback_owner_for_request(
         ),
     }
     for key in identity_owner_keys_by_action.get(catalog_action, ()):
-        for mapping in (target_scope, requested_payload):
-            value = mapping.get(key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
+        value = target_scope.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
     if action_request.requester_identity is not None:
         return action_request.requester_identity.strip() or None
+    for key in identity_owner_keys_by_action.get(catalog_action, ()):
+        value = requested_payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
     return None
 
 
