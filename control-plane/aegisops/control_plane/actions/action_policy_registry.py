@@ -690,11 +690,12 @@ def _authority_claim_matches_source(
             for term in between
         ):
             return False
-        authority_anchor_start = max(source_end, authority_index - 3)
-        authority_anchor = terms[
-            authority_anchor_start : min(len(terms), authority_end + 4)
-        ]
-        if any(term in {"aegisops", "bound"} for term in authority_anchor):
+        if _authority_claim_targets_aegisops_receipt(
+            terms=terms,
+            source_end=source_end,
+            authority_index=authority_index,
+            authority_end=authority_end,
+        ):
             return False
         return True
 
@@ -719,6 +720,20 @@ def _authority_claim_matches_source(
         }
         for term in between
     )
+
+
+def _authority_claim_targets_aegisops_receipt(
+    *,
+    terms: tuple[str, ...],
+    source_end: int,
+    authority_index: int,
+    authority_end: int,
+) -> bool:
+    authority_anchor_start = max(source_end, authority_index - 3)
+    authority_anchor = terms[
+        authority_anchor_start : min(len(terms), authority_end + 4)
+    ]
+    return any(term in {"aegisops", "bound"} for term in authority_anchor)
 
 
 def _blocked_reason_matches_declared_failure_category(

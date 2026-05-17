@@ -286,7 +286,8 @@ class ActionReviewWriteSurface:
                 "verification_evidence_ids": normalized_evidence_ids,
             }
             if phase62_fallback_context is not None:
-                manual_fallback_context.update(phase62_fallback_context)
+                for phase62_key, phase62_value in phase62_fallback_context.items():
+                    manual_fallback_context[phase62_key] = phase62_value
             if normalized_residual_uncertainty is not None:
                 manual_fallback_context["residual_uncertainty"] = (
                     normalized_residual_uncertainty
@@ -703,10 +704,25 @@ def _phase62_contains_unnegated_terms(
     terms: tuple[str, ...],
     target_terms: tuple[str, ...],
 ) -> bool:
-    for index, term in enumerate(terms):
-        if term in target_terms and not _phase62_has_recent_negation(terms, index):
-            return True
-    return False
+    return any(
+        _phase62_term_is_unnegated(
+            terms=terms,
+            index=index,
+            term=term,
+            target_terms=target_terms,
+        )
+        for index, term in enumerate(terms)
+    )
+
+
+def _phase62_term_is_unnegated(
+    *,
+    terms: tuple[str, ...],
+    index: int,
+    term: str,
+    target_terms: tuple[str, ...],
+) -> bool:
+    return term in target_terms and not _phase62_has_recent_negation(terms, index)
 
 
 def _phase62_contains_unnegated_term_group(
