@@ -5,6 +5,9 @@ import re
 import unittest
 
 
+EXPECTED_CATALOG_COLUMNS = 10
+
+
 def _doc_path(relative_path: str) -> pathlib.Path:
     return pathlib.Path(__file__).resolve().parents[2] / relative_path
 
@@ -25,9 +28,38 @@ def _catalog_rows(catalog_text: str) -> list[list[str]]:
         if re.fullmatch(r"\|[ \-:|]+\|", line):
             continue
         cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-        if len(cells) == 10:
-            rows.append(cells)
+        rows.append(cells)
     return rows
+
+
+def _is_forbidden_claims_heading(line: str) -> bool:
+    return bool(re.fullmatch(r"##\s+\d+\.\s+Forbidden Claims", line.strip()))
+
+
+def _is_section_heading(line: str) -> bool:
+    return bool(re.fullmatch(r"##\s+\d+\..*", line.strip()))
+
+
+def _is_rejection_context(line: str, in_forbidden_claims: bool) -> bool:
+    if in_forbidden_claims:
+        return True
+
+    normalized = line.casefold()
+    rejection_markers = (
+        "cannot",
+        "does not",
+        "fail closed",
+        "forbidden",
+        "must be rejected",
+        "no ",
+        "not ",
+        "non-goal",
+        "out of scope",
+        "rejected",
+        "remain blocked",
+        "without ",
+    )
+    return any(marker in normalized for marker in rejection_markers)
 
 
 def _catalog_validation_errors(catalog_text: str) -> list[str]:
@@ -35,6 +67,7 @@ def _catalog_validation_errors(catalog_text: str) -> list[str]:
     errors: list[str] = []
     required_families = {"Read", "Notify", "Soft Write"}
     seen_families: set[str] = set()
+    seen_actions: set[str] = set()
     required_columns = (
         "action",
         "family",
@@ -52,7 +85,18 @@ def _catalog_validation_errors(catalog_text: str) -> list[str]:
         errors.append("missing catalog rows")
 
     for row in rows:
-        action = row[0].strip("`")
+        action = row[0].strip("`") if row else "<missing action>"
+        if len(row) != EXPECTED_CATALOG_COLUMNS:
+            errors.append(
+                f"{action} malformed catalog row has {len(row)} columns; "
+                f"expected {EXPECTED_CATALOG_COLUMNS}"
+            )
+            continue
+
+        if action in seen_actions:
+            errors.append(f"{action} duplicate catalog action")
+        seen_actions.add(action)
+
         family = row[1]
         seen_families.add(family)
         for index, column_name in enumerate(required_columns):
@@ -84,13 +128,30 @@ def _catalog_validation_errors(catalog_text: str) -> list[str]:
         "broad SOAR marketplace coverage is implemented",
         "arbitrary SOAR connector marketplace import is approved",
         "Phase 62.1 claims Beta",
+        "Phase 62.1 claims RC",
+        "Phase 62.1 claims GA",
+        "Phase 62.1 claims commercial readiness",
+        "Phase 62.1 claims broad SOAR replacement readiness",
+        "Phase 62.1 implements Phase 63 evidence expansion",
+        "Phase 62.1 implements Phase 66 RC proof",
         "Controlled Write is a default Phase 62.1 catalog entry",
         "Hard Write is a default Phase 62.1 catalog entry",
     )
-    rendered_without_forbidden = catalog_text.split("## 6. Forbidden Claims", 1)[0]
-    for claim in broad_claims:
-        if claim in rendered_without_forbidden:
-            errors.append(f"forbidden overclaim outside rejection context: {claim}")
+    in_forbidden_claims = False
+    for line in catalog_text.splitlines():
+        if _is_forbidden_claims_heading(line):
+            in_forbidden_claims = True
+            continue
+        if in_forbidden_claims and _is_section_heading(line):
+            in_forbidden_claims = False
+
+        if _is_rejection_context(line, in_forbidden_claims):
+            continue
+
+        normalized_line = line.casefold()
+        for claim in broad_claims:
+            if claim.casefold() in normalized_line:
+                errors.append(f"forbidden overclaim outside rejection context: {claim}")
     return errors
 
 
@@ -120,8 +181,13 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
     def test_catalog_covers_default_read_notify_soft_write_entries(self) -> None:
         catalog_text = self.catalog_doc.read_text(encoding="utf-8")
         rows = _catalog_rows(catalog_text)
+        actions = [row[0].strip("`") for row in rows]
+        duplicate_actions = sorted(
+            {action for action in actions if actions.count(action) > 1}
+        )
         by_action = {row[0].strip("`"): row for row in rows}
 
+        self.assertEqual([], duplicate_actions)
         self.assertEqual(
             {
                 "enrichment_only_lookup",
@@ -131,6 +197,7 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
             },
             set(by_action),
         )
+        self.assertEqual(4, len(rows))
         self.assertEqual("Read", by_action["enrichment_only_lookup"][1])
         self.assertEqual("Notify", by_action["operator_notification"][1])
         self.assertEqual("Notify", by_action["manual_escalation_request"][1])
@@ -175,6 +242,26 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
             _catalog_validation_errors(hard_text),
         )
 
+    def test_rejects_malformed_and_duplicate_catalog_rows(self) -> None:
+        catalog_text = self.catalog_doc.read_text(encoding="utf-8")
+        malformed_text = catalog_text.replace(
+            "| `operator_notification` | Notify | AegisOps maintainers and IT Operations, Information Systems Department |",
+            "| `operator_notification` | Notify | AegisOps maintainers\n",
+        )
+        duplicate_text = catalog_text.replace(
+            "| `manual_escalation_request` | Notify |",
+            "| `operator_notification` | Notify |",
+        )
+
+        self.assertIn(
+            "operator_notification malformed catalog row has 3 columns; expected 10",
+            _catalog_validation_errors(malformed_text),
+        )
+        self.assertIn(
+            "operator_notification duplicate catalog action",
+            _catalog_validation_errors(duplicate_text),
+        )
+
     def test_rejects_missing_owner_receipt_and_limitation(self) -> None:
         catalog_text = self.catalog_doc.read_text(encoding="utf-8")
         missing_owner = catalog_text.replace(
@@ -216,6 +303,34 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
             "forbidden overclaim outside rejection context: broad SOAR marketplace coverage is implemented",
             _catalog_validation_errors(overclaim_text),
         )
+
+    def test_rejects_case_insensitive_readiness_and_later_phase_overclaims(
+        self,
+    ) -> None:
+        catalog_text = self.catalog_doc.read_text(encoding="utf-8")
+        overclaim_text = catalog_text.replace(
+            "## 8. Non-Goals",
+            "\n".join(
+                (
+                    "Phase 62.1 CLAIMS rc",
+                    "Phase 62.1 claims GA",
+                    "Phase 62.1 claims commercial readiness",
+                    "Phase 62.1 implements Phase 63 evidence expansion",
+                    "Phase 62.1 implements Phase 66 RC proof",
+                    "## 8. Non-Goals",
+                )
+            ),
+        )
+        validation_errors = _catalog_validation_errors(overclaim_text)
+
+        for expected in (
+            "forbidden overclaim outside rejection context: Phase 62.1 claims RC",
+            "forbidden overclaim outside rejection context: Phase 62.1 claims GA",
+            "forbidden overclaim outside rejection context: Phase 62.1 claims commercial readiness",
+            "forbidden overclaim outside rejection context: Phase 62.1 implements Phase 63 evidence expansion",
+            "forbidden overclaim outside rejection context: Phase 62.1 implements Phase 66 RC proof",
+        ):
+            self.assertIn(expected, validation_errors)
 
     def test_validation_file_states_pass_and_handoff_limitations(self) -> None:
         validation_text = self.validation_doc.read_text(encoding="utf-8")
