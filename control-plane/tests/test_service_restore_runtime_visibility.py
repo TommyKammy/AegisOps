@@ -23,6 +23,9 @@ from _restore_readiness_test_support import (
     timedelta,
     timezone,
 )
+from aegisops.control_plane.actions.review.action_review_visibility import (
+    action_review_runtime_visibility,
+)
 
 
 class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
@@ -291,6 +294,36 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
         self.assertIn(
             "execution rejected",
             scoped_visibility["manual_fallback"]["blocked_reason"],
+        )
+        refreshed_action_request = service.get_record(
+            ActionRequestRecord,
+            action_request.action_request_id,
+        )
+        self.assertIsNotNone(refreshed_action_request)
+        assert refreshed_action_request is not None
+        runtime_visibility = action_review_runtime_visibility(
+            service,
+            action_request=refreshed_action_request,
+            approval_decision=approval,
+            review_state="unresolved",
+        )
+        self.assertIsNotNone(runtime_visibility)
+        assert runtime_visibility is not None
+        runtime_manual_fallback = runtime_visibility["manual_fallback"]
+        for required_key in (
+            "fallback_owner_id",
+            "operator_note",
+            "affected_action",
+            "fallback_state",
+            "blocked_reason",
+            "expected_evidence",
+            "follow_up_state",
+        ):
+            with self.subTest(required_key=required_key):
+                self.assertIn(required_key, runtime_manual_fallback)
+        self.assertEqual(
+            runtime_manual_fallback["fallback_state"],
+            "execution_rejected",
         )
 
     def test_manual_fallback_owner_defaults_to_declared_action_target(self) -> None:
