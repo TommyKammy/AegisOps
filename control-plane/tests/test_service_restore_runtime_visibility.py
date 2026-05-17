@@ -91,6 +91,71 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
         )
         self.assertNotIn("manual_fallback", scoped_visibility)
 
+    def test_manual_fallback_rejects_ambiguous_failure_reason(self) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep manual fallback classification explicit.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Manual fallback classification must not infer a missing receipt.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-phase62-manual-fallback-ambiguous-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase62-manual-fallback-ambiguous-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "blocked_reason_missing_failure_category",
+        ):
+            service.record_action_review_manual_fallback(
+                action_request_id=action_request.action_request_id,
+                fallback_at=reviewed_at + timedelta(minutes=45),
+                fallback_actor_identity="analyst-003",
+                authority_boundary="approved_human_fallback",
+                reason="Investigate later with the operator on duty.",
+                action_taken="Documented manual follow-up under the approved procedure.",
+                verification_evidence_ids=(evidence_id,),
+                residual_uncertainty="Awaiting reconciliation review.",
+            )
+
+        case_after_rejection = service.get_record(CaseRecord, promoted_case.case_id)
+        self.assertIsNotNone(case_after_rejection)
+        assert case_after_rejection is not None
+        action_review_visibility = dict(
+            case_after_rejection.reviewed_context.get("action_review_visibility", {})
+        )
+        scoped_visibility = dict(
+            action_review_visibility.get(action_request.action_request_id, {})
+        )
+        self.assertNotIn("manual_fallback", scoped_visibility)
+
     def test_manual_fallback_state_uses_failure_reason_not_uncertainty(self) -> None:
         _store, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()

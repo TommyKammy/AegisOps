@@ -553,6 +553,11 @@ def _phase62_manual_fallback_record_for_request(
     if catalog_action not in PHASE62_MANUAL_FALLBACK_REQUIREMENTS:
         return None
     fallback_state = _phase62_fallback_state_from_text(reason)
+    if fallback_state is None:
+        raise ValueError(
+            "manual fallback violates Phase 62.5 contract: "
+            "blocked_reason_missing_failure_category"
+        )
     fallback_owner_id = (
         _phase62_declared_fallback_owner_for_request(
             action_request=action_request,
@@ -640,7 +645,7 @@ def _phase62_declared_fallback_owner_for_request(
     return None
 
 
-def _phase62_fallback_state_from_text(value: str) -> str:
+def _phase62_fallback_state_from_text(value: str) -> str | None:
     terms = _phase62_text_terms(value)
     if _phase62_contains_unnegated_terms(terms, ("mismatched", "mismatch")):
         return "mismatched_receipt"
@@ -656,7 +661,12 @@ def _phase62_fallback_state_from_text(value: str) -> str:
         ("unavailable", "timeout", "timed"),
     ):
         return "shuffle_unavailable"
-    return "missing_receipt"
+    if _phase62_contains_unnegated_terms(
+        terms,
+        ("missing", "missed", "absent"),
+    ):
+        return "missing_receipt"
+    return None
 
 
 def _phase62_contains_unnegated_terms(
@@ -678,11 +688,7 @@ def _phase62_has_recent_negation(terms: tuple[str, ...], index: int) -> bool:
 
 
 def _phase62_text_terms(value: str) -> tuple[str, ...]:
-    normalized = (
-        value.lower()
-        .replace("can't", "cant")
-        .replace("won't", "wont")
-    )
+    normalized = value.lower().replace("n't", " not")
     return tuple(
         "".join(char if char.isalnum() else " " for char in normalized).split()
     )

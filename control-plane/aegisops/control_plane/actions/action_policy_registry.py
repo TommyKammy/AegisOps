@@ -252,6 +252,7 @@ _FOLLOW_UP_COMPLETION_OR_READINESS_TERMS = (
     "ga",
 )
 _NEGATION_TERMS = ("not", "no", "never", "cannot", "cant", "wont", "without")
+_TERM_GROUP_MAX_INTERVENING_TERMS = 6
 
 
 PHASE62_ACTION_POLICIES: Mapping[str, ActionPolicy] = {
@@ -667,22 +668,27 @@ def _term_group_starts(
     if not required_terms or len(required_terms) > len(terms):
         return ()
     indexes: list[int] = []
+
+    def matches_from(term_index: int, required_index: int) -> bool:
+        if required_index == len(required_terms):
+            return True
+        next_term = required_terms[required_index]
+        max_next_index = min(
+            len(terms),
+            term_index + _TERM_GROUP_MAX_INTERVENING_TERMS + 2,
+        )
+        for next_index in range(term_index + 1, max_next_index):
+            if terms[next_index] == next_term and matches_from(
+                next_index,
+                required_index + 1,
+            ):
+                return True
+        return False
+
     for index, term in enumerate(terms):
         if term != required_terms[0]:
             continue
-        search_from = index + 1
-        matched = True
-        for required_term in required_terms[1:]:
-            try:
-                next_index = terms.index(required_term, search_from)
-            except ValueError:
-                matched = False
-                break
-            if next_index - search_from > 4:
-                matched = False
-                break
-            search_from = next_index + 1
-        if matched:
+        if matches_from(index, 1):
             indexes.append(index)
     return tuple(indexes)
 
@@ -698,12 +704,7 @@ def _has_recent_negation(
 
 
 def _text_terms(value: str) -> tuple[str, ...]:
-    normalized = (
-        value.replace("can't", "cant")
-        .replace("Can't", "Cant")
-        .replace("won't", "wont")
-        .replace("Won't", "Wont")
-    )
+    normalized = value.lower().replace("n't", " not")
     return tuple(
         "".join(char if char.isalnum() else " " for char in normalized).split()
     )

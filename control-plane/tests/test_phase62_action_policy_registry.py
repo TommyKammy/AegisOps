@@ -240,6 +240,7 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                 "and analyst context, then confirms receipt"
             ),
             "ticket output cannot prove execution; ticket state confirms receipt",
+            "issue lint a b c d e lint output is authoritative",
         ):
             with self.subTest(expected_evidence=expected_evidence):
                 errors = validate_phase62_manual_fallback_record(
@@ -284,6 +285,21 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             negated_errors,
         )
 
+        contraction_negated_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "expected_evidence": (
+                    "ticket output isn't authoritative and cannot replace the "
+                    "bound AegisOps receipt"
+                ),
+            },
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            contraction_negated_errors,
+        )
+
     def test_manual_fallback_validation_rejects_closure_readiness_follow_up_state(
         self,
     ) -> None:
@@ -321,6 +337,7 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
         for follow_up_state in (
             "not_ready_for_case_closure",
             "not_ready_for_reconciliation_complete",
+            "wasn't_successful",
         ):
             with self.subTest(negated_follow_up_state=follow_up_state):
                 errors = validate_phase62_manual_fallback_record(
