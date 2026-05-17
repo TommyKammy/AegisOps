@@ -1093,6 +1093,30 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
                     "execution_rejected",
                 )
 
+    def test_manual_fallback_state_covers_unresolved_connector_thread_cluster(
+        self,
+    ) -> None:
+        from aegisops.control_plane.actions.review.action_review_write_surface import (
+            _phase62_fallback_state_from_text,
+        )
+
+        self.assertEqual(
+            _phase62_fallback_state_from_text("route was not only unavailable"),
+            "shuffle_unavailable",
+        )
+        self.assertEqual(
+            _phase62_fallback_state_from_text(
+                "route was not only rejected before receipt emission"
+            ),
+            "execution_rejected",
+        )
+        self.assertIsNone(
+            _phase62_fallback_state_from_text("fallback owner rejected handoff window")
+        )
+        self.assertIsNone(
+            _phase62_fallback_state_from_text("receipt not missing, but owner mismatch")
+        )
+
         _store, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
         )
