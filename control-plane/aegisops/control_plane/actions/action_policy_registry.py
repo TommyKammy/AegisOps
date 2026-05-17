@@ -164,15 +164,29 @@ _MANUAL_FALLBACK_RECORD_FIELDS = (
     "follow_up_state",  # required alongside fallback_state for schema checklists
 )
 _MANUAL_FALLBACK_BLOCKED_REASON_CATEGORIES = {
-    "shuffle_unavailable": (("unavailable",),),
+    "shuffle_unavailable": (("unavailable",), ("timeout",), ("timed", "out")),
     "execution_rejected": (
+        ("reject",),
+        ("rejects",),
         ("rejected",),
         ("rejection",),
+        ("rejecting",),
+        ("cancel",),
+        ("cancels",),
         ("canceled",),
         ("cancelled",),
+        ("canceling",),
+        ("cancelling",),
         ("cancellation",),
     ),
-    "missing_receipt": (("receipt", "missing"), ("missing", "receipt")),
+    "missing_receipt": (
+        ("receipt", "missing"),
+        ("missing", "receipt"),
+        ("receipt", "absent"),
+        ("absent", "receipt"),
+        ("receipt", "missed"),
+        ("missed", "receipt"),
+    ),
     "stale_receipt": (("receipt", "stale"), ("stale", "receipt")),
     "mismatched_receipt": (
         ("receipt", "mismatched"),
@@ -313,11 +327,13 @@ _AUTHORITY_PROOF_TERM_GROUPS = tuple(
 _EXECUTION_SUCCESS_TERM_GROUPS = (
     ("execution", "succeed"),
     ("execution", "succeeds"),
+    ("execution", "succeeding"),
     ("execution", "success"),
     ("execution", "successful"),
     ("execution", "succeeded"),
     ("succeed", "execution"),
     ("succeeds", "execution"),
+    ("succeeding", "execution"),
     ("success", "execution"),
     ("successful", "execution"),
     ("succeeded", "execution"),
@@ -797,7 +813,14 @@ def validate_phase62_manual_fallback_record(
     blocked_reason_terms = _text_terms(blocked_reason)
     if _contains_unnegated_term_group(
         blocked_reason_terms,
-        (("succeed",), ("succeeds",), ("success",), ("successful",), ("succeeded",)),
+        (
+            ("succeed",),
+            ("succeeds",),
+            ("succeeding",),
+            ("success",),
+            ("successful",),
+            ("succeeded",),
+        ),
     ):
         errors.append("blocked_reason_promotes_success")
     if (
@@ -939,7 +962,10 @@ def _authority_claim_matches_source(
         return _source_is_directly_asserted_as_authority(between)
 
     between = terms[authority_end:source_index]
-    if any(term in _NEGATION_BOUNDARY_TERMS for term in between):
+    if any(
+        term in {_TERM_COMMA_BOUNDARY, *_NEGATION_BOUNDARY_TERMS}
+        for term in between
+    ):
         return False
     if source_index - authority_end <= 3 and not any(
         term in {"aegisops", "bound"} for term in terms[authority_index:source_end]

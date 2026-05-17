@@ -808,6 +808,7 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "execution proven",
             "receipt proven",
             "manual fallback says execution succeeds",
+            "manual fallback says execution succeeding",
             "manual fallback is authority for execution",
             "manual fallback is authoritative for execution",
         )
@@ -839,6 +840,15 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                     errors,
                 )
 
+        expected_evidence_authority_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={**valid_record, "expected_evidence": "execution succeeding"},
+        )
+        self.assertIn(
+            "expected_evidence_promotes_authority",
+            expected_evidence_authority_errors,
+        )
+
         scoped_authority_errors = validate_phase62_manual_fallback_record(
             catalog_action="operator_notification",
             record={
@@ -853,19 +863,51 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "expected_evidence_promotes_non_authoritative_truth",
             scoped_authority_errors,
         )
-
-        rejection_noun_errors = validate_phase62_manual_fallback_record(
+        comma_scoped_authority_errors = validate_phase62_manual_fallback_record(
             catalog_action="operator_notification",
             record={
                 **valid_record,
-                "fallback_state": "execution_rejected",
-                "blocked_reason": "reviewed Shuffle execution rejection before receipt",
+                "expected_evidence": (
+                    "bound AegisOps receipt is authoritative, ticket output "
+                    "remains context"
+                ),
             },
         )
         self.assertNotIn(
-            "blocked_reason_missing_failure_category",
-            rejection_noun_errors,
+            "expected_evidence_promotes_non_authoritative_truth",
+            comma_scoped_authority_errors,
         )
+
+        category_examples = (
+            ("shuffle_unavailable", "reviewed Shuffle execution timeout"),
+            ("shuffle_unavailable", "reviewed Shuffle execution timed out"),
+            ("execution_rejected", "reviewed Shuffle execution rejection before receipt"),
+            ("execution_rejected", "reviewed Shuffle execution reject before receipt"),
+            ("execution_rejected", "reviewed Shuffle execution rejects before receipt"),
+            ("execution_rejected", "reviewed Shuffle execution rejecting before receipt"),
+            ("execution_rejected", "reviewed Shuffle execution cancel before receipt"),
+            ("execution_rejected", "reviewed Shuffle execution cancels before receipt"),
+            ("execution_rejected", "reviewed Shuffle execution canceling before receipt"),
+            ("missing_receipt", "bound AegisOps receipt absent"),
+            ("missing_receipt", "bound AegisOps receipt missed"),
+        )
+        for fallback_state, blocked_reason in category_examples:
+            with self.subTest(
+                fallback_state=fallback_state,
+                blocked_reason=blocked_reason,
+            ):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={
+                        **valid_record,
+                        "fallback_state": fallback_state,
+                        "blocked_reason": blocked_reason,
+                    },
+                )
+                self.assertNotIn(
+                    "blocked_reason_missing_failure_category",
+                    errors,
+                )
 
         success_errors = validate_phase62_manual_fallback_record(
             catalog_action="operator_notification",
@@ -875,6 +917,14 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             },
         )
         self.assertIn("blocked_reason_promotes_success", success_errors)
+        progressing_success_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "blocked_reason": "receipt missing while execution succeeding",
+            },
+        )
+        self.assertIn("blocked_reason_promotes_success", progressing_success_errors)
 
         for follow_up_state in ("execution succeeds", "ticket closes"):
             with self.subTest(follow_up_state=follow_up_state):
