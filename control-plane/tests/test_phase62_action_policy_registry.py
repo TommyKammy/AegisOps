@@ -193,6 +193,10 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "AI output is authoritative for receipt proof",
             "verifier output proves execution",
             "operator note is reconciliation truth",
+            "ticket output is authoritative",
+            "Shuffle result is truth",
+            "workflow result confirms receipt",
+            "issue lint report is receipt proof",
         ):
             with self.subTest(expected_evidence=expected_evidence):
                 errors = validate_phase62_manual_fallback_record(

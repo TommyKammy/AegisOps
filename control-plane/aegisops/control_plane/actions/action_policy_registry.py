@@ -167,30 +167,30 @@ _MANUAL_FALLBACK_BLOCKED_REASON_TERMS = {
     "stale_receipt": ("stale",),
     "mismatched_receipt": ("mismatched", "mismatch"),
 }
-_NON_AUTHORITATIVE_EVIDENCE_SOURCES = (
-    "shuffle workflow",
-    "workflow state",
-    "ticket state",
-    "ui cache",
-    "browser state",
-    "ai output",
-    "verifier output",
-    "issue-lint output",
-    "operator note",
+_NON_AUTHORITATIVE_EVIDENCE_SOURCE_TERMS = (
+    ("shuffle",),
+    ("workflow",),
+    ("ticket",),
+    ("ui",),
+    ("browser",),
+    ("ai",),
+    ("verifier",),
+    ("issue", "lint"),
+    ("operator", "note"),
 )
 _NON_AUTHORITATIVE_EVIDENCE_AUTHORITY_TERMS = (
-    "authoritative",
-    "authority",
-    "truth",
-    "confirms execution",
-    "confirms receipt",
-    "confirms reconciliation",
-    "proves execution",
-    "proves receipt",
-    "proves reconciliation",
-    "execution proof",
-    "receipt proof",
-    "reconciliation proof",
+    ("authoritative",),
+    ("authority",),
+    ("truth",),
+    ("confirms", "execution"),
+    ("confirms", "receipt"),
+    ("confirms", "reconciliation"),
+    ("proves", "execution"),
+    ("proves", "receipt"),
+    ("proves", "reconciliation"),
+    ("execution", "proof"),
+    ("receipt", "proof"),
+    ("reconciliation", "proof"),
 )
 _FOLLOW_UP_COMPLETION_OR_READINESS_TERMS = (
     "complete",
@@ -543,13 +543,20 @@ def _non_blank_string(value: object) -> bool:
 
 
 def _promotes_non_authoritative_evidence(value: str) -> bool:
+    terms = _text_terms(value)
     has_untrusted_source = any(
-        source in value for source in _NON_AUTHORITATIVE_EVIDENCE_SOURCES
+        _contains_term_group(terms, source_terms)
+        for source_terms in _NON_AUTHORITATIVE_EVIDENCE_SOURCE_TERMS
     )
     has_authority_claim = any(
-        term in value for term in _NON_AUTHORITATIVE_EVIDENCE_AUTHORITY_TERMS
+        _contains_term_group(terms, authority_terms)
+        for authority_terms in _NON_AUTHORITATIVE_EVIDENCE_AUTHORITY_TERMS
     )
     return has_untrusted_source and has_authority_claim
+
+
+def _contains_term_group(terms: tuple[str, ...], required_terms: tuple[str, ...]) -> bool:
+    return all(term in terms for term in required_terms)
 
 
 def _text_terms(value: str) -> tuple[str, ...]:
