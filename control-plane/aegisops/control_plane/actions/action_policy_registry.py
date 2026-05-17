@@ -160,22 +160,31 @@ _MANUAL_FALLBACK_RECORD_FIELDS = (
     "expected_evidence",
     "follow_up_state",
 )
-_MANUAL_FALLBACK_BLOCKED_REASON_TERMS = {
-    "shuffle_unavailable": ("unavailable",),
-    "execution_rejected": ("rejected",),
-    "missing_receipt": ("missing",),
-    "stale_receipt": ("stale",),
-    "mismatched_receipt": ("mismatched", "mismatch"),
+_MANUAL_FALLBACK_BLOCKED_REASON_CATEGORIES = {
+    "shuffle_unavailable": (("unavailable",),),
+    "execution_rejected": (("rejected",),),
+    "missing_receipt": (("missing",),),
+    "stale_receipt": (("stale",),),
+    "mismatched_receipt": (("mismatched",), ("mismatch",)),
 }
 _NON_AUTHORITATIVE_EVIDENCE_SOURCE_TERMS = (
     ("shuffle",),
+    ("shuffle", "result"),
     ("workflow",),
+    ("workflow", "result"),
     ("ticket",),
+    ("ticket", "output"),
+    ("ticket", "state"),
     ("ui",),
+    ("ui", "cache"),
     ("browser",),
+    ("browser", "state"),
     ("ai",),
+    ("ai", "output"),
     ("verifier",),
+    ("verifier", "output"),
     ("issue", "lint"),
+    ("issue", "lint", "report"),
     ("operator", "note"),
 )
 _NON_AUTHORITATIVE_EVIDENCE_AUTHORITY_TERMS = (
@@ -188,6 +197,9 @@ _NON_AUTHORITATIVE_EVIDENCE_AUTHORITY_TERMS = (
     ("proves", "execution"),
     ("proves", "receipt"),
     ("proves", "reconciliation"),
+    ("validates", "execution"),
+    ("validates", "receipt"),
+    ("validates", "reconciliation"),
     ("execution", "proof"),
     ("receipt", "proof"),
     ("reconciliation", "proof"),
@@ -526,11 +538,11 @@ def validate_phase62_manual_fallback_record(
         errors.append("blocked_reason_promotes_success")
     if (
         isinstance(fallback_state, str)
-        and fallback_state in _MANUAL_FALLBACK_BLOCKED_REASON_TERMS
+        and fallback_state in _MANUAL_FALLBACK_BLOCKED_REASON_CATEGORIES
         and _non_blank_string(record.get("blocked_reason"))
-        and not any(
-            term in blocked_reason
-            for term in _MANUAL_FALLBACK_BLOCKED_REASON_TERMS[fallback_state]
+        and not _blocked_reason_matches_declared_failure_category(
+            fallback_state=fallback_state,
+            blocked_reason=blocked_reason,
         )
     ):
         errors.append("blocked_reason_missing_failure_category")
@@ -553,6 +565,20 @@ def _promotes_non_authoritative_evidence(value: str) -> bool:
         for authority_terms in _NON_AUTHORITATIVE_EVIDENCE_AUTHORITY_TERMS
     )
     return has_untrusted_source and has_authority_claim
+
+
+def _blocked_reason_matches_declared_failure_category(
+    *,
+    fallback_state: str,
+    blocked_reason: str,
+) -> bool:
+    terms = _text_terms(blocked_reason)
+    return any(
+        _contains_term_group(terms, category_terms)
+        for category_terms in _MANUAL_FALLBACK_BLOCKED_REASON_CATEGORIES[
+            fallback_state
+        ]
+    )
 
 
 def _contains_term_group(terms: tuple[str, ...], required_terms: tuple[str, ...]) -> bool:

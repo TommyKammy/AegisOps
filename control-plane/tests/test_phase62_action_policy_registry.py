@@ -197,6 +197,8 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "Shuffle result is truth",
             "workflow result confirms receipt",
             "issue lint report is receipt proof",
+            "browser state is reconciliation proof",
+            "AI output validates receipt",
         ):
             with self.subTest(expected_evidence=expected_evidence):
                 errors = validate_phase62_manual_fallback_record(
@@ -270,6 +272,25 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
         }
         for fallback_state, blocked_reason in cases.items():
             with self.subTest(fallback_state=fallback_state):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={
+                        **valid_record,
+                        "fallback_state": fallback_state,
+                        "blocked_reason": blocked_reason,
+                    },
+                )
+                self.assertIn("blocked_reason_missing_failure_category", errors)
+
+        mismatch_cases = {
+            "shuffle_unavailable": "bound AegisOps receipt missing",
+            "execution_rejected": "bound AegisOps receipt stale",
+            "missing_receipt": "reviewed Shuffle route unavailable",
+            "stale_receipt": "bound AegisOps execution receipt mismatched",
+            "mismatched_receipt": "reviewed Shuffle execution rejected",
+        }
+        for fallback_state, blocked_reason in mismatch_cases.items():
+            with self.subTest(mismatched_category=fallback_state):
                 errors = validate_phase62_manual_fallback_record(
                     catalog_action="operator_notification",
                     record={
