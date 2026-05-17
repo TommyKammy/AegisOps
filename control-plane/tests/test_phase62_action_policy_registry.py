@@ -193,6 +193,7 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
 
         for operator_note in (
             "Manual fallback can't bypass approval.",
+            "Manual fallback can\u2019t bypass approval.",
             "Manual fallback cannot under any circumstances bypass approval.",
         ):
             with self.subTest(negated_operator_note=operator_note):
@@ -352,6 +353,21 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             contraction_negated_errors,
         )
 
+        smart_quote_contraction_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "expected_evidence": (
+                    "ticket output isn\u2019t authoritative and cannot replace the "
+                    "bound AegisOps receipt"
+                ),
+            },
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            smart_quote_contraction_errors,
+        )
+
     def test_manual_fallback_validation_rejects_closure_readiness_follow_up_state(
         self,
     ) -> None:
@@ -390,6 +406,7 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "not_ready_for_case_closure",
             "not_ready_for_reconciliation_complete",
             "wasn't_successful",
+            "wasn\u2019t_successful",
         ):
             with self.subTest(negated_follow_up_state=follow_up_state):
                 errors = validate_phase62_manual_fallback_record(
@@ -458,6 +475,21 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             },
         )
         self.assertNotIn("blocked_reason_promotes_success", success_errors)
+
+        for canceled_reason in (
+            "reviewed Shuffle execution canceled before receipt emission",
+            "reviewed Shuffle execution cancelled before receipt emission",
+        ):
+            with self.subTest(canceled_reason=canceled_reason):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={
+                        **valid_record,
+                        "fallback_state": "execution_rejected",
+                        "blocked_reason": canceled_reason,
+                    },
+                )
+                self.assertNotIn("blocked_reason_missing_failure_category", errors)
 
         mismatch_cases = {
             "shuffle_unavailable": "bound AegisOps receipt missing",

@@ -165,7 +165,12 @@ _MANUAL_FALLBACK_RECORD_FIELDS = (
 )
 _MANUAL_FALLBACK_BLOCKED_REASON_CATEGORIES = {
     "shuffle_unavailable": (("unavailable",),),
-    "execution_rejected": (("rejected",),),
+    "execution_rejected": (
+        ("rejected",),
+        ("canceled",),
+        ("cancelled",),
+        ("cancellation",),
+    ),
     "missing_receipt": (("missing",),),
     "stale_receipt": (("stale",),),
     "mismatched_receipt": (("mismatched",), ("mismatch",)),
@@ -792,7 +797,12 @@ def _has_recent_negation(
 
 
 def _text_terms(value: str) -> tuple[str, ...]:
-    normalized = value.lower().replace("n't", " not")
+    normalized = (
+        value.lower()
+        .replace("n't", " not")
+        .replace("n\u2019t", " not")
+        .replace("n\u2018t", " not")
+    )
     return _tokenize_with_boundaries(normalized)
 
 

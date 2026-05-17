@@ -653,7 +653,20 @@ def _phase62_fallback_state_from_text(value: str) -> str | None:
         return "stale_receipt"
     if _phase62_contains_unnegated_terms(
         terms,
-        ("rejected", "reject", "rejects", "rejecting", "rejection"),
+        (
+            "rejected",
+            "reject",
+            "rejects",
+            "rejecting",
+            "rejection",
+            "canceled",
+            "cancelled",
+            "cancel",
+            "cancels",
+            "canceling",
+            "cancelling",
+            "cancellation",
+        ),
     ):
         return "execution_rejected"
     if _phase62_contains_unnegated_terms(
@@ -715,7 +728,12 @@ def _phase62_has_recent_negation(terms: tuple[str, ...], index: int) -> bool:
 
 
 def _phase62_text_terms(value: str) -> tuple[str, ...]:
-    normalized = value.lower().replace("n't", " not")
+    normalized = (
+        value.lower()
+        .replace("n't", " not")
+        .replace("n\u2019t", " not")
+        .replace("n\u2018t", " not")
+    )
     characters: list[str] = []
     for char in normalized:
         if char.isalnum():

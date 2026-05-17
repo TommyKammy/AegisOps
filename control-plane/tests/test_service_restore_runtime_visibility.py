@@ -743,6 +743,7 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
             "The reviewed route was not unavailable. receipt missing after dispatch.",
             "The reviewed route was not unavailable, receipt missing after dispatch.",
             "The reviewed route was not unavailable or receipt missing after dispatch.",
+            "The reviewed route wasn\u2019t unavailable but receipt missing after dispatch.",
         ):
             with self.subTest(reason=reason):
                 self.assertEqual(
@@ -818,6 +819,21 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
         )
 
     def test_manual_fallback_state_recognizes_rejection_variants(self) -> None:
+        from aegisops.control_plane.actions.review.action_review_write_surface import (
+            _phase62_fallback_state_from_text,
+        )
+
+        for reason in (
+            "The reviewed Shuffle execution was canceled before receipt emission.",
+            "The reviewed Shuffle execution was cancelled before receipt emission.",
+            "The reviewed Shuffle execution cancellation blocked the route.",
+        ):
+            with self.subTest(reason=reason):
+                self.assertEqual(
+                    _phase62_fallback_state_from_text(reason),
+                    "execution_rejected",
+                )
+
         _store, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
         )
@@ -861,7 +877,7 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
             fallback_at=reviewed_at + timedelta(minutes=45),
             fallback_actor_identity="analyst-003",
             authority_boundary="approved_human_fallback",
-            reason="The reviewed Shuffle execution rejection blocked the approved route.",
+            reason="The reviewed Shuffle execution was canceled before receipt emission.",
             action_taken="Documented manual follow-up under the approved procedure.",
             verification_evidence_ids=(evidence_id,),
             residual_uncertainty="Awaiting reconciliation review.",
