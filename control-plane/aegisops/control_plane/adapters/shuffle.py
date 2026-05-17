@@ -4,6 +4,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Mapping
 
+from ..actions.action_policy_registry import (
+    reviewed_shuffle_workflow_mapping_for_action_type,
+)
+
 
 @dataclass(frozen=True)
 class ShuffleDelegationReceipt:
@@ -127,20 +131,26 @@ class ShuffleActionAdapter:
 
     @staticmethod
     def _default_workflow_id(action_type: object) -> str:
-        if action_type == "notify_identity_owner":
-            return "notify_identity_owner"
-        if action_type == "create_tracking_ticket":
-            return "create_tracking_ticket"
+        if isinstance(action_type, str):
+            mapping = reviewed_shuffle_workflow_mapping_for_action_type(action_type)
+            if mapping is not None:
+                return mapping.workflow_template_id
         raise ValueError(
             "approved action is outside the reviewed Phase 20 Shuffle delegation scope"
         )
 
     @staticmethod
     def _default_workflow_version_id(workflow_id: str) -> str:
-        if workflow_id == "notify_identity_owner":
-            return "notify_identity_owner-v1-reviewed-2026-05-03"
-        if workflow_id == "create_tracking_ticket":
-            return "create_tracking_ticket-v1-reviewed-2026-05-03"
+        for action_type in (
+            "enrichment_only_lookup",
+            "operator_notification",
+            "manual_escalation_request",
+            "create_tracking_ticket",
+            "notify_identity_owner",
+        ):
+            mapping = reviewed_shuffle_workflow_mapping_for_action_type(action_type)
+            if mapping is not None and mapping.workflow_template_id == workflow_id:
+                return mapping.reviewed_template_version
         raise ValueError(
             "approved action is outside the reviewed Phase 20 Shuffle delegation scope"
         )

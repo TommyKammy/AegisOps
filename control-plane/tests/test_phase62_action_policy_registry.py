@@ -12,7 +12,9 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 from aegisops.control_plane.actions.action_policy_registry import (  # noqa: E402
     PHASE62_ACTION_POLICIES,
+    PHASE62_SHUFFLE_WORKFLOW_MAPPINGS,
     evaluate_phase62_action_policy,
+    validate_phase62_shuffle_workflow_mapping,
 )
 
 
@@ -54,6 +56,138 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                     "manual_review",
                 ),
             )
+
+    def test_shuffle_mapping_contains_reviewed_catalog_actions(self) -> None:
+        self.assertEqual(
+            set(PHASE62_SHUFFLE_WORKFLOW_MAPPINGS),
+            set(PHASE62_ACTION_POLICIES),
+        )
+
+        tracking_ticket = PHASE62_SHUFFLE_WORKFLOW_MAPPINGS[
+            "create_tracking_ticket"
+        ]
+        self.assertEqual(tracking_ticket.workflow_template_id, "create_tracking_ticket")
+        self.assertEqual(
+            tracking_ticket.reviewed_template_version,
+            "create_tracking_ticket-v1-reviewed-2026-05-03",
+        )
+        self.assertEqual(tracking_ticket.family, "Soft Write")
+        self.assertIn("correlation_id", tracking_ticket.correlation_fields)
+        self.assertIn(
+            "expected_execution_receipt_id",
+            tracking_ticket.correlation_fields,
+        )
+
+        validation = validate_phase62_shuffle_workflow_mapping(
+            catalog_action="create_tracking_ticket",
+            workflow_template_id="create_tracking_ticket",
+            reviewed_template_version="create_tracking_ticket-v1-reviewed-2026-05-03",
+            family="Soft Write",
+            required_inputs=tracking_ticket.required_inputs,
+            expected_outputs=tracking_ticket.expected_outputs,
+            correlation_fields=tracking_ticket.correlation_fields,
+            policy_registry_id="phase62.2:create_tracking_ticket",
+            review_status=tracking_ticket.review_status,
+            import_eligible=tracking_ticket.import_eligible,
+        )
+
+        self.assertEqual(validation, ())
+
+    def test_shuffle_mapping_validation_fails_closed_for_drift(self) -> None:
+        reviewed_mapping = PHASE62_SHUFFLE_WORKFLOW_MAPPINGS["operator_notification"]
+
+        missing_template = validate_phase62_shuffle_workflow_mapping(
+            catalog_action="operator_notification",
+            workflow_template_id="",
+            reviewed_template_version=reviewed_mapping.reviewed_template_version,
+            family=reviewed_mapping.family,
+            required_inputs=reviewed_mapping.required_inputs,
+            expected_outputs=reviewed_mapping.expected_outputs,
+            correlation_fields=reviewed_mapping.correlation_fields,
+            policy_registry_id="phase62.2:operator_notification",
+            review_status=reviewed_mapping.review_status,
+            import_eligible=reviewed_mapping.import_eligible,
+        )
+        version_mismatch = validate_phase62_shuffle_workflow_mapping(
+            catalog_action="operator_notification",
+            workflow_template_id="operator_notification",
+            reviewed_template_version="operator_notification-v2-unreviewed",
+            family=reviewed_mapping.family,
+            required_inputs=reviewed_mapping.required_inputs,
+            expected_outputs=reviewed_mapping.expected_outputs,
+            correlation_fields=reviewed_mapping.correlation_fields,
+            policy_registry_id="phase62.2:operator_notification",
+            review_status=reviewed_mapping.review_status,
+            import_eligible=reviewed_mapping.import_eligible,
+        )
+        unreviewed_template = validate_phase62_shuffle_workflow_mapping(
+            catalog_action="operator_notification",
+            workflow_template_id="operator_notification",
+            reviewed_template_version=reviewed_mapping.reviewed_template_version,
+            family=reviewed_mapping.family,
+            required_inputs=reviewed_mapping.required_inputs,
+            expected_outputs=reviewed_mapping.expected_outputs,
+            correlation_fields=reviewed_mapping.correlation_fields,
+            policy_registry_id="phase62.2:operator_notification",
+            review_status="draft",
+            import_eligible=False,
+        )
+        family_mismatch = validate_phase62_shuffle_workflow_mapping(
+            catalog_action="operator_notification",
+            workflow_template_id="operator_notification",
+            reviewed_template_version=reviewed_mapping.reviewed_template_version,
+            family="Hard Write",
+            required_inputs=reviewed_mapping.required_inputs,
+            expected_outputs=reviewed_mapping.expected_outputs,
+            correlation_fields=reviewed_mapping.correlation_fields,
+            policy_registry_id="phase62.2:operator_notification",
+            review_status=reviewed_mapping.review_status,
+            import_eligible=reviewed_mapping.import_eligible,
+        )
+        missing_correlation = validate_phase62_shuffle_workflow_mapping(
+            catalog_action="operator_notification",
+            workflow_template_id="operator_notification",
+            reviewed_template_version=reviewed_mapping.reviewed_template_version,
+            family=reviewed_mapping.family,
+            required_inputs=reviewed_mapping.required_inputs,
+            expected_outputs=reviewed_mapping.expected_outputs,
+            correlation_fields=("action_request_id",),
+            policy_registry_id="phase62.2:operator_notification",
+            review_status=reviewed_mapping.review_status,
+            import_eligible=reviewed_mapping.import_eligible,
+        )
+        policy_incompatibility = validate_phase62_shuffle_workflow_mapping(
+            catalog_action="operator_notification",
+            workflow_template_id="operator_notification",
+            reviewed_template_version=reviewed_mapping.reviewed_template_version,
+            family=reviewed_mapping.family,
+            required_inputs=reviewed_mapping.required_inputs,
+            expected_outputs=reviewed_mapping.expected_outputs,
+            correlation_fields=reviewed_mapping.correlation_fields,
+            policy_registry_id="phase62.2:create_tracking_ticket",
+            review_status=reviewed_mapping.review_status,
+            import_eligible=reviewed_mapping.import_eligible,
+        )
+        unsupported_action = validate_phase62_shuffle_workflow_mapping(
+            catalog_action="disable_account",
+            workflow_template_id="disable_account",
+            reviewed_template_version="disable_account-v1-reviewed",
+            family="Hard Write",
+            required_inputs=("action_request_id",),
+            expected_outputs=("execution_receipt_id",),
+            correlation_fields=("correlation_id",),
+            policy_registry_id="phase62.2:disable_account",
+            review_status="reviewed",
+            import_eligible=True,
+        )
+
+        self.assertIn("missing_template", missing_template)
+        self.assertIn("version_mismatch", version_mismatch)
+        self.assertIn("unreviewed_template", unreviewed_template)
+        self.assertIn("family_mismatch", family_mismatch)
+        self.assertIn("missing_correlation", missing_correlation)
+        self.assertIn("policy_incompatibility", policy_incompatibility)
+        self.assertIn("unsupported_action", unsupported_action)
 
     def test_validation_allows_reviewed_tracking_ticket_policy(self) -> None:
         decision = evaluate_phase62_action_policy(

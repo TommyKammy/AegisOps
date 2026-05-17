@@ -9,6 +9,7 @@ from .action_receipt_validation import (
     require_receipt_https_url_value,
     require_receipt_string_value,
 )
+from .action_policy_registry import reviewed_shuffle_workflow_mapping_for_action_type
 from .execution_coordinator import (
     ExecutionCoordinatorServiceDependencies,
     _PHASE26_REVIEWED_COORDINATION_TARGET_TYPES,
@@ -19,12 +20,6 @@ from ..models import (
     ActionRequestRecord,
     ApprovalDecisionRecord,
 )
-
-
-_REVIEWED_SHUFFLE_WORKFLOW_VERSIONS = {
-    "create_tracking_ticket": "create_tracking_ticket-v1-reviewed-2026-05-03",
-    "notify_identity_owner": "notify_identity_owner-v1-reviewed-2026-05-03",
-}
 
 
 class ApprovedActionDelegationCoordinator:
@@ -281,6 +276,18 @@ class ApprovedActionDelegationCoordinator:
         approved_payload: Mapping[str, object],
     ) -> None:
         action_type = approved_payload.get("action_type")
+        action_type_value = (
+            action_type.strip()
+            if isinstance(action_type, str) and action_type.strip()
+            else ""
+        )
+        reviewed_mapping = reviewed_shuffle_workflow_mapping_for_action_type(
+            action_type_value,
+        )
+        if reviewed_mapping is None:
+            raise ValueError(
+                "approved action is outside the reviewed Phase 20 Shuffle delegation scope"
+            )
         if action_type == "notify_identity_owner":
             for field_name in (
                 "recipient_identity",
@@ -340,6 +347,13 @@ class ApprovedActionDelegationCoordinator:
             approved_payload.get("action_type"),
             "approved_payload.action_type",
         )
+        reviewed_mapping = reviewed_shuffle_workflow_mapping_for_action_type(
+            action_type,
+        )
+        if reviewed_mapping is None:
+            raise ValueError(
+                "approved action is outside the reviewed Phase 20 Shuffle delegation scope"
+            )
         workflow_id = self._service._require_non_empty_string(
             binding.get("workflow_id"),
             "shuffle_delegation_binding.workflow_id",
@@ -360,14 +374,11 @@ class ApprovedActionDelegationCoordinator:
         if not isinstance(requested_scope, Mapping):
             raise ValueError("shuffle delegation binding requested_scope is malformed")
 
-        if workflow_id != action_type:
+        if workflow_id != reviewed_mapping.workflow_template_id:
             raise ValueError(
                 "shuffle delegation binding does not match approved action request scope"
             )
-        if (
-            _REVIEWED_SHUFFLE_WORKFLOW_VERSIONS.get(workflow_id)
-            != workflow_version_id
-        ):
+        if reviewed_mapping.reviewed_template_version != workflow_version_id:
             raise ValueError(
                 "shuffle delegation binding uses an unknown reviewed workflow template version"
             )
