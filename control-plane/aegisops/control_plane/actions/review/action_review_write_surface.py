@@ -547,13 +547,7 @@ def _phase62_manual_fallback_record_for_request(
     catalog_action = ACTION_TYPE_POLICY_ALIASES.get(action_type, action_type)
     if catalog_action not in PHASE62_MANUAL_FALLBACK_REQUIREMENTS:
         return None
-    fallback_state = _phase62_fallback_state_from_text(
-        " ".join(
-            value
-            for value in (reason, action_taken, residual_uncertainty or "")
-            if value
-        )
-    )
+    fallback_state = _phase62_fallback_state_from_text(reason)
     return {
         "fallback_owner_id": fallback_actor_identity,
         "operator_note": action_taken,

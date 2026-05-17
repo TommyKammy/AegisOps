@@ -200,6 +200,12 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "issue lint report is receipt proof",
             "browser state is reconciliation proof",
             "AI output validates receipt",
+            "receipt proof comes from ticket state",
+            (
+                "ticket state includes owner shift case account route queue ticket "
+                "and analyst context, then confirms receipt"
+            ),
+            "ticket output cannot prove execution; ticket state confirms receipt",
         ):
             with self.subTest(expected_evidence=expected_evidence):
                 errors = validate_phase62_manual_fallback_record(

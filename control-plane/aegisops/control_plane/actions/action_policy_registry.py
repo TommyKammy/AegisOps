@@ -590,16 +590,16 @@ def _non_blank_string(value: object) -> bool:
 def _promotes_non_authoritative_evidence(value: str) -> bool:
     terms = _text_terms(value)
     for source_terms in _NON_AUTHORITATIVE_EVIDENCE_SOURCE_TERMS:
-        source_index = _term_group_start(terms, source_terms)
-        if source_index is None:
+        source_indexes = _term_group_starts(terms, source_terms)
+        if not source_indexes:
             continue
         for authority_terms in _NON_AUTHORITATIVE_EVIDENCE_AUTHORITY_TERMS:
-            authority_index = _term_group_start(terms, authority_terms)
-            if (
-                authority_index is not None
-                and source_index <= authority_index
-                and authority_index - source_index <= 6
-                and not _has_recent_negation(terms, authority_index, window=3)
+            authority_indexes = _term_group_starts(terms, authority_terms)
+            if not authority_indexes:
+                continue
+            if any(
+                not _has_recent_negation(terms, authority_index, window=3)
+                for authority_index in authority_indexes
             ):
                 return True
     return False
@@ -628,8 +628,10 @@ def _contains_unnegated_term_group(
     term_groups: tuple[tuple[str, ...], ...],
 ) -> bool:
     for term_group in term_groups:
-        index = _term_group_start(terms, term_group)
-        if index is not None and not _has_recent_negation(terms, index, window=3):
+        if any(
+            not _has_recent_negation(terms, index, window=3)
+            for index in _term_group_starts(terms, term_group)
+        ):
             return True
     return False
 
@@ -644,17 +646,18 @@ def _contains_unnegated_single_term(
     return False
 
 
-def _term_group_start(
+def _term_group_starts(
     terms: tuple[str, ...],
     required_terms: tuple[str, ...],
-) -> int | None:
+) -> tuple[int, ...]:
     if not required_terms or len(required_terms) > len(terms):
-        return None
+        return ()
     group_length = len(required_terms)
-    for index in range(0, len(terms) - group_length + 1):
-        if terms[index : index + group_length] == required_terms:
-            return index
-    return None
+    return tuple(
+        index
+        for index in range(0, len(terms) - group_length + 1)
+        if terms[index : index + group_length] == required_terms
+    )
 
 
 def _has_recent_negation(

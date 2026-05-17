@@ -90,6 +90,70 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
         )
         self.assertNotIn("manual_fallback", scoped_visibility)
 
+    def test_manual_fallback_state_uses_failure_reason_not_uncertainty(self) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Keep manual fallback classification tied to the reason.",
+        )
+        action_request = service.create_reviewed_action_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            recipient_identity="repo-owner-001",
+            message_intent="Notify the accountable repository owner about the reviewed permission change.",
+            escalation_reason="Manual fallback classification must not be inferred from notes.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-phase62-manual-fallback-state-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase62-manual-fallback-state-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+
+        updated_case = service.record_action_review_manual_fallback(
+            action_request_id=action_request.action_request_id,
+            fallback_at=reviewed_at + timedelta(minutes=45),
+            fallback_actor_identity="analyst-003",
+            authority_boundary="approved_human_fallback",
+            reason="The reviewed Shuffle execution was rejected by the approved route.",
+            action_taken="Documented manual follow-up under the approved procedure.",
+            verification_evidence_ids=(evidence_id,),
+            residual_uncertainty=(
+                "A later stale receipt warning remains unresolved for reconciliation."
+            ),
+        )
+
+        scoped_visibility = updated_case.reviewed_context["action_review_visibility"][
+            action_request.action_request_id
+        ]
+        self.assertEqual(
+            scoped_visibility["manual_fallback"]["fallback_state"],
+            "execution_rejected",
+        )
+        self.assertIn(
+            "execution rejected",
+            scoped_visibility["manual_fallback"]["blocked_reason"],
+        )
+
     def test_service_phase21_restore_prefers_canonical_manual_fallback_timestamp(
         self,
     ) -> None:
