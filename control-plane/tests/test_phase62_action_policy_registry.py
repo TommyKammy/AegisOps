@@ -257,6 +257,73 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                 )
                 self.assertIn(expected_error, errors)
 
+    def test_simulator_validation_covers_unresolved_connector_thread_cluster(
+        self,
+    ) -> None:
+        cases = {
+            "PRRT_kwDOR2iDUc6Cr1WG": (
+                {
+                    "demo_test_label": (
+                        "demo test evidence only; production execution receipt truth"
+                    ),
+                },
+                "demo_test_label_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr4V3": (
+                {"production_exclusion": "excluded for audit cleanup"},
+                "missing_production_exclusion",
+            ),
+            "PRRT_kwDOR2iDUc6Cr4V5_case": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "truth and case closed."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr4V5_ticket": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "truth and ticket closed."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr4V7": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "truth and delegates production workflow launch."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+        }
+
+        for thread_id, (override, expected_error) in cases.items():
+            with self.subTest(thread_id=thread_id):
+                errors = validate_phase62_simulator_output(
+                    catalog_action="operator_notification",
+                    output={**self._valid_simulator_output(), **override},
+                )
+                self.assertIn(expected_error, errors)
+
+        self.assertEqual(
+            validate_phase62_simulator_output(
+                catalog_action="operator_notification",
+                output={
+                    **self._valid_simulator_output(),
+                    "production_exclusion": (
+                        "Simulator output excludes production execution receipt "
+                        "and reconciliation truth."
+                    ),
+                },
+            ),
+            (),
+        )
+
     def test_manual_fallback_requirements_cover_every_reviewed_action(self) -> None:
         self.assertEqual(
             set(PHASE62_MANUAL_FALLBACK_REQUIREMENTS),
