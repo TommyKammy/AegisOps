@@ -23,6 +23,23 @@ if TYPE_CHECKING:
     from ...service import AegisOpsControlPlaneService
 
 
+_PHASE62_NEGATION_TERMS = {"not", "no", "never", "without", "cannot", "cant", "wont"}
+_PHASE62_NEGATION_BOUNDARY_TERMS = {
+    "boundary",
+    "but",
+    "however",
+    "though",
+    "although",
+    "yet",
+    "whereas",
+    "while",
+    "instead",
+    "and",
+    "then",
+    "or",
+}
+
+
 class ActionReviewWriteSurfaceDependencies(Protocol):
     _store: object
 
@@ -709,22 +726,9 @@ def _phase62_contains_unnegated_term_group(
 def _phase62_has_recent_negation(terms: tuple[str, ...], index: int) -> bool:
     start = max(0, index - 8)
     for term in reversed(terms[start:index]):
-        if term in {
-            "boundary",
-            "but",
-            "however",
-            "though",
-            "although",
-            "yet",
-            "whereas",
-            "while",
-            "instead",
-            "and",
-            "then",
-            "or",
-        }:
+        if term in _PHASE62_NEGATION_BOUNDARY_TERMS:
             return False
-        if term in {"not", "no", "never", "without", "cannot", "cant", "wont"}:
+        if term in _PHASE62_NEGATION_TERMS:
             return True
     return False
 

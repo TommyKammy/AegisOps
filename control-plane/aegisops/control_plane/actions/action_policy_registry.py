@@ -628,21 +628,34 @@ def _promotes_non_authoritative_evidence(value: str) -> bool:
         source_indexes = _term_group_starts(terms, source_terms)
         if not source_indexes:
             continue
-        for authority_terms in _NON_AUTHORITATIVE_EVIDENCE_AUTHORITY_TERMS:
-            authority_indexes = _term_group_starts(terms, authority_terms)
-            if not authority_indexes:
+        if any(
+            _source_promotes_non_authoritative_evidence(
+                terms=terms,
+                source_index=source_index,
+                source_terms=source_terms,
+            )
+            for source_index in source_indexes
+        ):
+            return True
+    return False
+
+
+def _source_promotes_non_authoritative_evidence(
+    *,
+    terms: tuple[str, ...],
+    source_index: int,
+    source_terms: tuple[str, ...],
+) -> bool:
+    for authority_terms in _NON_AUTHORITATIVE_EVIDENCE_AUTHORITY_TERMS:
+        for authority_index in _term_group_starts(terms, authority_terms):
+            if _has_recent_negation(terms, authority_index, window=3):
                 continue
-            if any(
-                _authority_claim_matches_source(
-                    terms=terms,
-                    source_index=source_index,
-                    source_terms=source_terms,
-                    authority_index=authority_index,
-                    authority_terms=authority_terms,
-                )
-                and not _has_recent_negation(terms, authority_index, window=3)
-                for source_index in source_indexes
-                for authority_index in authority_indexes
+            if _authority_claim_matches_source(
+                terms=terms,
+                source_index=source_index,
+                source_terms=source_terms,
+                authority_index=authority_index,
+                authority_terms=authority_terms,
             ):
                 return True
     return False

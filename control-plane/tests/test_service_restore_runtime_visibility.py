@@ -325,6 +325,20 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
             runtime_manual_fallback["fallback_state"],
             "execution_rejected",
         )
+        inspected_manual_fallback = service.inspect_case_detail(
+            promoted_case.case_id
+        ).current_action_review["runtime_visibility"]["manual_fallback"]
+        for required_key in (
+            "fallback_owner_id",
+            "operator_note",
+            "affected_action",
+            "fallback_state",
+            "blocked_reason",
+            "expected_evidence",
+            "follow_up_state",
+        ):
+            with self.subTest(inspected_required_key=required_key):
+                self.assertIn(required_key, inspected_manual_fallback)
 
     def test_manual_fallback_owner_defaults_to_declared_action_target(self) -> None:
         _store, service, promoted_case, evidence_id, reviewed_at = (
@@ -773,6 +787,7 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
         )
 
         for reason in (
+            "The reviewed route was not unavailable but receipt missing after dispatch.",
             "The reviewed route was not unavailable. receipt missing after dispatch.",
             "The reviewed route was not unavailable, receipt missing after dispatch.",
             "The reviewed route was not unavailable or receipt missing after dispatch.",
