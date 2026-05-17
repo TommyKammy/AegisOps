@@ -12,6 +12,13 @@ _ROLE_ALIASES = {
     "platform-admin": "platform_admin",
     "platform": "platform_admin",
 }
+_KNOWN_ROLE_PREFIXES = (
+    ("read-only-auditor-", "read_only_auditor"),
+    ("readonly-auditor-", "read_only_auditor"),
+    ("platform-admin-", "platform_admin"),
+    ("analyst-", "analyst"),
+    ("approver-", "approver"),
+)
 
 
 @dataclass(frozen=True)
@@ -126,6 +133,9 @@ def requester_role_from_identity(identity: str) -> str:
     normalized = identity.strip().lower()
     if not normalized:
         return ""
+    for prefix, role in _KNOWN_ROLE_PREFIXES:
+        if normalized.startswith(prefix):
+            return role
     role_hint = normalized.rsplit("-", 1)[0]
     return _ROLE_ALIASES.get(role_hint, role_hint.replace("-", "_"))
 

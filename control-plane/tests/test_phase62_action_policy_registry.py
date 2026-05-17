@@ -42,7 +42,7 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
     def test_validation_allows_reviewed_tracking_ticket_policy(self) -> None:
         decision = evaluate_phase62_action_policy(
             action_type="create_tracking_ticket",
-            requester_identity="analyst-001",
+            requester_identity="analyst-phase62-001",
             target_scope={
                 "case_id": "case-001",
                 "coordination_reference_id": "coordination-ref-001",
