@@ -14,12 +14,25 @@ DISALLOWED_DEFAULT_FAMILIES = {"Controlled Write", "Hard Write"}
 FORBIDDEN_OVERCLAIM_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "broad SOAR marketplace coverage is implemented",
-        re.compile(r"\bbroad\s+soar\s+marketplace\s+coverage\s+is\s+implemented\b", re.I),
+        re.compile(
+            r"\bbroad\s+soar\s+marketplace\s+coverage\s+is\s+"
+            r"(?:approved|enabled|implemented|permitted)\b",
+            re.I,
+        ),
     ),
     (
         "arbitrary SOAR connector marketplace import is approved",
         re.compile(
-            r"\barbitrary\s+soar\s+connector\s+marketplace\s+import\s+is\s+approved\b",
+            r"\barbitrary\s+soar\s+connector\s+marketplace\s+import\s+is\s+"
+            r"(?:approved|enabled|implemented|permitted)\b",
+            re.I,
+        ),
+    ),
+    (
+        "broad SOAR replacement readiness appears",
+        re.compile(
+            r"\bbroad\s+soar\s+replacement\s+readiness\s+is\s+"
+            r"(?:approved|enabled|implemented|permitted)\b",
             re.I,
         ),
     ),
@@ -210,7 +223,7 @@ FORBIDDEN_AUTHORITY_PROMOTION_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] 
             r"output|issue-lint\s+output|admin\s+configuration|admin\s+ui\s+state)"
             r"\s+"
             r"(?:(?:is|are|becomes?|become)\s+|as\s+)aegisops\s+"
-            r"(?:(?:action|case|reconciliation|execution\s+receipt|policy|"
+            r"(?:(?:action\s+policy|action|case|reconciliation|execution\s+receipt|policy|"
             r"release|gate|limitation|closeout)\s+)?truth\b",
             re.I,
         ),
@@ -262,7 +275,7 @@ FORBIDDEN_AUTHORITY_PROMOTION_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] 
         "browser state is AegisOps truth",
         re.compile(
             r"\bbrowser\s+state\s+is\s+aegisops\s+"
-            r"(?:(?:action|case|reconciliation|release|gate)\s+)?truth\b",
+            r"(?:(?:action\s+policy|action|case|reconciliation|release|gate)\s+)?truth\b",
             re.I,
         ),
     ),
@@ -478,7 +491,6 @@ def _is_rejection_context(
         r"^(?:[-*]\s*)?no\b",
         r"\bdoes\s+not\s+(?:broaden|claim|dispatch|enable|grant|implement|import|"
         r"launch|let|replace)\b",
-        r"\bdo\s+not\b",
         r"\bmust\s+fail\s+closed\b",
         r"\bmust\s+be\s+rejected\b",
         r"\b(?:is|are)\s+rejected\b",
@@ -891,6 +903,28 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
             _catalog_validation_errors(overclaim_text),
         )
 
+    def test_rejects_marketplace_overclaim_wording_variants(self) -> None:
+        catalog_text = self.catalog_doc.read_text(encoding="utf-8")
+        overclaim_text = catalog_text.replace(
+            "## 8. Non-Goals",
+            "\n".join(
+                (
+                    "Broad SOAR marketplace coverage is approved.",
+                    "Arbitrary SOAR connector marketplace import is implemented.",
+                    "Broad SOAR replacement readiness is implemented.",
+                    "## 8. Non-Goals",
+                )
+            ),
+        )
+        validation_errors = _catalog_validation_errors(overclaim_text)
+
+        for expected in (
+            "forbidden overclaim outside rejection context: broad SOAR marketplace coverage is implemented",
+            "forbidden overclaim outside rejection context: arbitrary SOAR connector marketplace import is approved",
+            "forbidden overclaim outside rejection context: broad SOAR replacement readiness appears",
+        ):
+            self.assertIn(expected, validation_errors)
+
     def test_rejects_template_marketplace_import_overclaim(self) -> None:
         catalog_text = self.catalog_doc.read_text(encoding="utf-8")
         overclaim_text = catalog_text.replace(
@@ -967,6 +1001,11 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
             "The catalog cannot hide that Phase 62.1 claims GA readiness.\n"
             "## 8. Non-Goals",
         )
+        do_not_marker_text = catalog_text.replace(
+            "## 8. Non-Goals",
+            "Operators do not dispute that Phase 62.1 claims GA readiness.\n"
+            "## 8. Non-Goals",
+        )
 
         expected = "forbidden overclaim outside rejection context: Phase 62.1 claims RC"
         self.assertIn(expected, _catalog_validation_errors(not_marker_text))
@@ -978,6 +1017,10 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
         self.assertIn(
             "forbidden overclaim outside rejection context: Phase 62.1 claims GA",
             _catalog_validation_errors(cannot_marker_text),
+        )
+        self.assertIn(
+            "forbidden overclaim outside rejection context: Phase 62.1 claims GA",
+            _catalog_validation_errors(do_not_marker_text),
         )
 
     def test_rejects_case_insensitive_readiness_and_later_phase_overclaims(
@@ -1100,6 +1143,7 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
                     "Ticket close is AegisOps reconciliation truth.",
                     "UI cache is AegisOps action policy truth.",
                     "Browser state is AegisOps case truth.",
+                    "Browser state is AegisOps action policy truth.",
                     "Browser state becomes AegisOps release truth.",
                     "Phase 62.1 treats browser state as AegisOps action truth.",
                     "Admin configuration is AegisOps action truth.",
