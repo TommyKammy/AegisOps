@@ -245,6 +245,10 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             ),
             "ticket output cannot prove execution; ticket state confirms receipt",
             "issue lint a b c d e lint output is authoritative",
+            (
+                "ticket output is authoritative and bound AegisOps execution "
+                "receipt remains required"
+            ),
         ):
             with self.subTest(expected_evidence=expected_evidence):
                 errors = validate_phase62_manual_fallback_record(
@@ -407,6 +411,7 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "not_ready_for_reconciliation_complete",
             "wasn't_successful",
             "wasn\u2019t_successful",
+            "manual_replacement_pending",
         ):
             with self.subTest(negated_follow_up_state=follow_up_state):
                 errors = validate_phase62_manual_fallback_record(

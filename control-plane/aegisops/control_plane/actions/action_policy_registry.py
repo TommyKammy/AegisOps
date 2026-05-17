@@ -251,7 +251,6 @@ _FOLLOW_UP_COMPLETION_OR_READINESS_TERMS = (
     "reconciled",
     "reconciliation",
     "commercial",
-    "replacement",
     "beta",
     "rc",
     "ga",
@@ -661,6 +660,8 @@ def _authority_claim_matches_source(
     authority_end = authority_index + len(authority_terms)
     if source_index <= authority_index:
         between = terms[source_end:authority_index]
+        if source_end <= authority_index and authority_index - source_end <= 2:
+            return True
         if any(
             term
             in {

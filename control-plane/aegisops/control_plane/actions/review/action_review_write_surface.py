@@ -707,7 +707,7 @@ def _phase62_contains_unnegated_term_group(
 
 
 def _phase62_has_recent_negation(terms: tuple[str, ...], index: int) -> bool:
-    start = max(0, index - 4)
+    start = max(0, index - 8)
     for term in reversed(terms[start:index]):
         if term in {
             "boundary",
@@ -716,6 +716,8 @@ def _phase62_has_recent_negation(terms: tuple[str, ...], index: int) -> bool:
             "though",
             "although",
             "yet",
+            "whereas",
+            "while",
             "instead",
             "and",
             "then",

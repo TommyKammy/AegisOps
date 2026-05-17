@@ -777,6 +777,12 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
             "The reviewed route was not unavailable, receipt missing after dispatch.",
             "The reviewed route was not unavailable or receipt missing after dispatch.",
             "The reviewed route wasn\u2019t unavailable but receipt missing after dispatch.",
+            (
+                "The reviewed route was not under exceptionally constrained "
+                "external conditions unavailable but receipt missing after dispatch."
+            ),
+            "The reviewed route was not unavailable whereas receipt missing after dispatch.",
+            "The reviewed route was not unavailable while receipt missing after dispatch.",
         ):
             with self.subTest(reason=reason):
                 self.assertEqual(
