@@ -65,6 +65,10 @@ FORBIDDEN_OVERCLAIM_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         ),
     ),
     (
+        "standalone replacement claim appears",
+        re.compile(r"\bstandalone\s+replacement\b", re.I),
+    ),
+    (
         "standalone replacement claims are approved",
         re.compile(r"\bstandalone\s+replacement\s+claims?\s+are\s+approved\b", re.I),
     ),
@@ -98,8 +102,11 @@ FORBIDDEN_SETUP_TRUST_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "placeholder credentials are valid",
         re.compile(
-            r"\bplaceholder\s+(?:shuffle\s+)?(?:api\s+keys?|secrets?|credentials?|tokens?)"
-            r"\s+(?:(?:are|is)\s+(?:valid|trusted|approved|accepted)|as\s+valid"
+            r"\b(?:treats?\s+)?placeholder\s+(?:shuffle\s+)?"
+            r"(?:api\s+keys?|secrets?|credentials?|tokens?)\s+"
+            r"(?:(?:are|is)\s+(?:valid|trusted|approved|accepted)|"
+            r"(?:are|is)\s+treated\s+as\s+(?:valid|trusted|approved|accepted)"
+            r"(?:\s+setup\s+state)?|as\s+(?:valid|trusted|approved|accepted)"
             r"\s+setup\s+state)\b",
             re.I,
         ),
@@ -107,56 +114,94 @@ FORBIDDEN_SETUP_TRUST_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "sample credentials are valid",
         re.compile(
-            r"\bsample\s+(?:secrets?|credentials?|tokens?)"
-            r"\s+(?:are|is)\s+(?:valid|trusted|approved|accepted)\b",
+            r"\b(?:treats?\s+)?sample\s+(?:secrets?|credentials?|tokens?)\s+"
+            r"(?:(?:are|is)\s+(?:valid|trusted|approved|accepted)|"
+            r"(?:are|is)\s+treated\s+as\s+(?:valid|trusted|approved|accepted)"
+            r"(?:\s+setup\s+state)?|as\s+(?:valid|trusted|approved|accepted)"
+            r"\s+setup\s+state)\b",
             re.I,
         ),
     ),
     (
         "fake values are valid",
         re.compile(
-            r"\bfake\s+values?\s+(?:are|is)\s+(?:valid|trusted|approved|accepted)\b",
+            r"\b(?:treats?\s+)?fake\s+values?\s+"
+            r"(?:(?:are|is)\s+(?:valid|trusted|approved|accepted)|"
+            r"(?:are|is)\s+treated\s+as\s+(?:valid|trusted|approved|accepted)"
+            r"(?:\s+setup\s+state)?|as\s+(?:valid|trusted|approved|accepted)"
+            r"\s+setup\s+state)\b",
             re.I,
         ),
     ),
     (
         "TODO values are valid",
         re.compile(
-            r"\btodo\s+values?\s+(?:are|is)\s+(?:valid|trusted|approved|accepted)\b",
+            r"\b(?:treats?\s+)?todo\s+values?\s+"
+            r"(?:(?:are|is)\s+(?:valid|trusted|approved|accepted)|"
+            r"(?:are|is)\s+treated\s+as\s+(?:valid|trusted|approved|accepted)"
+            r"(?:\s+setup\s+state)?|as\s+(?:valid|trusted|approved|accepted)"
+            r"\s+setup\s+state)\b",
             re.I,
         ),
     ),
     (
         "unsigned tokens are valid",
         re.compile(
-            r"\bunsigned\s+tokens?\s+(?:are|is)\s+(?:valid|trusted|approved|accepted)\b",
+            r"\b(?:treats?\s+)?unsigned\s+tokens?\s+"
+            r"(?:(?:are|is)\s+(?:valid|trusted|approved|accepted)|"
+            r"(?:are|is)\s+treated\s+as\s+(?:valid|trusted|approved|accepted)"
+            r"(?:\s+setup\s+state)?|as\s+(?:valid|trusted|approved|accepted)"
+            r"\s+setup\s+state)\b",
             re.I,
         ),
     ),
     (
         "inline secrets are valid",
         re.compile(
-            r"\binline\s+secrets?\s+(?:are|is)\s+(?:valid|trusted|approved|accepted)\b",
+            r"\b(?:treats?\s+)?inline\s+secrets?\s+"
+            r"(?:(?:are|is)\s+(?:valid|trusted|approved|accepted)|"
+            r"(?:are|is)\s+treated\s+as\s+(?:valid|trusted|approved|accepted)"
+            r"(?:\s+setup\s+state)?|as\s+(?:valid|trusted|approved|accepted)"
+            r"\s+setup\s+state)\b",
             re.I,
         ),
     ),
     (
         "raw forwarded headers are trusted",
         re.compile(
-            r"\braw\s+forwarded\s+headers?\s+(?:are|is)\s+trusted\b",
+            r"\b(?:treats?\s+)?raw\s+forwarded\s+headers?\s+"
+            r"(?:(?:are|is)\s+trusted|(?:are|is)\s+treated\s+as\s+trusted"
+            r"(?:\s+(?:identity|setup\s+state))?|as\s+trusted\s+identity)\b",
             re.I,
         ),
     ),
     (
         "inferred linkage is valid",
         re.compile(
-            r"\binferred\s+(?:tenant|source|delegation)\s+linkage\s+"
-            r"(?:is|are)\s+(?:valid|trusted|approved|accepted)\b",
+            r"\b(?:treats?\s+)?inferred\s+(?:tenant|source|delegation)\s+linkage\s+"
+            r"(?:(?:is|are)\s+(?:valid|trusted|approved|accepted)|"
+            r"(?:is|are)\s+treated\s+as\s+(?:valid|trusted|approved|accepted)"
+            r"(?:\s+setup\s+state)?|as\s+(?:valid|trusted|approved|accepted)"
+            r"\s+setup\s+state)\b",
             re.I,
         ),
     ),
 )
 FORBIDDEN_AUTHORITY_PROMOTION_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "subordinate source is treated as AegisOps truth",
+        re.compile(
+            r"\b(?:treats?\s+)?(?:shuffle\s+workflow\s+state|shuffle\s+workflow\s+"
+            r"success|shuffle\s+callback\s+payload|simulator\s+state|ticket\s+"
+            r"state|ticket\s+status|ui\s+cache|browser\s+state|ai\s+output|"
+            r"source-native\s+status|verifier\s+output|issue-lint\s+output|"
+            r"admin\s+configuration|admin\s+ui\s+state)\s+"
+            r"(?:(?:is|are|becomes?|become)\s+|as\s+)aegisops\s+"
+            r"(?:(?:action|case|reconciliation|execution\s+receipt|policy|"
+            r"release|gate|limitation|closeout)\s+)?truth\b",
+            re.I,
+        ),
+    ),
     (
         "direct ad-hoc Shuffle launch is approved",
         re.compile(r"\bdirect\s+ad-?hoc\s+shuffle\s+launch\s+is\s+approved\b", re.I),
@@ -323,7 +368,8 @@ def _is_rejection_context(
 
     explicit_negation_patterns = (
         r"^(?:[-*]\s*)?no\b",
-        r"\bdoes\s+not\s+(?:broaden|dispatch|enable|grant|import|launch|let)\b",
+        r"\bdoes\s+not\s+(?:broaden|claim|dispatch|enable|grant|implement|import|"
+        r"launch|let|replace)\b",
         r"\bdo\s+not\b",
         r"\bmust\s+fail\s+closed\b",
         r"\bmust\s+be\s+rejected\b",
@@ -824,6 +870,8 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
                 (
                     "Phase 62.1 is a standalone replacement.",
                     "Phase 62.1 claims standalone replacement readiness",
+                    "Standalone replacement is implemented for this catalog.",
+                    "This catalog includes standalone replacement readiness.",
                     "Standalone replacement claims are approved",
                     "## 8. Non-Goals",
                 )
@@ -833,6 +881,10 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
 
         self.assertIn(
             "forbidden overclaim outside rejection context: Phase 62.1 is or claims standalone replacement readiness",
+            validation_errors,
+        )
+        self.assertIn(
+            "forbidden overclaim outside rejection context: standalone replacement claim appears",
             validation_errors,
         )
         self.assertIn(
@@ -848,13 +900,21 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
                 (
                     "Phase 62.1 treats placeholder Shuffle API keys as valid setup state.",
                     "Placeholder Shuffle API keys are valid credentials.",
+                    "Placeholder credentials are treated as valid setup state.",
                     "Sample credentials are accepted.",
+                    "Sample tokens are treated as trusted setup state.",
                     "Fake values are valid setup state.",
+                    "Fake values are treated as approved setup state.",
                     "TODO values are valid setup state.",
+                    "TODO values are treated as accepted setup state.",
                     "Unsigned tokens are trusted.",
+                    "Unsigned tokens are treated as valid setup state.",
                     "Inline secrets are approved.",
+                    "Inline secrets are treated as trusted setup state.",
                     "Raw forwarded headers are trusted callback identity.",
+                    "Raw forwarded headers are treated as trusted identity.",
                     "Inferred tenant linkage is valid.",
+                    "Inferred source linkage is treated as valid setup state.",
                     "## 8. Non-Goals",
                 )
             ),
@@ -884,10 +944,13 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
                     "Shuffle callback payload is AegisOps execution receipt truth.",
                     "Shuffle workflow status closes AegisOps cases.",
                     "Ticket status is AegisOps case truth.",
+                    "Phase 62.1 treats ticket status as AegisOps case truth.",
                     "Ticket close is AegisOps reconciliation truth.",
                     "UI cache is AegisOps action policy truth.",
                     "Browser state is AegisOps case truth.",
+                    "Phase 62.1 treats browser state as AegisOps action truth.",
                     "Admin configuration is AegisOps action truth.",
+                    "Phase 62.1 treats admin configuration as AegisOps reconciliation truth.",
                     "AI output approves automation.",
                     "Source-native status reconciles automation.",
                     "Verifier output gates production readiness.",
@@ -899,6 +962,7 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
         validation_errors = _catalog_validation_errors(authority_claim_text)
 
         for expected in (
+            "forbidden authority promotion outside rejection context: subordinate source is treated as AegisOps truth",
             "forbidden authority promotion outside rejection context: direct ad-hoc Shuffle launch is approved",
             "forbidden authority promotion outside rejection context: Shuffle workflow success is AegisOps reconciliation truth",
             "forbidden authority promotion outside rejection context: Shuffle callback payload is AegisOps execution receipt truth",
