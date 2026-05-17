@@ -324,6 +324,64 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             (),
         )
 
+    def test_simulator_validation_covers_current_head_connector_followups(
+        self,
+    ) -> None:
+        cases = {
+            "PRRT_kwDOR2iDUc6Cr6vQ_partial_exclusion": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution."
+                    ),
+                },
+                "missing_production_exclusion",
+            ),
+            "PRRT_kwDOR2iDUc6Cr6vS_delegated": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and production workflow delegated."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr6vU_direct_ad_hoc": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and uses direct ad hoc execution."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr6vW_not_excluded": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is not excluded from production execution "
+                        "receipt and reconciliation truth."
+                    ),
+                },
+                "missing_production_exclusion",
+            ),
+            "PRRT_kwDOR2iDUc6Cr6vX_authoritative_truth": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and simulator state is authoritative truth."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+        }
+
+        for thread_id, (override, expected_error) in cases.items():
+            with self.subTest(thread_id=thread_id):
+                errors = validate_phase62_simulator_output(
+                    catalog_action="operator_notification",
+                    output={**self._valid_simulator_output(), **override},
+                )
+                self.assertIn(expected_error, errors)
+
     def test_manual_fallback_requirements_cover_every_reviewed_action(self) -> None:
         self.assertEqual(
             set(PHASE62_MANUAL_FALLBACK_REQUIREMENTS),

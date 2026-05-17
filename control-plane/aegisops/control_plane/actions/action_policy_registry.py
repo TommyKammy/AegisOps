@@ -674,6 +674,7 @@ _SIMULATOR_PRODUCTION_TRUTH_TERMS = (
     ("authoritative", "execution"),
     ("authoritative", "receipt"),
     ("authoritative", "reconciliation"),
+    ("authoritative", "truth"),
     ("case", "truth"),
     ("close", "case"),
     ("closes", "case"),
@@ -686,9 +687,14 @@ _SIMULATOR_PRODUCTION_TRUTH_TERMS = (
     ("ticket", "closed"),
     ("production", "workflow", "delegation"),
     ("production", "workflow", "delegate"),
+    ("production", "workflow", "delegated"),
     ("delegate", "production", "workflow"),
+    ("delegated", "production", "workflow"),
     ("production", "workflow", "launch"),
     ("launch", "production", "workflow"),
+    ("direct", "ad", "hoc", "execution"),
+    ("ad", "hoc", "execution"),
+    ("direct", "execution"),
     ("readiness",),
 )
 _SIMULATOR_EXCLUDABLE_PRODUCTION_TRUTH_TERMS = (
@@ -705,11 +711,9 @@ _SIMULATOR_EXCLUSION_CONTEXT_TERMS = (
     "excluding",
     "exclusion",
 )
-_SIMULATOR_PRODUCTION_EXCLUSION_SUBJECT_TERMS = (
-    "execution",
-    "receipt",
-    "reconciliation",
-    "truth",
+_SIMULATOR_REQUIRED_PRODUCTION_EXCLUSION_TERM_GROUPS = (
+    ("production", "execution", "receipt"),
+    ("reconciliation", "truth"),
 )
 _SIMULATOR_EXCLUSION_CLAIM_BOUNDARY_TERMS = {
     _TERM_BOUNDARY,
@@ -1005,15 +1009,21 @@ def validate_phase62_simulator_output(
     production_exclusion = output.get("production_exclusion")
     if _non_blank_string(production_exclusion):
         exclusion_terms = _text_terms(str(production_exclusion))
-        has_exclusion_term = any(
-            term in _SIMULATOR_EXCLUSION_CONTEXT_TERMS for term in exclusion_terms
+        has_unnegated_exclusion_term = any(
+            term in _SIMULATOR_EXCLUSION_CONTEXT_TERMS
+            and not _has_recent_negation(
+                exclusion_terms,
+                index,
+                window=_NEGATION_SCAN_WINDOW,
+            )
+            for index, term in enumerate(exclusion_terms)
         )
         has_production_exclusion_context = (
-            has_exclusion_term
+            has_unnegated_exclusion_term
             and "production" in exclusion_terms
-            and any(
-                term in _SIMULATOR_PRODUCTION_EXCLUSION_SUBJECT_TERMS
-                for term in exclusion_terms
+            and all(
+                _contains_unnegated_term_group(exclusion_terms, (term_group,))
+                for term_group in _SIMULATOR_REQUIRED_PRODUCTION_EXCLUSION_TERM_GROUPS
             )
         )
         if not has_production_exclusion_context:
