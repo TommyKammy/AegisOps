@@ -152,12 +152,11 @@ _MANUAL_FALLBACK_STATES = (
     "stale_receipt",
     "mismatched_receipt",
 )
-_MANUAL_FALLBACK_STATE_FIELD = "fallback_state"
 _MANUAL_FALLBACK_RECORD_FIELDS = (
     "fallback_owner_id",
     "operator_note",
     "affected_action",
-    _MANUAL_FALLBACK_STATE_FIELD,
+    "fallback_state",
     "blocked_reason",
     "expected_evidence",
     "follow_up_state",
@@ -504,6 +503,7 @@ def validate_phase62_manual_fallback_record(
     catalog_action: str,
     record: Mapping[str, object],
 ) -> tuple[str, ...]:
+    """Return fail-closed Phase 62.5 errors for a candidate fallback record."""
     requirement = PHASE62_MANUAL_FALLBACK_REQUIREMENTS.get(catalog_action)
     if requirement is None:
         return ("unsupported_action",)
@@ -581,6 +581,18 @@ def require_phase62_manual_fallback_record(
         raise ValueError(
             "manual fallback violates Phase 62.5 contract: " + ", ".join(errors)
         )
+
+
+def validated_phase62_manual_fallback_record(
+    *,
+    catalog_action: str,
+    record: Mapping[str, object],
+) -> dict[str, object]:
+    require_phase62_manual_fallback_record(
+        catalog_action=catalog_action,
+        record=record,
+    )
+    return dict(record)
 
 
 def _non_blank_string(value: object) -> bool:

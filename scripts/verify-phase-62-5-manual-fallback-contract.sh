@@ -50,6 +50,7 @@ for phrase in \
   '"fallback_owner_id"' \
   '"operator_note"' \
   '"affected_action"' \
+  '"fallback_state"' \
   '"blocked_reason"' \
   '"expected_evidence"' \
   '"follow_up_state"' \

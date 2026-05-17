@@ -10,7 +10,7 @@ from ..action_policy import evaluate_action_policy_record
 from ..action_policy_registry import (
     ACTION_TYPE_POLICY_ALIASES,
     PHASE62_MANUAL_FALLBACK_REQUIREMENTS,
-    require_phase62_manual_fallback_record,
+    validated_phase62_manual_fallback_record,
 )
 from ...models import (
     ActionRequestRecord,
@@ -249,7 +249,7 @@ class ActionReviewWriteSurface:
                 residual_uncertainty=normalized_residual_uncertainty,
             )
             if phase62_fallback_context is not None:
-                require_phase62_manual_fallback_record(
+                phase62_fallback_context = validated_phase62_manual_fallback_record(
                     catalog_action=str(phase62_fallback_context["affected_action"]),
                     record=phase62_fallback_context,
                 )
