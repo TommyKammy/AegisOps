@@ -617,8 +617,12 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
         for operator_note in (
             "manual fallback closed case",
             "manual fallback close case",
+            "manual fallback closes cases",
+            "manual fallback closes tickets",
             "execution confirmed",
             "receipt validated",
+            "execution proven",
+            "receipt proven",
             "ticket closed",
             "case closed",
             "operator note prove execution",
@@ -642,6 +646,8 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "ticket output validate receipt",
             "output from ticket is authoritative",
             "ticket output confirmed execution",
+            "ticket outputs are authoritative",
+            "workflow outputs are authoritative",
             "ticket state is proof of receipt",
             "workflow result is confirmation of execution",
             "browser state is validation of receipt",
@@ -672,6 +678,18 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                     "expected_evidence_promotes_non_authoritative_truth",
                     errors,
                 )
+
+        for follow_up_state in (
+            "execution succeeds",
+            "ticket closes",
+            "manual follow-up completes the action",
+        ):
+            with self.subTest(follow_up_state=follow_up_state):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={**valid_record, "follow_up_state": follow_up_state},
+                )
+                self.assertIn("follow_up_state_promotes_completion", errors)
 
     def test_manual_fallback_validation_rejects_closure_readiness_follow_up_state(
         self,
