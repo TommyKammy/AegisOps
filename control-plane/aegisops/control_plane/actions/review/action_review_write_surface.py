@@ -741,10 +741,17 @@ def _phase62_contains_unnegated_term_group(
 
 def _phase62_has_recent_negation(terms: tuple[str, ...], index: int) -> bool:
     start = max(0, index - 8)
-    for term in reversed(terms[start:index]):
+    for negation_index in range(index - 1, start - 1, -1):
+        term = terms[negation_index]
         if term in _PHASE62_NEGATION_BOUNDARY_TERMS:
             return False
         if term in _PHASE62_NEGATION_TERMS:
+            if (
+                term == "not"
+                and negation_index + 1 < index
+                and terms[negation_index + 1] == "only"
+            ):
+                continue
             return True
     return False
 

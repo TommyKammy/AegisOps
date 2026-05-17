@@ -176,7 +176,7 @@ _MANUAL_FALLBACK_BLOCKED_REASON_CATEGORIES = {
     "stale_receipt": (("stale",),),
     "mismatched_receipt": (("mismatched",), ("mismatch",)),
 }
-_NON_AUTHORITATIVE_EVIDENCE_SOURCE_TERMS = (
+_NON_AUTHORITATIVE_EVIDENCE_SOURCE_BASE_TERMS = (
     ("shuffle", "result"),
     ("shuffle", "state"),
     ("shuffle", "output"),
@@ -199,16 +199,31 @@ _NON_AUTHORITATIVE_EVIDENCE_SOURCE_TERMS = (
     ("issue", "lint", "report"),
     ("operator", "note"),
 )
+_NON_AUTHORITATIVE_EVIDENCE_SOURCE_TERMS = tuple(
+    dict.fromkeys(
+        (
+            *_NON_AUTHORITATIVE_EVIDENCE_SOURCE_BASE_TERMS,
+            *(
+                (source_terms[-1], *source_terms[:-1])
+                for source_terms in _NON_AUTHORITATIVE_EVIDENCE_SOURCE_BASE_TERMS
+                if len(source_terms) > 1
+            ),
+        )
+    )
+)
 _AUTHORITY_PROOF_VERBS = (
     "confirm",
     "confirms",
     "confirmed",
+    "confirming",
     "prove",
     "proves",
     "proved",
+    "proving",
     "validate",
     "validates",
     "validated",
+    "validating",
 )
 _AUTHORITY_PROOF_OBJECTS = ("execution", "receipt", "reconciliation")
 _APPROVAL_BYPASS_TERMS = ("bypass", "bypasses", "bypassed", "bypassing")
@@ -313,6 +328,18 @@ _NEGATION_BOUNDARY_TERMS = {
     "or",
 }
 _TERM_GROUP_MAX_INTERVENING_TERMS = 6
+_SOURCE_AUTHORITY_ASSERTION_LINK_TERMS = {
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "being",
+    "been",
+    "become",
+    "becomes",
+    "became",
+}
 
 
 PHASE62_ACTION_POLICIES: Mapping[str, ActionPolicy] = {
@@ -719,7 +746,13 @@ def _has_source_scoped_negation_before_authority(
     source_end = source_index + len(source_terms)
     if authority_index <= source_end:
         return False
-    return any(term in _NEGATION_TERMS for term in terms[source_end:authority_index])
+    for negation_index in range(authority_index - 1, source_end - 1, -1):
+        term = terms[negation_index]
+        if term in _NEGATION_BOUNDARY_TERMS:
+            return False
+        if term in _NEGATION_TERMS:
+            return not _is_not_only_phrase(terms, negation_index, authority_index)
+    return False
 
 
 def _authority_claim_matches_source(
@@ -734,8 +767,6 @@ def _authority_claim_matches_source(
     authority_end = authority_index + len(authority_terms)
     if source_index <= authority_index:
         between = terms[source_end:authority_index]
-        if source_end <= authority_index and authority_index - source_end <= 2:
-            return True
         if any(
             term
             in {
@@ -751,13 +782,18 @@ def _authority_claim_matches_source(
             for term in between
         ):
             return False
-        if _authority_claim_targets_aegisops_receipt(
+        targets_aegisops_receipt = _authority_claim_targets_aegisops_receipt(
             terms=terms,
             source_end=source_end,
             authority_index=authority_index,
             authority_end=authority_end,
+        )
+        if targets_aegisops_receipt and not _source_is_directly_asserted_as_authority(
+            between
         ):
             return False
+        if source_end <= authority_index and authority_index - source_end <= 2:
+            return True
         return True
 
     between = terms[authority_end:source_index]
@@ -795,6 +831,17 @@ def _authority_claim_targets_aegisops_receipt(
         authority_anchor_start : min(len(terms), authority_end + 4)
     ]
     return any(term in {"aegisops", "bound"} for term in authority_anchor)
+
+
+def _source_is_directly_asserted_as_authority(
+    between_source_and_authority: tuple[str, ...],
+) -> bool:
+    if any(term in _NEGATION_BOUNDARY_TERMS for term in between_source_and_authority):
+        return False
+    return any(
+        term in _SOURCE_AUTHORITY_ASSERTION_LINK_TERMS
+        for term in between_source_and_authority
+    )
 
 
 def _blocked_reason_matches_declared_failure_category(
@@ -878,12 +925,27 @@ def _has_recent_negation(
     window: int,
 ) -> bool:
     start = max(0, index - window)
-    for term in reversed(terms[start:index]):
+    for negation_index in range(index - 1, start - 1, -1):
+        term = terms[negation_index]
         if term in _NEGATION_BOUNDARY_TERMS:
             return False
         if term in _NEGATION_TERMS:
+            if _is_not_only_phrase(terms, negation_index, index):
+                continue
             return True
     return False
+
+
+def _is_not_only_phrase(
+    terms: tuple[str, ...],
+    negation_index: int,
+    target_index: int,
+) -> bool:
+    return (
+        terms[negation_index] == "not"
+        and negation_index + 1 < target_index
+        and terms[negation_index + 1] == "only"
+    )
 
 
 def _text_terms(value: str) -> tuple[str, ...]:

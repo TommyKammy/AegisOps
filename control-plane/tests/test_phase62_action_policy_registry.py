@@ -243,6 +243,21 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "operator_note_reconciliation_validates": {
                 "operator_note": "Manual fallback says reconciliation validates the action.",
             },
+            "operator_note_confirming_execution": {
+                "operator_note": "Manual fallback confirming execution.",
+            },
+            "operator_note_validating_receipt": {
+                "operator_note": "Manual fallback validating receipt.",
+            },
+            "operator_note_proving_execution": {
+                "operator_note": "Manual fallback proving execution.",
+            },
+            "operator_note_not_only_bypasses_approval": {
+                "operator_note": "Manual fallback not only bypasses approval.",
+            },
+            "operator_note_not_only_confirmed_execution": {
+                "operator_note": "Manual fallback not only confirmed execution.",
+            },
         }
 
         for label, override in cases.items():
@@ -315,6 +330,10 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "workflow result says receipt validated",
             "workflow result says receipt validates execution",
             "issue lint a b c d e lint output is authoritative",
+            "output from ticket is authoritative",
+            "state from workflow confirms receipt",
+            "result from Shuffle proves execution",
+            "ticket output not delayed and authoritative",
             (
                 "ticket output is authoritative and bound AegisOps execution "
                 "receipt remains required"
@@ -395,6 +414,21 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
         self.assertNotIn(
             "expected_evidence_promotes_non_authoritative_truth",
             source_context_aegisops_authoritative_errors,
+        )
+
+        adjacent_aegisops_receipt_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "expected_evidence": (
+                    "ticket output and authoritative AegisOps receipt remains "
+                    "required"
+                ),
+            },
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            adjacent_aegisops_receipt_errors,
         )
 
         source_context_sentence_authority_errors = (

@@ -805,6 +805,19 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
                     "missing_receipt",
                 )
 
+        self.assertEqual(
+            _phase62_fallback_state_from_text(
+                "The reviewed route was not only unavailable after dispatch."
+            ),
+            "shuffle_unavailable",
+        )
+        self.assertEqual(
+            _phase62_fallback_state_from_text(
+                "The reviewed route was not only rejected before receipt emission."
+            ),
+            "execution_rejected",
+        )
+
         _store, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
         )
