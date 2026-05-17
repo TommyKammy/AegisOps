@@ -6,6 +6,7 @@ from typing import Mapping
 
 
 ManualFallbackValidationErrors = tuple[str, ...]
+SimulatorValidationErrors = tuple[str, ...]
 
 _ROLE_ALIASES = {
     "read-only-auditor": "read_only_auditor",
@@ -69,6 +70,21 @@ class ManualFallbackRequirement:
     approval_bypass: str = "forbidden"
     execution_truth: str = "execution_receipt_required"
     reconciliation_truth: str = "aegisops_reconciliation_required"
+
+
+@dataclass(frozen=True)
+class SimulatorContract:
+    catalog_action: str
+    allowed_modes: tuple[str, ...]
+    reviewed_template_version: str
+    required_output_fields: tuple[str, ...]
+    allowed_statuses: tuple[str, ...]
+    authority_posture: str = "non_authoritative_demo_test_evidence"
+    production_exclusion: str = (
+        "excluded_from_production_execution_and_reconciliation_truth"
+    )
+    secret_posture: str = "live_secrets_forbidden"
+    data_posture: str = "synthetic_or_sanitized_only"
 
 
 @dataclass(frozen=True)
@@ -620,6 +636,52 @@ _COMMON_SHUFFLE_EXPECTED_OUTPUTS = (
     "execution_finished_at",
 )
 
+_SIMULATOR_OUTPUT_FIELDS = (
+    "mode",
+    "catalog_action",
+    "action_request_id",
+    "simulation_run_id",
+    "reviewed_template_version",
+    "correlation_id",
+    "simulated_started_at",
+    "simulated_finished_at",
+    "simulated_status",
+    "demo_test_label",
+    "production_exclusion",
+    "authority_posture",
+    "live_secret_ref",
+    "customer_data_classification",
+    "simulated_evidence_ref",
+)
+_SIMULATOR_ALLOWED_STATUSES = (
+    "simulated_success",
+    "simulated_failure",
+    "simulated_missing_receipt",
+    "simulated_stale_receipt",
+    "simulated_mismatched_receipt",
+    "simulated_manual_review",
+)
+_SIMULATOR_ALLOWED_DATA_CLASSIFICATIONS = (
+    "synthetic_only",
+    "sanitized_demo_only",
+)
+_SIMULATOR_PRODUCTION_TRUTH_TERMS = (
+    ("production", "execution", "receipt", "truth"),
+    ("production", "reconciliation", "truth"),
+    ("execution", "receipt", "truth"),
+    ("reconciliation", "truth"),
+    ("production", "truth"),
+    ("authoritative", "execution"),
+    ("authoritative", "receipt"),
+    ("authoritative", "reconciliation"),
+    ("case", "truth"),
+    ("close", "case"),
+    ("closes", "case"),
+    ("closed", "case"),
+    ("ticket", "truth"),
+    ("readiness",),
+)
+
 PHASE62_SHUFFLE_WORKFLOW_MAPPINGS: Mapping[str, ShuffleWorkflowMapping] = {
     "enrichment_only_lookup": ShuffleWorkflowMapping(
         catalog_action="enrichment_only_lookup",
@@ -681,6 +743,17 @@ PHASE62_SHUFFLE_WORKFLOW_MAPPINGS: Mapping[str, ShuffleWorkflowMapping] = {
         ].correlation_fields,
         policy_registry_id="phase62.2:create_tracking_ticket",
     ),
+}
+
+PHASE62_SIMULATOR_CONTRACTS: Mapping[str, SimulatorContract] = {
+    catalog_action: SimulatorContract(
+        catalog_action=catalog_action,
+        allowed_modes=("demo", "test"),
+        reviewed_template_version=mapping.reviewed_template_version,
+        required_output_fields=_SIMULATOR_OUTPUT_FIELDS,
+        allowed_statuses=_SIMULATOR_ALLOWED_STATUSES,
+    )
+    for catalog_action, mapping in PHASE62_SHUFFLE_WORKFLOW_MAPPINGS.items()
 }
 
 _LEGACY_ACTION_TYPE_SHUFFLE_MAPPINGS: Mapping[str, ShuffleWorkflowMapping] = {
@@ -835,6 +908,102 @@ def validate_phase62_manual_fallback_record(
         errors.append("blocked_reason_missing_failure_category")
 
     return tuple(dict.fromkeys(errors))
+
+
+def validate_phase62_simulator_output(
+    *,
+    catalog_action: str,
+    output: Mapping[str, object],
+) -> SimulatorValidationErrors:
+    """Return fail-closed Phase 62.6 errors for demo/test simulator output."""
+    contract = PHASE62_SIMULATOR_CONTRACTS.get(catalog_action)
+    if contract is None:
+        return ("unsupported_action",)
+
+    errors: list[str] = []
+    for field in contract.required_output_fields:
+        if not _non_blank_string(output.get(field)):
+            errors.append(f"missing_{field}")
+
+    mode = output.get("mode")
+    if _non_blank_string(mode):
+        if mode not in contract.allowed_modes:
+            errors.append("unsupported_mode")
+
+    output_catalog_action = output.get("catalog_action")
+    if _non_blank_string(output_catalog_action):
+        if output_catalog_action != contract.catalog_action:
+            errors.append("catalog_action_mismatch")
+
+    reviewed_template_version = output.get("reviewed_template_version")
+    if _non_blank_string(reviewed_template_version):
+        if reviewed_template_version != contract.reviewed_template_version:
+            errors.append("reviewed_template_version_mismatch")
+
+    simulated_status = output.get("simulated_status")
+    if _non_blank_string(simulated_status):
+        if simulated_status not in contract.allowed_statuses:
+            errors.append("unsupported_simulated_status")
+        if _contains_unnegated_term_group(
+            _text_terms(str(simulated_status)),
+            _SIMULATOR_PRODUCTION_TRUTH_TERMS,
+        ):
+            errors.append("simulated_status_promotes_production_truth")
+
+    demo_test_label = output.get("demo_test_label")
+    if _non_blank_string(demo_test_label):
+        label_terms = _text_terms(str(demo_test_label))
+        if not (
+            {"demo", "test"} & set(label_terms)
+            and "evidence" in label_terms
+            and any(term in {"only", "non", "non_authoritative"} for term in label_terms)
+        ):
+            errors.append("missing_demo_test_label")
+
+    production_exclusion = output.get("production_exclusion")
+    if _non_blank_string(production_exclusion):
+        exclusion_terms = _text_terms(str(production_exclusion))
+        has_exclusion_term = any(
+            term in {"exclude", "excluded", "exclusion"} for term in exclusion_terms
+        )
+        if not has_exclusion_term:
+            errors.append("missing_production_exclusion")
+        if not has_exclusion_term and _contains_unnegated_term_group(
+            exclusion_terms,
+            _SIMULATOR_PRODUCTION_TRUTH_TERMS,
+        ):
+            errors.append("production_exclusion_promotes_production_truth")
+
+    authority_posture = output.get("authority_posture")
+    if _non_blank_string(authority_posture):
+        if authority_posture != contract.authority_posture:
+            errors.append("authority_posture_mismatch")
+
+    live_secret_ref = output.get("live_secret_ref")
+    if _non_blank_string(live_secret_ref) and live_secret_ref != "not_used":
+        errors.append("live_secret_ref_forbidden")
+
+    customer_data_classification = output.get("customer_data_classification")
+    if _non_blank_string(customer_data_classification):
+        if customer_data_classification not in _SIMULATOR_ALLOWED_DATA_CLASSIFICATIONS:
+            errors.append("customer_data_forbidden")
+
+    return tuple(dict.fromkeys(errors))
+
+
+def require_phase62_simulator_output(
+    *,
+    catalog_action: str,
+    output: Mapping[str, object],
+) -> None:
+    errors = validate_phase62_simulator_output(
+        catalog_action=catalog_action,
+        output=output,
+    )
+    if errors:
+        raise ValueError(
+            "simulator output violates Phase 62.6 contract: " + ", ".join(errors)
+        )
 
 
 def require_phase62_manual_fallback_record(

@@ -13,9 +13,11 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 from aegisops.control_plane.actions.action_policy_registry import (  # noqa: E402
     PHASE62_ACTION_POLICIES,
     PHASE62_MANUAL_FALLBACK_REQUIREMENTS,
+    PHASE62_SIMULATOR_CONTRACTS,
     PHASE62_SHUFFLE_WORKFLOW_MAPPINGS,
     evaluate_phase62_action_policy,
     validate_phase62_manual_fallback_record,
+    validate_phase62_simulator_output,
     validate_phase62_shuffle_workflow_mapping,
 )
 
@@ -23,6 +25,31 @@ from aegisops.control_plane.actions.action_policy_registry import (  # noqa: E40
 class Phase62ActionPolicyRegistryTests(unittest.TestCase):
     def setUp(self) -> None:
         self.now = datetime(2026, 5, 17, 8, 30, tzinfo=timezone.utc)
+
+    def _valid_simulator_output(
+        self,
+        catalog_action: str = "operator_notification",
+    ) -> dict[str, object]:
+        return {
+            "mode": "demo",
+            "catalog_action": catalog_action,
+            "action_request_id": "action-request-phase62-sim-001",
+            "simulation_run_id": "simulation-run-phase62-001",
+            "reviewed_template_version": "operator_notification-v1-reviewed-2026-05-03",
+            "correlation_id": "correlation-phase62-sim-001",
+            "simulated_started_at": "2026-05-17T08:30:00Z",
+            "simulated_finished_at": "2026-05-17T08:30:05Z",
+            "simulated_status": "simulated_success",
+            "demo_test_label": "demo/test evidence only",
+            "production_exclusion": (
+                "Simulator output is excluded from production execution receipt "
+                "and reconciliation truth."
+            ),
+            "authority_posture": "non_authoritative_demo_test_evidence",
+            "live_secret_ref": "not_used",
+            "customer_data_classification": "synthetic_only",
+            "simulated_evidence_ref": "synthetic-demo-evidence-001",
+        }
 
     def test_registry_contains_reviewed_phase62_actions(self) -> None:
         self.assertEqual(
@@ -58,6 +85,82 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                     "manual_review",
                 ),
             )
+
+    def test_simulator_contract_covers_reviewed_actions_in_demo_test_mode_only(
+        self,
+    ) -> None:
+        self.assertEqual(
+            set(PHASE62_SIMULATOR_CONTRACTS),
+            set(PHASE62_ACTION_POLICIES),
+        )
+
+        for action, contract in PHASE62_SIMULATOR_CONTRACTS.items():
+            with self.subTest(action=action):
+                self.assertEqual(contract.catalog_action, action)
+                self.assertEqual(contract.allowed_modes, ("demo", "test"))
+                self.assertEqual(
+                    contract.authority_posture,
+                    "non_authoritative_demo_test_evidence",
+                )
+                self.assertEqual(
+                    contract.production_exclusion,
+                    "excluded_from_production_execution_and_reconciliation_truth",
+                )
+                self.assertIn("demo_test_label", contract.required_output_fields)
+                self.assertIn("production_exclusion", contract.required_output_fields)
+                self.assertIn("authority_posture", contract.required_output_fields)
+
+    def test_simulator_validation_accepts_labeled_demo_test_output(self) -> None:
+        self.assertEqual(
+            validate_phase62_simulator_output(
+                catalog_action="operator_notification",
+                output=self._valid_simulator_output(),
+            ),
+            (),
+        )
+
+        self.assertEqual(
+            validate_phase62_simulator_output(
+                catalog_action="operator_notification",
+                output={**self._valid_simulator_output(), "mode": "test"},
+            ),
+            (),
+        )
+
+    def test_simulator_validation_rejects_production_truth_overclaims(self) -> None:
+        cases = {
+            "production_mode": {"mode": "production"},
+            "missing_demo_label": {"demo_test_label": ""},
+            "receipt_truth": {
+                "production_exclusion": (
+                    "Simulator output is production execution receipt truth."
+                )
+            },
+            "reconciliation_truth": {
+                "production_exclusion": (
+                    "Simulator state is production reconciliation truth."
+                )
+            },
+            "authoritative": {"authority_posture": "authoritative_execution_receipt"},
+            "live_secret": {"live_secret_ref": "shuffle-prod-secret"},
+            "customer_data": {"customer_data_classification": "customer_private"},
+            "direct_execution": {"simulated_status": "production_execution_success"},
+            "catalog_mismatch": {"catalog_action": "create_tracking_ticket"},
+            "unsupported_action": {"catalog_action": "disable_account"},
+        }
+
+        for label, override in cases.items():
+            with self.subTest(label=label):
+                catalog_action = (
+                    "disable_account"
+                    if label == "unsupported_action"
+                    else "operator_notification"
+                )
+                errors = validate_phase62_simulator_output(
+                    catalog_action=catalog_action,
+                    output={**self._valid_simulator_output(), **override},
+                )
+                self.assertTrue(errors, label)
 
     def test_manual_fallback_requirements_cover_every_reviewed_action(self) -> None:
         self.assertEqual(
