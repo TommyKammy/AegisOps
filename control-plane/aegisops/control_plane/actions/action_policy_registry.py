@@ -198,55 +198,39 @@ _NON_AUTHORITATIVE_EVIDENCE_SOURCE_TERMS = (
     ("issue", "lint", "report"),
     ("operator", "note"),
 )
+_AUTHORITY_PROOF_VERBS = (
+    "confirms",
+    "confirmed",
+    "proves",
+    "proved",
+    "validates",
+    "validated",
+)
+_AUTHORITY_PROOF_OBJECTS = ("execution", "receipt", "reconciliation")
+_APPROVAL_BYPASS_TERMS = ("bypass", "bypasses", "bypassed", "bypassing")
+_CLOSURE_AUTHORITY_TERM_GROUPS = (
+    ("closes", "case"),
+    ("closes", "ticket"),
+    ("close", "ticket"),
+    ("closed", "ticket"),
+)
+_AUTHORITY_PROOF_TERM_GROUPS = tuple(
+    (verb, proof_object)
+    for verb in _AUTHORITY_PROOF_VERBS
+    for proof_object in _AUTHORITY_PROOF_OBJECTS
+)
 _NON_AUTHORITATIVE_EVIDENCE_AUTHORITY_TERMS = (
     ("authoritative",),
     ("authority",),
     ("truth",),
-    ("confirms", "execution"),
-    ("confirms", "receipt"),
-    ("confirms", "reconciliation"),
-    ("confirmed", "execution"),
-    ("confirmed", "receipt"),
-    ("confirmed", "reconciliation"),
-    ("proves", "execution"),
-    ("proves", "receipt"),
-    ("proves", "reconciliation"),
-    ("proved", "execution"),
-    ("proved", "receipt"),
-    ("proved", "reconciliation"),
-    ("validates", "execution"),
-    ("validates", "receipt"),
-    ("validates", "reconciliation"),
-    ("validated", "execution"),
-    ("validated", "receipt"),
-    ("validated", "reconciliation"),
+    *_AUTHORITY_PROOF_TERM_GROUPS,
     ("execution", "proof"),
     ("receipt", "proof"),
     ("reconciliation", "proof"),
 )
 _AUTHORITY_PROMOTING_TERM_GROUPS = (
-    ("bypass",),
-    ("bypasses",),
-    ("bypassed",),
-    ("bypassing",),
-    ("confirms", "execution"),
-    ("confirms", "receipt"),
-    ("confirms", "reconciliation"),
-    ("confirmed", "execution"),
-    ("confirmed", "receipt"),
-    ("confirmed", "reconciliation"),
-    ("proves", "execution"),
-    ("proves", "receipt"),
-    ("proves", "reconciliation"),
-    ("proved", "execution"),
-    ("proved", "receipt"),
-    ("proved", "reconciliation"),
-    ("validates", "execution"),
-    ("validates", "receipt"),
-    ("validates", "reconciliation"),
-    ("validated", "execution"),
-    ("validated", "receipt"),
-    ("validated", "reconciliation"),
+    *((term,) for term in _APPROVAL_BYPASS_TERMS),
+    *_AUTHORITY_PROOF_TERM_GROUPS,
     ("execution", "authority"),
     ("execution", "truth"),
     ("receipt", "truth"),
@@ -255,10 +239,7 @@ _AUTHORITY_PROMOTING_TERM_GROUPS = (
     ("execution", "proof"),
     ("receipt", "proof"),
     ("reconciliation", "proof"),
-    ("closes", "case"),
-    ("closes", "ticket"),
-    ("close", "ticket"),
-    ("closed", "ticket"),
+    *_CLOSURE_AUTHORITY_TERM_GROUPS,
     ("successful", "execution"),
 )
 _FOLLOW_UP_LAUNCH_READINESS_TERMS = (
