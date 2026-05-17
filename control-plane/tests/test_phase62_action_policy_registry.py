@@ -372,6 +372,60 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                 },
                 "production_exclusion_promotes_production_truth",
             ),
+            "PRRT_kwDOR2iDUc6Cr838_case_closure": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and case closure."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr838_ticket_closure": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and ticket closure."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr83__production_receipts": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and writes production receipts."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr83__production_reconciliation_state": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and sets production reconciliation state."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr84B_standalone_authority": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and simulator output has authority."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
+            "PRRT_kwDOR2iDUc6Cr84E_ready_for_production": (
+                {
+                    "production_exclusion": (
+                        "Simulator output is excluded from production execution receipt "
+                        "and reconciliation truth and is ready for production."
+                    ),
+                },
+                "production_exclusion_promotes_production_truth",
+            ),
         }
 
         for thread_id, (override, expected_error) in cases.items():
