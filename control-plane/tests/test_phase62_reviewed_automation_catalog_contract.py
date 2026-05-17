@@ -9,6 +9,8 @@ import unittest
 EXPECTED_CATALOG_COLUMNS = 10
 CATALOG_SECTION_HEADING = "## 3. Approved Default Catalog Entries"
 CATALOG_SECTION_END_HEADING = "## 4. Catalog Boundedness Rules"
+ALLOWED_DEFAULT_FAMILIES = {"Read", "Notify", "Soft Write"}
+DISALLOWED_DEFAULT_FAMILIES = {"Controlled Write", "Hard Write"}
 FORBIDDEN_OVERCLAIM_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "broad SOAR marketplace coverage is implemented",
@@ -24,7 +26,16 @@ FORBIDDEN_OVERCLAIM_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "template marketplace import is approved",
         re.compile(
-            r"\btemplate\s+marketplace\s+import\s+is\s+(?:approved|implemented)\b",
+            r"\b(?:workflow\s+)?template\s+marketplace\s+imports?\s+"
+            r"(?:is|are)\s+(?:approved|available|enabled|implemented|permitted)\b",
+            re.I,
+        ),
+    ),
+    (
+        "template import from marketplace is approved",
+        re.compile(
+            r"\btemplate\s+imports?\s+from\s+(?:the\s+)?marketplace\s+"
+            r"(?:is|are)\s+(?:approved|available|enabled|implemented|permitted)\b",
             re.I,
         ),
     ),
@@ -191,11 +202,13 @@ FORBIDDEN_AUTHORITY_PROMOTION_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] 
     (
         "subordinate source is treated as AegisOps truth",
         re.compile(
-            r"\b(?:treats?\s+)?(?:shuffle\s+workflow\s+state|shuffle\s+workflow\s+"
-            r"success|shuffle\s+callback\s+payload|simulator\s+state|ticket\s+"
-            r"state|ticket\s+status|ui\s+cache|browser\s+state|ai\s+output|"
-            r"source-native\s+status|verifier\s+output|issue-lint\s+output|"
-            r"admin\s+configuration|admin\s+ui\s+state)\s+"
+            r"\b(?:treats?\s+)?(?:shuffle\s+workflow\s+state|workflow\s+state|"
+            r"shuffle\s+workflow\s+success|shuffle\s+workflow\s+failure|workflow\s+"
+            r"failure|workflow\s+status|shuffle\s+callback\s+payload|callback\s+"
+            r"payload|simulator\s+state|ticket\s+state|ticket\s+status|ui\s+cache|"
+            r"browser\s+state|ai\s+output|source-native\s+status|verifier\s+"
+            r"output|issue-lint\s+output|admin\s+configuration|admin\s+ui\s+state)"
+            r"\s+"
             r"(?:(?:is|are|becomes?|become)\s+|as\s+)aegisops\s+"
             r"(?:(?:action|case|reconciliation|execution\s+receipt|policy|"
             r"release|gate|limitation|closeout)\s+)?truth\b",
@@ -277,6 +290,100 @@ FORBIDDEN_AUTHORITY_PROMOTION_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] 
         "issue-lint output gates production readiness",
         re.compile(r"\bissue-lint\s+output\s+gates\s+production\s+readiness\b", re.I),
     ),
+)
+FORBIDDEN_BYPASS_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "default entry permits direct workflow launch",
+        re.compile(
+            r"\b(?:default\s+entr(?:y|ies)\s+permits?|catalog\s+(?:allows?|enables?)|"
+            r"direct\s+(?:ad-?hoc\s+)?shuffle\s+launch\s+is)\s+"
+            r"(?:direct\s+(?:ad-?hoc\s+)?shuffle\s+launch|allowed|approved|"
+            r"enabled|permitted)\b",
+            re.I,
+        ),
+    ),
+    (
+        "autonomous approval is permitted",
+        re.compile(
+            r"\b(?:default\s+entr(?:y|ies)\s+permits?|autonomous\s+approval\s+is)\s+"
+            r"(?:autonomous\s+approval|allowed|approved|enabled|permitted)\b",
+            re.I,
+        ),
+    ),
+    (
+        "autonomous remediation is permitted",
+        re.compile(
+            r"\b(?:default\s+entr(?:y|ies)\s+permits?|autonomous\s+remediation\s+is)\s+"
+            r"(?:autonomous\s+remediation|allowed|approved|enabled|permitted)\b",
+            re.I,
+        ),
+    ),
+    (
+        "protected target mutation is permitted",
+        re.compile(
+            r"\b(?:default\s+entr(?:y|ies)\s+permits?|protected\s+target\s+mutation\s+is)\s+"
+            r"(?:protected\s+target\s+mutation|allowed|approved|enabled|permitted)\b",
+            re.I,
+        ),
+    ),
+    (
+        "case closure is permitted",
+        re.compile(
+            r"\b(?:default\s+entr(?:y|ies)\s+permits?|case\s+closure\s+is)\s+"
+            r"(?:case\s+closure|allowed|approved|enabled|permitted)\b",
+            re.I,
+        ),
+    ),
+    (
+        "ticket closure is permitted",
+        re.compile(
+            r"\b(?:default\s+entr(?:y|ies)\s+permits?|ticket\s+closure\s+is)\s+"
+            r"(?:ticket\s+closure|allowed|approved|enabled|permitted)\b",
+            re.I,
+        ),
+    ),
+    (
+        "detector activation is permitted",
+        re.compile(
+            r"\b(?:default\s+entr(?:y|ies)\s+permits?|detector\s+activation\s+is)\s+"
+            r"(?:detector\s+activation|allowed|approved|enabled|permitted)\b",
+            re.I,
+        ),
+    ),
+    (
+        "suppression activation is permitted",
+        re.compile(
+            r"\b(?:default\s+entr(?:y|ies)\s+permits?|suppression\s+activation\s+is)\s+"
+            r"(?:suppression\s+activation|allowed|approved|enabled|permitted)\b",
+            re.I,
+        ),
+    ),
+    (
+        "approval bypass is permitted",
+        re.compile(
+            r"\b(?:default\s+entr(?:y|ies)\s+permits?|approval\s+bypass\s+is)\s+"
+            r"(?:approval\s+bypass|allowed|approved|enabled|permitted)\b",
+            re.I,
+        ),
+    ),
+    (
+        "reconciliation bypass is permitted",
+        re.compile(
+            r"\b(?:default\s+entr(?:y|ies)\s+permits?|reconciliation\s+bypass\s+is)\s+"
+            r"(?:reconciliation\s+bypass|allowed|approved|enabled|permitted)\b",
+            re.I,
+        ),
+    ),
+)
+FAIL_CLOSED_REJECTION_ITEM_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\bmissing\b", re.I),
+    re.compile(r"\bdoes\s+not\s+include\b", re.I),
+    re.compile(r"\buses\s+(?:controlled\s+write|hard\s+write)\b", re.I),
+    re.compile(r"\bpermits\s+", re.I),
+    re.compile(r"\bpromotes\s+.*\baegisops\s+truth\b", re.I),
+    re.compile(r"\bclaims?\s+appear\s+outside\s+explicit\s+rejection\b", re.I),
+    re.compile(r"\btreated\s+as\s+valid\s+setup\s+state\b", re.I),
+    re.compile(r"\buses\s+workstation-local\s+absolute\s+paths\b", re.I),
 )
 PLACEHOLDER_CELL_PATTERN = re.compile(
     r"^(?:-|todo|tbd|placeholder|sample|fake)(?:\b|[:\s-])",
@@ -364,7 +471,8 @@ def _is_rejection_context(
     stripped = line.strip()
     normalized = stripped.casefold()
     if in_fail_closed_rule_list and stripped.startswith("- "):
-        return True
+        item_text = stripped[2:].strip()
+        return any(pattern.search(item_text) for pattern in FAIL_CLOSED_REJECTION_ITEM_PATTERNS)
 
     explicit_negation_patterns = (
         r"^(?:[-*]\s*)?no\b",
@@ -447,7 +555,7 @@ def _non_rejection_segments(catalog_text: str) -> list[str]:
             if current_lines:
                 current_lines.append(" ")
             continue
-        current_lines.append(stripped)
+        current_lines.append(re.sub(r"^[-*]\s+", "", stripped))
 
     flush()
     return segments
@@ -498,8 +606,10 @@ def _catalog_validation_errors(catalog_text: str) -> list[str]:
         for index, column_name in enumerate(required_columns):
             if _is_placeholder_cell(row[index]):
                 errors.append(f"{action} missing {column_name}")
-        if family in {"Controlled Write", "Hard Write"}:
+        if family in DISALLOWED_DEFAULT_FAMILIES:
             errors.append(f"{action} uses disallowed default family {family}")
+        elif family not in ALLOWED_DEFAULT_FAMILIES:
+            errors.append(f"{action} uses unknown default family {family}")
         if "owner" in row[2].lower() and "missing" in row[2].lower():
             errors.append(f"{action} missing owner")
         if "direct ad-hoc Shuffle launch" not in row[3]:
@@ -535,6 +645,11 @@ def _catalog_validation_errors(catalog_text: str) -> list[str]:
             if pattern.search(segment):
                 errors.append(
                     f"forbidden authority promotion outside rejection context: {claim}"
+                )
+        for claim, pattern in FORBIDDEN_BYPASS_PATTERNS:
+            if pattern.search(segment):
+                errors.append(
+                    f"forbidden action boundary bypass outside rejection context: {claim}"
                 )
     return errors
 
@@ -662,6 +777,18 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
             _catalog_validation_errors(hard_text),
         )
 
+    def test_rejects_unknown_default_catalog_family(self) -> None:
+        catalog_text = self.catalog_doc.read_text(encoding="utf-8")
+        unknown_family_text = catalog_text.replace(
+            "| `operator_notification` | Notify |",
+            "| `operator_notification` | Autonomous Write |",
+        )
+
+        self.assertIn(
+            "operator_notification uses unknown default family Autonomous Write",
+            _catalog_validation_errors(unknown_family_text),
+        )
+
     def test_rejects_malformed_and_duplicate_catalog_rows(self) -> None:
         catalog_text = self.catalog_doc.read_text(encoding="utf-8")
         malformed_text = catalog_text.replace(
@@ -770,10 +897,18 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
             "Phase 62.1 records the default reviewed automation catalog",
             "Phase 62.1 records that template marketplace import is approved and the default reviewed automation catalog",
         )
+        marketplace_source_text = catalog_text.replace(
+            "Phase 62.1 records the default reviewed automation catalog",
+            "Phase 62.1 records that template imports from the marketplace are enabled and the default reviewed automation catalog",
+        )
 
         self.assertIn(
             "forbidden overclaim outside rejection context: template marketplace import is approved",
             _catalog_validation_errors(overclaim_text),
+        )
+        self.assertIn(
+            "forbidden overclaim outside rejection context: template import from marketplace is approved",
+            _catalog_validation_errors(marketplace_source_text),
         )
 
     def test_scans_non_rejection_validation_rules_lines_for_overclaims(self) -> None:
@@ -783,10 +918,19 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
             "The verifier reports Phase 62.1 claims GA readiness.\n\n"
             "The Phase 62.1 reviewed automation catalog verifier must fail closed when:",
         )
+        bullet_overclaim_text = catalog_text.replace(
+            "- the catalog contract or validation record is missing;",
+            "- Phase 62.1 claims GA readiness.\n"
+            "- the catalog contract or validation record is missing;",
+        )
 
         self.assertIn(
             "forbidden overclaim outside rejection context: Phase 62.1 claims GA",
             _catalog_validation_errors(overclaim_text),
+        )
+        self.assertIn(
+            "forbidden overclaim outside rejection context: Phase 62.1 claims GA",
+            _catalog_validation_errors(bullet_overclaim_text),
         )
 
     def test_rejects_overclaims_with_not_marker_and_line_wrapping(self) -> None:
@@ -808,6 +952,10 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
             "## 8. Non-Goals",
             "Phase 62.1 claims\n\nRC readiness\n## 8. Non-Goals",
         )
+        bullet_blank_wrapped_text = catalog_text.replace(
+            "## 8. Non-Goals",
+            "Phase 62.1 claims\n\n- RC readiness\n## 8. Non-Goals",
+        )
         long_wrapped_text = catalog_text.replace(
             "## 8. Non-Goals",
             "Phase 62.1 "
@@ -825,6 +973,7 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
         self.assertIn(expected, _catalog_validation_errors(does_not_marker_text))
         self.assertIn(expected, _catalog_validation_errors(wrapped_text))
         self.assertIn(expected, _catalog_validation_errors(blank_wrapped_text))
+        self.assertIn(expected, _catalog_validation_errors(bullet_blank_wrapped_text))
         self.assertIn(expected, _catalog_validation_errors(long_wrapped_text))
         self.assertIn(
             "forbidden overclaim outside rejection context: Phase 62.1 claims GA",
@@ -941,15 +1090,20 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
                 (
                     "Direct ad-hoc Shuffle launch is approved.",
                     "Shuffle workflow success is AegisOps reconciliation truth.",
+                    "Shuffle workflow state is AegisOps reconciliation truth.",
+                    "Workflow failure becomes AegisOps gate truth.",
                     "Shuffle callback payload is AegisOps execution receipt truth.",
+                    "Simulator state is AegisOps case truth.",
                     "Shuffle workflow status closes AegisOps cases.",
                     "Ticket status is AegisOps case truth.",
                     "Phase 62.1 treats ticket status as AegisOps case truth.",
                     "Ticket close is AegisOps reconciliation truth.",
                     "UI cache is AegisOps action policy truth.",
                     "Browser state is AegisOps case truth.",
+                    "Browser state becomes AegisOps release truth.",
                     "Phase 62.1 treats browser state as AegisOps action truth.",
                     "Admin configuration is AegisOps action truth.",
+                    "Admin UI state becomes AegisOps gate truth.",
                     "Phase 62.1 treats admin configuration as AegisOps reconciliation truth.",
                     "AI output approves automation.",
                     "Source-native status reconciles automation.",
@@ -976,6 +1130,44 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
             "forbidden authority promotion outside rejection context: source-native status reconciles automation",
             "forbidden authority promotion outside rejection context: verifier output gates production readiness",
             "forbidden authority promotion outside rejection context: issue-lint output gates production readiness",
+        ):
+            self.assertIn(expected, validation_errors)
+
+    def test_rejects_action_boundary_bypass_claims_outside_rejection_context(
+        self,
+    ) -> None:
+        catalog_text = self.catalog_doc.read_text(encoding="utf-8")
+        bypass_claim_text = catalog_text.replace(
+            "## 8. Non-Goals",
+            "\n".join(
+                (
+                    "Default entry permits direct ad-hoc Shuffle launch.",
+                    "Autonomous approval is enabled.",
+                    "Autonomous remediation is approved.",
+                    "Protected target mutation is permitted.",
+                    "Case closure is allowed.",
+                    "Ticket closure is allowed.",
+                    "Detector activation is enabled.",
+                    "Suppression activation is approved.",
+                    "Approval bypass is permitted.",
+                    "Reconciliation bypass is permitted.",
+                    "## 8. Non-Goals",
+                )
+            ),
+        )
+        validation_errors = _catalog_validation_errors(bypass_claim_text)
+
+        for expected in (
+            "forbidden action boundary bypass outside rejection context: default entry permits direct workflow launch",
+            "forbidden action boundary bypass outside rejection context: autonomous approval is permitted",
+            "forbidden action boundary bypass outside rejection context: autonomous remediation is permitted",
+            "forbidden action boundary bypass outside rejection context: protected target mutation is permitted",
+            "forbidden action boundary bypass outside rejection context: case closure is permitted",
+            "forbidden action boundary bypass outside rejection context: ticket closure is permitted",
+            "forbidden action boundary bypass outside rejection context: detector activation is permitted",
+            "forbidden action boundary bypass outside rejection context: suppression activation is permitted",
+            "forbidden action boundary bypass outside rejection context: approval bypass is permitted",
+            "forbidden action boundary bypass outside rejection context: reconciliation bypass is permitted",
         ):
             self.assertIn(expected, validation_errors)
 
