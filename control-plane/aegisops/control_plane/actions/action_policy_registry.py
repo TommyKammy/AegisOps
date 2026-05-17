@@ -53,6 +53,23 @@ class ShuffleWorkflowMapping:
 
 
 @dataclass(frozen=True)
+class ManualFallbackRequirement:
+    catalog_action: str
+    fallback_owner: str
+    operator_note_requirement: str
+    affected_action: str
+    fallback_states: tuple[str, ...]
+    blocked_reason_requirement: str
+    expected_evidence_requirement: str
+    follow_up_state_requirement: str
+    required_record_fields: tuple[str, ...]
+    manual_fallback_role: str = "subordinate_guidance"
+    approval_bypass: str = "forbidden"
+    execution_truth: str = "execution_receipt_required"
+    reconciliation_truth: str = "aegisops_reconciliation_required"
+
+
+@dataclass(frozen=True)
 class ActionPolicyDecision:
     policy: ActionPolicy
     requester_role: str
@@ -128,6 +145,21 @@ _COMMON_RECONCILIATION_OUTCOMES = (
     "wrong_correlation",
     "manual_review",
 )
+_MANUAL_FALLBACK_STATES = (
+    "shuffle_unavailable",
+    "execution_rejected",
+    "missing_receipt",
+    "stale_receipt",
+    "mismatched_receipt",
+)
+_MANUAL_FALLBACK_RECORD_FIELDS = (
+    "fallback_owner_id",
+    "operator_note",
+    "affected_action",
+    "blocked_reason",
+    "expected_evidence",
+    "follow_up_state",
+)
 
 
 PHASE62_ACTION_POLICIES: Mapping[str, ActionPolicy] = {
@@ -199,6 +231,29 @@ PHASE62_ACTION_POLICIES: Mapping[str, ActionPolicy] = {
         reconciliation_outcomes=_COMMON_RECONCILIATION_OUTCOMES,
         registry_id="phase62.2:create_tracking_ticket",
     ),
+}
+
+PHASE62_MANUAL_FALLBACK_REQUIREMENTS: Mapping[str, ManualFallbackRequirement] = {
+    catalog_action: ManualFallbackRequirement(
+        catalog_action=catalog_action,
+        fallback_owner="explicit fallback owner required",
+        operator_note_requirement=(
+            "explicit operator note required; note remains subordinate guidance"
+        ),
+        affected_action=catalog_action,
+        fallback_states=_MANUAL_FALLBACK_STATES,
+        blocked_reason_requirement=(
+            "explicit unavailable, rejected, missing, stale, or mismatched reason required"
+        ),
+        expected_evidence_requirement=(
+            "bound AegisOps execution receipt and reconciliation review required"
+        ),
+        follow_up_state_requirement=(
+            "explicit follow-up posture required; fallback cannot mark execution complete"
+        ),
+        required_record_fields=_MANUAL_FALLBACK_RECORD_FIELDS,
+    )
+    for catalog_action in PHASE62_ACTION_POLICIES
 }
 
 ACTION_TYPE_POLICY_ALIASES = {
@@ -364,6 +419,60 @@ def validate_phase62_shuffle_workflow_mapping(
     if candidate_correlation_fields - reviewed_correlation_fields:
         errors.append("unexpected_correlation")
     return tuple(dict.fromkeys(errors))
+
+
+def validate_phase62_manual_fallback_record(
+    *,
+    catalog_action: str,
+    record: Mapping[str, object],
+) -> tuple[str, ...]:
+    requirement = PHASE62_MANUAL_FALLBACK_REQUIREMENTS.get(catalog_action)
+    if requirement is None:
+        return ("unsupported_action",)
+
+    errors: list[str] = []
+    for field in requirement.required_record_fields:
+        if not _non_blank_string(record.get(field)):
+            errors.append(f"missing_{field}")
+
+    affected_action = record.get("affected_action")
+    if _non_blank_string(affected_action) and affected_action != requirement.affected_action:
+        errors.append("affected_action_mismatch")
+
+    fallback_state = record.get("fallback_state")
+    if not _non_blank_string(fallback_state):
+        errors.append("missing_fallback_state")
+    elif fallback_state not in requirement.fallback_states:
+        errors.append("unsupported_fallback_state")
+
+    operator_note = str(record.get("operator_note") or "").lower()
+    expected_evidence = str(record.get("expected_evidence") or "").lower()
+    follow_up_state = str(record.get("follow_up_state") or "").lower()
+    blocked_reason = str(record.get("blocked_reason") or "").lower()
+
+    authority_promoting_terms = (
+        "bypass",
+        "proves execution",
+        "execution truth",
+        "reconciliation truth",
+        "approval truth",
+        "closes case",
+        "successful execution",
+    )
+    if any(term in operator_note for term in authority_promoting_terms):
+        errors.append("operator_note_promotes_authority")
+    if any(term in expected_evidence for term in authority_promoting_terms):
+        errors.append("expected_evidence_promotes_authority")
+    if any(term in follow_up_state for term in ("complete", "succeeded", "success")):
+        errors.append("follow_up_state_promotes_completion")
+    if "success" in blocked_reason:
+        errors.append("blocked_reason_promotes_success")
+
+    return tuple(dict.fromkeys(errors))
+
+
+def _non_blank_string(value: object) -> bool:
+    return isinstance(value, str) and bool(value.strip())
 
 
 def requester_role_from_identity(identity: str) -> str:

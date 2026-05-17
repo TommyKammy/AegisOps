@@ -12,8 +12,10 @@ if str(CONTROL_PLANE_ROOT) not in sys.path:
 
 from aegisops.control_plane.actions.action_policy_registry import (  # noqa: E402
     PHASE62_ACTION_POLICIES,
+    PHASE62_MANUAL_FALLBACK_REQUIREMENTS,
     PHASE62_SHUFFLE_WORKFLOW_MAPPINGS,
     evaluate_phase62_action_policy,
+    validate_phase62_manual_fallback_record,
     validate_phase62_shuffle_workflow_mapping,
 )
 
@@ -56,6 +58,102 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                     "manual_review",
                 ),
             )
+
+    def test_manual_fallback_requirements_cover_every_reviewed_action(self) -> None:
+        self.assertEqual(
+            set(PHASE62_MANUAL_FALLBACK_REQUIREMENTS),
+            set(PHASE62_ACTION_POLICIES),
+        )
+
+        for action, requirement in PHASE62_MANUAL_FALLBACK_REQUIREMENTS.items():
+            self.assertEqual(requirement.catalog_action, action)
+            self.assertEqual(requirement.affected_action, action)
+            self.assertEqual(
+                requirement.fallback_states,
+                (
+                    "shuffle_unavailable",
+                    "execution_rejected",
+                    "missing_receipt",
+                    "stale_receipt",
+                    "mismatched_receipt",
+                ),
+            )
+            self.assertEqual(
+                requirement.required_record_fields,
+                (
+                    "fallback_owner_id",
+                    "operator_note",
+                    "affected_action",
+                    "blocked_reason",
+                    "expected_evidence",
+                    "follow_up_state",
+                ),
+            )
+            self.assertEqual(requirement.manual_fallback_role, "subordinate_guidance")
+            self.assertEqual(requirement.approval_bypass, "forbidden")
+            self.assertEqual(requirement.execution_truth, "execution_receipt_required")
+            self.assertEqual(
+                requirement.reconciliation_truth,
+                "aegisops_reconciliation_required",
+            )
+
+    def test_manual_fallback_validation_rejects_missing_and_authority_bypass_fields(
+        self,
+    ) -> None:
+        valid_record = {
+            "fallback_owner_id": "it-operations-duty-owner",
+            "operator_note": (
+                "Manual follow-up required because Shuffle did not produce a "
+                "bound AegisOps receipt; preserve approval and reconciliation review."
+            ),
+            "affected_action": "operator_notification",
+            "fallback_state": "shuffle_unavailable",
+            "blocked_reason": "reviewed Shuffle route unavailable",
+            "expected_evidence": (
+                "bound AegisOps execution receipt and reconciliation review"
+            ),
+            "follow_up_state": "manual_follow_up_pending",
+        }
+
+        for fallback_state in (
+            "shuffle_unavailable",
+            "execution_rejected",
+            "missing_receipt",
+            "stale_receipt",
+            "mismatched_receipt",
+        ):
+            with self.subTest(valid_fallback_state=fallback_state):
+                self.assertEqual(
+                    validate_phase62_manual_fallback_record(
+                        catalog_action="operator_notification",
+                        record={**valid_record, "fallback_state": fallback_state},
+                    ),
+                    (),
+                )
+
+        cases = {
+            "shuffle_unavailable": {"fallback_owner_id": ""},
+            "execution_rejected": {"operator_note": ""},
+            "missing_receipt": {"expected_evidence": ""},
+            "stale_receipt": {"affected_action": "create_tracking_ticket"},
+            "mismatched_receipt": {"fallback_state": "success"},
+            "missing_operator_note": {
+                "operator_note": "This note bypasses approval and proves execution.",
+            },
+            "missing_follow_up_state": {"follow_up_state": ""},
+            "fallback_as_reconciliation_truth": {
+                "operator_note": "Operator note is reconciliation truth.",
+            },
+        }
+
+        for label, override in cases.items():
+            with self.subTest(label=label):
+                candidate = {**valid_record, **override}
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record=candidate,
+                )
+                self.assertTrue(errors, label)
 
     def test_shuffle_mapping_contains_reviewed_catalog_actions(self) -> None:
         self.assertEqual(
