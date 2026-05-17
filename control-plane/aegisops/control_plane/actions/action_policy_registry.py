@@ -167,6 +167,7 @@ _MANUAL_FALLBACK_BLOCKED_REASON_CATEGORIES = {
     "shuffle_unavailable": (("unavailable",),),
     "execution_rejected": (
         ("rejected",),
+        ("rejection",),
         ("canceled",),
         ("cancelled",),
         ("cancellation",),
@@ -199,25 +200,57 @@ _NON_AUTHORITATIVE_EVIDENCE_SOURCE_TERMS = (
     ("operator", "note"),
 )
 _AUTHORITY_PROOF_VERBS = (
+    "confirm",
     "confirms",
     "confirmed",
+    "prove",
     "proves",
     "proved",
+    "validate",
     "validates",
     "validated",
 )
 _AUTHORITY_PROOF_OBJECTS = ("execution", "receipt", "reconciliation")
 _APPROVAL_BYPASS_TERMS = ("bypass", "bypasses", "bypassed", "bypassing")
 _CLOSURE_AUTHORITY_TERM_GROUPS = (
+    ("close", "case"),
+    ("closed", "case"),
     ("closes", "case"),
-    ("closes", "ticket"),
+    ("case", "close"),
+    ("case", "closed"),
+    ("case", "closes"),
+    ("case", "closure"),
     ("close", "ticket"),
     ("closed", "ticket"),
+    ("closes", "ticket"),
+    ("ticket", "close"),
+    ("ticket", "closes"),
+    ("ticket", "closed"),
+    ("ticket", "closure"),
 )
 _AUTHORITY_PROOF_TERM_GROUPS = tuple(
-    (verb, proof_object)
-    for verb in _AUTHORITY_PROOF_VERBS
-    for proof_object in _AUTHORITY_PROOF_OBJECTS
+    dict.fromkeys(
+        (
+            *(
+                (verb, proof_object)
+                for verb in _AUTHORITY_PROOF_VERBS
+                for proof_object in _AUTHORITY_PROOF_OBJECTS
+            ),
+            *(
+                (proof_object, verb)
+                for verb in _AUTHORITY_PROOF_VERBS
+                for proof_object in _AUTHORITY_PROOF_OBJECTS
+            ),
+        )
+    )
+)
+_EXECUTION_SUCCESS_TERM_GROUPS = (
+    ("execution", "success"),
+    ("execution", "successful"),
+    ("execution", "succeeded"),
+    ("success", "execution"),
+    ("successful", "execution"),
+    ("succeeded", "execution"),
 )
 _NON_AUTHORITATIVE_EVIDENCE_AUTHORITY_TERMS = (
     ("authoritative",),
@@ -240,7 +273,7 @@ _AUTHORITY_PROMOTING_TERM_GROUPS = (
     ("receipt", "proof"),
     ("reconciliation", "proof"),
     *_CLOSURE_AUTHORITY_TERM_GROUPS,
-    ("successful", "execution"),
+    *_EXECUTION_SUCCESS_TERM_GROUPS,
 )
 _FOLLOW_UP_LAUNCH_READINESS_TERMS = (
     "commercial",
@@ -658,6 +691,13 @@ def _source_promotes_non_authoritative_evidence(
         for authority_index in _term_group_starts(terms, authority_terms):
             if _has_recent_negation(terms, authority_index, window=3):
                 continue
+            if _has_source_scoped_negation_before_authority(
+                terms=terms,
+                source_index=source_index,
+                source_terms=source_terms,
+                authority_index=authority_index,
+            ):
+                continue
             if _authority_claim_matches_source(
                 terms=terms,
                 source_index=source_index,
@@ -667,6 +707,19 @@ def _source_promotes_non_authoritative_evidence(
             ):
                 return True
     return False
+
+
+def _has_source_scoped_negation_before_authority(
+    *,
+    terms: tuple[str, ...],
+    source_index: int,
+    source_terms: tuple[str, ...],
+    authority_index: int,
+) -> bool:
+    source_end = source_index + len(source_terms)
+    if authority_index <= source_end:
+        return False
+    return any(term in _NEGATION_TERMS for term in terms[source_end:authority_index])
 
 
 def _authority_claim_matches_source(

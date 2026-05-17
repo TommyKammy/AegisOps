@@ -195,6 +195,39 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "operator_note_closes_ticket": {
                 "operator_note": "Manual fallback closes ticket.",
             },
+            "operator_note_closes_case": {
+                "operator_note": "Manual fallback closes case.",
+            },
+            "operator_note_close_case": {
+                "operator_note": "Manual fallback can close the case.",
+            },
+            "operator_note_closed_case": {
+                "operator_note": "Manual fallback closed the case.",
+            },
+            "operator_note_case_closed": {
+                "operator_note": "Manual fallback marks the case closed.",
+            },
+            "operator_note_ticket_closure": {
+                "operator_note": "Manual fallback supplies ticket closure.",
+            },
+            "operator_note_execution_successful": {
+                "operator_note": "Manual fallback marks execution successful.",
+            },
+            "operator_note_successful_execution": {
+                "operator_note": "Manual fallback marks successful execution.",
+            },
+            "operator_note_receipt_confirmed": {
+                "operator_note": "Manual fallback says receipt confirmed.",
+            },
+            "operator_note_confirm_execution": {
+                "operator_note": "Manual fallback can confirm execution.",
+            },
+            "operator_note_prove_receipt": {
+                "operator_note": "Manual fallback can prove receipt.",
+            },
+            "operator_note_reconciliation_validates": {
+                "operator_note": "Manual fallback says reconciliation validates the action.",
+            },
         }
 
         for label, override in cases.items():
@@ -248,11 +281,13 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "ticket output is authoritative",
             "Shuffle result is truth",
             "workflow result confirms receipt",
+            "ticket state can confirm receipt",
             "ticket state confirms the receipt",
             "ticket state proves the execution",
             "issue lint report is receipt proof",
             "browser state is reconciliation proof",
             "AI output validates receipt",
+            "AI output says receipt validates",
             "receipt proof comes from ticket state",
             (
                 "ticket state includes owner shift case account route queue ticket "
@@ -261,6 +296,7 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "ticket output cannot prove execution; ticket state confirms receipt",
             "ticket output confirmed execution",
             "workflow result validated receipt",
+            "workflow result says receipt validates execution",
             "issue lint a b c d e lint output is authoritative",
             (
                 "ticket output is authoritative and bound AegisOps execution "
@@ -406,6 +442,21 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             smart_quote_contraction_errors,
         )
 
+        long_form_negation_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "expected_evidence": (
+                    "ticket output does not by itself become authoritative and "
+                    "cannot replace the bound AegisOps receipt"
+                ),
+            },
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            long_form_negation_errors,
+        )
+
     def test_manual_fallback_validation_rejects_closure_readiness_follow_up_state(
         self,
     ) -> None:
@@ -526,6 +577,7 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
         self.assertIn("blocked_reason_promotes_success", succeeded_errors)
 
         for canceled_reason in (
+            "reviewed Shuffle execution rejection before receipt emission",
             "reviewed Shuffle execution canceled before receipt emission",
             "reviewed Shuffle execution cancelled before receipt emission",
         ):
