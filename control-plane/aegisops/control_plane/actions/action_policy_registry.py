@@ -221,7 +221,7 @@ _AUTHORITY_PROMOTING_TERM_GROUPS = (
     ("validates", "reconciliation"),
     ("execution", "truth"),
     ("receipt", "truth"),
-    ("reconciliation", "truth"),
+    ("reconciliation", "truth"),  # manual fallback notes cannot become truth records
     ("approval", "truth"),
     ("execution", "proof"),
     ("receipt", "proof"),
