@@ -553,8 +553,15 @@ def _phase62_manual_fallback_record_for_request(
     if catalog_action not in PHASE62_MANUAL_FALLBACK_REQUIREMENTS:
         return None
     fallback_state = _phase62_fallback_state_from_text(reason)
+    fallback_owner_id = (
+        _phase62_declared_fallback_owner_for_request(
+            action_request=action_request,
+            catalog_action=catalog_action,
+        )
+        or ""
+    )
     return {
-        "fallback_owner_id": fallback_actor_identity,
+        "fallback_owner_id": fallback_owner_id,
         "operator_note": action_taken,
         "affected_action": catalog_action,
         "fallback_state": fallback_state,
@@ -566,17 +573,106 @@ def _phase62_manual_fallback_record_for_request(
     }
 
 
+def _phase62_declared_fallback_owner_for_request(
+    *,
+    action_request: ActionRequestRecord,
+    catalog_action: str,
+) -> str | None:
+    requested_payload = action_request.requested_payload
+    target_scope = action_request.target_scope
+    owner_keys_by_action = {
+        "operator_notification": (
+            "fallback_owner_id",
+            "fallback_owner_identity",
+            "recipient_identity",
+        ),
+        "manual_escalation_request": (
+            "fallback_owner_id",
+            "fallback_owner_identity",
+            "escalation_owner_id",
+        ),
+        "create_tracking_ticket": (
+            "fallback_owner_id",
+            "fallback_owner_identity",
+            "coordination_owner_id",
+            "coordination_reference_id",
+            "case_id",
+            "alert_id",
+            "requester_identity",
+        ),
+        "enrichment_only_lookup": (
+            "fallback_owner_id",
+            "fallback_owner_identity",
+            "lookup_owner_id",
+            "lookup_subject_id",
+            "case_id",
+            "alert_id",
+            "requester_identity",
+        ),
+    }
+    for key in owner_keys_by_action.get(catalog_action, ()):
+        for mapping in (requested_payload, target_scope):
+            value = mapping.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    if action_request.requester_identity is not None:
+        return action_request.requester_identity.strip() or None
+    for value in (
+        action_request.case_id,
+        action_request.alert_id,
+        action_request.finding_id,
+    ):
+        if value is not None and value.strip():
+            return value.strip()
+    return None
+
+
 def _phase62_fallback_state_from_text(value: str) -> str:
-    terms = tuple("".join(char if char.isalnum() else " " for char in value.lower()).split())
-    if any(term in terms for term in ("mismatched", "mismatch")):
+    terms = _phase62_text_terms(value)
+    if _phase62_contains_unnegated_terms(terms, ("mismatched", "mismatch")):
         return "mismatched_receipt"
-    if "stale" in terms:
+    if _phase62_contains_unnegated_terms(terms, ("stale",)):
         return "stale_receipt"
-    if "rejected" in terms:
+    if _phase62_contains_unnegated_terms(
+        terms,
+        ("rejected", "reject", "rejects", "rejecting", "rejection"),
+    ):
         return "execution_rejected"
-    if any(term in terms for term in ("unavailable", "timeout", "timed")):
+    if _phase62_contains_unnegated_terms(
+        terms,
+        ("unavailable", "timeout", "timed"),
+    ):
         return "shuffle_unavailable"
     return "missing_receipt"
+
+
+def _phase62_contains_unnegated_terms(
+    terms: tuple[str, ...],
+    target_terms: tuple[str, ...],
+) -> bool:
+    for index, term in enumerate(terms):
+        if term in target_terms and not _phase62_has_recent_negation(terms, index):
+            return True
+    return False
+
+
+def _phase62_has_recent_negation(terms: tuple[str, ...], index: int) -> bool:
+    start = max(0, index - 4)
+    return any(
+        term in {"not", "no", "never", "without", "cannot", "cant", "wont"}
+        for term in terms[start:index]
+    )
+
+
+def _phase62_text_terms(value: str) -> tuple[str, ...]:
+    normalized = (
+        value.lower()
+        .replace("can't", "cant")
+        .replace("won't", "wont")
+    )
+    return tuple(
+        "".join(char if char.isalnum() else " " for char in normalized).split()
+    )
 
 
 def _phase62_fallback_state_label(fallback_state: str) -> str:
