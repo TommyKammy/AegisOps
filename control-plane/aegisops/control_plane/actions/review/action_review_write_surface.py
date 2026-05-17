@@ -696,9 +696,18 @@ def _phase62_contains_unnegated_term_group(
 def _phase62_has_recent_negation(terms: tuple[str, ...], index: int) -> bool:
     start = max(0, index - 4)
     for term in reversed(terms[start:index]):
-        if term in {"but", "however", "though", "although", "yet", "instead"}:
-            return False
-        if term in {"and", "then"}:
+        if term in {
+            "boundary",
+            "but",
+            "however",
+            "though",
+            "although",
+            "yet",
+            "instead",
+            "and",
+            "then",
+            "or",
+        }:
             return False
         if term in {"not", "no", "never", "without", "cannot", "cant", "wont"}:
             return True
@@ -707,9 +716,15 @@ def _phase62_has_recent_negation(terms: tuple[str, ...], index: int) -> bool:
 
 def _phase62_text_terms(value: str) -> tuple[str, ...]:
     normalized = value.lower().replace("n't", " not")
-    return tuple(
-        "".join(char if char.isalnum() else " " for char in normalized).split()
-    )
+    characters: list[str] = []
+    for char in normalized:
+        if char.isalnum():
+            characters.append(char)
+        elif char in ".;,:!?":
+            characters.append(" boundary ")
+        else:
+            characters.append(" ")
+    return tuple("".join(characters).split())
 
 
 def _phase62_fallback_state_label(fallback_state: str) -> str:

@@ -139,6 +139,13 @@ def _action_review_manual_fallback_visibility(
         ("authority_boundary", "authority_boundary"),
         ("reason", "reason"),
         ("action_taken", "action_taken"),
+        ("fallback_owner_id", "fallback_owner_id"),
+        ("operator_note", "operator_note"),
+        ("affected_action", "affected_action"),
+        ("fallback_state", "fallback_state"),
+        ("blocked_reason", "blocked_reason"),
+        ("expected_evidence", "expected_evidence"),
+        ("follow_up_state", "follow_up_state"),
         ("verification_evidence_ids", "verification_evidence_ids"),
         ("residual_uncertainty", "residual_uncertainty"),
     ):

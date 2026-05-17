@@ -735,6 +735,21 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
     def test_manual_fallback_state_limits_negation_at_conjunction_boundary(
         self,
     ) -> None:
+        from aegisops.control_plane.actions.review.action_review_write_surface import (
+            _phase62_fallback_state_from_text,
+        )
+
+        for reason in (
+            "The reviewed route was not unavailable. receipt missing after dispatch.",
+            "The reviewed route was not unavailable, receipt missing after dispatch.",
+            "The reviewed route was not unavailable or receipt missing after dispatch.",
+        ):
+            with self.subTest(reason=reason):
+                self.assertEqual(
+                    _phase62_fallback_state_from_text(reason),
+                    "missing_receipt",
+                )
+
         _store, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
         )
@@ -1235,6 +1250,22 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
         self.assertEqual(
             runtime_visibility["manual_fallback"]["fallback_actor_identity"],
             "analyst-003",
+        )
+        self.assertEqual(
+            runtime_visibility["manual_fallback"]["fallback_owner_id"],
+            "repo-owner-001",
+        )
+        self.assertEqual(
+            runtime_visibility["manual_fallback"]["fallback_state"],
+            "shuffle_unavailable",
+        )
+        self.assertIn(
+            "shuffle unavailable",
+            runtime_visibility["manual_fallback"]["blocked_reason"],
+        )
+        self.assertEqual(
+            runtime_visibility["manual_fallback"]["follow_up_state"],
+            "manual_follow_up_pending",
         )
         self.assertEqual(
             runtime_visibility["escalation_notes"]["escalated_to"],

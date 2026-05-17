@@ -177,6 +177,9 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "fallback_as_reconciliation_truth": {
                 "operator_note": "Operator note is reconciliation truth.",
             },
+            "repeated_bypass_after_sentence_boundary": {
+                "operator_note": "Manual fallback cannot bypass approval. bypass approval.",
+            },
         }
 
         for label, override in cases.items():
@@ -300,6 +303,23 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
         self.assertNotIn(
             "expected_evidence_promotes_non_authoritative_truth",
             source_context_authoritative_aegisops_errors,
+        )
+
+        source_context_sentence_authority_errors = (
+            validate_phase62_manual_fallback_record(
+                catalog_action="operator_notification",
+                record={
+                    **valid_record,
+                    "expected_evidence": (
+                        "ticket output retained only as context. authoritative "
+                        "AegisOps receipt remains required"
+                    ),
+                },
+            )
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            source_context_sentence_authority_errors,
         )
 
         negated_errors = validate_phase62_manual_fallback_record(

@@ -252,6 +252,21 @@ _FOLLOW_UP_COMPLETION_OR_READINESS_TERMS = (
     "ga",
 )
 _NEGATION_TERMS = ("not", "no", "never", "cannot", "cant", "wont", "without")
+_TERM_BOUNDARY = "boundary"
+_NEGATION_BOUNDARY_TERMS = {
+    _TERM_BOUNDARY,
+    "and",
+    "but",
+    "however",
+    "though",
+    "although",
+    "yet",
+    "whereas",
+    "while",
+    "instead",
+    "then",
+    "or",
+}
 _TERM_GROUP_MAX_INTERVENING_TERMS = 6
 
 
@@ -744,6 +759,8 @@ def _term_group_starts(
             term_index + _TERM_GROUP_MAX_INTERVENING_TERMS + 2,
         )
         for next_index in range(term_index + 1, max_next_index):
+            if terms[next_index] == _TERM_BOUNDARY:
+                break
             if terms[next_index] == next_term and matches_from(
                 next_index,
                 required_index + 1,
@@ -766,14 +783,29 @@ def _has_recent_negation(
     window: int,
 ) -> bool:
     start = max(0, index - window)
-    return any(term in _NEGATION_TERMS for term in terms[start:index])
+    for term in reversed(terms[start:index]):
+        if term in _NEGATION_BOUNDARY_TERMS:
+            return False
+        if term in _NEGATION_TERMS:
+            return True
+    return False
 
 
 def _text_terms(value: str) -> tuple[str, ...]:
     normalized = value.lower().replace("n't", " not")
-    return tuple(
-        "".join(char if char.isalnum() else " " for char in normalized).split()
-    )
+    return _tokenize_with_boundaries(normalized)
+
+
+def _tokenize_with_boundaries(value: str) -> tuple[str, ...]:
+    characters: list[str] = []
+    for char in value:
+        if char.isalnum():
+            characters.append(char)
+        elif char in ".;,:!?":
+            characters.append(f" {_TERM_BOUNDARY} ")
+        else:
+            characters.append(" ")
+    return tuple("".join(characters).split())
 
 
 def requester_role_from_identity(identity: str) -> str:
