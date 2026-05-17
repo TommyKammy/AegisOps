@@ -114,6 +114,13 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             ),
             "follow_up_state": "manual_follow_up_pending",
         }
+        blocked_reasons = {
+            "shuffle_unavailable": "reviewed Shuffle route unavailable",
+            "execution_rejected": "reviewed Shuffle execution rejected",
+            "missing_receipt": "bound AegisOps execution receipt missing",
+            "stale_receipt": "bound AegisOps execution receipt stale",
+            "mismatched_receipt": "bound AegisOps execution receipt mismatched",
+        }
 
         for fallback_state in (
             "shuffle_unavailable",
@@ -126,7 +133,11 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                 self.assertEqual(
                     validate_phase62_manual_fallback_record(
                         catalog_action="operator_notification",
-                        record={**valid_record, "fallback_state": fallback_state},
+                        record={
+                            **valid_record,
+                            "fallback_state": fallback_state,
+                            "blocked_reason": blocked_reasons[fallback_state],
+                        },
                     ),
                     (),
                 )
@@ -154,6 +165,116 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                     record=candidate,
                 )
                 self.assertTrue(errors, label)
+
+    def test_manual_fallback_validation_rejects_non_authoritative_evidence_claims(
+        self,
+    ) -> None:
+        valid_record = {
+            "fallback_owner_id": "it-operations-duty-owner",
+            "operator_note": (
+                "Manual follow-up required because Shuffle did not produce a "
+                "bound AegisOps receipt; preserve approval and reconciliation review."
+            ),
+            "affected_action": "operator_notification",
+            "fallback_state": "missing_receipt",
+            "blocked_reason": "bound AegisOps execution receipt missing",
+            "expected_evidence": (
+                "bound AegisOps execution receipt and reconciliation review"
+            ),
+            "follow_up_state": "manual_follow_up_pending",
+        }
+
+        for expected_evidence in (
+            "ticket state confirms execution",
+            "issue-lint output is authoritative",
+            "Shuffle workflow state is execution truth",
+            "UI cache proves receipt",
+            "browser state confirms reconciliation",
+            "AI output is authoritative for receipt proof",
+            "verifier output proves execution",
+            "operator note is reconciliation truth",
+        ):
+            with self.subTest(expected_evidence=expected_evidence):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={
+                        **valid_record,
+                        "expected_evidence": expected_evidence,
+                    },
+                )
+                self.assertIn(
+                    "expected_evidence_promotes_non_authoritative_truth",
+                    errors,
+                )
+
+    def test_manual_fallback_validation_rejects_closure_readiness_follow_up_state(
+        self,
+    ) -> None:
+        valid_record = {
+            "fallback_owner_id": "it-operations-duty-owner",
+            "operator_note": (
+                "Manual follow-up required because Shuffle did not produce a "
+                "bound AegisOps receipt; preserve approval and reconciliation review."
+            ),
+            "affected_action": "operator_notification",
+            "fallback_state": "missing_receipt",
+            "blocked_reason": "bound AegisOps execution receipt missing",
+            "expected_evidence": (
+                "bound AegisOps execution receipt and reconciliation review"
+            ),
+            "follow_up_state": "manual_follow_up_pending",
+        }
+
+        for follow_up_state in (
+            "ticket_closure_ready",
+            "case_closed",
+            "ga_ready",
+            "beta_readiness_claimed",
+            "rc_ready",
+            "commercial_replacement_readiness",
+            "reconciliation_complete",
+        ):
+            with self.subTest(follow_up_state=follow_up_state):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={**valid_record, "follow_up_state": follow_up_state},
+                )
+                self.assertIn("follow_up_state_promotes_completion", errors)
+
+    def test_manual_fallback_validation_requires_blocked_reason_category(self) -> None:
+        valid_record = {
+            "fallback_owner_id": "it-operations-duty-owner",
+            "operator_note": (
+                "Manual follow-up required because Shuffle did not produce a "
+                "bound AegisOps receipt; preserve approval and reconciliation review."
+            ),
+            "affected_action": "operator_notification",
+            "fallback_state": "missing_receipt",
+            "blocked_reason": "bound AegisOps execution receipt missing",
+            "expected_evidence": (
+                "bound AegisOps execution receipt and reconciliation review"
+            ),
+            "follow_up_state": "manual_follow_up_pending",
+        }
+
+        cases = {
+            "shuffle_unavailable": "investigate later",
+            "execution_rejected": "operator needs to review",
+            "missing_receipt": "investigate later",
+            "stale_receipt": "operator needs to review",
+            "mismatched_receipt": "investigate later",
+        }
+        for fallback_state, blocked_reason in cases.items():
+            with self.subTest(fallback_state=fallback_state):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={
+                        **valid_record,
+                        "fallback_state": fallback_state,
+                        "blocked_reason": blocked_reason,
+                    },
+                )
+                self.assertIn("blocked_reason_missing_failure_category", errors)
 
     def test_shuffle_mapping_contains_reviewed_catalog_actions(self) -> None:
         self.assertEqual(

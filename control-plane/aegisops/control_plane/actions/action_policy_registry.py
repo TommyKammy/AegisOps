@@ -160,6 +160,57 @@ _MANUAL_FALLBACK_RECORD_FIELDS = (
     "expected_evidence",
     "follow_up_state",
 )
+_MANUAL_FALLBACK_BLOCKED_REASON_TERMS = {
+    "shuffle_unavailable": ("unavailable",),
+    "execution_rejected": ("rejected",),
+    "missing_receipt": ("missing",),
+    "stale_receipt": ("stale",),
+    "mismatched_receipt": ("mismatched", "mismatch"),
+}
+_NON_AUTHORITATIVE_EVIDENCE_SOURCES = (
+    "shuffle workflow",
+    "workflow state",
+    "ticket state",
+    "ui cache",
+    "browser state",
+    "ai output",
+    "verifier output",
+    "issue-lint output",
+    "operator note",
+)
+_NON_AUTHORITATIVE_EVIDENCE_AUTHORITY_TERMS = (
+    "authoritative",
+    "authority",
+    "truth",
+    "confirms execution",
+    "confirms receipt",
+    "confirms reconciliation",
+    "proves execution",
+    "proves receipt",
+    "proves reconciliation",
+    "execution proof",
+    "receipt proof",
+    "reconciliation proof",
+)
+_FOLLOW_UP_COMPLETION_OR_READINESS_TERMS = (
+    "complete",
+    "completed",
+    "succeeded",
+    "success",
+    "successful",
+    "closure",
+    "closed",
+    "close",
+    "ready",
+    "readiness",
+    "reconciled",
+    "reconciliation",
+    "commercial",
+    "replacement",
+    "beta",
+    "rc",
+    "ga",
+)
 
 
 PHASE62_ACTION_POLICIES: Mapping[str, ActionPolicy] = {
@@ -463,16 +514,46 @@ def validate_phase62_manual_fallback_record(
         errors.append("operator_note_promotes_authority")
     if any(term in expected_evidence for term in authority_promoting_terms):
         errors.append("expected_evidence_promotes_authority")
-    if any(term in follow_up_state for term in ("complete", "succeeded", "success")):
+    if _promotes_non_authoritative_evidence(expected_evidence):
+        errors.append("expected_evidence_promotes_non_authoritative_truth")
+    follow_up_terms = _text_terms(follow_up_state)
+    if any(
+        term in follow_up_terms
+        for term in _FOLLOW_UP_COMPLETION_OR_READINESS_TERMS
+    ):
         errors.append("follow_up_state_promotes_completion")
     if "success" in blocked_reason:
         errors.append("blocked_reason_promotes_success")
+    if (
+        isinstance(fallback_state, str)
+        and fallback_state in _MANUAL_FALLBACK_BLOCKED_REASON_TERMS
+        and _non_blank_string(record.get("blocked_reason"))
+        and not any(
+            term in blocked_reason
+            for term in _MANUAL_FALLBACK_BLOCKED_REASON_TERMS[fallback_state]
+        )
+    ):
+        errors.append("blocked_reason_missing_failure_category")
 
     return tuple(dict.fromkeys(errors))
 
 
 def _non_blank_string(value: object) -> bool:
     return isinstance(value, str) and bool(value.strip())
+
+
+def _promotes_non_authoritative_evidence(value: str) -> bool:
+    has_untrusted_source = any(
+        source in value for source in _NON_AUTHORITATIVE_EVIDENCE_SOURCES
+    )
+    has_authority_claim = any(
+        term in value for term in _NON_AUTHORITATIVE_EVIDENCE_AUTHORITY_TERMS
+    )
+    return has_untrusted_source and has_authority_claim
+
+
+def _text_terms(value: str) -> tuple[str, ...]:
+    return tuple("".join(char if char.isalnum() else " " for char in value).split())
 
 
 def requester_role_from_identity(identity: str) -> str:
