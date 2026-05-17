@@ -865,7 +865,7 @@ def _authority_claim_matches_source(
         return True
 
     between = terms[authority_end:source_index]
-    if any(term == _TERM_BOUNDARY for term in between):
+    if any(term in _NEGATION_BOUNDARY_TERMS for term in between):
         return False
     if source_index - authority_end <= 3 and not any(
         term in {"aegisops", "bound"} for term in terms[authority_index:source_end]

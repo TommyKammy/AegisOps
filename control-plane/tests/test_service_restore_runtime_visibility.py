@@ -402,6 +402,47 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
             "analyst-003",
         )
 
+    def test_manual_fallback_owner_uses_payload_when_requester_identity_is_blank(
+        self,
+    ) -> None:
+        from aegisops.control_plane.actions.review.action_review_write_surface import (
+            _phase62_declared_fallback_owner_for_request,
+        )
+
+        requested_at = datetime.now(timezone.utc)
+        action_request = ActionRequestRecord(
+            action_request_id=(
+                "action-request-phase62-blank-requester-payload-owner-001"
+            ),
+            approval_decision_id=None,
+            case_id="case-phase62-blank-requester-payload-owner-001",
+            alert_id=None,
+            finding_id=None,
+            idempotency_key="phase62-blank-requester-payload-owner-001",
+            target_scope={
+                "case_id": "case-phase62-blank-requester-payload-owner-001",
+            },
+            payload_hash="payload-hash-phase62-blank-requester-payload-owner-001",
+            requested_at=requested_at,
+            expires_at=requested_at + timedelta(hours=4),
+            lifecycle_state="pending_approval",
+            requester_identity="   ",
+            requested_payload={
+                "action_type": "operator_notification",
+                "case_id": "case-phase62-blank-requester-payload-owner-001",
+                "recipient_identity": "payload-recipient-owner-001",
+            },
+            policy_evaluation={"approval_requirement": "human_required"},
+        )
+
+        self.assertEqual(
+            _phase62_declared_fallback_owner_for_request(
+                action_request=action_request,
+                catalog_action="operator_notification",
+            ),
+            "payload-recipient-owner-001",
+        )
+
     def test_manual_fallback_owner_prefers_reviewed_target_scope_over_payload(
         self,
     ) -> None:

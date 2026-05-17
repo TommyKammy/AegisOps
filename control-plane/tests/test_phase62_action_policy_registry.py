@@ -683,6 +683,10 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                 "bound AegisOps receipt is authoritative; ticket output "
                 "remains context"
             ),
+            (
+                "bound AegisOps receipt is authoritative and ticket output "
+                "remains context"
+            ),
         ):
             with self.subTest(compliant_expected_evidence=expected_evidence):
                 errors = validate_phase62_manual_fallback_record(

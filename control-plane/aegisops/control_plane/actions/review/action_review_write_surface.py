@@ -631,7 +631,9 @@ def _phase62_declared_fallback_owner_for_request(
         if isinstance(value, str) and value.strip():
             return value.strip()
     if action_request.requester_identity is not None:
-        return action_request.requester_identity.strip() or None
+        requester_identity = action_request.requester_identity.strip()
+        if requester_identity:
+            return requester_identity
     for key in identity_owner_keys_by_action.get(catalog_action, ()):
         value = requested_payload.get(key)
         if isinstance(value, str) and value.strip():
