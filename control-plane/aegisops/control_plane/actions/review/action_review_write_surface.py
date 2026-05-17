@@ -580,7 +580,7 @@ def _phase62_declared_fallback_owner_for_request(
 ) -> str | None:
     requested_payload = action_request.requested_payload
     target_scope = action_request.target_scope
-    owner_keys_by_action = {
+    identity_owner_keys_by_action = {
         "operator_notification": (
             "fallback_owner_id",
             "fallback_owner_identity",
@@ -595,28 +595,39 @@ def _phase62_declared_fallback_owner_for_request(
             "fallback_owner_id",
             "fallback_owner_identity",
             "coordination_owner_id",
-            "coordination_reference_id",
-            "case_id",
-            "alert_id",
             "requester_identity",
         ),
         "enrichment_only_lookup": (
             "fallback_owner_id",
             "fallback_owner_identity",
             "lookup_owner_id",
-            "lookup_subject_id",
-            "case_id",
-            "alert_id",
             "requester_identity",
         ),
     }
-    for key in owner_keys_by_action.get(catalog_action, ()):
+    fallback_identifier_keys_by_action = {
+        "create_tracking_ticket": (
+            "coordination_reference_id",
+            "case_id",
+            "alert_id",
+        ),
+        "enrichment_only_lookup": (
+            "lookup_subject_id",
+            "case_id",
+            "alert_id",
+        ),
+    }
+    for key in identity_owner_keys_by_action.get(catalog_action, ()):
         for mapping in (requested_payload, target_scope):
             value = mapping.get(key)
             if isinstance(value, str) and value.strip():
                 return value.strip()
     if action_request.requester_identity is not None:
         return action_request.requester_identity.strip() or None
+    for key in fallback_identifier_keys_by_action.get(catalog_action, ()):
+        for mapping in (requested_payload, target_scope):
+            value = mapping.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
     for value in (
         action_request.case_id,
         action_request.alert_id,

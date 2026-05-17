@@ -224,6 +224,85 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
             "analyst-003",
         )
 
+    def test_tracking_ticket_manual_fallback_owner_uses_requester_before_reference(
+        self,
+    ) -> None:
+        _store, service, promoted_case, evidence_id, reviewed_at = (
+            self._build_phase19_in_scope_case()
+        )
+        observation = service.record_case_observation(
+            case_id=promoted_case.case_id,
+            author_identity="analyst-001",
+            observed_at=reviewed_at,
+            scope_statement="Observed repository permission change requires tracked review.",
+            supporting_evidence_ids=(evidence_id,),
+        )
+        lead = service.record_case_lead(
+            case_id=promoted_case.case_id,
+            triage_owner="analyst-001",
+            triage_rationale="Privilege-impacting change needs durable business-hours follow-up.",
+            observation_id=observation.observation_id,
+        )
+        recommendation = service.record_case_recommendation(
+            case_id=promoted_case.case_id,
+            review_owner="analyst-001",
+            intended_outcome="Review repository owner change evidence before ticket coordination.",
+            lead_id=lead.lead_id,
+        )
+        action_request = service.create_reviewed_tracking_ticket_request_from_advisory(
+            record_family="recommendation",
+            record_id=recommendation.recommendation_id,
+            requester_identity="analyst-001",
+            coordination_reference_id="coordination-ref-phase62-fallback-owner-001",
+            coordination_target_type="zammad",
+            ticket_title="Review repository owner change",
+            ticket_description="Coordinate reviewed follow-up without making ticket state authoritative.",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
+            action_request_id="action-request-phase62-ticket-fallback-owner-001",
+        )
+        approval = service.persist_record(
+            ApprovalDecisionRecord(
+                approval_decision_id="approval-phase62-ticket-fallback-owner-001",
+                action_request_id=action_request.action_request_id,
+                approver_identities=("approver-001",),
+                target_snapshot=dict(action_request.target_scope),
+                payload_hash=action_request.payload_hash,
+                decided_at=reviewed_at + timedelta(minutes=5),
+                lifecycle_state="approved",
+                approved_expires_at=action_request.expires_at,
+            )
+        )
+        service.persist_record(
+            replace(
+                action_request,
+                approval_decision_id=approval.approval_decision_id,
+                lifecycle_state="unresolved",
+            )
+        )
+
+        updated_case = service.record_action_review_manual_fallback(
+            action_request_id=action_request.action_request_id,
+            fallback_at=reviewed_at + timedelta(minutes=45),
+            fallback_actor_identity="analyst-003",
+            authority_boundary="approved_human_fallback",
+            reason="The reviewed Shuffle execution was rejected by the approved route.",
+            action_taken="Documented manual follow-up under the approved procedure.",
+            verification_evidence_ids=(evidence_id,),
+            residual_uncertainty="Awaiting ticket requester follow-up.",
+        )
+
+        scoped_visibility = updated_case.reviewed_context["action_review_visibility"][
+            action_request.action_request_id
+        ]
+        self.assertEqual(
+            scoped_visibility["manual_fallback"]["fallback_owner_id"],
+            "analyst-001",
+        )
+        self.assertNotEqual(
+            scoped_visibility["manual_fallback"]["fallback_owner_id"],
+            "coordination-ref-phase62-fallback-owner-001",
+        )
+
     def test_manual_fallback_state_ignores_negated_failure_terms(self) -> None:
         _store, service, promoted_case, evidence_id, reviewed_at = (
             self._build_phase19_in_scope_case()
