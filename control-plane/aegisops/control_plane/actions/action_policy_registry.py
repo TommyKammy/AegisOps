@@ -226,6 +226,7 @@ _AUTHORITY_PROOF_VERBS = (
     "validating",
 )
 _AUTHORITY_PROOF_OBJECTS = ("execution", "receipt", "reconciliation")
+_AUTHORITY_PROOF_NOUNS = ("proof", "confirmation", "validation")
 _APPROVAL_BYPASS_TERMS = ("bypass", "bypasses", "bypassed", "bypassing")
 _CLOSURE_AUTHORITY_TERM_GROUPS = (
     ("close", "case"),
@@ -254,6 +255,16 @@ _AUTHORITY_PROOF_TERM_GROUPS = tuple(
             *(
                 (proof_object, verb)
                 for verb in _AUTHORITY_PROOF_VERBS
+                for proof_object in _AUTHORITY_PROOF_OBJECTS
+            ),
+            *(
+                (proof_noun, proof_object)
+                for proof_noun in _AUTHORITY_PROOF_NOUNS
+                for proof_object in _AUTHORITY_PROOF_OBJECTS
+            ),
+            *(
+                (proof_object, proof_noun)
+                for proof_noun in _AUTHORITY_PROOF_NOUNS
                 for proof_object in _AUTHORITY_PROOF_OBJECTS
             ),
         )
@@ -797,6 +808,8 @@ def _authority_claim_matches_source(
         return True
 
     between = terms[authority_end:source_index]
+    if any(term == _TERM_BOUNDARY for term in between):
+        return False
     if source_index - authority_end <= 3 and not any(
         term in {"aegisops", "bound"} for term in terms[authority_index:source_end]
     ):
@@ -867,8 +880,8 @@ def _contains_unnegated_term_group(
 ) -> bool:
     for term_group in term_groups:
         if any(
-            not _has_recent_negation(terms, index, window=4)
-            for index in _term_group_starts(terms, term_group)
+            not any(_has_recent_negation(terms, index, window=4) for index in match)
+            for match in _term_group_matches(terms, term_group)
         ):
             return True
     return False
@@ -888,13 +901,25 @@ def _term_group_starts(
     terms: tuple[str, ...],
     required_terms: tuple[str, ...],
 ) -> tuple[int, ...]:
+    return tuple(match[0] for match in _term_group_matches(terms, required_terms))
+
+
+def _term_group_matches(
+    terms: tuple[str, ...],
+    required_terms: tuple[str, ...],
+) -> tuple[tuple[int, ...], ...]:
     if not required_terms or len(required_terms) > len(terms):
         return ()
-    indexes: list[int] = []
+    matches: list[tuple[int, ...]] = []
 
-    def matches_from(term_index: int, required_index: int) -> bool:
+    def matches_from(
+        term_index: int,
+        required_index: int,
+        matched_indexes: tuple[int, ...],
+    ) -> None:
         if required_index == len(required_terms):
-            return True
+            matches.append(matched_indexes)
+            return
         next_term = required_terms[required_index]
         max_next_index = min(
             len(terms),
@@ -903,19 +928,18 @@ def _term_group_starts(
         for next_index in range(term_index + 1, max_next_index):
             if terms[next_index] == _TERM_BOUNDARY:
                 break
-            if terms[next_index] == next_term and matches_from(
-                next_index,
-                required_index + 1,
-            ):
-                return True
-        return False
+            if terms[next_index] == next_term:
+                matches_from(
+                    next_index,
+                    required_index + 1,
+                    (*matched_indexes, next_index),
+                )
 
     for index, term in enumerate(terms):
         if term != required_terms[0]:
             continue
-        if matches_from(index, 1):
-            indexes.append(index)
-    return tuple(indexes)
+        matches_from(index, 1, (index,))
+    return tuple(matches)
 
 
 def _has_recent_negation(

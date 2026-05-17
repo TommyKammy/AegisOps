@@ -511,6 +511,15 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
             expires_at=datetime.now(timezone.utc) + timedelta(hours=4),
             action_request_id="action-request-phase62-ticket-fallback-owner-001",
         )
+        action_request = service.persist_record(
+            replace(
+                action_request,
+                requested_payload={
+                    **dict(action_request.requested_payload),
+                    "requester_identity": "stale-payload-requester-001",
+                },
+            )
+        )
         approval = service.persist_record(
             ApprovalDecisionRecord(
                 approval_decision_id="approval-phase62-ticket-fallback-owner-001",
@@ -552,6 +561,10 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
         self.assertNotEqual(
             scoped_visibility["manual_fallback"]["fallback_owner_id"],
             "coordination-ref-phase62-fallback-owner-001",
+        )
+        self.assertNotEqual(
+            scoped_visibility["manual_fallback"]["fallback_owner_id"],
+            "stale-payload-requester-001",
         )
 
     def test_manual_escalation_fallback_owner_uses_reviewed_target_scope(
@@ -884,6 +897,30 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
             "receipt missing",
             scoped_visibility["manual_fallback"]["blocked_reason"],
         )
+
+    def test_manual_fallback_state_requires_receipt_context_for_absent_terms(
+        self,
+    ) -> None:
+        from aegisops.control_plane.actions.review.action_review_write_surface import (
+            _phase62_fallback_state_from_text,
+        )
+
+        for reason in (
+            "operator missed handoff window",
+            "fallback owner absent from calendar rotation",
+        ):
+            with self.subTest(generic_absent_reason=reason):
+                self.assertIsNone(_phase62_fallback_state_from_text(reason))
+
+        for reason in (
+            "bound AegisOps receipt absent after dispatch",
+            "bound AegisOps receipt was missed after dispatch",
+        ):
+            with self.subTest(receipt_absent_reason=reason):
+                self.assertEqual(
+                    _phase62_fallback_state_from_text(reason),
+                    "missing_receipt",
+                )
 
     def test_manual_fallback_state_recognizes_rejection_variants(self) -> None:
         from aegisops.control_plane.actions.review.action_review_write_surface import (

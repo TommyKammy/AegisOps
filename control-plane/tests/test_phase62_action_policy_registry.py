@@ -252,6 +252,15 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "operator_note_proving_execution": {
                 "operator_note": "Manual fallback proving execution.",
             },
+            "operator_note_proof_of_execution": {
+                "operator_note": "Manual fallback is proof of execution.",
+            },
+            "operator_note_confirmation_of_execution": {
+                "operator_note": "Manual fallback is confirmation of execution.",
+            },
+            "operator_note_validation_of_receipt": {
+                "operator_note": "Manual fallback is validation of receipt.",
+            },
             "operator_note_not_only_bypasses_approval": {
                 "operator_note": "Manual fallback not only bypasses approval.",
             },
@@ -275,6 +284,17 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "Manual fallback cannot under any circumstances bypass approval.",
         ):
             with self.subTest(negated_operator_note=operator_note):
+                errors = validate_phase62_manual_fallback_record(
+                    catalog_action="operator_notification",
+                    record={**valid_record, "operator_note": operator_note},
+                )
+                self.assertNotIn("operator_note_promotes_authority", errors)
+
+        for operator_note in (
+            "Manual fallback says execution is not truth.",
+            "Manual fallback says receipt is not proof.",
+        ):
+            with self.subTest(negated_term_group_operator_note=operator_note):
                 errors = validate_phase62_manual_fallback_record(
                     catalog_action="operator_notification",
                     record={**valid_record, "operator_note": operator_note},
@@ -338,6 +358,9 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                 "ticket output is authoritative and bound AegisOps execution "
                 "receipt remains required"
             ),
+            "ticket state is proof of receipt",
+            "workflow result is confirmation of execution",
+            "browser state is validation of receipt",
         ):
             with self.subTest(expected_evidence=expected_evidence):
                 errors = validate_phase62_manual_fallback_record(
@@ -446,6 +469,21 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
         self.assertNotIn(
             "expected_evidence_promotes_non_authoritative_truth",
             source_context_sentence_authority_errors,
+        )
+
+        reverse_context_sentence_authority_errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "expected_evidence": (
+                    "bound AegisOps receipt is authoritative; ticket output "
+                    "remains context"
+                ),
+            },
+        )
+        self.assertNotIn(
+            "expected_evidence_promotes_non_authoritative_truth",
+            reverse_context_sentence_authority_errors,
         )
 
         negated_errors = validate_phase62_manual_fallback_record(

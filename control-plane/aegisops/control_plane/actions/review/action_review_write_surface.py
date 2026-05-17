@@ -619,13 +619,11 @@ def _phase62_declared_fallback_owner_for_request(
             "fallback_owner_id",
             "fallback_owner_identity",
             "coordination_owner_id",
-            "requester_identity",
         ),
         "enrichment_only_lookup": (
             "fallback_owner_id",
             "fallback_owner_identity",
             "lookup_owner_id",
-            "requester_identity",
         ),
     }
     fallback_identifier_keys_by_action = {
@@ -694,7 +692,10 @@ def _phase62_fallback_state_from_text(value: str) -> str | None:
         return "shuffle_unavailable"
     if _phase62_contains_unnegated_terms(
         terms,
-        ("missing", "missed", "absent"),
+        ("missing",),
+    ) or _phase62_contains_unnegated_receipt_loss_terms(
+        terms,
+        ("missed", "absent"),
     ):
         return "missing_receipt"
     return None
@@ -713,6 +714,31 @@ def _phase62_contains_unnegated_terms(
         )
         for index, term in enumerate(terms)
     )
+
+
+def _phase62_contains_unnegated_receipt_loss_terms(
+    terms: tuple[str, ...],
+    target_terms: tuple[str, ...],
+) -> bool:
+    receipt_indexes = tuple(
+        index
+        for index, term in enumerate(terms)
+        if term in {"receipt", "receipts"}
+        and not _phase62_has_recent_negation(terms, index)
+    )
+    if not receipt_indexes:
+        return False
+    for index, term in enumerate(terms):
+        if not _phase62_term_is_unnegated(
+            terms=terms,
+            index=index,
+            term=term,
+            target_terms=target_terms,
+        ):
+            continue
+        if any(abs(index - receipt_index) <= 4 for receipt_index in receipt_indexes):
+            return True
+    return False
 
 
 def _phase62_term_is_unnegated(
