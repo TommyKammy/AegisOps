@@ -345,11 +345,11 @@ def validate_phase62_shuffle_workflow_mapping(
         errors.append("family_mismatch")
     if policy_registry_id != reviewed_policy.registry_id:
         errors.append("policy_incompatibility")
-    for field_name in ("action_request_id", "approval_decision_id"):
+    for field_name in reviewed_mapping.required_inputs:
         if field_name not in required_inputs:
             errors.append("missing_required_input")
             break
-    for field_name in ("execution_receipt_id", "normalized_receipt_ref"):
+    for field_name in reviewed_mapping.expected_outputs:
         if field_name not in expected_outputs:
             errors.append("missing_expected_output")
             break

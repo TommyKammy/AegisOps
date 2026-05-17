@@ -189,6 +189,35 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
         self.assertIn("policy_incompatibility", policy_incompatibility)
         self.assertIn("unsupported_action", unsupported_action)
 
+    def test_shuffle_mapping_validation_rejects_action_specific_contract_drift(
+        self,
+    ) -> None:
+        reviewed_mapping = PHASE62_SHUFFLE_WORKFLOW_MAPPINGS["create_tracking_ticket"]
+
+        validation = validate_phase62_shuffle_workflow_mapping(
+            catalog_action="create_tracking_ticket",
+            workflow_template_id=reviewed_mapping.workflow_template_id,
+            reviewed_template_version=reviewed_mapping.reviewed_template_version,
+            family=reviewed_mapping.family,
+            required_inputs=tuple(
+                field
+                for field in reviewed_mapping.required_inputs
+                if field not in {"ticket_pointer_id", "ticket_system_id"}
+            ),
+            expected_outputs=tuple(
+                field
+                for field in reviewed_mapping.expected_outputs
+                if field not in {"ticket_pointer_id", "ticket_system_id"}
+            ),
+            correlation_fields=reviewed_mapping.correlation_fields,
+            policy_registry_id=reviewed_mapping.policy_registry_id,
+            review_status=reviewed_mapping.review_status,
+            import_eligible=reviewed_mapping.import_eligible,
+        )
+
+        self.assertIn("missing_required_input", validation)
+        self.assertIn("missing_expected_output", validation)
+
     def test_validation_allows_reviewed_tracking_ticket_policy(self) -> None:
         decision = evaluate_phase62_action_policy(
             action_type="create_tracking_ticket",
