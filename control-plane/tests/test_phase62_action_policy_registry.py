@@ -156,6 +156,21 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             review_status=reviewed_mapping.review_status,
             import_eligible=reviewed_mapping.import_eligible,
         )
+        unexpected_contract_fields = validate_phase62_shuffle_workflow_mapping(
+            catalog_action="operator_notification",
+            workflow_template_id="operator_notification",
+            reviewed_template_version=reviewed_mapping.reviewed_template_version,
+            family=reviewed_mapping.family,
+            required_inputs=reviewed_mapping.required_inputs
+            + ("unreviewed_operator_hint",),
+            expected_outputs=reviewed_mapping.expected_outputs
+            + ("unreviewed_delivery_receipt",),
+            correlation_fields=reviewed_mapping.correlation_fields
+            + ("unreviewed_correlation_hint",),
+            policy_registry_id="phase62.2:operator_notification",
+            review_status=reviewed_mapping.review_status,
+            import_eligible=reviewed_mapping.import_eligible,
+        )
         policy_incompatibility = validate_phase62_shuffle_workflow_mapping(
             catalog_action="operator_notification",
             workflow_template_id="operator_notification",
@@ -186,6 +201,9 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
         self.assertIn("unreviewed_template", unreviewed_template)
         self.assertIn("family_mismatch", family_mismatch)
         self.assertIn("missing_correlation", missing_correlation)
+        self.assertIn("unexpected_required_input", unexpected_contract_fields)
+        self.assertIn("unexpected_expected_output", unexpected_contract_fields)
+        self.assertIn("unexpected_correlation", unexpected_contract_fields)
         self.assertIn("policy_incompatibility", policy_incompatibility)
         self.assertIn("unsupported_action", unsupported_action)
 
@@ -217,6 +235,24 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
 
         self.assertIn("missing_required_input", validation)
         self.assertIn("missing_expected_output", validation)
+
+        unexpected_validation = validate_phase62_shuffle_workflow_mapping(
+            catalog_action="create_tracking_ticket",
+            workflow_template_id=reviewed_mapping.workflow_template_id,
+            reviewed_template_version=reviewed_mapping.reviewed_template_version,
+            family=reviewed_mapping.family,
+            required_inputs=reviewed_mapping.required_inputs
+            + ("unreviewed_ticket_priority",),
+            expected_outputs=reviewed_mapping.expected_outputs
+            + ("unreviewed_ticket_url",),
+            correlation_fields=reviewed_mapping.correlation_fields,
+            policy_registry_id=reviewed_mapping.policy_registry_id,
+            review_status=reviewed_mapping.review_status,
+            import_eligible=reviewed_mapping.import_eligible,
+        )
+
+        self.assertIn("unexpected_required_input", unexpected_validation)
+        self.assertIn("unexpected_expected_output", unexpected_validation)
 
     def test_validation_allows_reviewed_tracking_ticket_policy(self) -> None:
         decision = evaluate_phase62_action_policy(

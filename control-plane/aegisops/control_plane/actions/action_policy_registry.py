@@ -345,18 +345,24 @@ def validate_phase62_shuffle_workflow_mapping(
         errors.append("family_mismatch")
     if policy_registry_id != reviewed_policy.registry_id:
         errors.append("policy_incompatibility")
-    for field_name in reviewed_mapping.required_inputs:
-        if field_name not in required_inputs:
-            errors.append("missing_required_input")
-            break
-    for field_name in reviewed_mapping.expected_outputs:
-        if field_name not in expected_outputs:
-            errors.append("missing_expected_output")
-            break
-    for field_name in reviewed_policy.correlation_fields:
-        if field_name not in correlation_fields:
-            errors.append("missing_correlation")
-            break
+    reviewed_required_inputs = set(reviewed_mapping.required_inputs)
+    candidate_required_inputs = set(required_inputs)
+    if reviewed_required_inputs - candidate_required_inputs:
+        errors.append("missing_required_input")
+    if candidate_required_inputs - reviewed_required_inputs:
+        errors.append("unexpected_required_input")
+    reviewed_expected_outputs = set(reviewed_mapping.expected_outputs)
+    candidate_expected_outputs = set(expected_outputs)
+    if reviewed_expected_outputs - candidate_expected_outputs:
+        errors.append("missing_expected_output")
+    if candidate_expected_outputs - reviewed_expected_outputs:
+        errors.append("unexpected_expected_output")
+    reviewed_correlation_fields = set(reviewed_policy.correlation_fields)
+    candidate_correlation_fields = set(correlation_fields)
+    if reviewed_correlation_fields - candidate_correlation_fields:
+        errors.append("missing_correlation")
+    if candidate_correlation_fields - reviewed_correlation_fields:
+        errors.append("unexpected_correlation")
     return tuple(dict.fromkeys(errors))
 
 
