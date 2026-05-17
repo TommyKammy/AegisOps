@@ -3,9 +3,74 @@ from __future__ import annotations
 import pathlib
 import re
 import unittest
+from collections import Counter
 
 
 EXPECTED_CATALOG_COLUMNS = 10
+FORBIDDEN_OVERCLAIM_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "broad SOAR marketplace coverage is implemented",
+        re.compile(r"\bbroad\s+soar\s+marketplace\s+coverage\s+is\s+implemented\b", re.I),
+    ),
+    (
+        "arbitrary SOAR connector marketplace import is approved",
+        re.compile(
+            r"\barbitrary\s+soar\s+connector\s+marketplace\s+import\s+is\s+approved\b",
+            re.I,
+        ),
+    ),
+    (
+        "Phase 62.1 claims Beta",
+        re.compile(r"\bphase\s+62\.1\s+claims\s+beta(?:\s+readiness)?\b", re.I),
+    ),
+    (
+        "Phase 62.1 claims RC",
+        re.compile(r"\bphase\s+62\.1\s+claims\s+rc(?:\s+readiness)?\b", re.I),
+    ),
+    (
+        "Phase 62.1 claims GA",
+        re.compile(r"\bphase\s+62\.1\s+claims\s+ga(?:\s+readiness)?\b", re.I),
+    ),
+    (
+        "Phase 62.1 claims commercial readiness",
+        re.compile(
+            r"\bphase\s+62\.1\s+claims\s+commercial(?:\s+replacement)?\s+readiness\b",
+            re.I,
+        ),
+    ),
+    (
+        "Phase 62.1 claims broad SOAR replacement readiness",
+        re.compile(
+            r"\bphase\s+62\.1\s+claims\s+broad\s+soar\s+replacement\s+readiness\b",
+            re.I,
+        ),
+    ),
+    (
+        "Phase 62.1 implements Phase 63 evidence expansion",
+        re.compile(
+            r"\bphase\s+62\.1\s+implements\s+phase\s+63\s+evidence\s+expansion\b",
+            re.I,
+        ),
+    ),
+    (
+        "Phase 62.1 implements Phase 66 RC proof",
+        re.compile(r"\bphase\s+62\.1\s+implements\s+phase\s+66\s+rc\s+proof\b", re.I),
+    ),
+    (
+        "Controlled Write is a default Phase 62.1 catalog entry",
+        re.compile(
+            r"\bcontrolled\s+write\s+is\s+a\s+default\s+phase\s+62\.1\s+catalog\s+entry\b",
+            re.I,
+        ),
+    ),
+    (
+        "Hard Write is a default Phase 62.1 catalog entry",
+        re.compile(
+            r"\bhard\s+write\s+is\s+a\s+default\s+phase\s+62\.1\s+catalog\s+entry\b",
+            re.I,
+        ),
+    ),
+)
 
 
 def _doc_path(relative_path: str) -> pathlib.Path:
@@ -124,19 +189,6 @@ def _catalog_validation_errors(catalog_text: str) -> list[str]:
     for family in required_families - seen_families:
         errors.append(f"missing required family {family}")
 
-    broad_claims = (
-        "broad SOAR marketplace coverage is implemented",
-        "arbitrary SOAR connector marketplace import is approved",
-        "Phase 62.1 claims Beta",
-        "Phase 62.1 claims RC",
-        "Phase 62.1 claims GA",
-        "Phase 62.1 claims commercial readiness",
-        "Phase 62.1 claims broad SOAR replacement readiness",
-        "Phase 62.1 implements Phase 63 evidence expansion",
-        "Phase 62.1 implements Phase 66 RC proof",
-        "Controlled Write is a default Phase 62.1 catalog entry",
-        "Hard Write is a default Phase 62.1 catalog entry",
-    )
     in_forbidden_claims = False
     for line in catalog_text.splitlines():
         if _is_forbidden_claims_heading(line):
@@ -148,9 +200,8 @@ def _catalog_validation_errors(catalog_text: str) -> list[str]:
         if _is_rejection_context(line, in_forbidden_claims):
             continue
 
-        normalized_line = line.casefold()
-        for claim in broad_claims:
-            if claim.casefold() in normalized_line:
+        for claim, pattern in FORBIDDEN_OVERCLAIM_PATTERNS:
+            if pattern.search(line):
                 errors.append(f"forbidden overclaim outside rejection context: {claim}")
     return errors
 
@@ -182,10 +233,10 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
         catalog_text = self.catalog_doc.read_text(encoding="utf-8")
         rows = _catalog_rows(catalog_text)
         actions = [row[0].strip("`") for row in rows]
+        action_counts = Counter(actions)
         duplicate_actions = sorted(
-            {action for action in actions if actions.count(action) > 1}
+            action for action, count in action_counts.items() if count > 1
         )
-        by_action = {row[0].strip("`"): row for row in rows}
 
         self.assertEqual([], duplicate_actions)
         self.assertEqual(
@@ -195,9 +246,10 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
                 "manual_escalation_request",
                 "create_tracking_ticket",
             },
-            set(by_action),
+            set(actions),
         )
         self.assertEqual(4, len(rows))
+        by_action = {row[0].strip("`"): row for row in rows}
         self.assertEqual("Read", by_action["enrichment_only_lookup"][1])
         self.assertEqual("Notify", by_action["operator_notification"][1])
         self.assertEqual("Notify", by_action["manual_escalation_request"][1])
@@ -313,8 +365,9 @@ class Phase62ReviewedAutomationCatalogContractTests(unittest.TestCase):
             "\n".join(
                 (
                     "Phase 62.1 CLAIMS rc",
-                    "Phase 62.1 claims GA",
-                    "Phase 62.1 claims commercial readiness",
+                    "Phase 62.1 claims RC readiness",
+                    "Phase 62.1 claims GA readiness",
+                    "Phase 62.1 claims commercial replacement readiness",
                     "Phase 62.1 implements Phase 63 evidence expansion",
                     "Phase 62.1 implements Phase 66 RC proof",
                     "## 8. Non-Goals",
