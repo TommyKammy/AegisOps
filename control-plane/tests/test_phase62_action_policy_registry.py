@@ -641,6 +641,9 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
             "manual fallback confirming execution",
             "manual fallback validating receipt",
             "manual fallback proving execution",
+            "manual fallback says execution succeeds",
+            "manual fallback is authority for execution",
+            "manual fallback is authoritative for execution",
             "manual fallback not only bypasses approval",
             "manual fallback not only confirmed execution",
             "manual fallback is proof of execution",
@@ -702,6 +705,15 @@ class Phase62ActionPolicyRegistryTests(unittest.TestCase):
                     record={**valid_record, "follow_up_state": follow_up_state},
                 )
                 self.assertIn("follow_up_state_promotes_completion", errors)
+
+        errors = validate_phase62_manual_fallback_record(
+            catalog_action="operator_notification",
+            record={
+                **valid_record,
+                "blocked_reason": "receipt missing after execution succeeds",
+            },
+        )
+        self.assertIn("blocked_reason_promotes_success", errors)
 
     def test_manual_fallback_validation_rejects_closure_readiness_follow_up_state(
         self,

@@ -648,7 +648,7 @@ def _phase62_fallback_state_from_text(value: str) -> str | None:
         return "mismatched_receipt"
     if _phase62_contains_unnegated_receipt_loss_terms(terms, ("stale",)):
         return "stale_receipt"
-    if _phase62_contains_unnegated_terms(
+    if _phase62_contains_unnegated_contextual_terms(
         terms,
         (
             "rejected",
@@ -664,12 +664,18 @@ def _phase62_fallback_state_from_text(value: str) -> str | None:
             "cancelling",
             "cancellation",
         ),
+        context_terms=_PHASE62_EXECUTION_FAILURE_CONTEXT_TERMS,
     ):
         return "execution_rejected"
-    if _phase62_contains_unnegated_terms(
+    if _phase62_contains_unnegated_contextual_terms(
         terms,
         ("unavailable", "timeout"),
-    ) or _phase62_contains_unnegated_term_group(terms, ("timed", "out")):
+        context_terms=_PHASE62_WORKFLOW_FAILURE_CONTEXT_TERMS,
+    ) or _phase62_contains_unnegated_contextual_term_group(
+        terms,
+        ("timed", "out"),
+        context_terms=_PHASE62_WORKFLOW_FAILURE_CONTEXT_TERMS,
+    ):
         return "shuffle_unavailable"
     if _phase62_contains_unnegated_receipt_loss_terms(
         terms,
@@ -682,9 +688,28 @@ def _phase62_fallback_state_from_text(value: str) -> str | None:
     return None
 
 
-def _phase62_contains_unnegated_terms(
+_PHASE62_WORKFLOW_FAILURE_CONTEXT_TERMS = {
+    "automation",
+    "dispatch",
+    "execution",
+    "path",
+    "route",
+    "shuffle",
+    "workflow",
+}
+_PHASE62_EXECUTION_FAILURE_CONTEXT_TERMS = {
+    *_PHASE62_WORKFLOW_FAILURE_CONTEXT_TERMS,
+    "receipt",
+    "receipts",
+}
+_PHASE62_CONTEXT_WINDOW = 6
+
+
+def _phase62_contains_unnegated_contextual_terms(
     terms: tuple[str, ...],
     target_terms: tuple[str, ...],
+    *,
+    context_terms: set[str],
 ) -> bool:
     return any(
         _phase62_term_is_unnegated(
@@ -693,7 +718,52 @@ def _phase62_contains_unnegated_terms(
             term=term,
             target_terms=target_terms,
         )
+        and _phase62_has_nearby_context_term(
+            terms=terms,
+            index=index,
+            context_terms=context_terms,
+        )
         for index, term in enumerate(terms)
+    )
+
+
+def _phase62_contains_unnegated_contextual_term_group(
+    terms: tuple[str, ...],
+    target_group: tuple[str, ...],
+    *,
+    context_terms: set[str],
+) -> bool:
+    if not target_group or len(target_group) > len(terms):
+        return False
+    for index in range(0, len(terms) - len(target_group) + 1):
+        if terms[index : index + len(target_group)] != target_group:
+            continue
+        if _phase62_has_recent_negation(
+            terms,
+            index,
+        ):
+            continue
+        if _phase62_has_nearby_context_term(
+            terms=terms,
+            index=index,
+            context_terms=context_terms,
+        ):
+            return True
+    return False
+
+
+def _phase62_has_nearby_context_term(
+    *,
+    terms: tuple[str, ...],
+    index: int,
+    context_terms: set[str],
+) -> bool:
+    start = max(0, index - _PHASE62_CONTEXT_WINDOW)
+    end = min(len(terms), index + _PHASE62_CONTEXT_WINDOW + 1)
+    return any(
+        term in context_terms
+        for term in terms[start:end]
+        if term != "boundary"
     )
 
 
@@ -717,7 +787,7 @@ def _phase62_contains_unnegated_receipt_loss_terms(
             target_terms=target_terms,
         ):
             continue
-        if any(abs(index - receipt_index) <= 4 for receipt_index in receipt_indexes):
+        if any(abs(index - receipt_index) <= 8 for receipt_index in receipt_indexes):
             return True
     return False
 

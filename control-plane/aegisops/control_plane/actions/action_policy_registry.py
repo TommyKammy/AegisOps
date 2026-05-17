@@ -311,9 +311,13 @@ _AUTHORITY_PROOF_TERM_GROUPS = tuple(
     )
 )
 _EXECUTION_SUCCESS_TERM_GROUPS = (
+    ("execution", "succeed"),
+    ("execution", "succeeds"),
     ("execution", "success"),
     ("execution", "successful"),
     ("execution", "succeeded"),
+    ("succeed", "execution"),
+    ("succeeds", "execution"),
     ("success", "execution"),
     ("successful", "execution"),
     ("succeeded", "execution"),
@@ -331,6 +335,9 @@ _AUTHORITY_PROMOTING_TERM_GROUPS = (
     *((term,) for term in _APPROVAL_BYPASS_TERMS),
     *_AUTHORITY_PROOF_TERM_GROUPS,
     ("execution", "authority"),
+    ("execution", "authoritative"),
+    ("authority", "execution"),
+    ("authoritative", "execution"),
     ("execution", "truth"),
     ("receipt", "truth"),
     ("reconciliation", "truth"),  # manual fallback notes cannot become truth records
@@ -715,7 +722,7 @@ def validate_phase62_manual_fallback_record(
     blocked_reason_terms = _text_terms(blocked_reason)
     if _contains_unnegated_term_group(
         blocked_reason_terms,
-        (("success",), ("successful",), ("succeeded",)),
+        (("succeed",), ("succeeds",), ("success",), ("successful",), ("succeeded",)),
     ):
         errors.append("blocked_reason_promotes_success")
     if (

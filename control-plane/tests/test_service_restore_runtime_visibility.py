@@ -1001,12 +1001,15 @@ class RestoreRuntimeVisibilityTests(ServicePersistenceTestBase):
             "fallback owner absent from calendar rotation",
             "stale owner roster blocked manual follow-up",
             "mismatched owner roster blocked manual follow-up",
+            "fallback owner unavailable for handoff",
+            "fallback owner rejected handoff window",
         ):
             with self.subTest(generic_absent_reason=reason):
                 self.assertIsNone(_phase62_fallback_state_from_text(reason))
 
         for reason in (
             "bound AegisOps receipt missing after dispatch",
+            "bound AegisOps receipt was absolutely and completely missing after dispatch",
             "bound AegisOps receipt absent after dispatch",
             "bound AegisOps receipt was missed after dispatch",
             "bound AegisOps receipt stale after dispatch",
